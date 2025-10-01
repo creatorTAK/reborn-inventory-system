@@ -1,0 +1,1780 @@
+<script>
+  const NAME_LIMIT = 40;
+  const NAME_LIMIT_MODE = 'warn';
+  const DESC_LIMIT = 1000;
+  const DESC_LIMIT_MODE = 'warn';
+  const SHIPPING_DEFAULTS = {
+    '配送料の負担': '送料込み(出品者負担)',
+    '配送の方法': 'ゆうゆうメルカリ便',
+    '発送元の地域': '岡山県',
+    '発送までの日数': '1~2日で発送'
+  };
+  const REQUIRED = [];
+  
+  const FIELD_IDS = [
+  '棚番号','商品番号','担当者',
+  'セールスワード(カテゴリ)','セールスワード',
+  'ブランド(英語)','ブランド(カナ)',
+  '商品名(タイトル)',
+  '大分類(カテゴリ)','中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2',
+  'サイズ','商品の状態',
+  'アイテム名',
+  '商品の説明',
+  '商品状態詳細',
+  '肩幅','身幅','袖丈','着丈','ウエスト','ヒップ','股上','股下',
+  '仕入日','仕入先','仕入金額',
+  '出品日','出品先','出品金額',
+  '配送料の負担','配送の方法','発送元の地域','発送までの日数'
+];
+
+  let CAT_ROWS = [];
+  let BRAND_EN = [];
+  let BRAND_KANA = [];
+
+  // ブランドペアデータ（英語名とカナ読みの正確な対応関係）
+  let BRAND_PAIRS = [];
+
+  // ブランドデータの高速検索用インデックスマップ（ペア用）
+  let BRAND_INDEX_MAP = new Map();
+
+  // セールスワードデータ保存用
+  let SALESWORD_DATA = {
+    categories: [],
+    wordsByCategory: {},
+    allWords: []
+  };
+
+  // 商品状態履歴保持用
+  let CONDITION_HISTORY = [];
+
+  // 素材システム用のグローバル変数
+  let materialCount = 1;
+  let MATERIAL_LOCATIONS = [];
+  let MATERIAL_TYPES = [];
+
+  // 素材マスタデータの取得と設定
+  function initializeMaterialMasters() {
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(opts) {
+          MATERIAL_LOCATIONS = opts['素材(箇所)'] || [];
+          MATERIAL_TYPES = opts['素材(種類)'] || [];
+
+          populateMaterialSelects(1);
+
+          console.log('素材マスタ取得完了 - 箇所:', MATERIAL_LOCATIONS.length, '種類:', MATERIAL_TYPES.length);
+        })
+        .withFailureHandler(function(error) {
+          console.error('素材マスタ取得エラー:', error);
+        })
+        .getMasterOptions();
+    }
+  }
+
+  // セレクトボックスにマスタデータを設定
+  function populateMaterialSelects(index) {
+    const locationSelect = document.getElementById(`素材${index}_箇所`);
+    const type1Select = document.getElementById(`素材${index}_種類1`);
+    const type2Select = document.getElementById(`素材${index}_種類2`);
+
+    if (locationSelect) {
+      locationSelect.innerHTML = '<option value="">--</option>';
+      MATERIAL_LOCATIONS.forEach(loc => {
+        locationSelect.insertAdjacentHTML('beforeend', `<option value="${loc}">${loc}</option>`);
+      });
+    }
+
+    if (type1Select) {
+      type1Select.innerHTML = '<option value="">--</option>';
+      MATERIAL_TYPES.forEach(type => {
+        type1Select.insertAdjacentHTML('beforeend', `<option value="${type}">${type}</option>`);
+      });
+    }
+
+    if (type2Select) {
+      type2Select.innerHTML = '<option value="">--</option>';
+      MATERIAL_TYPES.forEach(type => {
+        type2Select.insertAdjacentHTML('beforeend', `<option value="${type}">${type}</option>`);
+      });
+    }
+  }
+
+  // 素材セットを追加
+  function addMaterial() {
+    if (materialCount >= 10) {
+      alert('素材は最大10個まで追加できます');
+      return;
+    }
+
+    materialCount++;
+
+    const materialList = document.getElementById('materialList');
+    const newItem = document.createElement('div');
+    newItem.className = 'material-item';
+    newItem.setAttribute('data-index', materialCount);
+
+    newItem.innerHTML = `
+      <div class="material-header">
+        <span>素材 ${materialCount}</span>
+        <button type="button" class="remove-material-btn" onclick="removeMaterial(${materialCount})">削除</button>
+      </div>
+      
+      <div class="material-fields">
+        <label>箇所:
+          <select id="素材${materialCount}_箇所" class="material-location">
+            <option value="">--</option>
+          </select>
+        </label>
+        
+        <div class="material-composition">
+          <div class="composition-row">
+            <label>種類:
+              <select id="素材${materialCount}_種類1" class="material-type">
+                <option value="">--</option>
+              </select>
+            </label>
+            <label>割合:
+              <input type="number" id="素材${materialCount}_％1" class="material-percent" min="0" max="100" 
+  placeholder="%">
+            </label>
+          </div>
+
+          <div class="composition-row">
+            <label>種類:
+              <select id="素材${materialCount}_種類2" class="material-type">
+                <option value="">--</option>
+              </select>
+            </label>
+            <label>割合:
+              <input type="number" id="素材${materialCount}_％2" class="material-percent" min="0" max="100" 
+  placeholder="%">
+            </label>
+          </div>
+        </div>
+      </div>
+    `;
+
+    materialList.appendChild(newItem);
+    populateMaterialSelects(materialCount);
+    updateRemoveButtons();
+  }
+
+  // 素材セットを削除
+  function removeMaterial(index) {
+    const item = document.querySelector(`.material-item[data-index="${index}"]`);
+    if (item) {
+      item.remove();
+
+      const items = document.querySelectorAll('.material-item');
+      materialCount = items.length;
+
+      items.forEach((item, i) => {
+        const newIndex = i + 1;
+        item.setAttribute('data-index', newIndex);
+        item.querySelector('.material-header span').textContent = `素材 ${newIndex}`;
+
+        // onclickも更新
+        const removeBtn = item.querySelector('.remove-material-btn');
+        if (removeBtn) {
+          removeBtn.onclick = () => removeMaterial(newIndex);
+        }
+      });
+
+      updateRemoveButtons();
+      updateDescriptionFromDetail(); // 素材情報更新
+    }
+  }
+
+  // 削除ボタンの表示制御
+  function updateRemoveButtons() {
+    const items = document.querySelectorAll('.material-item');
+    items.forEach(item => {
+      const btn = item.querySelector('.remove-material-btn');
+      if (btn) {
+        btn.style.display = items.length > 1 ? 'block' : 'none';
+      }
+    });
+  }
+
+  // クイック挿入ボタンのイベントリスナー設定
+  function setupQuickInsertButtons() {
+    const buttons = document.querySelectorAll('.quick-btn');
+    const textarea = document.getElementById('商品状態詳細');
+
+    if (!textarea) {
+      console.log('商品状態詳細のテキストエリアが見つかりません');
+      return;
+    }
+
+    buttons.forEach(button => {
+      button.addEventListener('click', function() {
+        const text = this.getAttribute('data-text');
+        const currentValue = textarea.value;
+
+        // 既存テキストがある場合は改行して追加
+        if (currentValue.trim()) {
+          textarea.value = currentValue + '\n' + text;
+        } else {
+          textarea.value = text;
+        }
+
+        // 商品の説明を更新
+        if (typeof updateDescriptionFromDetail === 'function') {
+          updateDescriptionFromDetail();
+        }
+      });
+    });
+
+    console.log('クイック挿入ボタン設定完了:', buttons.length, '個');
+  }
+
+  // 商品状態詳細オートコンプリート機能
+  function attachConditionSuggest(inputId, list) {
+    const input = document.getElementById(inputId);
+    const panel = document.getElementById('suggest-' + inputId);
+
+    if (!input || !panel) {
+      console.log(`商品状態詳細オートコンプリート: 要素が見つかりません ${inputId}`);
+      return;
+    }
+
+    let activeIndex = -1;
+    const limit = 10;
+
+    const render = (items) => {
+      panel.innerHTML = '';
+      if (!items.length) {
+        panel.innerHTML = '<div class="sug-empty">候補なし</div>';
+        panel.hidden = false;
+        return;
+      }
+
+      items.slice(0, limit).forEach((v, i) => {
+        const div = document.createElement('div');
+        div.className = 'sug-item';
+        div.textContent = v;
+
+        div.addEventListener('mousemove', () => {
+          Array.from(panel.querySelectorAll('.sug-item')).forEach(x => x.classList.remove('active'));
+          div.classList.add('active');
+          activeIndex = i;
+        });
+
+        div.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+        });
+
+        div.addEventListener('click', () => {
+          input.value = v;
+          hide();
+          if (typeof updateDescriptionFromDetail === 'function') {
+            updateDescriptionFromDetail();
+          }
+        });
+
+        panel.appendChild(div);
+      });
+
+      panel.hidden = false;
+    };
+
+    const hide = () => {
+      panel.hidden = true;
+      activeIndex = -1;
+    };
+
+    const hideLater = () => setTimeout(hide, 100);
+
+    const doFilter = () => {
+      const q = (input.value || '').trim();
+
+      if (!Array.isArray(list) || list.length === 0 || !q || q.length < 2) {
+        hide();
+        return;
+      }
+
+      // 部分一致検索（大文字小文字を区別しない）
+      const qq = q.toLowerCase();
+      const filtered = list.filter(v => {
+        const s = String(v).toLowerCase();
+        return s.indexOf(qq) !== -1;
+      });
+
+      console.log(`商品状態詳細候補: ${filtered.length}件`);
+      render(filtered);
+    };
+
+    input.addEventListener('input', doFilter);
+    input.addEventListener('focus', doFilter);
+    input.addEventListener('blur', hideLater);
+
+    input.addEventListener('keydown', (e) => {
+      if (panel.hidden) return;
+      const items = Array.from(panel.querySelectorAll('.sug-item'));
+      if (!items.length) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = (activeIndex + 1) % items.length;
+        items.forEach(x => x.classList.remove('active'));
+        items[activeIndex].classList.add('active');
+        items[activeIndex].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = (activeIndex - 1 + items.length) % items.length;
+        items.forEach(x => x.classList.remove('active'));
+        items[activeIndex].classList.add('active');
+        items[activeIndex].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        if (activeIndex >= 0) {
+          e.preventDefault();
+          input.value = items[activeIndex].textContent || '';
+          hide();
+          if (typeof updateDescriptionFromDetail === 'function') {
+            updateDescriptionFromDetail();
+          }
+        }
+      } else if (e.key === 'Escape') {
+        hide();
+      }
+    });
+
+    console.log('商品状態詳細オートコンプリート設定完了');
+  }
+
+  // オリジナルハッシュタグ生成関数
+  function generateHashtags() {
+    const tags = [];
+    const shopName = 'REBORN';
+
+    // 全商品タグ
+    tags.push(`#${shopName}_全商品`);
+
+    // ブランド別タグ
+    const brandEn = _val('ブランド(英語)');
+    if (brandEn) {
+      // 半角英数のみ使用、スペースは除去
+      const cleanBrand = brandEn.replace(/\s+/g, '');
+      tags.push(`#${shopName}_${cleanBrand}アイテム一覧`);
+    }
+
+    // 中分類タグ
+    const category2 = _val('中分類(カテゴリ)');
+    if (category2) {
+      tags.push(`#${shopName}_${category2}一覧`);
+    }
+
+    // 大分類タグ
+    const category1 = _val('大分類(カテゴリ)');
+    if (category1) {
+      tags.push(`#${shopName}_${category1}アイテム一覧`);
+    }
+
+    // 大分類+中分類の組み合わせタグ
+    if (category1 && category2) {
+      tags.push(`#${shopName}_${category1}${category2}一覧`);
+    }
+
+    // 重複削除
+    return [...new Set(tags)];
+  }
+
+  function splitMulti(s) {
+    return String(s||'').split(/[,\u3001\/\uFF0F\n]+/).map(v=>v.trim()).filter(v=>v.length>0);
+  }
+
+  function uniqKeepOrder(arr) {
+    const s=new Set(), out=[];
+    for(const x of arr||[]) {
+      const v=(x??'').toString().trim();
+      if(!v||s.has(v))continue;
+      s.add(v);
+      out.push(v);
+    }
+    return out;
+  }
+
+  // ブランドペアデータの高速検索用インデックスマップを構築
+  function buildBrandIndexMap() {
+    BRAND_INDEX_MAP.clear();
+
+    // ペアデータから英語名をキーとしてマップを構築
+    BRAND_PAIRS.forEach((pair, index) => {
+      if (pair && pair.english) {
+        BRAND_INDEX_MAP.set(pair.english, index);
+      }
+    });
+
+    console.log(`ブランドペアインデックスマップ構築完了: ${BRAND_INDEX_MAP.size}件`);
+    console.log('ブランドペアデータ数:', BRAND_PAIRS.length);
+  }
+
+  function fillSelectSafe(sel, values) {
+    if (!sel) return;
+    if (Array.isArray(values) && values.length) {
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">--</option>';
+      values.forEach(v=> sel.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`));
+      sel.disabled = false;
+      if (prev && values.includes(prev)) sel.value = prev;
+    }
+  }
+
+  function resetSelect(id, disable=true) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">--</option>';
+    sel.value = '';
+    if (disable) sel.disabled = true;
+  }
+
+  function applyShippingDefaults() {
+    for (const k of Object.keys(SHIPPING_DEFAULTS)) {
+      const el = document.getElementById(k);
+      if (!el) continue;
+      const def = SHIPPING_DEFAULTS[k];
+      const exists = Array.from(el.options).some(o => String(o.value) === def);
+      if (!exists) el.insertAdjacentHTML('beforeend', `<option value="${def}">${def}</option>`);
+      el.value = def;
+    }
+  }
+
+  function initPrefix1() {
+    const p1 = document.getElementById('prefix1');
+    if (!p1) return;
+    p1.innerHTML = '<option value="">--</option>';
+    for (let c=65;c<=90;c++) {
+      const v=String.fromCharCode(c);
+      p1.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`);
+    }
+  }
+
+  function buildShelf() {
+    const p1 = document.getElementById('prefix1');
+    const shelf = document.getElementById('棚番号');
+    if (!p1 || !shelf) return;
+    const v1 = p1.value;
+    shelf.innerHTML = '<option value="">--</option>';
+    if (!v1) {
+      shelf.disabled = true;
+      setItemNumber('', '選択してください');
+      return;
+    }
+    shelf.disabled = false;
+    for (let c=65;c<=90;c++) {
+      const v=v1+String.fromCharCode(c);
+      shelf.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`);
+    }
+    shelf.value = '';
+    setItemNumber('', '選択してください');
+  }
+
+  function requestNextNumber() {
+    const shelfSel = document.getElementById('棚番号');
+    if (!shelfSel) {
+      setItemNumber('', '選択してください');
+      return;
+    }
+    const shelf = shelfSel.value;
+    if (!shelf) {
+      setItemNumber('', '選択してください');
+      return;
+    }
+    setItemNumber('', '採番中…');
+    if (!(google && google.script && google.script.run)) {
+      setItemNumber('', '');
+      return;
+    }
+    google.script.run.withSuccessHandler(res=>{
+      if (typeof res === 'string' && res.startsWith('NG(')) {
+        show(res);
+        return;
+      }
+      setItemNumber(res, '');
+    }).withFailureHandler(e=> show(`NG(UNKNOWN): ${e && e.message ? e.message : e}`)).getNextItemNumber(shelf);
+  }
+
+  function setItemNumber(val, ph) {
+    const el=document.getElementById('商品番号');
+    if (!el) return;
+    el.value=val||'';
+    el.placeholder=ph||'';
+  }
+
+  const NAME_REST_FIELDS = ['商品属性1_値', '商品属性2_値', '商品属性3_値'];
+
+  // DOM要素キャッシュ
+  const elementCache = new Map();
+
+  function _val(id) {
+    if (!elementCache.has(id)) {
+      elementCache.set(id, document.getElementById(id));
+    }
+    const el = elementCache.get(id);
+    return (el && (el.value||'').toString().trim()) || '';
+  }
+
+  // キャッシュクリア機能（必要時のため）
+  function clearElementCache() {
+    elementCache.clear();
+  }
+
+  function _truncateByCodePoints(str, limit) {
+    const a = Array.from(str);
+    return (a.length > limit) ? a.slice(0, limit).join('') : str;
+  }
+
+  function adjustPreviewHeight() {
+    const ta = document.getElementById('商品名プレビュー');
+    if (!ta) return;
+    ta.classList.remove('scroll');
+    ta.style.height = 'auto';
+    const sh = ta.scrollHeight;
+    const max = 140;
+    if (sh > max) {
+      ta.style.height = max + 'px';
+      ta.classList.add('scroll');
+    } else {
+      ta.style.height = sh + 'px';
+    }
+  }
+
+  function updateNamePreview() {
+    const kw = _val('セールスワード');
+
+    // 商品名ブロック内のブランドを参照（どちらか片方でも可）
+    const brandEn = _val('商品名_ブランド(英語)');
+    const brandKana = _val('商品名_ブランド(カナ)');
+    const brands = [brandEn, brandKana].filter(Boolean).join('');
+
+    const item = _val('アイテム名');
+    const others = NAME_REST_FIELDS.map(_val).filter(Boolean);
+    let text = '';
+    if (kw) text += kw;
+    if (brands) text += brands;
+    if (item) text += (text ? ' ' : '') + item;
+    if (others.length) text += (text ? ' ' : '') + others.join(' ');
+    const count = Array.from(text).length;
+    const counterEl = document.getElementById('nameCounter');
+    const nameCountEl = document.getElementById('nameCount');
+    const nameMaxEl = document.getElementById('nameMax');
+    if (nameCountEl) nameCountEl.textContent = count;
+    if (nameMaxEl) nameMaxEl.textContent = NAME_LIMIT;
+    if (counterEl) counterEl.classList.toggle('over', count > NAME_LIMIT);
+    let saveText = text;
+    if (NAME_LIMIT_MODE === 'truncate' && count > NAME_LIMIT) {
+      saveText = _truncateByCodePoints(text, NAME_LIMIT);
+    }
+    const ta = document.getElementById('商品名プレビュー');
+    if (ta) {
+      ta.value = text;
+      adjustPreviewHeight();
+    }
+    const hidden = document.getElementById('商品名(タイトル)');
+    if (hidden) hidden.value = saveText;
+  }
+
+  // ブランド表示フィールドの更新
+  function updateBrandDisplay() {
+    const englishName = _val('ブランド(英語)');
+    const englishField = document.getElementById('ブランド表示_英語');
+    const kanaField = document.getElementById('ブランド表示_カナ');
+
+    if (!englishField || !kanaField) return;
+
+    if (englishName) {
+      // ペアデータから正確なカナ読みを取得
+      const pairIndex = BRAND_INDEX_MAP.get(englishName);
+      const kanaName = pairIndex !== undefined && BRAND_PAIRS[pairIndex] ? BRAND_PAIRS[pairIndex].kana : '';
+
+      englishField.value = englishName;
+      kanaField.value = kanaName;
+
+      console.log('ブランド表示更新:', englishName, '→', kanaName);
+    } else {
+      englishField.value = '';
+      kanaField.value = '';
+      englishField.placeholder = '未選択';
+      kanaField.placeholder = '未選択';
+    }
+  }
+
+  function wirePreviewWatchers() {
+    const ids = new Set(['セールスワード','ブランド(英語)','アイテム名','セールスワード(カテゴリ)',
+  '商品名_ブランド(英語)', '商品名_ブランド(カナ)', ...NAME_REST_FIELDS]);
+    ids.forEach(id=>{
+      const el = document.getElementById(id);
+      if (!el) return;
+      const ev = (el.tagName === 'INPUT') ? 'input' : 'change';
+
+      // 既存のイベントリスナーを削除してから追加
+      el.removeEventListener(ev, updateNamePreview);
+      el.addEventListener(ev, updateNamePreview);
+
+      // 基本情報のブランド(英語)の場合はブランド表示と商品説明も更新
+      if (id === 'ブランド(英語)') {
+        el.removeEventListener(ev, updateBrandDisplay);
+        el.addEventListener(ev, updateBrandDisplay);
+        el.removeEventListener(ev, updateDescriptionFromDetail);
+        el.addEventListener(ev, updateDescriptionFromDetail);
+      }
+    });
+  }
+
+  function adjustDescHeight() {
+    const ta = document.getElementById('商品の説明');
+    if (!ta) return;
+    ta.classList.remove('scroll');
+    ta.style.height = 'auto';
+    const sh = ta.scrollHeight;
+    const max = 360;
+    if (sh > max) {
+      ta.style.height = max + 'px';
+      ta.classList.add('scroll');
+    } else {
+      ta.style.height = sh + 'px';
+    }
+  }
+
+  function updateDesc() {
+    const ta = document.getElementById('商品の説明');
+    if (!ta) return;
+    const text = (ta.value || '').toString();
+    const count = Array.from(text).length;
+    const counterEl = document.getElementById('descCounter');
+    const descCountEl = document.getElementById('descCount');
+    const descMaxEl = document.getElementById('descMax');
+    if (descCountEl) descCountEl.textContent = count;
+    if (descMaxEl) descMaxEl.textContent = DESC_LIMIT;
+    if (counterEl) counterEl.classList.toggle('over', count > DESC_LIMIT);
+    if (DESC_LIMIT_MODE === 'truncate' && count > DESC_LIMIT) {
+      ta.value = Array.from(text).slice(0, DESC_LIMIT).join('');
+    }
+    adjustDescHeight();
+  }
+
+  function wireDescWatcher() {
+    const ta = document.getElementById('商品の説明');
+    if (!ta) return;
+    ta.addEventListener('input', updateDesc);
+  }
+
+  // ブランド情報取得関数
+  function getBrandInfo() {
+    const englishName = _val('ブランド(英語)');
+    if (!englishName) return '';
+
+    const pairIndex = BRAND_INDEX_MAP.get(englishName);
+    const kanaName = pairIndex !== undefined && BRAND_PAIRS[pairIndex] ? BRAND_PAIRS[pairIndex].kana : '';
+    return `ブランド名\n${englishName}（${kanaName}）\n\n`;
+  }
+
+  // サイズ情報取得関数
+  function getSizeInfo() {
+    const sizeValues = {
+      肩幅: _val('肩幅'),
+      身幅: _val('身幅'),
+      袖丈: _val('袖丈'),
+      着丈: _val('着丈'),
+      ウエスト: _val('ウエスト'),
+      ヒップ: _val('ヒップ'),
+      股上: _val('股上'),
+      股下: _val('股下')
+    };
+
+    const hasSizeData = Object.values(sizeValues).some(value => value);
+    if (!hasSizeData) return '';
+
+    let sizeText = 'サイズ\n';
+    if (sizeValues.肩幅) sizeText += `肩幅：${sizeValues.肩幅}cm\n`;
+    if (sizeValues.身幅) sizeText += `身幅：${sizeValues.身幅}cm\n`;
+    if (sizeValues.袖丈) sizeText += `袖丈：${sizeValues.袖丈}cm\n`;
+    if (sizeValues.着丈) sizeText += `着丈：${sizeValues.着丈}cm\n`;
+    if (sizeValues.ウエスト) sizeText += `ウエスト：${sizeValues.ウエスト}cm\n`;
+    if (sizeValues.ヒップ) sizeText += `ヒップ：${sizeValues.ヒップ}cm\n`;
+    if (sizeValues.股上) sizeText += `股上：${sizeValues.股上}cm\n`;
+    if (sizeValues.股下) sizeText += `股下：${sizeValues.股下}cm\n`;
+    sizeText += '\n';
+
+    return sizeText;
+  }
+
+  // 素材情報取得関数
+  function getMaterialInfo() {
+    let materialText = '';
+    const items = document.querySelectorAll('.material-item');
+
+    items.forEach((item, i) => {
+      const index = i + 1;
+      const location = _val(`素材${index}_箇所`);
+      const type1 = _val(`素材${index}_種類1`);
+      const percent1 = _val(`素材${index}_％1`);
+      const type2 = _val(`素材${index}_種類2`);
+      const percent2 = _val(`素材${index}_％2`);
+
+      if (location && type1) {
+        materialText += `${location}: ${type1}`;
+        if (percent1) materialText += ` ${percent1}%`;
+        if (type2) {
+          materialText += `, ${type2}`;
+          if (percent2) materialText += ` ${percent2}%`;
+        }
+        materialText += '\n';
+      }
+    });
+
+    if (materialText) {
+      materialText = '素材\n' + materialText + '\n';
+    }
+
+    return materialText;
+  }
+
+  function updateDescriptionFromDetail() {
+        console.log('updateDescriptionFromDetail 関数が呼び出されました');
+        const detailInput = document.getElementById('商品状態詳細');
+        const descTextarea = document.getElementById('商品の説明');
+        if (!detailInput || !descTextarea) {
+          console.error('要素が見つかりません', { detailInput, descTextarea });
+          return;
+        }
+
+        // ブランド情報を取得
+        const brandText = getBrandInfo();
+
+        // サイズ情報を取得
+        const sizeText = getSizeInfo();
+
+          // 素材情報を収集
+          const materialText = getMaterialInfo();
+
+          // 商品状態詳細を取得
+          const detailText = (detailInput.value || '').trim();
+        let detailSection = '';
+        if (detailText) {
+          detailSection = `商品状態(詳細)\n${detailText}\n\n`;
+        }
+
+        // ハッシュタグ生成
+          const hashtags = generateHashtags();
+          const hashtagText = hashtags.join('\n');
+
+          // 割引案内テキスト
+          const discountInfo = `
+    【お得な割引情報】
+
+    ■ フォロー割
+    〜2,999円 ⇒ 100円引
+    〜5,999円 ⇒ 200円引
+    〜8,999円 ⇒ 300円引
+    9,000円〜 ⇒ 500円引
+
+    ■ リピート割: 200円引
+    ■ まとめ割: 2点⇒300円 | 3点⇒500円 | 4点⇒1,000円
+
+    ※購入前にコメントで適用します`;
+
+          // 最終的な説明文を組み立て
+          const descriptionText = brandText + sizeText + materialText + detailSection + discountInfo + '\n\n' +
+  hashtagText;
+
+          // 商品の説明欄を更新
+          descTextarea.value = descriptionText;
+          console.log('更新後の説明文:', descriptionText);
+
+          // 文字数カウント更新
+          if (typeof updateDesc === 'function') {
+            updateDesc();
+          }
+      }
+
+  function setupDetailEventListener() {
+    console.log('setupDetailEventListener 関数が呼び出されました');
+    const detailInput = document.getElementById('商品状態詳細');
+    if (detailInput) {
+      // 既存のイベントリスナーを削除
+      detailInput.removeEventListener('input', updateDescriptionFromDetail);
+      // 新しいイベントリスナーを追加
+      detailInput.addEventListener('input', updateDescriptionFromDetail);
+      console.log('商品状態(詳細)イベントリスナー設定完了');
+      // テスト用: 初回実行
+      updateDescriptionFromDetail();
+    } else {
+      console.error('商品状態詳細の要素が見つかりません');
+    }
+  }
+
+  // ================= 新セールスワードシステム =================
+  function initializeSalesWords() {
+    console.log('=== セールスワード初期化開始 ===');
+    if (!(google && google.script && google.script.run)) {
+      console.log('google.script.run が利用できません');
+      setupFallbackSalesWords();
+      return;
+    }
+    // セールスワード専用データ取得
+    google.script.run
+      .withSuccessHandler(function(salesWordData) {
+        console.log('セールスワードデータ取得成功:', salesWordData);
+        SALESWORD_DATA = salesWordData;
+        // カテゴリプルダウンを設定
+        setupCategoryDropdown();
+        console.log('セールスワード初期化完了');
+      })
+      .withFailureHandler(function(error) {
+        console.error('セールスワードデータ取得エラー:', error);
+        // エラー時のフォールバック
+        setupFallbackSalesWords();
+      })
+      .getSalesWordData();
+  }
+
+  function setupCategoryDropdown() {
+    const categorySelect = document.getElementById('セールスワード(カテゴリ)');
+    if (!categorySelect) {
+      console.log('セールスワード(カテゴリ)要素が見つかりません');
+      return;
+    }
+    // プルダウンをクリア
+    categorySelect.innerHTML = '<option value="">-- カテゴリを選択 --</option>';
+    // カテゴリオプションを追加
+    SALESWORD_DATA.categories.forEach(category => {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      categorySelect.appendChild(option);
+    });
+    console.log(`カテゴリプルダウン設定完了: ${SALESWORD_DATA.categories.length}件`);
+    // キーワードプルダウンをリセット
+    resetKeywordDropdown();
+  }
+
+  function resetKeywordDropdown() {
+    const keywordSelect = document.getElementById('セールスワード');
+    if (!keywordSelect) {
+      console.log('セールスワード要素が見つかりません');
+      return;
+    }
+    keywordSelect.innerHTML = '<option value="">-- キーワードを選択 --</option>';
+    keywordSelect.disabled = true;
+  }
+
+  function onSalesWordCategoryChanged() {
+    const categorySelect = document.getElementById('セールスワード(カテゴリ)');
+    const keywordSelect = document.getElementById('セールスワード');
+    if (!categorySelect || !keywordSelect) {
+      console.log('セールスワード要素が見つかりません');
+      updateNamePreview();
+      return;
+    }
+    const selectedCategory = categorySelect.value.trim();
+    if (!selectedCategory) {
+      resetKeywordDropdown();
+      updateNamePreview();
+      return;
+    }
+    console.log('カテゴリ選択:', selectedCategory);
+    // 選択されたカテゴリのキーワードを取得
+    const categoryWords = SALESWORD_DATA.wordsByCategory[selectedCategory] || [];
+    // キーワードプルダウンを更新
+    keywordSelect.innerHTML = '<option value="">-- キーワードを選択 --</option>';
+    categoryWords.forEach(word => {
+      const option = document.createElement('option');
+      option.value = word;
+      option.textContent = word;
+      keywordSelect.appendChild(option);
+    });
+    keywordSelect.disabled = categoryWords.length === 0;
+    console.log(`キーワード設定完了: ${categoryWords.length}件`);
+    updateNamePreview();
+  }
+
+  function setupFallbackSalesWords() {
+    console.log('フォールバック用セールスワード設定');
+    const fallbackCategories = [
+      '価格・セール', '希少性・在庫状況', '状態・コンディション',
+      '取引・配送方法', '商品タイプ・ジャンル'
+    ];
+    const fallbackWords = {
+      '価格・セール': ['【セール】', '【特価】', '【値下げ】'],
+      '希少性・在庫状況': ['【レア】', '【限定】', '【1点もの】'],
+      '状態・コンディション': ['【美品】', '【新品同様】', '【良品】'],
+      '取引・配送方法': ['【匿名配送】', '【送料無料】'],
+      '商品タイプ・ジャンル': ['【古着】', '【ヴィンテージ】']
+    };
+    SALESWORD_DATA = {
+      categories: fallbackCategories,
+      wordsByCategory: fallbackWords,
+      allWords: Object.values(fallbackWords).flat()
+    };
+    setupCategoryDropdown();
+  }
+
+  function setupSalesWordEventListeners() {
+    const categorySelect = document.getElementById('セールスワード(カテゴリ)');
+    if (categorySelect) {
+      // 既存のイベントリスナーを削除
+      categorySelect.removeEventListener('change', onSalesWordCategoryChanged);
+      // 新しいイベントリスナーを追加
+      categorySelect.addEventListener('change', onSalesWordCategoryChanged);
+      console.log('セールスワードイベントリスナー設定完了');
+    }
+  }
+
+  // ================= カテゴリ階層 =================
+  function filterByCategory(rows) {
+    const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
+    const l2 = (document.getElementById('中分類(カテゴリ)')?.value||'').trim();
+    const l3 = (document.getElementById('小分類(カテゴリ)')?.value||'').trim();
+    const l4 = (document.getElementById('細分類(カテゴリ)')?.value||'').trim();
+    const l5 = (document.getElementById('細分類2')?.value||'').trim();
+    let r = rows.slice();
+    if (l1) r = r.filter(x=> x.大分類 === l1);
+    if (l2) r = r.filter(x=> x.中分類 === l2);
+    if (l3) r = r.filter(x=> x.小分類 === l3);
+    if (l4) r = r.filter(x=> x.細分類 === l4);
+    if (l5) r = r.filter(x=> x.細分類2 === l5);
+    return r;
+  }
+
+  function refreshItems() {
+    const rows = filterByCategory(CAT_ROWS);
+    fillSelectSafe(document.getElementById('アイテム名'), uniqKeepOrder(rows.map(r=>r.アイテム名)));
+    updateNamePreview();
+  }
+
+  function onL1Changed() {
+    resetSelect('中分類(カテゴリ)');
+    resetSelect('小分類(カテゴリ)');
+    resetSelect('細分類(カテゴリ)');
+    resetSelect('細分類2');
+    resetSelect('アイテム名', false);
+    const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
+    if (l1) {
+      const mids = uniqKeepOrder(CAT_ROWS.filter(r=>r.大分類===l1).map(r=>r.中分類));
+      fillSelectSafe(document.getElementById('中分類(カテゴリ)'), mids);
+    }
+    refreshItems();
+  }
+
+  function onL2Changed() {
+    resetSelect('小分類(カテゴリ)');
+    resetSelect('細分類(カテゴリ)');
+    resetSelect('細分類2');
+    resetSelect('アイテム名', false);
+    const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
+    const l2 = (document.getElementById('中分類(カテゴリ)')?.value||'').trim();
+    if (l2) {
+      const smalls = uniqKeepOrder(CAT_ROWS.filter(r=>r.大分類===l1 && r.中分類===l2).map(r=>r.小分類));
+      fillSelectSafe(document.getElementById('小分類(カテゴリ)'), smalls);
+    }
+    refreshItems();
+  }
+
+  function onL3Changed() {
+    resetSelect('細分類(カテゴリ)');
+    resetSelect('細分類2');
+    resetSelect('アイテム名', false);
+    const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
+    const l2 = (document.getElementById('中分類(カテゴリ)')?.value||'').trim();
+    const l3 = (document.getElementById('小分類(カテゴリ)')?.value||'').trim();
+    if (l3) {
+      const mins = uniqKeepOrder(CAT_ROWS.filter(r=>r.大分類===l1 && r.中分類===l2 && r.小分類===l3).map(r=>r.細分類));
+      fillSelectSafe(document.getElementById('細分類(カテゴリ)'), mins);
+    }
+    refreshItems();
+  }
+
+  function onL4Changed() {
+    resetSelect('細分類2');
+    resetSelect('アイテム名', false);
+    const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
+    const l2 = (document.getElementById('中分類(カテゴリ)')?.value||'').trim();
+    const l3 = (document.getElementById('小分類(カテゴリ)')?.value||'').trim();
+    const l4 = (document.getElementById('細分類(カテゴリ)')?.value||'').trim();
+    if (l4) {
+      const fin2 = uniqKeepOrder(CAT_ROWS.filter(r=>r.大分類===l1 && r.中分類===l2 && r.小分類===l3 && r.細分類===l4).map(r=>r.細分類2));
+      fillSelectSafe(document.getElementById('細分類2'), fin2);
+    }
+    refreshItems();
+  }
+
+  function onL5Changed() {
+    refreshItems();
+  }
+
+  function collect() {
+    const d={};
+    FIELD_IDS.forEach(k=>{
+      const el = document.getElementById(k);
+      if (!el) return;
+      const v=(el.value||'').trim();
+      if (v !== '') d[k]=v;
+    });
+    return d;
+  }
+
+  function frontValidate(d) {
+    const name = d['商品名(タイトル)'] || '';
+    const len = Array.from(name).length;
+    if (NAME_LIMIT_MODE === 'block' && len > NAME_LIMIT) {
+      return `NG(NAME): 商品名(タイトル)は${NAME_LIMIT}文字以内にしてください（現在${len}文字）`;
+    }
+    const desc = d['商品の説明'] || '';
+    const dlen = Array.from(desc).length;
+    if (DESC_LIMIT_MODE === 'block' && dlen > DESC_LIMIT) {
+      return `NG(DESC): 商品の説明は${DESC_LIMIT}文字以内にしてください（現在${dlen}文字）`;
+    }
+    if (d['商品番号'] && (isNaN(Number(d['商品番号'])) || Number(d['商品番号']) < 1001)) return "NG(FORMAT): 商品番号は1001以上の数値で入力してください";
+    if (d['仕入金額'] && isNaN(Number(d['仕入金額']))) return "NG(FORMAT): 仕入金額は数値で入力してください";
+    if (d['出品金額'] && isNaN(Number(d['出品金額']))) return "NG(FORMAT): 出品金額は数値で入力してください";
+    return '';
+  }
+
+  function onSave() {
+    updateNamePreview();
+    updateDesc();
+    const d = collect();
+    const ng = frontValidate(d);
+    if (ng) {
+      return show(ng);
+    }
+    show('送信中…');
+    if (!(google && google.script && google.script.run)) {
+      show('NG(ENV): google.script.run が無効です');
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function(result) {
+        show(result);
+      })
+      .withFailureHandler(function(error) {
+        show(`NG(UNKNOWN): ${error && error.message ? error.message : error}`);
+      })
+      .saveProduct(d);
+  }
+
+  function onReset() {
+    FIELD_IDS.forEach(k=>{
+      const el=document.getElementById(k);
+      if(el) el.value='';
+    });
+    ['中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2'].forEach(id=> resetSelect(id, true));
+    const l1 = document.getElementById('大分類(カテゴリ)');
+    if (l1) l1.value='';
+    ['サイズ','商品の状態','アイテム名','仕入先','出品先',
+   '商品属性1_カテゴリ','商品属性1_値','商品属性2_カテゴリ','商品属性2_値',
+   '商品属性3_カテゴリ','商品属性3_値']
+  .forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+    // セールスワードを初期状態にリセット
+    resetKeywordDropdown();
+    const categorySelect = document.getElementById('セールスワード(カテゴリ)');
+    if (categorySelect) categorySelect.value = '';
+
+    // 商品状態(詳細)もリセット
+      const detailInput = document.getElementById('商品状態詳細');
+      if (detailInput) detailInput.value = '';
+
+      // 素材フィールドをリセット
+      const materialItems = document.querySelectorAll('.material-item');
+      materialItems.forEach((item, index) => {
+        if (index === 0) {
+          // 最初の素材項目は空にするだけ
+          const locationSelect = item.querySelector(`#素材1_箇所`);
+          const type1Select = item.querySelector(`#素材1_種類1`);
+          const percent1Input = item.querySelector(`#素材1_％1`);
+          const type2Select = item.querySelector(`#素材1_種類2`);
+          const percent2Input = item.querySelector(`#素材1_％2`);
+
+          if (locationSelect) locationSelect.value = '';
+          if (type1Select) type1Select.value = '';
+          if (percent1Input) percent1Input.value = '';
+          if (type2Select) type2Select.value = '';
+          if (percent2Input) percent2Input.value = '';
+        } else {
+          // 2番目以降の素材項目は削除
+          item.remove();
+        }
+      });
+
+      // 素材カウンターをリセット
+      materialCount = 1;
+      updateRemoveButtons();
+
+      applyShippingDefaults();
+    const p1 = document.getElementById('prefix1');
+    if (p1) p1.value = '';
+    buildShelf();
+    setItemNumber('', '選択してください');
+    hideSuggest('ブランド(英語)');
+  // ブランドフィールドを明示的にクリア
+    const brandEn = document.getElementById('商品名_ブランド(英語)');
+    const brandKana = document.getElementById('商品名_ブランド(カナ)');
+    if (brandEn) brandEn.value = '';
+    if (brandKana) brandKana.value = '';
+
+    // ブランド表示フィールドもクリア
+    const brandDisplayEn = document.getElementById('ブランド表示_英語');
+    const brandDisplayKana = document.getElementById('ブランド表示_カナ');
+    if (brandDisplayEn) {
+      brandDisplayEn.value = '';
+      brandDisplayEn.placeholder = '未選択';
+    }
+    if (brandDisplayKana) {
+      brandDisplayKana.value = '';
+      brandDisplayKana.placeholder = '未選択';
+    }
+
+    hideSuggest('商品名_ブランド(英語)');
+    hideSuggest('商品名_ブランド(カナ)');
+    show('');
+    updateNamePreview();
+    updateDesc();
+  }
+
+  function show(t) {
+    const el=document.getElementById('msg');
+    if (el) el.textContent = t;
+  }
+
+  function unifyConditionList(list) {
+    const arr = (list||[]).map(v => (v??'').toString().trim()).filter(v=>v);
+    const hasCombined = arr.includes('新品、未使用');
+    const idxNew = arr.indexOf('新品');
+    const idxUnused = arr.indexOf('未使用');
+    if (hasCombined && idxNew === -1 && idxUnused === -1) return arr;
+    const earliest = Math.min(
+      idxNew === -1 ? Infinity : idxNew,
+      idxUnused === -1 ? Infinity : idxUnused
+    );
+    const out = [];
+    let combinedInserted = false;
+    for (let i=0; i<arr.length; i++) {
+      const v = arr[i];
+      if (i === earliest && (idxNew !== -1 || idxUnused !== -1)) {
+        if (!combinedInserted) {
+          out.push('新品、未使用');
+          combinedInserted = true;
+        }
+        continue;
+      }
+      if (v === '新品' || v === '未使用') continue;
+      if (v === '新品、未使用') {
+        if (!combinedInserted) {
+          out.push(v);
+          combinedInserted = true;
+        }
+        continue;
+      }
+      out.push(v);
+    }
+    if (!combinedInserted && (idxNew !== -1 || idxUnused !== -1)) out.unshift('新品、未使用');
+    return out;
+  }
+
+  function attachBrandSuggest(inputId, list) {
+    console.log(`attachBrandSuggest called for ${inputId} with list length:`, list ? list.length : 'undefined');
+    const input = document.getElementById(inputId);
+    const panel = document.getElementById('suggest-' + inputId);
+    if (!input || !panel) {
+      console.log(`Missing elements for ${inputId}: input=${!!input}, panel=${!!panel}`);
+      return;
+    }
+    let activeIndex = -1;
+    const limit = 15;
+    const render = (items) => {
+      panel.innerHTML = '';
+      if (!items.length) {
+        panel.innerHTML = '<div class="sug-empty">候補なし</div>';
+        panel.hidden = false;
+        return;
+      }
+
+      // ブランド入力フィールドかどうかを判定
+      const isBrandField = inputId === 'ブランド(英語)' || inputId === '商品名_ブランド(英語)';
+
+      items.slice(0, limit).forEach((v, i)=>{
+        const div = document.createElement('div');
+
+if (isBrandField) {
+            // ブランド(英語)の場合は2行表示
+            div.className = 'sug-item brand-item';
+
+            const englishName = v;
+            // ペアデータから正確なカナ読みを取得
+            const pairIndex = BRAND_INDEX_MAP.get(englishName);
+            const kanaName = pairIndex !== undefined && BRAND_PAIRS[pairIndex] ? BRAND_PAIRS[pairIndex].kana : '';
+
+            const escapedEnglishName = String(englishName).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g,
+  '&gt;').replace(/"/g, '&quot;');
+            const escapedKanaName = String(kanaName).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g,
+  '&gt;').replace(/"/g, '&quot;');
+
+            div.innerHTML = `
+              <div class="brand-english">${escapedEnglishName}</div>
+              <div class="brand-kana">${escapedKanaName}</div>
+            `;
+          } else {
+          // その他のフィールドは従来通り1行表示
+          div.className = 'sug-item';
+          div.textContent = v;
+        }
+
+        div.addEventListener('mousemove', ()=> {
+          Array.from(panel.querySelectorAll('.sug-item')).forEach(x=> x.classList.remove('active'));
+          div.classList.add('active');
+          activeIndex = i;
+        });
+        div.addEventListener('mousedown', (e)=> {
+          e.preventDefault();
+        });
+        div.addEventListener('click', ()=> {
+            // ブランド(英語)の2行表示の場合は英語名のみを取得
+            if ((inputId === 'ブランド(英語)' || inputId === '商品名_ブランド(英語)') &&
+  div.classList.contains('brand-item')) {
+              const englishDiv = div.querySelector('.brand-english');
+              input.value = englishDiv ? englishDiv.textContent : '';
+            } else {
+              input.value = v;
+            }
+            hide();
+            updateNamePreview();
+            updateBrandDisplay();
+            updateDescriptionFromDetail();
+          });
+        panel.appendChild(div);
+      });
+      panel.hidden = false;
+    };
+    const hide = ()=>{
+      panel.hidden = true;
+      activeIndex = -1;
+    };
+    const hideLater = ()=> setTimeout(hide, 100);
+    const doFilter = ()=>{
+      const q = (input.value || '').trim();
+
+      // デバッグ用ログ
+      console.log(`doFilter called for ${inputId}, query: "${q}", list length: ${list ? list.length : 'undefined'}`);
+
+      // リストが存在しない場合は何もしない
+      if (!Array.isArray(list) || list.length === 0) {
+        console.log(`No data available for ${inputId}`);
+        hide();
+        return;
+      }
+
+      if (!q) {
+        hide();
+        return;
+      }
+
+      // 短すぎる検索文字列の場合は処理を制限（パフォーマンス向上）
+      if (inputId === 'ブランド(英語)' && q.length < 2 && list.length > 10000) {
+        hide();
+        return;
+      }
+
+      let filtered;
+
+if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(英語)') {
+        // ブランド(英語)の場合は英語名とカナ読み両方で検索（ペアデータ使用）
+        const qq = q.toLowerCase();
+        filtered = list.filter(v=>{
+          const englishName = String(v).toLowerCase();
+
+          // 完全一致検索
+          if (englishName.indexOf(qq) !== -1) {
+            return true;
+          }
+
+          // 単語境界での部分一致検索（スペース区切り）
+          const words = englishName.split(/\s+/);
+          if (words.some(word => word.startsWith(qq))) {
+            return true;
+          }
+
+          // カナ読み検索（ペアデータから正確に取得）
+          const pairIndex = BRAND_INDEX_MAP.get(v);
+          if (pairIndex !== undefined && BRAND_PAIRS[pairIndex]) {
+            const kanaName = String(BRAND_PAIRS[pairIndex].kana || '').toLowerCase();
+
+            // カナ読み完全一致
+            if (kanaName.indexOf(qq) !== -1) {
+              return true;
+            }
+
+            // カナ読み単語境界での部分一致
+            const kanaWords = kanaName.split(/[\s・]+/);
+            if (kanaWords.some(word => word.startsWith(qq))) {
+              return true;
+            }
+          }
+
+          return false;
+        });
+        } else if (inputId === 'ブランド(英語)') {
+          // 基本情報ブランド(英語)の場合も同様の柔軟検索
+          const qq = q.toLowerCase();
+          filtered = list.filter(v=>{
+            const englishName = String(v).toLowerCase();
+
+            // 完全一致検索
+            if (englishName.indexOf(qq) !== -1) {
+              return true;
+            }
+
+            // 単語境界での部分一致検索（スペース区切り）
+            const words = englishName.split(/\s+/);
+            if (words.some(word => word.startsWith(qq))) {
+              return true;
+            }
+
+            // カナ読み検索（ペアデータから正確に取得）
+            const pairIndex = BRAND_INDEX_MAP.get(v);
+            if (pairIndex !== undefined && BRAND_PAIRS[pairIndex]) {
+              const kanaName = String(BRAND_PAIRS[pairIndex].kana || '').toLowerCase();
+
+              // カナ読み完全一致
+              if (kanaName.indexOf(qq) !== -1) {
+                return true;
+              }
+
+              // カナ読み単語境界での部分一致
+              const kanaWords = kanaName.split(/[\s・]+/);
+              if (kanaWords.some(word => word.startsWith(qq))) {
+                return true;
+              }
+            }
+
+            return false;
+          });
+        } else {
+          // その他のフィールドは従来通り（case-insensitive対応）
+          const qq = q.toLowerCase();
+          filtered = list.filter(v=>{
+            const s = String(v).toLowerCase();
+            return s.indexOf(qq) !== -1;
+          });
+        }
+
+      console.log(`Filtered results for ${inputId}: ${filtered.length} items`);
+      render(filtered);
+    };
+    input.addEventListener('input', doFilter);
+    input.addEventListener('focus', doFilter);
+    input.addEventListener('blur', hideLater);
+    input.addEventListener('keydown', (e)=>{
+      if (panel.hidden) return;
+      const items = Array.from(panel.querySelectorAll('.sug-item'));
+      if (!items.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = (activeIndex + 1) % items.length;
+        items.forEach(x=>x.classList.remove('active'));
+        items[activeIndex].classList.add('active');
+        items[activeIndex].scrollIntoView({ block:'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = (activeIndex - 1 + items.length) % items.length;
+        items.forEach(x=>x.classList.remove('active'));
+        items[activeIndex].classList.add('active');
+        items[activeIndex].scrollIntoView({ block:'nearest' });
+      } else if (e.key === 'Enter') {
+        if (activeIndex >= 0) {
+          e.preventDefault();
+          const selectedItem = items[activeIndex];
+
+          // ブランド(英語)の2行表示の場合は英語名のみを取得
+          if ((inputId === 'ブランド(英語)' || inputId === '商品名_ブランド(英語)') &&
+  selectedItem.classList.contains('brand-item')) {
+            const englishDiv = selectedItem.querySelector('.brand-english');
+            input.value = englishDiv ? englishDiv.textContent : '';
+          } else {
+            input.value = selectedItem.textContent || '';
+          }
+
+          hide();
+          updateNamePreview();
+
+          // ブランド(英語)の場合は追加の更新処理
+          if (inputId === 'ブランド(英語)') {
+            updateBrandDisplay();
+            updateDescriptionFromDetail();
+          }
+        }
+      } else if (e.key === 'Escape') {
+        hide();
+      }
+    });
+    function hideExternal() {
+      hide();
+    }
+    input._hideSuggest = hideExternal;
+  }
+
+  function hideSuggest(inputId) {
+    const input = document.getElementById(inputId);
+    if (input && input._hideSuggest) input._hideSuggest();
+  }
+
+  // ================= 初期化処理 =================
+  (function init() {
+    initPrefix1();
+    buildShelf();
+    const p1 = document.getElementById('prefix1');
+    if (p1) p1.addEventListener('change', buildShelf);
+    const sh = document.getElementById('棚番号');
+    if (sh) sh.addEventListener('change', requestNextNumber);
+
+    // カテゴリマスタ取得
+    if (google && google.script && google.script.run && google.script.run.getCategoryRows) {
+      google.script.run.withSuccessHandler(res=>{
+        if (!res || !res.ok) {
+          show(res && res.msg ? res.msg : 'NG(MASTER): マスタを取得できませんでした');
+          return;
+        }
+        CAT_ROWS = (res.rows || []).map(r=>({
+          大分類:String(r.大分類||'').trim(),
+          中分類:String(r.中分類||'').trim(),
+          小分類:String(r.小分類||'').trim(),
+          細分類:String(r.細分類||'').trim(),
+          細分類2:String(r.細分類2||'').trim(),
+          アイテム名:String(r.アイテム名||'').trim(),
+        }));
+        const l1s = uniqKeepOrder(CAT_ROWS.map(r=>r.大分類));
+        fillSelectSafe(document.getElementById('大分類(カテゴリ)'), l1s);
+
+        wirePreviewWatchers();
+        updateNamePreview();
+        adjustPreviewHeight();
+      }).withFailureHandler(e=> show(`NG(MASTER): ${e && e.message ? e.message : e}`)).getCategoryRows();
+    }
+
+    // マスタオプション取得
+    if (google && google.script && google.script.run && google.script.run.getMasterOptions) {
+      google.script.run.withSuccessHandler(opts=>{
+        if (!opts || typeof opts !== 'object') {
+          show('NG(MASTER): 空の応答');
+          return;
+        }
+
+        const fillSel=(id,arr)=>{
+          const sel=document.getElementById(id);
+          if(!sel) return;
+          sel.innerHTML='<option value="">--</option>';
+          (arr||[]).forEach(v=> sel.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`));
+        };
+
+        // 基本フィールド
+        fillSel('担当者', opts['担当者']||[]);
+        fillSel('仕入先', opts['仕入先']||[]);
+        fillSel('生地・素材・質感系', opts['生地・素材・質感系']||[]);
+        fillSel('サイズ', opts['サイズ']||[]);
+        fillSel('商品の状態', unifyConditionList(opts['商品の状態']||[]));
+
+// ブランドデータ（従来の配列形式は互換性のため保持）
+        BRAND_EN = Array.isArray(opts['ブランド(英語)']) ? opts['ブランド(英語)'] : [];
+        BRAND_KANA = Array.isArray(opts['ブランド(カナ)']) ? opts['ブランド(カナ)'] : [];
+
+        // ブランドペアデータを別途取得
+        google.script.run
+          .withSuccessHandler(function(pairs) {
+            console.log('ブランドペアデータ取得成功:', pairs.length, '件');
+            BRAND_PAIRS = pairs || [];
+
+            // ペアデータから英語とカナの配列を再構築
+            BRAND_EN = BRAND_PAIRS.map(pair => pair.english);
+            BRAND_KANA = BRAND_PAIRS.map(pair => pair.kana);
+
+            // ペアデータ用インデックスマップを構築
+            buildBrandIndexMap();
+
+            // ブランド候補を再設定（ペアデータ使用）
+  attachBrandSuggest('ブランド(英語)', BRAND_EN);
+
+  // 商品名ブロック用のブランド候補を設定
+  attachBrandSuggest('商品名_ブランド(英語)', BRAND_EN);
+  attachBrandSuggest('商品名_ブランド(カナ)', BRAND_KANA);
+
+            console.log('ブランドペアデータ設定完了 - EN:', BRAND_EN.length, 'KANA:', BRAND_KANA.length);
+          })
+          .withFailureHandler(function(error) {
+            console.error('ブランドペアデータ取得エラー:', error);
+            // エラー時は従来の配列方式にフォールバック
+  buildBrandIndexMap();
+  attachBrandSuggest('ブランド(英語)', BRAND_EN);
+  attachBrandSuggest('商品名_ブランド(英語)', BRAND_EN);
+  attachBrandSuggest('商品名_ブランド(カナ)', BRAND_KANA);
+          })
+          .getBrandPairs();
+
+        // タイトル情報フィールド
+        [
+          '季節感・機能性','着用シーン・イベント','見た目・印象','トレンド表現',
+          'サイズ感・体型カバー','年代・テイスト・スタイル','カラー/配色/トーン','柄・模様',
+          'ディテール・仕様','シルエット/ライン','ネックライン','襟・衿',
+          '袖・袖付け','丈','革/加工','毛皮/加工','生産国'
+        ].forEach(name => fillSel(name, opts[name]||[]));
+
+        // 出品・配送関連
+        fillSel('出品先', opts['出品先']||[]);
+        fillSel('配送料の負担', opts['配送料の負担']||[]);
+        fillSel('配送の方法', opts['配送の方法']||[]);
+        fillSel('発送元の地域', opts['発送元の地域']||[]);
+        fillSel('発送までの日数', opts['発送までの日数']||[]);
+
+applyShippingDefaults();
+
+  // グローバルにマスターオプションを保存（階層式セレクター用）
+  window.globalMasterOptions = opts;
+
+  // ブランド候補設定は getBrandPairs() の成功時に実行される
+
+        wirePreviewWatchers();
+        updateNamePreview();
+        adjustPreviewHeight();
+
+      }).withFailureHandler(e=> show(`NG(MASTER): ${e && e.message ? e.message : e}`)).getMasterOptions();
+    }
+
+// 階層式商品属性セレクター設定
+  setupAttributeSelectors();
+
+  // 動的サイズシステム設定
+  setupSizeSystem();
+
+    // セールスワード専用初期化
+    initializeSalesWords();
+
+    // イベントリスナー設定
+    const l1=document.getElementById('大分類(カテゴリ)');
+    if (l1) l1.addEventListener('change', onL1Changed);
+    const l2=document.getElementById('中分類(カテゴリ)');
+    if (l2) l2.addEventListener('change', onL2Changed);
+    const l3=document.getElementById('小分類(カテゴリ)');
+    if (l3) l3.addEventListener('change', onL3Changed);
+    const l4=document.getElementById('細分類(カテゴリ)');
+    if (l4) l4.addEventListener('change', onL4Changed);
+    const l5=document.getElementById('細分類2');
+    if (l5) l5.addEventListener('change', onL5Changed);
+
+    // セールスワード専用イベント設定
+    setupSalesWordEventListeners();
+
+    wireDescWatcher();
+
+    // 商品状態(詳細)イベントリスナー設定を追加
+    setupDetailEventListener();
+
+    // クイック挿入ボタン設定
+    setupQuickInsertButtons();
+
+    // 素材マスターデータ初期化
+    initializeMaterialMasters();
+
+    // 素材追加ボタンのイベントリスナー
+    const addBtn = document.getElementById('addMaterialBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', addMaterial);
+    }
+
+    // 素材入力フィールドの変更監視
+    document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('material-location') ||
+          e.target.classList.contains('material-type') ||
+          e.target.classList.contains('material-percent')) {
+        updateDescriptionFromDetail();
+      }
+    });
+
+    // 商品状態履歴を取得してオートコンプリート設定
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(history) {
+          CONDITION_HISTORY = history || [];
+          console.log('商品状態履歴取得完了:', CONDITION_HISTORY.length, '件');
+
+          // オートコンプリートを設定
+          attachConditionSuggest('商品状態詳細', CONDITION_HISTORY);
+        })
+        .withFailureHandler(function(error) {
+          console.error('商品状態履歴取得エラー:', error);
+          // エラー時もボタンは使えるようにする
+          attachConditionSuggest('商品状態詳細', []);
+        })
+        .getProductConditionHistory();
+    }
+
+    window.addEventListener('resize', ()=>{
+      adjustPreviewHeight();
+      adjustDescHeight();
+    });
+  })();
+
+  // ================= 動的サイズ機能 =================
+  function setupSizeSystem() {
+    // サイズプルダウンに数値選択肢を設定
+    const sizeFields = ['肩幅', '身幅', '袖丈', '着丈', 'ウエスト', 'ヒップ', '股上', '股下'];
+
+    sizeFields.forEach(fieldId => {
+      const select = document.getElementById(fieldId);
+      if (select) {
+        // 20cm〜120cmまで1cm刻みで選択肢を生成
+  for (let i = 20; i <= 120; i += 1) {
+    const option = document.createElement('option');
+    option.value = i.toString();
+    option.textContent = i.toString();
+    select.appendChild(option);
+  }
+
+        // サイズ選択時に説明文を更新
+        select.addEventListener('change', updateDescriptionFromDetail);
+      }
+    });
+
+    // 小分類変更時のサイズ表示切り替え
+    const subcategorySelect = document.getElementById('小分類(カテゴリ)');
+    if (subcategorySelect) {
+      subcategorySelect.addEventListener('change', updateSizeDisplay);
+    }
+
+    // 初期表示設定
+    updateSizeDisplay();
+  }
+
+  function updateSizeDisplay() {
+    const subcategory = _val('小分類(カテゴリ)');
+    const sizeSection = document.getElementById('sizeSection');
+    const topsSize = document.getElementById('topsSize');
+    const bottomsSize = document.getElementById('bottomsSize');
+
+    if (!sizeSection || !topsSize || !bottomsSize) return;
+
+    // カテゴリマッピング
+    const topsCategories = [
+      'Tシャツ', 'シャツ', 'ニット', 'セーター', 'パーカー', 'スウェット',
+      'ジャケット', 'ブレザー', 'カーディガン', 'ベスト', 'タンクトップ',
+      'キャミソール', 'ブラウス', 'チュニック', 'ワンピース',
+      'コート', 'ダウンジャケット', 'アウター', 'ジャンパー'
+    ];
+
+    const bottomsCategories = [
+      'パンツ', 'ジーンズ', 'デニム', 'チノパン', 'スラックス', 'ショートパンツ',
+      'ハーフパンツ', 'レギンス', 'スパッツ', 'ジョガーパンツ', 'カーゴパンツ',
+      'スカート', 'ミニスカート', 'マキシスカート', 'プリーツスカート'
+    ];
+
+    const setCategories = [
+      'スーツ', 'セットアップ', 'パジャマ', 'ルームウェア', 'ジャージ',
+      'トラックスーツ', 'スポーツウェア', '作業着', 'つなぎ'
+    ];
+
+    // 表示状態をリセット
+    sizeSection.style.display = 'none';
+    topsSize.style.display = 'none';
+    bottomsSize.style.display = 'none';
+
+    if (!subcategory) return;
+
+    // カテゴリに応じて表示切り替え
+    if (topsCategories.some(cat => subcategory.includes(cat))) {
+      sizeSection.style.display = 'block';
+      topsSize.style.display = 'block';
+    } else if (bottomsCategories.some(cat => subcategory.includes(cat))) {
+      sizeSection.style.display = 'block';
+      bottomsSize.style.display = 'block';
+    } else if (setCategories.some(cat => subcategory.includes(cat))) {
+      sizeSection.style.display = 'block';
+      topsSize.style.display = 'block';
+      bottomsSize.style.display = 'block';
+    }
+
+    // 説明文を更新
+    updateDescriptionFromDetail();
+  }
+
+  // グローバル関数設定
+  window.onSave = onSave;
+  window.onReset = onReset;
+  window.initPrefix1 = initPrefix1;
+  window.buildShelf = buildShelf;
+  window.requestNextNumber = requestNextNumber;
+  window.updateDescriptionFromDetail = updateDescriptionFromDetail;
+  window.setupDetailEventListener = setupDetailEventListener;
+
+  // ================= 階層式商品属性セレクター =================
+  function setupAttributeSelectors() {
+    // 商品属性1
+    const category1 = document.getElementById('商品属性1_カテゴリ');
+    const value1 = document.getElementById('商品属性1_値');
+    if (category1 && value1) {
+      category1.addEventListener('change', function() {
+        updateAttributeValues('商品属性1_カテゴリ', '商品属性1_値');
+      });
+    }
+
+    // 商品属性2
+    const category2 = document.getElementById('商品属性2_カテゴリ');
+    const value2 = document.getElementById('商品属性2_値');
+    if (category2 && value2) {
+      category2.addEventListener('change', function() {
+        updateAttributeValues('商品属性2_カテゴリ', '商品属性2_値');
+      });
+    }
+
+    // 商品属性3
+    const category3 = document.getElementById('商品属性3_カテゴリ');
+    const value3 = document.getElementById('商品属性3_値');
+    if (category3 && value3) {
+      category3.addEventListener('change', function() {
+        updateAttributeValues('商品属性3_カテゴリ', '商品属性3_値');
+      });
+    }
+  }
+
+  function updateAttributeValues(categoryId, valueId) {
+    const categorySelect = document.getElementById(categoryId);
+    const valueSelect = document.getElementById(valueId);
+
+    if (!categorySelect || !valueSelect) return;
+
+    const selectedCategory = categorySelect.value;
+
+    // 値プルダウンをリセット
+    valueSelect.innerHTML = '<option value="">--カテゴリを選択してください--</option>';
+    valueSelect.disabled = true;
+
+    if (!selectedCategory) {
+      updateNamePreview();
+      return;
+    }
+
+    // グローバルなマスターオプションから値を取得
+    if (window.globalMasterOptions && window.globalMasterOptions[selectedCategory]) {
+      const values = window.globalMasterOptions[selectedCategory];
+
+      if (values && values.length > 0) {
+        valueSelect.innerHTML = '<option value="">--選択してください--</option>';
+        values.forEach(value => {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value;
+          valueSelect.appendChild(option);
+        });
+        valueSelect.disabled = false;
+
+        // 値選択時のイベントリスナーを設定（重複回避のため一度削除）
+        valueSelect.removeEventListener('change', updateNamePreview);
+        valueSelect.addEventListener('change', updateNamePreview);
+      }
+    }
+
+    updateNamePreview();
+  }
+
+</script>

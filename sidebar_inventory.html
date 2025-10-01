@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head><meta charset="UTF-8">
+<style>
+  body{font-family:system-ui,-apple-system,Roboto;margin:12px}
+  h3{margin:0 0 12px}
+  label{display:block;margin:8px 0 4px;font-size:12px;color:#555}
+  input,select,button{width:100%;box-sizing:border-box;padding:8px}
+  button{border:1px solid #ccc;background:#fff;border-radius:6px;cursor:pointer}
+  button:hover{background:#f5f5f5}
+  .row{display:flex;gap:8px}
+  .row>*{flex:1}
+  #msg{margin-top:8px;font-size:12px;white-space:pre-wrap}
+</style></head>
+<body>
+  <h3>在庫管理（最小）</h3>
+
+  <label>管理番号 (例: AA-1013)</label>
+  <input id="code" placeholder="AA-1013">
+
+  <div class="row" style="margin-top:8px;">
+    <button id="btnJump">検索/ジャンプ</button>
+    <button id="btnWho">担当者表示</button>
+  </div>
+
+  <label style="margin-top:12px;">担当者（読み取り専用）</label>
+  <input id="person" readonly placeholder="検索後に自動表示">
+
+  <label style="margin-top:12px;">ステータス</label>
+  <select id="status">
+    <option value="">--選択--</option>
+    <option>在庫</option>
+    <option>販売</option>
+  </select>
+  <button id="btnSave" style="margin-top:8px;">ステータスを保存</button>
+
+  <div id="msg"></div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  const setMsg=t=>{ $('msg').textContent = t||''; };
+
+  $('btnJump').addEventListener('click', ()=>{
+    const code = ($('code').value||'').trim();
+    if(!code){ setMsg('管理番号を入力してください'); return; }
+    setMsg('検索中…');
+    google.script.run
+      .withSuccessHandler(res=> setMsg(res||''))
+      .withFailureHandler(err=> setMsg('エラー：' + (err && err.message ? err.message : err)))
+      .jumpToRowByCode(code);
+  });
+
+  $('btnWho').addEventListener('click', ()=>{
+    const code = ($('code').value||'').trim();
+    if(!code){ setMsg('管理番号を入力してください'); return; }
+    setMsg('担当者取得中…');
+    google.script.run
+      .withSuccessHandler(name=>{ $('person').value = name || ''; setMsg(''); })
+      .withFailureHandler(err=> setMsg('エラー：' + (err && err.message ? err.message : err)))
+      .getPersonByManageNo(code);
+  });
+
+  $('btnSave').addEventListener('click', ()=>{
+    const code = ($('code').value||'').trim();
+    const status = ($('status').value||'').trim();
+    if(!code){ setMsg('管理番号を入力してください'); return; }
+    if(!status){ setMsg('ステータスを選択してください'); return; }
+    setMsg('保存中…');
+    google.script.run
+      .withSuccessHandler(res=> setMsg(res||''))
+      .withFailureHandler(err=> setMsg('エラー：' + (err && err.message ? err.message : err)))
+      .updateStatus(code, status);
+  });
+</script>
+</body>
+</html>
