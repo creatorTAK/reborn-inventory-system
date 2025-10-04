@@ -5,7 +5,7 @@
 // =============================================================================
 const REQUIRED_FIELDS_PRODUCT = []; // 重複回避
 
-const PRODUCT_FIELDS = [  // 名前を変更して重複回避
+const PRODUCT_FIELDS = [
   '棚番号','商品番号','担当者',
   'セールスワード(カテゴリ)','セールスワード',
   'ブランド(英語)','ブランド(カナ)',
@@ -15,16 +15,14 @@ const PRODUCT_FIELDS = [  // 名前を変更して重複回避
   'サイズ感・体型カバー','年代・テイスト・スタイル','カラー/配色/トーン','柄・模様',
   'ディテール・仕様','シルエット/ライン','ネックライン','襟・衿',
   '袖・袖付け','丈','革/加工','毛皮/加工','生産国',
-  '大分類(カテゴリ)','中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2',
+  '大分類','中分類','小分類','細分類1','細分類2',
   'サイズ','商品の状態',
   'アイテム名',
   '商品の説明',
-  '商品状態詳細',  // 新規追加
-  // 仕入
+  '商品状態(詳細)',
+  '肩幅','身幅','袖丈','着丈','ウエスト','ヒップ','股上','股下',
   '仕入日','仕入先','仕入金額',
-  // 出品
   '出品日','出品先','出品金額',
-  // 配送
   '配送料の負担','配送の方法','発送元の地域','発送までの日数'
 ];
 
@@ -97,10 +95,22 @@ function saveProductDetailField(sheet, targetRow, formData) {
 // =============================================================================
 function saveProduct(form) {
   try {
+    // ★★★ フォームIDとスプレッドシート列名のマッピング ★★★
+    const fieldMapping = {
+      '大分類(カテゴリ)': '大分類',
+      '中分類(カテゴリ)': '中分類',
+      '小分類(カテゴリ)': '小分類',
+      '細分類(カテゴリ)': '細分類1',
+      '商品状態詳細': '商品状態(詳細)'
+    };
+
+    console.log('=== saveProduct 受信データ ===');
+    console.log('全データ:', JSON.stringify(form));
+
     const sh = getSheet_();
     const { map, lastCol } = getHeaderMap_();
     
-    // === 1) 必須 & 形式チェック ===
+    // 必須チェック
     for (const k of REQUIRED_FIELDS_PRODUCT) {
       if (!form[k]) return `NG(VALIDATION): '${k}' が未入力です`;
     }
@@ -121,72 +131,79 @@ function saveProduct(form) {
       if (isNaN(d.getTime())) return 'NG(FORMAT): 仕入日の形式が不正です';
     }
     
-    // === 2) 管理番号（AA-1013）をサーバ側で生成（列があれば書く） ===
+    // 管理番号生成
     const padWidth = KEY_NUM_WIDTH_PRODUCT;
     const shelf = String(form['棚番号'] || '').trim();
     const num = String(form['商品番号'] || '').trim();
     const mgmtKey = (shelf && num) ? `${shelf}-${String(Number(num)).padStart(padWidth, '0')}` : '';
     
-    // === 3) 追記行を用意：最下行の「数式/検証/書式のみ」を引き継ぐ ===
-    const lastRow = sh.getLastRow(); // 見出し含む最終行
+    // === 行挿入処理 ===
+    const lastRow = sh.getLastRow();
     let targetRow;
     
     if (lastRow >= 2) {
-        // データが1行以上ある → その直下に1行挿入
-        sh.insertRowsAfter(lastRow, 1);
-        targetRow = lastRow + 1;
-        const src = sh.getRange(lastRow, 1, 1, lastCol);
-        const dst = sh.getRange(targetRow, 1, 1, lastCol);
-        // 値はコピーしない。数式・検証・書式だけを順に貼り付け
-        src.copyTo(dst, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-        src.copyTo(dst, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
-        src.copyTo(dst, SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
+      // スプレッドシートの標準動作を再現
+      sh.insertRowAfter(lastRow);
+      targetRow = lastRow + 1;
+      
+      const srcRange = sh.getRange(lastRow, 1, 1, lastCol);
+      const dstRange = sh.getRange(targetRow, 1, 1, lastCol);
+      
+// 数式のみをコピー
+srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_FORMULA, false);
 
-        // 明示的に上部罫線を設定（確実に罫線を表示するため）
-        dst.setBorder(true, null, null, null, null, null, 'black', SpreadsheetApp.BorderStyle.SOLID);
-      } else {
-      // データが無い（見出しのみ）→ 2行目を空で用意
-      sh.insertRowsAfter(1, 1);
+// 書式をコピー（罫線も含む）
+srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+// データ検証（プルダウン）をコピー
+srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
+      
+    } else {
+      sh.insertRowAfter(1);
       targetRow = 2;
-      // この場合は参照元が無いので数式は引き継げません（初回のみの想定）
     }
     
-    // === 4) 入力列にだけ値をセット（それ以外の列＝引き継いだ数式/検証を保持） ===
-    // PRODUCT_FIELDS に含まれる列は、未入力でも '' を明示セットして前行の値を消す
-    for (const name of PRODUCT_FIELDS) {
-      const col = map[name];
-      if (!col) continue;
-      let val = form[name];
-      if (name === '商品番号' && val !== '' && val != null) {
-        val = Number(val); // 数字として保存
+    // === データ保存 ===
+    for (const formKey of Object.keys(form)) {
+      // マッピングを適用
+      const sheetColumnName = fieldMapping[formKey] || formKey;
+      const col = map[sheetColumnName];
+      
+      if (!col) {
+        console.log(`列未発見: フォーム[${formKey}] → シート[${sheetColumnName}]`);
+        continue;
+      }
+      
+      let val = form[formKey];
+      
+      // データ型変換
+      if (formKey === '商品番号' && val !== '' && val != null) {
+        val = Number(val);
       } else {
         val = (val == null) ? '' : String(val).trim();
       }
+      
+      console.log(`保存: ${formKey} → ${sheetColumnName} = "${val}" (列${col})`);
       sh.getRange(targetRow, col).setValue(val);
     }
     
-    // === 5) 商品状態(詳細)の動的保存処理 ===
-    const detailSaved = saveProductDetailField(sh, targetRow, form);
-    
-    // === 6) 任意列：管理番号列があるなら書き込む（PRODUCT_FIELDS外でも可） ===
+    // 管理番号
     const headersAll = sh.getRange(1, 1, 1, lastCol).getValues()[0];
-    const idxMng = headersAll.indexOf('管理番号'); // 0-based
+    const idxMng = headersAll.indexOf('管理番号');
     if (idxMng !== -1 && mgmtKey) {
       sh.getRange(targetRow, idxMng + 1).setValue(mgmtKey);
     }
     
-    // === 7) 完了メッセージ ===
-    let message = mgmtKey ? `OK: 管理番号='${mgmtKey}' を登録しました` : `OK: 登録しました（管理番号列なし）`;
+    let message = mgmtKey ? `OK: 管理番号='${mgmtKey}' を登録しました` : `OK: 登録しました`;
     
-    if (detailSaved && form['商品状態詳細']) {
-      message += ` ※商品状態(詳細)も保存されました`;
-    } else if (form['商品状態詳細'] && !detailSaved) {
-      message += ` ※注意: 商品状態(詳細)列が見つからないため、商品状態詳細は保存されませんでした`;
+    if (form['商品状態詳細']) {
+      message += ` ※商品状態(詳細)も保存`;
     }
     
     return message;
       
   } catch (e) {
+    console.error('saveProduct エラー:', e);
     const msg = (e && e.message) ? e.message : String(e);
     return msg.startsWith('NG(') ? msg : `NG(UNKNOWN): ${msg}`;
   }
@@ -199,23 +216,39 @@ function getNextItemNumber(shelf) {
   try {
     const sh = getSheet_();
     if (!sh) return 'NG(SHEET): シートが見つかりません';
-    
+
     const { map } = getHeaderMap_();
     const numCol = map['商品番号'];
+    const shelfCol = map['棚番号'];
+
     if (!numCol) return 'NG(COLUMN): 商品番号列が見つかりません';
-    
+    if (!shelfCol) return 'NG(COLUMN): 棚番号列が見つかりません';
+
     const lastRow = sh.getLastRow();
     if (lastRow < 2) return 1001; // 初回
-    
-    // 既存の商品番号を取得
-    const numValues = sh.getRange(2, numCol, lastRow - 1, 1).getValues().flat();
-    const maxNum = Math.max(...numValues.map(v => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : 0;
-    }));
-    
+
+    // 棚番号と商品番号を同時に取得
+    const range = sh.getRange(2, Math.min(numCol, shelfCol), lastRow - 1, Math.abs(numCol - shelfCol) + 1);
+    const values = range.getValues();
+
+    // 指定された棚番号に一致する商品番号のみを抽出
+    const filteredNumbers = values
+      .filter(row => {
+        const rowShelf = shelfCol < numCol ? row[0] : row[row.length - 1];
+        return String(rowShelf).trim() === String(shelf).trim();
+      })
+      .map(row => {
+        const num = shelfCol < numCol ? row[row.length - 1] : row[0];
+        const n = Number(num);
+        return Number.isFinite(n) ? n : 0;
+      });
+
+    // 該当する棚番号のデータがない場合は1001から開始
+    if (filteredNumbers.length === 0) return 1001;
+
+    const maxNum = Math.max(...filteredNumbers);
     return maxNum >= 1001 ? maxNum + 1 : 1001;
-    
+
   } catch (error) {
     console.error('getNextItemNumber エラー:', error);
     return `NG(ERROR): ${error.message}`;

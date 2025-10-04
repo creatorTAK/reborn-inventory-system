@@ -15,9 +15,18 @@ const MASTER_SHEET = 'マスタデータ';
     return result;
   }
 
-  function _findIdx(arr, target) {
-    return arr.indexOf(target);
+  function _findIdx(arr, targets) {
+  // targetsが配列の場合、各エイリアスを順番に試す
+  if (Array.isArray(targets)) {
+    for (const target of targets) {
+      const index = arr.indexOf(target);
+      if (index !== -1) return index;
+    }
+    return -1;
   }
+  // 配列でない場合は従来通り
+  return arr.indexOf(targets);
+}
 
   function _splitMulti(value) {
     return String(value || '').split(/[,\u3001\/\uFF0F\n]+/).map(v => v.trim()).filter(v => v.length > 0);
