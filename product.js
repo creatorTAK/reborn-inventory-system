@@ -26,8 +26,6 @@ const PRODUCT_FIELDS = [
   '配送料の負担','配送の方法','発送元の地域','発送までの日数'
 ];
 
-const KEY_NUM_WIDTH_PRODUCT = 4; // 重複回避
-
 // =============================================================================
 // ヘルパー関数（sp_scripts.htmlとの連携用）
 // =============================================================================
@@ -131,11 +129,8 @@ function saveProduct(form) {
       if (isNaN(d.getTime())) return 'NG(FORMAT): 仕入日の形式が不正です';
     }
     
-    // 管理番号生成
-    const padWidth = KEY_NUM_WIDTH_PRODUCT;
-    const shelf = String(form['棚番号'] || '').trim();
-    const num = String(form['商品番号'] || '').trim();
-    const mgmtKey = (shelf && num) ? `${shelf}-${String(Number(num)).padStart(padWidth, '0')}` : '';
+    // 管理番号取得（フロントエンドから受け取る）
+    const mgmtKey = String(form['管理番号'] || '').trim();
     
     // === 行挿入処理 ===
     const lastRow = sh.getLastRow();
@@ -157,12 +152,22 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
 
 // データ検証（プルダウン）をコピー
 srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
-      
+
+      // コピー後、数式以外のセル（値が入っているセル）を空文字でクリア
+      const values = dstRange.getValues()[0];
+      const formulas = dstRange.getFormulas()[0];
+      for (let i = 0; i < values.length; i++) {
+        // 数式がないセルで値が入っている場合のみクリア
+        if (!formulas[i] && values[i] !== '') {
+          sh.getRange(targetRow, i + 1).setValue('');
+        }
+      }
+
     } else {
       sh.insertRowAfter(1);
       targetRow = 2;
     }
-    
+
     // === データ保存 ===
     for (const formKey of Object.keys(form)) {
       // マッピングを適用
@@ -186,14 +191,7 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
       console.log(`保存: ${formKey} → ${sheetColumnName} = "${val}" (列${col})`);
       sh.getRange(targetRow, col).setValue(val);
     }
-    
-    // 管理番号
-    const headersAll = sh.getRange(1, 1, 1, lastCol).getValues()[0];
-    const idxMng = headersAll.indexOf('管理番号');
-    if (idxMng !== -1 && mgmtKey) {
-      sh.getRange(targetRow, idxMng + 1).setValue(mgmtKey);
-    }
-    
+
     let message = mgmtKey ? `OK: 管理番号='${mgmtKey}' を登録しました` : `OK: 登録しました`;
     
     if (form['商品状態詳細']) {
@@ -210,51 +208,7 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
 }
 
 // =============================================================================
-// 管理番号生成関連（sp_scripts.htmlから呼び出される）
-// =============================================================================
-function getNextItemNumber(shelf) {
-  try {
-    const sh = getSheet_();
-    if (!sh) return 'NG(SHEET): シートが見つかりません';
-
-    const { map } = getHeaderMap_();
-    const numCol = map['商品番号'];
-    const shelfCol = map['棚番号'];
-
-    if (!numCol) return 'NG(COLUMN): 商品番号列が見つかりません';
-    if (!shelfCol) return 'NG(COLUMN): 棚番号列が見つかりません';
-
-    const lastRow = sh.getLastRow();
-    if (lastRow < 2) return 1001; // 初回
-
-    // 棚番号と商品番号を同時に取得
-    const range = sh.getRange(2, Math.min(numCol, shelfCol), lastRow - 1, Math.abs(numCol - shelfCol) + 1);
-    const values = range.getValues();
-
-    // 指定された棚番号に一致する商品番号のみを抽出
-    const filteredNumbers = values
-      .filter(row => {
-        const rowShelf = shelfCol < numCol ? row[0] : row[row.length - 1];
-        return String(rowShelf).trim() === String(shelf).trim();
-      })
-      .map(row => {
-        const num = shelfCol < numCol ? row[row.length - 1] : row[0];
-        const n = Number(num);
-        return Number.isFinite(n) ? n : 0;
-      });
-
-    // 該当する棚番号のデータがない場合は1001から開始
-    if (filteredNumbers.length === 0) return 1001;
-
-    const maxNum = Math.max(...filteredNumbers);
-    return maxNum >= 1001 ? maxNum + 1 : 1001;
-
-  } catch (error) {
-    console.error('getNextItemNumber エラー:', error);
-    return `NG(ERROR): ${error.message}`;
-  }
-}
-
+// 管理番号生成関連は id.js に移動
 // =============================================================================
 // セールスワード関連（sp_scripts.htmlから呼び出される）
 // =============================================================================
@@ -369,15 +323,23 @@ function processProductData(form) {
 }
 
 // =============================================================================
-// 管理番号生成（将来の拡張対応）
+// 管理番号生成（設定マスタ対応）
 // =============================================================================
 function generateManagementNumber(shelfCode, itemNumber) {
-  const padWidth = 4; // 将来的に設定可能にする
+  const mgmtConfig = getManagementNumberConfig();
+  const useShelf = mgmtConfig['棚番号使用'] === 'true';
+  const padWidth = parseInt(mgmtConfig['商品番号桁数']) || DEFAULT_KEY_NUM_WIDTH;
+  const separator = mgmtConfig['区切り文字'] || DEFAULT_SEPARATOR;
   const shelf = String(shelfCode || '').trim();
   const num = String(itemNumber || '').trim();
-  
-  if (shelf && num) {
-    return `${shelf}-${String(Number(num)).padStart(padWidth, '0')}`;
+
+  if (num) {
+    const paddedNum = String(Number(num)).padStart(padWidth, '0');
+    if (useShelf && shelf) {
+      return `${shelf}${separator}${paddedNum}`;
+    } else {
+      return paddedNum;
+    }
   }
   return '';
 }

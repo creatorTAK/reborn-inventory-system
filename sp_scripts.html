@@ -1,18 +1,39 @@
 <script>
+  // 管理番号システム改善版 - 2025-01-06
   const NAME_LIMIT = 40;
   const NAME_LIMIT_MODE = 'warn';
   const DESC_LIMIT = 1000;
   const DESC_LIMIT_MODE = 'warn';
-  const SHIPPING_DEFAULTS = {
+  // 配送デフォルト設定（設定マスタから読み込む）
+  let SHIPPING_DEFAULTS = {
     '配送料の負担': '送料込み(出品者負担)',
     '配送の方法': 'ゆうゆうメルカリ便',
     '発送元の地域': '岡山県',
     '発送までの日数': '1~2日で発送'
   };
+
+  // 設定マスタから配送デフォルトを読み込む
+  function loadShippingDefaults() {
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(config) {
+          if (config) {
+            SHIPPING_DEFAULTS = config;
+            console.log('配送デフォルト設定を読み込みました:', config);
+            // デフォルト値を適用
+            applyShippingDefaults();
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('配送デフォルト設定読み込みエラー:', error);
+        })
+        .getShippingDefaults();
+    }
+  }
   const REQUIRED = [];
   
   const FIELD_IDS = [
-  '棚番号','商品番号','担当者',
+  '管理番号','担当者',
   'セールスワード(カテゴリ)','セールスワード',
   'ブランド(英語)','ブランド(カナ)',
   '商品名(タイトル)',
@@ -46,6 +67,28 @@
 
   // 商品状態履歴保持用
   let CONDITION_HISTORY = [];
+
+  // 商品の状態別のクイック挿入ボタン定義（設定マスタから読み込む）
+  let CONDITION_BUTTONS = {};
+
+  // 設定マスタから商品状態ボタンを読み込む
+  function loadConditionButtonsFromConfig() {
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(buttons) {
+          if (buttons) {
+            CONDITION_BUTTONS = buttons;
+            console.log('商品状態ボタン設定を読み込みました:', Object.keys(CONDITION_BUTTONS).length, '種類');
+            // 既に商品の状態が選択されている場合はボタンを更新
+            updateConditionButtons();
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('商品状態ボタン設定読み込みエラー:', error);
+        })
+        .getConditionButtons();
+    }
+  }
 
   // 素材システム用のグローバル変数
   let materialCount = 1;
@@ -196,36 +239,65 @@
     });
   }
 
-  // クイック挿入ボタンのイベントリスナー設定
-  function setupQuickInsertButtons() {
-    const buttons = document.querySelectorAll('.quick-btn');
-    const textarea = document.getElementById('商品状態詳細');
+  // 商品の状態に応じてボタンを表示切替
+  function updateConditionButtons() {
+    const conditionSelect = document.getElementById('商品の状態');
+    const container = document.getElementById('quickInsertButtonsContainer');
 
-    if (!textarea) {
-      console.log('商品状態詳細のテキストエリアが見つかりません');
+    if (!conditionSelect || !container) {
+      console.log('商品の状態またはボタンコンテナが見つかりません');
       return;
     }
 
-    buttons.forEach(button => {
-      button.addEventListener('click', function() {
-        const text = this.getAttribute('data-text');
-        const currentValue = textarea.value;
+    const conditionValue = conditionSelect.value;
+    const buttons = CONDITION_BUTTONS[conditionValue] || [];
 
-        // 既存テキストがある場合は改行して追加
-        if (currentValue.trim()) {
-          textarea.value = currentValue + '\n' + text;
-        } else {
-          textarea.value = text;
-        }
+    // コンテナをクリア
+    container.innerHTML = '';
+
+    // ボタンが存在しない場合は非表示
+    if (buttons.length === 0) {
+      container.style.display = 'none';
+      return;
+    }
+
+    container.style.display = '';
+
+    // ボタンを生成
+    buttons.forEach(btn => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'quick-btn';
+      button.textContent = btn.label;
+      button.setAttribute('data-text', btn.text);
+
+      // クリックイベント
+      button.addEventListener('click', function() {
+        const textarea = document.getElementById('商品状態詳細');
+        if (!textarea) return;
+
+        const text = this.getAttribute('data-text');
+
+        // ボタンを押すと常に置き換え（上書き）
+        textarea.value = text;
 
         // 商品の説明を更新
         if (typeof updateDescriptionFromDetail === 'function') {
           updateDescriptionFromDetail();
         }
       });
+
+      container.appendChild(button);
     });
 
-    console.log('クイック挿入ボタン設定完了:', buttons.length, '個');
+    console.log('クイック挿入ボタン表示更新:', buttons.length, '個');
+  }
+
+  // クイック挿入ボタンのイベントリスナー設定
+  function setupQuickInsertButtons() {
+    // 初期化時に商品の状態に応じてボタンを表示
+    updateConditionButtons();
+    console.log('クイック挿入ボタン初期化完了');
   }
 
   // 商品状態詳細オートコンプリート機能
@@ -342,37 +414,170 @@
     console.log('商品状態詳細オートコンプリート設定完了');
   }
 
-  // オリジナルハッシュタグ生成関数
+  // ハッシュタグ設定（設定マスタから読み込む）
+  let HASHTAG_CONFIG = {
+    全商品プレフィックス: '#REBORN_',
+    全商品テキスト: '全商品',
+    ブランドプレフィックス: '#REBORN_',
+    ブランドサフィックス: 'アイテム一覧',
+    カテゴリプレフィックス: '#REBORN_',
+    カテゴリサフィックス: '一覧'
+  };
+
+  // 設定マスタからハッシュタグ設定を読み込む
+  function loadHashtagConfig() {
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(config) {
+          if (config) {
+            HASHTAG_CONFIG = config;
+            console.log('ハッシュタグ設定を読み込みました:', config);
+            // 設定読み込み後、商品の説明を更新
+            if (typeof updateDescriptionFromDetail === 'function') {
+              updateDescriptionFromDetail();
+            }
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('ハッシュタグ設定読み込みエラー:', error);
+        })
+        .getHashtagConfig();
+    }
+  }
+
+  // 割引情報設定（設定マスタから読み込む）
+  let DISCOUNT_CONFIG = {
+    'フォロー割': [
+      { 範囲: '〜2,999円', 割引額: '100円引' },
+      { 範囲: '〜5,999円', 割引額: '200円引' },
+      { 範囲: '〜8,999円', 割引額: '300円引' },
+      { 範囲: '9,000円〜', 割引額: '500円引' }
+    ],
+    'リピート割': [
+      { 範囲: '', 割引額: '200円引' }
+    ],
+    'まとめ割': [
+      { 範囲: '2点', 割引額: '300円' },
+      { 範囲: '3点', 割引額: '500円' },
+      { 範囲: '4点', 割引額: '1,000円' }
+    ]
+  };
+
+  // 設定マスタから割引情報を読み込む
+  function loadDiscountConfig() {
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(config) {
+          if (config) {
+            DISCOUNT_CONFIG = config;
+            console.log('割引情報設定を読み込みました:', Object.keys(config).length, '種類');
+            // 設定読み込み後、商品の説明を更新
+            if (typeof updateDescriptionFromDetail === 'function') {
+              updateDescriptionFromDetail();
+            }
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('割引情報設定読み込みエラー:', error);
+        })
+        .getDiscountConfig();
+    }
+  }
+
+  // 割引情報テキストを生成
+  function generateDiscountInfo() {
+    // 割引情報があるかチェック
+    const hasFollow = DISCOUNT_CONFIG['フォロー割'] && DISCOUNT_CONFIG['フォロー割'].length > 0;
+    const hasRepeat = DISCOUNT_CONFIG['リピート割'] && DISCOUNT_CONFIG['リピート割'].length > 0;
+    const hasMatome = DISCOUNT_CONFIG['まとめ割'] && DISCOUNT_CONFIG['まとめ割'].length > 0;
+
+    // すべての割引が空の場合は空文字を返す
+    if (!hasFollow && !hasRepeat && !hasMatome) {
+      return '';
+    }
+
+    let text = '\n【お得な割引情報】\n\n';
+
+    // フォロー割
+    if (hasFollow) {
+      text += '■ フォロー割\n';
+      DISCOUNT_CONFIG['フォロー割'].forEach(item => {
+        text += `${item.範囲} ⇒ ${item.割引額}\n`;
+      });
+      // 説明文があれば追加
+      if (DISCOUNT_CONFIG['フォロー割_説明文']) {
+        text += `${DISCOUNT_CONFIG['フォロー割_説明文']}\n`;
+      }
+      text += '\n';
+    }
+
+    // リピート割
+    if (hasRepeat) {
+      const repeatDiscount = DISCOUNT_CONFIG['リピート割'][0].割引額;
+      text += '■ リピート割\n';
+      text += `次回購入時に${repeatDiscount}\n`;
+      // 説明文があれば追加
+      if (DISCOUNT_CONFIG['リピート割_説明文']) {
+        text += `${DISCOUNT_CONFIG['リピート割_説明文']}\n`;
+      }
+      text += '\n';
+    }
+
+    // まとめ割
+    if (hasMatome) {
+      text += '■ まとめ割\n';
+      DISCOUNT_CONFIG['まとめ割'].forEach(item => {
+        text += `${item.範囲}⇒${item.割引額}\n`;
+      });
+      // 説明文があれば追加
+      if (DISCOUNT_CONFIG['まとめ割_説明文']) {
+        text += `${DISCOUNT_CONFIG['まとめ割_説明文']}`;
+      }
+    }
+
+    return text;
+  }
+
+  // オリジナルハッシュタグ生成関数（設定シート対応版）
   function generateHashtags() {
     const tags = [];
-    const shopName = 'REBORN';
 
     // 全商品タグ
-    tags.push(`#${shopName}_全商品`);
+    const allProductPrefix = HASHTAG_CONFIG.全商品プレフィックス || '#REBORN_';
+    const allProductText = HASHTAG_CONFIG.全商品テキスト || '全商品';
+    tags.push(`${allProductPrefix}${allProductText}`);
 
     // ブランド別タグ
     const brandEn = _val('ブランド(英語)');
     if (brandEn) {
+      const brandPrefix = HASHTAG_CONFIG.ブランドプレフィックス || '#REBORN_';
+      const brandSuffix = HASHTAG_CONFIG.ブランドサフィックス || 'アイテム一覧';
       // 半角英数のみ使用、スペースは除去
       const cleanBrand = brandEn.replace(/\s+/g, '');
-      tags.push(`#${shopName}_${cleanBrand}アイテム一覧`);
+      tags.push(`${brandPrefix}${cleanBrand}${brandSuffix}`);
     }
 
     // 中分類タグ
     const category2 = _val('中分類(カテゴリ)');
     if (category2) {
-      tags.push(`#${shopName}_${category2}一覧`);
+      const categoryPrefix = HASHTAG_CONFIG.カテゴリプレフィックス || '#REBORN_';
+      const categorySuffix = HASHTAG_CONFIG.カテゴリサフィックス || '一覧';
+      tags.push(`${categoryPrefix}${category2}${categorySuffix}`);
     }
 
     // 大分類タグ
     const category1 = _val('大分類(カテゴリ)');
     if (category1) {
-      tags.push(`#${shopName}_${category1}アイテム一覧`);
+      const categoryPrefix = HASHTAG_CONFIG.カテゴリプレフィックス || '#REBORN_';
+      const brandSuffix = HASHTAG_CONFIG.ブランドサフィックス || 'アイテム一覧';
+      tags.push(`${categoryPrefix}${category1}${brandSuffix}`);
     }
 
     // 大分類+中分類の組み合わせタグ
     if (category1 && category2) {
-      tags.push(`#${shopName}_${category1}${category2}一覧`);
+      const categoryPrefix = HASHTAG_CONFIG.カテゴリプレフィックス || '#REBORN_';
+      const categorySuffix = HASHTAG_CONFIG.カテゴリサフィックス || '一覧';
+      tags.push(`${categoryPrefix}${category1}${category2}${categorySuffix}`);
     }
 
     // 重複削除
@@ -439,6 +644,7 @@
     }
   }
 
+  // 頭文字プルダウンを初期化
   function initPrefix1() {
     const p1 = document.getElementById('prefix1');
     if (!p1) return;
@@ -449,6 +655,7 @@
     }
   }
 
+  // 棚番号プルダウンを構築
   function buildShelf() {
     const p1 = document.getElementById('prefix1');
     const shelf = document.getElementById('棚番号');
@@ -457,7 +664,7 @@
     shelf.innerHTML = '<option value="">--</option>';
     if (!v1) {
       shelf.disabled = true;
-      setItemNumber('', '選択してください');
+      setManagementNumber('', '選択してください');
       return;
     }
     shelf.disabled = false;
@@ -466,36 +673,42 @@
       shelf.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`);
     }
     shelf.value = '';
-    setItemNumber('', '選択してください');
+    setManagementNumber('', '選択してください');
   }
 
-  function requestNextNumber() {
+  // 棚番号選択時に管理番号を取得
+  function requestNextManagementNumber() {
     const shelfSel = document.getElementById('棚番号');
     if (!shelfSel) {
-      setItemNumber('', '選択してください');
+      setManagementNumber('', '選択してください');
       return;
     }
     const shelf = shelfSel.value;
     if (!shelf) {
-      setItemNumber('', '選択してください');
+      setManagementNumber('', '選択してください');
       return;
     }
-    setItemNumber('', '採番中…');
+    setManagementNumber('', '採番中…');
     if (!(google && google.script && google.script.run)) {
-      setItemNumber('', '');
+      setManagementNumber('', '');
       return;
     }
     google.script.run.withSuccessHandler(res=>{
       if (typeof res === 'string' && res.startsWith('NG(')) {
         show(res);
+        setManagementNumber('', 'エラー');
         return;
       }
-      setItemNumber(res, '');
-    }).withFailureHandler(e=> show(`NG(UNKNOWN): ${e && e.message ? e.message : e}`)).getNextItemNumber(shelf);
+      setManagementNumber(res, '');
+    }).withFailureHandler(e=> {
+      show(`NG(UNKNOWN): ${e && e.message ? e.message : e}`);
+      setManagementNumber('', 'エラー');
+    }).getNextManagementNumber(shelf);
   }
 
-  function setItemNumber(val, ph) {
-    const el=document.getElementById('商品番号');
+  // 管理番号フィールドに値を設定
+  function setManagementNumber(val, ph) {
+    const el=document.getElementById('管理番号');
     if (!el) return;
     el.value=val||'';
     el.placeholder=ph||'';
@@ -748,6 +961,14 @@
           // 素材情報を収集
           const materialText = getMaterialInfo();
 
+          // 商品の状態を取得（基本情報ブロックから）
+          const conditionSelect = document.getElementById('商品の状態');
+          const conditionValue = conditionSelect ? (conditionSelect.value || '').trim() : '';
+          let conditionSection = '';
+          if (conditionValue) {
+            conditionSection = `商品の状態\n${conditionValue}\n\n`;
+          }
+
           // 商品状態詳細を取得
           const detailText = (detailInput.value || '').trim();
         let detailSection = '';
@@ -759,23 +980,11 @@
           const hashtags = generateHashtags();
           const hashtagText = hashtags.join('\n');
 
-          // 割引案内テキスト
-          const discountInfo = `
-    【お得な割引情報】
-
-    ■ フォロー割
-    〜2,999円 ⇒ 100円引
-    〜5,999円 ⇒ 200円引
-    〜8,999円 ⇒ 300円引
-    9,000円〜 ⇒ 500円引
-
-    ■ リピート割: 200円引
-    ■ まとめ割: 2点⇒300円 | 3点⇒500円 | 4点⇒1,000円
-
-    ※購入前にコメントで適用します`;
+          // 割引案内テキスト（設定シート対応版）
+          const discountInfo = generateDiscountInfo();
 
           // 最終的な説明文を組み立て
-          const descriptionText = brandText + sizeText + materialText + detailSection + discountInfo + '\n\n' +
+          const descriptionText = brandText + sizeText + materialText + conditionSection + detailSection + discountInfo + '\n\n' +
   hashtagText;
 
           // 商品の説明欄を更新
@@ -1025,7 +1234,6 @@
     if (DESC_LIMIT_MODE === 'block' && dlen > DESC_LIMIT) {
       return `NG(DESC): 商品の説明は${DESC_LIMIT}文字以内にしてください（現在${dlen}文字）`;
     }
-    if (d['商品番号'] && (isNaN(Number(d['商品番号'])) || Number(d['商品番号']) < 1001)) return "NG(FORMAT): 商品番号は1001以上の数値で入力してください";
     if (d['仕入金額'] && isNaN(Number(d['仕入金額']))) return "NG(FORMAT): 仕入金額は数値で入力してください";
     if (d['出品金額'] && isNaN(Number(d['出品金額']))) return "NG(FORMAT): 出品金額は数値で入力してください";
     return '';
@@ -1424,12 +1632,13 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
 
   // ================= 初期化処理 =================
   (function init() {
+    // 頭文字・棚番号プルダウンを初期化
     initPrefix1();
     buildShelf();
     const p1 = document.getElementById('prefix1');
     if (p1) p1.addEventListener('change', buildShelf);
     const sh = document.getElementById('棚番号');
-    if (sh) sh.addEventListener('change', requestNextNumber);
+    if (sh) sh.addEventListener('change', requestNextManagementNumber);
 
     // カテゴリマスタ取得
     if (google && google.script && google.script.run && google.script.run.getCategoryRows) {
@@ -1543,6 +1752,8 @@ const conditionSelect = document.getElementById('商品の状態');
 if (conditionSelect) {
   conditionSelect.removeEventListener('change', updateDescriptionFromDetail);
   conditionSelect.addEventListener('change', updateDescriptionFromDetail);
+  conditionSelect.removeEventListener('change', updateConditionButtons);
+  conditionSelect.addEventListener('change', updateConditionButtons);
   console.log('商品の状態プルダウンのイベントリスナー設定完了');
 }
 
@@ -1573,6 +1784,18 @@ if (staffSelect) {
 
     // セールスワード専用初期化
     initializeSalesWords();
+
+    // 設定マスタから商品状態ボタンを読み込み
+    loadConditionButtonsFromConfig();
+
+    // 設定マスタからハッシュタグ設定を読み込み
+    loadHashtagConfig();
+
+    // 設定マスタから割引情報を読み込み
+    loadDiscountConfig();
+
+    // 設定マスタから配送デフォルトを読み込み
+    loadShippingDefaults();
 
     // イベントリスナー設定
     const l1=document.getElementById('大分類(カテゴリ)');
@@ -1726,7 +1949,7 @@ if (staffSelect) {
   window.onReset = onReset;
   window.initPrefix1 = initPrefix1;
   window.buildShelf = buildShelf;
-  window.requestNextNumber = requestNextNumber;
+  window.requestNextManagementNumber = requestNextManagementNumber;
   window.updateDescriptionFromDetail = updateDescriptionFromDetail;
   window.setupDetailEventListener = setupDetailEventListener;
 
