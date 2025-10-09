@@ -1,0 +1,1004 @@
+<!-- 管理番号ビルダー - レゴブロック式セグメント構築システム -->
+<style>
+  .mnb-container {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+  }
+
+  .mnb-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #212529;
+  }
+
+  /* セグメントリスト */
+  .mnb-segments {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 100px;
+    margin-bottom: 16px;
+  }
+
+  .mnb-segments.drag-over {
+    background: #e3f2fd;
+    border-color: #2196f3;
+  }
+
+  .mnb-segments-empty {
+    text-align: center;
+    color: #9ca3af;
+    padding: 24px 16px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* セグメントブロック */
+  .mnb-segment {
+    background: white;
+    border: 1px solid #e5e7eb;
+    color: #1f2937;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    cursor: move;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transition: all 0.2s;
+  }
+
+  .mnb-segment:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 2px 6px rgba(59,130,246,0.15);
+  }
+
+  .mnb-segment.dragging {
+    opacity: 0.5;
+  }
+
+  .mnb-segment-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .mnb-segment-drag-handle {
+    font-size: 16px;
+    color: #9ca3af;
+    cursor: grab;
+  }
+
+  .mnb-segment-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .mnb-segment-icon {
+    font-size: 22px;
+  }
+
+  .mnb-segment-type {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+  }
+
+  .mnb-segment-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 10px;
+  }
+
+  .mnb-segment-controls {
+    display: flex;
+    gap: 8px;
+  }
+
+  .mnb-segment-btn {
+    flex: 1;
+    background: white;
+    border: 1px solid #d1d5db;
+    color: #374151;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+
+  .mnb-segment-btn:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+  }
+
+  .mnb-segment-btn.delete {
+    color: #ef4444;
+    border-color: #fecaca;
+  }
+
+  .mnb-segment-btn.delete:hover {
+    background: #fef2f2;
+    border-color: #ef4444;
+  }
+
+  /* セグメント追加ボタン */
+  .mnb-add-segment {
+    background: white;
+    color: #3b82f6;
+    border: 2px dashed #3b82f6;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    width: 100%;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .mnb-add-segment:hover {
+    background: #eff6ff;
+  }
+
+  /* プレビュー */
+  .mnb-preview {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .mnb-preview-label {
+    font-size: 10px;
+    color: #6b7280;
+    margin-bottom: 2px;
+  }
+
+  .mnb-preview-value {
+    padding: 6px 10px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 11px;
+    color: #1e40af;
+    font-weight: 500;
+  }
+
+  .mnb-preview-parts {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .mnb-preview-part {
+    background: #f3f4f6;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  /* セグメント編集モーダル */
+  .mnb-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mnb-modal.active {
+    display: flex;
+  }
+
+  .mnb-modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+  }
+
+  .mnb-modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #1f2937;
+  }
+
+  .mnb-form-group {
+    margin-bottom: 12px;
+  }
+
+  .mnb-form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 4px;
+  }
+
+  .mnb-form-input,
+  .mnb-form-select {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  .mnb-form-input:focus,
+  .mnb-form-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  .mnb-modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .mnb-modal-btn {
+    flex: 1;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .mnb-modal-btn-primary {
+    background: #3b82f6;
+    color: white;
+  }
+
+  .mnb-modal-btn-primary:hover {
+    background: #2563eb;
+  }
+
+  .mnb-modal-btn-secondary {
+    background: #e5e7eb;
+    color: #374151;
+  }
+
+  .mnb-modal-btn-secondary:hover {
+    background: #d1d5db;
+  }
+
+  /* セグメントタイプ選択 */
+  .mnb-type-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .mnb-type-card {
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .mnb-type-card:hover {
+    border-color: #3b82f6;
+    background: #f0f9ff;
+  }
+
+  .mnb-type-card.selected {
+    border-color: #3b82f6;
+    background: #dbeafe;
+  }
+
+  .mnb-type-card-icon {
+    font-size: 30px;
+    margin-bottom: 4px;
+  }
+
+  .mnb-type-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 3px;
+  }
+
+  .mnb-type-card-desc {
+    font-size: 11px;
+    color: #6b7280;
+    line-height: 1.3;
+  }
+</style>
+
+<!-- 管理番号ビルダーUI -->
+<div class="mnb-container">
+  <div class="mnb-title">🔢 管理番号設定</div>
+
+  <!-- ヒント -->
+  <div style="font-size: 11px; color: #6b7280; padding: 8px; background: #f0f9ff; border-radius: 4px; border-left: 3px solid #3b82f6; margin-bottom: 16px;">
+    💡 商品登録時に自動で管理番号が生成されます。セグメントをドラッグして並び替えできます。
+  </div>
+
+  <!-- プリセット選択 -->
+  <div style="margin-bottom: 16px; padding: 12px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+    <label style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 12px; display: block;">
+      📋 プリセットから選択
+    </label>
+    <select id="mnbPresetSelect" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; background: #f9fafb; cursor: pointer; transition: all 0.2s;" onfocus="this.style.borderColor='#3b82f6'; this.style.background='white';" onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb';">
+      <option value="" style="padding: 8px;">-- カスタム設定 --</option>
+      <option value="simple" style="padding: 8px;">🔢 シンプル連番　(例: 1001, 1002, 1003...)</option>
+      <option value="shelf" style="padding: 8px;">📦 棚番号 + 連番　(例: AA-1001, BB-1001...)</option>
+      <option value="category_date" style="padding: 8px;">📅 カテゴリ + 日付 + 連番　(例: K-251007-001...)</option>
+      <option value="shelf_date" style="padding: 8px;">🗓️ 棚番号 + 日付 + 連番　(例: AA-251007-001...)</option>
+      <option value="category_rank" style="padding: 8px;">⭐ カテゴリ + ランク + 連番　(例: K-A-001...)</option>
+    </select>
+  </div>
+
+  <!-- セグメントリスト -->
+  <div id="mnbSegmentsList" class="mnb-segments">
+    <div class="mnb-segments-empty">
+      セグメントを追加してください<br><small style="font-size: 12px;">ドラッグして並び替えできます</small>
+    </div>
+  </div>
+
+  <!-- セグメント追加ボタン -->
+  <button type="button" class="mnb-add-segment" onclick="openAddSegmentModal()">
+    <span>➕</span>
+    <span>セグメントを追加</span>
+  </button>
+
+  <!-- プレビュー -->
+  <div class="mnb-preview">
+    <div class="mnb-preview-label">プレビュー:</div>
+    <div id="mnbPreviewValue" class="mnb-preview-value">-</div>
+    <div id="mnbPreviewParts" class="mnb-preview-parts"></div>
+  </div>
+</div>
+
+<!-- セグメント追加/編集モーダル -->
+<div id="mnbModal" class="mnb-modal">
+  <div class="mnb-modal-content">
+    <div class="mnb-modal-title" id="mnbModalTitle">セグメントを追加</div>
+
+    <!-- セグメントタイプ選択 -->
+    <div class="mnb-form-group">
+      <label class="mnb-form-label">セグメントタイプ</label>
+      <div class="mnb-type-grid" id="mnbTypeGrid">
+        <!-- 動的に生成 -->
+      </div>
+    </div>
+
+    <!-- セグメント設定（タイプによって変わる） -->
+    <div id="mnbSegmentConfig">
+      <!-- 動的に生成 -->
+    </div>
+
+    <!-- 区切り文字 -->
+    <div class="mnb-form-group">
+      <label class="mnb-form-label">区切り文字（このセグメントの後）</label>
+      <select class="mnb-form-select" id="mnbSeparator">
+        <option value="-">- (ハイフン)</option>
+        <option value="_">_ (アンダースコア)</option>
+        <option value="">（なし）</option>
+        <option value=".">. (ドット)</option>
+        <option value=" ">　(スペース)</option>
+      </select>
+    </div>
+
+    <!-- アクション -->
+    <div class="mnb-modal-actions">
+      <button type="button" class="mnb-modal-btn mnb-modal-btn-secondary" onclick="closeSegmentModal()">キャンセル</button>
+      <button type="button" class="mnb-modal-btn mnb-modal-btn-primary" onclick="saveSegment()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 管理番号ビルダーシステム
+  const ManagementNumberBuilder = {
+    segments: [],
+    currentEditingIndex: null,
+    selectedType: null,
+
+    // セグメントタイプ定義
+    segmentTypes: {
+      shelf: {
+        icon: '🏷️',
+        name: '棚番号',
+        desc: 'AA, BB などの棚番号',
+        fields: [
+          {
+            id: 'format',
+            label: '棚番号形式',
+            type: 'select',
+            options: [
+              { value: 'AA', label: 'アルファベット2文字 (AA)' },
+              { value: 'A', label: 'アルファベット1文字 (A)' },
+              { value: '01', label: '数字2桁 (01)' },
+              { value: '001', label: '数字3桁 (001)' },
+              { value: 'custom', label: '✏️ カスタム入力' }
+            ]
+          },
+          { id: 'code', label: '棚番号', type: 'text', placeholder: 'AA', conditional: { field: 'format', value: 'custom' } }
+        ],
+        preview: (config) => {
+          if (config.format === 'custom') {
+            return config.code || 'AA';
+          }
+          return config.format || 'AA';
+        }
+      },
+      sequence: {
+        icon: '🔢',
+        name: '連番',
+        desc: '001, 0001 などの連番',
+        fields: [
+          {
+            id: 'digits',
+            label: '桁数',
+            type: 'select',
+            options: [
+              { value: '2', label: '2桁 (01)' },
+              { value: '3', label: '3桁 (001)' },
+              { value: '4', label: '4桁 (0001)' },
+              { value: '5', label: '5桁 (00001)' },
+              { value: '6', label: '6桁 (000001)' }
+            ]
+          },
+          { id: 'start', label: '開始番号', type: 'number', placeholder: '1' }
+        ],
+        preview: (config) => {
+          const num = config.start || 1;
+          const digits = parseInt(config.digits) || 3;
+          return String(num).padStart(digits, '0');
+        }
+      },
+      category: {
+        icon: '📁',
+        name: 'カテゴリコード',
+        desc: '商品カテゴリ (K, O など)',
+        fields: [
+          { id: 'code', label: 'コード', type: 'text', placeholder: 'K' }
+        ],
+        preview: (config) => config.code || 'K'
+      },
+      date: {
+        icon: '📅',
+        name: '登録日',
+        desc: '日付形式を選択',
+        fields: [
+          {
+            id: 'format',
+            label: '形式',
+            type: 'select',
+            options: [
+              { value: 'YYMMDD', label: 'YYMMDD (241007)' },
+              { value: 'YYYYMMDD', label: 'YYYYMMDD (20241007)' },
+              { value: 'YYMD', label: 'YYMD (24107)' },
+              { value: 'YYMM', label: 'YYMM (2410)' }
+            ]
+          }
+        ],
+        preview: (config) => {
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const d = String(now.getDate()).padStart(2, '0');
+
+          switch(config.format) {
+            case 'YYYYMMDD': return `${y}${m}${d}`;
+            case 'YYMD': return `${String(y).slice(2)}${parseInt(m)}${parseInt(d)}`;
+            case 'YYMM': return `${String(y).slice(2)}${m}`;
+            default: return `${String(y).slice(2)}${m}${d}`;
+          }
+        }
+      },
+      rank: {
+        icon: '⭐',
+        name: '品質ランク',
+        desc: 'A, B, C などのランク',
+        fields: [
+          { id: 'value', label: 'ランク値', type: 'text', placeholder: 'A' }
+        ],
+        preview: (config) => config.value || 'A'
+      },
+      size: {
+        icon: '📏',
+        name: 'サイズコード',
+        desc: 'S, M, L などのサイズ',
+        fields: [
+          { id: 'code', label: 'サイズコード', type: 'text', placeholder: 'M' }
+        ],
+        preview: (config) => config.code || 'M'
+      },
+      color: {
+        icon: '🎨',
+        name: '色コード',
+        desc: 'DB, R などの色コード',
+        fields: [
+          { id: 'code', label: '色コード', type: 'text', placeholder: 'DB' }
+        ],
+        preview: (config) => config.code || 'DB'
+      },
+      custom: {
+        icon: '✏️',
+        name: 'カスタム固定値',
+        desc: '任意の固定文字列',
+        fields: [
+          { id: 'value', label: '固定値', type: 'text', placeholder: 'XXX' }
+        ],
+        preview: (config) => config.value || 'XXX'
+      }
+    },
+
+    // プリセット定義
+    presets: {
+      simple: [
+        { type: 'sequence', config: { digits: '4', start: '1001' }, separator: '' }
+      ],
+      shelf: [
+        { type: 'shelf', config: { format: 'AA' }, separator: '-' },
+        { type: 'sequence', config: { digits: '4', start: '1001' }, separator: '' }
+      ],
+      category_date: [
+        { type: 'category', config: { code: 'K' }, separator: '-' },
+        { type: 'date', config: { format: 'YYMMDD' }, separator: '-' },
+        { type: 'sequence', config: { digits: '3', start: '1' }, separator: '' }
+      ],
+      shelf_date: [
+        { type: 'shelf', config: { format: 'AA' }, separator: '-' },
+        { type: 'date', config: { format: 'YYMMDD' }, separator: '-' },
+        { type: 'sequence', config: { digits: '3', start: '1' }, separator: '' }
+      ],
+      category_rank: [
+        { type: 'category', config: { code: 'K' }, separator: '-' },
+        { type: 'rank', config: { value: 'A' }, separator: '-' },
+        { type: 'sequence', config: { digits: '3', start: '1' }, separator: '' }
+      ]
+    },
+
+    // 初期化
+    init() {
+      this.renderTypeGrid();
+      this.updatePreview();
+      this.setupDragAndDrop();
+      this.loadSettings();
+      this.setupPresetSelector();
+    },
+
+    // プリセットセレクター設定
+    setupPresetSelector() {
+      const selector = document.getElementById('mnbPresetSelect');
+      if (!selector) return;
+
+      selector.addEventListener('change', (e) => {
+        const presetKey = e.target.value;
+        if (!presetKey) return;
+
+        const preset = this.presets[presetKey];
+        if (!preset) return;
+
+        // 既存のセグメントをクリアして、プリセットを適用
+        if (confirm('現在の設定を削除してプリセットを適用しますか？')) {
+          this.segments = JSON.parse(JSON.stringify(preset)); // ディープコピー
+          this.renderSegments();
+          this.updatePreview();
+        } else {
+          // キャンセルされた場合は選択を戻す
+          selector.value = '';
+        }
+      });
+    },
+
+    // 設定をサーバーから読み込み
+    loadSettings() {
+      if (google && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler((config) => {
+            if (config && config.segments && config.segments.length > 0) {
+              this.segments = config.segments;
+              this.renderSegments();
+              this.updatePreview();
+              console.log('管理番号設定を読み込みました:', config.segments.length, 'セグメント');
+            }
+          })
+          .withFailureHandler((error) => {
+            console.error('管理番号設定の読み込みエラー:', error);
+          })
+          .getManagementNumberConfig();
+      }
+    },
+
+    // セグメントタイプグリッドを描画
+    renderTypeGrid() {
+      const grid = document.getElementById('mnbTypeGrid');
+      grid.innerHTML = '';
+
+      Object.keys(this.segmentTypes).forEach(typeKey => {
+        const type = this.segmentTypes[typeKey];
+        const card = document.createElement('div');
+        card.className = 'mnb-type-card';
+        card.onclick = () => this.selectType(typeKey);
+        card.innerHTML = `
+          <div class="mnb-type-card-icon">${type.icon}</div>
+          <div class="mnb-type-card-name">${type.name}</div>
+          <div class="mnb-type-card-desc">${type.desc}</div>
+        `;
+        grid.appendChild(card);
+      });
+    },
+
+    // セグメントタイプ選択
+    selectType(typeKey) {
+      this.selectedType = typeKey;
+
+      // カードの選択状態を更新
+      document.querySelectorAll('.mnb-type-card').forEach((card, i) => {
+        card.classList.remove('selected');
+      });
+      const typeKeys = Object.keys(this.segmentTypes);
+      const index = typeKeys.indexOf(typeKey);
+      document.querySelectorAll('.mnb-type-card')[index].classList.add('selected');
+
+      // 設定フィールドを表示
+      this.renderConfigFields(typeKey);
+    },
+
+    // 設定フィールドを描画
+    renderConfigFields(typeKey) {
+      const type = this.segmentTypes[typeKey];
+      const container = document.getElementById('mnbSegmentConfig');
+      container.innerHTML = '';
+
+      type.fields.forEach(field => {
+        const group = document.createElement('div');
+        group.className = 'mnb-form-group';
+
+        // 条件付きフィールドの場合はデフォルトで非表示
+        if (field.conditional) {
+          group.style.display = 'none';
+          group.setAttribute('data-conditional-field', field.conditional.field);
+          group.setAttribute('data-conditional-value', field.conditional.value);
+        }
+
+        const label = document.createElement('label');
+        label.className = 'mnb-form-label';
+        label.textContent = field.label;
+        group.appendChild(label);
+
+        if (field.type === 'select') {
+          const select = document.createElement('select');
+          select.className = 'mnb-form-select';
+          select.id = `mnbField_${field.id}`;
+
+          field.options.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.label;
+            select.appendChild(option);
+          });
+
+          // セレクト変更時に条件付きフィールドの表示/非表示を切り替え
+          select.addEventListener('change', () => {
+            this.updateConditionalFields(field.id, select.value);
+          });
+
+          group.appendChild(select);
+        } else {
+          const input = document.createElement('input');
+          input.className = 'mnb-form-input';
+          input.type = field.type;
+          input.id = `mnbField_${field.id}`;
+          input.placeholder = field.placeholder || '';
+          group.appendChild(input);
+        }
+
+        container.appendChild(group);
+      });
+    },
+
+    // 条件付きフィールドの表示/非表示を更新
+    updateConditionalFields(fieldId, value) {
+      const container = document.getElementById('mnbSegmentConfig');
+      const conditionalFields = container.querySelectorAll(`[data-conditional-field="${fieldId}"]`);
+
+      conditionalFields.forEach(field => {
+        const conditionalValue = field.getAttribute('data-conditional-value');
+        if (value === conditionalValue) {
+          field.style.display = 'block';
+        } else {
+          field.style.display = 'none';
+        }
+      });
+    },
+
+    // セグメントを追加
+    addSegment(segment) {
+      this.segments.push(segment);
+      this.renderSegments();
+      this.updatePreview();
+    },
+
+    // セグメントを更新
+    updateSegment(index, segment) {
+      this.segments[index] = segment;
+      this.renderSegments();
+      this.updatePreview();
+    },
+
+    // セグメントを削除
+    removeSegment(index) {
+      this.segments.splice(index, 1);
+      this.renderSegments();
+      this.updatePreview();
+    },
+
+    // セグメントを移動
+    moveSegment(fromIndex, toIndex) {
+      const segment = this.segments.splice(fromIndex, 1)[0];
+      this.segments.splice(toIndex, 0, segment);
+      this.renderSegments();
+      this.updatePreview();
+    },
+
+    // セグメントリストを描画
+    renderSegments() {
+      const container = document.getElementById('mnbSegmentsList');
+
+      if (this.segments.length === 0) {
+        container.innerHTML = `
+          <div class="mnb-segments-empty">
+            セグメントを追加してください<br>
+            <small>ドラッグして並び替えできます</small>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = '';
+
+      this.segments.forEach((segment, index) => {
+        const type = this.segmentTypes[segment.type];
+        const block = document.createElement('div');
+        block.className = 'mnb-segment';
+        block.draggable = true;
+        block.setAttribute('data-index', index);
+
+        const preview = type.preview(segment.config);
+
+        block.innerHTML = `
+          <div class="mnb-segment-header">
+            <div class="mnb-segment-drag-handle">☰</div>
+            <div class="mnb-segment-icon">${type.icon}</div>
+            <div class="mnb-segment-type">${type.name}</div>
+          </div>
+          <div class="mnb-segment-value">${preview}</div>
+          <div class="mnb-segment-controls">
+            <button class="mnb-segment-btn" onclick="event.stopPropagation(); ManagementNumberBuilder.editSegment(${index})">編集</button>
+            <button class="mnb-segment-btn delete" onclick="event.stopPropagation(); ManagementNumberBuilder.removeSegment(${index})">削除</button>
+          </div>
+        `;
+
+        container.appendChild(block);
+      });
+    },
+
+    // プレビューを更新
+    updatePreview() {
+      if (this.segments.length === 0) {
+        document.getElementById('mnbPreviewValue').textContent = '-';
+        document.getElementById('mnbPreviewParts').innerHTML = '';
+        return;
+      }
+
+      let preview = '';
+      const parts = [];
+
+      this.segments.forEach((segment, index) => {
+        const type = this.segmentTypes[segment.type];
+        const value = type.preview(segment.config);
+
+        preview += value;
+        if (index < this.segments.length - 1 && segment.separator) {
+          preview += segment.separator;
+        }
+
+        parts.push(`<div class="mnb-preview-part">${type.icon} ${value}</div>`);
+      });
+
+      document.getElementById('mnbPreviewValue').textContent = preview;
+      document.getElementById('mnbPreviewParts').innerHTML = parts.join('');
+    },
+
+    // セグメントを編集
+    editSegment(index) {
+      this.currentEditingIndex = index;
+      const segment = this.segments[index];
+
+      document.getElementById('mnbModalTitle').textContent = 'セグメントを編集';
+      this.selectType(segment.type);
+
+      // 設定値を復元
+      const type = this.segmentTypes[segment.type];
+      type.fields.forEach(field => {
+        const elem = document.getElementById(`mnbField_${field.id}`);
+        if (elem) {
+          elem.value = segment.config[field.id] || '';
+
+          // セレクトフィールドの場合、条件付きフィールドも表示更新
+          if (field.type === 'select') {
+            this.updateConditionalFields(field.id, elem.value);
+          }
+        }
+      });
+
+      document.getElementById('mnbSeparator').value = segment.separator || '-';
+      document.getElementById('mnbModal').classList.add('active');
+    },
+
+    // ドラッグ&ドロップ設定
+    setupDragAndDrop() {
+      const container = document.getElementById('mnbSegmentsList');
+
+      let draggedElement = null;
+      let draggedIndex = null;
+
+      container.addEventListener('dragstart', (e) => {
+        if (e.target.classList.contains('mnb-segment')) {
+          draggedElement = e.target;
+          draggedIndex = parseInt(e.target.getAttribute('data-index'));
+          e.target.classList.add('dragging');
+        }
+      });
+
+      container.addEventListener('dragend', (e) => {
+        if (e.target.classList.contains('mnb-segment')) {
+          e.target.classList.remove('dragging');
+        }
+      });
+
+      container.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const afterElement = this.getDragAfterElement(container, e.clientY);
+
+        if (afterElement == null) {
+          container.appendChild(draggedElement);
+        } else {
+          container.insertBefore(draggedElement, afterElement);
+        }
+      });
+
+      container.addEventListener('drop', (e) => {
+        e.preventDefault();
+
+        const blocks = Array.from(container.querySelectorAll('.mnb-segment'));
+        const newIndex = blocks.indexOf(draggedElement);
+
+        if (draggedIndex !== null && newIndex !== -1 && draggedIndex !== newIndex) {
+          this.moveSegment(draggedIndex, newIndex);
+        }
+      });
+    },
+
+    getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll('.mnb-segment:not(.dragging)')];
+
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: child };
+        } else {
+          return closest;
+        }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    },
+
+    // データを取得
+    getData() {
+      return {
+        segments: this.segments
+      };
+    },
+
+    // データをセット
+    setData(data) {
+      this.segments = data.segments || [];
+      this.renderSegments();
+      this.updatePreview();
+    }
+  };
+
+  // グローバル関数
+  function openAddSegmentModal() {
+    ManagementNumberBuilder.currentEditingIndex = null;
+    ManagementNumberBuilder.selectedType = null;
+    document.getElementById('mnbModalTitle').textContent = 'セグメントを追加';
+    document.getElementById('mnbSegmentConfig').innerHTML = '';
+    document.getElementById('mnbSeparator').value = '-';
+
+    // カードの選択状態をクリア
+    document.querySelectorAll('.mnb-type-card').forEach(card => {
+      card.classList.remove('selected');
+    });
+
+    document.getElementById('mnbModal').classList.add('active');
+  }
+
+  function closeSegmentModal() {
+    document.getElementById('mnbModal').classList.remove('active');
+  }
+
+  function saveSegment() {
+    if (!ManagementNumberBuilder.selectedType) {
+      alert('セグメントタイプを選択してください');
+      return;
+    }
+
+    const type = ManagementNumberBuilder.segmentTypes[ManagementNumberBuilder.selectedType];
+    const config = {};
+
+    // 設定値を収集
+    type.fields.forEach(field => {
+      const elem = document.getElementById(`mnbField_${field.id}`);
+      if (elem) {
+        config[field.id] = elem.value;
+      }
+    });
+
+    const segment = {
+      type: ManagementNumberBuilder.selectedType,
+      config: config,
+      separator: document.getElementById('mnbSeparator').value
+    };
+
+    if (ManagementNumberBuilder.currentEditingIndex !== null) {
+      ManagementNumberBuilder.updateSegment(ManagementNumberBuilder.currentEditingIndex, segment);
+    } else {
+      ManagementNumberBuilder.addSegment(segment);
+    }
+
+    closeSegmentModal();
+  }
+
+  // 初期化
+  if (typeof window !== 'undefined') {
+    window.ManagementNumberBuilder = ManagementNumberBuilder;
+
+    // DOMContentLoadedで初期化
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        ManagementNumberBuilder.init();
+      });
+    } else {
+      ManagementNumberBuilder.init();
+    }
+  }
+</script>

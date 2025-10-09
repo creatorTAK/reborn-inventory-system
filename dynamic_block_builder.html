@@ -1,0 +1,443 @@
+<script>
+/**
+ * 動的ブロックビルダー - 統一的な動的フォーム生成システム
+ *
+ * 使用例:
+ * const builder = new DynamicBlockBuilder({
+ *   containerId: 'materialList',
+ *   itemLabel: '素材',
+ *   minItems: 1,
+ *   maxItems: 10,
+ *   fields: [
+ *     { id: '箇所', type: 'select', label: '箇所', options: [] },
+ *     { id: '種類1', type: 'select', label: '種類', options: [] }
+ *   ],
+ *   onChange: () => updatePreview()
+ * });
+ */
+
+class DynamicBlockBuilder {
+  /**
+   * @param {Object} config - 設定オブジェクト
+   * @param {string} config.containerId - コンテナ要素のID
+   * @param {string} config.itemLabel - アイテムのラベル（例: '素材', '商品属性'）
+   * @param {number} config.minItems - 最小アイテム数（デフォルト: 1）
+   * @param {number} config.maxItems - 最大アイテム数（デフォルト: 10）
+   * @param {Array} config.fields - フィールド定義配列
+   * @param {Function} config.onChange - 変更時のコールバック関数
+   * @param {string} config.itemClass - アイテム要素のCSSクラス（デフォルト: 'dynamic-block-item'）
+   * @param {Object} config.template - カスタムテンプレート設定
+   */
+  constructor(config) {
+    this.containerId = config.containerId;
+    this.itemLabel = config.itemLabel || 'アイテム';
+    this.minItems = config.minItems || 1;
+    this.maxItems = config.maxItems || 10;
+    this.fields = config.fields || [];
+    this.onChange = config.onChange || (() => {});
+    this.itemClass = config.itemClass || 'dynamic-block-item';
+    this.template = config.template || {};
+
+    this.container = null;
+    this.itemCount = 0;
+
+    this.init();
+  }
+
+  /**
+   * 初期化
+   */
+  init() {
+    this.container = document.getElementById(this.containerId);
+    if (!this.container) {
+      console.error(`DynamicBlockBuilder: Container with id '${this.containerId}' not found`);
+      return;
+    }
+
+    // 既存のアイテムをカウント
+    this.itemCount = this.container.querySelectorAll(`.${this.itemClass}`).length;
+
+    // 最小アイテム数を確保
+    if (this.itemCount < this.minItems) {
+      for (let i = this.itemCount; i < this.minItems; i++) {
+        this.addItem();
+      }
+    }
+
+    // 削除ボタンの表示を更新
+    this.updateRemoveButtons();
+  }
+
+  /**
+   * アイテムを追加
+   * @param {Object} data - 初期データ（任意）
+   * @returns {HTMLElement} 追加されたアイテム要素
+   */
+  addItem(data = null) {
+    if (this.itemCount >= this.maxItems) {
+      alert(`${this.itemLabel}は最大${this.maxItems}個まで追加できます`);
+      return null;
+    }
+
+    this.itemCount++;
+    const item = this.createItemElement(this.itemCount, data);
+    this.container.appendChild(item);
+
+    this.updateRemoveButtons();
+    this.onChange();
+
+    return item;
+  }
+
+  /**
+   * アイテム要素を生成
+   * @param {number} index - アイテムのインデックス
+   * @param {Object} data - 初期データ
+   * @returns {HTMLElement} アイテム要素
+   */
+  createItemElement(index, data = null) {
+    const item = document.createElement('div');
+    item.className = this.itemClass;
+    item.setAttribute('data-index', index);
+
+    // ヘッダー部分
+    const header = this.createHeader(index);
+    item.appendChild(header);
+
+    // フィールド部分
+    const fieldsContainer = this.createFieldsContainer(index, data);
+    item.appendChild(fieldsContainer);
+
+    return item;
+  }
+
+  /**
+   * ヘッダー要素を生成
+   * @param {number} index - アイテムのインデックス
+   * @returns {HTMLElement} ヘッダー要素
+   */
+  createHeader(index) {
+    const header = document.createElement('div');
+    header.className = this.template.headerClass || 'dynamic-block-header';
+
+    const label = document.createElement('span');
+    label.textContent = `${this.itemLabel} ${index}`;
+    header.appendChild(label);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = this.template.removeBtnClass || 'remove-dynamic-block-btn';
+    removeBtn.textContent = '削除';
+    removeBtn.onclick = () => this.removeItem(index);
+    header.appendChild(removeBtn);
+
+    return header;
+  }
+
+  /**
+   * フィールドコンテナを生成
+   * @param {number} index - アイテムのインデックス
+   * @param {Object} data - 初期データ
+   * @returns {HTMLElement} フィールドコンテナ要素
+   */
+  createFieldsContainer(index, data = null) {
+    const container = document.createElement('div');
+    container.className = this.template.fieldsClass || 'dynamic-block-fields';
+
+    this.fields.forEach(fieldConfig => {
+      const field = this.createField(index, fieldConfig, data);
+      container.appendChild(field);
+    });
+
+    return container;
+  }
+
+  /**
+   * フィールド要素を生成
+   * @param {number} index - アイテムのインデックス
+   * @param {Object} fieldConfig - フィールド設定
+   * @param {Object} data - 初期データ
+   * @returns {HTMLElement} フィールド要素
+   */
+  createField(index, fieldConfig, data = null) {
+    const wrapper = document.createElement('div');
+    wrapper.className = fieldConfig.wrapperClass || 'dynamic-block-field';
+
+    // カスタムレンダラーがある場合
+    if (fieldConfig.render) {
+      const customField = fieldConfig.render(index, data);
+      wrapper.appendChild(customField);
+      return wrapper;
+    }
+
+    // ラベル
+    if (fieldConfig.label) {
+      const label = document.createElement('label');
+      label.textContent = fieldConfig.label + ':';
+      if (fieldConfig.labelClass) {
+        label.className = fieldConfig.labelClass;
+      }
+      wrapper.appendChild(label);
+    }
+
+    // 入力要素
+    const inputElement = this.createInputElement(index, fieldConfig, data);
+    wrapper.appendChild(inputElement);
+
+    return wrapper;
+  }
+
+  /**
+   * 入力要素を生成
+   * @param {number} index - アイテムのインデックス
+   * @param {Object} fieldConfig - フィールド設定
+   * @param {Object} data - 初期データ
+   * @returns {HTMLElement} 入力要素
+   */
+  createInputElement(index, fieldConfig, data = null) {
+    const fieldId = this.getFieldId(index, fieldConfig.id);
+    let input;
+
+    switch (fieldConfig.type) {
+      case 'select':
+        input = document.createElement('select');
+        input.id = fieldId;
+        input.className = fieldConfig.className || '';
+
+        // デフォルトオプション
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = fieldConfig.placeholder || '--';
+        input.appendChild(defaultOption);
+
+        // オプションを追加
+        if (fieldConfig.options) {
+          const options = this.resolveOptions(fieldConfig.options);
+          options.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = typeof opt === 'object' ? opt.value : opt;
+            option.textContent = typeof opt === 'object' ? opt.label : opt;
+            input.appendChild(option);
+          });
+        }
+
+        // 初期値設定
+        if (data && data[fieldConfig.id]) {
+          input.value = data[fieldConfig.id];
+        }
+        break;
+
+      case 'number':
+        input = document.createElement('input');
+        input.type = 'number';
+        input.id = fieldId;
+        input.className = fieldConfig.className || '';
+        input.placeholder = fieldConfig.placeholder || '';
+
+        if (fieldConfig.min !== undefined) input.min = fieldConfig.min;
+        if (fieldConfig.max !== undefined) input.max = fieldConfig.max;
+        if (fieldConfig.step !== undefined) input.step = fieldConfig.step;
+
+        // 初期値設定
+        if (data && data[fieldConfig.id]) {
+          input.value = data[fieldConfig.id];
+        }
+        break;
+
+      case 'text':
+      default:
+        input = document.createElement('input');
+        input.type = 'text';
+        input.id = fieldId;
+        input.className = fieldConfig.className || '';
+        input.placeholder = fieldConfig.placeholder || '';
+
+        // 初期値設定
+        if (data && data[fieldConfig.id]) {
+          input.value = data[fieldConfig.id];
+        }
+        break;
+    }
+
+    // 変更イベント
+    input.addEventListener('change', () => this.onChange());
+    input.addEventListener('input', () => {
+      if (fieldConfig.onInput) {
+        fieldConfig.onInput(input.value, index);
+      }
+    });
+
+    return input;
+  }
+
+  /**
+   * オプションを解決（配列またはグローバル変数名）
+   * @param {Array|string} options - オプション配列または変数名
+   * @returns {Array} オプション配列
+   */
+  resolveOptions(options) {
+    if (Array.isArray(options)) {
+      return options;
+    }
+    if (typeof options === 'string') {
+      // グローバル変数として評価
+      return window[options] || [];
+    }
+    return [];
+  }
+
+  /**
+   * フィールドIDを生成
+   * @param {number} index - アイテムのインデックス
+   * @param {string} fieldId - フィールドID
+   * @returns {string} 完全なフィールドID
+   */
+  getFieldId(index, fieldId) {
+    return `${this.itemLabel}${index}_${fieldId}`;
+  }
+
+  /**
+   * アイテムを削除
+   * @param {number} index - 削除するアイテムのインデックス
+   */
+  removeItem(index) {
+    const item = this.container.querySelector(`.${this.itemClass}[data-index="${index}"]`);
+    if (!item) return;
+
+    // 最小数チェック
+    const items = this.container.querySelectorAll(`.${this.itemClass}`);
+    if (items.length <= this.minItems) {
+      alert(`${this.itemLabel}は最低${this.minItems}個必要です`);
+      return;
+    }
+
+    item.remove();
+    this.renumberItems();
+    this.updateRemoveButtons();
+    this.onChange();
+  }
+
+  /**
+   * アイテムを再番号付け
+   */
+  renumberItems() {
+    const items = this.container.querySelectorAll(`.${this.itemClass}`);
+    this.itemCount = items.length;
+
+    items.forEach((item, i) => {
+      const newIndex = i + 1;
+      const oldIndex = item.getAttribute('data-index');
+      item.setAttribute('data-index', newIndex);
+
+      // ヘッダーのラベルを更新
+      const label = item.querySelector(`.${this.template.headerClass || 'dynamic-block-header'} span`);
+      if (label) {
+        label.textContent = `${this.itemLabel} ${newIndex}`;
+      }
+
+      // 削除ボタンのonclickを更新
+      const removeBtn = item.querySelector(`.${this.template.removeBtnClass || 'remove-dynamic-block-btn'}`);
+      if (removeBtn) {
+        removeBtn.onclick = () => this.removeItem(newIndex);
+      }
+
+      // フィールドIDを更新
+      this.fields.forEach(fieldConfig => {
+        const oldFieldId = this.getFieldId(oldIndex, fieldConfig.id);
+        const newFieldId = this.getFieldId(newIndex, fieldConfig.id);
+        const field = item.querySelector(`#${oldFieldId}`);
+        if (field) {
+          field.id = newFieldId;
+        }
+      });
+    });
+  }
+
+  /**
+   * 削除ボタンの表示を更新
+   */
+  updateRemoveButtons() {
+    const items = this.container.querySelectorAll(`.${this.itemClass}`);
+    items.forEach(item => {
+      const btn = item.querySelector(`.${this.template.removeBtnClass || 'remove-dynamic-block-btn'}`);
+      if (btn) {
+        btn.style.display = items.length > this.minItems ? 'block' : 'none';
+      }
+    });
+  }
+
+  /**
+   * 全アイテムのデータを収集
+   * @returns {Array} データ配列
+   */
+  collectData() {
+    const items = this.container.querySelectorAll(`.${this.itemClass}`);
+    const data = [];
+
+    items.forEach((item, i) => {
+      const index = i + 1;
+      const itemData = {};
+
+      this.fields.forEach(fieldConfig => {
+        const fieldId = this.getFieldId(index, fieldConfig.id);
+        const field = document.getElementById(fieldId);
+        if (field) {
+          itemData[fieldConfig.id] = field.value;
+        }
+      });
+
+      data.push(itemData);
+    });
+
+    return data;
+  }
+
+  /**
+   * データをセット
+   * @param {Array} dataArray - データ配列
+   */
+  setData(dataArray) {
+    // 既存アイテムをクリア
+    this.container.innerHTML = '';
+    this.itemCount = 0;
+
+    // データに基づいてアイテムを追加
+    if (dataArray && dataArray.length > 0) {
+      dataArray.forEach(data => {
+        this.addItem(data);
+      });
+    } else {
+      // 最小アイテム数を確保
+      for (let i = 0; i < this.minItems; i++) {
+        this.addItem();
+      }
+    }
+  }
+
+  /**
+   * アイテム数を取得
+   * @returns {number} 現在のアイテム数
+   */
+  getItemCount() {
+    return this.itemCount;
+  }
+
+  /**
+   * コンテナ要素を取得
+   * @returns {HTMLElement} コンテナ要素
+   */
+  getContainer() {
+    return this.container;
+  }
+
+  /**
+   * アイテムをクリア（最小数まで）
+   */
+  clear() {
+    this.setData([]);
+  }
+}
+
+// グローバルに公開
+window.DynamicBlockBuilder = DynamicBlockBuilder;
+</script>

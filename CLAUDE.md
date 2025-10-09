@@ -2,7 +2,7 @@
 
 古着物販管理システム（Google Apps Script + スプレッドシート）
 
-**完成度: 40%** | **商品登録: 80%** | **在庫管理: 0%** | **設定管理: 90%** | **売上分析: 20%**
+**完成度: 62%** | **商品登録: 88%** | **在庫管理: 0%** | **設定管理: 100%** ✅ | **売上分析: 20%** | **管理番号システム: 100%** ✅ | **ハッシュタグシステム: 100%** ✅ | **使い方ガイド: 100%** ✅ | **リセット機能: 100%** ✅
 
 ---
 
@@ -71,6 +71,28 @@ git commit -m "feat: 新機能追加"
 git push origin main
 ```
 
+### ⚠️ 重要な注意事項
+
+#### Claude Codeの会話圧縮後は必ず `clasp push` を確認
+
+**症状**:
+- Claude Codeとのチャットが長くなると「Conversation compacted」が表示される
+- この画面に切り替わると、直前の変更が `clasp push` されていないことを忘れがち
+
+**対策**:
+1. **会話圧縮画面が表示されたら、まず `clasp push` の実行を確認**
+2. ファイル変更後は必ず「clasp pushを実行してください」と明示的に依頼
+3. 長時間作業する場合は、定期的に `clasp push` を実行
+
+**確認方法**:
+```bash
+# 最後のpush以降の変更を確認
+git status
+
+# GASとローカルの差分を確認（clasp pull後に比較）
+# ※注意: clasp pullは上書きするので必ずバックアップを取る
+```
+
 ### 今後の統合予定
 
 ```
@@ -81,7 +103,10 @@ AI機能
 
 開発効率化ツール
 ├── Claude Code: AI駆動開発（導入済み）
-├── Serena MCP: リポジトリ全体把握精度向上
+├── Serena MCP: リポジトリ全体把握精度向上（導入済み）★重要
+│   ├── シンボルベースでの正確な検索・編集
+│   ├── 関数間の依存関係を漏れなく追跡
+│   └── エラー大幅減少・開発速度向上
 └── CLAUDE.md: 完全開発ドキュメント（このファイル）
 ```
 
@@ -134,7 +159,7 @@ diagnosis.js                 # システム診断
 test_master.js               # テスト用
 ```
 
-#### HTMLファイル（17個）
+#### HTMLファイル（20個）
 
 **メインUI**
 ```
@@ -147,6 +172,9 @@ master_manager_ui.html       # マスタデータ管理UI
 
 **スクリプト・スタイル**
 ```
+dynamic_block_builder.html           # 動的ブロックビルダー（統一システム）★新規
+dynamic_block_builder_styles.html    # 動的ブロックビルダー用スタイル ★新規
+test_dynamic_block_builder.html      # 動的ブロックビルダーテスト ★新規
 sp_scripts.html              # JavaScript処理（設定マスタ対応）★最重要・最大規模
 sp_styles.html               # CSSスタイルシート（包括的）
 ```
@@ -186,6 +214,324 @@ sp_block_kodawari.html       # こだわり条件ブロック
 - `1001` (棚番号なし、商品番号のみ)
 
 **実装ファイル**: `id.js`, `product.js`, `sp_block_manage.html`, `config_loader.js`
+
+---
+
+### 🏷️ 管理番号システム（完全リニューアル版）✅ ★最重要機能
+
+#### 概要
+
+セグメント方式による超柔軟な管理番号生成システム。商品登録と設定管理の両面で完全実装。
+
+**完成度**: 100% ✅
+**実装期間**: 2025年（Serena MCP導入後、開発効率が飛躍的に向上）
+
+#### 1. セグメントベースアーキテクチャ
+
+管理番号を複数の「セグメント」で構成し、各セグメントが独立して設定・生成される設計。
+
+**7種類のセグメントタイプ**:
+
+| セグメント | 説明 | 例 | 入力方法 |
+|----------|------|-----|---------|
+| `category` | カテゴリコード | K, O, C | ユーザー入力 |
+| `date` | 登録日 | 251007, 20251007 | 自動生成 |
+| `rank` | 品質ランク | A, B, C | ユーザー入力 |
+| `size` | サイズコード | S, M, L | ユーザー入力 |
+| `color` | 色コード | BK, WH, RD | ユーザー入力 |
+| `sequence` | 連番 | 001, 1001 | 自動採番 |
+| `custom` | カスタム値 | AA, BB, RACK-A | ユーザー選択 |
+
+**設定可能項目**:
+- 各セグメントの有効/無効
+- 区切り文字（`-`, `_`, 空欄など）
+- 連番の桁数（3〜6桁）
+- 連番の開始値（任意）
+- カスタム値のデフォルト値
+
+**実装ファイル**: `id.js` (lines 1-263), `config_loader.js` (lines 80-98, 393-406)
+
+#### 2. 商品登録側の機能
+
+**動的セグメント入力フィールド**:
+- 設定マスタに基づいて自動生成
+- `custom`タイプは2段階プルダウン（頭文字 → 棚番号）
+- リアルタイムプレビュー更新
+
+**例: AA-ZZ 棚番号の2段階選択**:
+```
+頭文字: [A▼]  →  棚番号: [AA▼ AB▼ AC▼ ... AZ▼]
+```
+- 26 + 26 = 52回の選択（vs 676回の選択）
+- UX大幅改善
+
+**使用可能な管理番号表示**:
+- 読み取り専用フィールド
+- 左詰め表示、グレー背景
+- 上下ボタンで手動調整可能
+
+**上下ボタンによる番号調整**:
+- ▲ボタン: 番号を1つ増やす
+- ▼ボタン: 番号を1つ減らす（スマートバリデーション付き）
+
+**スマートバリデーション**:
+- ▼ボタン押下時、サーバーに問い合わせ
+- `getMinAvailableNumber()` で使用済み番号を確認
+- 実際に使用可能な番号までしか下げられない
+- ボタン無効化でフィードバック
+
+**実装ファイル**:
+- `sp_block_manage.html` (lines 1-27)
+- `sp_scripts.html` (lines 700-962)
+- `id.js` (lines 209-263: `getMinAvailableNumber()`)
+
+**主要関数**:
+```javascript
+// sp_scripts.html
+function renderManagementNumberFields(segments)  // 動的UI生成
+function updateManagementNumberPreview()         // プレビュー更新
+function adjustManagementNumber(delta)           // 番号調整
+
+// id.js
+function generateSegmentBasedManagementNumber(userInputs)  // 管理番号生成
+function getNextSequenceNumber(prefix, config)             // 連番取得
+function getMinAvailableNumber(prefix, digits, currentNumber)  // 最小番号
+```
+
+#### 3. 設定管理側の機能
+
+**プリセットシステム** ★目玉機能:
+- ワンクリックで一般的なパターンを適用
+- 5種類のプリセット（アイコン・例付き）
+- 適用後にカスタマイズ可能（ディープコピー）
+
+**プリセット一覧**:
+
+| プリセット | 説明 | 例 | アイコン |
+|----------|------|-----|---------|
+| シンプル連番 | 連番のみ | 1001, 1002, 1003 | 🔢 |
+| 棚番号 + 連番 | 棚管理向け | AA-1001, BB-1001 | 📦 |
+| カテゴリ + 日付 + 連番 | 日付管理 | K-251007-001 | 📅 |
+| 棚番号 + 日付 + 連番 | 棚×日付 | AA-251007-001 | 🗓️ |
+| カテゴリ + ランク + 連番 | 品質管理 | K-A-001 | ⭐ |
+
+**セグメント編集機能**:
+- 「+ セグメントを追加」ボタン
+- 各セグメントを個別に削除可能
+- ドラッグ&ドロップ並び替え（未実装、将来予定）
+
+**リアルタイムプレビュー**:
+- 設定変更時に即座に反映
+- フォントサイズ18px、左詰め
+- レター間隔1px
+
+**保存機能**:
+- JSON形式でスプレッドシートに保存
+- キャッシュ自動クリア
+- 成功通知とエラーハンドリング
+
+**実装ファイル**:
+- `management_number_builder.html` (全体)
+- `sidebar_config.html` (lines 355-360: 保存ボタン)
+- `config_loader.js` (lines 80-98, 393-406)
+
+#### 4. データフロー
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 設定マスタシート                                         │
+│ ├── カテゴリ: 管理番号設定                               │
+│ └── 項目1: segments                                      │
+│     └── 値: [{"type":"custom","config":{"value":"AA"}...}] │
+└─────────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────┐
+│ config_loader.js                                         │
+│ ├── loadConfigMaster() でJSON解析                        │
+│ └── 5分間キャッシュ                                      │
+└─────────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────┐
+│ 商品登録UI (sp_scripts.html)                             │
+│ ├── renderManagementNumberFields()                       │
+│ │   └── セグメント設定からUI自動生成                     │
+│ ├── updateManagementNumberPreview()                      │
+│ │   └── ユーザー入力値を収集                             │
+│ └── ユーザー入力: { custom: "AA", ... }                  │
+└─────────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────┐
+│ id.js (generateSegmentBasedManagementNumber)             │
+│ ├── セグメントごとに値を生成                             │
+│ │   ├── custom → ユーザー入力値 (AA)                     │
+│ │   ├── date → formatDate()                              │
+│ │   └── sequence → getNextSequenceNumber()               │
+│ │       └── プレフィックス "AA" で既存番号を検索         │
+│ │           └── 未使用の最小番号を返す (1001)            │
+│ └── 区切り文字で結合: "AA-1001"                          │
+└─────────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────────┐
+│ スプレッドシート「在庫/売上管理表」                       │
+│ └── 管理番号列に "AA-1001" を保存                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### 5. 独立した連番管理
+
+**プレフィックスベースの採番**:
+- 各プレフィックスごとに独立して連番を管理
+- 例: AA-1001, AA-1002 / BB-1001, BB-1002
+- 正規表現マッチングで既存番号を検索
+
+**実装コード** (id.js lines 160-177):
+```javascript
+const pattern = prefix
+  ? `^${escapeRegex(prefix)}-?(\\d+)$`
+  : `^(\\d+)$`;
+const re = new RegExp(pattern, 'i');
+
+for (const v of vals) {
+  const s = String(v || '').trim();
+  const m = s.match(re);
+  if (!m) continue;
+
+  const num = parseInt(m[1], 10);
+  if (!Number.isNaN(num) && num >= startValue) {
+    used.add(num);
+    if (num > maxSeen) maxSeen = num;
+  }
+}
+```
+
+**未使用番号の探索**:
+- 使用済み番号をSetで管理
+- 最小未使用番号を線形探索
+- 欠番があれば優先的に埋める
+
+#### 6. 2段階プルダウンの実装
+
+**課題**: AA-ZZ (676通り) のプルダウンは選択が大変
+
+**解決策**: 頭文字 (26通り) → 2文字目 (26通り) の2段階選択
+
+**実装** (sp_scripts.html lines 786-858):
+```javascript
+// 頭文字の選択肢を生成（A-Z）
+let firstCharOptions = '<option value="">--選択--</option>';
+for (let i = 65; i <= 90; i++) {
+  const char = String.fromCharCode(i);
+  firstCharOptions += `<option value="${char}">${char}</option>`;
+}
+
+// 頭文字選択時に2文字目を更新
+document.getElementById('mgmt_custom_first').addEventListener('change', function() {
+  const firstChar = this.value;
+  const secondSelect = document.getElementById('mgmt_custom_second');
+
+  if (!firstChar) {
+    secondSelect.innerHTML = '<option value="">--選択--</option>';
+    secondSelect.disabled = true;
+  } else {
+    let secondOptions = '<option value="">--選択--</option>';
+    for (let i = 65; i <= 90; i++) {
+      const char = String.fromCharCode(i);
+      secondOptions += `<option value="${char}">${firstChar}${char}</option>`;
+    }
+    secondSelect.innerHTML = secondOptions;
+    secondSelect.disabled = false;
+  }
+  updateManagementNumberPreview();
+});
+```
+
+**ユーザー体験**:
+- 最大26回の選択で済む（676 → 26 + 26）
+- 視覚的にわかりやすい階層構造
+- 無効状態でUIフィードバック
+
+#### 7. プリセットシステムのアーキテクチャ
+
+**ディープコピー戦略**:
+```javascript
+function applyPreset(presetName) {
+  const preset = MANAGEMENT_NUMBER_CONFIG.presets[presetName];
+  if (!preset) return;
+
+  // ディープコピーでプリセットを複製
+  MANAGEMENT_NUMBER_CONFIG.segments = JSON.parse(JSON.stringify(preset));
+
+  renderSegments();
+  updatePreview();
+}
+```
+
+**メリット**:
+- プリセット適用後もカスタマイズ可能
+- 元のプリセットテンプレートは不変
+- ユーザーが自由に編集できる
+
+#### 8. Serena MCPの貢献 ★重要
+
+**導入効果**:
+- エラー大幅減少（ほぼゼロ）
+- 開発速度向上（2〜3倍）
+- 関数間の依存関係を正確に追跡
+- シンボルベースでの正確な検索・編集
+
+**ユーザーコメント**:
+> "大体何かしらエラーが起きてたんですが、やはりSerena MCPを導入したのも結構よかったですね。"
+
+**具体例**:
+- `_findIdx()` のような内部関数も漏れなく検索
+- `getMinAvailableNumber()` の新規追加時に依存関係を正確に把握
+- 複数ファイルにまたがる変更を一貫して実行
+
+#### 9. 後方互換性
+
+**旧システムとの共存**:
+```javascript
+// id.js lines 265-299
+function getNextManagementNumber(shelfCode) {
+  const mgmtConfig = getManagementNumberConfig();
+
+  // セグメント設定がある場合は新方式
+  if (mgmtConfig.segments && mgmtConfig.segments.length > 0) {
+    return generateSegmentBasedManagementNumber({ category: shelfCode });
+  }
+
+  // 旧方式（棚番号+連番）
+  const useShelf = String(mgmtConfig['棚番号使用'] || '').toLowerCase() === 'true';
+  // ... 旧ロジック継続
+}
+```
+
+**移行パス**:
+- 既存データは影響なし
+- 設定マスタに`segments`がない場合は旧方式
+- 段階的な移行が可能
+
+#### 10. テスト済みシナリオ
+
+✅ AA-ZZ すべての棚番号で採番確認
+✅ プレフィックスごとに独立した連番
+✅ 欠番がある場合の最小番号取得
+✅ 上下ボタンでの手動調整
+✅ ▼ボタンの使用済み番号バリデーション
+✅ プリセット5種類すべて適用・カスタマイズ
+✅ 設定保存・読み込み・キャッシュクリア
+✅ 2段階プルダウンの動作
+✅ リアルタイムプレビュー更新
+✅ エラーハンドリング（NG()プレフィックス）
+
+#### 11. 残課題・将来予定
+
+- [ ] セグメントのドラッグ&ドロップ並び替え
+- [ ] プリセットのユーザー登録機能
+- [ ] 管理番号の一括変更ツール
+- [ ] 履歴管理・ロールバック機能
+
+---
 
 #### 分類カテゴリ6階層プルダウン
 
@@ -315,7 +661,7 @@ sp_block_kodawari.html       # こだわり条件ブロック
 
 ---
 
-### 2. 設定管理システム（90%完成）★新機能
+### 2. 設定管理システム（100%完成）★完成 ✅
 
 #### 概要
 
@@ -323,14 +669,15 @@ sp_block_kodawari.html       # こだわり条件ブロック
 
 #### メニュー構成
 
-「物販管理システム」→「⚙️ 設定管理」から5タブ構成のUIを開く
+「物販管理システム」→「⚙️ 設定管理」から6タブ構成のUIを開く
 
 **タブ一覧**:
-1. 商品状態ボタン設定
-2. ハッシュタグ設定
-3. 割引情報設定
-4. 配送デフォルト設定
-5. 管理番号設定
+1. 🔢 管理番号設定（デフォルト選択）
+2. 📦 配送デフォルト設定
+3. 🔘 商品状態ボタン設定
+4. 💰 割引情報設定
+5. 🏷️ ハッシュタグ設定
+6. 📖 使い方ガイド ★新規
 
 #### 1. 商品状態ボタン設定
 
@@ -349,17 +696,57 @@ sp_block_kodawari.html       # こだわり条件ブロック
 
 **実装ファイル**: `sidebar_config.html`, `config_loader.js`
 
-#### 2. ハッシュタグ設定
+#### 2. ハッシュタグ設定 ★完成 ✅
 
-**設定項目**:
-- 全商品プレフィックス
-- 全商品テキスト
-- ブランドプレフィックス
-- ブランドサフィックス
-- カテゴリプレフィックス
-- カテゴリサフィックス
+**概要**:
+動的にハッシュタグを追加・編集・並び替えできる高機能システム。商品説明の最後に自動挿入される。
 
-**実装ファイル**: `sidebar_config.html`, `config_loader.js`
+**主要機能**:
+
+1. **動的ハッシュタグ追加**
+   - 5種類のハッシュタグタイプ: 🌐 全商品、👔 ブランド、📁 カテゴリ、🎨 カラー、📏 サイズ
+   - タイプ選択メニューから追加
+   - 個別の削除も可能
+
+2. **ドラッグ&ドロップ並び替え**
+   - ⋮⋮ アイコンをドラッグして順序変更
+   - 管理番号システムと同様のUI
+   - 視覚的フィードバック付き
+
+3. **共通プレフィックス設定**
+   - すべてのハッシュタグに共通の接頭辞（例: `#REBORN_`）
+   - リアルタイムプレビュー更新
+
+4. **サフィックスのカスタマイズ**
+   - プルダウン選択: 一覧、アイテム一覧、商品一覧、コレクション
+   - カスタム入力も可能
+
+5. **カテゴリの複数選択**
+   - 大分類、中分類、小分類、細分類1、細分類2、アイテム名から選択
+   - 複数選択で連結（例: `#REBORN_メンズトップス一覧`）
+   - デフォルト: 大分類のみ
+
+6. **プレビュー表示**
+   - 具体例付き（UNIQLO、メンズ、黒、M など）
+   - 「例:」ラベルで分かりやすく
+
+7. **すべてクリアボタン**
+   - 🗑️ ボタンで一括削除
+   - 確認ダイアログ付き
+
+**生成例**:
+```
+#REBORN_全商品
+#REBORN_UNIQLOアイテム一覧
+#REBORN_メンズ一覧
+#REBORN_黒一覧
+#REBORN_M一覧
+```
+
+**実装ファイル**:
+- `sidebar_config.html` (UI)
+- `config_loader.js` (設定読み込み・保存)
+- `sp_scripts.html` (ハッシュタグ生成ロジック)
 
 #### 3. 割引情報設定
 
@@ -452,6 +839,49 @@ sp_block_kodawari.html       # こだわり条件ブロック
 - 保存時に自動でキャッシュクリア
 
 **実装ファイル**: `config_loader.js`, `setup_config.js`
+
+#### 6. 使い方ガイド ★新規完成 ✅
+
+**概要**:
+設定管理の各機能を詳しく解説するアコーディオン式のガイドタブ。非エンジニアでも迷わず設定できるよう、丁寧な説明を提供。
+
+**主要機能**:
+
+1. **アコーディオン式UI**
+   - 5つのセクションに分かれた折りたたみ式
+   - 必要な部分だけ展開して確認可能
+   - 見やすいレイアウト
+
+2. **各設定の詳細解説**
+   - 📌 概要: 機能の説明
+   - 🎯 できること/設定項目: 主な機能一覧
+   - 📝 設定手順: ステップバイステップの手順
+   - 💡 設定例/おすすめ設定: 具体例付き
+
+3. **5つのガイドセクション**
+   - 🔢 管理番号設定
+   - 📦 配送デフォルト設定
+   - 🔘 商品状態ボタン設定
+   - 💰 割引情報設定
+   - 🏷️ ハッシュタグ設定
+
+4. **ヒントセクション**
+   - 設定保存の重要性
+   - プレビュー機能の活用方法
+   - ガイド参照の推奨
+
+5. **保存ボタンの自動非表示**
+   - 使い方ガイドタブでは保存ボタンが非表示
+   - 他のタブに切り替えると再表示
+   - JavaScriptで動的制御
+
+**特徴**:
+- わかりやすい日本語（専門用語を避ける）
+- 具体例を豊富に掲載
+- アイコンを活用した視覚的な説明
+- プレフィックス・サフィックスなどの専門用語を使わず、「先頭に付く文字列」「末尾の文字列」と表現
+
+**実装ファイル**: `sidebar_config.html` (lines 463-709, 744-759)
 
 ---
 
@@ -777,6 +1207,257 @@ textarea.value = text;
 
 ---
 
+### ❌ 問題⑧: リセットボタンで一部のフィールドがクリアされない ★重要
+
+**発生日**: 2025年10月9日
+
+**症状**: リセットボタンを押しても以下が残ったままになる
+- 管理番号の頭文字と棚番号
+- ブランド(英語)・ブランド(カナ)
+- 商品名プレビュー
+- 商品の説明プレビュー（デフォルト値も消える）
+- サイズアイコン・ラベル
+- サイズ(表記)プルダウン
+- 裄丈ラベル（肩幅に戻らない）
+
+**原因**:
+
+1. **存在しない関数呼び出しでエラー**:
+```javascript
+setItemNumber('', '選択してください');  // この関数が存在しない
+// ReferenceError: Can't find variable: setItemNumber
+```
+→ エラーで処理が中断し、その後のクリア処理が実行されていなかった
+
+2. **動的に生成されるフィールドを考慮していない**:
+- `mgmt_shelf_first`, `mgmt_shelf_second`（棚番号の頭文字・棚番号）
+- `mgmt_custom_first`, `mgmt_custom_second`（カスタム値）
+- これらは設定に応じて動的に生成されるため、FIELD_IDSに含まれていない
+
+3. **商品名ブロックと基本情報ブロックの区別**:
+- 基本情報: `ブランド(英語)`のみ
+- 商品名ブロック: `商品名_ブランド(英語)`, `商品名_ブランド(カナ)`
+- 両方を個別にクリアする必要がある
+
+**解決策**:
+
+```javascript
+function onReset() {
+  console.log('=== リセット開始 ===');
+
+  // 1. FIELD_IDSの全フィールドをクリア
+  FIELD_IDS.forEach(k=>{
+    const el=document.getElementById(k);
+    if(el) {
+      el.value='';
+      console.log(`クリア: ${k}`);
+    }
+  });
+
+  // 2. カテゴリプルダウンをリセット
+  ['中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2']
+    .forEach(id=> resetSelect(id, true));
+
+  // ... 省略 ...
+
+  // 9. 管理番号関連をリセット（動的フィールド対応）
+  const mgmtShelfFirst = document.getElementById('mgmt_shelf_first');
+  const mgmtShelfSecond = document.getElementById('mgmt_shelf_second');
+  const mgmtCustomFirst = document.getElementById('mgmt_custom_first');
+  const mgmtCustomSecond = document.getElementById('mgmt_custom_second');
+  if (mgmtShelfFirst) mgmtShelfFirst.value = '';
+  if (mgmtShelfSecond) mgmtShelfSecond.value = '';
+  if (mgmtCustomFirst) mgmtCustomFirst.value = '';
+  if (mgmtCustomSecond) mgmtCustomSecond.value = '';
+
+  // 管理番号プレビューをクリア
+  const mgmtNumberField = document.getElementById('管理番号');
+  if (mgmtNumberField) mgmtNumberField.value = '';
+
+  // 10. ブランドフィールドをクリア
+  const brandEnBasic = document.getElementById('ブランド(英語)');
+  if (brandEnBasic) brandEnBasic.value = '';
+
+  const brandEn = document.getElementById('商品名_ブランド(英語)');
+  const brandKana = document.getElementById('商品名_ブランド(カナ)');
+  if (brandEn) brandEn.value = '';
+  if (brandKana) brandKana.value = '';
+
+  // 11. プレビューを明示的にクリア
+  const namePreview = document.getElementById('商品名プレビュー');
+  if (namePreview) namePreview.value = '';
+
+  // 12. サイズ関連をリセット
+  const shoulderLabel = document.getElementById('shoulderWidthLabel');
+  if (shoulderLabel) shoulderLabel.textContent = '肩幅';
+
+  const sizeHyokiTop = document.getElementById('サイズ(表記)_トップス');
+  const sizeHyokiBottom = document.getElementById('サイズ(表記)_ボトムス');
+  if (sizeHyokiTop) sizeHyokiTop.value = '';
+  if (sizeHyokiBottom) sizeHyokiBottom.value = '';
+
+  const sizeSection = document.getElementById('sizeSection');
+  if (sizeSection) sizeSection.style.display = 'none';
+
+  const sizeIconDisplay = document.getElementById('sizeIconDisplay');
+  const sizeLabelDisplay = document.getElementById('sizeLabelDisplay');
+  if (sizeIconDisplay) sizeIconDisplay.textContent = '👕';
+  if (sizeLabelDisplay) sizeLabelDisplay.textContent = 'サイズ';
+
+  // 13. プレビュー再構築
+  updateNamePreview();  // 空の商品名
+  updateDescriptionFromDetail();  // デフォルト値のみ
+
+  console.log('=== リセット完了 ===');
+}
+```
+
+**実装箇所**: `sp_scripts.html` lines 2057-2177
+
+**デバッグ手法**:
+
+1. **ブラウザの開発者ツールを活用**:
+```javascript
+// コンソールログで処理の進行を確認
+console.log('=== リセット開始 ===');
+console.log(`クリア: ${k}`);
+console.log('=== リセット完了 ===');
+```
+
+2. **エラーで処理が止まっている箇所を特定**:
+```
+[Error] ReferenceError: Can't find variable: setItemNumber
+    onReset (スクリプト要素1:2137)
+```
+→ この行でエラーが発生し、その後の処理が実行されていない
+
+3. **スーパーリロードの重要性**:
+- `clasp push`後は必ず**Cmd+Shift+R**（スーパーリロード）
+- 通常のリロードではJavaScriptのキャッシュが残る
+
+**教訓**:
+
+1. **リセット処理は初期化処理と同等に扱う**:
+   - 初期状態 = 商品登録メニューを開いた直後の状態
+   - リセット = 初期状態に完全に戻す
+   - デフォルト値（ハッシュタグ・割引情報）は保持
+
+2. **動的に生成されるフィールドの考慮**:
+   - 設定に応じて動的に生成されるフィールドは、存在チェックが必須
+   - `if (element) element.value = '';` のパターンを使う
+
+3. **プレビューフィールドの扱い**:
+   - 読み取り専用フィールドも明示的にクリア
+   - その後、更新関数を呼び出して再構築
+
+4. **エラーハンドリングの重要性**:
+   - 存在しない関数を呼び出すとそこで処理が止まる
+   - `console.log()`でデバッグログを仕込む
+   - ブラウザの開発者ツールでエラーを確認
+
+5. **テスト方法**:
+   - リセット前: データを入力した状態
+   - リセット後: 初期状態（デフォルト値あり）
+   - 複数回のリセットで動作が安定しているか確認
+
+**チェックリスト** - リセット機能実装時:
+
+- [ ] FIELD_IDSに含まれる全フィールドをクリア
+- [ ] 動的に生成されるフィールドを個別にクリア
+- [ ] 読み取り専用フィールドも明示的にクリア
+- [ ] プレビューフィールドの再構築関数を呼び出す
+- [ ] デフォルト値は保持（配送情報、ハッシュタグ、割引情報）
+- [ ] console.log()でデバッグログを仕込む
+- [ ] エラーが発生しないか開発者ツールで確認
+- [ ] 複数回リセットして動作確認
+
+---
+
+### ❌ 問題⑨: サイズ(表記)と裄丈のプレビュー反映
+
+**発生日**: 2025年10月9日
+
+**症状**:
+1. サイズ(表記)プルダウンを選択しても商品の説明プレビューに反映されない
+2. ラグラン判定でラベルが「裄丈」に変わるが、プレビューでは「肩幅」のまま
+
+**原因**:
+
+1. **イベントリスナーが設定されていない**:
+```javascript
+// サイズ(表記)変更時のイベントリスナーがなかった
+```
+
+2. **getSizeInfo()関数でラグラン判定していない**:
+```javascript
+function getSizeInfo() {
+  // ラグラン判定がなく、常に「肩幅」と表示
+  if (sizeValues.肩幅) sizeText += `肩幅：${sizeValues.肩幅}cm\n`;
+}
+```
+
+**解決策**:
+
+1. **サイズ(表記)のイベントリスナー追加**:
+```javascript
+function setupSizeHyokiListeners() {
+  const sizeHyokiTop = document.getElementById('サイズ(表記)_トップス');
+  const sizeHyokiBottom = document.getElementById('サイズ(表記)_ボトムス');
+
+  if (sizeHyokiTop) {
+    sizeHyokiTop.addEventListener('change', updateDescriptionFromDetail);
+  }
+  if (sizeHyokiBottom) {
+    sizeHyokiBottom.addEventListener('change', updateDescriptionFromDetail);
+  }
+}
+
+// ページ読み込み時に設定
+setTimeout(() => {
+  setupSizeHyokiListeners();
+}, 1000);
+```
+
+2. **getSizeInfo()でラグラン判定を追加**:
+```javascript
+function getSizeInfo() {
+  const sizeHyoki = _val('サイズ(表記)_トップス') || _val('サイズ(表記)_ボトムス');
+
+  // ラグラン判定
+  const itemName = _val('アイテム名');
+  const isRaglan = itemName && itemName.includes('ラグラン');
+  const shoulderLabel = isRaglan ? '裄丈' : '肩幅';
+
+  // サイズ(実寸)セクション
+  if (hasJissunData) {
+    sizeText += 'サイズ(実寸)\n';
+    if (sizeValues.肩幅) sizeText += `${shoulderLabel}：${sizeValues.肩幅}cm\n`;
+    // ...
+  }
+}
+```
+
+3. **アイテム名変更時のイベントリスナー追加**:
+```javascript
+function setupRaglanListener() {
+  const itemNameField = document.getElementById('アイテム名');
+  if (itemNameField) {
+    itemNameField.addEventListener('change', updateSizeDisplay);
+  }
+}
+```
+
+**実装箇所**:
+- `sp_scripts.html` lines 1644-1693: `getSizeInfo()`
+- `sp_scripts.html` lines 2944-2970: イベントリスナー設定
+
+**教訓**:
+- プレビュー更新関数は、表示に使う全データを参照する
+- 入力フィールド変更時のイベントリスナーを忘れずに設定
+- リアルタイム更新が求められる場合は`change`イベントを使う
+
+---
+
 ## 開発ルール
 
 ### ✅ 開発時のチェックリスト
@@ -855,7 +1536,103 @@ textarea.value = text;
 
 ## 次の実装予定
 
-### 短期（2週間以内）- 商品登録残り20%部分
+### 短期（2週間以内）- 商品登録残り12%部分
+
+#### ~~1. サイズレイアウト変更（縦→2列並び）~~ ✅ **完了（2025/10/09）**
+
+**変更内容**: 縦配置 → 2列並び
+
+```
+変更前:        変更後:
+肩幅           肩幅    身幅
+身幅    →      袖丈    着丈
+袖丈
+着丈
+```
+
+**実装方法**:
+- `class="row"`をインラインスタイルに変更
+- `display: grid; grid-template-columns: 1fr 1fr; gap: 8px;`
+- トップス（肩幅・身幅、袖丈・着丈）とボトムス（ウエスト・ヒップ、股上・股下）に適用
+
+**実装箇所**: `sp_block_description.html` lines 42-137
+
+---
+
+#### ~~2. ラグラン例外処理（肩幅→裄丈）~~ ✅ **完了（2025/10/09）**
+
+**機能**:
+- アイテム名に「ラグラン」が含まれる場合、「肩幅」→「裄丈」に変更
+- UI表示ラベルとプレビューの両方に対応
+- リアルタイム更新（アイテム名変更時に自動切り替え）
+
+**実装内容**:
+
+1. **UI表示ラベルの動的切り替え**:
+```javascript
+// ラグラン判定
+const itemName = _val('アイテム名');
+const isRaglan = itemName && itemName.includes('ラグラン');
+
+// ラベルテキスト更新
+const shoulderLabel = document.getElementById('shoulderWidthLabel');
+if (shoulderLabel) {
+  shoulderLabel.textContent = isRaglan ? '裄丈' : '肩幅';
+}
+```
+
+2. **プレビュー表示の動的切り替え**:
+```javascript
+function getSizeInfo() {
+  const itemName = _val('アイテム名');
+  const isRaglan = itemName && itemName.includes('ラグラン');
+  const shoulderLabel = isRaglan ? '裄丈' : '肩幅';
+
+  if (sizeValues.肩幅) sizeText += `${shoulderLabel}：${sizeValues.肩幅}cm\n`;
+}
+```
+
+3. **イベントリスナー追加**:
+```javascript
+function setupRaglanListener() {
+  const itemNameField = document.getElementById('アイテム名');
+  if (itemNameField) {
+    itemNameField.addEventListener('change', updateSizeDisplay);
+  }
+}
+```
+
+**実装箇所**:
+- `sp_block_description.html` line 44: `id="shoulderWidthLabel"`
+- `sp_scripts.html` lines 1649-1652: ラグラン判定
+- `sp_scripts.html` lines 2804-2840: UI更新
+- `sp_scripts.html` lines 2957-2963: イベントリスナー
+
+---
+
+#### ~~3. リセット機能の完全実装~~ ✅ **完了（2025/10/09）**
+
+**機能**: リセットボタンで初期状態（商品登録メニューを開いた直後の状態）に完全に戻す
+
+**対応項目**:
+- FIELD_IDS全フィールドのクリア
+- 動的生成フィールド（管理番号の頭文字・棚番号）
+- ブランドフィールド（基本情報・商品名ブロック）
+- 商品名プレビュー（空欄に）
+- 商品の説明プレビュー（デフォルト値のみ表示）
+- サイズ関連（アイコン・ラベル・表記プルダウン・裄丈ラベル）
+- 素材フィールド（1セット目のみ残して他を削除）
+- 配送デフォルト値を再適用
+
+**実装箇所**: `sp_scripts.html` lines 2057-2177
+
+**重要な教訓**:
+- リセット = 初期化と同等に扱う
+- 動的フィールドは存在チェック必須
+- エラーで処理が止まらないようにする
+- console.log()でデバッグログを仕込む
+
+---
 
 #### 1. ブランド(カナ)の頭に半角スペース
 
@@ -888,52 +1665,9 @@ textarea.value = text;
 - 「+ 商品属性を追加」ボタン
 - 見た目スッキリ
 
-**実装参考**: `sp_scripts.html`の`addMaterial()`
+**実装方法**: 動的ブロックビルダー（`DynamicBlockBuilder`）を使用 ★実装済み
 
-#### 4. サイズ全般の表記修正と新規追加１
-
-**変更内容**:
-
-テキスト削除:
-- 「トップス／アウター」「パンツ」の文字削除
-- 代わりにアイコン設置（👕 👖）
-
-表記変更:
-- 「サイズ」→「サイズ(実寸)」
-
-新規追加:
-- 「サイズ(表記)」プルダウン追加
-- マスタデータの「サイズ(表記)」列を参照
-
-プレビュー表示統一:
-```
-サイズ(表記)
-M
-
-サイズ(実寸)
-肩幅：45cm
-身幅：50cm
-...
-```
-
-#### 5. サイズ全般の表記修正と新規追加２
-
-**レイアウト変更**: 縦配置 → 2列並び
-
-```
-現状:          変更後:
-肩幅           肩幅    身幅
-身幅    →      袖丈    着丈
-袖丈
-着丈
-```
-
-**例外処理**: ラグランTシャツ・ラグランスウェット
-- 「肩幅」→「裄丈」に変更
-- メンズ・レディース両方対応
-- アイテム名で判定
-
-#### 6. カラー(詳細)追加
+#### 4. カラー(詳細)追加
 
 **新規機能**:
 - 商品の説明ブロック内に追加
@@ -1357,7 +2091,44 @@ const fieldMapping = {
 3. 手動管理シート
 4. デフォルト値（コード内フォールバック）
 
-#### 4. キャッシュ機構
+#### 4. 動的ブロックビルダー ★新規
+
+統一的な動的フォーム生成システム
+
+**概要**:
+- 宣言的な設定でブロックを自動生成
+- 追加・削除の自動管理
+- 最小/最大数の制御
+- 自動リナンバリング
+- データ収集・セット機能
+
+**使用例**:
+```javascript
+const materialBuilder = new DynamicBlockBuilder({
+  containerId: 'materialList',
+  itemLabel: '素材',
+  minItems: 1,
+  maxItems: 10,
+  fields: [
+    { id: '箇所', type: 'select', label: '箇所', options: 'MATERIAL_LOCATIONS' },
+    { id: '種類1', type: 'select', label: '種類', options: 'MATERIAL_TYPES' }
+  ],
+  onChange: () => updatePreview()
+});
+```
+
+**実装ファイル**:
+- `dynamic_block_builder.html` - コアロジック
+- `dynamic_block_builder_styles.html` - スタイル
+- `test_dynamic_block_builder.html` - テスト用サンプル
+- `DYNAMIC_BLOCK_BUILDER_GUIDE.md` - 詳細ドキュメント
+
+**適用例**:
+- 素材ブロック（実装済み）
+- 商品属性ブロック（今後実装予定）
+- 割引範囲ブロック（設定管理用、今後移行予定）
+
+#### 5. キャッシュ機構
 
 設定マスタデータを5分間キャッシュしてパフォーマンス向上
 
@@ -1367,7 +2138,7 @@ let CONFIG_CACHE = null;
 let CONFIG_CACHE_TIMESTAMP = null;
 ```
 
-#### 5. エラーハンドリング階層
+#### 6. エラーハンドリング階層
 
 1. フロント側バリデーション
 2. バックエンドバリデーション
@@ -1506,4 +2277,13 @@ window.onload = function() {
 
 **このドキュメントは Claude Code が効率的に開発を進めるための完全なリファレンスです。**
 
-**最終更新日**: 2025年（設定管理システム実装完了時）
+**最終更新日**: 2025年10月9日（設定管理システム完成・使い方ガイドタブ追加）
+
+**最新の更新内容**:
+- ✅ 設定管理システム 100% 完成
+- ✅ 使い方ガイドタブ追加（アコーディオン式、5セクション）
+- ✅ タブ順序変更（管理番号設定 → 配送デフォルト → 商品状態ボタン → 割引情報 → ハッシュタグ → 使い方ガイド）
+- ✅ ハッシュタグ設定の専門用語削除（プレフィックス → 先頭に付く文字列、サフィックス → 末尾の文字列）
+- ✅ 商品状態ボタン設定にプリセットドロップダウン追加
+- ✅ 使い方ガイドタブでの保存ボタン自動非表示
+- ⚠️ Claude Code会話圧縮後の `clasp push` 忘れ防止策を追記

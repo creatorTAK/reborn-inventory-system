@@ -42,6 +42,7 @@
   'アイテム名',
   '商品の説明',
   '商品状態詳細',
+  'サイズ(表記)',
   '肩幅','身幅','袖丈','着丈','ウエスト','ヒップ','股上','股下',
   '仕入日','仕入先','仕入金額',
   '出品日','出品先','出品金額',
@@ -239,6 +240,136 @@
     });
   }
 
+  // ========== 商品属性動的追加機能 ==========
+  let attributeCount = 1;
+
+  // カテゴリの選択肢を生成
+  function getAttributeCategoryOptions() {
+    const categories = [
+      '生地・素材・質感系', '季節感・機能性', '着用シーン・イベント', '見た目・印象',
+      'トレンド表現', 'サイズ感・体型カバー', '年代・テイスト・スタイル', 'カラー/配色/トーン',
+      '柄・模様', 'ディテール・仕様', 'シルエット/ライン', 'ネックライン',
+      '襟・衿', '袖・袖付け', '丈', '革/加工', '毛皮/加工', '生産国'
+    ];
+    let options = '<option value="">--選択してください--</option>';
+    categories.forEach(cat => {
+      options += `<option value="${cat}">${cat}</option>`;
+    });
+    return options;
+  }
+
+  // 商品属性のカテゴリプルダウンに選択肢を設定
+  function populateAttributeCategory(index) {
+    const categorySelect = document.getElementById(`商品属性${index}_カテゴリ`);
+    if (categorySelect) {
+      categorySelect.innerHTML = getAttributeCategoryOptions();
+    }
+  }
+
+  // 商品属性セットを追加
+  function addAttribute() {
+    if (attributeCount >= 10) {
+      alert('商品属性は最大10個まで追加できます');
+      return;
+    }
+
+    attributeCount++;
+
+    const attributeList = document.getElementById('attributeList');
+    const newItem = document.createElement('div');
+    newItem.className = 'attribute-item';
+    newItem.setAttribute('data-index', attributeCount);
+
+    newItem.innerHTML = `
+      <div class="attribute-header">
+        <span>属性 ${attributeCount}</span>
+        <button type="button" class="remove-attribute-btn" onclick="removeAttribute(${attributeCount})">削除</button>
+      </div>
+
+      <div class="row" style="margin-top: 6px;">
+        <div>
+          <label>カテゴリ</label>
+          <select id="商品属性${attributeCount}_カテゴリ">
+            <option value="">--選択してください--</option>
+          </select>
+        </div>
+        <div>
+          <label>値</label>
+          <select id="商品属性${attributeCount}_値" disabled>
+            <option value="">--カテゴリを選択してください--</option>
+          </select>
+        </div>
+      </div>
+    `;
+
+    attributeList.appendChild(newItem);
+    populateAttributeCategory(attributeCount);
+    setupAttributeSelector(attributeCount);
+    updateAttributeRemoveButtons();
+    updateAttributeFields();
+  }
+
+  // 商品属性セットを削除
+  function removeAttribute(index) {
+    const item = document.querySelector(`.attribute-item[data-index="${index}"]`);
+    if (item) {
+      item.remove();
+
+      const items = document.querySelectorAll('.attribute-item');
+      attributeCount = items.length;
+
+      items.forEach((item, i) => {
+        const newIndex = i + 1;
+        item.setAttribute('data-index', newIndex);
+        item.querySelector('.attribute-header span').textContent = `属性 ${newIndex}`;
+
+        // onclickも更新
+        const removeBtn = item.querySelector('.remove-attribute-btn');
+        if (removeBtn) {
+          removeBtn.onclick = () => removeAttribute(newIndex);
+        }
+      });
+
+      updateAttributeRemoveButtons();
+      updateAttributeFields();
+      updateNamePreview();
+    }
+  }
+
+  // 削除ボタンの表示制御
+  function updateAttributeRemoveButtons() {
+    const items = document.querySelectorAll('.attribute-item');
+    items.forEach(item => {
+      const btn = item.querySelector('.remove-attribute-btn');
+      if (btn) {
+        btn.style.display = (items.length > 1) ? 'block' : 'none';
+      }
+    });
+  }
+
+  // NAME_REST_FIELDS配列を更新（商品名プレビュー用）
+  function updateAttributeFields() {
+    const items = document.querySelectorAll('.attribute-item');
+    NAME_REST_FIELDS.length = 0; // 配列をクリア
+    items.forEach((item, i) => {
+      NAME_REST_FIELDS.push(`商品属性${i + 1}_値`);
+    });
+  }
+
+  // 単一の商品属性セレクターをセットアップ
+  function setupAttributeSelector(index) {
+    const categorySelect = document.getElementById(`商品属性${index}_カテゴリ`);
+    const valueSelect = document.getElementById(`商品属性${index}_値`);
+
+    if (categorySelect && valueSelect) {
+      categorySelect.addEventListener('change', function() {
+        updateAttributeValues(`商品属性${index}_カテゴリ`, `商品属性${index}_値`);
+      });
+
+      valueSelect.addEventListener('change', updateNamePreview);
+    }
+  }
+
   // 商品の状態に応じてボタンを表示切替
   function updateConditionButtons() {
     const conditionSelect = document.getElementById('商品の状態');
@@ -432,6 +563,8 @@
           if (config) {
             HASHTAG_CONFIG = config;
             console.log('ハッシュタグ設定を読み込みました:', config);
+            // ハッシュタグチェックボックスを生成
+            renderHashtagCheckboxes();
             // 設定読み込み後、商品の説明を更新
             if (typeof updateDescriptionFromDetail === 'function') {
               updateDescriptionFromDetail();
@@ -443,6 +576,141 @@
         })
         .getHashtagConfig();
     }
+  }
+
+  /**
+   * ハッシュタグチェックボックスを生成
+   */
+  function renderHashtagCheckboxes() {
+    console.log('renderHashtagCheckboxes が呼び出されました');
+    const container = document.getElementById('hashtagCheckboxContainer');
+    if (!container) {
+      console.error('hashtagCheckboxContainer が見つかりません');
+      return;
+    }
+
+    container.innerHTML = '';
+
+    console.log('HASHTAG_CONFIG:', HASHTAG_CONFIG);
+    if (!HASHTAG_CONFIG || !HASHTAG_CONFIG.hashtags || HASHTAG_CONFIG.hashtags.length === 0) {
+      console.warn('ハッシュタグ設定が空です');
+      container.innerHTML = '<div style="font-size: 11px; color: #6b7280; text-align: center;">ハッシュタグ設定がありません</div>';
+      return;
+    }
+
+    const hashtags = HASHTAG_CONFIG.hashtags;
+    const commonPrefix = HASHTAG_CONFIG.commonPrefix || '#';
+
+    hashtags.forEach((hashtag, index) => {
+      const title = hashtag.title || '';
+      const icon = hashtag.icon || '🏷️';
+      const suffix = hashtag.suffix || '';
+
+      // プレビューテキストを生成（実際の値は商品登録時に動的に変わる）
+      let previewText = '';
+      if (title === '全商品') {
+        previewText = `${commonPrefix}${suffix}`;
+      } else if (title === 'ブランド') {
+        previewText = `${commonPrefix}ブランド名${suffix}`;
+      } else if (title === 'カテゴリ') {
+        const categoryOptions = hashtag.categoryOptions || [];
+        const categoryPreview = categoryOptions.join('+');
+        previewText = `${commonPrefix}${categoryPreview}${suffix}`;
+      } else {
+        previewText = `${commonPrefix}${suffix}`;
+      }
+
+      const checkboxId = `hashtag-checkbox-${index}`;
+
+      console.log(`Creating checkbox ${index}:`, {title, icon, previewText});
+
+      // シンプルに1行で表示
+      const label = document.createElement('label');
+      label.style.cssText = 'display: block; cursor: pointer; padding: 6px 4px; border-bottom: 1px solid #e5e7eb;';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = checkboxId;
+      checkbox.setAttribute('data-index', index);
+      checkbox.checked = true;
+      checkbox.onchange = updateDescriptionFromDetail;
+      checkbox.style.cssText = 'cursor: pointer; margin-right: 6px; vertical-align: middle;';
+
+      const textSpan = document.createElement('span');
+      textSpan.style.cssText = 'font-size: 11px; color: #374151; vertical-align: middle;';
+      textSpan.textContent = previewText;
+
+      label.appendChild(checkbox);
+      label.appendChild(textSpan);
+
+      container.appendChild(label);
+    });
+
+    // 生成後のDOMを確認
+    console.log('生成されたHTML:', container.innerHTML);
+    console.log('チェックボックスコンテナの子要素数:', container.children.length);
+  }
+
+  /**
+   * ハッシュタグチェックボックスのプレビューテキストを更新
+   */
+  function updateHashtagCheckboxPreviews() {
+    if (!HASHTAG_CONFIG || !HASHTAG_CONFIG.hashtags) return;
+
+    const hashtags = HASHTAG_CONFIG.hashtags;
+    const commonPrefix = HASHTAG_CONFIG.commonPrefix || '#';
+
+    hashtags.forEach((hashtag, index) => {
+      const previewElement = document.getElementById(`hashtag-preview-${index}`);
+      if (!previewElement) return;
+
+      const title = hashtag.title || '';
+      const suffix = hashtag.suffix || '';
+      let previewText = '';
+
+      if (title === '全商品') {
+        previewText = `${commonPrefix}${suffix}`;
+      } else if (title === 'ブランド') {
+        const brandEn = _val('ブランド(英語)');
+        const brandKana = _val('ブランド(カナ)');
+        const brand = brandEn || brandKana;
+        if (brand) {
+          const cleanBrand = brand.replace(/\s+/g, '');
+          previewText = `${commonPrefix}${cleanBrand}${suffix}`;
+        } else {
+          previewText = `${commonPrefix}ブランド名${suffix}`;
+        }
+      } else if (title === 'カテゴリ') {
+        const categoryOptions = hashtag.categoryOptions || [];
+        const categoryMap = {
+          '大分類': _val('大分類(カテゴリ)'),
+          '中分類': _val('中分類(カテゴリ)'),
+          '小分類': _val('小分類(カテゴリ)'),
+          '細分類1': _val('細分類(カテゴリ)'),
+          '細分類2': _val('細分類2'),
+          'アイテム名': _val('アイテム名')
+        };
+
+        const categoryParts = [];
+        categoryOptions.forEach(optionName => {
+          const value = categoryMap[optionName];
+          if (value) {
+            categoryParts.push(value);
+          }
+        });
+
+        if (categoryParts.length > 0) {
+          previewText = `${commonPrefix}${categoryParts.join('')}${suffix}`;
+        } else {
+          const categoryPreview = categoryOptions.join('+');
+          previewText = `${commonPrefix}${categoryPreview}${suffix}`;
+        }
+      } else {
+        previewText = `${commonPrefix}${suffix}`;
+      }
+
+      previewElement.textContent = previewText;
+    });
   }
 
   // 割引情報設定（設定マスタから読み込む）
@@ -538,46 +806,123 @@
     return text;
   }
 
-  // オリジナルハッシュタグ生成関数（設定シート対応版）
+  // オリジナルハッシュタグ生成関数（動的設定対応版・チェックボックス連動）
   function generateHashtags() {
     const tags = [];
 
-    // 全商品タグ
-    const allProductPrefix = HASHTAG_CONFIG.全商品プレフィックス || '#REBORN_';
-    const allProductText = HASHTAG_CONFIG.全商品テキスト || '全商品';
-    tags.push(`${allProductPrefix}${allProductText}`);
+    // 新形式（動的ハッシュタグ配列 + 共通プレフィックス）に対応
+    if (HASHTAG_CONFIG.hashtags && Array.isArray(HASHTAG_CONFIG.hashtags)) {
+      const commonPrefix = HASHTAG_CONFIG.commonPrefix || '';
 
-    // ブランド別タグ
-    const brandEn = _val('ブランド(英語)');
-    if (brandEn) {
-      const brandPrefix = HASHTAG_CONFIG.ブランドプレフィックス || '#REBORN_';
-      const brandSuffix = HASHTAG_CONFIG.ブランドサフィックス || 'アイテム一覧';
-      // 半角英数のみ使用、スペースは除去
-      const cleanBrand = brandEn.replace(/\s+/g, '');
-      tags.push(`${brandPrefix}${cleanBrand}${brandSuffix}`);
-    }
+      HASHTAG_CONFIG.hashtags.forEach((hashtag, index) => {
+        // チェックボックスの状態を確認
+        const checkbox = document.getElementById(`hashtag-checkbox-${index}`);
+        if (!checkbox || !checkbox.checked) {
+          return; // チェックされていない場合はスキップ
+        }
 
-    // 中分類タグ
-    const category2 = _val('中分類(カテゴリ)');
-    if (category2) {
-      const categoryPrefix = HASHTAG_CONFIG.カテゴリプレフィックス || '#REBORN_';
-      const categorySuffix = HASHTAG_CONFIG.カテゴリサフィックス || '一覧';
-      tags.push(`${categoryPrefix}${category2}${categorySuffix}`);
-    }
+        const suffix = hashtag.suffix || '';
+        const title = hashtag.title || '';
 
-    // 大分類タグ
-    const category1 = _val('大分類(カテゴリ)');
-    if (category1) {
-      const categoryPrefix = HASHTAG_CONFIG.カテゴリプレフィックス || '#REBORN_';
-      const brandSuffix = HASHTAG_CONFIG.ブランドサフィックス || 'アイテム一覧';
-      tags.push(`${categoryPrefix}${category1}${brandSuffix}`);
-    }
+        // タイトルに基づいて中間部分を決定
+        if (title === '全商品') {
+          // 全商品タグ
+          tags.push(`${commonPrefix}${suffix}`);
+        } else if (title === 'ブランド') {
+          // ブランド別タグ（英語優先、なければカナ）
+          const brandEn = _val('ブランド(英語)');
+          const brandKana = _val('ブランド(カナ)');
+          const brand = brandEn || brandKana;
+          if (brand) {
+            const cleanBrand = brand.replace(/\s+/g, '');
+            tags.push(`${commonPrefix}${cleanBrand}${suffix}`);
+          }
+        } else if (title === 'カテゴリ') {
+          // カテゴリタグ（選択されたカテゴリを連結）
+          const categoryOptions = hashtag.categoryOptions || ['大分類', '中分類'];
 
-    // 大分類+中分類の組み合わせタグ
-    if (category1 && category2) {
-      const categoryPrefix = HASHTAG_CONFIG.カテゴリプレフィックス || '#REBORN_';
-      const categorySuffix = HASHTAG_CONFIG.カテゴリサフィックス || '一覧';
-      tags.push(`${categoryPrefix}${category1}${category2}${categorySuffix}`);
+          // カテゴリ値のマッピング
+          const categoryMap = {
+            '大分類': _val('大分類(カテゴリ)'),
+            '中分類': _val('中分類(カテゴリ)'),
+            '小分類': _val('小分類(カテゴリ)'),
+            '細分類1': _val('細分類(カテゴリ)'),
+            '細分類2': _val('細分類2'),
+            'アイテム名': _val('アイテム名')
+          };
+
+          // 選択されたカテゴリを順番に連結
+          const categoryParts = [];
+          categoryOptions.forEach(optionName => {
+            const value = categoryMap[optionName];
+            if (value) {
+              categoryParts.push(value);
+            }
+          });
+
+          // 連結されたカテゴリでハッシュタグを生成
+          if (categoryParts.length > 0) {
+            const combinedCategory = categoryParts.join('');
+            tags.push(`${commonPrefix}${combinedCategory}${suffix}`);
+          }
+        } else if (title === 'カラー') {
+          // カラータグ
+          const colorValue = _val('カラー');
+          if (colorValue) {
+            const cleanColor = colorValue.replace(/\s+/g, '');
+            tags.push(`${commonPrefix}${cleanColor}${suffix}`);
+          }
+        } else if (title === 'サイズ') {
+          // サイズタグ
+          const sizeValue = _val('サイズ');
+          if (sizeValue) {
+            const cleanSize = sizeValue.replace(/\s+/g, '');
+            tags.push(`${commonPrefix}${cleanSize}${suffix}`);
+          }
+        } else {
+          // カスタムハッシュタグ（タイトルが特定のものでない場合）
+          // 共通プレフィックスとサフィックスのみ結合
+          if (commonPrefix || suffix) {
+            tags.push(`${commonPrefix}${suffix}`);
+          }
+        }
+      });
+    } else {
+      // 旧形式（固定3項目）との後方互換性
+      // 全商品タグ
+      if (HASHTAG_CONFIG.全商品プレフィックス || HASHTAG_CONFIG.全商品テキスト) {
+        const allProductPrefix = HASHTAG_CONFIG.全商品プレフィックス || '#REBORN_';
+        const allProductText = HASHTAG_CONFIG.全商品テキスト || '全商品';
+        tags.push(`${allProductPrefix}${allProductText}`);
+      }
+
+      // ブランド別タグ
+      const brandEn = _val('ブランド(英語)');
+      if (brandEn && (HASHTAG_CONFIG.ブランドプレフィックス || HASHTAG_CONFIG.ブランドサフィックス)) {
+        const brandPrefix = HASHTAG_CONFIG.ブランドプレフィックス || '#REBORN_';
+        const brandSuffix = HASHTAG_CONFIG.ブランドサフィックス || 'アイテム一覧';
+        const cleanBrand = brandEn.replace(/\s+/g, '');
+        tags.push(`${brandPrefix}${cleanBrand}${brandSuffix}`);
+      }
+
+      // カテゴリタグ
+      if (HASHTAG_CONFIG.カテゴリプレフィックス || HASHTAG_CONFIG.カテゴリサフィックス) {
+        const categoryPrefix = HASHTAG_CONFIG.カテゴリプレフィックス || '#REBORN_';
+        const categorySuffix = HASHTAG_CONFIG.カテゴリサフィックス || '一覧';
+
+        const category1 = _val('大分類(カテゴリ)');
+        const category2 = _val('中分類(カテゴリ)');
+
+        if (category2) {
+          tags.push(`${categoryPrefix}${category2}${categorySuffix}`);
+        }
+        if (category1) {
+          tags.push(`${categoryPrefix}${category1}${categorySuffix}`);
+        }
+        if (category1 && category2) {
+          tags.push(`${categoryPrefix}${category1}${category2}${categorySuffix}`);
+        }
+      }
     }
 
     // 重複削除
@@ -643,6 +988,413 @@
       el.value = def;
     }
   }
+
+  // ========== 管理番号セグメント方式UI ==========
+
+  // 管理番号セグメントUIを初期化
+  function initManagementNumberUI() {
+    google.script.run
+      .withSuccessHandler(function(segments) {
+        if (!segments || segments.length === 0) {
+          // セグメント設定がない場合は旧UIを使用
+          initLegacyManagementUI();
+          return;
+        }
+
+        renderManagementSegmentUI(segments);
+      })
+      .withFailureHandler(function(e) {
+        console.error('セグメント設定の読み込みに失敗:', e);
+        initLegacyManagementUI();
+      })
+      .getManagementNumberSegments();
+  }
+
+  // セグメントUIを生成
+  function renderManagementSegmentUI(segments) {
+    const container = document.getElementById('managementNumberFields');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    // ユーザー入力が必要なセグメントがあるかチェック
+    let hasUserInput = false;
+
+    segments.forEach((segment, index) => {
+      const type = segment.type;
+      const config = segment.config;
+
+      // ユーザー入力が必要なセグメントのみUIを生成
+      switch (type) {
+        case 'shelf':
+          // 棚番号選択（2段階選択: 頭文字 → 棚番号）
+          const shelfDiv = document.createElement('div');
+          shelfDiv.style.marginBottom = '8px';
+
+          // 頭文字の選択肢を生成（A-Z）
+          let shelfFirstCharOptions = '<option value="">--選択--</option>';
+          for (let i = 65; i <= 90; i++) {
+            const char = String.fromCharCode(i);
+            shelfFirstCharOptions += `<option value="${char}">${char}</option>`;
+          }
+
+          shelfDiv.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div>
+                <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
+                  頭文字
+                </label>
+                <select id="mgmt_shelf_first" class="tight" style="width: 100%;">
+                  ${shelfFirstCharOptions}
+                </select>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
+                  棚番号
+                </label>
+                <select id="mgmt_shelf_second" class="tight" style="width: 100%;">
+                  <option value="">--選択--</option>
+                </select>
+              </div>
+            </div>
+          `;
+          container.appendChild(shelfDiv);
+
+          // 頭文字選択時に2文字目を更新
+          document.getElementById('mgmt_shelf_first').addEventListener('change', function() {
+            const firstChar = this.value;
+            const secondSelect = document.getElementById('mgmt_shelf_second');
+
+            if (!firstChar) {
+              secondSelect.innerHTML = '<option value="">--選択--</option>';
+              secondSelect.disabled = true;
+            } else {
+              let secondOptions = '<option value="">--選択--</option>';
+              for (let i = 65; i <= 90; i++) {
+                const char = String.fromCharCode(i);
+                secondOptions += `<option value="${char}">${firstChar}${char}</option>`;
+              }
+              secondSelect.innerHTML = secondOptions;
+              secondSelect.disabled = false;
+            }
+            updateManagementNumberPreview();
+          });
+
+          // 2文字目選択時にプレビュー更新
+          document.getElementById('mgmt_shelf_second').addEventListener('change', updateManagementNumberPreview);
+          hasUserInput = true;
+          break;
+
+        case 'category':
+          // カテゴリコード選択（AA〜ZZ）
+          const categoryDiv = document.createElement('div');
+          categoryDiv.style.marginBottom = '8px';
+
+          // AA〜ZZの選択肢を生成
+          let categoryOptions = '<option value="">--選択--</option>';
+          for (let i = 65; i <= 90; i++) { // A-Z
+            for (let j = 65; j <= 90; j++) { // A-Z
+              const code = String.fromCharCode(i) + String.fromCharCode(j);
+              categoryOptions += `<option value="${code}">${code}</option>`;
+            }
+          }
+
+          categoryDiv.innerHTML = `
+            <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
+              📁 カテゴリコード
+            </label>
+            <select id="mgmt_category" class="tight" style="width: 100%;">
+              ${categoryOptions}
+            </select>
+          `;
+          container.appendChild(categoryDiv);
+
+          // プレビュー更新イベント
+          document.getElementById('mgmt_category').addEventListener('change', updateManagementNumberPreview);
+          hasUserInput = true;
+          break;
+
+        case 'rank':
+          // 品質ランク選択
+          const rankDiv = document.createElement('div');
+          rankDiv.style.marginBottom = '8px';
+          rankDiv.innerHTML = `
+            <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
+              ⭐ 品質ランク
+            </label>
+            <select id="mgmt_rank" class="tight" style="width: 100%;">
+              <option value="">--選択--</option>
+              <option value="S">S (最高品質)</option>
+              <option value="A">A (新品・美品)</option>
+              <option value="B">B (良好)</option>
+              <option value="C">C (使用感あり)</option>
+              <option value="D">D (難あり)</option>
+              <option value="E">E (ジャンク)</option>
+            </select>
+          `;
+          container.appendChild(rankDiv);
+
+          // プレビュー更新イベント
+          document.getElementById('mgmt_rank').addEventListener('change', updateManagementNumberPreview);
+          hasUserInput = true;
+          break;
+
+        case 'size':
+          // サイズコード選択
+          const sizeDiv = document.createElement('div');
+          sizeDiv.style.marginBottom = '8px';
+          sizeDiv.innerHTML = `
+            <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
+              📏 サイズコード
+            </label>
+            <select id="mgmt_size" class="tight" style="width: 100%;">
+              <option value="">--選択--</option>
+              <option value="XS">XS</option>
+              <option value="S">S</option>
+              <option value="M">M</option>
+              <option value="L">L</option>
+              <option value="XL">XL</option>
+              <option value="XXL">XXL</option>
+            </select>
+          `;
+          container.appendChild(sizeDiv);
+
+          // プレビュー更新イベント
+          document.getElementById('mgmt_size').addEventListener('change', updateManagementNumberPreview);
+          hasUserInput = true;
+          break;
+
+        case 'color':
+          // 色コード選択
+          const colorDiv = document.createElement('div');
+          colorDiv.style.marginBottom = '8px';
+          colorDiv.innerHTML = `
+            <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
+              🎨 色コード
+            </label>
+            <select id="mgmt_color" class="tight" style="width: 100%;">
+              <option value="">--選択--</option>
+              <option value="BK">BK (黒)</option>
+              <option value="W">W (白)</option>
+              <option value="R">R (赤)</option>
+              <option value="BL">BL (青)</option>
+              <option value="GR">GR (緑)</option>
+              <option value="Y">Y (黄)</option>
+              <option value="G">G (グレー)</option>
+              <option value="BR">BR (茶)</option>
+              <option value="BE">BE (ベージュ)</option>
+              <option value="P">P (ピンク)</option>
+              <option value="O">O (オレンジ)</option>
+            </select>
+          `;
+          container.appendChild(colorDiv);
+
+          // プレビュー更新イベント
+          document.getElementById('mgmt_color').addEventListener('change', updateManagementNumberPreview);
+          hasUserInput = true;
+          break;
+
+        case 'custom':
+          // カスタム値（2段階選択: 頭文字 → 棚番号）
+          const customDiv = document.createElement('div');
+          customDiv.style.marginBottom = '8px';
+
+          // 頭文字の選択肢を生成（A-Z）
+          let firstCharOptions = '<option value="">--選択--</option>';
+          for (let i = 65; i <= 90; i++) {
+            const char = String.fromCharCode(i);
+            firstCharOptions += `<option value="${char}">${char}</option>`;
+          }
+
+          customDiv.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div>
+                <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
+                  頭文字
+                </label>
+                <select id="mgmt_custom_first" class="tight" style="width: 100%;">
+                  ${firstCharOptions}
+                </select>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
+                  棚番号
+                </label>
+                <select id="mgmt_custom_second" class="tight" style="width: 100%;">
+                  <option value="">--選択--</option>
+                </select>
+              </div>
+            </div>
+          `;
+          container.appendChild(customDiv);
+
+          // 頭文字選択時に2文字目を更新
+          document.getElementById('mgmt_custom_first').addEventListener('change', function() {
+            const firstChar = this.value;
+            const secondSelect = document.getElementById('mgmt_custom_second');
+
+            if (!firstChar) {
+              secondSelect.innerHTML = '<option value="">--選択--</option>';
+              secondSelect.disabled = true;
+            } else {
+              let secondOptions = '<option value="">--選択--</option>';
+              for (let i = 65; i <= 90; i++) {
+                const char = String.fromCharCode(i);
+                secondOptions += `<option value="${char}">${firstChar}${char}</option>`;
+              }
+              secondSelect.innerHTML = secondOptions;
+              secondSelect.disabled = false;
+            }
+            updateManagementNumberPreview();
+          });
+
+          // 2文字目選択時にプレビュー更新
+          document.getElementById('mgmt_custom_second').addEventListener('change', updateManagementNumberPreview);
+          hasUserInput = true;
+          break;
+
+        case 'date':
+        case 'sequence':
+          // これらは自動生成なのでUIは不要
+          break;
+      }
+    });
+
+    // ユーザー入力が不要な場合（連番のみなど）は自動で管理番号を生成
+    if (!hasUserInput) {
+      updateManagementNumberPreview();
+    } else {
+      // 初期状態では管理番号フィールドを空欄にする
+      setManagementNumber('', '未選択');
+    }
+  }
+
+  // 管理番号プレビューを更新
+  function updateManagementNumberPreview() {
+    // 棚番号は2段階選択から結合
+    const shelfFirst = _val('mgmt_shelf_first');
+    const shelfSecond = _val('mgmt_shelf_second');
+    const shelfValue = (shelfFirst && shelfSecond) ? shelfFirst + shelfSecond : '';
+
+    // カスタム値は2段階選択から結合
+    const customFirst = _val('mgmt_custom_first');
+    const customSecond = _val('mgmt_custom_second');
+    const customValue = (customFirst && customSecond) ? customFirst + customSecond : '';
+
+    const userInputs = {
+      shelf: shelfValue,
+      category: _val('mgmt_category'),
+      rank: _val('mgmt_rank'),
+      size: _val('mgmt_size'),
+      color: _val('mgmt_color'),
+      custom: customValue
+    };
+
+    // 自動採番を実行
+    google.script.run
+      .withSuccessHandler(function(managementNumber) {
+        if (typeof managementNumber === 'string' && managementNumber.startsWith('NG(')) {
+          setManagementNumber('', managementNumber);
+          return;
+        }
+        setManagementNumber(managementNumber, '');
+      })
+      .withFailureHandler(function(e) {
+        console.error('管理番号生成エラー:', e);
+        setManagementNumber('', 'エラー');
+      })
+      .generateSegmentBasedManagementNumber(userInputs);
+  }
+
+  // 管理番号の連番を調整（▲▼ボタン用）
+  function adjustManagementNumber(delta) {
+    const input = document.getElementById('管理番号');
+    if (!input || !input.value) return;
+
+    const currentValue = input.value;
+
+    // 管理番号を分解（例：BB-1001 → prefix: 'BB-', number: 1001）
+    const match = currentValue.match(/^(.*?)(\d+)$/);
+    if (!match) return;
+
+    const prefix = match[1]; // 例：'BB-'
+    const currentNumber = parseInt(match[2], 10); // 例：1001
+    const digits = match[2].length; // ゼロパディング用
+
+    // 新しい番号を計算
+    let newNumber = currentNumber + delta;
+
+    // 下げる場合は、サーバーに問い合わせて最小値を確認
+    if (delta < 0) {
+      // 一時的に無効化して二重クリックを防止
+      const buttons = document.querySelectorAll('button[onclick*="adjustManagementNumber"]');
+      buttons.forEach(btn => btn.disabled = true);
+
+      // サーバーに問い合わせ
+      google.script.run
+        .withSuccessHandler(function(minAvailableNumber) {
+          buttons.forEach(btn => btn.disabled = false);
+
+          if (typeof minAvailableNumber === 'string' && minAvailableNumber.startsWith('NG(')) {
+            console.error('最小番号取得エラー:', minAvailableNumber);
+            return;
+          }
+
+          // 最小使用可能番号以上に制限
+          const finalNumber = Math.max(minAvailableNumber, newNumber);
+          const paddedNumber = String(finalNumber).padStart(digits, '0');
+          const newValue = prefix + paddedNumber;
+
+          input.value = newValue;
+          console.log(`管理番号を調整: ${currentValue} → ${newValue} (最小: ${minAvailableNumber})`);
+
+          if (finalNumber === minAvailableNumber && newNumber < minAvailableNumber) {
+            // 既に最小値に達している場合は通知
+            console.log('これ以上下げられません（使用済みの番号です）');
+          }
+        })
+        .withFailureHandler(function(error) {
+          buttons.forEach(btn => btn.disabled = false);
+          console.error('最小番号取得失敗:', error);
+        })
+        .getMinAvailableNumber(prefix.replace(/-$/, ''), digits, parseInt(match[2]));
+    } else {
+      // 上げる場合はそのまま適用
+      newNumber = Math.max(1, newNumber);
+      const paddedNumber = String(newNumber).padStart(digits, '0');
+      const newValue = prefix + paddedNumber;
+      input.value = newValue;
+      console.log(`管理番号を調整: ${currentValue} → ${newValue}`);
+    }
+  }
+
+  // 旧UI初期化（後方互換用）
+  function initLegacyManagementUI() {
+    const container = document.getElementById('managementNumberFields');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div class="row3">
+        <div>
+          <span class="small">頭文字</span>
+          <select id="prefix1" class="tight">
+            <option value="">--</option>
+          </select>
+        </div>
+        <div>
+          <span class="small">棚番号</span>
+          <select id="棚番号" class="tight" disabled>
+            <option value="">--</option>
+          </select>
+        </div>
+        <div></div>
+      </div>
+    `;
+
+    initPrefix1();
+  }
+
+  // ========== 旧システム（後方互換用） ==========
 
   // 頭文字プルダウンを初期化
   function initPrefix1() {
@@ -714,7 +1466,7 @@
     el.placeholder=ph||'';
   }
 
-  const NAME_REST_FIELDS = ['商品属性1_値', '商品属性2_値', '商品属性3_値'];
+  let NAME_REST_FIELDS = ['商品属性1_値'];
 
   // DOM要素キャッシュ
   const elementCache = new Map();
@@ -758,7 +1510,16 @@
     // 商品名ブロック内のブランドを参照（どちらか片方でも可）
     const brandEn = _val('商品名_ブランド(英語)');
     const brandKana = _val('商品名_ブランド(カナ)');
-    const brands = [brandEn, brandKana].filter(Boolean).join('');
+
+    // ブランド名の構築（カナの前に半角スペース）
+    let brands = '';
+    if (brandEn && brandKana) {
+      brands = brandEn + ' ' + brandKana;
+    } else if (brandEn) {
+      brands = brandEn;
+    } else if (brandKana) {
+      brands = brandKana;
+    }
 
     const item = _val('アイテム名');
     const others = NAME_REST_FIELDS.map(_val).filter(Boolean);
@@ -787,11 +1548,11 @@
     if (hidden) hidden.value = saveText;
   }
 
-  // ブランド表示フィールドの更新
+  // ブランド表示フィールドの更新（基本情報→商品名ブロックへ自動反映）
   function updateBrandDisplay() {
     const englishName = _val('ブランド(英語)');
-    const englishField = document.getElementById('ブランド表示_英語');
-    const kanaField = document.getElementById('ブランド表示_カナ');
+    const englishField = document.getElementById('商品名_ブランド(英語)');
+    const kanaField = document.getElementById('商品名_ブランド(カナ)');
 
     if (!englishField || !kanaField) return;
 
@@ -802,13 +1563,11 @@
 
       englishField.value = englishName;
       kanaField.value = kanaName;
-
-      console.log('ブランド表示更新:', englishName, '→', kanaName);
     } else {
       englishField.value = '';
       kanaField.value = '';
-      englishField.placeholder = '未選択';
-      kanaField.placeholder = '未選択';
+      englishField.placeholder = '入力すると候補が表示されます';
+      kanaField.placeholder = '入力すると候補が表示されます';
     }
   }
 
@@ -884,6 +1643,15 @@
 
   // サイズ情報取得関数
   function getSizeInfo() {
+    // サイズ(表記)を取得
+    const sizeHyoki = _val('サイズ(表記)_トップス') || _val('サイズ(表記)_ボトムス');
+
+    // ラグラン判定
+    const itemName = _val('アイテム名');
+    const isRaglan = itemName && itemName.includes('ラグラン');
+    const shoulderLabel = isRaglan ? '裄丈' : '肩幅';
+
+    // サイズ(実寸)を取得
     const sizeValues = {
       肩幅: _val('肩幅'),
       身幅: _val('身幅'),
@@ -895,19 +1663,31 @@
       股下: _val('股下')
     };
 
-    const hasSizeData = Object.values(sizeValues).some(value => value);
+    const hasSizeData = sizeHyoki || Object.values(sizeValues).some(value => value);
     if (!hasSizeData) return '';
 
-    let sizeText = 'サイズ\n';
-    if (sizeValues.肩幅) sizeText += `肩幅：${sizeValues.肩幅}cm\n`;
-    if (sizeValues.身幅) sizeText += `身幅：${sizeValues.身幅}cm\n`;
-    if (sizeValues.袖丈) sizeText += `袖丈：${sizeValues.袖丈}cm\n`;
-    if (sizeValues.着丈) sizeText += `着丈：${sizeValues.着丈}cm\n`;
-    if (sizeValues.ウエスト) sizeText += `ウエスト：${sizeValues.ウエスト}cm\n`;
-    if (sizeValues.ヒップ) sizeText += `ヒップ：${sizeValues.ヒップ}cm\n`;
-    if (sizeValues.股上) sizeText += `股上：${sizeValues.股上}cm\n`;
-    if (sizeValues.股下) sizeText += `股下：${sizeValues.股下}cm\n`;
-    sizeText += '\n';
+    let sizeText = '';
+
+    // サイズ(表記)セクション
+    if (sizeHyoki) {
+      sizeText += 'サイズ(表記)\n';
+      sizeText += `${sizeHyoki}\n\n`;
+    }
+
+    // サイズ(実寸)セクション
+    const hasJissunData = Object.values(sizeValues).some(value => value);
+    if (hasJissunData) {
+      sizeText += 'サイズ(実寸)\n';
+      if (sizeValues.肩幅) sizeText += `${shoulderLabel}：${sizeValues.肩幅}cm\n`;
+      if (sizeValues.身幅) sizeText += `身幅：${sizeValues.身幅}cm\n`;
+      if (sizeValues.袖丈) sizeText += `袖丈：${sizeValues.袖丈}cm\n`;
+      if (sizeValues.着丈) sizeText += `着丈：${sizeValues.着丈}cm\n`;
+      if (sizeValues.ウエスト) sizeText += `ウエスト：${sizeValues.ウエスト}cm\n`;
+      if (sizeValues.ヒップ) sizeText += `ヒップ：${sizeValues.ヒップ}cm\n`;
+      if (sizeValues.股上) sizeText += `股上：${sizeValues.股上}cm\n`;
+      if (sizeValues.股下) sizeText += `股下：${sizeValues.股下}cm\n`;
+      sizeText += '\n';
+    }
 
     return sizeText;
   }
@@ -951,6 +1731,9 @@
           console.error('要素が見つかりません', { detailInput, descTextarea });
           return;
         }
+
+        // ハッシュタグチェックボックスのプレビューを更新
+        updateHashtagCheckboxPreviews();
 
         // ブランド情報を取得
         const brandText = getBrandInfo();
@@ -1220,6 +2003,15 @@
       const v=(el.value||'').trim();
       if (v !== '') d[k]=v;
     });
+
+    // サイズ(表記)の特殊処理: トップスとボトムスのどちらかの値を使用
+    const sizeHyokiTop = _val('サイズ(表記)_トップス');
+    const sizeHyokiBottom = _val('サイズ(表記)_ボトムス');
+    const sizeHyoki = sizeHyokiTop || sizeHyokiBottom;
+    if (sizeHyoki) {
+      d['サイズ(表記)'] = sizeHyoki;
+    }
+
     return d;
   }
 
@@ -1263,85 +2055,139 @@
   }
 
   function onReset() {
+    console.log('=== リセット開始 ===');
+
+    // 1. すべての入力フィールドをクリア
     FIELD_IDS.forEach(k=>{
       const el=document.getElementById(k);
-      if(el) el.value='';
+      if(el) {
+        el.value='';
+        console.log(`クリア: ${k}`);
+      }
     });
+
+    // 2. カテゴリプルダウンをリセット
     ['中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2'].forEach(id=> resetSelect(id, true));
     const l1 = document.getElementById('大分類(カテゴリ)');
     if (l1) l1.value='';
-    ['サイズ','商品の状態','アイテム名','仕入先','出品先',
-   '商品属性1_カテゴリ','商品属性1_値','商品属性2_カテゴリ','商品属性2_値',
-   '商品属性3_カテゴリ','商品属性3_値']
-  .forEach(id=>{
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
 
-    // セールスワードを初期状態にリセット
+    // 3. その他のフィールドをクリア
+    ['サイズ','商品の状態','アイテム名','仕入先','出品先',
+     '商品属性1_カテゴリ','商品属性1_値','商品属性2_カテゴリ','商品属性2_値',
+     '商品属性3_カテゴリ','商品属性3_値']
+    .forEach(id=>{
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    // 4. セールスワードをリセット
     resetKeywordDropdown();
     const categorySelect = document.getElementById('セールスワード(カテゴリ)');
     if (categorySelect) categorySelect.value = '';
 
-    // 商品状態(詳細)もリセット
-      const detailInput = document.getElementById('商品状態詳細');
-      if (detailInput) detailInput.value = '';
+    // 5. 商品状態(詳細)をリセット
+    const detailInput = document.getElementById('商品状態詳細');
+    if (detailInput) detailInput.value = '';
 
-      // 素材フィールドをリセット
-      const materialItems = document.querySelectorAll('.material-item');
-      materialItems.forEach((item, index) => {
-        if (index === 0) {
-          // 最初の素材項目は空にするだけ
-          const locationSelect = item.querySelector(`#素材1_箇所`);
-          const type1Select = item.querySelector(`#素材1_種類1`);
-          const percent1Input = item.querySelector(`#素材1_％1`);
-          const type2Select = item.querySelector(`#素材1_種類2`);
-          const percent2Input = item.querySelector(`#素材1_％2`);
+    // 6. 素材フィールドをリセット
+    const materialItems = document.querySelectorAll('.material-item');
+    materialItems.forEach((item, index) => {
+      if (index === 0) {
+        const locationSelect = item.querySelector(`#素材1_箇所`);
+        const type1Select = item.querySelector(`#素材1_種類1`);
+        const percent1Input = item.querySelector(`#素材1_％1`);
+        const type2Select = item.querySelector(`#素材1_種類2`);
+        const percent2Input = item.querySelector(`#素材1_％2`);
+        if (locationSelect) locationSelect.value = '';
+        if (type1Select) type1Select.value = '';
+        if (percent1Input) percent1Input.value = '';
+        if (type2Select) type2Select.value = '';
+        if (percent2Input) percent2Input.value = '';
+      } else {
+        item.remove();
+      }
+    });
+    materialCount = 1;
+    updateRemoveButtons();
 
-          if (locationSelect) locationSelect.value = '';
-          if (type1Select) type1Select.value = '';
-          if (percent1Input) percent1Input.value = '';
-          if (type2Select) type2Select.value = '';
-          if (percent2Input) percent2Input.value = '';
-        } else {
-          // 2番目以降の素材項目は削除
-          item.remove();
-        }
-      });
+    // 7. サイズ関連をリセット
+    const shoulderLabel = document.getElementById('shoulderWidthLabel');
+    if (shoulderLabel) shoulderLabel.textContent = '肩幅';
 
-      // 素材カウンターをリセット
-      materialCount = 1;
-      updateRemoveButtons();
+    const sizeHyokiTop = document.getElementById('サイズ(表記)_トップス');
+    const sizeHyokiBottom = document.getElementById('サイズ(表記)_ボトムス');
+    if (sizeHyokiTop) sizeHyokiTop.value = '';
+    if (sizeHyokiBottom) sizeHyokiBottom.value = '';
 
-      applyShippingDefaults();
+    const sizeSection = document.getElementById('sizeSection');
+    if (sizeSection) sizeSection.style.display = 'none';
+
+    const sizeIconDisplay = document.getElementById('sizeIconDisplay');
+    const sizeLabelDisplay = document.getElementById('sizeLabelDisplay');
+    if (sizeIconDisplay) sizeIconDisplay.textContent = '👕';
+    if (sizeLabelDisplay) sizeLabelDisplay.textContent = 'サイズ';
+
+    // 8. 配送デフォルトを適用
+    applyShippingDefaults();
+
+    // 9. 管理番号関連をリセット
     const p1 = document.getElementById('prefix1');
     if (p1) p1.value = '';
+    const shelfField = document.getElementById('棚番号');
+    if (shelfField) shelfField.value = '';
+
+    // 動的に生成される管理番号フィールドをクリア
+    const mgmtShelfFirst = document.getElementById('mgmt_shelf_first');
+    const mgmtShelfSecond = document.getElementById('mgmt_shelf_second');
+    const mgmtCustomFirst = document.getElementById('mgmt_custom_first');
+    const mgmtCustomSecond = document.getElementById('mgmt_custom_second');
+    if (mgmtShelfFirst) mgmtShelfFirst.value = '';
+    if (mgmtShelfSecond) mgmtShelfSecond.value = '';
+    if (mgmtCustomFirst) mgmtCustomFirst.value = '';
+    if (mgmtCustomSecond) mgmtCustomSecond.value = '';
+
+    // 管理番号プレビューをクリア
+    const mgmtNumberField = document.getElementById('管理番号');
+    if (mgmtNumberField) mgmtNumberField.value = '';
+
     buildShelf();
-    setItemNumber('', '選択してください');
-    hideSuggest('ブランド(英語)');
-  // ブランドフィールドを明示的にクリア
+
+    // 10. ブランドフィールドをクリア
+    const brandEnBasic = document.getElementById('ブランド(英語)');
+    if (brandEnBasic) brandEnBasic.value = '';
+
     const brandEn = document.getElementById('商品名_ブランド(英語)');
     const brandKana = document.getElementById('商品名_ブランド(カナ)');
     if (brandEn) brandEn.value = '';
     if (brandKana) brandKana.value = '';
 
-    // ブランド表示フィールドもクリア
-    const brandDisplayEn = document.getElementById('ブランド表示_英語');
-    const brandDisplayKana = document.getElementById('ブランド表示_カナ');
-    if (brandDisplayEn) {
-      brandDisplayEn.value = '';
-      brandDisplayEn.placeholder = '未選択';
-    }
-    if (brandDisplayKana) {
-      brandDisplayKana.value = '';
-      brandDisplayKana.placeholder = '未選択';
-    }
-
+    hideSuggest('ブランド(英語)');
     hideSuggest('商品名_ブランド(英語)');
     hideSuggest('商品名_ブランド(カナ)');
+
+    // 11. プレビューをリセット
+    const namePreview = document.getElementById('商品名プレビュー');
+    if (namePreview) {
+      namePreview.value = '';
+      console.log('商品名プレビューをクリア');
+    }
+
+    const descPreview = document.getElementById('商品の説明');
+    if (descPreview) {
+      console.log('商品の説明プレビューをクリア（後でデフォルト値復活）');
+    }
+
+    // 12. メッセージをクリア
     show('');
+
+    // 13. プレビューを再構築（商品名は空、商品の説明はデフォルト値）
+    console.log('商品名プレビュー再構築');
     updateNamePreview();
-    updateDesc();
+
+    console.log('商品の説明デフォルト値復活');
+    updateDescriptionFromDetail();
+
+    console.log('=== リセット完了 ===');
   }
 
   function show(t) {
@@ -1450,9 +2296,15 @@ if (isBrandField) {
               input.value = v;
             }
             hide();
-            updateNamePreview();
-            updateBrandDisplay();
-            updateDescriptionFromDetail();
+            // 基本情報のブランド(英語)選択時は、先に商品名ブロックに反映してから商品名プレビューを更新
+            if (inputId === 'ブランド(英語)') {
+              updateBrandDisplay();
+              updateNamePreview();
+              updateDescriptionFromDetail();
+            } else {
+              updateNamePreview();
+              updateDescriptionFromDetail();
+            }
           });
         panel.appendChild(div);
       });
@@ -1686,6 +2538,10 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         fillSel('サイズ', opts['サイズ']||[]);
         fillSel('商品の状態', unifyConditionList(opts['商品の状態']||[]));
 
+        // サイズ(表記)の選択肢を設定
+        fillSel('サイズ(表記)_トップス', opts['サイズ(表記)']||[]);
+        fillSel('サイズ(表記)_ボトムス', opts['サイズ(表記)']||[]);
+
 // ブランドデータ（従来の配列形式は互換性のため保持）
         BRAND_EN = Array.isArray(opts['ブランド(英語)']) ? opts['ブランド(英語)'] : [];
         BRAND_KANA = Array.isArray(opts['ブランド(カナ)']) ? opts['ブランド(カナ)'] : [];
@@ -1823,11 +2679,25 @@ if (staffSelect) {
     // 素材マスターデータ初期化
     initializeMaterialMasters();
 
+    // 管理番号UI初期化（動的セグメント対応）
+    initManagementNumberUI();
+
     // 素材追加ボタンのイベントリスナー
     const addBtn = document.getElementById('addMaterialBtn');
     if (addBtn) {
       addBtn.addEventListener('click', addMaterial);
     }
+
+    // 商品属性追加ボタンのイベントリスナー
+    const addAttributeBtn = document.getElementById('addAttributeBtn');
+    if (addAttributeBtn) {
+      addAttributeBtn.addEventListener('click', addAttribute);
+    }
+
+    // 初期の商品属性セットアップ
+    populateAttributeCategory(1);
+    setupAttributeSelector(1);
+    updateAttributeRemoveButtons();
 
     // 素材入力フィールドの変更監視
     document.addEventListener('change', function(e) {
@@ -1893,11 +2763,71 @@ if (staffSelect) {
     updateSizeDisplay();
   }
 
+  // カテゴリに応じたアイコンとラベルを取得
+  function getSizeIconAndLabel(subcategory) {
+    // アイコンマッピング（大分類・中分類・アイテム名に対応）
+    const iconMap = {
+      // トップス系
+      'Tシャツ': { icon: '👕', label: 'Tシャツ' },
+      'シャツ': { icon: '👔', label: 'シャツ' },
+      'ニット': { icon: '👕', label: 'ニット' },
+      'セーター': { icon: '👕', label: 'セーター' },
+      'パーカー': { icon: '🧥', label: 'パーカー' },
+      'スウェット': { icon: '👕', label: 'スウェット' },
+      'ジャケット': { icon: '🧥', label: 'ジャケット' },
+      'ブレザー': { icon: '🧥', label: 'ブレザー' },
+      'カーディガン': { icon: '🧥', label: 'カーディガン' },
+      'ベスト': { icon: '🦺', label: 'ベスト' },
+      'タンクトップ': { icon: '🎽', label: 'タンクトップ' },
+      'キャミソール': { icon: '👗', label: 'キャミソール' },
+      'ブラウス': { icon: '👚', label: 'ブラウス' },
+      'チュニック': { icon: '👚', label: 'チュニック' },
+      'ワンピース': { icon: '👗', label: 'ワンピース' },
+      'コート': { icon: '🧥', label: 'コート' },
+      'ダウンジャケット': { icon: '🧥', label: 'ダウンジャケット' },
+      'アウター': { icon: '🧥', label: 'アウター' },
+      'ジャンパー': { icon: '🧥', label: 'ジャンパー' },
+
+      // ボトムス系
+      'パンツ': { icon: '👖', label: 'パンツ' },
+      'ジーンズ': { icon: '👖', label: 'ジーンズ' },
+      'デニム': { icon: '👖', label: 'デニム' },
+      'チノパン': { icon: '👖', label: 'チノパン' },
+      'スラックス': { icon: '👔', label: 'スラックス' },
+      'ショートパンツ': { icon: '🩳', label: 'ショートパンツ' },
+      'ハーフパンツ': { icon: '🩳', label: 'ハーフパンツ' },
+      'レギンス': { icon: '👖', label: 'レギンス' },
+      'スパッツ': { icon: '👖', label: 'スパッツ' },
+      'ジョガーパンツ': { icon: '👖', label: 'ジョガーパンツ' },
+      'カーゴパンツ': { icon: '👖', label: 'カーゴパンツ' },
+      'スカート': { icon: '👗', label: 'スカート' },
+      'ミニスカート': { icon: '👗', label: 'ミニスカート' },
+      'マキシスカート': { icon: '👗', label: 'マキシスカート' },
+      'プリーツスカート': { icon: '👗', label: 'プリーツスカート' }
+    };
+
+    // デフォルトアイコン
+    const defaultTops = { icon: '👕', label: 'トップス' };
+    const defaultBottoms = { icon: '👖', label: 'パンツ' };
+
+    // 部分一致でマッピング検索
+    for (const [key, value] of Object.entries(iconMap)) {
+      if (subcategory && subcategory.includes(key)) {
+        return value;
+      }
+    }
+
+    // 見つからない場合はデフォルト
+    return null;
+  }
+
   function updateSizeDisplay() {
     const subcategory = _val('小分類(カテゴリ)');
     const sizeSection = document.getElementById('sizeSection');
     const topsSize = document.getElementById('topsSize');
     const bottomsSize = document.getElementById('bottomsSize');
+    const sizeIconDisplay = document.getElementById('sizeIconDisplay');
+    const sizeLabelDisplay = document.getElementById('sizeLabelDisplay');
 
     if (!sizeSection || !topsSize || !bottomsSize) return;
 
@@ -1927,17 +2857,46 @@ if (staffSelect) {
 
     if (!subcategory) return;
 
-    // カテゴリに応じて表示切り替え
+    // アイコンとラベルを取得
+    const iconData = getSizeIconAndLabel(subcategory);
+
+    // ラグラン判定（アイテム名で判定）
+    const itemName = _val('アイテム名');
+    const isRaglan = itemName && itemName.includes('ラグラン');
+
+    // カテゴリに応じて表示切り替え＆アイコン更新
     if (topsCategories.some(cat => subcategory.includes(cat))) {
       sizeSection.style.display = 'block';
       topsSize.style.display = 'block';
+      if (iconData && sizeIconDisplay && sizeLabelDisplay) {
+        sizeIconDisplay.textContent = iconData.icon;
+        sizeLabelDisplay.textContent = iconData.label;
+      }
+      // ラグラン例外処理: 肩幅→裄丈
+      const shoulderLabel = document.getElementById('shoulderWidthLabel');
+      if (shoulderLabel) {
+        shoulderLabel.textContent = isRaglan ? '裄丈' : '肩幅';
+      }
     } else if (bottomsCategories.some(cat => subcategory.includes(cat))) {
       sizeSection.style.display = 'block';
       bottomsSize.style.display = 'block';
+      if (iconData && sizeIconDisplay && sizeLabelDisplay) {
+        sizeIconDisplay.textContent = iconData.icon;
+        sizeLabelDisplay.textContent = iconData.label;
+      }
     } else if (setCategories.some(cat => subcategory.includes(cat))) {
       sizeSection.style.display = 'block';
       topsSize.style.display = 'block';
       bottomsSize.style.display = 'block';
+      if (iconData && sizeIconDisplay && sizeLabelDisplay) {
+        sizeIconDisplay.textContent = iconData.icon;
+        sizeLabelDisplay.textContent = iconData.label;
+      }
+      // ラグラン例外処理: 肩幅→裄丈
+      const shoulderLabel = document.getElementById('shoulderWidthLabel');
+      if (shoulderLabel) {
+        shoulderLabel.textContent = isRaglan ? '裄丈' : '肩幅';
+      }
     }
 
     // 説明文を更新
@@ -2022,5 +2981,51 @@ if (staffSelect) {
 
     updateNamePreview();
   }
+
+  // 基本情報フィールド変更時にハッシュタグプレビューを更新
+  function setupHashtagPreviewListeners() {
+    const fieldsToWatch = [
+      'ブランド(英語)', 'ブランド(カナ)',
+      '大分類(カテゴリ)', '中分類(カテゴリ)', '小分類(カテゴリ)',
+      '細分類(カテゴリ)', '細分類2', 'アイテム名'
+    ];
+
+    fieldsToWatch.forEach(fieldId => {
+      const element = document.getElementById(fieldId);
+      if (element) {
+        element.addEventListener('change', function() {
+          updateHashtagCheckboxPreviews();
+        });
+      }
+    });
+  }
+
+  // サイズ(表記)フィールドのイベントリスナーを設定
+  function setupSizeHyokiListeners() {
+    const sizeHyokiTop = document.getElementById('サイズ(表記)_トップス');
+    const sizeHyokiBottom = document.getElementById('サイズ(表記)_ボトムス');
+
+    if (sizeHyokiTop) {
+      sizeHyokiTop.addEventListener('change', updateDescriptionFromDetail);
+    }
+    if (sizeHyokiBottom) {
+      sizeHyokiBottom.addEventListener('change', updateDescriptionFromDetail);
+    }
+  }
+
+  // ラグラン判定のイベントリスナーを設定
+  function setupRaglanListener() {
+    const itemNameField = document.getElementById('アイテム名');
+    if (itemNameField) {
+      itemNameField.addEventListener('change', updateSizeDisplay);
+    }
+  }
+
+  // ページ読み込み時にイベントリスナーを設定
+  setTimeout(() => {
+    setupHashtagPreviewListeners();
+    setupSizeHyokiListeners();
+    setupRaglanListener();
+  }, 1000);
 
 </script>

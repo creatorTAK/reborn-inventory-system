@@ -60,7 +60,21 @@ function loadConfigMaster() {
           break;
 
         case 'ハッシュタグ':
-          config.ハッシュタグ[item1] = value;
+          // 新形式: JSON文字列をパース
+          if (item1 === 'config') {
+            try {
+              config.ハッシュタグ = JSON.parse(value);
+            } catch (e) {
+              console.error('ハッシュタグ設定のJSON解析エラー:', e);
+              config.ハッシュタグ = { commonPrefix: '#', hashtags: [] };
+            }
+          } else {
+            // 旧形式との互換性
+            if (!config.ハッシュタグ.commonPrefix) {
+              config.ハッシュタグ = {};
+            }
+            config.ハッシュタグ[item1] = value;
+          }
           break;
 
         case '割引情報':
@@ -84,7 +98,26 @@ function loadConfigMaster() {
           break;
 
         case '管理番号設定':
-          config.管理番号設定[item1] = value;
+          // segmentsはJSON文字列なのでパース
+          if (item1 === 'segments') {
+            try {
+              config.管理番号設定.segments = JSON.parse(value);
+            } catch (e) {
+              console.error('segmentsのJSON解析エラー:', e);
+              config.管理番号設定.segments = [];
+            }
+          } else {
+            config.管理番号設定[item1] = value;
+          }
+          break;
+
+        case '管理番号ビルダー':
+          // JSON形式のセグメントデータを解析
+          try {
+            config.管理番号設定 = JSON.parse(value);
+          } catch (e) {
+            console.error('管理番号ビルダーデータ解析エラー:', e);
+          }
           break;
       }
     });
@@ -192,16 +225,53 @@ function getManagementNumberConfig() {
   if (!config || !config.管理番号設定) {
     console.log('管理番号設定が見つかりません。デフォルト値を使用します。');
     return {
-      '棚番号使用': 'true',
-      '棚番号形式': 'AA',
-      '棚番号サンプル': 'RACK-A',
-      '区切り文字': '-',
-      '商品番号桁数': '4',
-      '商品番号開始値': '1001'
+      segments: []  // 空の配列（ユーザーが自分で設定）
     };
   }
 
   return config.管理番号設定;
+}
+
+/**
+ * 管理番号ビルダーのセグメント設定を保存
+ * @param {Object} segmentsData - セグメントデータ
+ */
+function saveManagementNumberSegments(segmentsData) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('設定マスタ');
+
+    if (!sheet) {
+      throw new Error('設定マスタシートが見つかりません');
+    }
+
+    // 既存の管理番号設定を削除
+    const lastRow = sheet.getLastRow();
+    const data = sheet.getRange(2, 1, lastRow - 1, 5).getValues();
+
+    for (let i = data.length - 1; i >= 0; i--) {
+      if (data[i][0] === '管理番号ビルダー') {
+        sheet.deleteRow(i + 2);
+      }
+    }
+
+    // 新しい設定を追加
+    const newRows = [];
+    newRows.push(['管理番号ビルダー', 'segments', '', '', JSON.stringify(segmentsData)]);
+
+    if (newRows.length > 0) {
+      const newLastRow = sheet.getLastRow();
+      sheet.getRange(newLastRow + 1, 1, newRows.length, 5).setValues(newRows);
+    }
+
+    // キャッシュをクリア
+    clearConfigCache();
+
+    return { success: true, message: '管理番号設定を保存しました' };
+  } catch (error) {
+    console.error('管理番号設定保存エラー:', error);
+    return { success: false, message: error.toString() };
+  }
 }
 
 /**
@@ -316,9 +386,16 @@ function saveConfigMaster(newConfig) {
 
     // ハッシュタグ
     if (newConfig.ハッシュタグ && typeof newConfig.ハッシュタグ === 'object') {
-      Object.entries(newConfig.ハッシュタグ).forEach(([key, value]) => {
-        rows.push(['ハッシュタグ', key, '', '', value]);
-      });
+      // 新形式: commonPrefix + hashtags配列
+      if (newConfig.ハッシュタグ.hashtags && Array.isArray(newConfig.ハッシュタグ.hashtags)) {
+        // JSON文字列として1行に保存
+        rows.push(['ハッシュタグ', 'config', '', '', JSON.stringify(newConfig.ハッシュタグ)]);
+      } else {
+        // 旧形式との互換性
+        Object.entries(newConfig.ハッシュタグ).forEach(([key, value]) => {
+          rows.push(['ハッシュタグ', key, '', '', value]);
+        });
+      }
     }
 
     // 割引情報
@@ -344,11 +421,19 @@ function saveConfigMaster(newConfig) {
       });
     }
 
-    // 管理番号設定
+    // 管理番号設定（セグメント方式）
     if (newConfig.管理番号設定 && typeof newConfig.管理番号設定 === 'object') {
-      Object.entries(newConfig.管理番号設定).forEach(([key, value]) => {
-        rows.push(['管理番号設定', key, '', '', value]);
-      });
+      if (newConfig.管理番号設定.segments && Array.isArray(newConfig.管理番号設定.segments)) {
+        // 新方式: セグメント配列をJSON文字列として保存
+        rows.push(['管理番号設定', 'segments', '', '', JSON.stringify(newConfig.管理番号設定.segments)]);
+      } else {
+        // 旧方式との互換性維持
+        Object.entries(newConfig.管理番号設定).forEach(([key, value]) => {
+          if (key !== 'segments') {
+            rows.push(['管理番号設定', key, '', '', value]);
+          }
+        });
+      }
     }
 
     // データを書き込み

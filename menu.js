@@ -21,9 +21,8 @@ function showSalesAnalysis() {
 }
 
 function showConfigManager() {
-  const html = HtmlService.createHtmlOutputFromFile('sidebar_config')
-    .setTitle('設定管理')
-    .setWidth(400);
+  const t = HtmlService.createTemplateFromFile('sidebar_config');
+  const html = t.evaluate().setTitle('設定管理').setWidth(400);
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
