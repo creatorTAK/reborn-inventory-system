@@ -2,7 +2,7 @@
 
 古着物販管理システム（Google Apps Script + スプレッドシート）
 
-**完成度: 42%** | **商品登録: 80%** | **在庫管理: 0%** | **設定管理: 95%** ✅ | **売上分析: 20%** | **管理番号システム: 100%** ✅ | **ハッシュタグシステム: 100%** ✅ | **使い方ガイド: 100%** ✅ | **リセット機能: 100%** ✅
+**完成度: 45%** | **商品登録: 85%** | **在庫管理: 0%** | **設定管理: 95%** ✅ | **売上分析: 20%** | **管理番号システム: 100%** ✅ | **ハッシュタグシステム: 100%** ✅ | **使い方ガイド: 100%** ✅ | **リセット機能: 100%** ✅ | **コピー機能: 100%** ✅
 
 ---
 
@@ -1723,21 +1723,177 @@ M
 
 ---
 
-#### 1. コピーボタン実装
+#### ~~8. コピーボタン実装~~ ✅ **完了（2025/10/10）**
 
 **機能**:
 - 商品名コピーボタン
 - 商品説明コピーボタン
 - ワンクリックでクリップボードにコピー
-- メルカリページで貼り付け
+- 視覚的フィードバック（✓ コピー済み、緑色）
 
 **実装位置**:
-- 商品名プレビューの近く
-- 商品説明プレビューの近く
+- グループタイトル（✏️ 商品名、📝 商品の説明）の右側
+
+**実装内容**:
+
+1. **コピーボタンの配置**:
+```html
+<div class="group-title" style="display: flex; justify-content: space-between; align-items: center;">
+  <span>✏️ 商品名</span>
+  <button type="button" onclick="copyToClipboard('商品名プレビュー', 'copyNameBtn')" id="copyNameBtn"
+          style="padding: 6px 12px; font-size: 12px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 4px; cursor: pointer; color: #1976d2; font-weight: 500;">
+    📋 商品名をコピー
+  </button>
+</div>
+```
+
+2. **コピー機能の実装**:
+```javascript
+function copyToClipboard(fieldId, buttonId) {
+  const field = document.getElementById(fieldId);
+  const button = document.getElementById(buttonId);
+
+  if (!field || !field.value.trim()) {
+    alert('コピーする内容がありません');
+    return;
+  }
+
+  // クリップボードにコピー
+  navigator.clipboard.writeText(field.value).then(function() {
+    // ボタンのテキストを「✓ コピー済み」に変更
+    const originalText = button.innerHTML;
+    button.innerHTML = '✓ コピー済み';
+    button.style.background = '#c8e6c9';
+    button.style.borderColor = '#81c784';
+    button.style.color = '#2e7d32';
+
+    // 1秒後に元に戻す
+    setTimeout(function() {
+      button.innerHTML = originalText;
+      button.style.background = '#e3f2fd';
+      button.style.borderColor = '#90caf9';
+      button.style.color = '#1976d2';
+    }, 1000);
+  }).catch(function(err) {
+    console.error('クリップボードへのコピーに失敗しました:', err);
+    alert('コピーに失敗しました。ブラウザの設定を確認してください。');
+  });
+}
+```
+
+**実装ファイル**:
+- `sp_block_title.html` (lines 2-8): 商品名コピーボタン
+- `sp_block_description.html` (lines 2-8): 商品の説明コピーボタン
+- `sp_scripts.html` (lines 2548-2578): `copyToClipboard()`関数
 
 ---
 
-#### 2. コードレビュー・リファクタリング
+#### ~~9. 商品の説明の自動リサイズ機能~~ ✅ **完了（2025/10/10）**
+
+**機能**:
+- 商品の説明テキストエリアが内容に応じて自動的に高さ調整
+- スクロール不要で全体を表示
+- 項目追加時にリアルタイムで拡大
+
+**実装内容**:
+
+1. **HTML側の設定**:
+```html
+<textarea
+  id="商品の説明"
+  placeholder="商品の状態・素材・サイズ感・ディテール・注意点などを記入してください"
+  readonly
+  style="background-color: #f8f9fa; margin-top: 4px; min-height: 120px; resize: none;"
+></textarea>
+```
+
+2. **CSS側の設定** (`sp_styles.html`):
+```css
+#商品の説明 {
+  line-height: 1.5;
+  overflow: auto;  /* max-height制限を削除 */
+  background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
+  border: 2px solid #a855f7;
+}
+```
+
+3. **自動リサイズ関数**:
+```javascript
+function autoResizeTextarea(textarea) {
+  if (!textarea) return;
+
+  setTimeout(function() {
+    // 一旦高さをリセットしてscrollHeightを正しく取得
+    textarea.style.height = 'auto';
+
+    // scrollHeightに基づいて高さを設定
+    const newHeight = Math.max(120, textarea.scrollHeight + 10);
+    textarea.style.height = newHeight + 'px';
+  }, 50);
+}
+```
+
+4. **プレビュー更新時に自動リサイズ**:
+```javascript
+function updateDescriptionFromDetail() {
+  // ... 説明文生成処理 ...
+
+  descTextarea.value = descriptionText;
+
+  // テキストエリアの高さを自動調整
+  autoResizeTextarea(descTextarea);
+}
+```
+
+**実装ファイル**:
+- `sp_block_description.html` (line 22): テキストエリアの設定
+- `sp_styles.html` (lines 256-261): CSS設定
+- `sp_scripts.html` (lines 2580-2603): `autoResizeTextarea()`関数
+- `sp_scripts.html` (line 2075): `updateDescriptionFromDetail()`に呼び出し追加
+
+**注意点**:
+- PC入力では快適、モバイル対応は今後検討
+- わずかなカクカク感あり（`setTimeout(50ms)`による遅延）
+
+---
+
+#### ~~10. 管理番号「採番中...」表示~~ ✅ **完了（2025/10/10）**
+
+**機能**:
+- 棚番号の2文字目を選択した直後に「採番中...」と表示
+- サーバーからの応答で実際の管理番号に切り替わる
+
+**実装内容**:
+```javascript
+function updateManagementNumberPreview() {
+  // ... バリデーション処理 ...
+
+  // 採番中を表示
+  setManagementNumber('', '採番中...');
+
+  // 自動採番を実行
+  google.script.run
+    .withSuccessHandler(function(managementNumber) {
+      if (typeof managementNumber === 'string' && managementNumber.startsWith('NG(')) {
+        setManagementNumber('', managementNumber);
+        return;
+      }
+      setManagementNumber(managementNumber, '');
+    })
+    .withFailureHandler(function(e) {
+      console.error('管理番号生成エラー:', e);
+      setManagementNumber('', 'エラー');
+    })
+    .generateSegmentBasedManagementNumber(userInputs);
+}
+```
+
+**実装ファイル**:
+- `sp_scripts.html` (lines 1560-1561): 採番中表示
+
+---
+
+#### 1. コードレビュー・リファクタリング
 
 **目的**: Gemini API実装前にコードを最適化
 
@@ -2319,14 +2475,19 @@ window.onload = function() {
 
 **このドキュメントは Claude Code が効率的に開発を進めるための完全なリファレンスです。**
 
-**最終更新日**: 2025年10月10日（カラー(詳細)機能実装完了）
+**最終更新日**: 2025年10月10日（UI改善：コピー機能・自動リサイズ完成）
 
 **最新の更新内容**:
-- 📊 完成度を更新: 全体42%、商品登録80%
-- ✅ カラー(詳細)機能実装完了
-  - マスタデータ「カラー/配色/トーン」から取得
-  - 複数選択可能なチェックボックスリスト（3列グリッド）
-  - リアルタイムプレビュー（ブランド名の下に配置）
-  - リセット機能対応
-- 🔧 `.claspignore`にPlaywright関連ファイル追加
-- 📋 次の最優先タスク: コピーボタン実装、コードレビュー、エラーハンドリング強化
+- 📊 完成度を更新: 全体45%、商品登録85%
+- ✅ コピーボタン実装完了
+  - 商品名・商品説明をワンクリックでコピー
+  - グループタイトル右側に配置
+  - 視覚的フィードバック（✓ コピー済み、緑色に変化）
+- ✅ 商品の説明の自動リサイズ機能完了
+  - 内容に応じて自動的に高さ調整
+  - スクロール不要で全体表示
+  - PC入力で快適な操作性
+- ✅ 管理番号「採番中...」表示機能
+  - 2文字目選択後に「採番中...」と表示
+  - サーバー応答で実際の番号に切り替わる
+- 📋 次の最優先タスク: コードレビュー・リファクタリング、エラーハンドリング強化、Gemini API統合準備

@@ -96,6 +96,10 @@
   let MATERIAL_LOCATIONS = [];
   let MATERIAL_TYPES = [];
 
+  // カラーシステム用のグローバル変数
+  let colorCount = 1;
+  let COLOR_OPTIONS = [];
+
   // 素材マスタデータの取得と設定
   function initializeMaterialMasters() {
     if (google && google.script && google.script.run) {
@@ -110,6 +114,24 @@
         })
         .withFailureHandler(function(error) {
           console.error('素材マスタ取得エラー:', error);
+        })
+        .getMasterOptions();
+    }
+  }
+
+  // カラーマスタデータの取得と設定
+  function initializeColorMasters() {
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(opts) {
+          COLOR_OPTIONS = opts['カラー/配色/トーン'] || [];
+
+          populateColorSelect(1);
+
+          console.log('カラーマスタ取得完了:', COLOR_OPTIONS.length);
+        })
+        .withFailureHandler(function(error) {
+          console.error('カラーマスタ取得エラー:', error);
         })
         .getMasterOptions();
     }
@@ -234,6 +256,103 @@
     const items = document.querySelectorAll('.material-item');
     items.forEach(item => {
       const btn = item.querySelector('.remove-material-btn');
+      if (btn) {
+        btn.style.display = items.length > 1 ? 'block' : 'none';
+      }
+    });
+  }
+
+  // ========== カラー動的追加機能 ==========
+
+  // カラーセレクトボックスにマスタデータを設定
+  function populateColorSelect(index) {
+    const colorSelect = document.getElementById(`カラー${index}`);
+
+    if (colorSelect) {
+      colorSelect.innerHTML = '<option value="">--</option>';
+      COLOR_OPTIONS.forEach(color => {
+        colorSelect.insertAdjacentHTML('beforeend', `<option value="${color}">${color}</option>`);
+      });
+
+      // 変更時にプレビューを更新
+      colorSelect.addEventListener('change', updateDescriptionFromDetail);
+    }
+  }
+
+  // カラーを追加
+  function addColor() {
+    if (colorCount >= 5) {
+      alert('カラーは最大5個まで追加できます');
+      return;
+    }
+
+    colorCount++;
+
+    const colorList = document.getElementById('colorList');
+    const newItem = document.createElement('div');
+    newItem.className = 'color-item';
+    newItem.setAttribute('data-index', colorCount);
+
+    newItem.innerHTML = `
+      <div class="color-header">
+        <span>カラー ${colorCount}</span>
+        <button type="button" class="remove-color-btn" onclick="removeColor(${colorCount})">削除</button>
+      </div>
+
+      <div class="color-fields">
+        <label>色:
+          <select id="カラー${colorCount}" class="color-select">
+            <option value="">--</option>
+          </select>
+        </label>
+      </div>
+    `;
+
+    colorList.appendChild(newItem);
+    populateColorSelect(colorCount);
+    updateColorRemoveButtons();
+  }
+
+  // カラーを削除
+  function removeColor(index) {
+    const item = document.querySelector(`.color-item[data-index="${index}"]`);
+    if (item) {
+      item.remove();
+
+      const items = document.querySelectorAll('.color-item');
+      colorCount = items.length;
+
+      items.forEach((item, i) => {
+        const newIndex = i + 1;
+        item.setAttribute('data-index', newIndex);
+        item.querySelector('.color-header span').textContent = `カラー ${newIndex}`;
+
+        // onclickも更新
+        const removeBtn = item.querySelector('.remove-color-btn');
+        if (removeBtn) {
+          removeBtn.onclick = () => removeColor(newIndex);
+        }
+
+        // selectのIDも更新
+        const select = item.querySelector('.color-select');
+        if (select) {
+          const oldId = select.id;
+          const oldValue = select.value;
+          select.id = `カラー${newIndex}`;
+          select.value = oldValue; // 選択値を保持
+        }
+      });
+
+      updateColorRemoveButtons();
+      updateDescriptionFromDetail(); // カラー情報更新
+    }
+  }
+
+  // カラー削除ボタンの表示制御
+  function updateColorRemoveButtons() {
+    const items = document.querySelectorAll('.color-item');
+    items.forEach(item => {
+      const btn = item.querySelector('.remove-color-btn');
       if (btn) {
         btn.style.display = items.length > 1 ? 'block' : 'none';
       }
@@ -579,77 +698,6 @@
   }
 
   /**
-   * カラー(詳細)データを読み込み
-   */
-  function loadColorOptions() {
-    console.log('loadColorOptions が呼び出されました');
-    if (google && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(colorOptions) {
-          if (colorOptions && colorOptions.length > 0) {
-            console.log('カラーデータを読み込みました:', colorOptions.length, '件');
-            renderColorCheckboxes(colorOptions);
-          } else {
-            console.warn('カラーデータが空です');
-            const container = document.getElementById('colorCheckboxContainer');
-            if (container) {
-              container.innerHTML = '<div style="font-size: 11px; color: #6b7280; text-align: center; grid-column: 1 / -1;">カラーデータがありません</div>';
-            }
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('カラーデータ読み込みエラー:', error);
-        })
-        .getMasterData('カラー/配色/トーン');
-    }
-  }
-
-  /**
-   * カラーチェックボックスを生成
-   */
-  function renderColorCheckboxes(colorOptions) {
-    console.log('renderColorCheckboxes が呼び出されました', colorOptions);
-    const container = document.getElementById('colorCheckboxContainer');
-    if (!container) {
-      console.error('colorCheckboxContainer が見つかりません');
-      return;
-    }
-
-    container.innerHTML = '';
-
-    if (!colorOptions || colorOptions.length === 0) {
-      console.warn('カラーオプションが空です');
-      container.innerHTML = '<div style="font-size: 11px; color: #6b7280; text-align: center; grid-column: 1 / -1;">カラーデータがありません</div>';
-      return;
-    }
-
-    colorOptions.forEach((color, index) => {
-      const checkboxId = `color-checkbox-${index}`;
-
-      const label = document.createElement('label');
-      label.style.cssText = 'display: flex; align-items: center; cursor: pointer; padding: 4px 6px; font-size: 12px;';
-
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.id = checkboxId;
-      checkbox.value = color;
-      checkbox.onchange = updateDescriptionFromDetail;
-      checkbox.style.cssText = 'cursor: pointer; margin-right: 6px;';
-
-      const textSpan = document.createElement('span');
-      textSpan.style.cssText = 'color: #374151;';
-      textSpan.textContent = color;
-
-      label.appendChild(checkbox);
-      label.appendChild(textSpan);
-
-      container.appendChild(label);
-    });
-
-    console.log('カラーチェックボックス生成完了:', container.children.length, '件');
-  }
-
-  /**
    * ハッシュタグチェックボックスを生成
    */
   function renderHashtagCheckboxes() {
@@ -720,6 +768,101 @@
     // 生成後のDOMを確認
     console.log('生成されたHTML:', container.innerHTML);
     console.log('チェックボックスコンテナの子要素数:', container.children.length);
+  }
+
+  /**
+   * 折りたたみ機能
+   */
+  function toggleCollapse(sectionId) {
+    const section = document.getElementById(sectionId);
+    const toggleIcon = document.getElementById(sectionId.replace('Section', 'Toggle'));
+
+    if (section && toggleIcon) {
+      const isHidden = section.style.display === 'none';
+      section.style.display = isHidden ? 'block' : 'none';
+      toggleIcon.textContent = isHidden ? '▲' : '▼';
+    }
+  }
+
+  /**
+   * 割引情報チェックボックスを動的生成
+   */
+  function renderDiscountCheckboxes() {
+    console.log('renderDiscountCheckboxes が呼び出されました');
+    const container = document.getElementById('discountCheckboxContainer');
+    if (!container) {
+      console.error('discountCheckboxContainer が見つかりません');
+      return;
+    }
+
+    container.innerHTML = '';
+
+    console.log('DISCOUNT_CONFIG:', DISCOUNT_CONFIG);
+    if (!DISCOUNT_CONFIG) {
+      console.warn('割引設定が空です');
+      container.innerHTML = '<div style="font-size: 11px; color: #6b7280; text-align: center;">割引設定がありません</div>';
+      return;
+    }
+
+    const discounts = [];
+
+    // フォロー割
+    if (DISCOUNT_CONFIG['フォロー割'] && DISCOUNT_CONFIG['フォロー割'].length > 0) {
+      discounts.push({
+        id: 'follow',
+        label: 'フォロー割',
+        icon: '👥'
+      });
+    }
+
+    // リピート割
+    if (DISCOUNT_CONFIG['リピート割'] && DISCOUNT_CONFIG['リピート割'].length > 0) {
+      discounts.push({
+        id: 'repeat',
+        label: 'リピート割',
+        icon: '🔁'
+      });
+    }
+
+    // まとめ割
+    if (DISCOUNT_CONFIG['まとめ割'] && DISCOUNT_CONFIG['まとめ割'].length > 0) {
+      discounts.push({
+        id: 'matome',
+        label: 'まとめ割',
+        icon: '📦'
+      });
+    }
+
+    if (discounts.length === 0) {
+      container.innerHTML = '<div style="font-size: 11px; color: #6b7280; text-align: center;">割引設定がありません</div>';
+      return;
+    }
+
+    discounts.forEach((discount, index) => {
+      const checkboxId = `discount-checkbox-${discount.id}`;
+
+      const label = document.createElement('label');
+      label.style.cssText = 'display: block; cursor: pointer; padding: 6px 4px; border-bottom: 1px solid #e5e7eb;';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = checkboxId;
+      checkbox.setAttribute('data-discount-type', discount.id);
+      checkbox.checked = true;
+      checkbox.onchange = updateDescriptionFromDetail;
+      checkbox.style.cssText = 'cursor: pointer; margin-right: 6px; vertical-align: middle;';
+
+      const textSpan = document.createElement('span');
+      textSpan.style.cssText = 'font-size: 11px; color: #374151; vertical-align: middle;';
+      textSpan.textContent = `${discount.icon} ${discount.label}`;
+
+      label.appendChild(checkbox);
+      label.appendChild(textSpan);
+
+      container.appendChild(label);
+    });
+
+    console.log('割引情報チェックボックス生成完了:', discounts.length);
   }
 
   /**
@@ -810,6 +953,8 @@
           if (config) {
             DISCOUNT_CONFIG = config;
             console.log('割引情報設定を読み込みました:', Object.keys(config).length, '種類');
+            // チェックボックスを生成
+            renderDiscountCheckboxes();
             // 設定読み込み後、商品の説明を更新
             if (typeof updateDescriptionFromDetail === 'function') {
               updateDescriptionFromDetail();
@@ -823,22 +968,31 @@
     }
   }
 
-  // 割引情報テキストを生成
+  // 割引情報テキストを生成（チェックボックス対応版）
   function generateDiscountInfo() {
     // 割引情報があるかチェック
     const hasFollow = DISCOUNT_CONFIG['フォロー割'] && DISCOUNT_CONFIG['フォロー割'].length > 0;
     const hasRepeat = DISCOUNT_CONFIG['リピート割'] && DISCOUNT_CONFIG['リピート割'].length > 0;
     const hasMatome = DISCOUNT_CONFIG['まとめ割'] && DISCOUNT_CONFIG['まとめ割'].length > 0;
 
-    // すべての割引が空の場合は空文字を返す
-    if (!hasFollow && !hasRepeat && !hasMatome) {
+    // チェックボックスの状態を確認
+    const followCheckbox = document.getElementById('discount-checkbox-follow');
+    const repeatCheckbox = document.getElementById('discount-checkbox-repeat');
+    const matomeCheckbox = document.getElementById('discount-checkbox-matome');
+
+    const includeFollow = hasFollow && (!followCheckbox || followCheckbox.checked);
+    const includeRepeat = hasRepeat && (!repeatCheckbox || repeatCheckbox.checked);
+    const includeMatome = hasMatome && (!matomeCheckbox || matomeCheckbox.checked);
+
+    // すべての割引が空またはチェックなしの場合は空文字を返す
+    if (!includeFollow && !includeRepeat && !includeMatome) {
       return '';
     }
 
     let text = '\n【お得な割引情報】\n\n';
 
     // フォロー割
-    if (hasFollow) {
+    if (includeFollow) {
       text += '■ フォロー割\n';
       DISCOUNT_CONFIG['フォロー割'].forEach(item => {
         text += `${item.範囲} ⇒ ${item.割引額}\n`;
@@ -851,7 +1005,7 @@
     }
 
     // リピート割
-    if (hasRepeat) {
+    if (includeRepeat) {
       const repeatDiscount = DISCOUNT_CONFIG['リピート割'][0].割引額;
       text += '■ リピート割\n';
       text += `次回購入時に${repeatDiscount}\n`;
@@ -863,7 +1017,7 @@
     }
 
     // まとめ割
-    if (hasMatome) {
+    if (includeMatome) {
       text += '■ まとめ割\n';
       DISCOUNT_CONFIG['まとめ割'].forEach(item => {
         text += `${item.範囲}⇒${item.割引額}\n`;
@@ -1131,28 +1285,42 @@
           `;
           container.appendChild(shelfDiv);
 
+          // 2文字目のイベントリスナーを先に設定
+          const shelfSecondSelect = document.getElementById('mgmt_shelf_second');
+          const updateShelfHandler = function() {
+            updateManagementNumberPreview();
+          };
+          shelfSecondSelect.addEventListener('change', updateShelfHandler);
+
           // 頭文字選択時に2文字目を更新
           document.getElementById('mgmt_shelf_first').addEventListener('change', function() {
             const firstChar = this.value;
-            const secondSelect = document.getElementById('mgmt_shelf_second');
+
+            // イベントリスナーを一時的に削除
+            shelfSecondSelect.removeEventListener('change', updateShelfHandler);
 
             if (!firstChar) {
-              secondSelect.innerHTML = '<option value="">--選択--</option>';
-              secondSelect.disabled = true;
+              shelfSecondSelect.innerHTML = '<option value="">--選択--</option>';
+              shelfSecondSelect.disabled = true;
+              shelfSecondSelect.value = '';
+              // 頭文字が空の場合は管理番号をクリア
+              setManagementNumber('', '未選択');
             } else {
               let secondOptions = '<option value="">--選択--</option>';
               for (let i = 65; i <= 90; i++) {
                 const char = String.fromCharCode(i);
                 secondOptions += `<option value="${char}">${firstChar}${char}</option>`;
               }
-              secondSelect.innerHTML = secondOptions;
-              secondSelect.disabled = false;
+              shelfSecondSelect.innerHTML = secondOptions;
+              shelfSecondSelect.value = '';  // 明示的に空欄に設定
+              shelfSecondSelect.disabled = false;
+              // 頭文字選択時はプレビュー更新しない（2文字目選択まで待つ）
+              setManagementNumber('', '');
             }
-            updateManagementNumberPreview();
-          });
 
-          // 2文字目選択時にプレビュー更新
-          document.getElementById('mgmt_shelf_second').addEventListener('change', updateManagementNumberPreview);
+            // イベントリスナーを再設定
+            shelfSecondSelect.addEventListener('change', updateShelfHandler);
+          });
           hasUserInput = true;
           break;
 
@@ -1299,14 +1467,26 @@
           `;
           container.appendChild(customDiv);
 
+          // 2文字目のイベントリスナーを先に設定
+          const secondSelect = document.getElementById('mgmt_custom_second');
+          const updateSecondHandler = function() {
+            updateManagementNumberPreview();
+          };
+          secondSelect.addEventListener('change', updateSecondHandler);
+
           // 頭文字選択時に2文字目を更新
           document.getElementById('mgmt_custom_first').addEventListener('change', function() {
             const firstChar = this.value;
-            const secondSelect = document.getElementById('mgmt_custom_second');
+
+            // イベントリスナーを一時的に削除
+            secondSelect.removeEventListener('change', updateSecondHandler);
 
             if (!firstChar) {
               secondSelect.innerHTML = '<option value="">--選択--</option>';
               secondSelect.disabled = true;
+              secondSelect.value = '';
+              // 頭文字が空の場合は管理番号をクリア
+              setManagementNumber('', '未選択');
             } else {
               let secondOptions = '<option value="">--選択--</option>';
               for (let i = 65; i <= 90; i++) {
@@ -1314,13 +1494,15 @@
                 secondOptions += `<option value="${char}">${firstChar}${char}</option>`;
               }
               secondSelect.innerHTML = secondOptions;
+              secondSelect.value = '';  // 明示的に空欄に設定
               secondSelect.disabled = false;
+              // 頭文字選択時はプレビュー更新しない（2文字目選択まで待つ）
+              setManagementNumber('', '');
             }
-            updateManagementNumberPreview();
-          });
 
-          // 2文字目選択時にプレビュー更新
-          document.getElementById('mgmt_custom_second').addEventListener('change', updateManagementNumberPreview);
+            // イベントリスナーを再設定
+            secondSelect.addEventListener('change', updateSecondHandler);
+          });
           hasUserInput = true;
           break;
 
@@ -1352,6 +1534,20 @@
     const customSecond = _val('mgmt_custom_second');
     const customValue = (customFirst && customSecond) ? customFirst + customSecond : '';
 
+    // 棚番号フィールドが存在する場合、2文字目が未選択なら採番しない
+    const shelfFirstField = document.getElementById('mgmt_shelf_first');
+    if (shelfFirstField && shelfFirst && !shelfSecond) {
+      setManagementNumber('', '');
+      return;
+    }
+
+    // カスタム値フィールドが存在する場合、2文字目が未選択なら採番しない
+    const customFirstField = document.getElementById('mgmt_custom_first');
+    if (customFirstField && customFirst && !customSecond) {
+      setManagementNumber('', '');
+      return;
+    }
+
     const userInputs = {
       shelf: shelfValue,
       category: _val('mgmt_category'),
@@ -1360,6 +1556,9 @@
       color: _val('mgmt_color'),
       custom: customValue
     };
+
+    // 採番中を表示
+    setManagementNumber('', '採番中...');
 
     // 自動採番を実行
     google.script.run
@@ -1709,24 +1908,7 @@
 
     const pairIndex = BRAND_INDEX_MAP.get(englishName);
     const kanaName = pairIndex !== undefined && BRAND_PAIRS[pairIndex] ? BRAND_PAIRS[pairIndex].kana : '';
-    return `ブランド名
-${englishName}（${kanaName}）
-
-`;
-  }
-
-  // カラー(詳細)情報取得関数
-  function getColorInfo() {
-    const colorCheckboxes = document.querySelectorAll('#colorCheckboxContainer input[type="checkbox"]:checked');
-    if (!colorCheckboxes || colorCheckboxes.length === 0) return '';
-
-    const selectedColors = Array.from(colorCheckboxes).map(cb => cb.value).filter(v => v);
-    if (selectedColors.length === 0) return '';
-
-    return `カラー(詳細)
-${selectedColors.join('、')}
-
-`;
+    return `ブランド名\n${englishName}（${kanaName}）\n\n`;
   }
 
   // サイズ情報取得関数
@@ -1811,6 +1993,25 @@ ${selectedColors.join('、')}
     return materialText;
   }
 
+  function getColorInfo() {
+    const items = document.querySelectorAll('.color-item');
+    const colors = [];
+
+    items.forEach((item, i) => {
+      const index = i + 1;
+      const colorValue = _val(`カラー${index}`);
+      if (colorValue) {
+        colors.push(colorValue);
+      }
+    });
+
+    if (colors.length > 0) {
+      return 'カラー(詳細)\n' + colors.join('、') + '\n\n';
+    }
+
+    return '';
+  }
+
   function updateDescriptionFromDetail() {
         console.log('updateDescriptionFromDetail 関数が呼び出されました');
         const detailInput = document.getElementById('商品状態詳細');
@@ -1826,7 +2027,7 @@ ${selectedColors.join('、')}
         // ブランド情報を取得
         const brandText = getBrandInfo();
 
-        // カラー(詳細)情報を取得
+        // カラー情報を取得
         const colorText = getColorInfo();
 
         // サイズ情報を取得
@@ -1858,9 +2059,7 @@ ${selectedColors.join('、')}
           const discountInfo = generateDiscountInfo();
 
           // 最終的な説明文を組み立て
-          const descriptionText = brandText + colorText + sizeText + materialText + conditionSection + detailSection + discountInfo + '
-
-' +
+          const descriptionText = brandText + colorText + sizeText + materialText + conditionSection + detailSection + discountInfo + '\n\n' +
   hashtagText;
 
           // 商品の説明欄を更新
@@ -1871,6 +2070,9 @@ ${selectedColors.join('、')}
           if (typeof updateDesc === 'function') {
             updateDesc();
           }
+
+          // テキストエリアの高さを自動調整
+          autoResizeTextarea(descTextarea);
       }
 
   function setupDetailEventListener() {
@@ -2034,6 +2236,10 @@ ${selectedColors.join('、')}
     resetSelect('細分類(カテゴリ)');
     resetSelect('細分類2');
     resetSelect('アイテム名', false);
+    // 細分類行を非表示
+    const saibunruiRow = document.getElementById('saibunruiRow');
+    if (saibunruiRow) saibunruiRow.style.display = 'none';
+
     const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
     if (l1) {
       const mids = uniqKeepOrder(CAT_ROWS.filter(r=>r.大分類===l1).map(r=>r.中分類));
@@ -2047,6 +2253,10 @@ ${selectedColors.join('、')}
     resetSelect('細分類(カテゴリ)');
     resetSelect('細分類2');
     resetSelect('アイテム名', false);
+    // 細分類行を非表示
+    const saibunruiRow = document.getElementById('saibunruiRow');
+    if (saibunruiRow) saibunruiRow.style.display = 'none';
+
     const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
     const l2 = (document.getElementById('中分類(カテゴリ)')?.value||'').trim();
     if (l2) {
@@ -2063,9 +2273,21 @@ ${selectedColors.join('、')}
     const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
     const l2 = (document.getElementById('中分類(カテゴリ)')?.value||'').trim();
     const l3 = (document.getElementById('小分類(カテゴリ)')?.value||'').trim();
+    const saibunruiRow = document.getElementById('saibunruiRow');
+
     if (l3) {
       const mins = uniqKeepOrder(CAT_ROWS.filter(r=>r.大分類===l1 && r.中分類===l2 && r.小分類===l3).map(r=>r.細分類));
       fillSelectSafe(document.getElementById('細分類(カテゴリ)'), mins);
+
+      // 細分類の選択肢がある場合のみ表示
+      if (mins.length > 0 && saibunruiRow) {
+        saibunruiRow.style.display = '';
+      } else if (saibunruiRow) {
+        saibunruiRow.style.display = 'none';
+      }
+    } else {
+      // 小分類が未選択の場合は非表示
+      if (saibunruiRow) saibunruiRow.style.display = 'none';
     }
     refreshItems();
   }
@@ -2164,6 +2386,10 @@ ${selectedColors.join('、')}
     const l1 = document.getElementById('大分類(カテゴリ)');
     if (l1) l1.value='';
 
+    // 細分類行を非表示
+    const saibunruiRow = document.getElementById('saibunruiRow');
+    if (saibunruiRow) saibunruiRow.style.display = 'none';
+
     // 3. その他のフィールドをクリア
     ['サイズ','商品の状態','アイテム名','仕入先','出品先',
      '商品属性1_カテゴリ','商品属性1_値','商品属性2_カテゴリ','商品属性2_値',
@@ -2181,12 +2407,6 @@ ${selectedColors.join('、')}
     // 5. 商品状態(詳細)をリセット
     const detailInput = document.getElementById('商品状態詳細');
     if (detailInput) detailInput.value = '';
-
-    // 5-1. カラー(詳細)チェックボックスをリセット
-    const colorCheckboxes = document.querySelectorAll('#colorCheckboxContainer input[type="checkbox"]');
-    colorCheckboxes.forEach(checkbox => {
-      checkbox.checked = false;
-    });
 
     // 6. 素材フィールドをリセット
     const materialItems = document.querySelectorAll('.material-item');
@@ -2208,6 +2428,19 @@ ${selectedColors.join('、')}
     });
     materialCount = 1;
     updateRemoveButtons();
+
+    // 6.5. カラーフィールドをリセット
+    const colorItems = document.querySelectorAll('.color-item');
+    colorItems.forEach((item, index) => {
+      if (index === 0) {
+        const colorSelect = item.querySelector(`#カラー1`);
+        if (colorSelect) colorSelect.value = '';
+      } else {
+        item.remove();
+      }
+    });
+    colorCount = 1;
+    updateColorRemoveButtons();
 
     // 7. サイズ関連をリセット
     const shoulderLabel = document.getElementById('shoulderWidthLabel');
@@ -2279,7 +2512,30 @@ ${selectedColors.join('、')}
     // 12. メッセージをクリア
     show('');
 
-    // 13. プレビューを再構築（商品名は空、商品の説明はデフォルト値）
+    // 13. ハッシュタグ・割引情報のチェックボックスを全てチェック
+    document.querySelectorAll('input[id^="hashtag-checkbox-"]').forEach(cb => {
+      cb.checked = true;
+    });
+    document.querySelectorAll('input[id^="discount-checkbox-"]').forEach(cb => {
+      cb.checked = true;
+    });
+
+    // 14. 折りたたみ状態をリセット（閉じる）
+    const hashtagSection = document.getElementById('hashtagSection');
+    const hashtagToggle = document.getElementById('hashtagToggle');
+    if (hashtagSection && hashtagToggle) {
+      hashtagSection.style.display = 'none';
+      hashtagToggle.textContent = '▼';
+    }
+
+    const discountSection = document.getElementById('discountSection');
+    const discountToggle = document.getElementById('discountToggle');
+    if (discountSection && discountToggle) {
+      discountSection.style.display = 'none';
+      discountToggle.textContent = '▼';
+    }
+
+    // 15. プレビューを再構築（商品名は空、商品の説明はデフォルト値）
     console.log('商品名プレビュー再構築');
     updateNamePreview();
 
@@ -2287,6 +2543,63 @@ ${selectedColors.join('、')}
     updateDescriptionFromDetail();
 
     console.log('=== リセット完了 ===');
+  }
+
+  // クリップボードにコピー
+  function copyToClipboard(fieldId, buttonId) {
+    const field = document.getElementById(fieldId);
+    const button = document.getElementById(buttonId);
+
+    if (!field || !field.value.trim()) {
+      alert('コピーする内容がありません');
+      return;
+    }
+
+    // クリップボードにコピー
+    navigator.clipboard.writeText(field.value).then(function() {
+      // ボタンのテキストを「✓ コピー済み」に変更
+      const originalText = button.innerHTML;
+      button.innerHTML = '✓ コピー済み';
+      button.style.background = '#c8e6c9';
+      button.style.borderColor = '#81c784';
+      button.style.color = '#2e7d32';
+
+      // 1秒後に元に戻す
+      setTimeout(function() {
+        button.innerHTML = originalText;
+        button.style.background = '#e3f2fd';
+        button.style.borderColor = '#90caf9';
+        button.style.color = '#1976d2';
+      }, 1000);
+    }).catch(function(err) {
+      console.error('クリップボードへのコピーに失敗しました:', err);
+      alert('コピーに失敗しました。ブラウザの設定を確認してください。');
+    });
+  }
+
+  // テキストエリアの高さを自動調整
+  function autoResizeTextarea(textarea) {
+    if (!textarea) return;
+
+    // DOMの更新を待ってから実行
+    setTimeout(function() {
+      console.log('autoResizeTextarea 実行開始');
+      console.log('現在の値の長さ:', textarea.value.length);
+      console.log('現在の高さ:', textarea.style.height);
+
+      // 一旦高さをリセットしてscrollHeightを正しく取得
+      textarea.style.height = 'auto';
+
+      // scrollHeightを取得
+      const scrollHeight = textarea.scrollHeight;
+      console.log('scrollHeight:', scrollHeight);
+
+      // scrollHeightに基づいて高さを設定（padding + border分を考慮）
+      const newHeight = Math.max(120, scrollHeight + 10);
+      textarea.style.height = newHeight + 'px';
+
+      console.log('新しい高さ:', newHeight + 'px');
+    }, 50);
   }
 
   function show(t) {
@@ -2746,9 +3059,6 @@ if (staffSelect) {
     // 設定マスタからハッシュタグ設定を読み込み
     loadHashtagConfig();
 
-    // カラー(詳細)データを読み込み
-    loadColorOptions();
-
     // 設定マスタから割引情報を読み込み
     loadDiscountConfig();
 
@@ -2781,6 +3091,9 @@ if (staffSelect) {
     // 素材マスターデータ初期化
     initializeMaterialMasters();
 
+    // カラーマスターデータ初期化
+    initializeColorMasters();
+
     // 管理番号UI初期化（動的セグメント対応）
     initManagementNumberUI();
 
@@ -2788,6 +3101,12 @@ if (staffSelect) {
     const addBtn = document.getElementById('addMaterialBtn');
     if (addBtn) {
       addBtn.addEventListener('click', addMaterial);
+    }
+
+    // カラー追加ボタンのイベントリスナー
+    const addColorBtnEl = document.getElementById('addColorBtn');
+    if (addColorBtnEl) {
+      addColorBtnEl.addEventListener('click', addColor);
     }
 
     // 商品属性追加ボタンのイベントリスナー
