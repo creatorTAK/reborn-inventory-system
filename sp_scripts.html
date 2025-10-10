@@ -579,6 +579,77 @@
   }
 
   /**
+   * カラー(詳細)データを読み込み
+   */
+  function loadColorOptions() {
+    console.log('loadColorOptions が呼び出されました');
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(colorOptions) {
+          if (colorOptions && colorOptions.length > 0) {
+            console.log('カラーデータを読み込みました:', colorOptions.length, '件');
+            renderColorCheckboxes(colorOptions);
+          } else {
+            console.warn('カラーデータが空です');
+            const container = document.getElementById('colorCheckboxContainer');
+            if (container) {
+              container.innerHTML = '<div style="font-size: 11px; color: #6b7280; text-align: center; grid-column: 1 / -1;">カラーデータがありません</div>';
+            }
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('カラーデータ読み込みエラー:', error);
+        })
+        .getMasterData('カラー/配色/トーン');
+    }
+  }
+
+  /**
+   * カラーチェックボックスを生成
+   */
+  function renderColorCheckboxes(colorOptions) {
+    console.log('renderColorCheckboxes が呼び出されました', colorOptions);
+    const container = document.getElementById('colorCheckboxContainer');
+    if (!container) {
+      console.error('colorCheckboxContainer が見つかりません');
+      return;
+    }
+
+    container.innerHTML = '';
+
+    if (!colorOptions || colorOptions.length === 0) {
+      console.warn('カラーオプションが空です');
+      container.innerHTML = '<div style="font-size: 11px; color: #6b7280; text-align: center; grid-column: 1 / -1;">カラーデータがありません</div>';
+      return;
+    }
+
+    colorOptions.forEach((color, index) => {
+      const checkboxId = `color-checkbox-${index}`;
+
+      const label = document.createElement('label');
+      label.style.cssText = 'display: flex; align-items: center; cursor: pointer; padding: 4px 6px; font-size: 12px;';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = checkboxId;
+      checkbox.value = color;
+      checkbox.onchange = updateDescriptionFromDetail;
+      checkbox.style.cssText = 'cursor: pointer; margin-right: 6px;';
+
+      const textSpan = document.createElement('span');
+      textSpan.style.cssText = 'color: #374151;';
+      textSpan.textContent = color;
+
+      label.appendChild(checkbox);
+      label.appendChild(textSpan);
+
+      container.appendChild(label);
+    });
+
+    console.log('カラーチェックボックス生成完了:', container.children.length, '件');
+  }
+
+  /**
    * ハッシュタグチェックボックスを生成
    */
   function renderHashtagCheckboxes() {
@@ -1638,7 +1709,24 @@
 
     const pairIndex = BRAND_INDEX_MAP.get(englishName);
     const kanaName = pairIndex !== undefined && BRAND_PAIRS[pairIndex] ? BRAND_PAIRS[pairIndex].kana : '';
-    return `ブランド名\n${englishName}（${kanaName}）\n\n`;
+    return `ブランド名
+${englishName}（${kanaName}）
+
+`;
+  }
+
+  // カラー(詳細)情報取得関数
+  function getColorInfo() {
+    const colorCheckboxes = document.querySelectorAll('#colorCheckboxContainer input[type="checkbox"]:checked');
+    if (!colorCheckboxes || colorCheckboxes.length === 0) return '';
+
+    const selectedColors = Array.from(colorCheckboxes).map(cb => cb.value).filter(v => v);
+    if (selectedColors.length === 0) return '';
+
+    return `カラー(詳細)
+${selectedColors.join('、')}
+
+`;
   }
 
   // サイズ情報取得関数
@@ -1738,6 +1826,9 @@
         // ブランド情報を取得
         const brandText = getBrandInfo();
 
+        // カラー(詳細)情報を取得
+        const colorText = getColorInfo();
+
         // サイズ情報を取得
         const sizeText = getSizeInfo();
 
@@ -1767,7 +1858,9 @@
           const discountInfo = generateDiscountInfo();
 
           // 最終的な説明文を組み立て
-          const descriptionText = brandText + sizeText + materialText + conditionSection + detailSection + discountInfo + '\n\n' +
+          const descriptionText = brandText + colorText + sizeText + materialText + conditionSection + detailSection + discountInfo + '
+
+' +
   hashtagText;
 
           // 商品の説明欄を更新
@@ -2088,6 +2181,12 @@
     // 5. 商品状態(詳細)をリセット
     const detailInput = document.getElementById('商品状態詳細');
     if (detailInput) detailInput.value = '';
+
+    // 5-1. カラー(詳細)チェックボックスをリセット
+    const colorCheckboxes = document.querySelectorAll('#colorCheckboxContainer input[type="checkbox"]');
+    colorCheckboxes.forEach(checkbox => {
+      checkbox.checked = false;
+    });
 
     // 6. 素材フィールドをリセット
     const materialItems = document.querySelectorAll('.material-item');
@@ -2646,6 +2745,9 @@ if (staffSelect) {
 
     // 設定マスタからハッシュタグ設定を読み込み
     loadHashtagConfig();
+
+    // カラー(詳細)データを読み込み
+    loadColorOptions();
 
     // 設定マスタから割引情報を読み込み
     loadDiscountConfig();
