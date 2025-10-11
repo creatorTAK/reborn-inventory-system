@@ -1873,6 +1873,11 @@
     if (!el) return;
     el.value=val||'';
     el.placeholder=ph||'';
+
+    // 管理番号が変更されたら商品名プレビューも更新
+    if (typeof updateNamePreview === 'function') {
+      updateNamePreview();
+    }
   }
 
   let NAME_REST_FIELDS = ['商品属性1_値'];
@@ -2073,6 +2078,40 @@
     });
 
     let text = parts.join(' ');
+
+    // 管理番号を商品名に追加（チェックボックスがONの場合）
+    const mgmtNumberCheckbox = document.getElementById('商品名に管理番号配置');
+    if (mgmtNumberCheckbox && mgmtNumberCheckbox.checked) {
+      const mgmtNumber = _val('管理番号');
+      if (mgmtNumber) {
+        const format = _val('管理番号形式') || '【】';
+        let formattedMgmtNumber = '';
+
+        switch (format) {
+          case '【】':
+            formattedMgmtNumber = `【${mgmtNumber}】`;
+            break;
+          case '()':
+            formattedMgmtNumber = `（${mgmtNumber}）`;
+            break;
+          case '｜':
+            formattedMgmtNumber = `｜${mgmtNumber}`;
+            break;
+          case '-':
+            formattedMgmtNumber = `- ${mgmtNumber}`;
+            break;
+          case 'none':
+            formattedMgmtNumber = mgmtNumber;
+            break;
+          default:
+            formattedMgmtNumber = `【${mgmtNumber}】`;
+        }
+
+        // 商品名の最後に管理番号を追加（スペース区切り）
+        text = text ? `${text} ${formattedMgmtNumber}` : formattedMgmtNumber;
+      }
+    }
+
     const count = Array.from(text).length;
     const counterEl = document.getElementById('nameCounter');
     const nameCountEl = document.getElementById('nameCount');
@@ -2091,6 +2130,21 @@
     }
     const hidden = document.getElementById('商品名(タイトル)');
     if (hidden) hidden.value = saveText;
+  }
+
+  // 商品名に管理番号を配置するチェックボックスのON/OFF処理
+  function toggleManagementNumberInTitle() {
+    const checkbox = document.getElementById('商品名に管理番号配置');
+    const formatSelector = document.getElementById('管理番号形式選択');
+
+    if (checkbox && formatSelector) {
+      if (checkbox.checked) {
+        formatSelector.style.display = 'block';
+      } else {
+        formatSelector.style.display = 'none';
+      }
+      updateNamePreview();
+    }
   }
 
   // アイテム名表示フィールドの更新（基本情報→商品名ブロックへ自動反映）
@@ -2831,6 +2885,18 @@
     // 管理番号プレビューをクリア
     const mgmtNumberField = document.getElementById('管理番号');
     if (mgmtNumberField) mgmtNumberField.value = '';
+
+    // 商品名に管理番号配置のチェックボックスをOFF
+    const mgmtInTitleCheckbox = document.getElementById('商品名に管理番号配置');
+    if (mgmtInTitleCheckbox) mgmtInTitleCheckbox.checked = false;
+
+    // 管理番号形式選択を非表示
+    const mgmtFormatSelector = document.getElementById('管理番号形式選択');
+    if (mgmtFormatSelector) mgmtFormatSelector.style.display = 'none';
+
+    // 管理番号形式をデフォルトに戻す
+    const mgmtFormatSelect = document.getElementById('管理番号形式');
+    if (mgmtFormatSelect) mgmtFormatSelect.value = '【】';
 
     buildShelf();
 
