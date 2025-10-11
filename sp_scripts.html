@@ -30,6 +30,35 @@
         .getShippingDefaults();
     }
   }
+
+  // 仕入・出品デフォルト設定（設定マスタから読み込む）
+  let PROCURE_LISTING_DEFAULTS = {
+    '仕入日_今日': false,
+    'デフォルト仕入日': '',
+    'デフォルト仕入先': '',
+    '出品日_今日': false,
+    'デフォルト出品日': '',
+    'デフォルト出品先': ''
+  };
+
+  // 設定マスタから仕入・出品デフォルトを読み込む
+  function loadProcureListingDefaults() {
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(config) {
+          if (config) {
+            PROCURE_LISTING_DEFAULTS = config;
+            console.log('仕入・出品デフォルト設定を読み込みました:', config);
+            // デフォルト値を適用
+            applyProcureListingDefaults();
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('仕入・出品デフォルト設定読み込みエラー:', error);
+        })
+        .getProcureListingDefaults();
+    }
+  }
   const REQUIRED = [];
   
   const FIELD_IDS = [
@@ -64,6 +93,13 @@
     categories: [],
     wordsByCategory: {},
     allWords: []
+  };
+
+  // セールスワード表示形式設定
+  let SALESWORD_FORMAT = {
+    globalPrefix: '【',
+    globalSuffix: '】',
+    wordOverrides: []
   };
 
   // 商品状態履歴保持用
@@ -1214,6 +1250,68 @@
     }
   }
 
+  function applyProcureListingDefaults() {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD形式
+
+    // デフォルト仕入日
+    const procureDateField = document.getElementById('仕入日');
+    if (procureDateField) {
+      if (PROCURE_LISTING_DEFAULTS['仕入日_今日'] === true) {
+        // 「常に今日」がチェックされている場合は今日の日付を使用
+        procureDateField.value = today;
+      } else {
+        // 固定日付を使用
+        const defaultProcureDate = PROCURE_LISTING_DEFAULTS['デフォルト仕入日'];
+        if (defaultProcureDate) {
+          procureDateField.value = defaultProcureDate;
+        }
+      }
+    }
+
+    // デフォルト仕入先
+    const defaultProcureSource = PROCURE_LISTING_DEFAULTS['デフォルト仕入先'];
+    if (defaultProcureSource) {
+      const procureSourceField = document.getElementById('仕入先');
+      if (procureSourceField) {
+        // 選択肢に存在するか確認
+        const exists = Array.from(procureSourceField.options).some(o => String(o.value) === defaultProcureSource);
+        if (!exists) {
+          procureSourceField.insertAdjacentHTML('beforeend', `<option value="${defaultProcureSource}">${defaultProcureSource}</option>`);
+        }
+        procureSourceField.value = defaultProcureSource;
+      }
+    }
+
+    // デフォルト出品日
+    const listingDateField = document.getElementById('出品日');
+    if (listingDateField) {
+      if (PROCURE_LISTING_DEFAULTS['出品日_今日'] === true) {
+        // 「常に今日」がチェックされている場合は今日の日付を使用
+        listingDateField.value = today;
+      } else {
+        // 固定日付を使用
+        const defaultListingDate = PROCURE_LISTING_DEFAULTS['デフォルト出品日'];
+        if (defaultListingDate) {
+          listingDateField.value = defaultListingDate;
+        }
+      }
+    }
+
+    // デフォルト出品先
+    const defaultListingDest = PROCURE_LISTING_DEFAULTS['デフォルト出品先'];
+    if (defaultListingDest) {
+      const listingDestField = document.getElementById('出品先');
+      if (listingDestField) {
+        // 選択肢に存在するか確認
+        const exists = Array.from(listingDestField.options).some(o => String(o.value) === defaultListingDest);
+        if (!exists) {
+          listingDestField.insertAdjacentHTML('beforeend', `<option value="${defaultListingDest}">${defaultListingDest}</option>`);
+        }
+        listingDestField.value = defaultListingDest;
+      }
+    }
+  }
+
   // ========== 管理番号セグメント方式UI ==========
 
   // 管理番号セグメントUIを初期化
@@ -1520,6 +1618,13 @@
       // 初期状態では管理番号フィールドを空欄にする
       setManagementNumber('', '未選択');
     }
+
+    // UI生成完了後、表示する
+    container.style.display = 'block';
+    const previewSection = document.getElementById('managementNumberPreview');
+    if (previewSection) {
+      previewSection.style.display = 'block';
+    }
   }
 
   // 管理番号プレビューを更新
@@ -1774,27 +1879,55 @@
     }
   }
 
+  /**
+   * セールスワードに形式を適用
+   */
+  function applySaleswordFormat(salesword) {
+    if (!salesword) return '';
+
+    // ワード別オーバーライドを確認
+    let prefix = SALESWORD_FORMAT.globalPrefix;
+    let suffix = SALESWORD_FORMAT.globalSuffix;
+
+    if (SALESWORD_FORMAT.wordOverrides) {
+      const override = SALESWORD_FORMAT.wordOverrides.find(o => o.word === salesword);
+      if (override) {
+        prefix = override.prefix;
+        suffix = override.suffix;
+      }
+    }
+
+    return prefix + salesword + suffix;
+  }
+
   function updateNamePreview() {
     const kw = _val('セールスワード');
+    const formattedKw = applySaleswordFormat(kw);
 
     // 商品名ブロック内のブランドを参照（どちらか片方でも可）
     const brandEn = _val('商品名_ブランド(英語)');
     const brandKana = _val('商品名_ブランド(カナ)');
 
+    // チェックボックスの状態を確認
+    const brandEnCheckbox = document.getElementById('商品名_ブランド(英語)_チェック');
+    const brandKanaCheckbox = document.getElementById('商品名_ブランド(カナ)_チェック');
+    const useBrandEn = brandEnCheckbox && brandEnCheckbox.checked && brandEn;
+    const useBrandKana = brandKanaCheckbox && brandKanaCheckbox.checked && brandKana;
+
     // ブランド名の構築（カナの前に半角スペース）
     let brands = '';
-    if (brandEn && brandKana) {
+    if (useBrandEn && useBrandKana) {
       brands = brandEn + ' ' + brandKana;
-    } else if (brandEn) {
+    } else if (useBrandEn) {
       brands = brandEn;
-    } else if (brandKana) {
+    } else if (useBrandKana) {
       brands = brandKana;
     }
 
     const item = _val('アイテム名');
     const others = NAME_REST_FIELDS.map(_val).filter(Boolean);
     let text = '';
-    if (kw) text += kw;
+    if (formattedKw) text += formattedKw;
     if (brands) text += brands;
     if (item) text += (text ? ' ' : '') + item;
     if (others.length) text += (text ? ' ' : '') + others.join(' ');
@@ -1823,6 +1956,7 @@
     const englishName = _val('ブランド(英語)');
     const englishField = document.getElementById('商品名_ブランド(英語)');
     const kanaField = document.getElementById('商品名_ブランド(カナ)');
+    const basicKanaField = document.getElementById('ブランド(カナ)');
 
     if (!englishField || !kanaField) return;
 
@@ -1833,11 +1967,22 @@
 
       englishField.value = englishName;
       kanaField.value = kanaName;
+
+      // 基本情報ブロックの隠しフィールドにもカナ読みを設定
+      if (basicKanaField) {
+        basicKanaField.value = kanaName;
+        console.log(`基本情報ブランド(カナ)に設定: "${kanaName}"`);
+      }
     } else {
       englishField.value = '';
       kanaField.value = '';
       englishField.placeholder = '入力すると候補が表示されます';
       kanaField.placeholder = '入力すると候補が表示されます';
+
+      // 基本情報ブロックの隠しフィールドもクリア
+      if (basicKanaField) {
+        basicKanaField.value = '';
+      }
     }
   }
 
@@ -1864,18 +2009,10 @@
   }
 
   function adjustDescHeight() {
+    // この関数は autoResizeTextarea() に置き換えられました
     const ta = document.getElementById('商品の説明');
     if (!ta) return;
-    ta.classList.remove('scroll');
-    ta.style.height = 'auto';
-    const sh = ta.scrollHeight;
-    const max = 360;
-    if (sh > max) {
-      ta.style.height = max + 'px';
-      ta.classList.add('scroll');
-    } else {
-      ta.style.height = sh + 'px';
-    }
+    autoResizeTextarea(ta);
   }
 
   function updateDesc() {
@@ -2099,21 +2236,61 @@
       setupFallbackSalesWords();
       return;
     }
-    // セールスワード専用データ取得
+
+    // セールスワード専用データ取得と設定マスタからの「よく使う」読み込みを並行実行
+    let salesWordData = null;
+    let favoriteSalesWords = [];
+
     google.script.run
-      .withSuccessHandler(function(salesWordData) {
-        console.log('セールスワードデータ取得成功:', salesWordData);
-        SALESWORD_DATA = salesWordData;
-        // カテゴリプルダウンを設定
-        setupCategoryDropdown();
-        console.log('セールスワード初期化完了');
+      .withSuccessHandler(function(data) {
+        console.log('セールスワードデータ取得成功:', data);
+        salesWordData = data;
+        checkAndSetup();
       })
       .withFailureHandler(function(error) {
         console.error('セールスワードデータ取得エラー:', error);
-        // エラー時のフォールバック
         setupFallbackSalesWords();
       })
       .getSalesWordData();
+
+    google.script.run
+      .withSuccessHandler(function(config) {
+        if (config && config.よく使うセールスワード) {
+          // 新しい構造（よく使う + 表示形式）に対応
+          if (typeof config.よく使うセールスワード === 'object' && config.よく使うセールスワード.よく使う) {
+            favoriteSalesWords = config.よく使うセールスワード.よく使う || [];
+            // 表示形式設定を読み込み
+            if (config.よく使うセールスワード.表示形式) {
+              SALESWORD_FORMAT = config.よく使うセールスワード.表示形式;
+              console.log('セールスワード表示形式取得成功:', SALESWORD_FORMAT);
+            }
+          } else {
+            // 旧形式（配列のみ）に対応
+            favoriteSalesWords = config.よく使うセールスワード;
+          }
+          console.log('よく使うセールスワード取得成功:', favoriteSalesWords);
+        }
+        checkAndSetup();
+      })
+      .withFailureHandler(function(error) {
+        console.error('よく使うセールスワード取得エラー:', error);
+        checkAndSetup();
+      })
+      .loadConfigMaster();
+
+    function checkAndSetup() {
+      if (salesWordData !== null) {
+        SALESWORD_DATA = salesWordData;
+
+        // 「よく使う」カテゴリを追加
+        if (favoriteSalesWords.length > 0) {
+          SALESWORD_DATA.wordsByCategory['よく使う'] = favoriteSalesWords;
+        }
+
+        setupCategoryDropdown();
+        console.log('セールスワード初期化完了');
+      }
+    }
   }
 
   function setupCategoryDropdown() {
@@ -2124,14 +2301,25 @@
     }
     // プルダウンをクリア
     categorySelect.innerHTML = '<option value="">-- カテゴリを選択 --</option>';
-    // カテゴリオプションを追加
+
+    // 「よく使う」カテゴリを先頭に追加
+    if (SALESWORD_DATA.wordsByCategory['よく使う']) {
+      const option = document.createElement('option');
+      option.value = 'よく使う';
+      option.textContent = '⭐ よく使う';
+      categorySelect.appendChild(option);
+    }
+
+    // その他のカテゴリオプションを追加
     SALESWORD_DATA.categories.forEach(category => {
       const option = document.createElement('option');
       option.value = category;
       option.textContent = category;
       categorySelect.appendChild(option);
     });
-    console.log(`カテゴリプルダウン設定完了: ${SALESWORD_DATA.categories.length}件`);
+
+    const totalCategories = SALESWORD_DATA.categories.length + (SALESWORD_DATA.wordsByCategory['よく使う'] ? 1 : 0);
+    console.log(`カテゴリプルダウン設定完了: ${totalCategories}件`);
     // キーワードプルダウンをリセット
     resetKeywordDropdown();
   }
@@ -2163,11 +2351,14 @@
     console.log('カテゴリ選択:', selectedCategory);
     // 選択されたカテゴリのキーワードを取得
     const categoryWords = SALESWORD_DATA.wordsByCategory[selectedCategory] || [];
+    // 重複を排除
+    const uniqueWords = [...new Set(categoryWords)];
     // キーワードプルダウンを更新
     keywordSelect.innerHTML = '<option value="">-- キーワードを選択 --</option>';
-    categoryWords.forEach(word => {
+    uniqueWords.forEach(word => {
       const option = document.createElement('option');
       option.value = word;
+      // 表示は元の値のまま（形式は適用しない）
       option.textContent = word;
       keywordSelect.appendChild(option);
     });
@@ -2362,6 +2553,11 @@
     google.script.run
       .withSuccessHandler(function(result) {
         show(result);
+        // 保存成功後も商品の説明エリアの高さを保持
+        const descTextarea = document.getElementById('商品の説明');
+        if (descTextarea) {
+          autoResizeTextarea(descTextarea);
+        }
       })
       .withFailureHandler(function(error) {
         show(`NG(UNKNOWN): ${error && error.message ? error.message : error}`);
@@ -2492,6 +2688,12 @@
     const brandKana = document.getElementById('商品名_ブランド(カナ)');
     if (brandEn) brandEn.value = '';
     if (brandKana) brandKana.value = '';
+
+    // ブランドチェックボックスをチェック状態に戻す
+    const brandEnCheckbox = document.getElementById('商品名_ブランド(英語)_チェック');
+    const brandKanaCheckbox = document.getElementById('商品名_ブランド(カナ)_チェック');
+    if (brandEnCheckbox) brandEnCheckbox.checked = true;
+    if (brandKanaCheckbox) brandKanaCheckbox.checked = true;
 
     hideSuggest('ブランド(英語)');
     hideSuggest('商品名_ブランド(英語)');
@@ -3006,6 +3208,7 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         fillSel('発送までの日数', opts['発送までの日数']||[]);
 
 applyShippingDefaults();
+applyProcureListingDefaults();
 
 // ★★★ ここから追加 ★★★
 // サイズ・商品の状態などのイベントリスナーを設定
@@ -3064,6 +3267,9 @@ if (staffSelect) {
 
     // 設定マスタから配送デフォルトを読み込み
     loadShippingDefaults();
+
+    // 設定マスタから仕入・出品デフォルトを読み込み
+    loadProcureListingDefaults();
 
     // イベントリスナー設定
     const l1=document.getElementById('大分類(カテゴリ)');

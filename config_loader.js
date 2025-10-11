@@ -42,7 +42,9 @@ function loadConfigMaster() {
       ハッシュタグ: {},
       割引情報: {},
       配送デフォルト: {},
-      管理番号設定: {}
+      仕入出品デフォルト: {},
+      管理番号設定: {},
+      よく使うセールスワード: {}
     };
 
     data.forEach(row => {
@@ -97,6 +99,10 @@ function loadConfigMaster() {
           config.配送デフォルト[item1] = value;
           break;
 
+        case '仕入出品デフォルト':
+          config.仕入出品デフォルト[item1] = value;
+          break;
+
         case '管理番号設定':
           // segmentsはJSON文字列なのでパース
           if (item1 === 'segments') {
@@ -117,6 +123,19 @@ function loadConfigMaster() {
             config.管理番号設定 = JSON.parse(value);
           } catch (e) {
             console.error('管理番号ビルダーデータ解析エラー:', e);
+          }
+          break;
+
+        case 'よく使うセールスワード':
+          // JSON文字列をパース
+          if (item1 === 'config') {
+            try {
+              config.よく使うセールスワード = JSON.parse(value);
+              console.log('セールスワード設定を読み込みました:', config.よく使うセールスワード);
+            } catch (e) {
+              console.error('セールスワード設定のJSON解析エラー:', e);
+              config.よく使うセールスワード = { よく使う: [], 表示形式: { globalPrefix: '【', globalSuffix: '】', wordOverrides: [] } };
+            }
           }
           break;
       }
@@ -214,6 +233,27 @@ function getShippingDefaults() {
   }
 
   return config.配送デフォルト;
+}
+
+/**
+ * 仕入・出品デフォルト設定を取得
+ * @returns {Object} 仕入・出品デフォルト設定
+ */
+function getProcureListingDefaults() {
+  const config = loadConfigMaster();
+  if (!config || !config.仕入出品デフォルト) {
+    console.log('仕入・出品デフォルト設定が見つかりません。デフォルト値を使用します。');
+    return {
+      '仕入日_今日': false,
+      'デフォルト仕入日': '',
+      'デフォルト仕入先': '',
+      '出品日_今日': false,
+      'デフォルト出品日': '',
+      'デフォルト出品先': ''
+    };
+  }
+
+  return config.仕入出品デフォルト;
 }
 
 /**
@@ -421,6 +461,13 @@ function saveConfigMaster(newConfig) {
       });
     }
 
+    // 仕入出品デフォルト
+    if (newConfig.仕入出品デフォルト && typeof newConfig.仕入出品デフォルト === 'object') {
+      Object.entries(newConfig.仕入出品デフォルト).forEach(([key, value]) => {
+        rows.push(['仕入出品デフォルト', key, '', '', value]);
+      });
+    }
+
     // 管理番号設定（セグメント方式）
     if (newConfig.管理番号設定 && typeof newConfig.管理番号設定 === 'object') {
       if (newConfig.管理番号設定.segments && Array.isArray(newConfig.管理番号設定.segments)) {
@@ -434,6 +481,13 @@ function saveConfigMaster(newConfig) {
           }
         });
       }
+    }
+
+    // よく使うセールスワード
+    if (newConfig.よく使うセールスワード && typeof newConfig.よく使うセールスワード === 'object') {
+      // JSON文字列として保存
+      rows.push(['よく使うセールスワード', 'config', '', '', JSON.stringify(newConfig.よく使うセールスワード)]);
+      console.log('セールスワード設定を保存:', newConfig.よく使うセールスワード);
     }
 
     // データを書き込み
