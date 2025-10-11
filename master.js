@@ -299,6 +299,23 @@ function getSalesWordsByCategory(category) {
 }
 
 /**
+ * セールスワード階層データ取得（設定管理UI用）
+ * カテゴリごとのセールスワード辞書を返す
+ * @returns {Object} { "カテゴリ1": ["ワード1", "ワード2"], "カテゴリ2": [...] }
+ */
+function getSaleswordHierarchy() {
+  try {
+    console.log('=== getSaleswordHierarchy 開始 ===');
+    const salesWordData = getSalesWordData();
+    console.log('取得完了 - wordsByCategory:', Object.keys(salesWordData.wordsByCategory).length, 'カテゴリ');
+    return salesWordData.wordsByCategory;
+  } catch (error) {
+    console.error('getSaleswordHierarchy エラー:', error);
+    return {};
+  }
+}
+
+/**
  * 手動管理シートからのオプション読み取り
  */
 function readOptionsFromManualSheet(sheetName, aliasMap) {
