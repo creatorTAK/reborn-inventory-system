@@ -138,6 +138,17 @@ function loadConfigMaster() {
             }
           }
           break;
+
+        case '商品名ブロック並び順':
+          // JSON文字列をパース
+          try {
+            config.商品名ブロック並び順 = JSON.parse(value);
+            console.log('商品名ブロック並び順を読み込みました:', config.商品名ブロック並び順);
+          } catch (e) {
+            console.error('商品名ブロック並び順のJSON解析エラー:', e);
+            config.商品名ブロック並び順 = ['salesword', 'brand', 'attribute'];
+          }
+          break;
       }
     });
 
@@ -270,6 +281,55 @@ function getManagementNumberConfig() {
   }
 
   return config.管理番号設定;
+}
+
+/**
+ * 商品名ブロックの並び順を取得
+ * @returns {Array} 並び順の配列
+ */
+function getTitleBlockOrder() {
+  const config = loadConfigMaster();
+  if (!config || !config.商品名ブロック並び順) {
+    console.log('商品名ブロック並び順が見つかりません。デフォルト値を使用します。');
+    return ['salesword', 'brand', 'attribute'];  // デフォルト順序
+  }
+
+  return config.商品名ブロック並び順;
+}
+
+/**
+ * 商品名ブロックの並び順を保存
+ * @param {Array} order - 並び順の配列（例: ['brand', 'salesword', 'attribute']）
+ */
+function saveTitleBlockOrder(order) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('設定マスタ');
+
+    if (!sheet) {
+      throw new Error('設定マスタシートが見つかりません');
+    }
+
+    // 既存の商品名ブロック並び順設定を削除
+    const data = sheet.getDataRange().getValues();
+    for (let i = data.length - 1; i >= 0; i--) {
+      if (data[i][0] === '商品名ブロック並び順') {
+        sheet.deleteRow(i + 1);
+      }
+    }
+
+    // 新しい並び順を保存（JSON形式）
+    sheet.appendRow(['商品名ブロック並び順', 'order', '', '', JSON.stringify(order)]);
+
+    // キャッシュをクリア
+    clearConfigCache();
+
+    console.log('商品名ブロックの並び順を保存しました:', order);
+    return 'OK';
+  } catch (error) {
+    console.error('商品名ブロック並び順の保存エラー:', error);
+    throw error;
+  }
 }
 
 /**

@@ -108,6 +108,27 @@
   // 商品の状態別のクイック挿入ボタン定義（設定マスタから読み込む）
   let CONDITION_BUTTONS = {};
 
+  // 商品名ブロックの並び順（設定マスタから読み込む）
+  let TITLE_BLOCK_ORDER = ['salesword', 'brand', 'attribute'];
+
+  // 設定マスタから商品名ブロックの並び順を読み込む
+  function loadTitleBlockOrder() {
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(order) {
+          if (order && Array.isArray(order)) {
+            TITLE_BLOCK_ORDER = order;
+            console.log('商品名ブロックの並び順を読み込みました:', order);
+            applyTitleBlockOrder();
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('商品名ブロック並び順読み込みエラー:', error);
+        })
+        .getTitleBlockOrder();
+    }
+  }
+
   // 設定マスタから商品状態ボタンを読み込む
   function loadConditionButtonsFromConfig() {
     if (google && google.script && google.script.run) {
@@ -1900,7 +1921,101 @@
     return prefix + salesword + suffix;
   }
 
+  // ========== 商品名ブロック並び替え機能 ==========
+
+  /**
+   * 商品名ブロックのドラッグ&ドロップを初期化
+   */
+  function initTitleBlockDragDrop() {
+    const container = document.getElementById('titleBlockContainer');
+    if (!container) return;
+
+    const blocks = container.querySelectorAll('.title-draggable-block');
+    let draggedElement = null;
+
+    blocks.forEach(block => {
+      // ドラッグハンドルのみをドラッグ開始可能にする
+      const handle = block.querySelector('.drag-handle');
+      if (handle) {
+        handle.addEventListener('mousedown', function(e) {
+          block.setAttribute('draggable', 'true');
+        });
+      }
+
+      block.addEventListener('dragstart', function(e) {
+        draggedElement = this;
+        this.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      block.addEventListener('dragend', function(e) {
+        this.style.opacity = '';
+        this.setAttribute('draggable', 'false');
+
+        // ドロップ後に並び順を保存
+        saveTitleBlockOrder();
+        updateNamePreview();
+      });
+
+      block.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+
+        if (draggedElement !== this) {
+          const rect = this.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+
+          if (e.clientY < midpoint) {
+            container.insertBefore(draggedElement, this);
+          } else {
+            container.insertBefore(draggedElement, this.nextSibling);
+          }
+        }
+      });
+    });
+  }
+
+  /**
+   * 現在の商品名ブロックの並び順を保存
+   */
+  function saveTitleBlockOrder() {
+    const container = document.getElementById('titleBlockContainer');
+    if (!container) return;
+
+    const blocks = container.querySelectorAll('.title-draggable-block');
+    TITLE_BLOCK_ORDER = Array.from(blocks).map(block => block.dataset.blockId);
+    console.log('商品名ブロックの並び順を更新:', TITLE_BLOCK_ORDER);
+
+    // 設定マスタに保存
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          console.log('商品名ブロックの並び順を設定マスタに保存しました');
+        })
+        .withFailureHandler(function(error) {
+          console.error('商品名ブロック並び順保存エラー:', error);
+        })
+        .saveTitleBlockOrder(TITLE_BLOCK_ORDER);
+    }
+  }
+
+  /**
+   * 保存された並び順でブロックを再配置
+   */
+  function applyTitleBlockOrder() {
+    const container = document.getElementById('titleBlockContainer');
+    if (!container || !TITLE_BLOCK_ORDER || TITLE_BLOCK_ORDER.length === 0) return;
+
+    TITLE_BLOCK_ORDER.forEach(blockId => {
+      const block = container.querySelector(`[data-block-id="${blockId}"]`);
+      if (block) {
+        container.appendChild(block);
+      }
+    });
+  }
+
   function updateNamePreview() {
+    // 各ブロックの値を取得
     const kw = _val('セールスワード');
     const formattedKw = applySaleswordFormat(kw);
 
@@ -1926,11 +2041,23 @@
 
     const item = _val('アイテム名');
     const others = NAME_REST_FIELDS.map(_val).filter(Boolean);
-    let text = '';
-    if (formattedKw) text += formattedKw;
-    if (brands) text += brands;
-    if (item) text += (text ? ' ' : '') + item;
-    if (others.length) text += (text ? ' ' : '') + others.join(' ');
+
+    // 並び順に基づいて商品名を構築
+    const parts = [];
+    TITLE_BLOCK_ORDER.forEach(blockId => {
+      if (blockId === 'salesword' && formattedKw) {
+        parts.push(formattedKw);
+      } else if (blockId === 'brand' && brands) {
+        parts.push(brands);
+      } else if (blockId === 'attribute') {
+        // アイテム名を追加
+        if (item) parts.push(item);
+        // 商品属性を追加
+        if (others.length) parts.push(...others);
+      }
+    });
+
+    let text = parts.join(' ');
     const count = Array.from(text).length;
     const counterEl = document.getElementById('nameCounter');
     const nameCountEl = document.getElementById('nameCount');
@@ -3271,6 +3398,9 @@ if (staffSelect) {
     // 設定マスタから仕入・出品デフォルトを読み込み
     loadProcureListingDefaults();
 
+    // 設定マスタから商品名ブロック並び順を読み込み
+    loadTitleBlockOrder();
+
     // イベントリスナー設定
     const l1=document.getElementById('大分類(カテゴリ)');
     if (l1) l1.addEventListener('change', onL1Changed);
@@ -3653,6 +3783,8 @@ if (staffSelect) {
     setupHashtagPreviewListeners();
     setupSizeHyokiListeners();
     setupRaglanListener();
+    initTitleBlockDragDrop();
+    applyTitleBlockOrder();
   }, 1000);
 
 </script>
