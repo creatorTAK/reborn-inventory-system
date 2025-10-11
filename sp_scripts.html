@@ -109,7 +109,7 @@
   let CONDITION_BUTTONS = {};
 
   // 商品名ブロックの並び順（設定マスタから読み込む）
-  let TITLE_BLOCK_ORDER = ['salesword', 'brand', 'attribute'];
+  let TITLE_BLOCK_ORDER = ['salesword', 'brand', 'item', 'attribute'];
 
   // 設定マスタから商品名ブロックの並び順を読み込む
   function loadTitleBlockOrder() {
@@ -117,6 +117,19 @@
       google.script.run
         .withSuccessHandler(function(order) {
           if (order && Array.isArray(order)) {
+            // 'item'が含まれていない古い設定の場合は、brandの後に挿入
+            if (!order.includes('item')) {
+              const brandIndex = order.indexOf('brand');
+              if (brandIndex !== -1) {
+                order.splice(brandIndex + 1, 0, 'item');
+              } else {
+                // brandもない場合はデフォルト順序を使用
+                order = ['salesword', 'brand', 'item', 'attribute'];
+              }
+              console.log('商品名ブロック並び順に item を追加しました:', order);
+              // 更新した並び順を保存
+              saveTitleBlockOrder();
+            }
             TITLE_BLOCK_ORDER = order;
             console.log('商品名ブロックの並び順を読み込みました:', order);
             applyTitleBlockOrder();
@@ -2039,7 +2052,8 @@
       brands = brandKana;
     }
 
-    const item = _val('アイテム名');
+    // 商品名ブロック内のアイテム名（編集可能）
+    const itemNameInTitle = _val('商品名_アイテム名');
     const others = NAME_REST_FIELDS.map(_val).filter(Boolean);
 
     // 並び順に基づいて商品名を構築
@@ -2049,10 +2063,11 @@
         parts.push(formattedKw);
       } else if (blockId === 'brand' && brands) {
         parts.push(brands);
+      } else if (blockId === 'item' && itemNameInTitle) {
+        // 商品名ブロック内のアイテム名を使用
+        parts.push(itemNameInTitle);
       } else if (blockId === 'attribute') {
-        // アイテム名を追加
-        if (item) parts.push(item);
-        // 商品属性を追加
+        // 商品属性のみを追加（アイテム名は含めない）
         if (others.length) parts.push(...others);
       }
     });
@@ -2076,6 +2091,17 @@
     }
     const hidden = document.getElementById('商品名(タイトル)');
     if (hidden) hidden.value = saveText;
+  }
+
+  // アイテム名表示フィールドの更新（基本情報→商品名ブロックへ自動反映）
+  function updateItemNameDisplay() {
+    const basicItemName = _val('アイテム名');
+    const titleItemField = document.getElementById('商品名_アイテム名');
+
+    if (titleItemField && basicItemName) {
+      titleItemField.value = basicItemName;
+      updateNamePreview();
+    }
   }
 
   // ブランド表示フィールドの更新（基本情報→商品名ブロックへ自動反映）
@@ -2545,6 +2571,7 @@
   function refreshItems() {
     const rows = filterByCategory(CAT_ROWS);
     fillSelectSafe(document.getElementById('アイテム名'), uniqKeepOrder(rows.map(r=>r.アイテム名)));
+    updateItemNameDisplay();
     updateNamePreview();
   }
 
@@ -3412,6 +3439,8 @@ if (staffSelect) {
     if (l4) l4.addEventListener('change', onL4Changed);
     const l5=document.getElementById('細分類2');
     if (l5) l5.addEventListener('change', onL5Changed);
+    const itemName=document.getElementById('アイテム名');
+    if (itemName) itemName.addEventListener('change', updateItemNameDisplay);
 
     // セールスワード専用イベント設定
     setupSalesWordEventListeners();

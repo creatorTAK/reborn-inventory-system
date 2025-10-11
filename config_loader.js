@@ -146,7 +146,7 @@ function loadConfigMaster() {
             console.log('商品名ブロック並び順を読み込みました:', config.商品名ブロック並び順);
           } catch (e) {
             console.error('商品名ブロック並び順のJSON解析エラー:', e);
-            config.商品名ブロック並び順 = ['salesword', 'brand', 'attribute'];
+            config.商品名ブロック並び順 = ['salesword', 'brand', 'item', 'attribute'];
           }
           break;
       }
@@ -291,7 +291,7 @@ function getTitleBlockOrder() {
   const config = loadConfigMaster();
   if (!config || !config.商品名ブロック並び順) {
     console.log('商品名ブロック並び順が見つかりません。デフォルト値を使用します。');
-    return ['salesword', 'brand', 'attribute'];  // デフォルト順序
+    return ['salesword', 'brand', 'item', 'attribute'];  // デフォルト順序
   }
 
   return config.商品名ブロック並び順;
