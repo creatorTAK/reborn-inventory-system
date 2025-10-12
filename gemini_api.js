@@ -82,6 +82,40 @@ function hasGeminiApiKey() {
 }
 
 // =============================================================================
+// ヘルパー関数
+// =============================================================================
+
+/**
+ * AI設定から最小文字数を取得
+ *
+ * @param {Object} aiConfig - AI生成設定
+ * @returns {number} 最小文字数
+ */
+function getMinLengthFromConfig(aiConfig) {
+  const lengthMap = {
+    'short': 150,
+    'medium': 200,
+    'long': 300
+  };
+  return lengthMap[aiConfig.length] || MIN_DESCRIPTION_LENGTH;
+}
+
+/**
+ * AI設定から最大文字数を取得
+ *
+ * @param {Object} aiConfig - AI生成設定
+ * @returns {number} 最大文字数
+ */
+function getMaxLengthFromConfig(aiConfig) {
+  const lengthMap = {
+    'short': 200,
+    'medium': 300,
+    'long': 500
+  };
+  return lengthMap[aiConfig.length] || MAX_DESCRIPTION_LENGTH;
+}
+
+// =============================================================================
 // プロンプト生成
 // =============================================================================
 
@@ -97,65 +131,162 @@ function hasGeminiApiKey() {
  * @param {string} [productInfo.condition] - 商品の状態
  * @param {string} [productInfo.material] - 素材
  * @param {string} [productInfo.color] - カラー
+ * @param {Object} [aiConfig] - AI生成設定
  * @returns {string} 構築されたプロンプト
  */
-function buildDescriptionPrompt(productInfo) {
+function buildDescriptionPrompt(productInfo, aiConfig) {
   // 必須項目のバリデーション
   if (!productInfo.brandName || !productInfo.itemName) {
     throw new Error('NG(VALIDATION): ブランド名とアイテム名は必須です。');
   }
 
-  // プロンプトのベース部分
+  // AI設定のデフォルト値
+  const config = aiConfig || {};
+  const minLength = getMinLengthFromConfig(config);
+  const maxLength = getMaxLengthFromConfig(config);
+
+  // カスタムプロンプトテンプレートがある場合は使用
+  if (config.promptTemplate && config.promptTemplate.trim()) {
+    let customPrompt = config.promptTemplate;
+
+    // 変数を置換
+    customPrompt = customPrompt
+      .replace(/\{brand\}/g, productInfo.brandName + (productInfo.brandKana ? `（${productInfo.brandKana}）` : ''))
+      .replace(/\{item\}/g, productInfo.itemName || '')
+      .replace(/\{category\}/g, productInfo.category || '')
+      .replace(/\{size\}/g, productInfo.size || '')
+      .replace(/\{condition\}/g, productInfo.condition || '')
+      .replace(/\{material\}/g, productInfo.material || '')
+      .replace(/\{color\}/g, productInfo.color || '')
+      .replace(/\{attributes\}/g, productInfo.attributes || '')
+      .replace(/\{modelNumber\}/g, productInfo.modelNumber || '')
+      .replace(/\{length\}/g, `${minLength}-${maxLength}`);
+
+    return customPrompt;
+  }
+
+  // デフォルトプロンプト
   let prompt = `あなたはメルカリの出品説明文を作成する専門家です。以下の商品情報から、魅力的で購買意欲を高める商品説明文を作成してください。
 
-【商品情報】
-ブランド: ${productInfo.brandName}`;
+【商品情報】`;
 
-  // オプション情報を追加
-  if (productInfo.brandKana) {
-    prompt += `（${productInfo.brandKana}）`;
+  // 含める要素のチェック
+  if (config.includeBrand !== false && productInfo.brandName) {
+    prompt += `
+ブランド: ${productInfo.brandName}`;
+    if (productInfo.brandKana) {
+      prompt += `（${productInfo.brandKana}）`;
+    }
+  }
+
+  if (config.includeCategory !== false && productInfo.category) {
+    prompt += `
+カテゴリ: ${productInfo.category}`;
   }
 
   prompt += `
 アイテム: ${productInfo.itemName}`;
 
-  if (productInfo.category) {
-    prompt += `
-カテゴリ: ${productInfo.category}`;
-  }
-
-  if (productInfo.size) {
+  if (config.includeSize !== false && productInfo.size) {
     prompt += `
 サイズ: ${productInfo.size}`;
   }
 
-  if (productInfo.condition) {
+  if (config.includeCondition !== false && productInfo.condition) {
     prompt += `
 状態: ${productInfo.condition}`;
   }
 
-  if (productInfo.material) {
+  if (config.includeMaterial !== false && productInfo.material) {
     prompt += `
 素材: ${productInfo.material}`;
   }
 
-  if (productInfo.color) {
+  if (config.includeColor !== false && productInfo.color) {
     prompt += `
 カラー: ${productInfo.color}`;
+  }
+
+  if (config.includeAttributes !== false && productInfo.attributes) {
+    prompt += `
+商品属性: ${productInfo.attributes}`;
+  }
+
+  // 品番・型番がある場合は強調
+  if (productInfo.modelNumber) {
+    prompt += `
+品番・型番: ${productInfo.modelNumber}
+
+※重要: この品番・型番でGoogle検索を行い、以下の情報を含めてください：
+  - 発売年・シーズン
+  - メーカー希望小売価格（定価）
+  - 商品の公式説明・特徴
+  - 人気度や評価（あれば）
+  - 素材やディテールの詳細情報`;
+  }
+
+  // トーン/スタイルに応じた指示
+  let toneInstruction = '';
+  switch (config.tone) {
+    case 'polite':
+      toneInstruction = '丁寧で格調高い文体で書いてください。';
+      break;
+    case 'standard':
+      toneInstruction = '丁寧で親しみやすい文体で書いてください。プロフェッショナルだが堅苦しくない表現を心がけてください。';
+      break;
+    case 'enthusiastic':
+      toneInstruction = '熱量高めで、おすすめ感を強調してください。';
+      break;
+    case 'casual':
+    default:
+      toneInstruction = 'フレンドリーでカジュアルな文体で書いてください。';
+      break;
+  }
+
+  // 見出しスタイルに応じた指示
+  let headingInstruction = '';
+  switch (config.headingStyle) {
+    case 'emoji':
+      headingInstruction = '見出しには絵文字を使ってください。例: ✨ 商品の特徴、👔 コーディネート提案、🎯 おすすめシーン';
+      break;
+    case 'brackets':
+      headingInstruction = '見出しには【】を使ってください。例: 【商品の特徴】、【コーディネート提案】、【おすすめシーン】';
+      break;
+    case 'square':
+      headingInstruction = '見出しには■を使ってください。例: ■ 商品の特徴、■ コーディネート提案、■ おすすめシーン';
+      break;
+    case 'none':
+      headingInstruction = '見出しは使わず、改行のみで区切ってください。';
+      break;
+    default:
+      headingInstruction = '見出しには【】を使ってください。例: 【商品の特徴】、【コーディネート提案】、【おすすめシーン】';
+      break;
   }
 
   // 指示部分
   prompt += `
 
 【作成条件】
-1. 文字数: ${MIN_DESCRIPTION_LENGTH}〜${MAX_DESCRIPTION_LENGTH}文字
-2. 以下の要素を含めること：
-   - 商品の特徴やアピールポイント
-   - おすすめのコーディネート提案
-   - 着用シーンの提案
-3. 自然で読みやすい文章
-4. 購入者の視点に立った魅力的な表現
-5. 過度な誇張表現は避ける
+1. 文字数: ${minLength}〜${maxLength}文字
+2. ${toneInstruction}
+3. ${headingInstruction}
+4. 以下の要素を含めること：
+   - 商品の特徴やアピールポイント`;
+
+  if (config.includeCoordinate !== false) {
+    prompt += `
+   - おすすめのコーディネート提案`;
+  }
+
+  if (config.includeScene !== false) {
+    prompt += `
+   - 着用シーンの提案`;
+  }
+
+  prompt += `
+5. 自然で読みやすい文章
+6. 購入者の視点に立った魅力的な表現
+7. 過度な誇張表現は避ける
 
 説明文のみを出力してください。余計な前置きや注釈は不要です。`;
 
@@ -170,13 +301,20 @@ function buildDescriptionPrompt(productInfo) {
  * Gemini APIを呼び出してテキストを生成
  *
  * @param {string} prompt - 生成用プロンプト
+ * @param {Object} [aiConfig] - AI生成設定
+ * @param {Object} [productInfo] - 商品情報（Google Search Grounding判定用）
  * @returns {string} 生成されたテキスト
  * @throws {Error} API呼び出しに失敗した場合
  */
-function callGeminiApi(prompt) {
+function callGeminiApi(prompt, aiConfig, productInfo) {
   try {
     const apiKey = getGeminiApiKey();
     const url = `${GEMINI_API_ENDPOINT}?key=${apiKey}`;
+
+    // AI設定のデフォルト値
+    const config = aiConfig || {};
+    const temperature = config.temperature !== undefined ? config.temperature : 0.7;
+    const maxTokens = config.maxTokens || 1024;
 
     // リクエストボディの構築
     const requestBody = {
@@ -186,8 +324,8 @@ function callGeminiApi(prompt) {
         }]
       }],
       generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 1024,
+        temperature: temperature,
+        maxOutputTokens: maxTokens,
         topP: 0.8,
         topK: 40
       },
@@ -210,6 +348,22 @@ function callGeminiApi(prompt) {
         }
       ]
     };
+
+    // 品番・型番がある場合はGoogle Search Groundingを有効化
+    if (productInfo && productInfo.modelNumber && productInfo.modelNumber.trim()) {
+      requestBody.tools = [{
+        googleSearchRetrieval: {
+          dynamicRetrievalConfig: {
+            mode: "MODE_DYNAMIC",
+            dynamicThreshold: 0.7
+          }
+        }
+      }];
+
+      if (DEBUG_MODE) {
+        console.log('[Gemini API] Google Search Grounding有効 - 品番:', productInfo.modelNumber);
+      }
+    }
 
     // HTTPリクエストオプション
     const options = {
@@ -293,16 +447,29 @@ function generateProductDescription(productInfo) {
       throw new Error('NG(CONFIG): Gemini APIキーが設定されていません。');
     }
 
+    // AI生成設定を取得
+    let aiConfig = {};
+    try {
+      const config = loadConfigMaster();
+      aiConfig = config && config.AI生成設定 ? config.AI生成設定 : {};
+    } catch (error) {
+      console.warn('[警告] AI生成設定の読み込みに失敗。デフォルト設定を使用します:', error);
+      aiConfig = {};
+    }
+
     // プロンプトの構築
-    const prompt = buildDescriptionPrompt(productInfo);
+    const prompt = buildDescriptionPrompt(productInfo, aiConfig);
 
-    // API呼び出し
-    const generatedText = callGeminiApi(prompt);
+    // API呼び出し（品番がある場合はGoogle Search Groundingが有効化される）
+    const generatedText = callGeminiApi(prompt, aiConfig, productInfo);
 
-    // 文字数チェック
-    if (generatedText.length < MIN_DESCRIPTION_LENGTH) {
+    // 文字数チェック（設定された範囲を使用）
+    const minLength = getMinLengthFromConfig(aiConfig);
+    const maxLength = getMaxLengthFromConfig(aiConfig);
+
+    if (generatedText.length < minLength) {
       console.warn(`[警告] 生成された説明文が短すぎます (${generatedText.length}文字)`);
-    } else if (generatedText.length > MAX_DESCRIPTION_LENGTH) {
+    } else if (generatedText.length > maxLength) {
       console.warn(`[警告] 生成された説明文が長すぎます (${generatedText.length}文字)`);
     }
 
@@ -331,7 +498,7 @@ function testGeminiApiConnection() {
 
     // シンプルなテストプロンプト
     const testPrompt = 'こんにちは！と日本語で返答してください。';
-    const response = callGeminiApi(testPrompt);
+    const response = callGeminiApi(testPrompt, null, null);
 
     return {
       success: true,

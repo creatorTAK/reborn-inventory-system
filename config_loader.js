@@ -44,7 +44,8 @@ function loadConfigMaster() {
       配送デフォルト: {},
       仕入出品デフォルト: {},
       管理番号設定: {},
-      よく使うセールスワード: {}
+      よく使うセールスワード: {},
+      AI生成設定: {}
     };
 
     data.forEach(row => {
@@ -135,6 +136,34 @@ function loadConfigMaster() {
             } catch (e) {
               console.error('セールスワード設定のJSON解析エラー:', e);
               config.よく使うセールスワード = { よく使う: [], 表示形式: { globalPrefix: '【', globalSuffix: '】', wordOverrides: [] } };
+            }
+          }
+          break;
+
+        case 'AI生成設定':
+          // JSON文字列をパース
+          if (item1 === 'config') {
+            try {
+              config.AI生成設定 = JSON.parse(value);
+              console.log('AI生成設定を読み込みました:', config.AI生成設定);
+            } catch (e) {
+              console.error('AI生成設定のJSON解析エラー:', e);
+              // デフォルト値
+              config.AI生成設定 = {
+                promptTemplate: '',
+                length: 'medium',
+                tone: 'casual',
+                temperature: 0.7,
+                maxTokens: 500,
+                includeBrand: true,
+                includeCategory: true,
+                includeSize: true,
+                includeMaterial: true,
+                includeColor: true,
+                includeCondition: true,
+                includeCoordinate: true,
+                includeScene: true
+              };
             }
           }
           break;
@@ -548,6 +577,13 @@ function saveConfigMaster(newConfig) {
       // JSON文字列として保存
       rows.push(['よく使うセールスワード', 'config', '', '', JSON.stringify(newConfig.よく使うセールスワード)]);
       console.log('セールスワード設定を保存:', newConfig.よく使うセールスワード);
+    }
+
+    // AI生成設定
+    if (newConfig.AI生成設定 && typeof newConfig.AI生成設定 === 'object') {
+      // JSON文字列として保存
+      rows.push(['AI生成設定', 'config', '', '', JSON.stringify(newConfig.AI生成設定)]);
+      console.log('AI生成設定を保存:', newConfig.AI生成設定);
     }
 
     // データを書き込み

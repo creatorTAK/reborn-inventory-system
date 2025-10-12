@@ -16,6 +16,30 @@
   const NAME_LIMIT_MODE = 'warn';
   const DESC_LIMIT = 1000;
   const DESC_LIMIT_MODE = 'warn';
+
+  // AI生成文を保存するグローバル変数
+  let AI_GENERATED_TEXT = '';
+
+  // 設定マスタ全体をキャッシュ
+  let CACHED_CONFIG = null;
+
+  // 設定マスタ全体を読み込む
+  function loadAllConfig() {
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(config) {
+          if (config) {
+            CACHED_CONFIG = config;
+            console.log('設定マスタ全体を読み込みました:', config);
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('設定マスタ読み込みエラー:', error);
+        })
+        .loadConfigMaster();
+    }
+  }
+
   // 配送デフォルト設定（設定マスタから読み込む）
   let SHIPPING_DEFAULTS = {
     '配送料の負担': '送料込み(出品者負担)',
@@ -2437,6 +2461,74 @@
     return '';
   }
 
+  /**
+   * 配置順序に従って商品説明を組み立てる
+   * @param {Object} elements - 各要素のテキスト（brand, color, size, material, condition, ai, management, discount, hashtag）
+   * @param {HTMLTextAreaElement} descTextarea - 説明文を表示するテキストエリア
+   */
+  function buildDescriptionByOrder(elements, descTextarea) {
+    console.log('buildDescriptionByOrder 関数が呼び出されました');
+
+    // 1. AI設定から配置順序を読み込み
+    let descriptionOrder = null;
+    try {
+      const aiConfig = CACHED_CONFIG && CACHED_CONFIG.AI生成設定 ? CACHED_CONFIG.AI生成設定 : null;
+      if (aiConfig && aiConfig.descriptionOrder && Array.isArray(aiConfig.descriptionOrder)) {
+        descriptionOrder = aiConfig.descriptionOrder;
+        console.log('カスタム配置順序を使用:', descriptionOrder);
+      }
+    } catch (error) {
+      console.warn('配置順序の読み込みに失敗。デフォルト順序を使用します:', error);
+    }
+
+    // 2. デフォルト順序の定義
+    const DEFAULT_ORDER = [
+      { id: 'brand', enabled: true },
+      { id: 'color', enabled: true },
+      { id: 'size', enabled: true },
+      { id: 'material', enabled: true },
+      { id: 'condition', enabled: true },
+      { id: 'ai', enabled: true },
+      { id: 'management', enabled: true },
+      { id: 'discount', enabled: true },
+      { id: 'hashtag', enabled: true }
+    ];
+
+    const order = descriptionOrder || DEFAULT_ORDER;
+
+    // 3. 配置順序に従って説明文を組み立て
+    const parts = [];
+
+    for (const item of order) {
+      // 無効化されている要素はスキップ
+      if (item.enabled === false) {
+        console.log(`要素 ${item.id} は無効化されているためスキップ`);
+        continue;
+      }
+
+      // 要素の内容を取得
+      const content = elements[item.id];
+      if (content && content.trim()) {
+        parts.push(content.trim());
+        console.log(`要素 ${item.id} を追加`);
+      } else {
+        console.log(`要素 ${item.id} は空のためスキップ`);
+      }
+    }
+
+    // 4. 全要素を結合（2行の空行で区切る）
+    const finalText = parts.join('\n\n');
+    descTextarea.value = finalText;
+
+    console.log('商品説明を配置順序に従って生成しました:', finalText.length, '文字');
+
+    // 5. UIを更新
+    if (typeof updateDesc === 'function') {
+      updateDesc();
+    }
+    autoResizeTextarea(descTextarea);
+  }
+
   // ================= AI生成機能 =================
 
   /**
@@ -2480,17 +2572,14 @@
         .withSuccessHandler(function(generatedText) {
           debug.log('AI生成成功:', generatedText);
 
-          // 商品状態詳細フィールドにAI生成テキストをセット
-          const detailInput = document.getElementById('商品状態詳細');
-          if (detailInput) {
-            detailInput.value = generatedText;
+          // AI生成文をグローバル変数に保存
+          AI_GENERATED_TEXT = generatedText;
 
-            // プレビューを更新
-            updateDescriptionFromDetail();
+          // プレビューを更新
+          updateDescriptionFromDetail();
 
-            // 成功メッセージ
-            alert('✅ AI説明文を生成しました！\n\n内容を確認して、必要に応じて編集してください。');
-          }
+          // 成功メッセージ
+          alert('✅ AI説明文を生成しました！\n\n内容を確認して、必要に応じて編集してください。');
 
           // ボタンを元に戻す
           resetAiButton(aiGenBtn, originalText);
@@ -2593,6 +2682,28 @@
     });
     productInfo.color = colors.join(', ');
 
+    // 商品属性を収集（商品名ブロックから）
+    const attributes = [];
+    for (let i = 1; i <= 10; i++) {
+      const attrValue = _val(`商品属性${i}`);
+      if (attrValue) {
+        attributes.push(attrValue);
+      }
+    }
+
+    // AI生成用 追加属性を収集（商品の説明ブロックから）
+    const aiAttributesText = _val('AI用商品属性');
+    if (aiAttributesText) {
+      // カンマ区切りで分割して追加
+      const aiAttributes = aiAttributesText.split(',').map(attr => attr.trim()).filter(attr => attr);
+      attributes.push(...aiAttributes);
+    }
+
+    productInfo.attributes = attributes.join(', ');
+
+    // 品番・型番を収集（Google Search Grounding用）
+    productInfo.modelNumber = _val('品番型番') || '';
+
     return productInfo;
   }
 
@@ -2650,11 +2761,17 @@
             conditionSection = `商品の状態：${conditionValue}\n\n`;
           }
 
-          // 商品状態詳細を取得
-          const detailText = (detailInput.value || '').trim();
+          // AI生成文または商品状態詳細を取得
         let detailSection = '';
-        if (detailText) {
-          detailSection = `商品状態(詳細)：\n${detailText}\n\n`;
+        if (AI_GENERATED_TEXT) {
+          // AI生成文がある場合はラベルなしでそのまま表示
+          detailSection = `${AI_GENERATED_TEXT}\n\n`;
+        } else {
+          // AI生成文がない場合は商品状態詳細フィールドの値を使用
+          const detailText = (detailInput.value || '').trim();
+          if (detailText) {
+            detailSection = `商品状態(詳細)：\n${detailText}\n\n`;
+          }
         }
 
         // ハッシュタグ生成
@@ -2674,21 +2791,18 @@
           // 割引案内テキスト（設定シート対応版）
           const discountInfo = generateDiscountInfo();
 
-          // 最終的な説明文を組み立て
-          const descriptionText = brandText + colorText + sizeText + materialText + conditionSection + detailSection + managementNumberSection + discountInfo + '\n\n' +
-  hashtagText;
-
-          // 商品の説明欄を更新
-          descTextarea.value = descriptionText;
-          console.log('更新後の説明文:', descriptionText);
-
-          // 文字数カウント更新
-          if (typeof updateDesc === 'function') {
-            updateDesc();
-          }
-
-          // テキストエリアの高さを自動調整
-          autoResizeTextarea(descTextarea);
+          // 配置順序を取得して説明文を組み立て
+          buildDescriptionByOrder({
+            brand: brandText,
+            color: colorText,
+            size: sizeText,
+            material: materialText,
+            condition: conditionSection,
+            ai: detailSection,
+            management: managementNumberSection,
+            discount: discountInfo,
+            hashtag: hashtagText
+          }, descTextarea);
     } catch (error) {
       console.error('商品の説明更新エラー:', error);
       debug.error('updateDescriptionFromDetail エラー:', error);
@@ -3059,6 +3173,9 @@
     try {
       console.log('=== リセット開始 ===');
 
+      // 0. AI生成文をクリア
+      AI_GENERATED_TEXT = '';
+
       // 1. すべての入力フィールドをクリア
       FIELD_IDS.forEach(k=>{
         const el=document.getElementById(k);
@@ -3128,6 +3245,35 @@
     });
     colorCount = 1;
     updateColorRemoveButtons();
+
+    // 6.6. 商品属性フィールドをリセット
+    const attributeItems = document.querySelectorAll('.attribute-item');
+    attributeItems.forEach((item, index) => {
+      if (index === 0) {
+        // 1個目はフィールドをクリア
+        const categorySelect = item.querySelector(`#商品属性1_カテゴリ`);
+        const valueSelect = item.querySelector(`#商品属性1_値`);
+        if (categorySelect) categorySelect.value = '';
+        if (valueSelect) {
+          valueSelect.value = '';
+          valueSelect.disabled = true;
+        }
+      } else {
+        // 2個目以降は削除
+        item.remove();
+      }
+    });
+    attributeCount = 1;
+    updateAttributeRemoveButtons();
+    updateAttributeFields();
+
+    // 6.7. AI用商品属性をクリア
+    const aiAttributesField = document.getElementById('AI用商品属性');
+    if (aiAttributesField) aiAttributesField.value = '';
+
+    // 6.8. 品番・型番をクリア
+    const modelNumberField = document.getElementById('品番型番');
+    if (modelNumberField) modelNumberField.value = '';
 
     // 7. サイズ関連をリセット
     const shoulderLabel = document.getElementById('shoulderWidthLabel');
@@ -3756,6 +3902,9 @@ if (staffSelect) {
 
     // セールスワード専用初期化
     initializeSalesWords();
+
+    // 設定マスタ全体を読み込み（配置順序を含む）
+    loadAllConfig();
 
     // 設定マスタから商品状態ボタンを読み込み
     loadConditionButtonsFromConfig();
