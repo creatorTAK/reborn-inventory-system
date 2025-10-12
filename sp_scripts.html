@@ -1,5 +1,17 @@
 <script>
-  // 管理番号システム改善版 - 2025-01-06
+  // ==================== デバッグ設定 ====================
+  // 本番環境ではfalseに設定してログを無効化
+  const DEBUG_MODE = true;
+
+  // デバッグ用ログユーティリティ
+  const debug = {
+    log: (...args) => { if (DEBUG_MODE) console.log(...args); },
+    warn: (...args) => { if (DEBUG_MODE) console.warn(...args); },
+    error: (...args) => { console.error(...args); }, // エラーは常に表示
+    info: (...args) => { if (DEBUG_MODE) console.info(...args); }
+  };
+
+  // ==================== 定数定義 ====================
   const NAME_LIMIT = 40;
   const NAME_LIMIT_MODE = 'warn';
   const DESC_LIMIT = 1000;
@@ -2032,10 +2044,17 @@
     });
   }
 
+  /**
+   * 商品名プレビューを更新
+   * セールスワード、ブランド名、アイテム名、商品属性、管理番号を組み立てる
+   * TITLE_BLOCK_ORDERの順序に従って表示
+   * @throws {Error} 処理中にエラーが発生した場合
+   */
   function updateNamePreview() {
-    // 各ブロックの値を取得
-    const kw = _val('セールスワード');
-    const formattedKw = applySaleswordFormat(kw);
+    try {
+      // 各ブロックの値を取得
+      const kw = _val('セールスワード');
+      const formattedKw = applySaleswordFormat(kw);
 
     // 商品名ブロック内のブランドを参照（どちらか片方でも可）
     const brandEn = _val('商品名_ブランド(英語)');
@@ -2128,11 +2147,15 @@
       ta.value = text;
       adjustPreviewHeight();
     }
-    const hidden = document.getElementById('商品名(タイトル)');
-    if (hidden) hidden.value = saveText;
+      const hidden = document.getElementById('商品名(タイトル)');
+      if (hidden) hidden.value = saveText;
 
-    // 形式選択が変更された場合も設定を保存
-    saveManagementNumberPlacementSettings();
+      // 形式選択が変更された場合も設定を保存
+      saveManagementNumberPlacementSettings();
+    } catch (error) {
+      console.error('商品名プレビュー更新エラー:', error);
+      debug.error('updateNamePreview エラー:', error);
+    }
   }
 
   // 管理番号配置設定を保存
@@ -2414,7 +2437,13 @@
     return '';
   }
 
+  /**
+   * 商品の説明プレビューを更新
+   * ブランド、カラー、サイズ、素材、商品状態、管理番号、割引情報、ハッシュタグを組み立てる
+   * @throws {Error} 要素が見つからない場合や処理中にエラーが発生した場合
+   */
   function updateDescriptionFromDetail() {
+    try {
         console.log('updateDescriptionFromDetail 関数が呼び出されました');
         const detailInput = document.getElementById('商品状態詳細');
         const descTextarea = document.getElementById('商品の説明');
@@ -2485,7 +2514,11 @@
 
           // テキストエリアの高さを自動調整
           autoResizeTextarea(descTextarea);
-      }
+    } catch (error) {
+      console.error('商品の説明更新エラー:', error);
+      debug.error('updateDescriptionFromDetail エラー:', error);
+    }
+  }
 
   function setupDetailEventListener() {
     console.log('setupDetailEventListener 関数が呼び出されました');
@@ -2841,17 +2874,24 @@
       .saveProduct(d);
   }
 
+  /**
+   * フォーム全体をリセット
+   * すべての入力フィールドをクリアし、デフォルト値（配送情報、仕入・出品情報）を再適用
+   * 管理番号の配置設定と形式は保持される（ユーザーの運用方針のため）
+   * @throws {Error} リセット処理中にエラーが発生した場合
+   */
   function onReset() {
-    console.log('=== リセット開始 ===');
+    try {
+      console.log('=== リセット開始 ===');
 
-    // 1. すべての入力フィールドをクリア
-    FIELD_IDS.forEach(k=>{
-      const el=document.getElementById(k);
-      if(el) {
-        el.value='';
-        console.log(`クリア: ${k}`);
-      }
-    });
+      // 1. すべての入力フィールドをクリア
+      FIELD_IDS.forEach(k=>{
+        const el=document.getElementById(k);
+        if(el) {
+          el.value='';
+          console.log(`クリア: ${k}`);
+        }
+      });
 
     // 2. カテゴリプルダウンをリセット
     ['中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2'].forEach(id=> resetSelect(id, true));
@@ -3022,10 +3062,15 @@
     console.log('商品名プレビュー再構築');
     updateNamePreview();
 
-    console.log('商品の説明デフォルト値復活');
-    updateDescriptionFromDetail();
+      console.log('商品の説明デフォルト値復活');
+      updateDescriptionFromDetail();
 
-    console.log('=== リセット完了 ===');
+      console.log('=== リセット完了 ===');
+    } catch (error) {
+      console.error('リセット処理エラー:', error);
+      debug.error('onReset エラー:', error);
+      alert('リセット処理中にエラーが発生しました。ページを再読み込みしてください。');
+    }
   }
 
   // クリップボードにコピー
