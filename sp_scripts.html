@@ -2130,20 +2130,79 @@
     }
     const hidden = document.getElementById('商品名(タイトル)');
     if (hidden) hidden.value = saveText;
+
+    // 形式選択が変更された場合も設定を保存
+    saveManagementNumberPlacementSettings();
   }
 
-  // 商品名に管理番号を配置するチェックボックスのON/OFF処理
-  function toggleManagementNumberInTitle() {
-    const checkbox = document.getElementById('商品名に管理番号配置');
+  // 管理番号配置設定を保存
+  function saveManagementNumberPlacementSettings() {
+    const titleCheckbox = document.getElementById('商品名に管理番号配置');
+    const descCheckbox = document.getElementById('説明文に管理番号配置');
+    const formatSelect = document.getElementById('管理番号形式');
+
+    const settings = {
+      inTitle: titleCheckbox ? titleCheckbox.checked : false,
+      inDesc: descCheckbox ? descCheckbox.checked : false,
+      format: formatSelect ? formatSelect.value : '【】'
+    };
+
+    try {
+      localStorage.setItem('managementNumberPlacement', JSON.stringify(settings));
+    } catch (e) {
+      console.warn('LocalStorage保存エラー:', e);
+    }
+  }
+
+  // 管理番号配置設定を復元
+  function restoreManagementNumberPlacementSettings() {
+    try {
+      const saved = localStorage.getItem('managementNumberPlacement');
+      if (!saved) return;
+
+      const settings = JSON.parse(saved);
+      const titleCheckbox = document.getElementById('商品名に管理番号配置');
+      const descCheckbox = document.getElementById('説明文に管理番号配置');
+      const formatSelect = document.getElementById('管理番号形式');
+      const formatSelector = document.getElementById('管理番号形式選択');
+
+      if (titleCheckbox) titleCheckbox.checked = settings.inTitle || false;
+      if (descCheckbox) descCheckbox.checked = settings.inDesc || false;
+      if (formatSelect) formatSelect.value = settings.format || '【】';
+
+      // 形式選択の表示/非表示を更新
+      if (formatSelector && titleCheckbox) {
+        formatSelector.style.display = titleCheckbox.checked ? 'block' : 'none';
+      }
+    } catch (e) {
+      console.warn('LocalStorage読み込みエラー:', e);
+    }
+  }
+
+  // 管理番号配置オプションの表示切り替え
+  function toggleManagementNumberOptions() {
+    const titleCheckbox = document.getElementById('商品名に管理番号配置');
+    const descCheckbox = document.getElementById('説明文に管理番号配置');
     const formatSelector = document.getElementById('管理番号形式選択');
 
-    if (checkbox && formatSelector) {
-      if (checkbox.checked) {
+    // 商品名チェックボックスがONの時だけ形式選択を表示
+    if (formatSelector) {
+      if (titleCheckbox && titleCheckbox.checked) {
         formatSelector.style.display = 'block';
       } else {
         formatSelector.style.display = 'none';
       }
-      updateNamePreview();
+    }
+
+    // 設定を保存
+    saveManagementNumberPlacementSettings();
+
+    // 商品名プレビューを更新
+    updateNamePreview();
+
+    // 商品の説明プレビューを更新
+    if (typeof updateDescriptionFromDetail === 'function') {
+      updateDescriptionFromDetail();
     }
   }
 
@@ -2252,7 +2311,7 @@
 
     const pairIndex = BRAND_INDEX_MAP.get(englishName);
     const kanaName = pairIndex !== undefined && BRAND_PAIRS[pairIndex] ? BRAND_PAIRS[pairIndex].kana : '';
-    return `ブランド名\n${englishName}（${kanaName}）\n\n`;
+    return `ブランド名：${englishName}（${kanaName}）\n\n`;
   }
 
   // サイズ情報取得関数
@@ -2284,14 +2343,13 @@
 
     // サイズ(表記)セクション
     if (sizeHyoki) {
-      sizeText += 'サイズ(表記)\n';
-      sizeText += `${sizeHyoki}\n\n`;
+      sizeText += `サイズ(表記)：${sizeHyoki}\n\n`;
     }
 
     // サイズ(実寸)セクション
     const hasJissunData = Object.values(sizeValues).some(value => value);
     if (hasJissunData) {
-      sizeText += 'サイズ(実寸)\n';
+      sizeText += '【サイズ(実寸)】\n';
       if (sizeValues.肩幅) sizeText += `${shoulderLabel}：${sizeValues.肩幅}cm\n`;
       if (sizeValues.身幅) sizeText += `身幅：${sizeValues.身幅}cm\n`;
       if (sizeValues.袖丈) sizeText += `袖丈：${sizeValues.袖丈}cm\n`;
@@ -2331,7 +2389,7 @@
     });
 
     if (materialText) {
-      materialText = '素材\n' + materialText + '\n';
+      materialText = '【素材】\n' + materialText + '\n';
     }
 
     return materialText;
@@ -2350,7 +2408,7 @@
     });
 
     if (colors.length > 0) {
-      return 'カラー(詳細)\n' + colors.join('、') + '\n\n';
+      return 'カラー(詳細)：' + colors.join('、') + '\n\n';
     }
 
     return '';
@@ -2385,25 +2443,35 @@
           const conditionValue = conditionSelect ? (conditionSelect.value || '').trim() : '';
           let conditionSection = '';
           if (conditionValue) {
-            conditionSection = `商品の状態\n${conditionValue}\n\n`;
+            conditionSection = `商品の状態：${conditionValue}\n\n`;
           }
 
           // 商品状態詳細を取得
           const detailText = (detailInput.value || '').trim();
         let detailSection = '';
         if (detailText) {
-          detailSection = `商品状態(詳細)\n${detailText}\n\n`;
+          detailSection = `商品状態(詳細)：\n${detailText}\n\n`;
         }
 
         // ハッシュタグ生成
           const hashtags = generateHashtags();
           const hashtagText = hashtags.join('\n');
 
+          // 管理番号セクション（説明文に配置がONの場合）
+          let managementNumberSection = '';
+          const mgmtDescCheckbox = document.getElementById('説明文に管理番号配置');
+          if (mgmtDescCheckbox && mgmtDescCheckbox.checked) {
+            const mgmtNumber = _val('管理番号');
+            if (mgmtNumber) {
+              managementNumberSection = `管理番号：${mgmtNumber}\n\n`;
+            }
+          }
+
           // 割引案内テキスト（設定シート対応版）
           const discountInfo = generateDiscountInfo();
 
           // 最終的な説明文を組み立て
-          const descriptionText = brandText + colorText + sizeText + materialText + conditionSection + detailSection + discountInfo + '\n\n' +
+          const descriptionText = brandText + colorText + sizeText + materialText + conditionSection + detailSection + managementNumberSection + discountInfo + '\n\n' +
   hashtagText;
 
           // 商品の説明欄を更新
@@ -2795,7 +2863,7 @@
     if (saibunruiRow) saibunruiRow.style.display = 'none';
 
     // 3. その他のフィールドをクリア
-    ['サイズ','商品の状態','アイテム名','仕入先','出品先',
+    ['サイズ','商品の状態','アイテム名','商品名_アイテム名',
      '商品属性1_カテゴリ','商品属性1_値','商品属性2_カテゴリ','商品属性2_値',
      '商品属性3_カテゴリ','商品属性3_値']
     .forEach(id=>{
@@ -2866,6 +2934,9 @@
     // 8. 配送デフォルトを適用
     applyShippingDefaults();
 
+    // 8-2. 仕入・出品デフォルトを適用
+    applyProcureListingDefaults();
+
     // 9. 管理番号関連をリセット
     const p1 = document.getElementById('prefix1');
     if (p1) p1.value = '';
@@ -2886,17 +2957,7 @@
     const mgmtNumberField = document.getElementById('管理番号');
     if (mgmtNumberField) mgmtNumberField.value = '';
 
-    // 商品名に管理番号配置のチェックボックスをOFF
-    const mgmtInTitleCheckbox = document.getElementById('商品名に管理番号配置');
-    if (mgmtInTitleCheckbox) mgmtInTitleCheckbox.checked = false;
-
-    // 管理番号形式選択を非表示
-    const mgmtFormatSelector = document.getElementById('管理番号形式選択');
-    if (mgmtFormatSelector) mgmtFormatSelector.style.display = 'none';
-
-    // 管理番号形式をデフォルトに戻す
-    const mgmtFormatSelect = document.getElementById('管理番号形式');
-    if (mgmtFormatSelect) mgmtFormatSelect.value = '【】';
+    // 管理番号の配置チェックボックスと形式は保持（ユーザーの好みなので）
 
     buildShelf();
 
@@ -3880,6 +3941,7 @@ if (staffSelect) {
     setupRaglanListener();
     initTitleBlockDragDrop();
     applyTitleBlockOrder();
+    restoreManagementNumberPlacementSettings();
   }, 1000);
 
 </script>
