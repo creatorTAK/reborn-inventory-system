@@ -2437,6 +2437,181 @@
     return '';
   }
 
+  // ================= AI生成機能 =================
+
+  /**
+   * AI生成ボタンクリック時の処理
+   * 商品情報を収集してGemini APIで説明文を生成
+   */
+  function generateAiDescription() {
+    try {
+      debug.log('AI説明文生成を開始します');
+
+      // ボタンの状態を変更（ローディング表示）
+      const aiGenBtn = document.getElementById('aiGenBtn');
+      if (!aiGenBtn) {
+        console.error('AI生成ボタンが見つかりません');
+        return;
+      }
+
+      // 元のテキストを保存
+      const originalText = aiGenBtn.innerHTML;
+
+      // ローディング状態に変更
+      aiGenBtn.disabled = true;
+      aiGenBtn.innerHTML = '⏳ 生成中...';
+      aiGenBtn.style.opacity = '0.6';
+      aiGenBtn.style.cursor = 'wait';
+
+      // 商品情報を収集
+      const productInfo = collectProductInfo();
+
+      debug.log('収集した商品情報:', productInfo);
+
+      // バリデーション
+      if (!productInfo.brandName || !productInfo.itemName) {
+        alert('❌ ブランド名とアイテム名を入力してください。');
+        resetAiButton(aiGenBtn, originalText);
+        return;
+      }
+
+      // サーバー側のAPI呼び出し
+      google.script.run
+        .withSuccessHandler(function(generatedText) {
+          debug.log('AI生成成功:', generatedText);
+
+          // 商品状態詳細フィールドにAI生成テキストをセット
+          const detailInput = document.getElementById('商品状態詳細');
+          if (detailInput) {
+            detailInput.value = generatedText;
+
+            // プレビューを更新
+            updateDescriptionFromDetail();
+
+            // 成功メッセージ
+            alert('✅ AI説明文を生成しました！\n\n内容を確認して、必要に応じて編集してください。');
+          }
+
+          // ボタンを元に戻す
+          resetAiButton(aiGenBtn, originalText);
+        })
+        .withFailureHandler(function(error) {
+          console.error('AI生成エラー:', error);
+
+          // エラーメッセージの表示
+          let errorMsg = 'AI説明文の生成に失敗しました。\n\n';
+
+          if (error.message && error.message.includes('NG(CONFIG)')) {
+            errorMsg += 'APIキーが設定されていません。\n\n';
+            errorMsg += '【設定手順】\n';
+            errorMsg += '1. Google Apps Scriptエディタを開く\n';
+            errorMsg += '2. ⚙️ プロジェクトの設定を開く\n';
+            errorMsg += '3. スクリプト プロパティに追加:\n';
+            errorMsg += '   プロパティ: GEMINI_API_KEY\n';
+            errorMsg += '   値: あなたのAPIキー';
+          } else if (error.message && error.message.includes('NG(API)')) {
+            errorMsg += 'API呼び出しに失敗しました。\n';
+            errorMsg += 'しばらく時間をおいて再度お試しください。\n\n';
+            errorMsg += `エラー詳細: ${error.message}`;
+          } else {
+            errorMsg += `エラー詳細: ${error.message || 'Unknown error'}`;
+          }
+
+          alert('❌ ' + errorMsg);
+
+          // ボタンを元に戻す
+          resetAiButton(aiGenBtn, originalText);
+        })
+        .generateProductDescription(productInfo);
+
+    } catch (error) {
+      console.error('AI生成処理エラー:', error);
+      alert('❌ エラーが発生しました: ' + error.message);
+
+      // ボタンを元に戻す
+      const aiGenBtn = document.getElementById('aiGenBtn');
+      if (aiGenBtn) {
+        resetAiButton(aiGenBtn, '✨ AI生成');
+      }
+    }
+  }
+
+  /**
+   * 商品情報を収集（AI生成用）
+   * @returns {Object} 商品情報オブジェクト
+   */
+  function collectProductInfo() {
+    const productInfo = {};
+
+    // ブランド名（基本情報ブロックから優先取得）
+    productInfo.brandName = _val('ブランド(英語)') || _val('商品名_ブランド(英語)') || '';
+    productInfo.brandKana = _val('ブランド(カナ)') || _val('商品名_ブランド(カナ)') || '';
+
+    // アイテム名
+    productInfo.itemName = _val('アイテム名') || '';
+
+    // カテゴリ（階層情報を統合）
+    const categories = [];
+    const daiCategory = _val('大分類(カテゴリ)');
+    const chuCategory = _val('中分類(カテゴリ)');
+    const shoCategory = _val('小分類(カテゴリ)');
+    if (daiCategory) categories.push(daiCategory);
+    if (chuCategory) categories.push(chuCategory);
+    if (shoCategory) categories.push(shoCategory);
+    productInfo.category = categories.join(' > ');
+
+    // サイズ
+    productInfo.size = _val('サイズ(表記)_トップス') || _val('サイズ(表記)_ボトムス') || _val('サイズ') || '';
+
+    // 商品の状態
+    productInfo.condition = _val('商品の状態') || '';
+
+    // 素材情報を収集
+    const materials = [];
+    for (let i = 1; i <= 10; i++) {
+      const location = _val(`素材${i}_箇所`);
+      const type1 = _val(`素材${i}_種類1`);
+      const percent1 = _val(`素材${i}_％1`);
+
+      if (location || type1) {
+        let materialStr = '';
+        if (location) materialStr += location + ': ';
+        if (type1) {
+          materialStr += type1;
+          if (percent1) materialStr += ` ${percent1}%`;
+        }
+        materials.push(materialStr);
+      }
+    }
+    productInfo.material = materials.join(', ');
+
+    // カラー情報を収集
+    const colors = [];
+    const colorCheckboxes = document.querySelectorAll('input[id^="color_"]:checked');
+    colorCheckboxes.forEach(checkbox => {
+      colors.push(checkbox.nextSibling.textContent.trim());
+    });
+    productInfo.color = colors.join(', ');
+
+    return productInfo;
+  }
+
+  /**
+   * AI生成ボタンを元の状態に戻す
+   * @param {HTMLElement} button - ボタン要素
+   * @param {string} originalText - 元のテキスト
+   */
+  function resetAiButton(button, originalText) {
+    if (!button) return;
+
+    button.disabled = false;
+    button.innerHTML = originalText;
+    button.style.opacity = '1';
+    button.style.cursor = 'pointer';
+  }
+
+  // ================= 商品の説明プレビュー =================
+
   /**
    * 商品の説明プレビューを更新
    * ブランド、カラー、サイズ、素材、商品状態、管理番号、割引情報、ハッシュタグを組み立てる
