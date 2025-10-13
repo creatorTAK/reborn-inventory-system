@@ -8,7 +8,7 @@ function include(filename) {
  */
 function doGet(e) {
   try {
-    const menuType = (e && e.parameter && e.parameter.menu) ? e.parameter.menu : 'main';
+    const menuType = (e && e.parameter && e.parameter.menu) ? e.parameter.menu : 'product';
 
     // メインメニュー
     if (menuType === 'test' || menuType === 'main') {
