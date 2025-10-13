@@ -8,10 +8,10 @@ function include(filename) {
  */
 function doGet(e) {
   try {
-    const menuType = (e && e.parameter && e.parameter.menu) ? e.parameter.menu : 'test';
+    const menuType = (e && e.parameter && e.parameter.menu) ? e.parameter.menu : 'main';
 
     // メインメニュー
-    if (menuType === 'test') {
+    if (menuType === 'test' || menuType === 'main') {
       const baseUrl = ScriptApp.getService().getUrl();
       return HtmlService.createHtmlOutput(`
         <!DOCTYPE html>
@@ -124,8 +124,8 @@ function doGet(e) {
         </head>
         <body>
           <div class="container">
-            <h1>🏠 物販管理システム</h1>
-            <p class="subtitle">REBORN Project</p>
+            <h1>🔄 REBORN</h1>
+            <p class="subtitle">古着物販管理システム</p>
 
             <div class="menu-section">
               <div class="menu-title">メインメニュー</div>
