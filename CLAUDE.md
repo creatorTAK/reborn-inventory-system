@@ -59,17 +59,29 @@ Google Apps Script (GAS)
 
 ```bash
 # 1. ローカルでコード編集（VSCode）
+
 # 2. GASにプッシュ
 clasp push
 
-# 3. ブラウザでテスト（スーパーリロード: Cmd+Shift+R）
-clasp open
+# 3. ウェブアプリにデプロイ（Apps Scriptエディタで手動操作）
+# Apps Scriptエディタを開く: https://script.google.com/d/15gwr6oQUTLjdbNM_8ypqE0ao-7HCEJYrtU_CwJ-uN58PXg6Rhb4kYc71/edit
+# 「デプロイ」→「デプロイを管理」→ ✏️ 鉛筆アイコン → 「新バージョン」→「デプロイ」
 
-# 4. 動作確認後、Gitにコミット
+# 4. ブラウザでテスト（スーパーリロード: Cmd+Shift+R）
+# スプレッドシートを開いて動作確認
+
+# 5. 動作確認後、Gitにコミット
 git add .
 git commit -m "feat: 新機能追加"
 git push origin main
 ```
+
+**⚠️ デプロイ時の重要な注意事項：**
+- **❌ `clasp deploy` は使用しない（「ライブラリ」に上書きされてしまう問題あり）**
+- **✅ Apps Scriptエディタで手動デプロイのみ使用**
+- 現在のウェブアプリデプロイID: `AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g`
+- ウェブアプリURL: `https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec`
+- このIDは2025年10月13日に作成
 
 ### ⚠️ 重要な注意事項
 
@@ -888,7 +900,7 @@ const baseUrl = ScriptApp.getService().getUrl();
 
 1. **Web App URL**:
 ```
-https://script.google.com/macros/s/[DEPLOYMENT_ID]/exec
+https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec
 ```
 
 2. **メニュー指定**:
@@ -898,6 +910,10 @@ https://script.google.com/macros/s/[DEPLOYMENT_ID]/exec
 ?menu=product        # フル機能商品登録
 ?menu=config         # 設定管理
 ```
+
+3. **スマホでアクセス**:
+- 上記URLをスマホに送ってブラウザで開く
+- または、Apps Scriptエディタの「デプロイを管理」からURLをコピーして開く
 
 #### 📊 ビジネスインパクト
 
