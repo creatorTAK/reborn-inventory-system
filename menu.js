@@ -236,6 +236,7 @@ function doGet(e) {
 
 function showProductSidebar() {
   const t = HtmlService.createTemplateFromFile('sidebar_product');
+  t.isSidebar = true;  // スプレッドシートのサイドバーフラグ
   const html = t.evaluate().setTitle('商品登録').setWidth(360);
   SpreadsheetApp.getUi().showSidebar(html);
 }
@@ -254,6 +255,7 @@ function showSalesAnalysis() {
 
 function showConfigManager() {
   const t = HtmlService.createTemplateFromFile('sidebar_config');
+  t.isSidebar = true;  // スプレッドシートのサイドバーフラグ
   const html = t.evaluate().setTitle('設定管理').setWidth(400);
   SpreadsheetApp.getUi().showSidebar(html);
 }
