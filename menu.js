@@ -10,7 +10,7 @@ function doGet(e) {
   try {
     const menuType = (e && e.parameter && e.parameter.menu) ? e.parameter.menu : 'test';
 
-    // テストモード
+    // メインメニュー
     if (menuType === 'test') {
       const baseUrl = ScriptApp.getService().getUrl();
       return HtmlService.createHtmlOutput(`
@@ -19,45 +19,134 @@ function doGet(e) {
         <head>
           <meta charset="UTF-8">
           <style>
+            /* スクロール固定（モバイル対応） */
+            html, body {
+              overflow-x: hidden;
+              width: 100%;
+              position: relative;
+              -webkit-overflow-scrolling: touch;
+            }
+            html {
+              touch-action: pan-y;
+            }
+            * {
+              max-width: 100%;
+              box-sizing: border-box;
+            }
+
             body {
               font-family: system-ui, sans-serif;
               padding: 20px;
-              background: #f0f0f0;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              min-height: 100vh;
+              margin: 0;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
             }
-            h1 { color: #059669; }
-            button {
-              padding: 15px 30px;
-              font-size: 18px;
-              background: #10b981;
-              color: white;
-              border: none;
-              border-radius: 8px;
-              margin: 10px 0;
-              min-height: 50px;
+            .container {
+              background: white;
+              border-radius: 16px;
+              padding: 32px;
+              box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+              max-width: 400px;
+              width: 100%;
             }
-            a {
-              display: inline-block;
-              margin: 10px 0;
-              padding: 12px 20px;
-              background: #3b82f6;
-              color: white;
+            h1 {
+              color: #1f2937;
+              margin: 0 0 8px 0;
+              font-size: 28px;
+              text-align: center;
+            }
+            .subtitle {
+              color: #6b7280;
+              text-align: center;
+              font-size: 14px;
+              margin-bottom: 32px;
+            }
+            .menu-section {
+              margin-bottom: 24px;
+            }
+            .menu-title {
+              font-size: 12px;
+              color: #6b7280;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              margin-bottom: 12px;
+            }
+            .menu-button {
+              display: block;
+              width: 100%;
+              padding: 16px 20px;
+              margin-bottom: 12px;
+              background: white;
+              border: 2px solid #e5e7eb;
+              border-radius: 12px;
               text-decoration: none;
-              border-radius: 6px;
+              color: #1f2937;
               font-size: 16px;
+              font-weight: 500;
+              transition: all 0.2s ease;
+              text-align: left;
+              cursor: pointer;
             }
-            a:hover {
-              background: #2563eb;
+            .menu-button:hover {
+              border-color: #667eea;
+              background: #f9fafb;
+              transform: translateY(-2px);
+              box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+            }
+            .menu-button:active {
+              transform: translateY(0);
+            }
+            .icon {
+              font-size: 20px;
+              margin-right: 12px;
+            }
+            .debug-section {
+              padding-top: 24px;
+              border-top: 1px solid #e5e7eb;
+            }
+            .debug-button {
+              background: #f3f4f6;
+              border-color: #d1d5db;
+              color: #6b7280;
+              font-size: 14px;
+              padding: 12px 16px;
+            }
+            .debug-button:hover {
+              border-color: #9ca3af;
+              background: #e5e7eb;
             }
           </style>
         </head>
         <body>
-          <h1>✅ Web App 動作テスト成功！</h1>
-          <p>このページが表示されれば、doGet()関数は正しく動作しています。</p>
-          <button onclick="alert('ボタンも動作します！')">テストボタン</button>
-          <hr>
-          <h3>📱 次のテスト：</h3>
-          <p><a href="${baseUrl}?menu=product-simple">シンプル商品登録を開く</a></p>
-          <p><a href="${baseUrl}?menu=product">フル機能商品登録を開く</a></p>
+          <div class="container">
+            <h1>🏠 物販管理システム</h1>
+            <p class="subtitle">REBORN Project</p>
+
+            <div class="menu-section">
+              <div class="menu-title">メインメニュー</div>
+              <a href="${baseUrl}?menu=product" class="menu-button">
+                <span class="icon">📝</span>商品登録
+              </a>
+              <a href="${baseUrl}?menu=config" class="menu-button">
+                <span class="icon">⚙️</span>設定管理
+              </a>
+              <a href="#" class="menu-button" style="opacity: 0.5; pointer-events: none;">
+                <span class="icon">📦</span>在庫管理（準備中）
+              </a>
+            </div>
+
+            <div class="debug-section">
+              <div class="menu-title">開発・デバッグ</div>
+              <a href="${baseUrl}?menu=product-simple" class="menu-button debug-button">
+                <span class="icon">🧪</span>シンプル商品登録
+              </a>
+            </div>
+          </div>
         </body>
         </html>
       `)
