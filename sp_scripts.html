@@ -2265,38 +2265,47 @@
   }
 
   // ブランド表示フィールドの更新（基本情報→商品名ブロックへ自動反映）
+  let updateBrandDisplayTimeout = null;
   function updateBrandDisplay() {
-    const englishName = _val('ブランド(英語)');
-    const englishField = document.getElementById('商品名_ブランド(英語)');
-    const kanaField = document.getElementById('商品名_ブランド(カナ)');
-    const basicKanaField = document.getElementById('ブランド(カナ)');
+    // デバウンス処理: 300ms待ってから実行
+    clearTimeout(updateBrandDisplayTimeout);
+    updateBrandDisplayTimeout = setTimeout(() => {
+      const englishName = _val('ブランド(英語)');
+      const englishField = document.getElementById('商品名_ブランド(英語)');
+      const kanaField = document.getElementById('商品名_ブランド(カナ)');
+      const basicKanaField = document.getElementById('ブランド(カナ)');
 
-    if (!englishField || !kanaField) return;
+      if (!englishField || !kanaField) return;
 
-    if (englishName) {
-      // ペアデータから正確なカナ読みを取得
-      const pairIndex = BRAND_INDEX_MAP.get(englishName);
-      const kanaName = pairIndex !== undefined && BRAND_PAIRS[pairIndex] ? BRAND_PAIRS[pairIndex].kana : '';
+      if (englishName) {
+        // 完全一致するブランドのみセット（途中の文字列では反応しない）
+        const pairIndex = BRAND_INDEX_MAP.get(englishName);
 
-      englishField.value = englishName;
-      kanaField.value = kanaName;
+        if (pairIndex !== undefined && BRAND_PAIRS[pairIndex]) {
+          const kanaName = BRAND_PAIRS[pairIndex].kana;
 
-      // 基本情報ブロックの隠しフィールドにもカナ読みを設定
-      if (basicKanaField) {
-        basicKanaField.value = kanaName;
-        console.log(`基本情報ブランド(カナ)に設定: "${kanaName}"`);
+          englishField.value = englishName;
+          kanaField.value = kanaName;
+
+          // 基本情報ブロックの隠しフィールドにもカナ読みを設定
+          if (basicKanaField) {
+            basicKanaField.value = kanaName;
+            console.log(`基本情報ブランド(カナ)に設定: "${kanaName}"`);
+          }
+        }
+      } else {
+        // 空の場合はクリア
+        englishField.value = '';
+        kanaField.value = '';
+        englishField.placeholder = '入力すると候補が表示されます';
+        kanaField.placeholder = '入力すると候補が表示されます';
+
+        // 基本情報ブロックの隠しフィールドもクリア
+        if (basicKanaField) {
+          basicKanaField.value = '';
+        }
       }
-    } else {
-      englishField.value = '';
-      kanaField.value = '';
-      englishField.placeholder = '入力すると候補が表示されます';
-      kanaField.placeholder = '入力すると候補が表示されます';
-
-      // 基本情報ブロックの隠しフィールドもクリア
-      if (basicKanaField) {
-        basicKanaField.value = '';
-      }
-    }
+    }, 300);
   }
 
   function wirePreviewWatchers() {
