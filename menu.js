@@ -217,6 +217,9 @@ function doGet(e) {
       title = '商品登録';
     }
 
+    // Web Appとして開かれていることを示すフラグ（戻るボタン表示用）
+    template.showBackButton = true;
+
     // Web Appとして開く場合はwidthを指定しない（画面幅いっぱいに表示）
     return template.evaluate()
       .setTitle(title)
