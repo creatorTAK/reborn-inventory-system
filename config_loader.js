@@ -45,7 +45,8 @@ function loadConfigMaster() {
       仕入出品デフォルト: {},
       管理番号設定: {},
       よく使うセールスワード: {},
-      AI生成設定: {}
+      AI生成設定: {},
+      デザインテーマ: 'casual'  // デフォルト値
     };
 
     data.forEach(row => {
@@ -177,6 +178,12 @@ function loadConfigMaster() {
             console.error('商品名ブロック並び順のJSON解析エラー:', e);
             config.商品名ブロック並び順 = ['salesword', 'brand', 'item', 'attribute'];
           }
+          break;
+
+        case 'デザインテーマ':
+          // 値をそのまま設定
+          config.デザインテーマ = value || 'casual';
+          console.log('デザインテーマを読み込みました:', config.デザインテーマ);
           break;
       }
     });
@@ -324,6 +331,20 @@ function getTitleBlockOrder() {
   }
 
   return config.商品名ブロック並び順;
+}
+
+/**
+ * デザインテーマを取得
+ * @returns {string} テーマ名（'casual' または 'modern'）
+ */
+function getDesignTheme() {
+  const config = loadConfigMaster();
+  if (!config || !config.デザインテーマ) {
+    console.log('デザインテーマが見つかりません。デフォルト値（casual）を使用します。');
+    return 'casual';  // デフォルトはカジュアルポップ
+  }
+
+  return config.デザインテーマ;
 }
 
 /**
@@ -584,6 +605,12 @@ function saveConfigMaster(newConfig) {
       // JSON文字列として保存
       rows.push(['AI生成設定', 'config', '', '', JSON.stringify(newConfig.AI生成設定)]);
       console.log('AI生成設定を保存:', newConfig.AI生成設定);
+    }
+
+    // デザインテーマ
+    if (newConfig.デザインテーマ) {
+      rows.push(['デザインテーマ', '', '', '', newConfig.デザインテーマ]);
+      console.log('デザインテーマを保存:', newConfig.デザインテーマ);
     }
 
     // データを書き込み

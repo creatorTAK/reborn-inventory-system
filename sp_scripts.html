@@ -23,6 +23,30 @@
   // 設定マスタ全体をキャッシュ
   let CACHED_CONFIG = null;
 
+  // ==================== テーマの即座適用（ちらつき防止） ====================
+  // ページ読み込み直後にLocalStorageからテーマを復元
+  (function() {
+    try {
+      const cachedTheme = localStorage.getItem('rebornTheme');
+      if (cachedTheme && cachedTheme !== 'casual') {
+        document.body.classList.add('theme-' + cachedTheme);
+        console.log('🚀 LocalStorageからテーマを即座に適用:', cachedTheme);
+      }
+    } catch (e) {
+      console.warn('LocalStorageアクセスエラー:', e);
+    }
+  })();
+
+  // テーマをLocalStorageに保存
+  function saveThemeToLocalStorage(theme) {
+    try {
+      localStorage.setItem('rebornTheme', theme);
+      console.log('💾 テーマをLocalStorageに保存:', theme);
+    } catch (e) {
+      console.warn('LocalStorage保存エラー:', e);
+    }
+  }
+
   // 設定マスタ全体を読み込む
   function loadAllConfig() {
     if (google && google.script && google.script.run) {
@@ -31,6 +55,30 @@
           if (config) {
             CACHED_CONFIG = config;
             console.log('設定マスタ全体を読み込みました:', config);
+
+            // デザインテーマを適用
+            if (config.デザインテーマ) {
+              const theme = config.デザインテーマ;
+              console.log('✅ デザインテーマを読み込みました:', theme);
+
+              // LocalStorageに保存
+              saveThemeToLocalStorage(theme);
+
+              // テーマクラスを適用（LocalStorageと異なる場合のみ）
+              if (theme !== 'casual') {
+                const themeClass = 'theme-' + theme;
+                if (!document.body.classList.contains(themeClass)) {
+                  document.body.classList.add(themeClass);
+                  console.log('✅ テーマクラスを追加:', themeClass);
+                }
+              } else {
+                // カジュアルテーマに戻す場合は全テーマクラスを削除
+                document.body.classList.remove('theme-modern');
+                console.log('ℹ️ カジュアルテーマ（デフォルト）を使用');
+              }
+            } else {
+              console.log('⚠️ デザインテーマ設定が見つかりません。デフォルト（casual）を使用します。');
+            }
           }
         })
         .withFailureHandler(function(error) {
@@ -248,6 +296,8 @@
     const locationSelect = document.getElementById(`素材${index}_箇所`);
     const type1Select = document.getElementById(`素材${index}_種類1`);
     const type2Select = document.getElementById(`素材${index}_種類2`);
+    const percent1Select = document.getElementById(`素材${index}_％1`);
+    const percent2Select = document.getElementById(`素材${index}_％2`);
 
     if (locationSelect) {
       locationSelect.innerHTML = '<option value="">--</option>';
@@ -268,6 +318,21 @@
       MATERIAL_TYPES.forEach(type => {
         type2Select.insertAdjacentHTML('beforeend', `<option value="${type}">${type}</option>`);
       });
+    }
+
+    // 割合のプルダウンを0-100で初期化
+    if (percent1Select) {
+      percent1Select.innerHTML = '<option value="">--%</option>';
+      for (let i = 0; i <= 100; i++) {
+        percent1Select.insertAdjacentHTML('beforeend', `<option value="${i}">${i}%</option>`);
+      }
+    }
+
+    if (percent2Select) {
+      percent2Select.innerHTML = '<option value="">--%</option>';
+      for (let i = 0; i <= 100; i++) {
+        percent2Select.insertAdjacentHTML('beforeend', `<option value="${i}">${i}%</option>`);
+      }
     }
   }
 
@@ -306,8 +371,9 @@
               </select>
             </label>
             <label>割合:
-              <input type="number" id="素材${materialCount}_％1" class="material-percent" min="0" max="100" 
-  placeholder="%">
+              <select id="素材${materialCount}_％1" class="material-percent">
+                <option value="">--%</option>
+              </select>
             </label>
           </div>
 
@@ -318,8 +384,9 @@
               </select>
             </label>
             <label>割合:
-              <input type="number" id="素材${materialCount}_％2" class="material-percent" min="0" max="100" 
-  placeholder="%">
+              <select id="素材${materialCount}_％2" class="material-percent">
+                <option value="">--%</option>
+              </select>
             </label>
           </div>
         </div>
@@ -944,6 +1011,9 @@
       return;
     }
 
+    // テーマチェック: モダンテーマの場合は絵文字を表示しない
+    const isModernTheme = document.body.classList.contains('theme-modern');
+
     discounts.forEach((discount, index) => {
       const checkboxId = `discount-checkbox-${discount.id}`;
 
@@ -960,7 +1030,7 @@
 
       const textSpan = document.createElement('span');
       textSpan.style.cssText = 'font-size: 11px; color: #374151; vertical-align: middle;';
-      textSpan.textContent = `${discount.icon} ${discount.label}`;
+      textSpan.textContent = isModernTheme ? discount.label : `${discount.icon} ${discount.label}`;
 
       label.appendChild(checkbox);
       label.appendChild(textSpan);
@@ -1097,9 +1167,13 @@
 
     let text = '\n【お得な割引情報】\n\n';
 
+    // テーマチェック: モダンテーマの場合は絵文字を表示しない
+    const isModernTheme = document.body.classList.contains('theme-modern');
+    const bullet = isModernTheme ? '' : '■ ';
+
     // フォロー割
     if (includeFollow) {
-      text += '■ フォロー割\n';
+      text += `${bullet}フォロー割\n`;
       DISCOUNT_CONFIG['フォロー割'].forEach(item => {
         text += `${item.範囲} ⇒ ${item.割引額}\n`;
       });
@@ -1113,7 +1187,7 @@
     // リピート割
     if (includeRepeat) {
       const repeatDiscount = DISCOUNT_CONFIG['リピート割'][0].割引額;
-      text += '■ リピート割\n';
+      text += `${bullet}リピート割\n`;
       text += `次回購入時に${repeatDiscount}\n`;
       // 説明文があれば追加
       if (DISCOUNT_CONFIG['リピート割_説明文']) {
@@ -1124,7 +1198,7 @@
 
     // まとめ割
     if (includeMatome) {
-      text += '■ まとめ割\n';
+      text += `${bullet}まとめ割\n`;
       DISCOUNT_CONFIG['まとめ割'].forEach(item => {
         text += `${item.範囲}⇒${item.割引額}\n`;
       });
@@ -3506,6 +3580,17 @@
     return out;
   }
 
+  /**
+   * ひらがなをカタカナに変換（スマホ対応）
+   * 例: "ないき" → "ナイキ"
+   */
+  function hiraganaToKatakana(str) {
+    return str.replace(/[\u3041-\u3096]/g, function(match) {
+      var chr = match.charCodeAt(0) + 0x60;
+      return String.fromCharCode(chr);
+    });
+  }
+
   function attachBrandSuggest(inputId, list) {
     console.log(`attachBrandSuggest called for ${inputId} with list length:`, list ? list.length : 'undefined');
     const input = document.getElementById(inputId);
@@ -3592,7 +3677,13 @@ if (isBrandField) {
     };
     const hideLater = ()=> setTimeout(hide, 100);
     const doFilter = ()=>{
-      const q = (input.value || '').trim();
+      let q = (input.value || '').trim();
+
+      // ひらがなをカタカナに変換（スマホ対応）
+      // 例: "ないき" → "ナイキ"
+      if (inputId === 'ブランド(英語)' || inputId === '商品名_ブランド(英語)') {
+        q = hiraganaToKatakana(q);
+      }
 
       // デバッグ用ログ
       console.log(`doFilter called for ${inputId}, query: "${q}", list length: ${list ? list.length : 'undefined'}`);

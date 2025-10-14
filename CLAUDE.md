@@ -76,12 +76,44 @@ git commit -m "feat: 新機能追加"
 git push origin main
 ```
 
-**⚠️ デプロイ時の重要な注意事項：**
-- **❌ `clasp deploy` は使用しない（「ライブラリ」に上書きされてしまう問題あり）**
-- **✅ Apps Scriptエディタで手動デプロイのみ使用**
-- 現在のウェブアプリデプロイID: `AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g`
-- ウェブアプリURL: `https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec`
-- このIDは2025年10月13日に作成
+**⚠️ デプロイ時の重要な注意事項：** ★超重要
+
+### 絶対にやってはいけないこと
+
+**❌ `clasp deploy` は絶対に使用禁止**
+- `-i` オプション付きでも使用禁止
+- `-d` オプション付きでも使用禁止
+- オプションなしでも使用禁止
+- **理由**: すべて「ライブラリ」として作成されてしまい、ウェブアプリとして動作しない
+
+**失敗例（2025年10月14日）**:
+```bash
+# ❌ これを実行してしまった
+clasp deploy -i AKfycbz2g36T4Y... -d "feat: スマホ対応"
+
+# 結果
+→ バージョン64が「ライブラリ」として作成された
+→ ブラウザからアクセスできない
+→ `clasp undeploy` で削除した
+→ Apps Scriptエディタで手動デプロイし直し（バージョン65）
+```
+
+### 正しいデプロイ方法
+
+**✅ Apps Scriptエディタで手動デプロイのみ使用**
+
+1. `clasp push -f` でコードをアップロード
+2. Apps Scriptエディタを開く: https://script.google.com/d/15gwr6oQUTLjdbNM_8ypqE0ao-7HCEJYrtU_CwJ-uN58PXg6Rhb4kYc71/edit
+3. 「デプロイ」→「デプロイを管理」
+4. 既存のウェブアプリデプロイの ✏️ 鉛筆アイコンをクリック
+5. 「バージョン」を「新バージョン」に変更
+6. 説明を入力（例: `feat: 新機能追加`）
+7. 「デプロイ」をクリック
+
+**現在のウェブアプリデプロイID**: `AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g`
+**ウェブアプリURL**: `https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec`
+
+**最新バージョン**: @65（2025年10月14日）
 
 ### ⚠️ 重要な注意事項
 
@@ -699,9 +731,14 @@ function getNextManagementNumber(shelfCode) {
 - 最大15件表示
 - 2行表示（英語名 + カナ読み）
 - メルカリと同様のUI
+- **ひらがな→カタカナ自動変換対応** ★新規（2025年10月14日）
+  - スマホでひらがな入力しても候補が表示される
+  - 例: "ないき" → "ナイキ" → NIKE が候補に表示
+  - Macは自動変換されるが、スマホは手動選択が必要だった問題を解決
+  - Unicode変換（+0x60）で実装
 
 **データ件数**: 52,667件（手動管理_ブランド）
-**実装ファイル**: `master.js`, `sp_scripts.html`, `sp_styles.html`
+**実装ファイル**: `master.js`, `sp_scripts.html` (lines 3509-3517: `hiraganaToKatakana()`), `sp_styles.html`
 
 #### 商品名選択式自動作成 + ドラッグ&ドロップ並び替え ★完成 ✅
 

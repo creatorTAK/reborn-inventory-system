@@ -10,6 +10,38 @@ function doGet(e) {
   try {
     const menuType = (e && e.parameter && e.parameter.menu) ? e.parameter.menu : 'product';
 
+    // PWA manifest.json配信
+    if (menuType === 'manifest') {
+      const baseUrl = ScriptApp.getService().getUrl();
+      const manifest = {
+        name: "REBORN.",
+        short_name: "REBORN",
+        description: "古着物販管理システム - 商品登録から在庫管理まで",
+        start_url: baseUrl + "?menu=product",
+        display: "standalone",
+        background_color: "#000000",
+        theme_color: "#000000",
+        orientation: "portrait",
+        icons: [
+          {
+            src: "https://raw.githubusercontent.com/creatorTAK/reborn-inventory-system/main/icon-512-Photoroom.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any maskable"
+          },
+          {
+            src: "https://raw.githubusercontent.com/creatorTAK/reborn-inventory-system/main/icon-192-Photoroom.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any maskable"
+          }
+        ]
+      };
+
+      return ContentService.createTextOutput(JSON.stringify(manifest))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     // メインメニュー
     if (menuType === 'test' || menuType === 'main') {
       const baseUrl = ScriptApp.getService().getUrl();
@@ -150,7 +182,7 @@ function doGet(e) {
         </body>
         </html>
       `)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     }
 
@@ -198,7 +230,7 @@ function doGet(e) {
         </body>
         </html>
       `)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     }
 
@@ -207,14 +239,14 @@ function doGet(e) {
 
     if (menuType === 'config') {
       template = HtmlService.createTemplateFromFile('sidebar_config');
-      title = '設定管理';
+      title = 'REBORN';
     } else if (menuType === 'product') {
       template = HtmlService.createTemplateFromFile('sidebar_product');
-      title = '商品登録';
+      title = 'REBORN';
     } else {
       // 不明なメニューの場合はデフォルトで商品登録
       template = HtmlService.createTemplateFromFile('sidebar_product');
-      title = '商品登録';
+      title = 'REBORN';
     }
 
     // Web Appとして開かれていることを示すフラグ（戻るボタン表示用）
@@ -223,7 +255,7 @@ function doGet(e) {
     // Web Appとして開く場合はwidthを指定しない（画面幅いっぱいに表示）
     return template.evaluate()
       .setTitle(title)
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .setSandboxMode(HtmlService.SandboxMode.IFRAME);
   } catch (error) {
