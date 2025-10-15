@@ -157,14 +157,14 @@
 <body>
   <div class="container">
     <h1>🔄 REBORN</h1>
-    <p class="subtitle">PWA + プッシュ通知 テスト</p>
+    <p class="subtitle">PWA + プッシュ通知 テスト（FCM版）</p>
 
     <div class="status">
       <div class="status-title">現在の状態</div>
       <ul class="status-list">
         <li>GitHub Pagesでホスティング</li>
         <li>Service Worker登録完了</li>
-        <li>プッシュ通知テスト準備完了</li>
+        <li>Firebase Cloud Messaging準備完了</li>
       </ul>
     </div>
 
@@ -175,25 +175,53 @@
     </div>
 
     <div class="test-section">
-      <div class="test-title">🔔 プッシュ通知テスト</div>
+      <div class="test-title">🔔 プッシュ通知テスト（FCM）</div>
       <button onclick="requestNotificationPermission()">① 通知を許可</button>
-      <button onclick="sendTestNotification()">② テスト通知を送信（ローカル）</button>
-      <button onclick="subscribeToNotifications()">③ サーバーに登録</button>
-      <button onclick="triggerServerNotification()">④ サーバーから通知を送信</button>
+      <button onclick="subscribeToFCM()">② FCMに登録</button>
+      <button onclick="triggerServerNotification()">③ サーバーから通知を送信</button>
       <div id="notificationResult"></div>
     </div>
   </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getMessaging, getToken, onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
+
+    // Firebase設定
+    const firebaseConfig = {
+      apiKey: "AIzaSyAwJKTz1gm3CIz_R4YT1bQOpgaBq1ULt1A",
+      authDomain: "reborn-pwa.firebaseapp.com",
+      projectId: "reborn-pwa",
+      storageBucket: "reborn-pwa.firebasestorage.app",
+      messagingSenderId: "345653439471",
+      appId: "1:345653439471:web:7620819ce3f022d9cd241a",
+      measurementId: "G-SX48K45X75"
+    };
+
+    // Firebase初期化
+    const app = initializeApp(firebaseConfig);
+    const messaging = getMessaging(app);
+
+    // グローバル変数として公開
+    window.firebaseMessaging = messaging;
+
+    // フォアグラウンドメッセージ受信
+    onMessage(messaging, (payload) => {
+      console.log('Message received (foreground):', payload);
+      const notifResult = document.getElementById('notificationResult');
+      notifResult.innerHTML = '✅ フォアグラウンドで通知を受信しました！\n\n' + JSON.stringify(payload.notification, null, 2);
+      notifResult.style.background = '#f0fdf4';
+      notifResult.style.borderColor = '#22c55e';
+    });
+  </script>
 
   <script>
     // GAS APIのURL
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec';
 
-    // VAPID公開鍵（後で実際のキーに置き換える）
-    // https://vapidkeys.com/ で生成してください
-    const VAPID_PUBLIC_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
-
-    // Service Worker登録状態
-    let swRegistration = null;
+    // VAPID公開鍵
+    const VAPID_PUBLIC_KEY = 'BP1Zqk3Ba7EjHOcl97LUMaPXQegl595o855OLBl7ol8kMphZse6zA0LuA63xlsagGysq8DsAFNqXCUedyYwsG1Q';
 
     async function testGasApi() {
       const resultDiv = document.getElementById('result');
@@ -232,7 +260,7 @@
         const permission = await Notification.requestPermission();
 
         if (permission === 'granted') {
-          notifResult.innerHTML = '✅ 通知が許可されました！\n\n次に「② テスト通知を送信」ボタンを押してください。';
+          notifResult.innerHTML = '✅ 通知が許可されました！\n\n次に「② FCMに登録」ボタンを押してください。';
           notifResult.style.background = '#f0fdf4';
           notifResult.style.borderColor = '#22c55e';
         } else {
@@ -247,75 +275,9 @@
       }
     }
 
-    // テスト通知を送信（ローカル）
-    async function sendTestNotification() {
+    // FCMに登録（トークンを取得してGASに送信）
+    async function subscribeToFCM() {
       const notifResult = document.getElementById('notificationResult');
-
-      if (!swRegistration) {
-        notifResult.innerHTML = '❌ Service Workerが登録されていません\n\nページをリロードしてください。';
-        notifResult.style.background = '#fef2f2';
-        notifResult.style.borderColor = '#ef4444';
-        return;
-      }
-
-      if (Notification.permission !== 'granted') {
-        notifResult.innerHTML = '❌ 通知が許可されていません\n\n「① 通知を許可」ボタンを押してください。';
-        notifResult.style.background = '#fef2f2';
-        notifResult.style.borderColor = '#ef4444';
-        return;
-      }
-
-      try {
-        notifResult.innerHTML = '送信中...<span class="loading"></span>';
-
-        // Service Workerからテスト通知を表示
-        await swRegistration.showNotification('🎉 REBORN テスト通知（ローカル）', {
-          body: '商品が売れました！\n管理番号: AA-1001\n出品先: メルカリ\n販売金額: 3,980円',
-          icon: '/reborn-inventory-system/icon-180.png',
-          badge: '/reborn-inventory-system/icon-180.png',
-          vibrate: [200, 100, 200],
-          tag: 'test-notification',
-          data: {
-            url: '/reborn-inventory-system/'
-          }
-        });
-
-        notifResult.innerHTML = '✅ テスト通知を送信しました！（ローカル）\n\niPhoneの場合、画面上部に通知が表示されます。\nまたは通知センターを確認してください。';
-        notifResult.style.background = '#f0fdf4';
-        notifResult.style.borderColor = '#22c55e';
-      } catch (error) {
-        notifResult.innerHTML = '❌ 送信失敗\n\nエラー: ' + error.message;
-        notifResult.style.background = '#fef2f2';
-        notifResult.style.borderColor = '#ef4444';
-      }
-    }
-
-    // Base64 URLエンコーディングをUint8Arrayに変換
-    function urlBase64ToUint8Array(base64String) {
-      const padding = '='.repeat((4 - base64String.length % 4) % 4);
-      const base64 = (base64String + padding)
-        .replace(/\-/g, '+')
-        .replace(/_/g, '/');
-
-      const rawData = window.atob(base64);
-      const outputArray = new Uint8Array(rawData.length);
-
-      for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-      }
-      return outputArray;
-    }
-
-    // サーバーに登録（Push Subscriptionを作成してGASに送信）
-    async function subscribeToNotifications() {
-      const notifResult = document.getElementById('notificationResult');
-
-      if (!swRegistration) {
-        notifResult.innerHTML = '❌ Service Workerが登録されていません\n\nページをリロードしてください。';
-        notifResult.style.background = '#fef2f2';
-        notifResult.style.borderColor = '#ef4444';
-        return;
-      }
 
       if (Notification.permission !== 'granted') {
         notifResult.innerHTML = '❌ 通知が許可されていません\n\n「① 通知を許可」ボタンを押してください。';
@@ -327,36 +289,42 @@
       try {
         notifResult.innerHTML = '登録中...<span class="loading"></span>';
 
-        // Push Subscriptionを作成
-        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-        const subscription = await swRegistration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: applicationServerKey
+        // Firebase Messagingからトークンを取得
+        const { getToken } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
+        const currentToken = await getToken(window.firebaseMessaging, {
+          vapidKey: VAPID_PUBLIC_KEY
         });
 
-        // GASに送信
-        const response = await fetch(GAS_API_URL + '?action=subscribe', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            subscription: subscription.toJSON()
-          })
-        });
+        if (currentToken) {
+          console.log('FCM Token:', currentToken);
 
-        if (response.ok) {
-          const data = await response.json();
-          notifResult.innerHTML = '✅ サーバーへの登録が完了しました！\n\n次に「④ サーバーから通知を送信」ボタンを押してください。';
-          notifResult.style.background = '#f0fdf4';
-          notifResult.style.borderColor = '#22c55e';
+          // GASにトークンを送信
+          const response = await fetch(GAS_API_URL + '?action=subscribeFCM', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              token: currentToken
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            notifResult.innerHTML = '✅ FCMへの登録が完了しました！\n\n次に「③ サーバーから通知を送信」ボタンを押してください。';
+            notifResult.style.background = '#f0fdf4';
+            notifResult.style.borderColor = '#22c55e';
+          } else {
+            throw new Error('HTTP ' + response.status);
+          }
         } else {
-          throw new Error('HTTP ' + response.status);
+          throw new Error('トークンの取得に失敗しました');
         }
       } catch (error) {
         notifResult.innerHTML = '❌ 登録失敗\n\nエラー: ' + error.message;
         notifResult.style.background = '#fef2f2';
         notifResult.style.borderColor = '#ef4444';
+        console.error('FCM registration error:', error);
       }
     }
 
@@ -367,14 +335,14 @@
       try {
         notifResult.innerHTML = '送信中...<span class="loading"></span>';
 
-        const response = await fetch(GAS_API_URL + '?action=sendPush', {
+        const response = await fetch(GAS_API_URL + '?action=sendFCM', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            title: '🎉 REBORN サーバー通知',
-            body: '商品が売れました！（サーバーからの通知）\n管理番号: AA-1002\n出品先: メルカリ\n販売金額: 5,280円'
+            title: '🎉 REBORN サーバー通知（FCM）',
+            body: '商品が売れました！\n管理番号: AA-1002\n出品先: メルカリ\n販売金額: 5,280円'
           })
         });
 
@@ -397,8 +365,8 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
-          swRegistration = await navigator.serviceWorker.register('/reborn-inventory-system/service-worker.js');
-          console.log('Service Worker registered:', swRegistration);
+          const registration = await navigator.serviceWorker.register('/reborn-inventory-system/firebase-messaging-sw.js');
+          console.log('Service Worker registered:', registration);
         } catch (err) {
           console.error('Service Worker registration failed:', err);
           const notifResult = document.getElementById('notificationResult');
