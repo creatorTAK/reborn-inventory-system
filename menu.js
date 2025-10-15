@@ -3,6 +3,54 @@ function include(filename) {
 }
 
 /**
+ * POSTリクエストのエントリーポイント
+ * Push通知関連のAPIエンドポイント
+ */
+function doPost(e) {
+  try {
+    const action = e.parameter.action;
+
+    if (!action) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'アクションが指定されていません'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // リクエストボディを解析
+    const requestBody = e.postData ? JSON.parse(e.postData.contents) : {};
+
+    if (action === 'subscribe') {
+      // Push Subscriptionを保存
+      const result = savePushSubscription(requestBody.subscription);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === 'sendPush') {
+      // Web Push通知を送信
+      const title = requestBody.title || 'REBORN';
+      const body = requestBody.body || 'テスト通知です';
+      const result = sendWebPushNotification(title, body);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: '不明なアクション: ' + action
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    Logger.log('doPost error: ' + error);
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
  * Web Appのエントリーポイント
  * URLパラメータ ?menu=product または ?menu=config でメニューを指定可能
  */
