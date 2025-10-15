@@ -30,8 +30,8 @@ function doGet(e) {
             purpose: "any maskable"
           },
           {
-            src: "https://raw.githubusercontent.com/creatorTAK/reborn-inventory-system/main/icon-192-Photoroom.png",
-            sizes: "192x192",
+            src: "https://raw.githubusercontent.com/creatorTAK/reborn-inventory-system/main/icon-180.png",
+            sizes: "180x180",
             type: "image/png",
             purpose: "any maskable"
           }
