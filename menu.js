@@ -15,10 +15,7 @@ function doPost(e) {
         status: 'error',
         message: 'アクションが指定されていません'
       }))
-        .setMimeType(ContentService.MimeType.JSON)
-        .setHeader('Access-Control-Allow-Origin', '*')
-        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     // リクエストボディを解析
@@ -28,10 +25,7 @@ function doPost(e) {
       // FCMトークンを保存
       const result = saveFCMToken(requestBody.token);
       return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON)
-        .setHeader('Access-Control-Allow-Origin', '*')
-        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     if (action === 'sendFCM') {
@@ -40,20 +34,14 @@ function doPost(e) {
       const body = requestBody.body || 'テスト通知です';
       const result = sendFCMNotification(title, body);
       return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON)
-        .setHeader('Access-Control-Allow-Origin', '*')
-        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: '不明なアクション: ' + action
     }))
-      .setMimeType(ContentService.MimeType.JSON)
-      .setHeader('Access-Control-Allow-Origin', '*')
-      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-      .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      .setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
     Logger.log('doPost error: ' + error);
@@ -61,10 +49,7 @@ function doPost(e) {
       status: 'error',
       message: error.toString()
     }))
-      .setMimeType(ContentService.MimeType.JSON)
-      .setHeader('Access-Control-Allow-Origin', '*')
-      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-      .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
@@ -373,7 +358,17 @@ function doGet(e) {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .setSandboxMode(HtmlService.SandboxMode.IFRAME);
   } catch (error) {
-    // エラー時の表示
+    // JSON APIリクエストのエラー時はJSONで返す
+    if (e && e.parameter && e.parameter.action) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: error.message,
+        stack: error.stack
+      }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 通常のエラー時の表示
     return HtmlService.createHtmlOutput(
       '<h1>エラーが発生しました</h1><p>' + error.message + '</p><p>' + error.stack + '</p>'
     );
