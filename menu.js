@@ -8,7 +8,9 @@ function include(filename) {
  */
 function doPost(e) {
   try {
-    const action = e.parameter.action;
+    // リクエストボディを解析
+    const requestBody = e.postData ? JSON.parse(e.postData.contents) : {};
+    const action = requestBody.action;
 
     if (!action) {
       return ContentService.createTextOutput(JSON.stringify({
@@ -18,9 +20,6 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // リクエストボディを解析
-    const requestBody = e.postData ? JSON.parse(e.postData.contents) : {};
-
     if (action === 'subscribeFCM') {
       // FCMトークンを保存
       const result = saveFCMToken(requestBody.token);
@@ -29,12 +28,45 @@ function doPost(e) {
     }
 
     if (action === 'sendFCM') {
-      // FCM通知を送信
-      const title = requestBody.title || 'REBORN';
-      const body = requestBody.body || 'テスト通知です';
-      const result = sendFCMNotification(title, body);
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+      // FCM通知を送信（POSTメソッド）
+      try {
+        // デバッグログをスプレッドシートに書き込む
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        let debugSheet = ss.getSheetByName('デバッグログ');
+        if (!debugSheet) {
+          debugSheet = ss.insertSheet('デバッグログ');
+          debugSheet.appendRow(['タイムスタンプ', 'メソッド', 'アクション', '受信データ', 'title', 'body', '送信結果']);
+        }
+
+        const timestamp = new Date().toLocaleString('ja-JP');
+        const rawData = JSON.stringify(requestBody);
+
+        // POSTデータから直接取得（エンコード/デコード不要）
+        const title = requestBody.title || 'REBORN';
+        const body = requestBody.body || 'テスト通知です';
+
+        const result = sendFCMNotification(title, body);
+
+        // デバッグ情報をスプレッドシートに記録
+        debugSheet.appendRow([
+          timestamp,
+          'POST',
+          'sendFCM',
+          rawData,
+          title,
+          body,
+          JSON.stringify(result)
+        ]);
+
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      } catch (error) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'error',
+          message: 'エラー: ' + error.toString()
+        }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
     }
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -89,12 +121,66 @@ function doGet(e) {
       }
 
       if (action === 'sendFCM') {
-        // FCM通知を送信（GETメソッド）
-        const title = decodeURIComponent(e.parameter.title || 'REBORN');
-        const body = decodeURIComponent(e.parameter.body || 'テスト通知です');
-        const result = sendFCMNotification(title, body);
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
+        // FCM通知を送信（GETメソッド + Base64デコード）
+        try {
+          // デバッグログをスプレッドシートに書き込む
+          const ss = SpreadsheetApp.getActiveSpreadsheet();
+          let debugSheet = ss.getSheetByName('デバッグログ');
+          if (!debugSheet) {
+            debugSheet = ss.insertSheet('デバッグログ');
+            debugSheet.appendRow(['タイムスタンプ', 'アクション', '受信パラメータ', 'デコード後title', 'デコード後body', '送信結果']);
+          }
+
+          const timestamp = new Date().toLocaleString('ja-JP');
+          const rawParams = JSON.stringify(e.parameter);
+
+          // URLパラメータからBase64エンコードされた文字列を取得
+          const titleEncoded = e.parameter.title || '';
+          const bodyEncoded = e.parameter.body || '';
+
+          // デフォルト値
+          let title = 'REBORN';
+          let body = 'テスト通知です';
+
+          // Base64デコード + URIデコード
+          try {
+            if (titleEncoded) {
+              // Base64デコード → バイト配列 → 文字列 → URIデコード
+              const titleBytes = Utilities.base64Decode(titleEncoded);
+              const titleDecoded = Utilities.newBlob(titleBytes).getDataAsString();
+              title = decodeURIComponent(titleDecoded);
+            }
+            if (bodyEncoded) {
+              const bodyBytes = Utilities.base64Decode(bodyEncoded);
+              const bodyDecoded = Utilities.newBlob(bodyBytes).getDataAsString();
+              body = decodeURIComponent(bodyDecoded);
+            }
+          } catch (decodeError) {
+            Logger.log('パラメータのデコードに失敗: ' + decodeError);
+            // デコード失敗時はデフォルト値を使用
+          }
+
+          const result = sendFCMNotification(title, body);
+
+          // デバッグ情報をスプレッドシートに記録
+          debugSheet.appendRow([
+            timestamp,
+            'sendFCM',
+            rawParams,
+            title,
+            body,
+            JSON.stringify(result)
+          ]);
+
+          return ContentService.createTextOutput(JSON.stringify(result))
+            .setMimeType(ContentService.MimeType.JSON);
+        } catch (error) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: 'error',
+            message: 'エラー: ' + error.toString()
+          }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
       }
 
       // その他のアクションは将来追加

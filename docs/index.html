@@ -209,11 +209,85 @@
     // フォアグラウンドメッセージ受信
     onMessage(messaging, (payload) => {
       console.log('Message received (foreground):', payload);
+
+      // 1. アプリ内バナー表示（画面上部）
+      showNotificationBanner(payload.notification);
+
+      // 2. 既存の表示も残す（デバッグ用）
       const notifResult = document.getElementById('notificationResult');
       notifResult.innerHTML = '✅ フォアグラウンドで通知を受信しました！\n\n' + JSON.stringify(payload.notification, null, 2);
       notifResult.style.background = '#f0fdf4';
       notifResult.style.borderColor = '#22c55e';
     });
+
+    // カスタム通知バナーを表示する関数
+    function showNotificationBanner(notification) {
+      // バナー要素を作成
+      const banner = document.createElement('div');
+      banner.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 16px 20px;
+        z-index: 9999;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        animation: slideDown 0.3s ease;
+        cursor: pointer;
+      `;
+
+      banner.innerHTML = `
+        <div style="font-weight: 600; font-size: 16px; margin-bottom: 4px;">${notification.title || 'REBORN'}</div>
+        <div style="font-size: 14px; opacity: 0.95;">${notification.body || ''}</div>
+      `;
+
+      // タップで消せるようにする
+      banner.onclick = () => {
+        banner.style.animation = 'slideUp 0.3s ease';
+        setTimeout(() => banner.remove(), 300);
+      };
+
+      // CSSアニメーションを追加（まだない場合）
+      if (!document.getElementById('notification-banner-styles')) {
+        const style = document.createElement('style');
+        style.id = 'notification-banner-styles';
+        style.textContent = `
+          @keyframes slideDown {
+            from {
+              transform: translateY(-100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateY(0);
+              opacity: 1;
+            }
+          }
+          @keyframes slideUp {
+            from {
+              transform: translateY(0);
+              opacity: 1;
+            }
+            to {
+              transform: translateY(-100%);
+              opacity: 0;
+            }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      document.body.prepend(banner);
+
+      // 5秒後に自動で消える
+      setTimeout(() => {
+        if (banner.parentElement) {
+          banner.style.animation = 'slideUp 0.3s ease';
+          setTimeout(() => banner.remove(), 300);
+        }
+      }, 5000);
+    }
   </script>
 
   <script>
