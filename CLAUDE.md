@@ -2,7 +2,7 @@
 
 古着物販管理システム（Google Apps Script + スプレッドシート）
 
-**完成度: 80%** | **商品登録: 100%** ✅ | **モバイル対応: 100%** ✅ | **PWA基盤: 100%** ✅ | **Service Worker: 100%** ✅ ★NEW | **プッシュ通知: 30%** 🔔 ★実装中 | **タブナビゲーション: 100%** ✅ | **Google Sites埋め込み: 100%** ✅ | **GitHub Pages + GAS Hybrid: 100%** ✅ | **チーム管理: 0%** 🎯 | **在庫管理: 0%** | **設定管理: 100%** ✅ | **売上分析: 20%** | **管理番号システム: 100%** ✅ | **ハッシュタグシステム: 100%** ✅ | **セールスワード設定: 100%** ✅ | **使い方ガイド: 100%** ✅ | **リセット機能: 100%** ✅ | **コピー機能: 100%** ✅ | **商品名並び替え: 100%** ✅ | **AI生成機能: 100%** ✅ | **Google Search Grounding: 100%** ✅ | **見出しスタイル: 100%** ✅ | **コード品質: 85%** 🔧
+**完成度: 82%** | **商品登録: 100%** ✅ | **モバイル対応: 100%** ✅ | **PWA基盤: 100%** ✅ | **Service Worker: 100%** ✅ | **FCM通知: 100%** ✅ ★NEW | **タブナビゲーション: 100%** ✅ | **Google Sites埋め込み: 100%** ✅ | **GitHub Pages + GAS Hybrid: 100%** ✅ | **チーム管理: 0%** 🎯 | **在庫管理: 0%** | **設定管理: 100%** ✅ | **売上分析: 20%** | **管理番号システム: 100%** ✅ | **ハッシュタグシステム: 100%** ✅ | **セールスワード設定: 100%** ✅ | **使い方ガイド: 100%** ✅ | **リセット機能: 100%** ✅ | **コピー機能: 100%** ✅ | **商品名並び替え: 100%** ✅ | **AI生成機能: 100%** ✅ | **Google Search Grounding: 100%** ✅ | **見出しスタイル: 100%** ✅ | **コード品質: 85%** 🔧
 
 ---
 
@@ -1151,6 +1151,164 @@ Web App URLに表示される警告メッセージ「このアプリケーショ
 - タブのドロップダウンメニュー（サブメニュー）
 
 **実装ファイル**: `mobile_header.html`, `sidebar_product.html`, `sidebar_config.html`, `menu.js`
+
+---
+
+### FCM通知機能（100%完成）✅ ★NEW
+
+#### 📱 概要
+
+Firebase Cloud Messagingを使用したプッシュ通知システム。GitHub Pages（PWA）からGAS経由でiPhoneにリアルタイムでプッシュ通知を送信できる。
+
+**完成度**: 100% ✅
+**実装日**: 2025年10月16日
+**バージョン**: 114
+**所要時間**: 2日間（複数の技術的問題を非エンジニアとAIの合わせ技で解決）
+
+#### ✨ 主要機能
+
+1. **プッシュ通知の送受信**
+   - GitHub Pages（PWA）からGAS APIを経由してFCM通知を送信
+   - 日本語・絵文字・改行を含む通知に完全対応
+   - リアルタイム配信（5〜10秒で到達）
+
+2. **CORS問題の完全解決**
+   - Base64エンコード方式でCORS問題を回避
+   - POSTメソッドでは不可能だった日本語通知を実現
+   - GETメソッド + Base64エンコードという独自の実装
+
+3. **FCMトークン管理**
+   - トークンの自動登録
+   - スプレッドシートでトークン管理
+   - 複数デバイスへの一斉配信に対応
+
+#### 🔧 技術仕様
+
+**アーキテクチャ**:
+```
+PWA (GitHub Pages)
+  ↓ Base64エンコード
+GAS Web App (doGet)
+  ↓ Base64デコード
+FCM HTTP v1 API
+  ↓
+iPhone (Service Worker)
+  ↓
+通知表示
+```
+
+**エンコード方式**:
+- **PWA側**: `btoa(encodeURIComponent(text))`
+- **GAS側**: `Utilities.base64Decode()` → `decodeURIComponent()`
+
+**実装ファイル**:
+- `docs/index.html` (PWA) - Base64エンコード処理
+- `menu.js` (GAS) - Base64デコード処理
+- `docs/firebase-messaging-sw.js` - Service Worker
+- `GEMINI_CORS_QUESTION.md` - CORS問題の詳細記録
+
+**主要関数**:
+```javascript
+// PWA側 (docs/index.html)
+async function triggerServerNotification() {
+  const titleEncoded = btoa(encodeURIComponent(title));
+  const bodyEncoded = btoa(encodeURIComponent(body));
+  const url = GAS_API_URL + '?action=sendFCM&title=' + titleEncoded + '&body=' + bodyEncoded;
+  await fetch(url);
+}
+
+// GAS側 (menu.js)
+if (action === 'sendFCM') {
+  const titleBytes = Utilities.base64Decode(e.parameter.title);
+  const titleDecoded = Utilities.newBlob(titleBytes).getDataAsString();
+  const title = decodeURIComponent(titleDecoded);
+  // bodyも同様にデコード
+  sendFCMNotification(title, body);
+}
+```
+
+#### 📊 実装の経緯
+
+**問題発生**: POSTメソッドでCORSプリフライトエラー（405）
+**原因**: Apps ScriptがOPTIONSメソッドに対応していない
+**解決策**: Geminiに相談し、Base64エンコード + GETメソッドを採用
+
+**重要な発見**:
+- 固定値テストで「パラメータエンコードが原因」と特定
+- iPhoneのPWAはフォアグラウンド時に通知を表示しない仕様
+
+**参考ドキュメント**: `GEMINI_CORS_QUESTION.md`に全経緯を記録
+
+#### ✅ テスト結果
+
+**送信内容**:
+```
+タイトル: 🎉 REBORN サーバー通知（FCM）
+本文:
+商品が売れました！
+管理番号: AA-1002
+出品先: メルカリ
+販売金額: 5,280円
+```
+
+**結果**: 完全成功 🎉
+- ✅ 日本語が正しく表示
+- ✅ 絵文字（🎉）が正しく表示
+- ✅ 改行が正しく反映（4行の本文）
+- ✅ CORS問題を完全に回避
+
+**デバッグログ（スプレッドシート）**:
+```
+タイムスタンプ: 2025/10/16 6:44
+デコード後title: 🎉 REBORN サーバー通知（FCM）
+デコード後body: 商品が売れました！\n管理番号: AA-1002\n出品先: メルカリ\n販売金額: 5,280円
+送信結果: {"status":"success","message":"通知を送信しました"}
+```
+
+#### 🎯 今後の改善予定
+
+1. **ボタン連打防止機能**
+   - 送信中は2度押しできないようにする
+   - ローディング表示中はボタンを無効化
+
+2. **古いFCMトークンのクリーンアップ**
+   - 定期的に古いトークンを削除
+   - アクティブなトークンのみ保持
+
+3. **通知テンプレート機能**
+   - 「商品が売れました」「発送してください」などのテンプレート
+   - チーム管理機能と統合
+
+#### 📈 ビジネスインパクト
+
+**チーム管理の核となる機能**:
+- 商品が売れたら即座に通知
+- 発送依頼、在庫アラート、タスク通知
+- **SaaS化の差別化要素**（競合にはない機能）
+
+**将来の応用例**:
+- 在庫が少なくなったら自動通知
+- 発送期限が近づいたら通知
+- 売上目標達成時に通知
+- チームメンバーへのタスク割り当て通知
+
+#### 🏆 教訓
+
+1. **Apps ScriptのCORS制約**
+   - POSTメソッドは`doOptions()`が実装できない
+   - GETメソッド + Base64エンコードが最も確実
+
+2. **固定値テストの重要性**
+   - パラメータ問題をエンコード問題と切り分けられた
+   - 根本原因の特定に不可欠
+
+3. **Geminiへの相談の効果**
+   - Google固有の制約を正確に把握できた
+   - 推奨アプローチの確認で時間を大幅節約
+
+4. **非エンジニアでも複雑な技術的問題を解決できる**
+   - AIとの合わせ技で2日間で完全解決
+   - ドキュメント化により将来の参考資料に
 
 ---
 
