@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>REBORN - 商品登録</title>
+  <title>REBORN - PWA テスト</title>
 
   <!-- PWA設定 -->
   <link rel="manifest" href="manifest.json">
@@ -107,6 +107,7 @@
       cursor: pointer;
       width: 100%;
       transition: transform 0.2s;
+      margin-bottom: 8px;
     }
 
     button:hover {
@@ -117,7 +118,13 @@
       transform: translateY(0);
     }
 
-    #result {
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    #result, #notificationResult {
       margin-top: 12px;
       padding: 12px;
       background: white;
@@ -150,14 +157,14 @@
 <body>
   <div class="container">
     <h1>🔄 REBORN</h1>
-    <p class="subtitle">GitHub Pages + GAS テスト</p>
+    <p class="subtitle">PWA + プッシュ通知 テスト</p>
 
     <div class="status">
       <div class="status-title">現在の状態</div>
       <ul class="status-list">
         <li>GitHub Pagesでホスティング</li>
-        <li>PWA設定準備完了</li>
-        <li>GAS API接続テスト準備完了</li>
+        <li>Service Worker登録完了</li>
+        <li>プッシュ通知テスト準備完了</li>
       </ul>
     </div>
 
@@ -166,18 +173,27 @@
       <button onclick="testGasApi()">GAS APIに接続してデータを取得</button>
       <div id="result"></div>
     </div>
+
+    <div class="test-section">
+      <div class="test-title">🔔 プッシュ通知テスト</div>
+      <button onclick="requestNotificationPermission()">① 通知を許可</button>
+      <button onclick="sendTestNotification()">② テスト通知を送信</button>
+      <div id="notificationResult"></div>
+    </div>
   </div>
 
   <script>
-    // GAS APIのURL（後で実際のURLに置き換える）
+    // GAS APIのURL
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec';
+
+    // Service Worker登録状態
+    let swRegistration = null;
 
     async function testGasApi() {
       const resultDiv = document.getElementById('result');
       resultDiv.innerHTML = '接続中...<span class="loading"></span>';
 
       try {
-        // まずはシンプルなGETリクエスト
         const response = await fetch(GAS_API_URL + '?action=test');
 
         if (response.ok) {
@@ -195,11 +211,95 @@
       }
     }
 
-    // Service Workerの登録（後で実装）
+    // プッシュ通知の許可をリクエスト
+    async function requestNotificationPermission() {
+      const notifResult = document.getElementById('notificationResult');
+
+      if (!('Notification' in window)) {
+        notifResult.innerHTML = '❌ このブラウザはプッシュ通知に対応していません';
+        notifResult.style.background = '#fef2f2';
+        notifResult.style.borderColor = '#ef4444';
+        return;
+      }
+
+      try {
+        const permission = await Notification.requestPermission();
+
+        if (permission === 'granted') {
+          notifResult.innerHTML = '✅ 通知が許可されました！\n\n次に「② テスト通知を送信」ボタンを押してください。';
+          notifResult.style.background = '#f0fdf4';
+          notifResult.style.borderColor = '#22c55e';
+        } else {
+          notifResult.innerHTML = '❌ 通知が拒否されました\n\n設定から許可してください。';
+          notifResult.style.background = '#fef2f2';
+          notifResult.style.borderColor = '#ef4444';
+        }
+      } catch (error) {
+        notifResult.innerHTML = '❌ エラー: ' + error.message;
+        notifResult.style.background = '#fef2f2';
+        notifResult.style.borderColor = '#ef4444';
+      }
+    }
+
+    // テスト通知を送信
+    async function sendTestNotification() {
+      const notifResult = document.getElementById('notificationResult');
+
+      if (!swRegistration) {
+        notifResult.innerHTML = '❌ Service Workerが登録されていません\n\nページをリロードしてください。';
+        notifResult.style.background = '#fef2f2';
+        notifResult.style.borderColor = '#ef4444';
+        return;
+      }
+
+      if (Notification.permission !== 'granted') {
+        notifResult.innerHTML = '❌ 通知が許可されていません\n\n「① 通知を許可」ボタンを押してください。';
+        notifResult.style.background = '#fef2f2';
+        notifResult.style.borderColor = '#ef4444';
+        return;
+      }
+
+      try {
+        notifResult.innerHTML = '送信中...<span class="loading"></span>';
+
+        // Service Workerからテスト通知を表示
+        await swRegistration.showNotification('🎉 REBORN テスト通知', {
+          body: '商品が売れました！\n管理番号: AA-1001\n出品先: メルカリ\n販売金額: 3,980円',
+          icon: '/reborn-inventory-system/icon-180.png',
+          badge: '/reborn-inventory-system/icon-180.png',
+          vibrate: [200, 100, 200],
+          tag: 'test-notification',
+          data: {
+            url: '/reborn-inventory-system/'
+          }
+        });
+
+        notifResult.innerHTML = '✅ テスト通知を送信しました！\n\niPhoneの場合、画面上部に通知が表示されます。\nまたは通知センターを確認してください。';
+        notifResult.style.background = '#f0fdf4';
+        notifResult.style.borderColor = '#22c55e';
+      } catch (error) {
+        notifResult.innerHTML = '❌ 送信失敗\n\nエラー: ' + error.message;
+        notifResult.style.background = '#fef2f2';
+        notifResult.style.borderColor = '#ef4444';
+      }
+    }
+
+    // Service Workerの登録
     if ('serviceWorker' in navigator) {
-      // navigator.serviceWorker.register('service-worker.js')
-      //   .then(reg => console.log('Service Worker registered', reg))
-      //   .catch(err => console.log('Service Worker registration failed', err));
+      window.addEventListener('load', async () => {
+        try {
+          swRegistration = await navigator.serviceWorker.register('/reborn-inventory-system/service-worker.js');
+          console.log('Service Worker registered:', swRegistration);
+        } catch (err) {
+          console.error('Service Worker registration failed:', err);
+          const notifResult = document.getElementById('notificationResult');
+          if (notifResult) {
+            notifResult.innerHTML = '❌ Service Worker登録失敗\n\n' + err.message;
+            notifResult.style.background = '#fef2f2';
+            notifResult.style.borderColor = '#ef4444';
+          }
+        }
+      });
     }
   </script>
 </body>
