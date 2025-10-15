@@ -223,6 +223,20 @@
     // VAPID公開鍵（Firebase Console > Cloud Messaging > Web Push certificates）
     const VAPID_PUBLIC_KEY = 'BP1Zqk3Ba7EjHQclg7LUMaPXQegl595o855OLBl7oI8kMphZse6zA0LuA63xIsagGvsq8DsAFNaXCUedYYwsG1Q';
 
+    // base64url文字列をUint8Arrayに変換（iOS Safari対策）
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
     // Service Worker registration（グローバル変数）
     let swRegistration = null;
 
@@ -294,8 +308,12 @@
 
         // Firebase Messagingからトークンを取得
         const { getToken } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
+
+        // VAPID鍵をUint8Arrayに変換（iOS Safari対策）
+        const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+
         const currentToken = await getToken(window.firebaseMessaging, {
-          vapidKey: VAPID_PUBLIC_KEY,
+          vapidKey: applicationServerKey,
           serviceWorkerRegistration: swRegistration
         });
 
