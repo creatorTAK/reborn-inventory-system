@@ -14,39 +14,57 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify({
         status: 'error',
         message: 'アクションが指定されていません'
-      })).setMimeType(ContentService.MimeType.JSON);
+      }))
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeader('Access-Control-Allow-Origin', '*')
+        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
     }
 
     // リクエストボディを解析
     const requestBody = e.postData ? JSON.parse(e.postData.contents) : {};
 
-    if (action === 'subscribe') {
-      // Push Subscriptionを保存
-      const result = savePushSubscription(requestBody.subscription);
+    if (action === 'subscribeFCM') {
+      // FCMトークンを保存
+      const result = saveFCMToken(requestBody.token);
       return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeader('Access-Control-Allow-Origin', '*')
+        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
     }
 
-    if (action === 'sendPush') {
-      // Web Push通知を送信
+    if (action === 'sendFCM') {
+      // FCM通知を送信
       const title = requestBody.title || 'REBORN';
       const body = requestBody.body || 'テスト通知です';
-      const result = sendWebPushNotification(title, body);
+      const result = sendFCMNotification(title, body);
       return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeader('Access-Control-Allow-Origin', '*')
+        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
     }
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: '不明なアクション: ' + action
-    })).setMimeType(ContentService.MimeType.JSON);
+    }))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+      .setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   } catch (error) {
     Logger.log('doPost error: ' + error);
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
+    }))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+      .setHeader('Access-Control-Allow-Headers', 'Content-Type');
   }
 }
 
@@ -74,6 +92,23 @@ function doGet(e) {
         };
 
         return ContentService.createTextOutput(JSON.stringify(response))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      if (action === 'subscribeFCM') {
+        // FCMトークンを保存（GETメソッド）
+        const token = e.parameter.token;
+        const result = saveFCMToken(token);
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      if (action === 'sendFCM') {
+        // FCM通知を送信（GETメソッド）
+        const title = decodeURIComponent(e.parameter.title || 'REBORN');
+        const body = decodeURIComponent(e.parameter.body || 'テスト通知です');
+        const result = sendFCMNotification(title, body);
+        return ContentService.createTextOutput(JSON.stringify(result))
           .setMimeType(ContentService.MimeType.JSON);
       }
 
