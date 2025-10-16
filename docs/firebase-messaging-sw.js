@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ
@@ -32,12 +32,16 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
-  // 🔧 重複チェック: 同じ通知を短時間に2回表示しない
-  const notificationTitle = payload.notification?.title || 'REBORN';
-  const notificationBody = payload.notification?.body || 'テスト通知です';
+  // 🔧 データメッセージから値を取得
+  // notification ではなく data から取得（ブラウザの自動表示を防ぐため）
+  const notificationTitle = payload.data?.title || 'REBORN';
+  const notificationBody = payload.data?.body || 'テスト通知です';
+  const notificationIcon = payload.data?.icon || '/reborn-inventory-system/icon-180.png';
+  const notificationBadge = payload.data?.badge || '/reborn-inventory-system/icon-180.png';
+  const notificationLink = payload.data?.link || '/reborn-inventory-system/';
   const cacheKey = `${notificationTitle}|${notificationBody}`.substring(0, 100);
 
-  // 同じ通知が2秒以内に来た場合はスキップ
+  // 同じ通知が2秒以内に来た場合はスキップ（念のため）
   if (notificationCache.has(cacheKey)) {
     console.log('[firebase-messaging-sw.js] 重複通知をスキップしました:', cacheKey);
     return;
@@ -53,13 +57,13 @@ messaging.onBackgroundMessage((payload) => {
   // 1. バッジカウントを増やす（Badge API）
   incrementBadgeCount();
 
-  // 2. 通知を表示
+  // 2. 通知を表示（1回だけ）
   const notificationOptions = {
     body: notificationBody,
-    icon: '/reborn-inventory-system/icon-180.png',
-    badge: '/reborn-inventory-system/icon-180.png',
+    icon: notificationIcon,
+    badge: notificationBadge,
     vibrate: [200, 100, 200],
-    data: payload.data || { url: '/reborn-inventory-system/' },
+    data: { url: notificationLink },
     tag: cacheKey // 同じtagの通知は上書きされる（重複防止）
   };
 
