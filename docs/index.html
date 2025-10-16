@@ -295,6 +295,12 @@
       <div class="test-title">📋 通知履歴</div>
       <button onclick="showNotificationHistory()">📋 通知履歴を表示</button>
     </div>
+
+    <div class="test-section">
+      <div class="test-title">🔍 Service Worker診断</div>
+      <button onclick="checkServiceWorkers()">🔍 Service Worker登録数を確認</button>
+      <div id="swDiagnosticResult"></div>
+    </div>
   </div>
 
   <!-- 通知履歴画面 -->
@@ -929,6 +935,100 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // Service Worker診断機能
+    async function checkServiceWorkers() {
+      const resultDiv = document.getElementById('swDiagnosticResult');
+      resultDiv.innerHTML = '診断中...<span class="loading"></span>';
+
+      try {
+        if (!('serviceWorker' in navigator)) {
+          resultDiv.innerHTML = '❌ Service Workerに対応していません';
+          resultDiv.style.background = '#fef2f2';
+          resultDiv.style.borderColor = '#ef4444';
+          return;
+        }
+
+        // 登録されているすべてのService Workerを取得
+        const registrations = await navigator.serviceWorker.getRegistrations();
+
+        let html = `
+          <div style="margin-top: 12px; padding: 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
+            <div style="font-weight: 600; margin-bottom: 8px;">📊 診断結果</div>
+            <div style="font-size: 14px; color: #374151;">
+              <div style="margin-bottom: 8px;">
+                <strong>登録数:</strong> ${registrations.length}個
+                ${registrations.length === 1 ? '✅ 正常' : registrations.length > 1 ? '⚠️ 複数登録（これが原因の可能性大）' : '❌ 未登録'}
+              </div>
+        `;
+
+        // 各Service Workerの詳細を表示
+        registrations.forEach((reg, index) => {
+          const scope = reg.scope;
+          const state = reg.active ? reg.active.state : 'unknown';
+          const scriptURL = reg.active ? reg.active.scriptURL : 'unknown';
+
+          html += `
+            <div style="margin-top: 12px; padding: 8px; background: #f9fafb; border-radius: 4px; border-left: 3px solid #667eea;">
+              <div style="font-weight: 600; color: #667eea;">Service Worker #${index + 1}</div>
+              <div style="font-size: 13px; margin-top: 4px;">
+                <div><strong>Scope:</strong> ${scope}</div>
+                <div><strong>State:</strong> ${state}</div>
+                <div style="word-break: break-all;"><strong>Script:</strong> ${scriptURL}</div>
+              </div>
+            </div>
+          `;
+        });
+
+        html += `
+            </div>
+          </div>
+        `;
+
+        // 複数登録がある場合、削除ボタンを追加
+        if (registrations.length > 1) {
+          html += `
+            <div style="margin-top: 12px;">
+              <button onclick="unregisterAllServiceWorkers()" style="width: 100%; background: #ef4444; margin-bottom: 0;">
+                🗑️ すべてのService Workerを削除して再登録
+              </button>
+              <div style="font-size: 12px; color: #6b7280; margin-top: 8px;">
+                ⚠️ 削除後、ページをリロードして再登録します
+              </div>
+            </div>
+          `;
+        }
+
+        resultDiv.innerHTML = html;
+      } catch (error) {
+        console.error('Service Worker診断エラー:', error);
+        resultDiv.innerHTML = '❌ 診断に失敗しました: ' + error.message;
+        resultDiv.style.background = '#fef2f2';
+        resultDiv.style.borderColor = '#ef4444';
+      }
+    }
+
+    // すべてのService Workerを削除
+    async function unregisterAllServiceWorkers() {
+      if (!confirm('本当にすべてのService Workerを削除しますか？\nページがリロードされます。')) {
+        return;
+      }
+
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+
+        for (const reg of registrations) {
+          await reg.unregister();
+          console.log('Service Workerを削除しました:', reg.scope);
+        }
+
+        alert('✅ すべてのService Workerを削除しました。\nページをリロードします。');
+        location.reload();
+      } catch (error) {
+        console.error('Service Worker削除エラー:', error);
+        alert('❌ 削除に失敗しました: ' + error.message);
+      }
     }
 
     // Service Workerの登録
