@@ -611,12 +611,15 @@
         const badgeClass = hasError ? 'history-card-badge error' : 'history-card-badge';
         const badgeText = hasError ? 'エラー' : `送信成功: ${item.successCount}件`;
 
+        // 日時を読みやすい形式に変換
+        const formattedTime = formatTimestamp(item.timestamp);
+
         html += `
           <div class="history-card">
             <div class="history-card-title">${escapeHtml(item.title || 'タイトルなし')}</div>
             <div class="history-card-body">${escapeHtml(item.body || '本文なし')}</div>
             <div class="history-card-footer">
-              <div class="history-card-time">${escapeHtml(item.timestamp || '')}</div>
+              <div class="history-card-time">${formattedTime}</div>
               <div class="${badgeClass}">${badgeText}</div>
             </div>
             ${hasError ? `<div style="margin-top: 8px; font-size: 12px; color: #dc2626;">エラー: ${escapeHtml(item.error)}</div>` : ''}
@@ -625,6 +628,34 @@
       }
 
       historyList.innerHTML = html;
+    }
+
+    // 日時を読みやすい形式に変換
+    function formatTimestamp(timestamp) {
+      if (!timestamp) return '';
+
+      try {
+        // スプレッドシートから返される形式: "2025/10/16 9:28:39"
+        // または ISO形式の可能性もある
+        const date = new Date(timestamp);
+
+        // 無効な日付の場合はそのまま返す
+        if (isNaN(date.getTime())) {
+          return timestamp;
+        }
+
+        // 日本時間で表示（YYYY/MM/DD HH:MM形式）
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+
+        return `${year}/${month}/${day} ${hours}:${minutes}`;
+      } catch (error) {
+        // エラー時はそのまま返す
+        return timestamp;
+      }
     }
 
     // HTMLエスケープ
