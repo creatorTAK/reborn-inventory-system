@@ -382,69 +382,54 @@
       }, 5000);
     }
 
-    // 通知音用のAudioオブジェクト（グローバル）
-    let notificationAudio = null;
+    // AudioContextをグローバルで管理
+    let audioContext = null;
 
-    // 通知音を初期化（ユーザー操作時に呼び出す）
-    function initNotificationSound() {
-      try {
-        // シンプルなビープ音（Data URL - 非常に短いWAVファイル）
-        const beepDataUrl = 'data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU' +
-          'tvT19gYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBg';
-
-        notificationAudio = new Audio(beepDataUrl);
-        notificationAudio.volume = 0.5;
-
-        // iOS対策：無音再生して初期化
-        notificationAudio.play().then(() => {
-          console.log('✅ 通知音の初期化に成功しました');
-          notificationAudio.pause();
-          notificationAudio.currentTime = 0;
-        }).catch(err => {
-          console.warn('⚠️ 初期化に失敗:', err);
-        });
-
-        return true;
-      } catch (error) {
-        console.error('❌ 通知音の初期化エラー:', error);
-        return false;
+    // AudioContextを初期化（ユーザー操作で呼び出す）
+    function initAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        console.log('✅ AudioContextを初期化しました（状態:', audioContext.state, '）');
       }
+
+      // iOSではsuspendedの場合、resumeする
+      if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+          console.log('✅ AudioContextを再開しました');
+        });
+      }
+
+      return audioContext;
     }
 
-    // 通知音を再生（HTML5 Audio）
+    // 通知音を再生（Web Audio API - プログラム的に音を生成）
     function playNotificationSound() {
       const resultDiv = document.getElementById('soundTestResult');
 
       try {
         console.log('🔔 通知音の再生を開始...');
 
-        // Audioオブジェクトが未初期化の場合、初期化する
-        if (!notificationAudio) {
-          console.log('通知音を初期化中...');
-          initNotificationSound();
-        }
+        // AudioContextを取得または初期化
+        const ctx = initAudioContext();
 
-        if (notificationAudio) {
-          notificationAudio.currentTime = 0;
-          const playPromise = notificationAudio.play();
+        // AudioContextの状態を確認
+        console.log('AudioContext状態:', ctx.state);
 
-          if (playPromise !== undefined) {
-            playPromise.then(() => {
-              console.log('🔔 通知音を再生しました');
-              if (resultDiv) {
-                resultDiv.innerHTML = '✅ 音の再生に成功しました！';
-                resultDiv.style.color = '#22c55e';
-              }
-            }).catch(error => {
-              console.error('❌ 再生エラー:', error);
-              if (resultDiv) {
-                resultDiv.innerHTML = '❌ 再生エラー: ' + error.message + '<br>※ iOSではアプリ起動後、一度タップが必要です';
-                resultDiv.style.color = '#dc2626';
-              }
-            });
-          }
+        if (ctx.state === 'suspended') {
+          // iOSで再開を試みる
+          ctx.resume().then(() => {
+            console.log('AudioContextを再開して再生します');
+            playBeep(ctx, resultDiv);
+          }).catch(err => {
+            console.error('AudioContext再開エラー:', err);
+            if (resultDiv) {
+              resultDiv.innerHTML = '❌ AudioContext再開エラー: ' + err.message;
+              resultDiv.style.color = '#dc2626';
+            }
+          });
         } else {
-          throw new Error('Audioオブジェクトの作成に失敗しました');
+          // 通常の再生
+          playBeep(ctx, resultDiv);
         }
       } catch (error) {
         console.error('❌ 通知音の再生に失敗しました:', error);
@@ -452,19 +437,71 @@
           resultDiv.innerHTML = '❌ 音の再生に失敗: ' + error.message;
           resultDiv.style.color = '#dc2626';
         }
-        // エラーが発生してもバナー表示は継続
       }
     }
 
-    // ページ読み込み時に音の初期化を試みる（ユーザー操作後に実行される）
-    document.addEventListener('DOMContentLoaded', () => {
-      // 最初のユーザータップで初期化
-      document.body.addEventListener('click', () => {
-        if (!notificationAudio) {
-          console.log('ユーザータップで通知音を初期化します');
-          initNotificationSound();
+    // ビープ音を生成して再生
+    function playBeep(ctx, resultDiv) {
+      try {
+        // 1音目（800Hz）
+        const oscillator1 = ctx.createOscillator();
+        const gainNode1 = ctx.createGain();
+
+        oscillator1.type = 'sine';
+        oscillator1.frequency.value = 800;
+
+        gainNode1.gain.setValueAtTime(0, ctx.currentTime);
+        gainNode1.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.01);
+        gainNode1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+
+        oscillator1.connect(gainNode1);
+        gainNode1.connect(ctx.destination);
+
+        oscillator1.start(ctx.currentTime);
+        oscillator1.stop(ctx.currentTime + 0.2);
+
+        // 2音目（1000Hz - 少し遅らせて）
+        const oscillator2 = ctx.createOscillator();
+        const gainNode2 = ctx.createGain();
+
+        oscillator2.type = 'sine';
+        oscillator2.frequency.value = 1000;
+
+        gainNode2.gain.setValueAtTime(0, ctx.currentTime + 0.1);
+        gainNode2.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.11);
+        gainNode2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+
+        oscillator2.connect(gainNode2);
+        gainNode2.connect(ctx.destination);
+
+        oscillator2.start(ctx.currentTime + 0.1);
+        oscillator2.stop(ctx.currentTime + 0.3);
+
+        console.log('🔔 通知音を再生しました');
+
+        if (resultDiv) {
+          resultDiv.innerHTML = '✅ 音の再生に成功しました！（状態: ' + ctx.state + '）<br>※ 音量を確認してください';
+          resultDiv.style.color = '#22c55e';
         }
-      }, { once: true }); // 一度だけ実行
+      } catch (error) {
+        console.error('❌ ビープ音生成エラー:', error);
+        if (resultDiv) {
+          resultDiv.innerHTML = '❌ ビープ音生成エラー: ' + error.message;
+          resultDiv.style.color = '#dc2626';
+        }
+        throw error;
+      }
+    }
+
+    // ページ読み込み時に初期化を準備
+    document.addEventListener('DOMContentLoaded', () => {
+      // 最初のユーザータップでAudioContextを初期化
+      document.body.addEventListener('click', () => {
+        if (!audioContext) {
+          console.log('ユーザータップでAudioContextを初期化します');
+          initAudioContext();
+        }
+      }, { once: true });
     });
   </script>
 
