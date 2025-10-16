@@ -453,8 +453,6 @@ function doGet(e) {
     return template.evaluate()
       .setTitle(title)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no')
-      .addMetaTag('apple-mobile-web-app-capable', 'yes')
-      .addMetaTag('apple-mobile-web-app-status-bar-style', 'black-translucent')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .setSandboxMode(HtmlService.SandboxMode.IFRAME);
   } catch (error) {
