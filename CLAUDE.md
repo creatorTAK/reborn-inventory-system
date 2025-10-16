@@ -5354,3 +5354,22 @@ if (e && e.parameter && e.parameter.action) {
   - GAS側: 最新1個のトークンだけに送信 → 4回に減少
   - Service Worker側: 重複チェック機能追加中
 - 📋 次のタスク: 通知重複バグの完全解決、PWA通知システムの安定化
+
+---
+
+**最終更新日**: 2025年10月16日（🌐 独自ドメイン + PWA実装開始 - Cloudflare Workers設定）
+
+**最新の更新内容**:
+- 🌐 **独自ドメイン購入 + Cloudflare Workers実装開始** ★NEW
+  - ✅ お名前.comで独自ドメイン購入（reborn-inventory.com）
+  - ✅ Cloudflare Freeプラン登録とDNS設定
+  - ✅ ネームサーバーをCloudflareに変更（アクティブ化完了）
+  - ✅ Cloudflare Workers 逆プロキシコード実装（複数回の試行錯誤）
+  - ✅ カスタムドメイン設定完了（reborn-inventory.com → Worker）
+  - ❌ **Googleログイン問題（未解決）** ★重要
+    - 症状: Cloudflare Workers経由でアクセスすると、Googleログイン画面が表示されるが、ログインボタンが押せない
+    - 確認済み: 元のGAS URLは正常動作、GASデプロイ設定は「全員」、カスタムドメイン設定完了
+    - 調査予定: Cookie/Session転送、CORSヘッダー、Referer/Origin処理
+    - 次のアクション: 他のAI（Perplexity、ChatGPT、Gemini）に質問して解決策を探る
+- ⏰ **所要時間**: 約1時間30分（21:00-21:40）
+- 📋 次のタスク: Googleログイン問題の解決、iPhoneでのPWAアイコン表示とフルスクリーン確認
