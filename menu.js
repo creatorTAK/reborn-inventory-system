@@ -183,6 +183,18 @@ function doGet(e) {
         }
       }
 
+      if (action === 'getNotificationHistory') {
+        // 通知履歴を取得
+        const limit = parseInt(e.parameter.limit) || 50;
+        const history = getNotificationHistory(limit);
+
+        return ContentService.createTextOutput(JSON.stringify({
+          status: 'success',
+          history: history
+        }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
       // その他のアクションは将来追加
       return ContentService.createTextOutput(JSON.stringify({
         status: 'error',

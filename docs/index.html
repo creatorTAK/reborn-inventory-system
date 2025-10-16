@@ -152,6 +152,69 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+
+    /* 通知履歴カードのスタイル */
+    .history-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .history-card-title {
+      font-weight: 600;
+      font-size: 16px;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+
+    .history-card-body {
+      color: #4b5563;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 8px;
+      white-space: pre-wrap;
+    }
+
+    .history-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 8px;
+      border-top: 1px solid #f3f4f6;
+    }
+
+    .history-card-time {
+      color: #6b7280;
+      font-size: 13px;
+    }
+
+    .history-card-badge {
+      background: #f0fdf4;
+      color: #15803d;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .history-card-badge.error {
+      background: #fef2f2;
+      color: #dc2626;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #6b7280;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
   </style>
 </head>
 <body>
@@ -180,6 +243,26 @@
       <button onclick="subscribeToFCM()">② FCMに登録</button>
       <button onclick="triggerServerNotification()">③ サーバーから通知を送信</button>
       <div id="notificationResult"></div>
+    </div>
+
+    <div class="test-section">
+      <div class="test-title">📋 通知履歴</div>
+      <button onclick="showNotificationHistory()">📋 通知履歴を表示</button>
+    </div>
+  </div>
+
+  <!-- 通知履歴画面 -->
+  <div id="historyContainer" class="container" style="display: none;">
+    <div style="display: flex; align-items: center; margin-bottom: 24px;">
+      <button onclick="hideNotificationHistory()" style="width: auto; padding: 8px 16px; margin-right: 12px; margin-bottom: 0;">← 戻る</button>
+      <h1 style="margin-bottom: 0;">📋 通知履歴</h1>
+    </div>
+
+    <div id="historyList" style="max-height: 70vh; overflow-y: auto;">
+      <div style="text-align: center; padding: 40px 20px; color: #6b7280;">
+        <div class="loading"></div>
+        <div style="margin-top: 12px;">読み込み中...</div>
+      </div>
     </div>
   </div>
 
@@ -445,6 +528,110 @@
         notifResult.style.background = '#fef2f2';
         notifResult.style.borderColor = '#ef4444';
       }
+    }
+
+    // 通知履歴を表示
+    async function showNotificationHistory() {
+      const mainContainer = document.querySelector('.container:not(#historyContainer)');
+      const historyContainer = document.getElementById('historyContainer');
+
+      // 画面切り替え
+      mainContainer.style.display = 'none';
+      historyContainer.style.display = 'block';
+
+      // 履歴を読み込む
+      await loadNotificationHistory();
+    }
+
+    // メイン画面に戻る
+    function hideNotificationHistory() {
+      const mainContainer = document.querySelector('.container:not(#historyContainer)');
+      const historyContainer = document.getElementById('historyContainer');
+
+      mainContainer.style.display = 'block';
+      historyContainer.style.display = 'none';
+    }
+
+    // 通知履歴を取得
+    async function loadNotificationHistory() {
+      const historyList = document.getElementById('historyList');
+
+      try {
+        historyList.innerHTML = `
+          <div style="text-align: center; padding: 40px 20px; color: #6b7280;">
+            <div class="loading"></div>
+            <div style="margin-top: 12px;">読み込み中...</div>
+          </div>
+        `;
+
+        const response = await fetch(GAS_API_URL + '?action=getNotificationHistory&limit=50');
+
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status);
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'success' && data.history) {
+          renderHistoryCards(data.history);
+        } else {
+          throw new Error(data.message || '履歴の取得に失敗しました');
+        }
+      } catch (error) {
+        console.error('履歴取得エラー:', error);
+        historyList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">❌</div>
+            <div>履歴の取得に失敗しました</div>
+            <div style="margin-top: 8px; font-size: 14px;">${error.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    // 履歴カードを表示
+    function renderHistoryCards(history) {
+      const historyList = document.getElementById('historyList');
+
+      if (!history || history.length === 0) {
+        historyList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <div>通知履歴がありません</div>
+            <div style="margin-top: 8px; font-size: 14px;">通知を送信すると、ここに履歴が表示されます。</div>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+
+      for (const item of history) {
+        const hasError = item.error && item.error.trim() !== '';
+        const badgeClass = hasError ? 'history-card-badge error' : 'history-card-badge';
+        const badgeText = hasError ? 'エラー' : `送信成功: ${item.successCount}件`;
+
+        html += `
+          <div class="history-card">
+            <div class="history-card-title">${escapeHtml(item.title || 'タイトルなし')}</div>
+            <div class="history-card-body">${escapeHtml(item.body || '本文なし')}</div>
+            <div class="history-card-footer">
+              <div class="history-card-time">${escapeHtml(item.timestamp || '')}</div>
+              <div class="${badgeClass}">${badgeText}</div>
+            </div>
+            ${hasError ? `<div style="margin-top: 8px; font-size: 12px; color: #dc2626;">エラー: ${escapeHtml(item.error)}</div>` : ''}
+          </div>
+        `;
+      }
+
+      historyList.innerHTML = html;
+    }
+
+    // HTMLエスケープ
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
 
     // Service Workerの登録
