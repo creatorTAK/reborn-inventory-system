@@ -1,6 +1,10 @@
 // Firebase Cloud Messaging Service Worker
 // バックグラウンドでのプッシュ通知を処理
 
+// バージョン管理（更新時にインクリメント）
+const CACHE_VERSION = 'v2';
+const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
+
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
@@ -59,5 +63,31 @@ self.addEventListener('notificationclick', (event) => {
           return clients.openWindow(urlToOpen);
         }
       })
+  );
+});
+
+// Service Workerのインストール時に古いキャッシュを削除
+self.addEventListener('install', (event) => {
+  console.log('[Service Worker] インストール中... バージョン:', CACHE_VERSION);
+  self.skipWaiting(); // 即座に有効化
+});
+
+self.addEventListener('activate', (event) => {
+  console.log('[Service Worker] 有効化中... バージョン:', CACHE_VERSION);
+
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('[Service Worker] 古いキャッシュを削除:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => {
+      console.log('[Service Worker] すべてのクライアントを制御します');
+      return self.clients.claim();
+    })
   );
 });
