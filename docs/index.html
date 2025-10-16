@@ -382,67 +382,69 @@
       }, 5000);
     }
 
-    // 通知音を再生（Web Audio API）
+    // 通知音用のAudioオブジェクト（グローバル）
+    let notificationAudio = null;
+
+    // 通知音を初期化（ユーザー操作時に呼び出す）
+    function initNotificationSound() {
+      try {
+        // シンプルなビープ音（Data URL - 非常に短いWAVファイル）
+        const beepDataUrl = 'data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU' +
+          'tvT19gYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBg';
+
+        notificationAudio = new Audio(beepDataUrl);
+        notificationAudio.volume = 0.5;
+
+        // iOS対策：無音再生して初期化
+        notificationAudio.play().then(() => {
+          console.log('✅ 通知音の初期化に成功しました');
+          notificationAudio.pause();
+          notificationAudio.currentTime = 0;
+        }).catch(err => {
+          console.warn('⚠️ 初期化に失敗:', err);
+        });
+
+        return true;
+      } catch (error) {
+        console.error('❌ 通知音の初期化エラー:', error);
+        return false;
+      }
+    }
+
+    // 通知音を再生（HTML5 Audio）
     function playNotificationSound() {
       const resultDiv = document.getElementById('soundTestResult');
 
       try {
         console.log('🔔 通知音の再生を開始...');
 
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        console.log('AudioContext 状態:', audioContext.state);
-
-        // iOSではユーザー操作後にAudioContextを再開する必要がある
-        if (audioContext.state === 'suspended') {
-          audioContext.resume().then(() => {
-            console.log('AudioContext を再開しました');
-            playSound(audioContext);
-          });
-        } else {
-          playSound(audioContext);
+        // Audioオブジェクトが未初期化の場合、初期化する
+        if (!notificationAudio) {
+          console.log('通知音を初期化中...');
+          initNotificationSound();
         }
 
-        function playSound(ctx) {
-          const oscillator = ctx.createOscillator();
-          const gainNode = ctx.createGain();
+        if (notificationAudio) {
+          notificationAudio.currentTime = 0;
+          const playPromise = notificationAudio.play();
 
-          oscillator.connect(gainNode);
-          gainNode.connect(ctx.destination);
-
-          // 心地よい通知音（2音階）
-          oscillator.frequency.value = 800; // 周波数（Hz）
-          oscillator.type = 'sine'; // 正弦波
-
-          // 音量をフェードアウト
-          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-
-          oscillator.start(ctx.currentTime);
-          oscillator.stop(ctx.currentTime + 0.2);
-
-          // 2音目（少し高い音）
-          setTimeout(() => {
-            const oscillator2 = ctx.createOscillator();
-            const gainNode2 = ctx.createGain();
-
-            oscillator2.connect(gainNode2);
-            gainNode2.connect(ctx.destination);
-
-            oscillator2.frequency.value = 1000;
-            oscillator2.type = 'sine';
-
-            gainNode2.gain.setValueAtTime(0.3, ctx.currentTime);
-            gainNode2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-
-            oscillator2.start(ctx.currentTime);
-            oscillator2.stop(ctx.currentTime + 0.2);
-          }, 100);
-
-          console.log('🔔 通知音を再生しました');
-          if (resultDiv) {
-            resultDiv.innerHTML = '✅ 音の再生に成功しました！（状態: ' + ctx.state + '）';
-            resultDiv.style.color = '#22c55e';
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              console.log('🔔 通知音を再生しました');
+              if (resultDiv) {
+                resultDiv.innerHTML = '✅ 音の再生に成功しました！';
+                resultDiv.style.color = '#22c55e';
+              }
+            }).catch(error => {
+              console.error('❌ 再生エラー:', error);
+              if (resultDiv) {
+                resultDiv.innerHTML = '❌ 再生エラー: ' + error.message + '<br>※ iOSではアプリ起動後、一度タップが必要です';
+                resultDiv.style.color = '#dc2626';
+              }
+            });
           }
+        } else {
+          throw new Error('Audioオブジェクトの作成に失敗しました');
         }
       } catch (error) {
         console.error('❌ 通知音の再生に失敗しました:', error);
@@ -453,6 +455,17 @@
         // エラーが発生してもバナー表示は継続
       }
     }
+
+    // ページ読み込み時に音の初期化を試みる（ユーザー操作後に実行される）
+    document.addEventListener('DOMContentLoaded', () => {
+      // 最初のユーザータップで初期化
+      document.body.addEventListener('click', () => {
+        if (!notificationAudio) {
+          console.log('ユーザータップで通知音を初期化します');
+          initNotificationSound();
+        }
+      }, { once: true }); // 一度だけ実行
+    });
   </script>
 
   <script>
