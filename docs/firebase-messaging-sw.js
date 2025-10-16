@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
@@ -29,6 +29,10 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
+  // 1. バッジカウントを増やす（Badge API）
+  incrementBadgeCount();
+
+  // 2. 通知を表示
   const notificationTitle = payload.notification?.title || 'REBORN';
   const notificationOptions = {
     body: payload.notification?.body || 'テスト通知です',
@@ -40,6 +44,28 @@ messaging.onBackgroundMessage((payload) => {
 
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
+
+// バッジカウントを増やす（Service Worker内）
+function incrementBadgeCount() {
+  // localStorageから現在のカウントを取得
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+    // 開いているクライアントがある場合はメッセージを送信
+    if (clients.length > 0) {
+      clients[0].postMessage({
+        type: 'INCREMENT_BADGE'
+      });
+    } else {
+      // クライアントがない場合、直接Badge APIを更新
+      if ('setAppBadge' in self.navigator) {
+        // localStorageは使えないため、IndexedDBまたは直接+1
+        // ここではシンプルに現在の値を取得せず+1だけする
+        self.navigator.setAppBadge(1).catch(err => {
+          console.error('Badge API エラー:', err);
+        });
+      }
+    }
+  });
+}
 
 // 通知クリック時の処理
 self.addEventListener('notificationclick', (event) => {

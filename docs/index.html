@@ -215,9 +215,49 @@
       font-size: 48px;
       margin-bottom: 16px;
     }
+
+    /* アプリ内バッジUI */
+    #notificationBadge {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #ef4444;
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: none; /* 初期状態は非表示 */
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
+      z-index: 10000; /* 最前面 */
+      cursor: pointer;
+      transition: transform 0.2s;
+      animation: badgePulse 2s infinite;
+    }
+
+    #notificationBadge:hover {
+      transform: scale(1.1);
+    }
+
+    @keyframes badgePulse {
+      0%, 100% {
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
+      }
+      50% {
+        box-shadow: 0 4px 20px rgba(239, 68, 68, 0.8);
+      }
+    }
   </style>
 </head>
 <body>
+  <!-- アプリ内通知バッジ -->
+  <div id="notificationBadge" onclick="showNotificationHistory()">
+    <span id="badgeCount">0</span>
+  </div>
+
   <div class="container">
     <h1>🔄 REBORN</h1>
     <p class="subtitle">PWA + プッシュ通知 テスト（FCM版）</p>
@@ -272,6 +312,82 @@
     </div>
   </div>
 
+  <!-- バッジ管理スクリプト -->
+  <script>
+    // 未読通知カウントを管理
+    let unreadCount = 0;
+
+    // localStorageから未読カウントを読み込む
+    function loadUnreadCount() {
+      const stored = localStorage.getItem('notificationUnreadCount');
+      unreadCount = stored ? parseInt(stored, 10) : 0;
+      updateBadgeDisplay();
+    }
+
+    // 未読カウントを保存
+    function saveUnreadCount() {
+      localStorage.setItem('notificationUnreadCount', unreadCount.toString());
+    }
+
+    // バッジ表示を更新（PWAアイコン + アプリ内バッジ）
+    function updateBadgeDisplay() {
+      // 1. PWAアイコンバッジ（Badge API）
+      if ('setAppBadge' in navigator) {
+        if (unreadCount > 0) {
+          navigator.setAppBadge(unreadCount).catch(err => {
+            console.error('Badge API エラー:', err);
+          });
+        } else {
+          navigator.clearAppBadge().catch(err => {
+            console.error('Badge API クリアエラー:', err);
+          });
+        }
+      }
+
+      // 2. アプリ内バッジUI
+      const badge = document.getElementById('notificationBadge');
+      const badgeCount = document.getElementById('badgeCount');
+
+      if (unreadCount > 0) {
+        badge.style.display = 'flex';
+        badgeCount.textContent = unreadCount > 99 ? '99+' : unreadCount;
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    // 未読カウントを増やす
+    function incrementUnreadCount() {
+      unreadCount++;
+      saveUnreadCount();
+      updateBadgeDisplay();
+      console.log('📬 未読通知カウント:', unreadCount);
+    }
+
+    // 未読カウントをクリア
+    function clearUnreadCount() {
+      unreadCount = 0;
+      saveUnreadCount();
+      updateBadgeDisplay();
+      console.log('✅ 未読通知カウントをクリアしました');
+    }
+
+    // ページ読み込み時に初期化
+    window.addEventListener('load', () => {
+      loadUnreadCount();
+    });
+
+    // Service Workerからのメッセージを受信
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INCREMENT_BADGE') {
+          console.log('📨 Service Workerからバッジ更新メッセージを受信');
+          incrementUnreadCount();
+        }
+      });
+    }
+  </script>
+
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
@@ -299,10 +415,13 @@
     onMessage(messaging, (payload) => {
       console.log('Message received (foreground):', payload);
 
-      // 1. アプリ内バナー表示（画面上部）
+      // 1. 未読カウントを増やす + バッジ更新
+      incrementUnreadCount();
+
+      // 2. アプリ内バナー表示（画面上部）
       showNotificationBanner(payload.notification);
 
-      // 2. 既存の表示も残す（デバッグ用）
+      // 3. 既存の表示も残す（デバッグ用）
       const notifResult = document.getElementById('notificationResult');
       notifResult.innerHTML = '✅ フォアグラウンドで通知を受信しました！\n\n' + JSON.stringify(payload.notification, null, 2);
       notifResult.style.background = '#f0fdf4';
@@ -678,6 +797,9 @@
     async function showNotificationHistory() {
       const mainContainer = document.querySelector('.container:not(#historyContainer)');
       const historyContainer = document.getElementById('historyContainer');
+
+      // 未読カウントをクリア + バッジ非表示
+      clearUnreadCount();
 
       // 画面切り替え
       mainContainer.style.display = 'none';
