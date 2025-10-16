@@ -2329,6 +2329,161 @@ return HtmlService.createHtmlOutput(`
 
 ---
 
+### ❌ 問題⑪: FCM通知が二重表示される ★超重要
+
+**発生日**: 2025年10月16日
+
+**症状**: 1回の通知テスト → 通知が2回（または6〜7回）表示される
+
+**進化の過程**:
+1. **初期状態**: 1回のテスト → 6〜7回の通知
+2. **第1回修正**: GAS側で最新1トークンのみ送信 → 4回に改善
+3. **第2回修正**: Service Worker側で重複防止キャッシュ → 2回に改善
+4. **第3回修正（ChatGPT分析）**: データメッセージ専用 → **1回に完全解決！** ✅
+
+**根本原因（ChatGPT分析より）** ★最重要:
+
+**FCMの自動表示 + Service Workerの手動表示 = 二重通知**
+
+```
+GAS側で notification を送る
+ ↓
+ブラウザが自動で通知を表示（1回目）
+ +
+Service Worker の onBackgroundMessage で showNotification()
+ ↓
+手動で通知を表示（2回目）
+ =
+同じ通知が2回表示される
+```
+
+**詳細説明**:
+- FCM Web は「ページが非アクティブ（バックグラウンド）」のとき、`notification`ペイロードを受け取るとブラウザが**自動で**通知を表示する仕様
+- さらに`onBackgroundMessage()`で`showNotification()`を呼ぶと、**手動で**通知を表示
+- 結果: 同じ通知が2つ出る
+
+**間違った実装**:
+
+```javascript
+// ❌ GAS側（web_push.js）
+const message = {
+  message: {
+    token: token,
+    notification: {  // ← これでブラウザが自動表示
+      title: title,
+      body: body
+    }
+  }
+};
+
+// ❌ Service Worker側（firebase-messaging-sw.js）
+messaging.onBackgroundMessage((payload) => {
+  const title = payload.notification?.title;
+  self.registration.showNotification(title, ...);  // ← これで手動表示
+});
+```
+
+**正しい実装（データメッセージ専用）**:
+
+```javascript
+// ✅ GAS側（web_push.js）- データメッセージのみ送信
+const message = {
+  message: {
+    token: token,
+    data: {  // notification ではなく data のみ
+      title: title,
+      body: body,
+      icon: '/reborn-inventory-system/icon-180.png',
+      badge: '/reborn-inventory-system/icon-180.png',
+      link: '/reborn-inventory-system/'
+    }
+  }
+};
+
+// ✅ Service Worker側（firebase-messaging-sw.js）
+messaging.onBackgroundMessage((payload) => {
+  // data から値を取得（notification ではない）
+  const title = payload.data?.title || 'REBORN';
+  const body = payload.data?.body || 'テスト通知です';
+  const icon = payload.data?.icon || '/reborn-inventory-system/icon-180.png';
+  const badge = payload.data?.badge || '/reborn-inventory-system/icon-180.png';
+  const link = payload.data?.link || '/reborn-inventory-system/';
+
+  // Service Worker で 1回だけ表示
+  const notificationOptions = {
+    body: body,
+    icon: icon,
+    badge: badge,
+    vibrate: [200, 100, 200],
+    data: { url: link },
+    tag: `${title}|${body}`.substring(0, 100)
+  };
+
+  self.registration.showNotification(title, notificationOptions);
+});
+```
+
+**実装箇所**:
+- `web_push.js` (lines 273-287): データメッセージ専用に変更
+- `docs/firebase-messaging-sw.js` (lines 31-72): `payload.data`から取得
+- キャッシュバージョン: v4 → v5
+
+**所要時間**:
+- 問題発見から第3回修正まで: 約3日
+- ChatGPT分析から完全解決まで: 1時間
+
+**教訓**:
+
+1. **FCM Web の仕様を正しく理解する** ★最重要
+   - `notification`ペイロード = ブラウザが自動表示
+   - `data`のみ = Service Workerで手動表示
+   - **両方を使うと二重表示になる**
+
+2. **"どちらが表示するか"を必ず1つに決める**
+   - （推奨）データメッセージ専用: `data`のみ送信 → Service Workerで1回表示
+   - または通知ペイロード専用: `notification`送信 → Service Workerでは表示しない
+   - **混在は絶対NG**
+
+3. **iOS PWA 特有の問題もある**
+   - ホーム画面アイコンが複数 → 複数インスタンスが並走
+   - 古いService Workerが残留 → 新旧が同時に処理
+   - 対策: PWA削除 → Safari設定でサイトデータ削除 → 端末再起動 → 再インストール
+
+4. **複数の原因が重なる場合がある**
+   - 今回のケース: 二重表示（2回）+ 複数トークン（×3）= 6回
+   - 一つずつ切り分けて解決する
+
+5. **ChatGPTのエージェントモードは強力**
+   - 最新情報を網羅的に調査
+   - iOS PWA特有の問題も含めた包括的な分析
+   - 一次情報（MDN、公式ドキュメント、GitHub issue）を引用
+   - 使用制限があるため、重要な問題の最終確認に使う
+
+**FCM Web のベストプラクティス**:
+
+| 方式 | GAS側 | Service Worker側 | 用途 |
+|-----|-------|-----------------|------|
+| データメッセージ専用 ★推奨 | `data`のみ送信 | `onBackgroundMessage`で`showNotification()` | 柔軟なカスタマイズ、Badge API連携 |
+| 通知ペイロード専用 | `notification`送信 | 表示処理は書かない | シンプルな通知のみ |
+
+**チェックリスト** - FCM通知実装時:
+- [ ] GAS側で`notification`と`data`を混在させていないか確認
+- [ ] Service Worker側で`payload.notification`と`payload.data`を混同していないか確認
+- [ ] データメッセージ専用の場合: GAS側で`notification`を送っていないか確認
+- [ ] 通知ペイロード専用の場合: Service Worker側で`showNotification()`を呼んでいないか確認
+- [ ] `onBackgroundMessage`と`addEventListener('push')`の両方を書いていないか確認
+- [ ] 複数トークンがアクティブになっていないか確認（最新1個のみ）
+- [ ] iOS PWA: ホーム画面アイコンが1つだけか確認
+- [ ] iOS PWA: PWA削除 → サイトデータ削除 → 再起動 → 再インストールでフルリセット
+- [ ] Service Workerのキャッシュバージョンを更新（`skipWaiting()` + `clients.claim()`）
+
+**参考リンク**:
+- [FCM Web バックグラウンド受信の仕様](https://firebase.google.com/docs/cloud-messaging/js/receive)
+- [iOS PWA の複数インスタンス問題](https://firt.dev/notes/pwa/)
+- [通知二重表示の実例（StackOverflow）](https://stackoverflow.com/questions/tagged/firebase-cloud-messaging)
+
+---
+
 ## 開発ルール
 
 ### ✅ 開発時のチェックリスト
