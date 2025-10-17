@@ -70,16 +70,84 @@
     </iframe>
   </div>
 
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
+
   <script>
+    // Firebase 設定
+    const firebaseConfig = {
+      apiKey: "AIzaSyBqG9vYxJ8gU-4Y8Z0qX7nQ5wJ6vK9mL0o",
+      authDomain: "reborn-pwa.firebaseapp.com",
+      projectId: "reborn-pwa",
+      storageBucket: "reborn-pwa.firebasestorage.app",
+      messagingSenderId: "633024916851",
+      appId: "1:633024916851:web:8b3f5c0a1e2d4f6g7h8i9j"
+    };
+
+    // Firebase 初期化
+    firebase.initializeApp(firebaseConfig);
+    const messaging = firebase.messaging();
+
+    // VAPID公開鍵（Firebase Console > Cloud Messaging > Web Push certificates）
+    const vapidKey = 'BLt5H1TPMi9OetYHgqoDXVoSkPQziC0Ulimr1-xv8rPObF693SCMWkzP8UhZLMaZzYGd_jP5V3JugDTROjKInbY';
+
+    // GAS Web App URL
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec';
+
     // Service Worker 登録（プッシュ通知用）
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/firebase-messaging-sw.js')
         .then(registration => {
           console.log('✅ Service Worker 登録成功:', registration.scope);
+
+          // Service Worker登録後、通知許可をリクエスト
+          requestNotificationPermission();
         })
         .catch(error => {
           console.error('❌ Service Worker 登録失敗:', error);
         });
+    }
+
+    // 通知許可をリクエスト
+    async function requestNotificationPermission() {
+      try {
+        console.log('🔔 通知許可をリクエスト中...');
+
+        const permission = await Notification.requestPermission();
+
+        if (permission === 'granted') {
+          console.log('✅ 通知許可が付与されました');
+
+          // FCMトークンを取得
+          const token = await messaging.getToken({ vapidKey: vapidKey });
+          console.log('📱 FCMトークン:', token);
+
+          // GASにトークンを保存
+          await saveFCMTokenToGAS(token);
+        } else {
+          console.log('❌ 通知許可が拒否されました');
+        }
+      } catch (error) {
+        console.error('❌ 通知許可リクエストエラー:', error);
+      }
+    }
+
+    // FCMトークンをGASに保存
+    async function saveFCMTokenToGAS(token) {
+      try {
+        const url = GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(token);
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (result.status === 'success') {
+          console.log('✅ FCMトークンをGASに保存しました');
+        } else {
+          console.error('❌ FCMトークン保存失敗:', result.message);
+        }
+      } catch (error) {
+        console.error('❌ FCMトークン保存エラー:', error);
+      }
     }
 
     // Badge API サポートチェック
