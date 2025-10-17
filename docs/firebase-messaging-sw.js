@@ -13,7 +13,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-comp
 
 // Firebase設定
 const firebaseConfig = {
-  apiKey: "AIzaSyAwJKTz1gm3CIz_R4YT1bQOpgaBq1ULt1A",
+  apiKey: "AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A",
   authDomain: "reborn-pwa.firebaseapp.com",
   projectId: "reborn-pwa",
   storageBucket: "reborn-pwa.firebasestorage.app",
