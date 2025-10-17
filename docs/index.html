@@ -118,14 +118,15 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 
   <script>
-    // Firebase 設定
+    // Firebase 設定（firebase-messaging-sw.jsと同じ設定）
     const firebaseConfig = {
-      apiKey: "AIzaSyBqG9vYxJ8gU-4Y8Z0qX7nQ5wJ6vK9mL0o",
+      apiKey: "AIzaSyAwJKTz1gm3CIz_R4YT1bQOpgaBq1ULt1A",
       authDomain: "reborn-pwa.firebaseapp.com",
       projectId: "reborn-pwa",
       storageBucket: "reborn-pwa.firebasestorage.app",
-      messagingSenderId: "633024916851",
-      appId: "1:633024916851:web:8b3f5c0a1e2d4f6g7h8i9j"
+      messagingSenderId: "345653439471",
+      appId: "1:345653439471:web:7620819ce3f022d9cd241a",
+      measurementId: "G-SX48K45X75"
     };
 
     // Firebase 初期化
@@ -238,30 +239,49 @@
     // FCMトークンを取得して保存
     async function getAndSaveFCMToken() {
       try {
+        console.log('🔄 FCMトークンを取得中...');
         const token = await messaging.getToken({ vapidKey: vapidKey });
         console.log('📱 FCMトークン:', token);
+
+        if (!token) {
+          const errorMsg = '❌ FCMトークンが取得できませんでした';
+          console.error(errorMsg);
+          alert(errorMsg + '\n\nService Workerが正しく登録されていない可能性があります。');
+          return;
+        }
 
         // GASにトークンを保存
         await saveFCMTokenToGAS(token);
       } catch (error) {
         console.error('❌ FCMトークン取得エラー:', error);
+        alert('❌ FCMトークン取得エラー:\n\n' + error.message + '\n\n詳細はコンソールを確認してください。');
       }
     }
 
     // FCMトークンをGASに保存
     async function saveFCMTokenToGAS(token) {
       try {
+        console.log('🔄 FCMトークンをGASに保存中...');
         const url = GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(token);
+        console.log('📤 リクエストURL:', url);
+
         const response = await fetch(url);
+        console.log('📥 レスポンス受信:', response.status);
+
         const result = await response.json();
+        console.log('📋 結果:', result);
 
         if (result.status === 'success') {
           console.log('✅ FCMトークンをGASに保存しました');
+          alert('✅ 通知設定が完了しました！\n\n商品登録時に通知が届くようになります。');
         } else {
-          console.error('❌ FCMトークン保存失敗:', result.message);
+          const errorMsg = '❌ FCMトークン保存失敗: ' + result.message;
+          console.error(errorMsg);
+          alert(errorMsg);
         }
       } catch (error) {
         console.error('❌ FCMトークン保存エラー:', error);
+        alert('❌ FCMトークン保存エラー:\n\n' + error.message + '\n\n詳細はコンソールを確認してください。');
       }
     }
 
