@@ -113,25 +113,28 @@
     </iframe>
   </div>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-messaging-compat.js"></script>
+  <!-- Firebase SDKs (Modular format) -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getMessaging, getToken } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
 
-  <script>
     // Firebase 設定（firebase-messaging-sw.jsと同じ設定）
     const firebaseConfig = {
       apiKey: "AIzaSyAwJKTz1gm3CIz_R4YT1bQOpgaBq1ULt1A",
       authDomain: "reborn-pwa.firebaseapp.com",
       projectId: "reborn-pwa",
-      storageBucket: "reborn-pwa.appspot.com",
+      storageBucket: "reborn-pwa.firebasestorage.app",
       messagingSenderId: "345653439471",
       appId: "1:345653439471:web:7620819ce3f022d9cd241a",
       measurementId: "G-SX48K45X75"
     };
 
     // Firebase 初期化
-    firebase.initializeApp(firebaseConfig);
-    const messaging = firebase.messaging();
+    const app = initializeApp(firebaseConfig);
+    const messaging = getMessaging(app);
+
+    // グローバル変数として公開（他の関数から参照できるように）
+    window.firebaseMessaging = messaging;
 
     // VAPID公開鍵（Firebase Console > Cloud Messaging > Web Push certificates）
     const vapidKey = 'BLt5H1TPMi9OetYHgqoDXVoSkPQziC0Ulimr1-xv8rPObF693SCMWkzP8UhZLMaZzYGd_jP5V3JugDTROjKInbY';
@@ -245,8 +248,11 @@
         const registration = await navigator.serviceWorker.ready;
         console.log('✅ Service Worker準備完了:', registration);
 
+        // モジュラー形式のgetToken()を動的にimport
+        const { getToken } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
+
         // Service Worker登録を明示的に渡す（重要！）
-        const token = await messaging.getToken({
+        const token = await getToken(window.firebaseMessaging, {
           vapidKey: vapidKey,
           serviceWorkerRegistration: registration
         });
