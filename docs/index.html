@@ -51,9 +51,51 @@
       font-size: 18px;
     }
 
+    /* 通知許可バナー（iOS対応） */
+    #push-cta {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      right: 16px;
+      display: none;
+      padding: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 12px;
+      z-index: 9999;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.4;
+    }
+
+    #enable-push {
+      margin-top: 12px;
+      width: 100%;
+      background: white;
+      color: #667eea;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    #enable-push:active {
+      transform: scale(0.98);
+    }
+
   </style>
 </head>
 <body>
+  <!-- 通知許可バナー（iOS対応：ユーザージェスチャー必須） -->
+  <div id="push-cta">
+    🔔 商品登録の通知を受け取りますか？
+    <button id="enable-push">通知を許可</button>
+  </div>
+
   <div id="app-container">
     <div class="loading" id="loading">
       <div>
@@ -102,49 +144,96 @@
         .then(registration => {
           console.log('✅ Service Worker 登録成功:', registration.scope);
 
-          // 通知許可状態をチェックしてバナーを表示
-          checkNotificationPermission();
+          // iOS対応：通知許可バナーを表示（条件付き）
+          maybeShowNotificationBanner();
         })
         .catch(error => {
           console.error('❌ Service Worker 登録失敗:', error);
         });
     }
 
-    // 通知許可状態をチェック
-    async function checkNotificationPermission() {
+    // 通知許可バナーを表示するか判定（iOS対応）
+    function maybeShowNotificationBanner() {
       if (!('Notification' in window)) {
         console.log('ℹ️ このブラウザは通知をサポートしていません');
         return;
       }
 
+      // 1. iOSホーム画面アプリ判定（standalone mode）
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+      console.log('📱 ホーム画面アプリモード:', isStandalone);
+
+      // 2. localStorageで「一度出したか」フラグチェック
+      const KEY = 'push-permission-asked-v1';
+      const asked = localStorage.getItem(KEY) === '1';
+      console.log('🔔 過去に通知許可を尋ねたか:', asked);
+
+      // 3. 現在の通知許可状態
       const permission = Notification.permission;
       console.log('🔔 現在の通知許可状態:', permission);
 
-      if (permission === 'default') {
-        // まだ許可/拒否されていない場合、自動でダイアログを表示
+      // 4. 表示条件：ホーム画面アプリ かつ 未許可(default) かつ 未表示
+      if (!isStandalone) {
+        console.log('ℹ️ ホーム画面アプリではないため、通知許可バナーを表示しません');
+        return;
+      }
+
+      if (permission !== 'default') {
+        console.log('ℹ️ 通知許可は既に決定済み（granted/denied）のため、バナーを表示しません');
+
+        // 許可済みの場合、FCMトークンを取得
+        if (permission === 'granted') {
+          console.log('✅ 通知はすでに許可されています');
+          getAndSaveFCMToken();
+        }
+        return;
+      }
+
+      if (asked) {
+        console.log('ℹ️ 過去に通知許可を尋ねたため、バナーを表示しません');
+        return;
+      }
+
+      // 5. 条件を満たした場合、バナーを表示
+      console.log('✅ 通知許可バナーを表示します');
+      document.getElementById('push-cta').style.display = 'block';
+    }
+
+    // ボタンクリック時の処理（ユーザージェスチャー内で requestPermission を呼ぶ）
+    document.getElementById('enable-push')?.addEventListener('click', async () => {
+      try {
         console.log('🔔 通知許可をリクエスト中...');
 
-        try {
-          const newPermission = await Notification.requestPermission();
+        // ユーザージェスチャー内で requestPermission を呼ぶ（iOS要件）
+        const perm = await Notification.requestPermission();
 
-          if (newPermission === 'granted') {
-            console.log('✅ 通知許可が付与されました');
-            // FCMトークンを取得して保存
-            await getAndSaveFCMToken();
-          } else {
-            console.log('❌ 通知許可が拒否されました');
-          }
-        } catch (error) {
-          console.error('❌ 通知許可リクエストエラー:', error);
+        // 一度出したら記録（次回以降は表示しない）
+        const KEY = 'push-permission-asked-v1';
+        localStorage.setItem(KEY, '1');
+
+        if (perm === 'granted') {
+          console.log('✅ 通知許可が付与されました');
+
+          // FCMトークンを取得して保存
+          await getAndSaveFCMToken();
+
+          // バナーを閉じる
+          document.getElementById('push-cta').style.display = 'none';
+        } else {
+          console.log('❌ 通知許可が拒否されました');
+
+          // 拒否時のメッセージ表示
+          const banner = document.getElementById('push-cta');
+          banner.innerHTML = '❌ 通知は拒否されました。<br>iOSの「設定 > 通知」で再度許可できます。';
+          setTimeout(() => {
+            banner.style.display = 'none';
+          }, 4000);
         }
-      } else if (permission === 'granted') {
-        // すでに許可済みの場合、トークンを取得
-        console.log('✅ 通知はすでに許可されています');
-        getAndSaveFCMToken();
-      } else {
-        console.log('❌ 通知は拒否されています');
+      } catch (error) {
+        console.error('❌ 通知許可リクエストエラー:', error);
+        alert('通知許可のリクエストに失敗しました: ' + error.message);
       }
-    }
+    });
 
     // FCMトークンを取得して保存
     async function getAndSaveFCMToken() {
