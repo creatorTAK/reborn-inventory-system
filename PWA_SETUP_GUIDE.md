@@ -650,6 +650,281 @@ function createJWT(serviceAccount) {
 
 ---
 
+### Phase 8: バッジ管理システムの実装（2025年10月17日完成）✅
+
+**目的**: プッシュ通知と連動したバッジカウント管理システムを実装
+
+#### 8-1. ヘッダーにバッジボタンを追加（docs/index.html）
+
+**CSS追加**:
+
+```css
+/* ヘッダー（通知ボタン付き） */
+#app-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 通知バッジボタン */
+.notification-button {
+  position: relative;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid white;
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.badge-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ef4444;
+  color: white;
+  border-radius: 12px;
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  display: none;
+}
+
+.badge-count.active {
+  display: flex;
+}
+```
+
+**HTML追加**:
+
+```html
+<!-- アプリ画面 -->
+<div id="app-screen">
+  <!-- ヘッダー（通知ボタン） -->
+  <div id="app-header">
+    <div class="app-title">🔄 REBORN</div>
+    <button class="notification-button" onclick="openNotifications()">
+      <span class="notification-icon">🔔</span>
+      <span class="badge-count" id="badge-count">0</span>
+    </button>
+  </div>
+
+  <!-- iframe -->
+  <iframe id="gas-iframe" src="..."></iframe>
+</div>
+```
+
+#### 8-2. バッジ管理システム（docs/index.html）
+
+**JavaScript追加**:
+
+```javascript
+// バッジ管理システム
+let badgeCount = 0;
+
+// バッジ初期化（localStorage読み込み）
+function initBadge() {
+  const saved = localStorage.getItem('reborn-badge-count');
+  badgeCount = saved ? parseInt(saved, 10) : 0;
+  updateBadgeDisplay();
+  updateAppBadge();
+}
+
+// バッジ+1（通知受信時）
+function incrementBadge() {
+  badgeCount++;
+  localStorage.setItem('reborn-badge-count', badgeCount);
+  updateBadgeDisplay();
+  updateAppBadge();
+  console.log('🔔 バッジカウント +1:', badgeCount);
+}
+
+// バッジクリア
+function clearBadge() {
+  badgeCount = 0;
+  localStorage.setItem('reborn-badge-count', 0);
+  updateBadgeDisplay();
+  updateAppBadge();
+}
+
+// UI更新
+function updateBadgeDisplay() {
+  const badgeElement = document.getElementById('badge-count');
+  if (badgeElement) {
+    badgeElement.textContent = badgeCount;
+    if (badgeCount > 0) {
+      badgeElement.classList.add('active');
+    } else {
+      badgeElement.classList.remove('active');
+    }
+  }
+}
+
+// Badge API更新（アイコン）
+function updateAppBadge() {
+  if ('setAppBadge' in navigator) {
+    if (badgeCount > 0) {
+      navigator.setAppBadge(badgeCount);
+    } else {
+      navigator.clearAppBadge();
+    }
+  }
+}
+
+// 通知ページを開く
+function openNotifications() {
+  window.location.href = 'notifications.html';
+}
+
+// Service Workerからのメッセージ受信
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data.type === 'INCREMENT_BADGE') {
+      incrementBadge();
+    }
+  });
+}
+
+// ページ読み込み時に初期化
+window.addEventListener('load', () => {
+  initBadge();
+});
+```
+
+#### 8-3. 通知ページ作成（docs/notifications.html）
+
+**新規ファイル作成**:
+
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>通知 - REBORN</title>
+  <style>
+    /* ヘッダー */
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 16px;
+    }
+
+    /* バッジカード */
+    .badge-number {
+      font-size: 72px;
+      font-weight: 700;
+      color: #667eea;
+    }
+
+    .clear-button {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: white;
+      padding: 14px 32px;
+      font-size: 16px;
+      border-radius: 12px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <button onclick="goBack()">← 戻る</button>
+    <div>🔔 通知</div>
+  </div>
+
+  <div class="badge-card">
+    <div>未読通知数</div>
+    <div class="badge-number" id="badge-display">0</div>
+    <button class="clear-button" onclick="clearBadgeCount()">
+      🗑️ バッジをクリア
+    </button>
+  </div>
+
+  <script>
+    function updateDisplay() {
+      const count = parseInt(localStorage.getItem('reborn-badge-count') || 0);
+      document.getElementById('badge-display').textContent = count;
+    }
+
+    function clearBadgeCount() {
+      if (confirm('バッジカウントを 0 にリセットしますか？')) {
+        localStorage.setItem('reborn-badge-count', 0);
+        if ('setAppBadge' in navigator) {
+          navigator.clearAppBadge();
+        }
+        updateDisplay();
+      }
+    }
+
+    function goBack() {
+      window.location.href = 'index.html';
+    }
+
+    window.addEventListener('load', updateDisplay);
+  </script>
+</body>
+</html>
+```
+
+#### 8-4. Service Worker連携（docs/firebase-messaging-sw.js）
+
+**Service Workerの通知受信時にバッジを増やす**:
+
+```javascript
+// バックグラウンドメッセージ受信
+messaging.onBackgroundMessage((payload) => {
+  console.log('Received background message:', payload);
+
+  // 1. バッジカウントを増やす
+  incrementBadgeCount();
+
+  // 2. 通知を表示
+  self.registration.showNotification(title, options);
+});
+
+// バッジカウントを増やす
+function incrementBadgeCount() {
+  self.clients.matchAll({ type: 'window' }).then(clients => {
+    if (clients.length > 0) {
+      // アプリが開いている場合はメッセージ送信
+      clients[0].postMessage({ type: 'INCREMENT_BADGE' });
+    } else {
+      // アプリが閉じている場合はBadge APIで直接更新
+      if ('setAppBadge' in self.navigator) {
+        self.navigator.setAppBadge(1);
+      }
+    }
+  });
+}
+```
+
+#### 動作確認
+
+1. **商品登録してテスト通知を送信**
+2. **ヘッダーの🔔ボタンを確認**
+   - バッジカウントが赤い丸に表示されているか
+3. **ホーム画面のアイコンを確認**
+   - アイコンにバッジ数字が表示されているか
+4. **🔔ボタンをタップ → 通知ページに移動**
+   - 大きな数字が表示されているか
+5. **バッジクリアボタンをタップ**
+   - カウントが0になるか
+
+---
+
 ## postMessage実装の完全ガイド
 
 ### GASの2重iframe構造
