@@ -142,18 +142,23 @@
     // GAS Web App URL
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec';
 
+    // Service Worker registration（グローバル変数）
+    let swRegistration = null;
+
     // Service Worker 登録（プッシュ通知用）
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/firebase-messaging-sw.js')
-        .then(registration => {
+      window.addEventListener('load', async () => {
+        try {
+          const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+          swRegistration = registration; // グローバル変数に保存
           console.log('✅ Service Worker 登録成功:', registration.scope);
 
           // iOS対応：通知許可バナーを表示（条件付き）
           maybeShowNotificationBanner();
-        })
-        .catch(error => {
+        } catch (error) {
           console.error('❌ Service Worker 登録失敗:', error);
-        });
+        }
+      });
     }
 
     // 通知許可バナーを表示するか判定（iOS対応）
@@ -244,9 +249,13 @@
       try {
         console.log('🔄 FCMトークンを取得中...');
 
-        // Service Worker登録を取得
-        const registration = await navigator.serviceWorker.ready;
-        console.log('✅ Service Worker準備完了:', registration);
+        // グローバル変数のService Worker登録を使用
+        if (!swRegistration) {
+          console.error('❌ Service Workerが登録されていません');
+          alert('Service Workerが登録されていません。ページをリロードしてください。');
+          return;
+        }
+        console.log('✅ Service Worker準備完了:', swRegistration);
 
         // モジュラー形式のgetToken()を動的にimport
         const { getToken } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
@@ -254,7 +263,7 @@
         // Service Worker登録を明示的に渡す（重要！）
         const token = await getToken(window.firebaseMessaging, {
           vapidKey: vapidKey,
-          serviceWorkerRegistration: registration
+          serviceWorkerRegistration: swRegistration
         });
         console.log('📱 FCMトークン:', token);
 
