@@ -50,9 +50,64 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 18px;
     }
+
+    /* 通知許可バナー */
+    #notification-banner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 16px;
+      text-align: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      z-index: 10000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      display: none;
+    }
+
+    #notification-banner.show {
+      display: block;
+    }
+
+    #notification-banner button {
+      background: white;
+      color: #667eea;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 12px;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    #notification-banner button:active {
+      transform: scale(0.98);
+    }
+
+    #notification-banner .close-btn {
+      background: transparent;
+      color: white;
+      padding: 4px 12px;
+      margin-left: 8px;
+      font-size: 14px;
+      box-shadow: none;
+    }
   </style>
 </head>
 <body>
+  <!-- 通知許可バナー -->
+  <div id="notification-banner">
+    <div style="font-size: 24px; margin-bottom: 8px;">🔔</div>
+    <div style="font-size: 16px; font-weight: 500;">商品登録の通知を受け取りますか？</div>
+    <div style="font-size: 14px; margin-top: 4px; opacity: 0.9;">商品登録完了時にプッシュ通知でお知らせします</div>
+    <button id="enable-notification-btn" onclick="enableNotifications()">🔔 通知を許可</button>
+    <button class="close-btn" onclick="closeBanner()">後で</button>
+  </div>
+
   <div id="app-container">
     <div class="loading" id="loading">
       <div>
@@ -101,16 +156,54 @@
         .then(registration => {
           console.log('✅ Service Worker 登録成功:', registration.scope);
 
-          // Service Worker登録後、通知許可をリクエスト
-          requestNotificationPermission();
+          // 通知許可状態をチェックしてバナーを表示
+          checkNotificationPermission();
         })
         .catch(error => {
           console.error('❌ Service Worker 登録失敗:', error);
         });
     }
 
-    // 通知許可をリクエスト
-    async function requestNotificationPermission() {
+    // 通知許可状態をチェック
+    function checkNotificationPermission() {
+      if (!('Notification' in window)) {
+        console.log('ℹ️ このブラウザは通知をサポートしていません');
+        return;
+      }
+
+      const permission = Notification.permission;
+      console.log('🔔 現在の通知許可状態:', permission);
+
+      if (permission === 'default') {
+        // まだ許可/拒否されていない場合、バナーを表示
+        showNotificationBanner();
+      } else if (permission === 'granted') {
+        // すでに許可済みの場合、トークンを取得
+        console.log('✅ 通知はすでに許可されています');
+        getAndSaveFCMToken();
+      } else {
+        console.log('❌ 通知は拒否されています');
+      }
+    }
+
+    // 通知許可バナーを表示
+    function showNotificationBanner() {
+      const banner = document.getElementById('notification-banner');
+      if (banner) {
+        banner.classList.add('show');
+      }
+    }
+
+    // バナーを閉じる
+    function closeBanner() {
+      const banner = document.getElementById('notification-banner');
+      if (banner) {
+        banner.classList.remove('show');
+      }
+    }
+
+    // 通知を有効化（ボタンクリック時）
+    async function enableNotifications() {
       try {
         console.log('🔔 通知許可をリクエスト中...');
 
@@ -119,17 +212,31 @@
         if (permission === 'granted') {
           console.log('✅ 通知許可が付与されました');
 
-          // FCMトークンを取得
-          const token = await messaging.getToken({ vapidKey: vapidKey });
-          console.log('📱 FCMトークン:', token);
+          // バナーを閉じる
+          closeBanner();
 
-          // GASにトークンを保存
-          await saveFCMTokenToGAS(token);
+          // FCMトークンを取得して保存
+          await getAndSaveFCMToken();
         } else {
           console.log('❌ 通知許可が拒否されました');
+          alert('通知が拒否されました。iPhoneの設定から通知を許可してください。');
         }
       } catch (error) {
         console.error('❌ 通知許可リクエストエラー:', error);
+        alert('通知許可のリクエストに失敗しました: ' + error.message);
+      }
+    }
+
+    // FCMトークンを取得して保存
+    async function getAndSaveFCMToken() {
+      try {
+        const token = await messaging.getToken({ vapidKey: vapidKey });
+        console.log('📱 FCMトークン:', token);
+
+        // GASにトークンを保存
+        await saveFCMTokenToGAS(token);
+      } catch (error) {
+        console.error('❌ FCMトークン取得エラー:', error);
       }
     }
 
