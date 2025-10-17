@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ
@@ -16,7 +16,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyAwJKTz1gm3CIz_R4YT1bQOpgaBq1ULt1A",
   authDomain: "reborn-pwa.firebaseapp.com",
   projectId: "reborn-pwa",
-  storageBucket: "reborn-pwa.firebasestorage.app",
+  storageBucket: "reborn-pwa.appspot.com",
   messagingSenderId: "345653439471",
   appId: "1:345653439471:web:7620819ce3f022d9cd241a",
   measurementId: "G-SX48K45X75"
