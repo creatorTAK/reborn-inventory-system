@@ -2618,6 +2618,134 @@
     autoResizeTextarea(descTextarea);
   }
 
+  // ================= 画像アップロード機能 =================
+
+  // アップロードされた画像を保存する配列
+  let uploadedImages = [];
+
+  /**
+   * 画像アップロード処理
+   * @param {Event} event - ファイル選択イベント
+   */
+  function handleImageUpload(event) {
+    const files = event.target.files;
+
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    // 既存の画像数と新規画像数の合計が3を超える場合は警告
+    if (uploadedImages.length + files.length > 3) {
+      alert('画像は最大3枚までアップロードできます');
+      return;
+    }
+
+    // 各ファイルをBase64に変換
+    Array.from(files).forEach((file, index) => {
+      // ファイルサイズチェック（10MB制限）
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`${file.name}のサイズが大きすぎます（最大10MB）`);
+        return;
+      }
+
+      // 画像ファイルかチェック
+      if (!file.type.startsWith('image/')) {
+        alert(`${file.name}は画像ファイルではありません`);
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        const base64Data = e.target.result;
+
+        uploadedImages.push({
+          name: file.name,
+          data: base64Data,
+          mimeType: file.type
+        });
+
+        // プレビューを更新
+        displayImagePreviews();
+
+        debug.log(`画像をアップロードしました: ${file.name}`);
+      };
+
+      reader.onerror = function(error) {
+        console.error('画像の読み込みに失敗しました:', error);
+        alert(`${file.name}の読み込みに失敗しました`);
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * 画像プレビューを表示
+   */
+  function displayImagePreviews() {
+    const container = document.getElementById('imagePreviewContainer');
+    const list = document.getElementById('imagePreviewList');
+    const count = document.getElementById('imageCount');
+
+    if (!container || !list || !count) {
+      console.error('プレビュー要素が見つかりません');
+      return;
+    }
+
+    // 画像がない場合は非表示
+    if (uploadedImages.length === 0) {
+      container.style.display = 'none';
+      return;
+    }
+
+    // 画像がある場合は表示
+    container.style.display = 'block';
+    count.textContent = uploadedImages.length;
+
+    // プレビューリストをクリア
+    list.innerHTML = '';
+
+    // 各画像のプレビューを作成
+    uploadedImages.forEach((image, index) => {
+      const previewItem = document.createElement('div');
+      previewItem.style.cssText = 'position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 2px solid #e5e7eb;';
+
+      previewItem.innerHTML = `
+        <img src="${image.data}" alt="${image.name}" style="width: 100%; height: 100%; object-fit: cover;">
+        <button
+          type="button"
+          onclick="removeImage(${index})"
+          style="position: absolute; top: 4px; right: 4px; background: rgba(239, 68, 68, 0.9); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;"
+          title="削除"
+        >×</button>
+      `;
+
+      list.appendChild(previewItem);
+    });
+  }
+
+  /**
+   * 画像を削除
+   * @param {number} index - 削除する画像のインデックス
+   */
+  function removeImage(index) {
+    uploadedImages.splice(index, 1);
+    displayImagePreviews();
+    debug.log(`画像を削除しました (index: ${index})`);
+  }
+
+  /**
+   * アップロードされた画像を取得
+   * @returns {Array} Base64画像データの配列
+   */
+  function getUploadedImages() {
+    return uploadedImages.map(img => ({
+      data: img.data.split(',')[1], // Base64部分のみ（data:image/png;base64,を除く）
+      mimeType: img.mimeType
+    }));
+  }
+
   // ================= AI生成機能 =================
 
   /**
@@ -2647,7 +2775,11 @@
       // 商品情報を収集
       const productInfo = collectProductInfo();
 
+      // 画像データを取得
+      const images = getUploadedImages();
+
       debug.log('収集した商品情報:', productInfo);
+      debug.log('アップロードされた画像数:', images.length);
 
       // バリデーション
       if (!productInfo.brandName || !productInfo.itemName) {
@@ -2700,7 +2832,7 @@
           // ボタンを元に戻す
           resetAiButton(aiGenBtn, originalText);
         })
-        .generateProductDescription(productInfo);
+        .generateProductDescription(productInfo, images);
 
     } catch (error) {
       console.error('AI生成処理エラー:', error);
@@ -3474,6 +3606,13 @@
 
       console.log('商品の説明デフォルト値復活');
       updateDescriptionFromDetail();
+
+    // 16. 画像をクリア
+    uploadedImages = [];
+    const imageInput = document.getElementById('productImages');
+    if (imageInput) imageInput.value = '';
+    displayImagePreviews();
+    console.log('画像をクリア');
 
       console.log('=== リセット完了 ===');
     } catch (error) {

@@ -134,11 +134,14 @@ function getMaxLengthFromConfig(aiConfig) {
  * @param {Object} [aiConfig] - AI生成設定
  * @returns {string} 構築されたプロンプト
  */
-function buildDescriptionPrompt(productInfo, aiConfig) {
+function buildDescriptionPrompt(productInfo, aiConfig, imageCount) {
   // 必須項目のバリデーション
   if (!productInfo.brandName || !productInfo.itemName) {
     throw new Error('NG(VALIDATION): ブランド名とアイテム名は必須です。');
   }
+
+  // 画像数のデフォルト
+  imageCount = imageCount || 0;
 
   // AI設定のデフォルト値
   const config = aiConfig || {};
@@ -263,6 +266,22 @@ function buildDescriptionPrompt(productInfo, aiConfig) {
       break;
   }
 
+  // 画像がある場合の指示
+  if (imageCount > 0) {
+    prompt += `
+
+【画像情報】
+${imageCount}枚の商品画像が添付されています。
+画像を詳しく分析して、以下の情報を抽出し、説明文に反映してください：
+- 商品の色・柄・デザインの詳細
+- 素材感（見た目からわかる範囲で）
+- シルエット・形状の特徴
+- ディテール（ポケット、ボタン、装飾など）
+- 着用イメージ・雰囲気
+- 状態（汚れ、ダメージ、使用感など）
+- その他、画像から読み取れる魅力的なポイント`;
+  }
+
   // 指示部分
   prompt += `
 
@@ -306,7 +325,7 @@ function buildDescriptionPrompt(productInfo, aiConfig) {
  * @returns {string} 生成されたテキスト
  * @throws {Error} API呼び出しに失敗した場合
  */
-function callGeminiApi(prompt, aiConfig, productInfo) {
+function callGeminiApi(prompt, aiConfig, productInfo, images) {
   try {
     const apiKey = getGeminiApiKey();
     const url = `${GEMINI_API_ENDPOINT}?key=${apiKey}`;
@@ -316,12 +335,32 @@ function callGeminiApi(prompt, aiConfig, productInfo) {
     const temperature = config.temperature !== undefined ? config.temperature : 0.7;
     const maxTokens = config.maxTokens || 1024;
 
+    // 画像データの検証
+    images = images || [];
+
+    // partsの構築（テキスト + 画像）
+    const parts = [{ text: prompt }];
+
+    // 画像がある場合は追加
+    if (images.length > 0) {
+      images.forEach((image, index) => {
+        parts.push({
+          inline_data: {
+            mime_type: image.mimeType,
+            data: image.data
+          }
+        });
+
+        if (DEBUG_MODE) {
+          console.log(`[Gemini API] 画像 ${index + 1} を追加:`, image.mimeType);
+        }
+      });
+    }
+
     // リクエストボディの構築
     const requestBody = {
       contents: [{
-        parts: [{
-          text: prompt
-        }]
+        parts: parts
       }],
       generationConfig: {
         temperature: temperature,
@@ -440,11 +479,17 @@ function callGeminiApi(prompt, aiConfig, productInfo) {
  * @returns {string} 生成された商品説明文
  * @throws {Error} 生成に失敗した場合
  */
-function generateProductDescription(productInfo) {
+function generateProductDescription(productInfo, images) {
   try {
     // APIキーの存在チェック
     if (!hasGeminiApiKey()) {
       throw new Error('NG(CONFIG): Gemini APIキーが設定されていません。');
+    }
+
+    // 画像データの検証
+    images = images || [];
+    if (images.length > 0) {
+      console.log(`[情報] ${images.length}枚の画像を使用してAI生成します`);
     }
 
     // AI生成設定を取得
@@ -457,11 +502,11 @@ function generateProductDescription(productInfo) {
       aiConfig = {};
     }
 
-    // プロンプトの構築
-    const prompt = buildDescriptionPrompt(productInfo, aiConfig);
+    // プロンプトの構築（画像の枚数を渡す）
+    const prompt = buildDescriptionPrompt(productInfo, aiConfig, images.length);
 
     // API呼び出し（品番がある場合はGoogle Search Groundingが有効化される）
-    const generatedText = callGeminiApi(prompt, aiConfig, productInfo);
+    const generatedText = callGeminiApi(prompt, aiConfig, productInfo, images);
 
     // 文字数チェック（設定された範囲を使用）
     const minLength = getMinLengthFromConfig(aiConfig);
