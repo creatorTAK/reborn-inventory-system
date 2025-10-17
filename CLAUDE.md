@@ -2,7 +2,7 @@
 
 古着物販管理システム（Google Apps Script + スプレッドシート）
 
-**完成度: 83%** | **商品登録: 100%** ✅ | **モバイル対応: 100%** ✅ | **PWA基盤: 100%** ✅ | **Service Worker: 100%** ✅ | **FCM通知: 100%** ✅ | **カスタムドメイン: 100%** ✅ ★NEW | **タブナビゲーション: 100%** ✅ | **Google Sites埋め込み: 100%** ✅ | **Cloudflare Pages: 100%** ✅ ★NEW | **チーム管理: 0%** 🎯 | **在庫管理: 0%** | **設定管理: 100%** ✅ | **売上分析: 20%** | **管理番号システム: 100%** ✅ | **ハッシュタグシステム: 100%** ✅ | **セールスワード設定: 100%** ✅ | **使い方ガイド: 100%** ✅ | **リセット機能: 100%** ✅ | **コピー機能: 100%** ✅ | **商品名並び替え: 100%** ✅ | **AI生成機能: 100%** ✅ | **Google Search Grounding: 100%** ✅ | **見出しスタイル: 100%** ✅ | **コード品質: 85%** 🔧
+**完成度: 84%** | **商品登録: 100%** ✅ | **モバイル対応: 100%** ✅ | **PWA基盤: 100%** ✅ | **Service Worker: 100%** ✅ | **FCM通知: 100%** ✅ | **カスタムドメイン: 100%** ✅ | **PWA内タブ切り替え: 100%** ✅ ★NEW | **タブナビゲーション: 100%** ✅ | **Google Sites埋め込み: 100%** ✅ | **Cloudflare Pages: 100%** ✅ | **チーム管理: 0%** 🎯 | **在庫管理: 0%** | **設定管理: 100%** ✅ | **売上分析: 20%** | **管理番号システム: 100%** ✅ | **ハッシュタグシステム: 100%** ✅ | **セールスワード設定: 100%** ✅ | **使い方ガイド: 100%** ✅ | **リセット機能: 100%** ✅ | **コピー機能: 100%** ✅ | **商品名並び替え: 100%** ✅ | **AI生成機能: 100%** ✅ | **Google Search Grounding: 100%** ✅ | **見出しスタイル: 100%** ✅ | **コード品質: 85%** 🔧
 
 ---
 
@@ -1649,6 +1649,143 @@ return template.evaluate()
 **参考**:
 - GitHub Pages → Cloudflare Pages 移行理由: より高速、より柔軟、カスタムドメイン設定が容易
 - 既存の GitHub Pages は停止せず並存可能
+
+---
+
+#### 🚀 Phase 7: PWA内タブ切り替え完全実装（postMessage）
+
+**日時**: 2025年10月17日
+**所要時間**: 約4時間（デバッグ含む）
+**技術スタック**: postMessage API, iframe通信, Same-Origin Policy対応
+
+**背景**:
+
+Phase 6でカスタムドメイン（www.reborn-inventory.com）を取得したが、重大な問題が発覚：
+- GAS Web App（iframe内）でタブ切り替え（商品登録 ↔ 設定）を行うと、**Safariブラウザが開いてしまう**
+- PWA内で完結せず、アプリ体験が台無し
+- SaaS化の必須要件を満たせない状態
+
+**技術的課題**:
+
+1. **Same-Origin Policy**
+   - Cloudflare Pages: `www.reborn-inventory.com`
+   - GAS Web App: `script.google.com`
+   - 異なるオリジン間でiframe → 親ウィンドウの直接制御が不可能
+
+2. **GASの2重iframe構造**
+   - 外側iframe: `script.google.com`
+   - 内側iframe（サンドボックス）: `googleusercontent.com` ← **実際のコードはここで実行**
+   - `window.parent` では外側iframeまでしか届かない
+
+**解決策: postMessage API**
+
+クロスオリジン間で安全にメッセージを送受信できる標準ブラウザAPI
+
+**実装内容**:
+
+**1. 親ウィンドウ側（docs/index.html）**
+```javascript
+// postMessage受信処理
+window.addEventListener('message', function(event) {
+  // セキュリティ: GASのサンドボックスiframeからのメッセージを許可
+  const isValidOrigin = event.origin === 'https://script.google.com' ||
+                       event.origin.includes('googleusercontent.com');
+
+  if (!isValidOrigin) {
+    console.warn('⚠️ 不正なオリジンからのメッセージを拒否:', event.origin);
+    return;
+  }
+
+  // ナビゲーション要求の処理
+  if (event.data.type === 'navigate' && event.data.url) {
+    const iframe = document.getElementById('gas-iframe');
+    iframe.src = event.data.url; // iframe srcを更新
+  }
+});
+```
+
+**2. iframe側（sidebar_product.html, sidebar_config.html）**
+```javascript
+function navigateInPWA(url) {
+  // window.top に送信（2重iframe構造に対応）
+  if (window.top && window.top !== window.self) {
+    window.top.postMessage({
+      type: 'navigate',
+      url: url
+    }, '*'); // ワイルドカード（サンドボックスから送信するため）
+  } else {
+    window.location.href = url; // iframe外での動作
+  }
+}
+```
+
+**3. タブナビゲーションのスタイル修正（sidebar_config.html）**
+- `sp_styles.html` の include 追加 → CSS変数 `--primary-gradient` を定義
+- `.nav-tabs` の z-index を 1 に設定 → タブナビゲーションヘッダーが最上位に表示
+
+**トラブルシューティング**:
+
+**問題1**: タブをクリックしても反応しない
+- **原因**: `window.parent` では内側iframeから親ウィンドウに届かない
+- **解決**: `window.top` に変更（最上位ウィンドウに直接送信）
+
+**問題2**: postMessage送信エラー（`Unable to post message`）
+- **原因**: ターゲットオリジン `'https://www.reborn-inventory.com'` が厳密すぎる
+- **解決**: ワイルドカード `'*'` に変更（サンドボックスからの送信に必要）
+
+**問題3**: タブナビゲーションヘッダーの背景が白い
+- **原因**: CSS変数 `--primary-gradient` が未定義
+- **解決**: `sp_styles.html` を include
+
+**問題4**: スクロール時に内部メニューがヘッダーに重なる
+- **原因**: z-index の競合
+- **解決**: `.nav-tabs` の z-index を 1 に設定
+
+**動作確認**:
+
+✅ **PCブラウザ**:
+- コンソールログで postMessage の送受信を確認
+- タブ切り替えが正常動作
+
+✅ **iPhone PWA**:
+- 商品登録 ↔ 設定の切り替えがPWA内で完結
+- Safariブラウザが開かない
+- タブナビゲーションヘッダーが紫のグラデーション背景で表示
+- スクロール時もヘッダーが最上位に固定
+
+**技術的ブレークスルー**:
+
+1. **Same-Origin Policy の克服**
+   - 直接制御（ブロック）→ postMessage（安全に通信）
+
+2. **GASの2重iframe構造の理解**
+   - `window.parent`（1階層）→ `window.top`（最上位）
+
+3. **セキュリティとUXの両立**
+   - オリジンチェックで不正なメッセージを拒否
+   - ワイルドカードでGASサンドボックスからの送信を許可
+
+**ビジネスインパクト**:
+
+- ✅ **完全なネイティブアプリ体験**: Safariに飛ばない、アプリ内で完結
+- ✅ **SaaS化の必須要件クリア**: プロフェッショナルなUI、カスタムドメイン、PWA
+- ✅ **チーム利用の基盤完成**: 安心して外注スタッフに共有できる
+- ✅ **他システムへの応用可能**: postMessage実装パターンを確立
+
+**開発の所感**:
+
+> 「完璧とは言いませんが、切り替えは問題なくできました。Webページが開くことなく、商品登録と設定を交互に開くことができました。」
+>
+> 「完璧じゃないでしょうか！ついにできましたね！」（ユーザー）
+
+**実装ファイル**:
+- `docs/index.html` (lines 99-118): postMessage受信処理
+- `sidebar_product.html` (lines 35-55): postMessage送信処理
+- `sidebar_config.html` (lines 19, 180-200): sp_styles.html include + postMessage送信処理
+
+**デプロイ**:
+- GAS: `clasp push` → Apps Scriptエディタで手動デプロイ
+- Cloudflare Pages: `git push` → 自動デプロイ
 
 ---
 
@@ -5416,9 +5553,31 @@ if (e && e.parameter && e.parameter.action) {
 
 ---
 
-**最終更新日**: 2025年10月17日（🌐 **カスタムドメイン完全実装！** www.reborn-inventory.com でPWA動作確認完了！）
+**最終更新日**: 2025年10月17日（🚀 **PWA内タブ切り替え完全実装！** postMessage APIでネイティブアプリ並みの体験を実現！）
 
 **最新の更新内容**:
+- 🚀 **PWA内タブ切り替え完全実装（postMessage）** ★超重要マイルストーン ✅
+  - ✅ **ネイティブアプリ並みの体験**: 商品登録 ↔ 設定の切り替えがPWA内で完結
+  - ✅ **Safariブラウザが開かない**: Same-Origin Policyをpostmessage APIで克服
+  - ✅ **GASの2重iframe構造に対応**: `window.parent` → `window.top` への変更
+  - ✅ **セキュリティとUXの両立**: オリジンチェック + ワイルドカード送信
+  - 📝 **技術的ブレークスルー**:
+    - postMessage APIによるクロスオリジン通信
+    - GASサンドボックスiframe（googleusercontent.com）からの送信対応
+    - タブナビゲーションヘッダーのスタイル修正（紫グラデーション背景、z-index調整）
+  - 🎯 **実装ファイル**: `docs/index.html`, `sidebar_product.html`, `sidebar_config.html`
+  - ⏰ **所要時間**: 約4時間（デバッグ含む）
+  - 💬 **開発者の感想**: 「完璧じゃないでしょうか！ついにできましたね！」
+- 📊 **完成度の更新**: 83% → 84%
+- 🎯 **SaaS化の必須要件完全クリア**:
+  - ✅ カスタムドメイン（www.reborn-inventory.com）
+  - ✅ プロフェッショナルなUI
+  - ✅ PWA（全画面表示、ホーム画面追加）
+  - ✅ 完全なネイティブアプリ体験（Safariに飛ばない）
+  - ✅ チームメンバー・外注スタッフに安心して共有可能
+- 📋 次のタスク: プッシュ通知のビジネスロジック統合、チーム管理機能の実装
+
+### 過去の更新（2025年10月17日 午前）
 - 🌐 **カスタムドメイン完全実装（Cloudflare Pages）** ★NEW ✅
   - ✅ Cloudflare Pages でPWAホスティング（GitHub連携・自動デプロイ）
   - ✅ カスタムドメイン設定: **https://www.reborn-inventory.com**
@@ -5429,4 +5588,3 @@ if (e && e.parameter && e.parameter.action) {
   - 🔧 Service Worker パス修正: `/firebase-messaging-sw.js`
   - 📊 **アーキテクチャ**: Cloudflare Pages（PWA静的ファイル） + GAS Web App（業務ロジック）のハイブリッド構成
 - ⏰ **所要時間**: 約30分（カスタムドメイン設定のみ、GAS逆プロキシ調査を含めると約3時間）
-- 📋 次のタスク: チーム管理機能の実装、プッシュ通知を活用したタスク自動化
