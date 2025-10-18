@@ -454,7 +454,7 @@
   <!-- Firebase SDKs (Modular format) -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getMessaging } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
+    import { getMessaging, onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
 
     // Firebase 設定
     const firebaseConfig = {
@@ -473,6 +473,34 @@
 
     // グローバル変数として公開
     window.firebaseMessaging = messaging;
+
+    // ★ フォアグラウンド通知対応 ★
+    // アプリを開いている状態で通知を受信した時の処理
+    onMessage(messaging, (payload) => {
+      console.log('📨 フォアグラウンドメッセージ受信:', payload);
+
+      // 通知データを取得
+      const notificationTitle = payload.data?.title || payload.notification?.title || 'REBORN';
+      const notificationBody = payload.data?.body || payload.notification?.body || '新しい通知があります';
+
+      // バッジを更新（グローバル関数を呼び出し）
+      if (typeof window.incrementBadge === 'function') {
+        window.incrementBadge();
+        console.log('🔔 バッジをインクリメントしました');
+      }
+
+      // ブラウザ通知を表示（ユーザーに気づいてもらうため）
+      if (Notification.permission === 'granted') {
+        new Notification(notificationTitle, {
+          body: notificationBody,
+          icon: '/reborn-inventory-system/icon-180.png',
+          badge: '/reborn-inventory-system/icon-192.png',
+          tag: 'reborn-notification',
+          requireInteraction: false  // 自動で消える
+        });
+        console.log('🔔 ブラウザ通知を表示しました');
+      }
+    });
   </script>
 
   <script>
