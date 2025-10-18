@@ -3597,6 +3597,95 @@ id.js: 352行、3つのエラーハンドリング
 
 ## 次の実装予定
 
+### ★明日のタスク★ 通知システムの改善（2025年10月19日）
+
+**発見された問題**:
+
+現在の通知システムには以下の2つの問題があります：
+
+#### 問題1: フォアグラウンド通知が機能していない（優先度: 高）
+
+**症状**:
+- アプリが**閉じている（バックグラウンド）**→ 通知が表示される、バッジが更新される ✅
+- アプリが**開いている（フォアグラウンド）**→ 何も起こらない ❌
+
+**原因**:
+- `docs/index.html`に`onMessage`リスナーが設定されていない
+- Service Workerの`onBackgroundMessage`しか実装されていない
+
+**必要な実装**:
+```javascript
+// docs/index.html に追加
+import { onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
+
+onMessage(messaging, (payload) => {
+  console.log('フォアグラウンドメッセージ受信:', payload);
+
+  // バッジを更新
+  incrementBadge();
+
+  // オプション: ブラウザ通知を表示
+  new Notification(payload.data.title, {
+    body: payload.data.body,
+    icon: '/reborn-inventory-system/icon-180.png'
+  });
+});
+```
+
+**影響範囲**:
+- ユーザーがアプリを開いたまま作業していると、新しい商品登録の通知に気づかない
+- バッジも更新されないため、未読の把握ができない
+
+**実装ファイル**:
+- `docs/index.html`
+
+---
+
+#### 問題2: 複数ユーザー対応になっていない（優先度: 中）
+
+**症状**:
+- 現在は**最新のトークン1個のみ**が有効
+- 2人目が登録すると、1人目は通知を受け取れなくなる
+
+**原因**:
+- `web_push.js`の`getLatestFCMToken()`が最新の1個のみを取得
+- 複数のトークンを登録しても、自動的に古いものが「非アクティブ」になる
+
+**現在のコード**:
+```javascript
+// web_push.js lines 147-193
+function getLatestFCMToken() {
+  // 最新の1個のアクティブなFCMトークンのみを取得
+  // 最新以外のトークンを自動的に「非アクティブ」にする
+}
+```
+
+**必要な修正**:
+```javascript
+// web_push.js の sendPushNotification() を修正
+function sendPushNotification(title, body) {
+  // 変更前
+  const token = getLatestFCMToken();  // 1個のみ
+
+  // 変更後
+  const tokens = getActiveFCMTokens();  // すべてのアクティブトークン
+
+  // 各トークンに対して通知を送信
+  tokens.forEach(token => {
+    sendFCMMessage(token, title, body);
+  });
+}
+```
+
+**影響範囲**:
+- チーム利用時、複数人が同時に通知を受け取れない
+- 最後に登録した人だけが通知を受け取る状態
+
+**実装ファイル**:
+- `web_push.js`
+
+---
+
 ### ★最優先★ PWA基盤完成とプッシュ通知実装（〜2週間）
 
 **方針転換により最優先事項が変更されました（2025年10月15日）**
