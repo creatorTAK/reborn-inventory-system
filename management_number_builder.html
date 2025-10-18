@@ -887,63 +887,29 @@
       document.getElementById('mnbModal').classList.add('active');
     },
 
-    // ドラッグ&ドロップ設定
+    // ドラッグ&ドロップ設定（Sortable.js使用）
+    // タッチデバイス（スマホ）でも動作するようになりました
     setupDragAndDrop() {
       const container = document.getElementById('mnbSegmentsList');
 
-      let draggedElement = null;
-      let draggedIndex = null;
+      // Sortable.jsを使用してドラッグ&ドロップを初期化
+      // タッチイベントに自動対応
+      Sortable.create(container, {
+        animation: 150,                    // アニメーション速度（ミリ秒）
+        handle: '.mnb-drag-handle',        // ⋮⋮ アイコンのみでドラッグ
+        ghostClass: 'sortable-ghost',      // ドラッグ中の要素に適用されるクラス
+        chosenClass: 'sortable-chosen',    // 選択中の要素に適用されるクラス
+        dragClass: 'sortable-drag',        // ドラッグ中の要素に適用されるクラス
+        onEnd: (evt) => {
+          // ドロップ後に並び順を更新
+          const oldIndex = evt.oldIndex;
+          const newIndex = evt.newIndex;
 
-      container.addEventListener('dragstart', (e) => {
-        if (e.target.classList.contains('mnb-segment')) {
-          draggedElement = e.target;
-          draggedIndex = parseInt(e.target.getAttribute('data-index'));
-          e.target.classList.add('dragging');
+          if (oldIndex !== newIndex) {
+            this.moveSegment(oldIndex, newIndex);
+          }
         }
       });
-
-      container.addEventListener('dragend', (e) => {
-        if (e.target.classList.contains('mnb-segment')) {
-          e.target.classList.remove('dragging');
-        }
-      });
-
-      container.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const afterElement = this.getDragAfterElement(container, e.clientY);
-
-        if (afterElement == null) {
-          container.appendChild(draggedElement);
-        } else {
-          container.insertBefore(draggedElement, afterElement);
-        }
-      });
-
-      container.addEventListener('drop', (e) => {
-        e.preventDefault();
-
-        const blocks = Array.from(container.querySelectorAll('.mnb-segment'));
-        const newIndex = blocks.indexOf(draggedElement);
-
-        if (draggedIndex !== null && newIndex !== -1 && draggedIndex !== newIndex) {
-          this.moveSegment(draggedIndex, newIndex);
-        }
-      });
-    },
-
-    getDragAfterElement(container, y) {
-      const draggableElements = [...container.querySelectorAll('.mnb-segment:not(.dragging)')];
-
-      return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-
-        if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child };
-        } else {
-          return closest;
-        }
-      }, { offset: Number.NEGATIVE_INFINITY }).element;
     },
 
     // データを取得

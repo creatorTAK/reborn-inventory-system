@@ -2052,54 +2052,26 @@
   // ========== 商品名ブロック並び替え機能 ==========
 
   /**
-   * 商品名ブロックのドラッグ&ドロップを初期化
+   * 商品名ブロックのドラッグ&ドロップを初期化（Sortable.js使用）
+   * タッチデバイス（スマホ）でも動作するようになりました
    */
   function initTitleBlockDragDrop() {
     const container = document.getElementById('titleBlockContainer');
     if (!container) return;
 
-    const blocks = container.querySelectorAll('.title-draggable-block');
-    let draggedElement = null;
-
-    blocks.forEach(block => {
-      // ドラッグハンドルのみをドラッグ開始可能にする
-      const handle = block.querySelector('.drag-handle');
-      if (handle) {
-        handle.addEventListener('mousedown', function(e) {
-          block.setAttribute('draggable', 'true');
-        });
-      }
-
-      block.addEventListener('dragstart', function(e) {
-        draggedElement = this;
-        this.style.opacity = '0.5';
-        e.dataTransfer.effectAllowed = 'move';
-      });
-
-      block.addEventListener('dragend', function(e) {
-        this.style.opacity = '';
-        this.setAttribute('draggable', 'false');
-
+    // Sortable.jsを使用してドラッグ&ドロップを初期化
+    // タッチイベントに自動対応
+    Sortable.create(container, {
+      animation: 150,                    // アニメーション速度（ミリ秒）
+      handle: '.drag-handle',            // ⋮⋮ アイコンのみでドラッグ
+      ghostClass: 'sortable-ghost',      // ドラッグ中の要素に適用されるクラス
+      chosenClass: 'sortable-chosen',    // 選択中の要素に適用されるクラス
+      dragClass: 'sortable-drag',        // ドラッグ中の要素に適用されるクラス
+      onEnd: function() {
         // ドロップ後に並び順を保存
         saveTitleBlockOrder();
         updateNamePreview();
-      });
-
-      block.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-
-        if (draggedElement !== this) {
-          const rect = this.getBoundingClientRect();
-          const midpoint = rect.top + rect.height / 2;
-
-          if (e.clientY < midpoint) {
-            container.insertBefore(draggedElement, this);
-          } else {
-            container.insertBefore(draggedElement, this.nextSibling);
-          }
-        }
-      });
+      }
     });
   }
 
