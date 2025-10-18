@@ -447,8 +447,10 @@ Gitのリモートリポジトリ（クラウド上のコード保管庫）。�
 - リポジトリURL: https://github.com/creatorTAK/reborn-inventory-system
 
 【アクセストークン】
-- Personal Access Token（clasp pushで使用）
+- Personal Access Token: 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
+- 用途: clasp push、Git操作の認証
 - 確認方法→ GitHub → Settings → Developer settings → Personal access tokens
+- ⚠️ 重要: このトークンは第三者に見せないこと
 ```
 
 #### 主要機能
@@ -573,7 +575,12 @@ clasp open              # Apps Scriptエディタを開く
 - 最新バージョン: @65（2025年10月14日）
 
 【Script Properties（機密情報）】
-- GEMINI_API_KEY: （Gemini APIキー）
+- GEMINI_API_KEY: AIzaSyArK3GbavlVNno9Y8Scx0i4Q1q6KOijoLA
+  用途: Gemini API（AI商品説明文生成）の認証
+  プロジェクト: reborn-gemini-api
+- oauth2.fcm: {"access_token":"ya29.c.c0ASRk0GZZy4qpTl..."}
+  用途: FCMプッシュ通知のOAuth2認証トークン
+  ⚠️ 自動生成・自動更新されるため手動設定不要
 ```
 
 #### デプロイフロー
@@ -690,10 +697,12 @@ git push origin main
 
 ## 外部API・サービス
 
-### 12. 🤖 **Google Cloud Platform（Gemini API）**
+### 12. 🤖 **Google Cloud Platform（Gemini API + Firebase）**
 
 #### 役割
-Gemini AI（Google製の生成AI）を使って商品説明文を自動生成。画像解析機能も含む。
+**2つのプロジェクトを使い分けています**：
+1. **reborn-gemini-api**: Gemini API（AI商品説明文生成）専用
+2. **reborn-pwa**: Firebase（プッシュ通知）専用
 
 #### なぜ必要か
 - **AI生成**: ワンクリックで魅力的な商品説明文を生成
@@ -706,14 +715,21 @@ Gemini AI（Google製の生成AI）を使って商品説明文を自動生成。
 【ログインURL】
 - https://console.cloud.google.com/
 
-【プロジェクト情報】
+【プロジェクト1: reborn-gemini-api（Gemini API専用）】✅ 現在使用中
+- プロジェクト番号: 227925975163
+- プロジェクト名: reborn-gemini-api
+- API有効化: Generative Language API (Gemini)
+- Gemini API Key: AIzaSyArK3GbavlVNno9Y8Scx0i4Q1q6KOijoLA
+  保存場所: Script Properties の GEMINI_API_KEY
+  確認方法→ Google Cloud Console → 認証情報
+
+【プロジェクト2: reborn-pwa（Firebase専用）】✅ 現在使用中
 - プロジェクトID: reborn-pwa
 - プロジェクト名: reborn-pwa
-- API有効化: Generative Language API (Gemini)
-
-【APIキー】
-- Gemini API Key: AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A
-  確認方法→ Google Cloud Console → 認証情報
+- 用途: Firebase（プッシュ通知、認証）
+- Firebase API Key: AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A
+  保存場所: docs/index.html、firebase-messaging-sw.js（ハードコード）
+  ⚠️ フロントエンド用のため公開OK
 
 【使用モデル】
 - gemini-2.0-flash-exp（最新・高速・マルチモーダル）
@@ -753,6 +769,8 @@ Gemini AI（Google製の生成AI）を使って商品説明文を自動生成。
 #### 役割
 PWAアプリでプッシュ通知を送信するためのサービス。
 
+**Google Cloud Platformのプロジェクト2（reborn-pwa）と同じプロジェクトです**。
+
 #### なぜ必要か
 - **プッシュ通知**: 商品登録完了をスマホに通知
 - **バッジ管理**: アプリアイコンに未読数を表示
@@ -764,7 +782,7 @@ PWAアプリでプッシュ通知を送信するためのサービス。
 【ログインURL】
 - https://console.firebase.google.com/
 
-【プロジェクト情報】
+【プロジェクト情報】✅ GCPのreborn-pwaと同一プロジェクト
 - プロジェクトID: reborn-pwa
 - プロジェクト名: reborn-pwa
 
