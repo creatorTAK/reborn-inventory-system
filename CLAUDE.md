@@ -3250,6 +3250,71 @@ messaging.onBackgroundMessage((payload) => {
 
 ---
 
+### ❌ 問題⑪: 画像アップロード後の保存エラー（NetworkError: HTTP 0）
+
+**発生日**: 2025年10月18日
+
+**症状**:
+- 商品画像をアップロードした状態で保存ボタンを押すと`NG(UNKNOWN): NetworkError: 次の理由のために接続できませんでした: HTTP 0`エラーが発生
+- 画像を削除すると正常に保存できる
+- AI生成後は正常に保存できる
+
+**再現手順**:
+1. 商品の説明ブロックで「📷 画像を選択」をクリック
+2. 商品画像を1〜3枚選択（プレビュー表示される）
+3. AI生成せずにそのまま保存ボタンを押す
+4. NetworkErrorが発生
+
+**原因**:
+`uploadedImages`配列に大きなBase64画像データが残っていて、メモリを圧迫し、`google.script.run`の通信を妨げていた。
+
+**詳細**:
+- 画像は`FileReader.readAsDataURL()`でBase64形式に変換され、`uploadedImages`配列に保存される
+- Base64データは元の画像サイズの約1.3倍に膨らむ（例: 3MB画像 → 4MB Base64）
+- 複数枚アップロードするとメモリ使用量が急増
+- `google.script.run.saveProduct(d)`実行時にメモリが不足し、通信エラーが発生
+
+**解決策**:
+
+```javascript
+// sp_scripts.html
+function onSave() {
+  // ... バリデーション処理 ...
+
+  // 画像データをクリア（メモリ節約のため）
+  if (uploadedImages && uploadedImages.length > 0) {
+    uploadedImages = [];
+    // プレビューも非表示
+    const container = document.getElementById('imagePreviewContainer');
+    if (container) {
+      container.style.display = 'none';
+    }
+    // ファイル入力もリセット
+    const fileInput = document.getElementById('productImages');
+    if (fileInput) {
+      fileInput.value = '';
+    }
+    debug.log('保存前に画像データをクリアしました');
+  }
+
+  // 保存処理を実行
+  google.script.run.saveProduct(d);
+}
+```
+
+**実装箇所**:
+- `sp_scripts.html` (lines 3380-3394): 保存時にクリア
+- `sp_scripts.html` (lines 2808-2822): AI生成成功後にクリア
+- `sp_scripts.html` (lines 3423-3436): リセット時にクリア
+
+**教訓**:
+- Base64画像データは非常に大きく、メモリを圧迫する
+- 使用後は速やかにクリアする（保存時、AI生成後、リセット時）
+- `google.script.run`は大きなデータを扱う際に通信エラーが発生しやすい
+- 画像データはサーバー側に送信せず、AI生成の入力としてのみ使用する設計が適切
+
+---
+
 ## 開発ルール
 
 ### ✅ 開発時のチェックリスト
@@ -3597,92 +3662,86 @@ id.js: 352行、3つのエラーハンドリング
 
 ## 次の実装予定
 
-### ★明日のタスク★ 通知システムの改善（2025年10月19日）
+### ✅ 完了したタスク - 通知システムの改善（2025年10月19日実施）
 
-**発見された問題**:
+#### Task 1: フォアグラウンド通知対応 ✅
 
-現在の通知システムには以下の2つの問題があります：
+**実装内容**:
+- `docs/index.html`に`onMessage`リスナーを追加（lines 477-503）
+- アプリを開いている状態でも通知とバッジが更新されるようになった
 
-#### 問題1: フォアグラウンド通知が機能していない（優先度: 高）
-
-**症状**:
-- アプリが**閉じている（バックグラウンド）**→ 通知が表示される、バッジが更新される ✅
-- アプリが**開いている（フォアグラウンド）**→ 何も起こらない ❌
-
-**原因**:
-- `docs/index.html`に`onMessage`リスナーが設定されていない
-- Service Workerの`onBackgroundMessage`しか実装されていない
-
-**必要な実装**:
+**実装コード**:
 ```javascript
-// docs/index.html に追加
-import { onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
+// docs/index.html lines 477-503
+import { getMessaging, onMessage } from 'firebase-messaging.js';
 
 onMessage(messaging, (payload) => {
-  console.log('フォアグラウンドメッセージ受信:', payload);
+  console.log('📨 フォアグラウンドメッセージ受信:', payload);
 
   // バッジを更新
-  incrementBadge();
+  if (typeof window.incrementBadge === 'function') {
+    window.incrementBadge();
+  }
 
-  // オプション: ブラウザ通知を表示
-  new Notification(payload.data.title, {
-    body: payload.data.body,
-    icon: '/reborn-inventory-system/icon-180.png'
-  });
+  // ブラウザ通知を表示
+  if (Notification.permission === 'granted') {
+    new Notification(notificationTitle, {
+      body: notificationBody,
+      icon: '/reborn-inventory-system/icon-180.png',
+      requireInteraction: false
+    });
+  }
 });
 ```
 
-**影響範囲**:
-- ユーザーがアプリを開いたまま作業していると、新しい商品登録の通知に気づかない
-- バッジも更新されないため、未読の把握ができない
-
-**実装ファイル**:
-- `docs/index.html`
+**効果**:
+- アプリを開いたまま作業していても、新しい商品登録の通知に気づける
+- バッジも正しく更新される
+- ブラウザ通知で視覚的・音的なフィードバックあり
 
 ---
 
-#### 問題2: 複数ユーザー対応になっていない（優先度: 中）
+#### Task 2: 複数ユーザー対応 ✅
 
-**症状**:
-- 現在は**最新のトークン1個のみ**が有効
-- 2人目が登録すると、1人目は通知を受け取れなくなる
+**実装内容**:
+1. **新関数`getActiveFCMTokens()`を作成**（web_push.js lines 150-179）
+   - すべてのアクティブなトークンを配列で返す
+   - 複数ユーザーが同時に通知を受け取れるようになった
 
-**原因**:
-- `web_push.js`の`getLatestFCMToken()`が最新の1個のみを取得
-- 複数のトークンを登録しても、自動的に古いものが「非アクティブ」になる
+2. **`getLatestFCMToken()`を修正**（lines 186-219）
+   - 最新以外を非アクティブ化する処理を削除
+   - 後方互換性のため関数は残す
 
-**現在のコード**:
+3. **`sendFCMNotification()`を修正**（lines 227-293）
+   - すべてのアクティブトークンに対してループで送信
+   - 詳細なログ出力（`[1/3] トークンに送信中...`など）
+
+**実装コード**:
 ```javascript
-// web_push.js lines 147-193
-function getLatestFCMToken() {
-  // 最新の1個のアクティブなFCMトークンのみを取得
-  // 最新以外のトークンを自動的に「非アクティブ」にする
-}
+// web_push.js lines 238-270
+const tokens = getActiveFCMTokens();
+Logger.log(`${tokens.length}個のトークンに通知を送信します`);
+
+tokens.forEach((token, index) => {
+  Logger.log(`[${index + 1}/${tokens.length}] トークンに送信中...`);
+  const result = sendFCMToTokenV1(accessToken, token, title, body);
+  if (result.success) {
+    successCount++;
+    updateLastSentTime(token);
+  } else {
+    failCount++;
+  }
+});
 ```
 
-**必要な修正**:
-```javascript
-// web_push.js の sendPushNotification() を修正
-function sendPushNotification(title, body) {
-  // 変更前
-  const token = getLatestFCMToken();  // 1個のみ
+**効果**:
+- チーム利用時、複数人が同時に通知を受け取れる
+- 最後に登録した人だけでなく、全員が通知を受け取れる
+- 成功・失敗の件数を返すため、デバッグが容易
 
-  // 変更後
-  const tokens = getActiveFCMTokens();  // すべてのアクティブトークン
-
-  // 各トークンに対して通知を送信
-  tokens.forEach(token => {
-    sendFCMMessage(token, title, body);
-  });
-}
-```
-
-**影響範囲**:
-- チーム利用時、複数人が同時に通知を受け取れない
-- 最後に登録した人だけが通知を受け取る状態
-
-**実装ファイル**:
-- `web_push.js`
+**修正ファイル**:
+- `docs/index.html` - フォアグラウンド通知リスナー追加
+- `web_push.js` - 複数ユーザー対応の関数追加・修正
 
 ---
 
