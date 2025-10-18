@@ -447,10 +447,11 @@ Gitのリモートリポジトリ（クラウド上のコード保管庫）。�
 - リポジトリURL: https://github.com/creatorTAK/reborn-inventory-system
 
 【アクセストークン】
-- Personal Access Token: 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
+- Personal Access Token: （セキュリティのためローカルメモに保存）
 - 用途: clasp push、Git操作の認証
 - 確認方法→ GitHub → Settings → Developer settings → Personal access tokens
-- ⚠️ 重要: このトークンは第三者に見せないこと
+- 保存場所: 1Password、Bitwarden等のパスワードマネージャー推奨
+- ⚠️ 重要: このトークンは絶対にGitにコミットしない
 ```
 
 #### 主要機能
