@@ -425,7 +425,7 @@ Gitのリモートリポジトリ（クラウド上のコード保管庫）。�
 ```
 【アカウント情報】
 - ユーザー名: creatorTAK
-- メールアドレス: ●●●@●●●
+- メールアドレス: mercari.yasuhirotakuji@gmail.com
 - リポジトリURL: https://github.com/creatorTAK/reborn-inventory-system
 
 【アクセストークン】
@@ -635,8 +635,8 @@ PWAアプリを高速・安全に公開するホスティングサービス。�
 #### 保存すべき情報
 ```
 【アカウント情報】
-- メールアドレス: ●●●@●●●
-- アカウントID: （Cloudflare ダッシュボード右上で確認）
+- メールアドレス: mercari.yasuhirotakuji@gmail.com
+- アカウントID: 11bd3a44e361a1ed3c3c9a860c93f612
 
 【プロジェクト情報】
 - プロジェクト名: reborn-inventory-system
@@ -680,12 +680,12 @@ Gemini AI（Google製の生成AI）を使って商品説明文を自動生成。
 #### 保存すべき情報
 ```
 【プロジェクト情報】
-- プロジェクトID: （GCP Console で確認）
-- プロジェクト名: （GCP Console で確認）
+- プロジェクトID: reborn-pwa
+- プロジェクト名: reborn-pwa
 - API有効化: Generative Language API (Gemini)
 
 【APIキー】
-- Gemini API Key: （Apps Script Script Properties に保存）
+- Gemini API Key: AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A
   確認方法→ Google Cloud Console → 認証情報
 
 【使用モデル】
@@ -736,7 +736,7 @@ PWAアプリでプッシュ通知を送信するためのサービス。
 ```
 【プロジェクト情報】
 - プロジェクトID: reborn-pwa
-- プロジェクト名: REBORN PWA
+- プロジェクト名: reborn-pwa
 
 【Firebase設定（公開可能）】
 - apiKey: AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A
@@ -746,6 +746,8 @@ PWAアプリでプッシュ通知を送信するためのサービス。
 - appId: 1:345653439471:web:7620819ce3f022d9cd241a
 
 【VAPID Key（公開鍵）】
+- 秘密鍵: rI1OOyMslviqkWkwU1mRrwYMPi3PSTVgXu4tgqbilk0
+- 鍵ペア: BLt5H1TPMi9OetYHgqoDXVoSkPQziC0Ulimr1-xv8rPObF693SCMWkzP8UhZLMaZzYGd_jP5V3JugDTROjKInbY
 - 確認方法→ Firebase Console → Project settings → Cloud Messaging
 - 用途: ブラウザのプッシュ通知購読に使用
 
@@ -781,20 +783,21 @@ PWAアプリでプッシュ通知を送信するためのサービス。
 #### 保存すべき情報
 ```
 【アカウント情報】
-- ログインID: ●●●
-- メールアドレス: ●●●@●●●
+- ログインID: 55496107
+- メールアドレス: mercari.yasuhirotakuji@gmail.com
 
 【ドメイン情報】
 - ドメイン名: reborn-inventory.com
-- 登録日: ●●●年●月●日
-- 次回更新日: ●●●年●月●日
+- サブドメイン名: www.reborn-inventory.com
+- 登録日: 2025年10月16日
+- 次回更新日: 2026年10月16日
 - 自動更新: ON（推奨）
 - 支払い方法: クレジットカード
 
 【ネームサーバー設定】
 - Cloudflareのネームサーバーを使用
-- NS1: ●●●.ns.cloudflare.com
-- NS2: ●●●.ns.cloudflare.com
+- NS1: diva.ns.cloudflare.com
+- NS2: elliott.ns.cloudflare.com
 ```
 
 #### 重要な注意事項
@@ -827,8 +830,9 @@ PWAアプリでプッシュ通知を送信するためのサービス。
 #### 保存すべき情報
 ```
 【アカウント情報】
-- メールアドレス: ●●●@●●●
-- アカウントID: （Cloudflare ダッシュボード右上で確認）
+- アカウント名: REBORN Inventory System
+- メールアドレス: mercari.yasuhirotakuji@gmail.com
+- アカウントID: 11bd3a44e361a1ed3c3c9a860c93f612
 
 【DNS設定】
 - ドメイン: reborn-inventory.com
