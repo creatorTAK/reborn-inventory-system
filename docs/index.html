@@ -183,7 +183,7 @@
       flex-direction: column;
     }
 
-    /* ヘッダー（通知ボタン付き） */
+    /* ヘッダー（通知＋メニューボタン付き） */
     #app-header {
       position: sticky;
       top: 0;
@@ -200,6 +200,13 @@
       color: white;
       font-size: 18px;
       font-weight: 600;
+    }
+
+    /* ヘッダー右側ボタングループ */
+    .header-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
 
     /* 通知バッジボタン */
@@ -219,6 +226,102 @@
 
     .notification-button:active {
       transform: scale(0.95);
+    }
+
+    /* メニューボタン（☰） */
+    .menu-button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 2px solid white;
+      border-radius: 8px;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.2s;
+      color: white;
+      font-size: 24px;
+      font-weight: 300;
+    }
+
+    .menu-button:active {
+      transform: scale(0.95);
+    }
+
+    /* ドロワーオーバーレイ（背景暗転） */
+    #drawer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1999;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    #drawer-overlay.active {
+      display: block;
+      opacity: 1;
+    }
+
+    /* ドロワーメニュー */
+    #drawer-menu {
+      position: fixed;
+      top: 0;
+      right: -280px;
+      width: 280px;
+      height: 100%;
+      background: white;
+      z-index: 2000;
+      box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+      transition: right 0.3s ease;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #drawer-menu.active {
+      right: 0;
+    }
+
+    .drawer-header {
+      padding: 20px 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-size: 20px;
+      font-weight: 600;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .drawer-item {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 16px;
+      color: #1f2937;
+      text-decoration: none;
+      border-bottom: 1px solid #e5e7eb;
+      transition: background 0.2s;
+    }
+
+    .drawer-item:hover {
+      background: #f3f4f6;
+    }
+
+    .drawer-item.active {
+      background: #ede9fe;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .drawer-item.disabled {
+      opacity: 0.5;
+      pointer-events: none;
     }
 
     .notification-icon {
@@ -309,13 +412,36 @@
 
   <!-- アプリ画面（2回目以降 or セットアップ完了後） -->
   <div id="app-screen">
-    <!-- ヘッダー（通知ボタン） -->
+    <!-- ヘッダー（通知ボタン + メニューボタン） -->
     <div id="app-header">
       <div class="app-title">🔄 REBORN</div>
-      <button class="notification-button" onclick="openNotifications()" title="通知">
-        <span class="notification-icon">🔔</span>
-        <span class="badge-count" id="badge-count">0</span>
-      </button>
+      <div class="header-buttons">
+        <button class="notification-button" onclick="openNotifications()" title="通知">
+          <span class="notification-icon">🔔</span>
+          <span class="badge-count" id="badge-count">0</span>
+        </button>
+        <button class="menu-button" onclick="toggleDrawer()" title="メニュー">☰</button>
+      </div>
+    </div>
+
+    <!-- ドロワーオーバーレイ -->
+    <div id="drawer-overlay" onclick="closeDrawer()"></div>
+
+    <!-- ドロワーメニュー -->
+    <div id="drawer-menu">
+      <div class="drawer-header">メニュー</div>
+      <a href="#" onclick="navigateToPage('product'); return false;" class="drawer-item active" id="drawer-product">
+        📝 商品登録
+      </a>
+      <a href="#" onclick="navigateToPage('config'); return false;" class="drawer-item" id="drawer-config">
+        ⚙️ 設定
+      </a>
+      <a href="#" class="drawer-item disabled">
+        📦 在庫管理
+      </a>
+      <a href="#" class="drawer-item disabled">
+        📈 売上
+      </a>
     </div>
 
     <div class="loading" id="loading">
@@ -543,6 +669,46 @@
     function showAppScreen() {
       document.getElementById('setup-screen').style.display = 'none';
       document.getElementById('app-screen').style.display = 'flex';
+    }
+
+    // ドロワーメニューを開く/閉じる
+    function toggleDrawer() {
+      const drawer = document.getElementById('drawer-menu');
+      const overlay = document.getElementById('drawer-overlay');
+
+      drawer.classList.toggle('active');
+      overlay.classList.toggle('active');
+    }
+
+    // ドロワーメニューを閉じる
+    function closeDrawer() {
+      const drawer = document.getElementById('drawer-menu');
+      const overlay = document.getElementById('drawer-overlay');
+
+      drawer.classList.remove('active');
+      overlay.classList.remove('active');
+    }
+
+    // ページ遷移（ドロワーメニューから）
+    function navigateToPage(page) {
+      const iframe = document.getElementById('gas-iframe');
+      const baseUrl = 'https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec';
+
+      // アクティブ状態を更新
+      document.querySelectorAll('.drawer-item').forEach(item => {
+        item.classList.remove('active');
+      });
+
+      if (page === 'product') {
+        iframe.src = baseUrl + '?menu=product';
+        document.getElementById('drawer-product').classList.add('active');
+      } else if (page === 'config') {
+        iframe.src = baseUrl + '?menu=config';
+        document.getElementById('drawer-config').classList.add('active');
+      }
+
+      // ドロワーを閉じる
+      closeDrawer();
     }
 
     // postMessage受信処理（iframe内からのナビゲーション要求 + バッジ更新）
