@@ -525,5 +525,7 @@ function onOpen() {
   ui.createMenu('🗂️ マスタ・設定')
     .addItem('🗂️ マスタデータ管理', 'showMasterDataManager')
     .addItem('⚙️ 設定管理', 'showConfigManager')
+    .addSeparator()
+    .addItem('🔧 APIキー検証', 'validateAllApiKeys')
     .addToUi();
 }

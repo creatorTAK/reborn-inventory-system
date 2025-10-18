@@ -1001,6 +1001,104 @@ PWAアプリでプッシュ通知を送信するためのサービス。
 
 ---
 
+## 🚀 デプロイ前チェックリスト
+
+### ⚠️ 必ず確認すべき項目（5分）
+
+**過去のトラブルの多くがAPIキーの間違いでした。デプロイ前に必ず以下を確認してください。**
+
+#### 1. 🔑 Script Propertiesの確認
+
+```
+1. Apps Scriptエディタを開く
+   https://script.google.com/d/15gwr6oQUTLjdbNM_8ypqE0ao-7HCEJYrtU_CwJ-uN58PXg6Rhb4kYc71/edit
+
+2. 左メニュー「プロジェクトの設定」⚙️ をクリック
+
+3. 下にスクロール → 「スクリプト プロパティ」セクション
+
+4. 以下の値を確認
+   ✅ GEMINI_API_KEY: AIzaSyArK3GbavlVNno9Y8Scx0i4Q1q6KOijoLA
+   ✅ oauth2.fcm: 存在することを確認（値は自動生成なのでそのまま）
+```
+
+**間違えやすいポイント**：
+- ❌ `AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A` ← これはFirebase用（reborn-pwa）
+- ✅ `AIzaSyArK3GbavlVNno9Y8Scx0i4Q1q6KOijoLA` ← これがGemini用（reborn-gemini-api）
+
+#### 2. 🔥 Firebase設定の確認（docs/index.html）
+
+```javascript
+// docs/index.html の344行目付近
+const firebaseConfig = {
+  apiKey: "AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A",  // ✅ reborn-pwa
+  authDomain: "reborn-pwa.firebaseapp.com",
+  projectId: "reborn-pwa",
+  // ...
+};
+```
+
+**重要**: このAPIキーは `R4YTlbQo` （小文字のl、小文字のo）
+- ❌ `R4YT1bQO` （数字の1、大文字のO）← 過去にこれで間違えた
+
+#### 3. 🔔 Service Workerの確認（docs/firebase-messaging-sw.js）
+
+```javascript
+// docs/firebase-messaging-sw.js の16行目付近
+const firebaseConfig = {
+  apiKey: "AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A",  // ✅ 同じ値
+  // ...
+};
+```
+
+#### 4. 🔧 APIキー検証を実行
+
+```
+1. スプレッドシートを開く
+2. メニュー「物販管理システム」→「🔧 APIキー検証」をクリック
+3. すべて ✅ になっていることを確認
+```
+
+**エラーが出た場合**：
+- Script Propertiesの値を再確認
+- DEVELOPMENT_SERVICES.mdに記載の正しい値と照合
+
+#### 5. 📋 clasp push後の確認
+
+```bash
+# 1. コードをプッシュ
+clasp push -f
+
+# 2. Apps Scriptエディタを開く
+clasp open
+
+# 3. Script Propertiesを再確認（念のため）
+# 4. 手動デプロイ
+# 5. スーパーリロード（Cmd+Shift+R）
+```
+
+### 📝 デプロイ時の完全フロー
+
+```
+✅ ローカルでコード編集（VSCode）
+    ↓
+✅ Script Propertiesを確認（APIキー検証実行）
+    ↓
+✅ clasp push -f
+    ↓
+✅ Apps Scriptエディタで手動デプロイ
+    ↓
+✅ スーパーリロード（Cmd+Shift+R）
+    ↓
+✅ ブラウザのConsoleでエラーチェック
+    ↓
+✅ 動作確認（商品登録、AI生成、通知など）
+    ↓
+✅ Git commit & push
+```
+
+---
+
 ## トラブルシューティング
 
 ### ❌ よくある問題と解決方法
