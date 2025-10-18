@@ -423,6 +423,9 @@ Gitのリモートリポジトリ（クラウド上のコード保管庫）。�
 
 #### 保存すべき情報
 ```
+【ログインURL】
+- https://github.com/login
+
 【アカウント情報】
 - ユーザー名: creatorTAK
 - メールアドレス: mercari.yasuhirotakuji@gmail.com
@@ -545,6 +548,9 @@ clasp open              # Apps Scriptエディタを開く
 
 #### 保存すべき情報
 ```
+【ログインURL】
+- https://script.google.com/
+
 【プロジェクト情報】
 - Script ID: 15gwr6oQUTLjdbNM_8ypqE0ao-7HCEJYrtU_CwJ-uN58PXg6Rhb4kYc71
 - Apps Script URL: https://script.google.com/d/15gwr6oQUTLjdbNM_8ypqE0ao-7HCEJYrtU_CwJ-uN58PXg6Rhb4kYc71/edit
@@ -634,6 +640,9 @@ PWAアプリを高速・安全に公開するホスティングサービス。�
 
 #### 保存すべき情報
 ```
+【ログインURL】
+- https://dash.cloudflare.com/
+
 【アカウント情報】
 - メールアドレス: mercari.yasuhirotakuji@gmail.com
 - アカウントID: 11bd3a44e361a1ed3c3c9a860c93f612
@@ -679,6 +688,9 @@ Gemini AI（Google製の生成AI）を使って商品説明文を自動生成。
 
 #### 保存すべき情報
 ```
+【ログインURL】
+- https://console.cloud.google.com/
+
 【プロジェクト情報】
 - プロジェクトID: reborn-pwa
 - プロジェクト名: reborn-pwa
@@ -734,6 +746,9 @@ PWAアプリでプッシュ通知を送信するためのサービス。
 
 #### 保存すべき情報
 ```
+【ログインURL】
+- https://console.firebase.google.com/
+
 【プロジェクト情報】
 - プロジェクトID: reborn-pwa
 - プロジェクト名: reborn-pwa
@@ -782,6 +797,9 @@ PWAアプリでプッシュ通知を送信するためのサービス。
 
 #### 保存すべき情報
 ```
+【ログインURL】
+- https://www.onamae.com/
+
 【アカウント情報】
 - ログインID: 55496107
 - メールアドレス: mercari.yasuhirotakuji@gmail.com
@@ -829,6 +847,9 @@ PWAアプリでプッシュ通知を送信するためのサービス。
 
 #### 保存すべき情報
 ```
+【ログインURL】
+- https://dash.cloudflare.com/
+
 【アカウント情報】
 - アカウント名: REBORN Inventory System
 - メールアドレス: mercari.yasuhirotakuji@gmail.com
