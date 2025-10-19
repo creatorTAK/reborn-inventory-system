@@ -1,10 +1,11 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v1';
+const CACHE_NAME = 'reborn-v2';
 const urlsToCache = [
   '/reborn-inventory-system/',
   '/reborn-inventory-system/index.html',
+  '/reborn-inventory-system/notifications.html',
   '/reborn-inventory-system/manifest.json',
   '/reborn-inventory-system/icon-180.png'
 ];
