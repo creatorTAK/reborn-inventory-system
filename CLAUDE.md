@@ -805,6 +805,54 @@ function getNextManagementNumber(shelfCode) {
 
 **実装ファイル**: `master.js`, `sp_scripts.html`
 
+#### デフォルトセールスワード設定 ★新規完成 ✅
+
+**概要**:
+商品登録画面を開いた時、設定したセールスワードが自動的に選択される機能。
+
+**完成度**: 100% ✅
+**実装日**: 2025年10月19日
+
+**主要機能**:
+- ⚙️ **設定管理で指定**: セールスワードカテゴリ + セールスワードの2段階選択
+- 🔄 **自動反映**: 商品登録を開くと自動で選択されている
+- ♻️ **リセット時も保持**: リセットボタンを押してもデフォルト値が残る
+- 💾 **設定マスタに保存**: 永続化され、次回起動時も有効
+
+**設定方法**:
+1. 設定管理 → よく使うセールスワード設定
+2. 「⭐ デフォルトセールスワード設定」セクション
+3. カテゴリを選択 → セールスワードを選択
+4. 保存ボタンをクリック
+
+**実装ファイル**:
+- `sidebar_config.html` (lines 992-1016): 設定UI
+- `sidebar_config.html` (lines 3036-3118): JavaScript関数（収集・表示・更新）
+- `sp_scripts.html` (lines 3077-3088, 3115, 3228-3262): デフォルト値読み込み・適用
+- `sp_scripts.html` (lines 3513-3519): リセット時の再適用
+- `config_loader.js`: 設定マスタへの保存・読み込み
+
+**主要関数**:
+```javascript
+// sidebar_config.html
+function collectDefaultSalesword()          // デフォルト値を収集
+function initDefaultSaleswordDropdowns()    // カテゴリプルダウン初期化
+function updateDefaultSaleswordOptions()    // セールスワードプルダウン更新
+function renderDefaultSalesword(config)     // 保存された設定を表示
+
+// sp_scripts.html
+function applyDefaultSalesword(defaultConfig)  // デフォルト値を適用
+```
+
+**ユーザー体験**:
+- 毎回同じセールスワードを入力する手間がなくなる
+- リセット後も自動で選択されるため、連続登録が効率的に
+- 設定変更で即座に反映
+
+**実装ファイル**: `sidebar_config.html`, `sp_scripts.html`, `config_loader.js`
+
+---
+
 #### 商品の説明選択式自動作成（設定マスタ対応）
 
 - リアルタイムプレビュー
@@ -3315,6 +3363,241 @@ function onSave() {
 
 ---
 
+### ❌ 問題⑫: iPhone SEでセットアップ画面がスクロールできない ★重要
+
+**発生日**: 2025年10月19日
+
+**症状**:
+- iPhone SEなど小さい画面でPWAセットアップ画面を開くと、「✅ アプリを開く」ボタンが画面外に出て見えない
+- スクロールもできないため、ボタンにアクセスできない
+- 大きい画面のiPhoneでは問題なく表示される
+
+**原因**:
+`docs/index.html`の`#setup-screen`が`height: 100vh`で固定され、`overflow`が設定されていなかった。
+
+```css
+/* 問題のあったCSS */
+#setup-screen {
+  width: 100vw;
+  height: 100vh;  /* ← 固定高さで画面サイズに制限 */
+  display: none;
+  /* overflow が未設定 → スクロール不可 */
+}
+```
+
+**解決策**:
+
+```css
+/* 修正後のCSS */
+#setup-screen {
+  width: 100vw;
+  min-height: 100vh;           /* height → min-height */
+  max-height: 100vh;           /* 最大高さを制限 */
+  overflow-y: auto;            /* 縦スクロール可能に */
+  -webkit-overflow-scrolling: touch;  /* iOSでスムーズスクロール */
+  display: none;
+}
+```
+
+**実装箇所**:
+- `docs/index.html` (lines 31-42)
+
+**テスト済みシナリオ**:
+- ✅ iPhone SEで「アプリを開く」ボタンまでスクロール可能
+- ✅ 横向き・縦向きの両方で正常動作
+- ✅ 大きい画面でも影響なし
+
+**教訓**:
+- 小さい画面でのテストは必須（iPhone SE、古いAndroid端末など）
+- 固定高さ（`height: 100vh`）ではなく最小高さ（`min-height: 100vh`）を使用
+- スクロール可能性を常に確保する（`overflow-y: auto`）
+- iOSでは`-webkit-overflow-scrolling: touch`でスムーズなスクロール体験を提供
+
+---
+
+### ❌ 問題⑬: 商品属性の削除ボタンが動作しない
+
+**発生日**: 2025年10月19日
+
+**症状**:
+- 商品名ブロック内の「商品属性」セクションで削除ボタンをクリックしても反応しない
+- カラー詳細や素材の削除ボタンは正常に動作する
+
+**原因**:
+関数名`removeAttribute()`がDOM標準メソッド`Element.removeAttribute()`と競合していた。
+
+```javascript
+// ❌ 問題のあったコード
+function removeAttribute(index) {
+  // DOM標準メソッドと名前が衝突
+  // ブラウザが組み込みメソッドを優先するため、カスタム関数が実行されない
+}
+```
+
+**解決策**:
+
+```javascript
+// ✅ 修正後
+function removeProductAttribute(index) {
+  const item = document.querySelector(`.attribute-item[data-index="${index}"]`);
+  if (item) {
+    item.remove();
+    // ... 残りの処理
+  }
+}
+```
+
+**修正箇所**:
+- `sp_scripts.html` (lines 562-629): 関数名を`removeProductAttribute`に変更
+- `sp_scripts.html` (line 578): 動的生成HTMLの呼び出しを更新
+- `sp_block_title.html` (line 109): 初期HTMLの呼び出しを更新
+
+**教訓**:
+- DOM標準メソッドと同じ名前の関数は避ける（`remove`, `setAttribute`, `getAttribute`, `removeAttribute`など）
+- より具体的な関数名を使う（`removeProductAttribute`, `addProductAttribute`など）
+- 他の機能（カラー、素材）と命名規則を統一する
+
+---
+
+### ❌ 問題⑭: アプリ内の音が鳴らなくなる ★重要
+
+**発生日**: 2025年10月19日
+
+**症状**:
+- Firebase Messaging初期化を追加した後、テキスト入力時のキーボード音などが鳴らなくなる
+- アプリ全体の動作が遅くなる
+
+**原因**:
+Firebase初期化時のエラーがページの実行をブロックしていた。重複初期化やエラーハンドリング不足が原因。
+
+```javascript
+// ❌ 問題のあったコード
+async function initFirebaseMessaging() {
+  const app = initializeApp(firebaseConfig);  // 2回目の呼び出しでエラー
+  // エラーが発生するとここで処理が止まり、他の機能に影響
+}
+```
+
+**解決策**:
+
+```javascript
+// ✅ 修正後（重複初期化チェック + エラーハンドリング）
+async function initFirebaseMessaging() {
+  try {
+    const { initializeApp, getApps, getApp } = await import('...');
+
+    // 既存のアプリを確認
+    let app;
+    if (getApps().length === 0) {
+      app = initializeApp(firebaseConfig);
+      console.log('✅ Firebase App初期化');
+    } else {
+      app = getApp();
+      console.log('✅ 既存のFirebase Appを使用');
+    }
+
+    // ... 残りの処理
+  } catch (error) {
+    console.error('❌ Firebase Messaging初期化エラー:', error);
+    console.log('⚠️ 通知機能は利用できませんが、他の機能は正常に動作します');
+    // エラーがあっても処理を継続
+  }
+}
+
+// 遅延初期化（他のスクリプトの読み込みを待つ）
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(initFirebaseMessaging, 2000);  // 2秒遅延
+  });
+} else {
+  setTimeout(initFirebaseMessaging, 2000);
+}
+```
+
+**修正箇所**:
+- `sp_scripts.html` (lines 4925-5020): Firebase初期化処理
+- `sidebar_config.html` (lines 4312-4407): Firebase初期化処理
+
+**教訓**:
+- Firebase初期化は重複チェック（`getApps()`）が必須
+- エラーハンドリングで他の機能をブロックしない設計
+- 重い初期化処理は遅延実行（`setTimeout`）で他のスクリプトの読み込みを妨げない
+- エラーメッセージは「他の機能は正常に動作」と明記してユーザーに安心感を与える
+
+---
+
+### ❌ 問題⑮: 複数端末に通知が届かない ★超重要
+
+**発生日**: 2025年10月19日
+
+**症状**:
+- 端末1でFCM登録 → 端末2でFCM登録 → 商品登録して保存
+- 端末2には通知が届くが、端末1には届かない
+- 3台のスマホでテストすると、最後に登録した1台にしか通知が届かない
+
+**原因**:
+`web_push.js`の`saveFCMToken()`関数で、新規登録時に他のすべてのトークンを「非アクティブ」に変更していた。
+
+```javascript
+// ❌ 問題のあったコード（lines 87-93）
+// 新規登録時、他のすべてのトークンを「非アクティブ」にする
+for (let i = 1; i < data.length; i++) {
+  if (data[i][3] === 'アクティブ') {
+    sheet.getRange(i + 1, 4).setValue('非アクティブ');
+    Logger.log(`古いトークンを非アクティブ化: 行${i + 1}`);
+  }
+}
+```
+
+**動作の流れ**:
+1. 端末1でFCM登録 → 端末1のトークンが「アクティブ」
+2. 端末2でFCM登録 → **端末1のトークンが「非アクティブ」に** + 端末2が「アクティブ」
+3. 通知送信 → `getActiveFCMTokens()`はアクティブなトークン（端末2のみ）を取得
+4. 結果: 端末2にしか通知が届かない
+
+**解決策**:
+
+```javascript
+// ✅ 修正後（複数端末対応）
+const now = new Date().toISOString();
+
+// 🔧 複数端末対応: 他のトークンを非アクティブ化しない
+// すべてのアクティブなトークンに通知を送信するため、非アクティブ化処理は削除
+
+if (existingRowIndex > -1) {
+  // 既存の登録を更新（日時を更新、ステータスはアクティブのまま）
+  sheet.getRange(existingRowIndex, 1).setValue(now);
+  sheet.getRange(existingRowIndex, 4).setValue('アクティブ');
+  Logger.log(`既存トークンを更新: 行${existingRowIndex}`);
+} else {
+  // 新規登録（アクティブとして追加）
+  sheet.appendRow([now, token, '', 'アクティブ']);
+  Logger.log(`新規トークンを追加: ${token.substring(0, 20)}...`);
+}
+```
+
+**修正箇所**:
+- `web_push.js` (lines 85-99): 非アクティブ化処理を削除
+- `web_push.js` (lines 238-293): `sendFCMNotification()`は既に複数トークン対応済み
+
+**テスト結果**:
+- ✅ 3台のスマホすべてに通知が届く
+- ✅ バッジカウント、通知音、通知表示すべて正常
+- ✅ フォアグラウンド・バックグラウンド両方で動作
+
+**教訓**:
+- チーム利用を前提とする場合、複数端末対応は必須
+- トークン管理の設計は慎重に行う（1人1端末とは限らない）
+- 「最新の1個だけアクティブ」という仮定は危険
+- テスト時は必ず複数端末で確認する
+
+**対処方法（既存ユーザー向け）**:
+既に非アクティブ化されたトークンがある場合、以下のいずれかで対処：
+1. 各端末でFCM再登録を実行（推奨）
+2. スプレッドシートの「FCM通知登録」シートで手動で「非アクティブ」→「アクティブ」に変更
+
+---
+
 ## 開発ルール
 
 ### ✅ 開発時のチェックリスト
@@ -3509,21 +3792,39 @@ function onSave() {
 - ❌ `clasp push`せずにブラウザをリロードしない
 - ❌ ローカルファイルを編集した後に`clasp pull`しない（上書きされる）
 
-#### デプロイ
+#### デプロイ ★絶対厳守
 
-**✅ すること**:
-- Apps Scriptのファイル（`.js`, `.html`）を修正した後：
-  - 必ず「clasp push後、Apps Scriptエディタで新バージョンとしてデプロイしてください」と案内
-  - デプロイ手順を毎回明示する
-- `docs/`フォルダ内のファイルを修正した場合：
-  - 「GitHub pushで反映されます。1〜2分待ってからリロードしてください」と案内
+**パターン1**: `docs/`フォルダ内のファイル（manifest.json、index.html、notifications.html等）を修正した場合
+- ✅ **Claude Codeが自動的にGit pushを実行**
+- ✅ **「GitHub pushで反映されます。1〜2分待ってからリロードしてください」と案内**
 
-**❌ しないこと**:
+```bash
+git add docs/修正したファイル && git commit -m "コミットメッセージ" && git push origin main
+```
+
+**パターン2**: Apps Scriptのファイル（`.js`, `.html`）を修正した場合
+- ✅ **Claude Codeが自動的にclasp pushを実行**
+- ✅ **「clasp push完了。Apps Scriptエディタで新バージョンとしてデプロイしてください」と案内**
+- ✅ **デプロイ手順を毎回明示**
+
+```bash
+clasp push -f
+```
+
+その後、以下のデプロイ手順を案内:
+```
+1. Apps Scriptエディタを開く: https://script.google.com/d/15gwr6oQUTLjdbNM_8ypqE0ao-7HCEJYrtU_CwJ-uN58PXg6Rhb4kYc71/edit
+2. 「デプロイ」→「デプロイを管理」
+3. ✏️ 鉛筆アイコン → 「新バージョン」→「デプロイ」
+```
+
+**❌ 絶対にしないこと**:
 - 「デプロイしましたか？」という確認
 - 「デプロイができてないことが原因です」という推測
 - デプロイに関する問題の可能性を示唆すること
+- ユーザーに「プッシュしてください」と依頼すること
 
-**理由**: ユーザーは指示通りに必ず実行するため、デプロイ関連の確認や推測は不要
+**理由**: ユーザーは指示通りに必ず実行するため、デプロイ関連の確認や推測は不要。Claude Codeが自動的にpush/deployを実行する。
 
 ---
 
@@ -5987,31 +6288,56 @@ if (e && e.parameter && e.parameter.action) {
 
 ---
 
-**最終更新日**: 2025年10月17日（🔔 **バッジ管理システム実装完了！** + チーム管理機能の全体像設計）
+**最終更新日**: 2025年10月19日（📱 **通知ページPWA化 + 開発戦略見直し** ✅）
 
 **最新の更新内容**:
-- 🔔 **バッジ管理システム実装（100%完成）** ★NEW ✅
-  - ✅ **ヘッダー右上に🔔バッジボタン**: REBORNロゴの右側に配置、赤い丸に数字表示
-  - ✅ **簡易通知ページ（notifications.html）**: 72pxの大きな数字でバッジカウント表示、バッジクリアボタン
-  - ✅ **localStorage + Badge API**: 永続化、ホーム画面アイコンに数字表示
-  - ✅ **Service Workerとの連携**: INCREMENT_BADGEメッセージ、自動増加
-  - ✅ **APIキーtypo修正**: 3日間の原因不明エラーを解決（R4YT1bQO → R4YTlbQo）
-  - 📝 **動作確認完了**: iPhone実機でバッジ表示・クリア・通知受信すべて成功
-  - 🎯 **実装ファイル**: `docs/index.html`, `docs/notifications.html`, `docs/firebase-messaging-sw.js`
-  - ⏰ **所要時間**: 約2時間（バッジシステム実装）+ 約3日間（FCM通知デバッグ）
-  - 💬 **開発者の感想**: 「本当に何かを実装できたと思ったら次から次に問題が発生して、めちゃくちゃ大変でしたが、なんとか乗り越えられましたね。素晴らしいことです。」
-- 📱 **チーム管理機能の全体像設計** ★超重要 🎯
-  - 📊 **チーム運用シナリオ**: 副業チーム（3人体制）、外注スタッフ活用（5人体制）
-  - 🔔 **通知の振り分け**: カテゴリ別、金額別、優先度別
-  - 📈 **自動レポート通知**: 週次・月次サマリー、目標達成時のリアルタイム通知
-  - 🔐 **権限管理**: 役割別のデータアクセス制限
-  - 💰 **SaaS化プラン**: 無料/ベーシック/プロの3プラン設計
-  - ✅ **Phase 1完了**: バッジ管理システム（基盤）
-  - 🎯 **次のPhase**: ステータス管理システム → 通知条件設定 → 権限管理
-- 📊 **完成度の更新**: 84% → 85%（バッジ管理100%、チーム管理10%）
-- 📋 **次のタスク**: 商品ステータス管理システム、通知の条件設定、権限管理システム
+- 📱 **通知ページのフルスクリーン（PWA）対応完了** ✅
+  - ✅ **manifest.json連携**: PWAとしてフルスクリーン表示に対応
+  - ✅ **iOS PWA対応**: apple-mobile-web-app-* メタタグ追加
+  - ✅ **レイアウト改善**: Flexboxによる固定ヘッダー + スクロール可能コンテンツ
+  - ✅ **iOS スムーススクロール**: `-webkit-overflow-scrolling: touch` 対応
+  - 🎯 **実装ファイル**: `docs/notifications.html` (全体的な構造変更)
+  - ⏰ **所要時間**: 約30分
+  - 🚀 **デプロイ**: GitHub → Cloudflare Pages 自動デプロイ完了
+- 🎯 **重要な開発戦略の見直し** ★超重要
+  - ⚠️ **コース変更**: 通知・SaaS機能の拡張を一時停止
+  - 🔄 **新優先順位**: 在庫管理・売上管理システムを先に実装
+  - 💡 **理由**: 通知機能はビジネスロジック（在庫・売上）と深く連携するため、コアシステムの構築が先決
+  - 📋 **今後の流れ**:
+    1. ✅ 通知ページのフルスクリーン化（完了）
+    2. ⏸️ 本格的な通知機能拡張（一時停止）
+    3. 🎯 在庫管理システムの実装（次の優先タスク）
+    4. 🎯 売上管理システムの実装
+    5. 🔄 通知・タスク管理機能の本格実装（コアシステム完成後）
+- 📚 **ドキュメント管理の最適化** ★NEW
+  - ✅ **DOCUMENTATION_RULES.md 新規作成**: 3つのドキュメント（CLAUDE.md / PWA_SETUP_GUIDE.md / DEVELOPMENT_SERVICES.md）の役割と保存ルールを明確化
+  - ✅ **簡単なテンプレート確立**: 「今回のセッション内容をドキュメントに保存してください」と伝えるだけでOK
+  - ✅ **判断フロー自動化**: Claude Codeが自動的に適切なドキュメントに振り分け
+- 💬 **ユーザーの気づき**: 「すみません、私の判断が完全に間違えました。通知のところやSaaS化のことを進める前に、在庫管理や売上管理などを先に作成しないと、その辺りと深く関わってくる部分ですもんね。」
 
-### 過去の更新（2025年10月17日 午後）
+### 過去の更新（2025年10月19日 午前）
+
+**前回更新日**: 2025年10月19日（⚙️ **デフォルトセールスワード設定 + 複数デバイス通知対応** ★完成 ✅）
+
+**前回の更新内容**:
+- ⚙️ **デフォルトセールスワード設定（100%完成）** ★NEW ✅
+  - ✅ **設定マスタに追加**: 商品登録を開いたときに自動で選択されるセールスワードを設定可能
+  - ✅ **2段階プルダウン**: カテゴリ → セールスワード
+  - ✅ **リセット後も維持**: リセットボタンを押してもデフォルト値が再適用される
+  - 🎯 **実装ファイル**: `sidebar_config.html` (lines 992-1016, 3036-3118), `sp_scripts.html` (lines 3077-3088, 3228-3262)
+  - ⏰ **所要時間**: 約1時間
+- 🔧 **5つのバグ修正** ✅
+  - ✅ **問題⑫**: iPhone SEスクロール問題修正（`docs/index.html` - CSS `height: 100vh` → `min-height + overflow-y: auto`）
+  - ✅ **問題⑬**: 商品属性削除バグ修正（`removeAttribute()` → `removeProductAttribute()` でDOM衝突回避）
+  - ✅ **問題⑭**: アプリ音停止問題修正（Firebase初期化エラー対策 - `getApps()`チェック + try-catch + 2秒遅延）
+  - ✅ **問題⑮**: 複数デバイス通知問題修正（`web_push.js` - トークン非アクティブ化ロジック削除、全アクティブトークンに送信）
+  - 📝 **テスト完了**: 3台のスマホで同時テスト、全デバイスに通知成功
+- 📚 **ドキュメント整理** ★NEW
+  - ✅ **DOCUMENTATION_RULES.md 新規作成**: 3つのドキュメントの役割と保存ルールを明確化
+  - ✅ **PWA_SETUP_GUIDE.md 更新**: 問題10（複数デバイス通知）と問題11（iPhone SEスクロール）を追加
+  - ✅ **CLAUDE.md 更新**: 問題⑫〜⑮を「過去のトラブルと教訓」に追加
+
+### 過去の更新（2025年10月17日）
 
 **前回更新日**: 2025年10月17日（🚀 **PWA内タブ切り替え完全実装！** postMessage APIでネイティブアプリ並みの体験を実現！）
 
