@@ -575,7 +575,7 @@
     newItem.innerHTML = `
       <div class="attribute-header">
         <span>属性 ${attributeCount}</span>
-        <button type="button" class="remove-attribute-btn" onclick="removeAttribute(${attributeCount})">削除</button>
+        <button type="button" class="remove-attribute-btn" onclick="removeProductAttribute(${attributeCount})">削除</button>
       </div>
 
       <div class="row" style="margin-top: 6px;">
@@ -602,7 +602,7 @@
   }
 
   // 商品属性セットを削除
-  function removeAttribute(index) {
+  function removeProductAttribute(index) {
     const item = document.querySelector(`.attribute-item[data-index="${index}"]`);
     if (item) {
       item.remove();
@@ -618,7 +618,7 @@
         // onclickも更新
         const removeBtn = item.querySelector('.remove-attribute-btn');
         if (removeBtn) {
-          removeBtn.onclick = () => removeAttribute(newIndex);
+          removeBtn.onclick = () => removeProductAttribute(newIndex);
         }
       });
 
@@ -2287,8 +2287,7 @@
       }
     }
 
-    // 設定を保存
-    saveManagementNumberPlacementSettings();
+    // 設定の保存は「保存」ボタン押下時に行う
 
     // 商品名プレビューを更新
     updateNamePreview();
@@ -2530,32 +2529,44 @@
   function buildDescriptionByOrder(elements, descTextarea) {
     console.log('buildDescriptionByOrder 関数が呼び出されました');
 
-    // 1. AI設定から配置順序を読み込み
-    let descriptionOrder = null;
-    try {
-      const aiConfig = CACHED_CONFIG && CACHED_CONFIG.AI生成設定 ? CACHED_CONFIG.AI生成設定 : null;
-      if (aiConfig && aiConfig.descriptionOrder && Array.isArray(aiConfig.descriptionOrder)) {
-        descriptionOrder = aiConfig.descriptionOrder;
-        console.log('カスタム配置順序を使用:', descriptionOrder);
-      }
-    } catch (error) {
-      console.warn('配置順序の読み込みに失敗。デフォルト順序を使用します:', error);
+    // 1. HTML要素の実際の順序を取得（最優先）
+    const actualBlocksOrder = getDescriptionBlocksOrder();
+    console.log('実際のブロック順序:', actualBlocksOrder);
+
+    // 2. ブロックタイプとelements[id]のマッピング
+    const blockTypeToElementId = {
+      'brandName': 'brand',
+      'size': 'size',
+      'color': 'color',
+      'condition': 'condition',
+      'material': 'material',
+      'aiGeneration': 'aiGeneration',
+      'discount': 'discount',
+      'hashtag': 'hashtag'
+    };
+
+    // 3. 実際の順序に基づいて配置順序を構築
+    let order = [];
+    if (actualBlocksOrder.length > 0) {
+      order = actualBlocksOrder.map(blockType => ({
+        id: blockTypeToElementId[blockType] || blockType,
+        enabled: true
+      }));
+      console.log('実際のブロック順序から配置順序を生成:', order);
+    } else {
+      // フォールバック: デフォルト順序
+      order = [
+        { id: 'brand', enabled: true },
+        { id: 'size', enabled: true },
+        { id: 'color', enabled: true },
+        { id: 'condition', enabled: true },
+        { id: 'material', enabled: true },
+        { id: 'ai', enabled: true },
+        { id: 'discount', enabled: true },
+        { id: 'hashtag', enabled: true }
+      ];
+      console.log('デフォルト順序を使用');
     }
-
-    // 2. デフォルト順序の定義
-    const DEFAULT_ORDER = [
-      { id: 'brand', enabled: true },
-      { id: 'color', enabled: true },
-      { id: 'size', enabled: true },
-      { id: 'material', enabled: true },
-      { id: 'condition', enabled: true },
-      { id: 'ai', enabled: true },
-      { id: 'management', enabled: true },
-      { id: 'discount', enabled: true },
-      { id: 'hashtag', enabled: true }
-    ];
-
-    const order = descriptionOrder || DEFAULT_ORDER;
 
     // 3. 配置順序に従って説明文を組み立て
     const parts = [];
@@ -2772,7 +2783,7 @@
           updateDescriptionFromDetail();
 
           // 成功メッセージ
-          alert('✅ AI説明文を生成しました！\n\n内容を確認して、必要に応じて編集してください。');
+          alert('✅ AI説明文を生成しました！\n\n商品の説明プレビューを確認して、必要に応じて直接編集してください。');
 
           // ボタンを元に戻す
           resetAiButton(aiGenBtn, originalText);
@@ -2970,18 +2981,18 @@
             conditionSection = `商品の状態：${conditionValue}\n\n`;
           }
 
-          // AI生成文または商品状態詳細を取得
-        let detailSection = '';
-        if (AI_GENERATED_TEXT) {
-          // AI生成文がある場合はラベルなしでそのまま表示
-          detailSection = `${AI_GENERATED_TEXT}\n\n`;
-        } else {
-          // AI生成文がない場合は商品状態詳細フィールドの値を使用
+          // 商品状態詳細を取得
           const detailText = (detailInput.value || '').trim();
+          let detailSection = '';
           if (detailText) {
             detailSection = `商品状態(詳細)：\n${detailText}\n\n`;
           }
-        }
+
+          // AI生成文を取得
+          let aiGenerationSection = '';
+          if (AI_GENERATED_TEXT) {
+            aiGenerationSection = `${AI_GENERATED_TEXT}\n\n`;
+          }
 
         // ハッシュタグ生成
           const hashtags = generateHashtags();
@@ -3003,12 +3014,11 @@
           // 配置順序を取得して説明文を組み立て
           buildDescriptionByOrder({
             brand: brandText,
-            color: colorText,
             size: sizeText,
+            color: colorText,
+            condition: detailSection,
             material: materialText,
-            condition: conditionSection,
-            ai: detailSection,
-            management: managementNumberSection,
+            aiGeneration: aiGenerationSection,
             discount: discountInfo,
             hashtag: hashtagText
           }, descTextarea);
@@ -3046,6 +3056,7 @@
     // セールスワード専用データ取得と設定マスタからの「よく使う」読み込みを並行実行
     let salesWordData = null;
     let favoriteSalesWords = [];
+    let defaultSalesword = null;
 
     google.script.run
       .withSuccessHandler(function(data) {
@@ -3062,13 +3073,18 @@
     google.script.run
       .withSuccessHandler(function(config) {
         if (config && config.よく使うセールスワード) {
-          // 新しい構造（よく使う + 表示形式）に対応
+          // 新しい構造（よく使う + 表示形式 + デフォルト）に対応
           if (typeof config.よく使うセールスワード === 'object' && config.よく使うセールスワード.よく使う) {
             favoriteSalesWords = config.よく使うセールスワード.よく使う || [];
             // 表示形式設定を読み込み
             if (config.よく使うセールスワード.表示形式) {
               SALESWORD_FORMAT = config.よく使うセールスワード.表示形式;
               console.log('セールスワード表示形式取得成功:', SALESWORD_FORMAT);
+            }
+            // デフォルトセールスワード設定を読み込み
+            if (config.よく使うセールスワード.デフォルト) {
+              defaultSalesword = config.よく使うセールスワード.デフォルト;
+              console.log('デフォルトセールスワード取得成功:', defaultSalesword);
             }
           } else {
             // 旧形式（配列のみ）に対応
@@ -3094,6 +3110,10 @@
         }
 
         setupCategoryDropdown();
+
+        // デフォルトセールスワードを適用
+        applyDefaultSalesword(defaultSalesword);
+
         console.log('セールスワード初期化完了');
       }
     }
@@ -3203,6 +3223,42 @@
       categorySelect.addEventListener('change', onSalesWordCategoryChanged);
       console.log('セールスワードイベントリスナー設定完了');
     }
+  }
+
+  /**
+   * デフォルトセールスワードを適用
+   */
+  function applyDefaultSalesword(defaultConfig) {
+    if (!defaultConfig || !defaultConfig.カテゴリ || !defaultConfig.セールスワード) {
+      console.log('デフォルトセールスワード設定がありません');
+      return;
+    }
+
+    const categorySelect = document.getElementById('セールスワード(カテゴリ)');
+    const saleswordSelect = document.getElementById('セールスワード');
+
+    if (!categorySelect || !saleswordSelect) {
+      console.log('セールスワードの要素が見つかりません');
+      return;
+    }
+
+    // カテゴリを設定
+    categorySelect.value = defaultConfig.カテゴリ;
+    console.log('デフォルトカテゴリを設定:', defaultConfig.カテゴリ);
+
+    // カテゴリ変更イベントをトリガー（セールスワードプルダウンを更新）
+    onSalesWordCategoryChanged();
+
+    // セールスワードを設定（プルダウン更新後に設定）
+    setTimeout(() => {
+      saleswordSelect.value = defaultConfig.セールスワード;
+      console.log('デフォルトセールスワードを設定:', defaultConfig.セールスワード);
+
+      // 商品名プレビューを更新
+      if (typeof updateNamePreview === 'function') {
+        updateNamePreview();
+      }
+    }, 100);
   }
 
   // ================= カテゴリ階層 =================
@@ -3382,6 +3438,11 @@
         if (descTextarea) {
           autoResizeTextarea(descTextarea);
         }
+        // 保存成功後に開閉状態と管理番号配置を保存
+        saveDescriptionBlocksCollapseState();
+        saveTitleBlocksCollapseState();
+        saveManagementNumberPlacementSettings();
+        console.log('保存成功：開閉状態と管理番号配置を保存しました');
       })
       .withFailureHandler(function(error) {
         show(`NG(UNKNOWN): ${error && error.message ? error.message : error}`);
@@ -4574,6 +4635,277 @@ if (staffSelect) {
     }
   }
 
+  /**
+   * 商品の説明ブロックの現在の順序を取得
+   * @returns {Array} ブロックタイプの配列
+   */
+  function getDescriptionBlocksOrder() {
+    const container = document.getElementById('descriptionBlocksContainer');
+    if (!container) return [];
+
+    const blocks = container.querySelectorAll('.desc-draggable-block');
+    return Array.from(blocks).map(block => block.dataset.blockType);
+  }
+
+  /**
+   * 商品の説明ブロックの開閉トグル
+   * @param {HTMLElement} button - クリックされた開閉ボタン
+   */
+  function toggleDescBlock(button) {
+    const block = button.closest('.desc-draggable-block');
+    if (!block) return;
+
+    const content = block.querySelector('.section-content');
+    if (!content) return;
+
+    const isOpen = content.style.display !== 'none';
+
+    if (isOpen) {
+      content.style.display = 'none';
+      button.textContent = '▶';
+    } else {
+      content.style.display = 'block';
+      button.textContent = '▼';
+    }
+
+    // 開閉状態の保存は「保存」ボタン押下時に行う
+  }
+
+  /**
+   * 商品名ブロックの開閉トグル
+   * @param {HTMLElement} button - クリックされた開閉ボタン
+   */
+  function toggleTitleBlock(button) {
+    const block = button.closest('.title-draggable-block');
+    if (!block) return;
+
+    const content = block.querySelector('.section-content');
+    if (!content) return;
+
+    const isOpen = content.style.display !== 'none';
+
+    if (isOpen) {
+      content.style.display = 'none';
+      button.textContent = '▶';
+    } else {
+      content.style.display = 'block';
+      button.textContent = '▼';
+    }
+
+    // 開閉状態の保存は「保存」ボタン押下時に行う
+  }
+
+  /**
+   * 商品の説明ブロックのドラッグ&ドロップを初期化
+   */
+  function initDescriptionBlocksDragDrop() {
+    const container = document.getElementById('descriptionBlocksContainer');
+    if (!container) return;
+
+    // Sortable.jsを使用してドラッグ&ドロップを初期化
+    Sortable.create(container, {
+      animation: 150,
+      handle: '.drag-handle',
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'sortable-drag',
+      onEnd: function() {
+        // ドロップ後に並び順を保存
+        saveDescriptionBlocksOrder();
+      }
+    });
+
+    console.log('商品の説明ブロックのドラッグ&ドロップを初期化しました');
+  }
+
+  /**
+   * 商品の説明ブロックの並び順を保存
+   */
+  function saveDescriptionBlocksOrder() {
+    const container = document.getElementById('descriptionBlocksContainer');
+    if (!container) return;
+
+    const blocks = container.querySelectorAll('.desc-draggable-block');
+    const order = Array.from(blocks).map(block => block.dataset.blockType);
+
+    console.log('商品の説明ブロック並び順を保存:', order);
+
+    // 設定マスタに保存（TODO: config_loader.jsに保存機能を追加）
+    // 今は一旦localStorageに保存
+    localStorage.setItem('descriptionBlocksOrder', JSON.stringify(order));
+  }
+
+  /**
+   * 商品の説明ブロックの並び順を読み込み
+   */
+  function loadDescriptionBlocksOrder() {
+    const savedOrder = localStorage.getItem('descriptionBlocksOrder');
+    if (!savedOrder) return;
+
+    try {
+      const order = JSON.parse(savedOrder);
+      const container = document.getElementById('descriptionBlocksContainer');
+      if (!container) return;
+
+      // 並び順に応じてブロックを並び替え
+      order.forEach(blockType => {
+        const block = container.querySelector(`[data-block-type="${blockType}"]`);
+        if (block) {
+          container.appendChild(block);
+        }
+      });
+
+      console.log('商品の説明ブロック並び順を復元しました:', order);
+    } catch (error) {
+      console.error('商品の説明ブロック並び順の読み込みエラー:', error);
+    }
+  }
+
+  /**
+   * 商品の説明ブロックの開閉状態を保存
+   */
+  function saveDescriptionBlocksCollapseState() {
+    const container = document.getElementById('descriptionBlocksContainer');
+    if (!container) return;
+
+    const blocks = container.querySelectorAll('.desc-draggable-block');
+    const state = {};
+
+    blocks.forEach(block => {
+      const content = block.querySelector('.section-content');
+      if (content) {
+        const blockType = block.dataset.blockType;
+        state[blockType] = content.style.display !== 'none';
+      }
+    });
+
+    console.log('商品の説明ブロック開閉状態を保存:', state);
+
+    // 今は一旦localStorageに保存
+    localStorage.setItem('descriptionBlocksCollapseState', JSON.stringify(state));
+  }
+
+  /**
+   * 商品名ブロックの開閉状態を保存
+   */
+  function saveTitleBlocksCollapseState() {
+    const container = document.getElementById('titleBlockContainer');
+    if (!container) return;
+
+    const blocks = container.querySelectorAll('.title-draggable-block');
+    const state = {};
+
+    blocks.forEach(block => {
+      const content = block.querySelector('.section-content');
+      if (content) {
+        const blockId = block.dataset.blockId;
+        state[blockId] = content.style.display !== 'none';
+      }
+    });
+
+    console.log('商品名ブロック開閉状態を保存:', state);
+
+    // localStorageに保存
+    localStorage.setItem('titleBlocksCollapseState', JSON.stringify(state));
+  }
+
+  /**
+   * 商品の説明ブロックの開閉状態を読み込み
+   */
+  function loadDescriptionBlocksCollapseState() {
+    const container = document.getElementById('descriptionBlocksContainer');
+    if (!container) return;
+
+    const savedState = localStorage.getItem('descriptionBlocksCollapseState');
+
+    // デフォルトで閉じるブロック
+    const defaultClosedBlocks = ['discount', 'hashtag'];
+
+    let state = {};
+
+    if (savedState) {
+      try {
+        state = JSON.parse(savedState);
+        console.log('商品の説明ブロック開閉状態を復元しました:', state);
+      } catch (error) {
+        console.error('商品の説明ブロック開閉状態の読み込みエラー:', error);
+        // エラー時はデフォルト状態を使用
+        defaultClosedBlocks.forEach(blockType => {
+          state[blockType] = false;
+        });
+      }
+    } else {
+      // 初回読み込み時はデフォルトで閉じる
+      defaultClosedBlocks.forEach(blockType => {
+        state[blockType] = false;
+      });
+      console.log('デフォルト開閉状態を適用しました:', state);
+    }
+
+    // すべてのブロックに開閉状態を適用
+    const blocks = container.querySelectorAll('.desc-draggable-block');
+    blocks.forEach(block => {
+      const blockType = block.dataset.blockType;
+      const content = block.querySelector('.section-content');
+      const button = block.querySelector('.collapse-btn');
+
+      if (!content || !button) return;
+
+      // stateに含まれている場合はその状態を使用、含まれていない場合は開いた状態
+      const isOpen = state[blockType] !== undefined ? state[blockType] : true;
+
+      if (isOpen) {
+        content.style.display = 'block';
+        button.textContent = '▼';
+      } else {
+        content.style.display = 'none';
+        button.textContent = '▶';
+      }
+    });
+  }
+
+  /**
+   * 商品名ブロックの開閉状態を読み込み
+   */
+  function loadTitleBlocksCollapseState() {
+    const container = document.getElementById('titleBlockContainer');
+    if (!container) return;
+
+    const savedState = localStorage.getItem('titleBlocksCollapseState');
+
+    let state = {};
+
+    if (savedState) {
+      try {
+        state = JSON.parse(savedState);
+        console.log('商品名ブロック開閉状態を復元しました:', state);
+      } catch (error) {
+        console.error('商品名ブロック開閉状態の読み込みエラー:', error);
+      }
+    }
+
+    // すべてのブロックに開閉状態を適用
+    const blocks = container.querySelectorAll('.title-draggable-block');
+    blocks.forEach(block => {
+      const blockId = block.dataset.blockId;
+      const content = block.querySelector('.section-content');
+      const button = block.querySelector('.collapse-btn');
+
+      if (!content || !button) return;
+
+      // stateに含まれている場合はその状態を使用、含まれていない場合は開いた状態（デフォルト）
+      const isOpen = state[blockId] !== undefined ? state[blockId] : true;
+
+      if (isOpen) {
+        content.style.display = 'block';
+        button.textContent = '▼';
+      } else {
+        content.style.display = 'none';
+        button.textContent = '▶';
+      }
+    });
+  }
+
   // ページ読み込み時にイベントリスナーを設定
   setTimeout(() => {
     setupHashtagPreviewListeners();
@@ -4582,6 +4914,107 @@ if (staffSelect) {
     initTitleBlockDragDrop();
     applyTitleBlockOrder();
     restoreManagementNumberPlacementSettings();
+    initDescriptionBlocksDragDrop();
+    loadDescriptionBlocksOrder();
+    loadDescriptionBlocksCollapseState();
+    loadTitleBlocksCollapseState();
   }, 1000);
 
+</script>
+
+<!-- Firebase Cloud Messaging - フォアグラウンド通知対応 -->
+<script type="module">
+  // Firebase設定
+  const firebaseConfig = {
+    apiKey: "AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A",
+    authDomain: "reborn-pwa.firebaseapp.com",
+    projectId: "reborn-pwa",
+    storageBucket: "reborn-pwa.firebasestorage.app",
+    messagingSenderId: "345653439471",
+    appId: "1:345653439471:web:7620819ce3f022d9cd241a",
+    measurementId: "G-SX48K45X75"
+  };
+
+  // Firebase初期化
+  async function initFirebaseMessaging() {
+    try {
+      // Firebase App と Messaging をインポート
+      const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+      const { getMessaging, onMessage } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
+
+      // 既に初期化されているかチェック
+      let app;
+      if (getApps().length === 0) {
+        app = initializeApp(firebaseConfig);
+        console.log('✅ Firebase App初期化（商品登録ページ）');
+      } else {
+        app = getApp();
+        console.log('✅ 既存のFirebase Appを使用（商品登録ページ）');
+      }
+
+      const messaging = getMessaging(app);
+      console.log('✅ Firebase Messaging取得完了（商品登録ページ）');
+
+      // フォアグラウンドメッセージ受信（アプリが開いている時）
+      onMessage(messaging, (payload) => {
+        console.log('📨 フォアグラウンドメッセージ受信（商品登録ページ）:', payload);
+
+        // 通知データを取得
+        const notificationTitle = payload.data?.title || payload.notification?.title || 'REBORN';
+        const notificationBody = payload.data?.body || payload.notification?.body || '新しい通知があります';
+
+        // バッジを更新
+        incrementBadgeIfAvailable();
+
+        // ブラウザ通知を表示
+        if (Notification.permission === 'granted') {
+          new Notification(notificationTitle, {
+            body: notificationBody,
+            icon: '/reborn-inventory-system/icon-180.png',
+            badge: '/reborn-inventory-system/icon-192.png',
+            tag: 'reborn-notification-product-page',
+            requireInteraction: false  // 自動で消える
+          });
+          console.log('🔔 ブラウザ通知を表示しました（商品登録ページ）');
+        }
+      });
+
+    } catch (error) {
+      // エラーが発生してもページの他の機能に影響しないようにする
+      console.error('❌ Firebase Messaging初期化エラー:', error);
+      console.log('⚠️ 通知機能は利用できませんが、他の機能は正常に動作します');
+    }
+  }
+
+  // バッジカウントを増やす（利用可能な場合）
+  function incrementBadgeIfAvailable() {
+    try {
+      // localStorageから現在のカウントを取得
+      const currentCount = parseInt(localStorage.getItem('badgeCount') || '0', 10);
+      const newCount = currentCount + 1;
+
+      // localStorageに保存
+      localStorage.setItem('badgeCount', newCount.toString());
+      console.log('📛 バッジカウント更新:', newCount);
+
+      // Badge APIで更新（対応ブラウザのみ）
+      if ('setAppBadge' in navigator) {
+        navigator.setAppBadge(newCount)
+          .then(() => console.log('✅ Badge API更新成功:', newCount))
+          .catch(err => console.error('❌ Badge APIエラー:', err));
+      }
+    } catch (error) {
+      console.error('❌ バッジ更新エラー:', error);
+    }
+  }
+
+  // ページ読み込み完了後、少し遅延させてからFirebase Messagingを初期化
+  // （他のスクリプトが完全に読み込まれるのを待つ）
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(initFirebaseMessaging, 2000);
+    });
+  } else {
+    setTimeout(initFirebaseMessaging, 2000);
+  }
 </script>
