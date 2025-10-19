@@ -1,6 +1,6 @@
 # PWA + GAS + postMessage 完全セットアップガイド
 
-**最終更新日**: 2025年10月17日
+**最終更新日**: 2025年10月19日
 **対象**: 他のプロジェクトで同じ構成を再現したい開発者向け
 **所要時間**: 約1時間で基本構成を再現可能
 
@@ -1311,6 +1311,280 @@ debugSheet.appendRow([new Date(), 'FCM送信', title, body, response.getContentT
 
 ---
 
+### 問題10: 複数デバイスで通知が届かない（チーム利用時）
+
+**発生日**: 2025年10月19日
+
+**症状**:
+- 最新登録したデバイスのみ通知が届く
+- 他のデバイスには全く通知が来ない（1回目も2回目も）
+- バッジも表示されない
+
+**原因**:
+- `web_push.js`（GAS側のFCMトークン管理スクリプト）が、新規トークン登録時に**既存の全トークンを非アクティブ化**していた
+- これにより、複数デバイスでの同時利用（チーム利用）ができない状態だった
+
+**問題のコード**（web_push.js lines 87-93）:
+```javascript
+// ❌ 古いコード（問題あり）
+for (let i = 1; i < data.length; i++) {
+  if (data[i][3] === 'アクティブ') {
+    sheet.getRange(i + 1, 4).setValue('非アクティブ');
+    Logger.log(`古いトークンを非アクティブ化: 行${i + 1}`);
+  }
+}
+```
+
+**解決策**:
+
+トークン非アクティブ化ロジックを削除し、**すべてのアクティブトークンに通知を送信**する方式に変更。
+
+```javascript
+// ✅ 修正後（正しい実装）
+const now = new Date().toISOString();
+
+// 🔧 複数端末対応: 他のトークンを非アクティブ化しない
+// すべてのアクティブなトークンに通知を送信するため、非アクティブ化処理は削除
+
+if (existingRowIndex > -1) {
+  // 既存の登録を更新（日時を更新、ステータスはアクティブのまま）
+  sheet.getRange(existingRowIndex, 1).setValue(now);
+  sheet.getRange(existingRowIndex, 4).setValue('アクティブ');
+  Logger.log(`既存トークンを更新: 行${existingRowIndex}`);
+} else {
+  // 新規登録（アクティブとして追加）
+  sheet.appendRow([now, token, '', 'アクティブ']);
+  Logger.log(`新規トークンを追加: ${token.substring(0, 20)}...`);
+}
+```
+
+**実装箇所**:
+- `/Users/yasuhirotakushi/Desktop/reborn-project/web_push.js` (lines 85-99)
+
+**テスト結果**:
+- ✅ 3台のスマホで同時にテスト
+- ✅ 全デバイスに通知が正しく届くことを確認
+
+**教訓**:
+1. **チーム利用を想定した設計**
+   - 複数デバイスでの同時利用は必須要件
+   - トークン管理は「最新1つのみ」ではなく「全アクティブトークン」に送信
+2. **トークンのライフサイクル管理**
+   - 非アクティブ化は、ユーザーが明示的にアプリを削除した場合のみ
+   - 新規登録時の自動非アクティブ化は不要
+3. **複数端末テストの重要性**
+   - 1台のテストだけでは発見できない問題がある
+
+---
+
+### 問題11: iPhone SEでセットアップボタンが表示されない
+
+**発生日**: 2025年10月19日
+
+**症状**:
+- iPhone SE（小画面）でFCMセットアップ完了後、「アプリを開く」ボタンが表示されない
+- 大きなiPhoneでは正常に表示される
+- 横向きにするとボタンが存在することは確認できる
+- ページがスクロールできない
+
+**原因**:
+- `docs/index.html`の`#setup-screen`に`height: 100vh`が設定されていた
+- これにより、画面の高さが固定され、内容が画面に収まらない場合でもスクロールできない
+- 小画面では「アプリを開く」ボタンが画面外に配置され、アクセス不可能
+
+**問題のコード**（docs/index.html lines 31-42）:
+```css
+/* ❌ 古いコード（問題あり） */
+#setup-screen {
+  width: 100vw;
+  height: 100vh;  /* 固定高さ */
+  display: none;
+  /* overflow-y プロパティなし */
+}
+```
+
+**解決策**:
+
+固定高さを柔軟な高さに変更し、スクロールを有効化。
+
+```css
+/* ✅ 修正後（正しい実装） */
+#setup-screen {
+  width: 100vw;
+  min-height: 100vh;           /* 最小高さ */
+  max-height: 100vh;           /* 最大高さ */
+  overflow-y: auto;            /* 縦スクロール有効 */
+  -webkit-overflow-scrolling: touch;  /* iOS スムーズスクロール */
+  display: none;
+}
+```
+
+**実装箇所**:
+- `/Users/yasuhirotakushi/Desktop/reborn-project/docs/index.html` (lines 31-42)
+
+**デバッグ手順**:
+1. ユーザーが横向きにして確認
+2. 「ボタンは表示されているが、スクロールできない」と判明
+3. CSS の`height: 100vh`が原因と特定
+4. `min-height` + `overflow-y: auto`に変更
+
+**テスト結果**:
+- ✅ iPhone SEでボタンが表示される
+- ✅ スクロールが正常に動作
+- ✅ 大きなiPhoneでも問題なし
+
+**教訓**:
+1. **レスポンシブデザインの重要性**
+   - 大画面でテストするだけでは不十分
+   - 小画面（iPhone SE、Android小型機）でのテストが必須
+2. **固定高さの危険性**
+   - `height: 100vh`は画面サイズが固定されている場合のみ使用
+   - 内容が可変の場合は`min-height`を使用
+3. **iOSのスクロール最適化**
+   - `-webkit-overflow-scrolling: touch`でスムーズなスクロールを実現
+4. **横向きテストの有効性**
+   - ユーザーが横向きにすることで、問題を素早く特定できた
+
+---
+
+### 問題12: iOS PWAでのナビゲーションがSafariで開いてしまう ★超重要
+
+**発生日**: 2025年10月19日
+
+**症状**:
+- iOS PWA（ホーム画面に追加したアプリ）で`window.location.href = 'notifications.html'`で画面遷移すると、PWAのフルスクリーンモードが解除され、Safariブラウザが開いてしまう
+- manifest.jsonの`display: "standalone"`設定にも関わらず、ナビゲーション時にブラウザに飛ばされる
+
+**環境**:
+- デバイス: iPhone
+- ホスティング: Cloudflare Pages（`docs/`フォルダをルート`/`として配信）
+- カスタムドメイン: `https://www.reborn-inventory.com`
+
+**根本原因**:
+
+iOS PWAは**相対パスのリソース参照やナビゲーションをスコープ外とみなし**、Safariで開いてしまう。以下の3つすべてを**絶対パス（`/`で始まる）**にする必要がある：
+
+1. **manifest.jsonのscope**
+2. **JavaScriptでのナビゲーション**
+3. **manifest.jsonへのリンク**
+
+**問題のあったコード**:
+
+```json
+// ❌ manifest.json（間違い）
+{
+  "start_url": "/reborn-inventory-system/",
+  "scope": "/reborn-inventory-system/"
+}
+```
+
+実際のファイルは`/index.html`、`/notifications.html`として配信されているため、スコープ外になる。
+
+```javascript
+// ❌ index.html（間違い）
+window.location.href = 'notifications.html';  // 相対パス
+```
+
+```html
+<!-- ❌ notifications.html（間違い） -->
+<link rel="manifest" href="manifest.json">  <!-- 相対パス -->
+```
+
+**解決策**:
+
+**1. manifest.jsonのscopeを実際のパス構造に合わせる**:
+
+```json
+// ✅ 修正後
+{
+  "start_url": "/",
+  "scope": "/"
+}
+```
+
+**2. すべてのナビゲーションを絶対パスに**:
+
+```javascript
+// ✅ index.html
+window.location.href = '/notifications.html';  // 絶対パス
+
+// ✅ notifications.html
+window.location.href = '/index.html';  // 絶対パス
+```
+
+**3. manifest.jsonへのリンクを絶対パスに**:
+
+```html
+<!-- ✅ index.html -->
+<link rel="manifest" href="/manifest.json">
+
+<!-- ✅ notifications.html -->
+<link rel="manifest" href="/manifest.json">
+```
+
+**実装箇所**:
+- `/Users/yasuhirotakushi/Desktop/reborn-project/docs/manifest.json` (lines 5-6)
+- `/Users/yasuhirotakushi/Desktop/reborn-project/docs/index.html` (line 12, line 820)
+- `/Users/yasuhirotakushi/Desktop/reborn-project/docs/notifications.html` (line 12, line 280)
+
+**デバッグ経緯**:
+
+1. **第1回修正**: manifest.jsonのscopeを`/reborn-inventory-system/`→`/`に変更
+   - **結果**: 動かず
+2. **第2回修正**: ナビゲーションを相対パス→絶対パスに変更
+   - **結果**: まだ動かず
+3. **第3回修正**: manifest.jsonへのリンクを絶対パスに + index.htmlにmanifest追加
+   - **結果**: ✅ 成功！PWA内でフルスクリーン維持したまま遷移
+
+**ChatGPTからの助言**:
+
+ChatGPTエージェントモードに相談し、以下のポイントを学習：
+- iOS PWAはscopeの解釈が厳密
+- 相対パスは「新しいコンテキスト」とみなされる
+- すべてのリソース参照を絶対パスにする必要がある
+
+**テスト結果**:
+- ✅ index.html（メイン画面）→ notifications.html（通知ページ）: PWA内で遷移
+- ✅ notifications.html → index.html: PWA内で遷移
+- ✅ フルスクリーンモード維持
+- ✅ Safariブラウザが開かない
+
+**教訓**:
+
+1. **iOS PWAの絶対パス原則** ★最重要
+   - すべてのナビゲーション、リソース参照は絶対パス（`/`始まり）にする
+   - 相対パスは**絶対に使わない**
+
+2. **manifest.jsonのscopeは実際のパス構造に合わせる**
+   - ホスティングサービスがどのフォルダをルートとして配信するか確認
+   - Cloudflare Pagesは`docs/`→`/`、GitHub Pagesは設定による
+
+3. **manifest.jsonへのリンクも絶対パス**
+   - `<link rel="manifest" href="/manifest.json">`
+   - すべてのHTMLページに追加
+
+4. **ChatGPTへの相談が有効**
+   - iOS PWA特有の問題はChatGPTエージェントモードで詳細調査
+   - 公式ドキュメントやベストプラクティスを網羅的に確認できる
+
+5. **段階的なデバッグ**
+   - 一度に複数箇所を修正せず、1つずつテスト
+   - どの修正が効いたか明確にする
+
+**今後の対応**:
+
+すべてのPWAプロジェクトで、最初から絶対パスを使用する。特に：
+- `window.location.href = '/page.html'`
+- `<link rel="manifest" href="/manifest.json">`
+- `<a href="/page.html">`
+- manifest.jsonの`start_url`と`scope`
+
+**参考リンク**:
+- [iOS PWAのベストプラクティス](https://developer.apple.com/documentation/webkit/delivering_web_content_in_full_screen_mode)
+- [manifest.json仕様](https://developer.mozilla.org/en-US/docs/Web/Manifest)
+
+---
+
 ## セキュリティ考慮事項
 
 ### 1. オリジンチェックの重要性
@@ -1767,6 +2041,7 @@ function doGet(e) {
 
 - **2025年10月17日**: 初版作成（REBORN プロジェクト Phase 7 完了時点）
 - **2025年10月17日**: Phase 7「プッシュ通知の実装（FCM + GAS）」追加、CORS問題解決の詳細を統合
+- **2025年10月19日**: トラブルシューティングに「問題10: 複数デバイスで通知が届かない」と「問題11: iPhone SEでセットアップボタンが表示されない」を追加
 
 ---
 

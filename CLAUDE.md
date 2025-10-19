@@ -3598,6 +3598,129 @@ if (existingRowIndex > -1) {
 
 ---
 
+### ❌ 問題⑯: iOS PWAでのナビゲーションがSafariで開いてしまう ★超重要
+
+**発生日**: 2025年10月19日
+
+**症状**:
+- iOS PWA（ホーム画面に追加したアプリ）で`window.location.href = 'notifications.html'`で画面遷移すると、PWAのフルスクリーンモードが解除され、Safariブラウザが開いてしまう
+- manifest.jsonの`display: "standalone"`設定にも関わらず、ナビゲーション時にブラウザに飛ばされる
+
+**根本原因**:
+iOS PWAは**相対パスのリソース参照やナビゲーションをスコープ外とみなし**、Safariで開いてしまう。以下の3つすべてを**絶対パス（`/`で始まる）**にする必要がある：
+
+1. **manifest.jsonのscope**
+2. **JavaScriptでのナビゲーション**
+3. **manifest.jsonへのリンク**
+
+**問題のあったコード**:
+
+```json
+// ❌ manifest.json（間違い）
+{
+  "start_url": "/reborn-inventory-system/",
+  "scope": "/reborn-inventory-system/"
+}
+```
+
+実際のファイルは`/index.html`、`/notifications.html`として配信されているため、スコープ外になる。
+
+```javascript
+// ❌ index.html（間違い）
+window.location.href = 'notifications.html';  // 相対パス
+```
+
+```html
+<!-- ❌ notifications.html（間違い） -->
+<link rel="manifest" href="manifest.json">  <!-- 相対パス -->
+```
+
+**解決策**:
+
+**1. manifest.jsonのscopeを実際のパス構造に合わせる**:
+
+```json
+// ✅ 修正後
+{
+  "start_url": "/",
+  "scope": "/"
+}
+```
+
+**2. すべてのナビゲーションを絶対パスに**:
+
+```javascript
+// ✅ index.html
+window.location.href = '/notifications.html';  // 絶対パス
+
+// ✅ notifications.html
+window.location.href = '/index.html';  // 絶対パス
+```
+
+**3. manifest.jsonへのリンクを絶対パスに**:
+
+```html
+<!-- ✅ index.html -->
+<link rel="manifest" href="/manifest.json">
+
+<!-- ✅ notifications.html -->
+<link rel="manifest" href="/manifest.json">
+```
+
+**実装箇所**:
+- `docs/manifest.json` (lines 5-6)
+- `docs/index.html` (line 12, line 820)
+- `docs/notifications.html` (line 12, line 280)
+
+**デバッグ経緯**:
+
+1. **第1回修正**: manifest.jsonのscopeを`/reborn-inventory-system/`→`/`に変更 → 動かず
+2. **第2回修正**: ナビゲーションを相対パス→絶対パスに変更 → まだ動かず
+3. **第3回修正**: manifest.jsonへのリンクを絶対パスに + index.htmlにmanifest追加 → ✅ 成功！
+
+**ChatGPTからの助言**:
+ChatGPTエージェントモードに相談し、以下のポイントを学習：
+- iOS PWAはscopeの解釈が厳密
+- 相対パスは「新しいコンテキスト」とみなされる
+- すべてのリソース参照を絶対パスにする必要がある
+
+**テスト結果**:
+- ✅ index.html → notifications.html: PWA内で遷移
+- ✅ notifications.html → index.html: PWA内で遷移
+- ✅ フルスクリーンモード維持
+- ✅ Safariブラウザが開かない
+
+**教訓**:
+
+1. **iOS PWAの絶対パス原則** ★最重要
+   - すべてのナビゲーション、リソース参照は絶対パス（`/`始まり）にする
+   - 相対パスは**絶対に使わない**
+
+2. **manifest.jsonのscopeは実際のパス構造に合わせる**
+   - ホスティングサービスがどのフォルダをルートとして配信するか確認
+   - Cloudflare Pagesは`docs/`→`/`、GitHub Pagesは設定による
+
+3. **manifest.jsonへのリンクも絶対パス**
+   - `<link rel="manifest" href="/manifest.json">`
+   - すべてのHTMLページに追加
+
+4. **ChatGPTへの相談が有効**
+   - iOS PWA特有の問題はChatGPTエージェントモードで詳細調査
+   - 公式ドキュメントやベストプラクティスを網羅的に確認できる
+
+5. **段階的なデバッグ**
+   - 一度に複数箇所を修正せず、1つずつテスト
+   - どの修正が効いたか明確にする
+
+**今後の対応**:
+すべてのPWAプロジェクトで、最初から絶対パスを使用する。特に：
+- `window.location.href = '/page.html'`
+- `<link rel="manifest" href="/manifest.json">`
+- `<a href="/page.html">`
+- manifest.jsonの`start_url`と`scope`
+
+---
+
 ## 開発ルール
 
 ### ✅ 開発時のチェックリスト
