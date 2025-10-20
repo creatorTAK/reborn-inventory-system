@@ -194,7 +194,7 @@ function buildDescriptionPrompt(productInfo, aiConfig, imageCount) {
     }
     if (DEBUG_MODE) Logger.log('[Gemini API] ✅ ブランド情報を追加');
   } else if (DEBUG_MODE) {
-    Logger.log('[Gemini API] ❌ ブランド情報スキップ - includeBrand:', config.includeBrand, 'brandName:', productInfo.brandName);
+    Logger.log('[Gemini API] ❌ ブランド情報スキップ - includeBrand: ' + config.includeBrand + ', brandName: ' + productInfo.brandName);
   }
 
   if (config.includeCategory !== false && productInfo.category) {
@@ -202,7 +202,7 @@ function buildDescriptionPrompt(productInfo, aiConfig, imageCount) {
 カテゴリ: ${productInfo.category}`;
     if (DEBUG_MODE) Logger.log('[Gemini API] ✅ カテゴリ情報を追加');
   } else if (DEBUG_MODE) {
-    Logger.log('[Gemini API] ❌ カテゴリ情報スキップ - includeCategory:', config.includeCategory, 'category:', productInfo.category);
+    Logger.log('[Gemini API] ❌ カテゴリ情報スキップ - includeCategory: ' + config.includeCategory + ', category: ' + productInfo.category);
   }
 
   prompt += `
@@ -213,7 +213,7 @@ function buildDescriptionPrompt(productInfo, aiConfig, imageCount) {
 サイズ: ${productInfo.size}`;
     if (DEBUG_MODE) Logger.log('[Gemini API] ✅ サイズ情報を追加');
   } else if (DEBUG_MODE) {
-    Logger.log('[Gemini API] ❌ サイズ情報スキップ - includeSize:', config.includeSize, 'size:', productInfo.size);
+    Logger.log('[Gemini API] ❌ サイズ情報スキップ - includeSize: ' + config.includeSize + ', size: ' + productInfo.size);
   }
 
   if (config.includeCondition !== false && productInfo.condition) {
@@ -221,7 +221,7 @@ function buildDescriptionPrompt(productInfo, aiConfig, imageCount) {
 状態: ${productInfo.condition}`;
     if (DEBUG_MODE) Logger.log('[Gemini API] ✅ 商品状態を追加');
   } else if (DEBUG_MODE) {
-    Logger.log('[Gemini API] ❌ 商品状態スキップ - includeCondition:', config.includeCondition, 'condition:', productInfo.condition);
+    Logger.log('[Gemini API] ❌ 商品状態スキップ - includeCondition: ' + config.includeCondition + ', condition: ' + productInfo.condition);
   }
 
   if (config.includeMaterial !== false && productInfo.material) {
@@ -229,27 +229,27 @@ function buildDescriptionPrompt(productInfo, aiConfig, imageCount) {
 素材: ${productInfo.material}`;
     if (DEBUG_MODE) Logger.log('[Gemini API] ✅ 素材情報を追加');
   } else if (DEBUG_MODE) {
-    Logger.log('[Gemini API] ❌ 素材情報スキップ - includeMaterial:', config.includeMaterial, 'material:', productInfo.material);
+    Logger.log('[Gemini API] ❌ 素材情報スキップ - includeMaterial: ' + config.includeMaterial + ', material: ' + productInfo.material);
   }
 
   if (config.includeColor !== false && productInfo.color) {
     prompt += `
 カラー: ${productInfo.color}`;
     if (DEBUG_MODE) {
-      Logger.log('[Gemini API] カラー情報を追加:', productInfo.color);
+      Logger.log('[Gemini API] ✅ カラー情報を追加: ' + productInfo.color);
     }
   } else if (DEBUG_MODE) {
-    Logger.log('[Gemini API] カラー情報スキップ - includeColor:', config.includeColor, 'color:', productInfo.color);
+    Logger.log('[Gemini API] カラー情報スキップ - includeColor: ' + config.includeColor + ', color: ' + productInfo.color);
   }
 
   if (config.includeAttributes !== false && productInfo.attributes) {
     prompt += `
 商品属性: ${productInfo.attributes}`;
     if (DEBUG_MODE) {
-      Logger.log('[Gemini API] 商品属性を追加:', productInfo.attributes);
+      Logger.log('[Gemini API] ✅ 商品属性を追加: ' + productInfo.attributes);
     }
   } else if (DEBUG_MODE) {
-    Logger.log('[Gemini API] 商品属性スキップ - includeAttributes:', config.includeAttributes, 'attributes:', productInfo.attributes);
+    Logger.log('[Gemini API] 商品属性スキップ - includeAttributes: ' + config.includeAttributes + ', attributes: ' + productInfo.attributes);
   }
 
   // 品番・型番がある場合は強調
@@ -357,7 +357,7 @@ ${imageCount}枚の商品画像が添付されています。
    - おすすめのコーディネート提案`;
     if (DEBUG_MODE) Logger.log('[Gemini API] ✅ コーディネート提案を追加');
   } else if (DEBUG_MODE) {
-    Logger.log('[Gemini API] ❌ コーディネート提案スキップ - includeCoordinate:', config.includeCoordinate);
+    Logger.log('[Gemini API] ❌ コーディネート提案スキップ - includeCoordinate: ' + config.includeCoordinate);
   }
 
   if (config.includeScene !== false) {
@@ -365,7 +365,7 @@ ${imageCount}枚の商品画像が添付されています。
    - 着用シーンの提案`;
     if (DEBUG_MODE) Logger.log('[Gemini API] ✅ 着用シーンを追加');
   } else if (DEBUG_MODE) {
-    Logger.log('[Gemini API] ❌ 着用シーンスキップ - includeScene:', config.includeScene);
+    Logger.log('[Gemini API] ❌ 着用シーンスキップ - includeScene: ' + config.includeScene);
   }
 
   prompt += `
@@ -595,15 +595,15 @@ function generateProductDescription(productInfo, images) {
       Logger.log('[Gemini API] 収集した商品情報:', JSON.stringify(productInfo, null, 2));
       Logger.log('[Gemini API] AI設定:', JSON.stringify(aiConfig, null, 2));
       Logger.log('[Gemini API] 含める要素の設定:');
-      Logger.log('  - includeBrand:', aiConfig.includeBrand, '(デフォルト: true)');
-      Logger.log('  - includeCategory:', aiConfig.includeCategory, '(デフォルト: true)');
-      Logger.log('  - includeSize:', aiConfig.includeSize, '(デフォルト: true)');
-      Logger.log('  - includeMaterial:', aiConfig.includeMaterial, '(デフォルト: true)');
-      Logger.log('  - includeColor:', aiConfig.includeColor, '(デフォルト: true)');
-      Logger.log('  - includeAttributes:', aiConfig.includeAttributes, '(デフォルト: true)');
-      Logger.log('  - includeCondition:', aiConfig.includeCondition, '(デフォルト: true)');
-      Logger.log('  - includeCoordinate:', aiConfig.includeCoordinate, '(デフォルト: true)');
-      Logger.log('  - includeScene:', aiConfig.includeScene, '(デフォルト: true)');
+      Logger.log('  - includeBrand: ' + aiConfig.includeBrand + ' (デフォルト: true)');
+      Logger.log('  - includeCategory: ' + aiConfig.includeCategory + ' (デフォルト: true)');
+      Logger.log('  - includeSize: ' + aiConfig.includeSize + ' (デフォルト: true)');
+      Logger.log('  - includeMaterial: ' + aiConfig.includeMaterial + ' (デフォルト: true)');
+      Logger.log('  - includeColor: ' + aiConfig.includeColor + ' (デフォルト: true)');
+      Logger.log('  - includeAttributes: ' + aiConfig.includeAttributes + ' (デフォルト: true)');
+      Logger.log('  - includeCondition: ' + aiConfig.includeCondition + ' (デフォルト: true)');
+      Logger.log('  - includeCoordinate: ' + aiConfig.includeCoordinate + ' (デフォルト: true)');
+      Logger.log('  - includeScene: ' + aiConfig.includeScene + ' (デフォルト: true)');
     }
 
     // プロンプトの構築（画像の枚数を渡す）
