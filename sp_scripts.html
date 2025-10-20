@@ -155,7 +155,7 @@
   'アイテム名',
   '商品の説明',
   '商品状態詳細',
-  'サイズ(表記)',
+  'サイズ(表記)','サイズ(表記)_靴','その他のサイズ表記_靴','普段のサイズ_靴','フィット感_靴',
   '肩幅','身幅','袖丈','着丈','ウエスト','ヒップ','股上','股下',
   '仕入日','仕入先','仕入金額',
   '出品日','出品先','出品金額',
@@ -165,6 +165,7 @@
   let CAT_ROWS = [];
   let BRAND_EN = [];
   let BRAND_KANA = [];
+  let MASTER_OPTIONS = {}; // マスターオプションを保存
 
   // ブランドペアデータ（英語名とカナ読みの正確な対応関係）
   let BRAND_PAIRS = [];
@@ -2300,12 +2301,23 @@
 
   // アイテム名表示フィールドの更新（基本情報→商品名ブロックへ自動反映）
   function updateItemNameDisplay() {
-    const basicItemName = _val('アイテム名');
-    const titleItemField = document.getElementById('商品名_アイテム名');
+    try {
+      console.log('★★★ updateItemNameDisplay() が呼ばれました');
+      const basicItemName = _val('アイテム名');
+      const titleItemField = document.getElementById('商品名_アイテム名');
 
-    if (titleItemField && basicItemName) {
-      titleItemField.value = basicItemName;
-      updateNamePreview();
+      if (titleItemField && basicItemName) {
+        titleItemField.value = basicItemName;
+        updateNamePreview();
+      }
+
+      // === 中分類に応じてサイズセクションを切り替え ===
+      const chuBunrui = _val('中分類(カテゴリ)');
+      console.log(`★★★ 中分類を取得しました: "${chuBunrui}"`);
+      updateSizeSectionDisplay(chuBunrui);
+    } catch (error) {
+      console.error('updateItemNameDisplay エラー:', error);
+      // エラーが起きても処理を続行
     }
   }
 
@@ -2423,8 +2435,13 @@
 
   // サイズ情報取得関数
   function getSizeInfo() {
-    // サイズ(表記)を取得
-    const sizeHyoki = _val('サイズ(表記)_トップス') || _val('サイズ(表記)_ボトムス');
+    // サイズ(表記)を取得（服または靴）
+    const sizeHyoki = _val('サイズ(表記)_トップス') || _val('サイズ(表記)_ボトムス') || _val('サイズ(表記)_靴');
+
+    // 靴の追加情報を取得
+    const shoesOtherSize = _val('その他のサイズ表記_靴');
+    const shoesUsualSize = _val('普段のサイズ_靴');
+    const shoesFit = _val('フィット感_靴');
 
     // ラグラン判定
     const itemName = _val('アイテム名');
@@ -2443,14 +2460,37 @@
       股下: _val('股下')
     };
 
-    const hasSizeData = sizeHyoki || Object.values(sizeValues).some(value => value);
-    if (!hasSizeData) return '';
+    // 靴または服のサイズ情報があるか確認
+    const hasShoesSizeData = sizeHyoki && (_val('サイズ(表記)_靴') !== '');
+    const hasClothesSizeData = sizeHyoki && (Object.values(sizeValues).some(value => value) || _val('サイズ(表記)_トップス') || _val('サイズ(表記)_ボトムス'));
+
+    if (!sizeHyoki && !shoesOtherSize && !shoesUsualSize && !shoesFit) return '';
 
     let sizeText = '';
 
     // サイズ(表記)セクション
     if (sizeHyoki) {
-      sizeText += `サイズ(表記)：${sizeHyoki}\n\n`;
+      sizeText += `サイズ(表記)：${sizeHyoki}\n`;
+    }
+
+    // 靴の場合の追加情報
+    if (hasShoesSizeData || shoesOtherSize || shoesUsualSize || shoesFit) {
+      if (shoesOtherSize) {
+        sizeText += `その他のサイズ表記：${shoesOtherSize}\n`;
+      }
+      if (shoesUsualSize) {
+        sizeText += `普段のサイズ：${shoesUsualSize}\n`;
+      }
+      if (shoesFit) {
+        sizeText += `フィット感：${shoesFit}\n`;
+      }
+      sizeText += '\n';
+      return sizeText; // 靴の場合は実寸サイズを表示しない
+    }
+
+    // 服の場合のみ実寸サイズを表示
+    if (sizeHyoki) {
+      sizeText += '\n';
     }
 
     // サイズ(実寸)セクション
@@ -2788,21 +2828,8 @@
           // ボタンを元に戻す
           resetAiButton(aiGenBtn, originalText);
 
-          // 画像データをクリア（生成後は不要なため、メモリ節約）
-          if (uploadedImages && uploadedImages.length > 0) {
-            uploadedImages = [];
-            // プレビューも非表示
-            const container = document.getElementById('imagePreviewContainer');
-            if (container) {
-              container.style.display = 'none';
-            }
-            // ファイル入力もリセット
-            const fileInput = document.getElementById('productImages');
-            if (fileInput) {
-              fileInput.value = '';
-            }
-            debug.log('AI生成後に画像データをクリアしました');
-          }
+          // 画像データはクリアしない（保存時に画像URLを記録するため）
+          debug.log('AI生成成功。画像データは保存時まで保持します。');
         })
         .withFailureHandler(function(error) {
           console.error('AI生成エラー:', error);
@@ -2912,14 +2939,21 @@
     }
 
     // AI生成用 追加属性を収集（商品の説明ブロックから）
-    const aiAttributesText = _val('AI用商品属性');
+    // キャッシュを使わず直接取得（最新の値を確実に取得するため）
+    const aiAttributesElement = document.getElementById('AI用商品属性');
+    const aiAttributesText = aiAttributesElement ? aiAttributesElement.value.trim() : '';
+
+    debug.log(`AI用商品属性の値: "${aiAttributesText}"`);
+
     if (aiAttributesText) {
       // カンマ区切りで分割して追加
       const aiAttributes = aiAttributesText.split(',').map(attr => attr.trim()).filter(attr => attr);
       attributes.push(...aiAttributes);
+      debug.log(`AI用商品属性を追加しました: ${aiAttributes.join(', ')}`);
     }
 
     productInfo.attributes = attributes.join(', ');
+    debug.log(`最終的なattributes: "${productInfo.attributes}"`);
 
     // 品番・型番を収集（Google Search Grounding用）
     productInfo.modelNumber = _val('品番型番') || '';
@@ -3042,6 +3076,24 @@
     } else {
       console.error('商品状態詳細の要素が見つかりません');
     }
+
+    // 靴のサイズ関連項目にもイベントリスナーを追加
+    const shoesFields = [
+      'サイズ(表記)_靴',
+      'その他のサイズ表記_靴',
+      '普段のサイズ_靴',
+      'フィット感_靴'
+    ];
+
+    shoesFields.forEach(fieldId => {
+      const element = document.getElementById(fieldId);
+      if (element) {
+        const eventType = element.tagName === 'SELECT' ? 'change' : 'input';
+        element.removeEventListener(eventType, updateDescriptionFromDetail);
+        element.addEventListener(eventType, updateDescriptionFromDetail);
+        console.log(`${fieldId}のイベントリスナー設定完了`);
+      }
+    });
   }
 
   // ================= 新セールスワードシステム =================
@@ -3284,6 +3336,190 @@
     updateNamePreview();
   }
 
+  /**
+   * 中分類に応じてサイズプルダウンの選択肢を切り替える
+   * @param {string} chuBunrui - 中分類の値
+   */
+  function updateSizeOptions(chuBunrui) {
+    try {
+      debug.log(`updateSizeOptions() が呼ばれました。中分類: "${chuBunrui}"`);
+      const sizeSelect = document.getElementById('サイズ');
+      if (!sizeSelect) {
+        debug.log('サイズプルダウンが見つかりません');
+        return;
+      }
+
+      const currentValue = sizeSelect.value; // 現在の選択値を保持
+
+      // 中分類が「靴」の場合は靴用サイズ、それ以外は服用サイズ
+      if (chuBunrui === '靴') {
+        // 大分類でメンズ/レディースを判定
+        const daiBunrui = _val('大分類(カテゴリ)');
+        const shoeSizes = [];
+
+        if (daiBunrui === 'メンズ') {
+          // メンズ: 23.5cm以下、24cm～30.5cm、31cm以上
+          shoeSizes.push('23.5cm以下');
+          for (let size = 24.0; size <= 30.5; size += 0.5) {
+            shoeSizes.push(size.toFixed(1) + 'cm');
+          }
+          shoeSizes.push('31cm以上');
+        } else if (daiBunrui === 'レディース') {
+          // レディース: 20cm以下、20.5cm～27cm、27.5cm以上
+          shoeSizes.push('20cm以下');
+          for (let size = 20.5; size <= 27.0; size += 0.5) {
+            shoeSizes.push(size.toFixed(1) + 'cm');
+          }
+          shoeSizes.push('27.5cm以上');
+        } else {
+          // その他（キッズなど）: デフォルト
+          for (let size = 22.0; size <= 30.0; size += 0.5) {
+            shoeSizes.push(size.toFixed(1) + 'cm');
+          }
+        }
+
+        fillSelectSafe(sizeSelect, shoeSizes);
+        debug.log(`サイズプルダウンを靴用サイズに切り替えました（${daiBunrui}）`);
+      } else {
+        // 服用サイズ: マスターデータから取得（エラー時は何もしない）
+        try {
+          const sizeOptions = MASTER_OPTIONS && MASTER_OPTIONS['サイズ'] ? MASTER_OPTIONS['サイズ'] : [];
+          if (sizeOptions.length > 0) {
+            fillSelectSafe(sizeSelect, sizeOptions);
+            debug.log('サイズプルダウンを服用サイズに切り替えました');
+          } else {
+            debug.log('マスターデータに服用サイズが見つかりません');
+          }
+        } catch (e) {
+          debug.log('マスターデータからサイズ取得エラー:', e);
+          // エラー時は何もしない（既存の選択肢を維持）
+        }
+      }
+
+      // 以前の選択値が新しい選択肢に存在する場合は復元
+      if (currentValue) {
+        const options = Array.from(sizeSelect.options).map(opt => opt.value);
+        if (options.includes(currentValue)) {
+          sizeSelect.value = currentValue;
+        }
+      }
+    } catch (error) {
+      console.error('updateSizeOptions エラー:', error);
+      // エラーが起きても処理を続行
+    }
+  }
+
+  /**
+   * 基本情報のサイズを商品の説明ブロックに同期
+   */
+  function syncBasicSizeToDescription() {
+    try {
+      const chuBunrui = _val('中分類(カテゴリ)');
+      const basicSize = _val('サイズ');
+
+      if (chuBunrui === '靴' && basicSize) {
+        const shoesSizeSelect = document.getElementById('サイズ(表記)_靴');
+        if (shoesSizeSelect) {
+          shoesSizeSelect.value = basicSize;
+          debug.log(`基本情報のサイズ(${basicSize})を商品の説明ブロック（靴）に反映しました`);
+          // 説明文プレビューを更新
+          updateDescriptionFromDetail();
+        }
+      }
+    } catch (error) {
+      console.error('syncBasicSizeToDescription エラー:', error);
+    }
+  }
+
+  /**
+   * 中分類に応じて商品の説明ブロックのサイズセクション表示を切り替える
+   * @param {string} chuBunrui - 中分類の値
+   */
+  function updateSizeSectionDisplay(chuBunrui) {
+    try {
+      console.log(`★★★ updateSizeSectionDisplay() が呼ばれました。中分類: "${chuBunrui}"`);
+      const sizeSection = document.getElementById('sizeSection');
+      const topsSize = document.getElementById('topsSize');
+      const bottomsSize = document.getElementById('bottomsSize');
+      const shoesSize = document.getElementById('shoesSize');
+      const sizeIconDisplay = document.getElementById('sizeIconDisplay');
+      const sizeLabelDisplay = document.getElementById('sizeLabelDisplay');
+
+      console.log('★★★ 要素チェック:', {sizeSection: !!sizeSection, topsSize: !!topsSize, bottomsSize: !!bottomsSize, shoesSize: !!shoesSize});
+
+      if (!sizeSection || !topsSize || !bottomsSize || !shoesSize) {
+        console.log('★★★ サイズセクションの要素が見つかりません');
+        return;
+      }
+
+      // 全て非表示にする
+      topsSize.style.display = 'none';
+      bottomsSize.style.display = 'none';
+      shoesSize.style.display = 'none';
+
+      if (chuBunrui === '靴') {
+        // 靴の場合
+        console.log('★★★ 靴モード: displayを設定する前 - sizeSection.style.display:', sizeSection.style.display);
+        sizeSection.style.display = 'block';
+
+        // 折りたたみコンテンツも表示し、ボタンの状態も更新する
+        const sectionContent = sizeSection.querySelector('.section-content');
+        const collapseBtn = sizeSection.querySelector('.collapse-btn');
+        if (sectionContent) {
+          sectionContent.style.display = 'block';
+          if (collapseBtn) {
+            collapseBtn.textContent = '▼';
+          }
+          console.log('★★★ section-content とボタンを表示状態にしました');
+        }
+
+        shoesSize.style.display = 'block';
+        console.log('★★★ 靴モード: displayを設定した後 - sizeSection.style.display:', sizeSection.style.display);
+        console.log('★★★ 靴モード: displayを設定した後 - shoesSize.style.display:', shoesSize.style.display);
+
+        // 要素の詳細情報をログ出力
+        const rect = sizeSection.getBoundingClientRect();
+        console.log('★★★ sizeSection の位置とサイズ:', {
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+          visible: rect.width > 0 && rect.height > 0
+        });
+        console.log('★★★ sizeSection の親要素:', sizeSection.parentElement ? sizeSection.parentElement.tagName : 'なし');
+        console.log('★★★ sizeSection の親要素の display:', sizeSection.parentElement ? window.getComputedStyle(sizeSection.parentElement).display : 'なし');
+
+        if (sizeIconDisplay) sizeIconDisplay.textContent = '👟';
+        if (sizeLabelDisplay) sizeLabelDisplay.textContent = 'サイズ（靴）';
+
+        // 靴用サイズ選択肢を生成
+        const shoesSizeSelect = document.getElementById('サイズ(表記)_靴');
+        if (shoesSizeSelect) {
+          const shoeSizes = [];
+          for (let size = 22.0; size <= 30.0; size += 0.5) {
+            shoeSizes.push(size.toFixed(1) + 'cm');
+          }
+          fillSelectSafe(shoesSizeSelect, shoeSizes);
+
+          // 基本情報のサイズを靴用サイズ(表記)に同期
+          const basicSize = _val('サイズ');
+          if (basicSize) {
+            shoesSizeSelect.value = basicSize;
+            console.log(`★★★ 基本情報のサイズ(${basicSize})を反映しました`);
+          }
+        }
+        console.log('★★★ サイズセクションを靴用に切り替えました');
+      } else {
+        // 服の場合（既存の処理）
+        sizeSection.style.display = 'none'; // 初期状態は非表示
+        console.log('★★★ サイズセクションを非表示にしました（アイテム名選択後に表示されます）');
+      }
+    } catch (error) {
+      console.error('updateSizeSectionDisplay エラー:', error);
+      // エラーが起きても処理を続行
+    }
+  }
+
   function onL1Changed() {
     resetSelect('中分類(カテゴリ)');
     resetSelect('小分類(カテゴリ)');
@@ -3303,6 +3539,7 @@
   }
 
   function onL2Changed() {
+    debug.log('onL2Changed() が呼ばれました');
     resetSelect('小分類(カテゴリ)');
     resetSelect('細分類(カテゴリ)');
     resetSelect('細分類2');
@@ -3313,10 +3550,15 @@
 
     const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
     const l2 = (document.getElementById('中分類(カテゴリ)')?.value||'').trim();
+    debug.log(`中分類の値: "${l2}"`);
     if (l2) {
       const smalls = uniqKeepOrder(CAT_ROWS.filter(r=>r.大分類===l1 && r.中分類===l2).map(r=>r.小分類));
       fillSelectSafe(document.getElementById('小分類(カテゴリ)'), smalls);
     }
+
+    // === 靴の場合、サイズプルダウンを靴用サイズに切り替え ===
+    updateSizeOptions(l2);
+
     refreshItems();
   }
 
@@ -3373,12 +3615,40 @@
       if (v !== '') d[k]=v;
     });
 
-    // サイズ(表記)の特殊処理: トップスとボトムスのどちらかの値を使用
+    // サイズ(表記)の特殊処理: トップス、ボトムス、靴のいずれかの値を使用
     const sizeHyokiTop = _val('サイズ(表記)_トップス');
     const sizeHyokiBottom = _val('サイズ(表記)_ボトムス');
-    const sizeHyoki = sizeHyokiTop || sizeHyokiBottom;
+    const sizeHyokiShoes = _val('サイズ(表記)_靴');
+    const sizeHyoki = sizeHyokiTop || sizeHyokiBottom || sizeHyokiShoes;
     if (sizeHyoki) {
       d['サイズ(表記)'] = sizeHyoki;
+    }
+
+    // === 画像URLを追加（最大3枚） ===
+    if (uploadedImages && uploadedImages.length > 0) {
+      uploadedImages.forEach((img, index) => {
+        if (index < 3) {
+          d[`画像URL${index + 1}`] = img.data; // data URLをそのまま保存
+        }
+      });
+      debug.log(`画像URLを追加しました: ${uploadedImages.length}枚`);
+    }
+
+    // === AI生成履歴を追加 ===
+    debug.log(`AI_GENERATED_TEXT: "${AI_GENERATED_TEXT ? AI_GENERATED_TEXT.substring(0, 50) + '...' : '(空)'}"`);
+    if (AI_GENERATED_TEXT && AI_GENERATED_TEXT.trim() !== '') {
+      const aiHistory = {
+        timestamp: new Date().toISOString(),
+        text: AI_GENERATED_TEXT,
+        imageCount: uploadedImages ? uploadedImages.length : 0,
+        brandName: _val('ブランド(英語)') || _val('商品名_ブランド(英語)') || '',
+        itemName: _val('アイテム名') || ''
+      };
+      const historyJson = JSON.stringify(aiHistory);
+      d['AI生成履歴'] = historyJson;
+      debug.log(`AI生成履歴を追加しました (${historyJson.length}文字)`);
+    } else {
+      debug.log('AI生成履歴は空のためスキップしました');
     }
 
     return d;
@@ -3410,22 +3680,6 @@
     }
     show('送信中…');
 
-    // 画像データをクリア（メモリ節約のため）
-    if (uploadedImages && uploadedImages.length > 0) {
-      uploadedImages = [];
-      // プレビューも非表示
-      const container = document.getElementById('imagePreviewContainer');
-      if (container) {
-        container.style.display = 'none';
-      }
-      // ファイル入力もリセット
-      const fileInput = document.getElementById('productImages');
-      if (fileInput) {
-        fileInput.value = '';
-      }
-      debug.log('保存前に画像データをクリアしました');
-    }
-
     if (!(google && google.script && google.script.run)) {
       show('NG(ENV): google.script.run が無効です');
       return;
@@ -3443,6 +3697,26 @@
         saveTitleBlocksCollapseState();
         saveManagementNumberPlacementSettings();
         console.log('保存成功：開閉状態と管理番号配置を保存しました');
+
+        // === 保存成功後に画像データとAI生成テキストをクリア ===
+        if (uploadedImages && uploadedImages.length > 0) {
+          uploadedImages = [];
+          // プレビューも非表示
+          const container = document.getElementById('imagePreviewContainer');
+          if (container) {
+            container.style.display = 'none';
+          }
+          // ファイル入力もリセット
+          const fileInput = document.getElementById('productImages');
+          if (fileInput) {
+            fileInput.value = '';
+          }
+          debug.log('保存成功後に画像データをクリアしました');
+        }
+        if (AI_GENERATED_TEXT) {
+          AI_GENERATED_TEXT = '';
+          debug.log('保存成功後にAI生成テキストをクリアしました');
+        }
       })
       .withFailureHandler(function(error) {
         show(`NG(UNKNOWN): ${error && error.message ? error.message : error}`);
@@ -4111,6 +4385,36 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         const l1s = uniqKeepOrder(CAT_ROWS.map(r=>r.大分類));
         fillSelectSafe(document.getElementById('大分類(カテゴリ)'), l1s);
 
+        // カテゴリプルダウンのイベントリスナーを設定
+        const l1Select = document.getElementById('大分類(カテゴリ)');
+        const l2Select = document.getElementById('中分類(カテゴリ)');
+        const l3Select = document.getElementById('小分類(カテゴリ)');
+        const l4Select = document.getElementById('細分類(カテゴリ)');
+        const l5Select = document.getElementById('細分類2');
+        const itemSelect = document.getElementById('アイテム名');
+        if (l1Select) {
+          l1Select.addEventListener('change', onL1Changed);
+          debug.log('大分類のイベントリスナーを設定しました');
+        }
+        if (l2Select) {
+          l2Select.addEventListener('change', onL2Changed);
+          debug.log('中分類のイベントリスナーを設定しました');
+        }
+        if (l3Select) {
+          l3Select.addEventListener('change', onL3Changed);
+          debug.log('小分類のイベントリスナーを設定しました');
+        }
+        if (l4Select) l4Select.addEventListener('change', onL4Changed);
+        if (l5Select) l5Select.addEventListener('change', onL5Changed);
+        if (itemSelect) itemSelect.addEventListener('change', updateItemNameDisplay);
+
+        // 基本情報のサイズプルダウンのイベントリスナーを設定（商品の説明ブロックに連動）
+        const sizeSelect = document.getElementById('サイズ');
+        if (sizeSelect) {
+          sizeSelect.addEventListener('change', syncBasicSizeToDescription);
+          debug.log('サイズプルダウンのイベントリスナーを設定しました');
+        }
+
         wirePreviewWatchers();
         updateNamePreview();
         adjustPreviewHeight();
@@ -4124,6 +4428,9 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
           show('NG(MASTER): 空の応答');
           return;
         }
+
+        // マスターオプションをグローバル変数に保存
+        MASTER_OPTIONS = opts;
 
         const fillSel=(id,arr)=>{
           const sel=document.getElementById(id);
@@ -4448,10 +4755,11 @@ if (staffSelect) {
     const sizeSection = document.getElementById('sizeSection');
     const topsSize = document.getElementById('topsSize');
     const bottomsSize = document.getElementById('bottomsSize');
+    const shoesSize = document.getElementById('shoesSize');
     const sizeIconDisplay = document.getElementById('sizeIconDisplay');
     const sizeLabelDisplay = document.getElementById('sizeLabelDisplay');
 
-    if (!sizeSection || !topsSize || !bottomsSize) return;
+    if (!sizeSection || !topsSize || !bottomsSize || !shoesSize) return;
 
     // カテゴリマッピング
     const topsCategories = [
@@ -4472,10 +4780,18 @@ if (staffSelect) {
       'トラックスーツ', 'スポーツウェア', '作業着', 'つなぎ'
     ];
 
+    const shoesCategories = [
+      'スニーカー', 'ローファー', 'ブーツ', 'サンダル', 'パンプス',
+      'レザーシューズ', 'スポーツシューズ', 'ランニングシューズ',
+      'バスケットシューズ', 'スケートシューズ', 'ハイカットスニーカー',
+      'ローカットスニーカー', 'スリッポン', 'モカシン', 'デッキシューズ'
+    ];
+
     // 表示状態をリセット
     sizeSection.style.display = 'none';
     topsSize.style.display = 'none';
     bottomsSize.style.display = 'none';
+    shoesSize.style.display = 'none';
 
     if (!subcategory) return;
 
@@ -4519,6 +4835,42 @@ if (staffSelect) {
       if (shoulderLabel) {
         shoulderLabel.textContent = isRaglan ? '裄丈' : '肩幅';
       }
+    } else if (shoesCategories.some(cat => subcategory.includes(cat))) {
+      // 靴の場合
+      sizeSection.style.display = 'block';
+      shoesSize.style.display = 'block';
+      if (sizeIconDisplay && sizeLabelDisplay) {
+        sizeIconDisplay.textContent = '👟';
+        sizeLabelDisplay.textContent = 'サイズ（靴）';
+      }
+
+      // サイズ(表記)_靴のselectに選択肢を設定
+      const shoesSizeSelect = document.getElementById('サイズ(表記)_靴');
+      const basicSizeSelect = document.getElementById('サイズ');
+      if (shoesSizeSelect && basicSizeSelect) {
+        // 基本情報のサイズプルダウンの選択肢をコピー
+        const currentValue = shoesSizeSelect.value;
+        shoesSizeSelect.innerHTML = '';
+
+        // 基本情報の全選択肢をコピー
+        Array.from(basicSizeSelect.options).forEach(option => {
+          const newOption = document.createElement('option');
+          newOption.value = option.value;
+          newOption.textContent = option.textContent;
+          shoesSizeSelect.appendChild(newOption);
+        });
+
+        // 基本情報で選択されている値があれば同期
+        const basicSize = basicSizeSelect.value;
+        if (basicSize) {
+          shoesSizeSelect.value = basicSize;
+        } else if (currentValue) {
+          // 以前の選択値を復元
+          shoesSizeSelect.value = currentValue;
+        }
+      }
+
+      console.log('★★★ updateSizeDisplay() で靴のサイズセクションを表示しました');
     }
 
     // 説明文を更新

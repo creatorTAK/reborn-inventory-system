@@ -6,6 +6,25 @@
 
 ---
 
+## 🚨 最重要：必読ドキュメント
+
+**Claude Code（AI開発アシスタント）へ**: 開発を始める前に必ず読むこと
+
+### API使用時の重大な安全ルール
+**[API_SAFETY_CRITICAL.md](API_SAFETY_CRITICAL.md)** ← ★必ず最初に読むこと
+
+**背景**: 2025年10月20日、Claude APIの誤設定により800円の損失と開発停止が発生
+
+**絶対厳守事項**:
+- ❌ グローバル環境変数にAPIキーを設定しない
+- ❌ Phase を飛ばした提案をしない（今はPhase 1）
+- ❌ 新しいAPI導入は必ず事前確認
+- ❌ Claude Agent SDKは Phase 4まで提案禁止
+
+**詳細**: [API_SAFETY_CRITICAL.md](API_SAFETY_CRITICAL.md)を必ず参照
+
+---
+
 ## 📋 目次
 
 **このファイル（CLAUDE.md）**: プロジェクトのエッセンシャル情報
@@ -16,6 +35,7 @@
 5. [最新の更新内容](#最新の更新内容)
 
 **詳細ドキュメント** (必要に応じて読み込み):
+- **[API_SAFETY_CRITICAL.md](API_SAFETY_CRITICAL.md)** ★最重要 - API使用時の重大な安全ルール（必ず最初に読むこと）
 - **[PWA_SETUP_GUIDE.md](PWA_SETUP_GUIDE.md)** - PWA + GAS + FCM構成の完全マニュアル、トラブルシューティング
 - **[DEVELOPMENT_SERVICES.md](DEVELOPMENT_SERVICES.md)** - 開発環境・ツール一覧、サービス情報
 - **[DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md)** - ドキュメント管理ルール

@@ -23,7 +23,24 @@ const PRODUCT_FIELDS = [
   '肩幅','身幅','袖丈','着丈','ウエスト','ヒップ','股上','股下',
   '仕入日','仕入先','仕入金額',
   '出品日','出品先','出品金額',
-  '配送料の負担','配送の方法','発送元の地域','発送までの日数'
+  '配送料の負担','配送の方法','発送元の地域','発送までの日数',
+
+  // === Phase 1: 今すぐ追加（Agent SDK準備） ===
+  '登録者',
+  '登録日時',
+  '最終更新者',
+  '更新日時',
+  '画像URL1',
+  '画像URL2',
+  '画像URL3',
+
+  // === Phase 4: 将来使用（今は空欄） ===
+  'AI生成履歴',      // JSON形式
+  'メルカリURL',
+  '競合価格履歴',    // JSON形式
+  'AIタグ',
+  'JSON_データ',     // Agent SDK用
+  'Agent分析結果'    // JSON形式
 ];
 
 // =============================================================================
@@ -86,6 +103,52 @@ function saveProductDetailField(sheet, targetRow, formData) {
   }
   
   return false; // 列が見つからない場合
+}
+
+// =============================================================================
+// 登録者・更新者情報記録
+// =============================================================================
+/**
+ * 登録者・更新者情報を記録
+ * @param {Sheet} sheet - 対象シート
+ * @param {number} targetRow - 対象行
+ * @param {boolean} isNew - 新規登録かどうか（true: 新規, false: 更新）
+ */
+function recordUserActivity(sheet, targetRow, isNew = true) {
+  const { map } = getHeaderMapCommon();
+
+  // ユーザーメールアドレスを取得（複数の方法で試行）
+  let userEmail = '';
+  try {
+    userEmail = Session.getEffectiveUser().getEmail();
+  } catch (e) {
+    try {
+      userEmail = Session.getActiveUser().getEmail();
+    } catch (e2) {
+      // 取得できない場合は、スプレッドシートのオーナーのメールを使用
+      userEmail = SpreadsheetApp.getActiveSpreadsheet().getOwner().getEmail();
+    }
+  }
+
+  const now = new Date();
+
+  if (isNew) {
+    // 新規登録時のみ記録
+    if (map['登録者']) {
+      sheet.getRange(targetRow, map['登録者']).setValue(userEmail);
+    }
+    if (map['登録日時']) {
+      sheet.getRange(targetRow, map['登録日時']).setValue(now);
+    }
+  }
+
+  // 更新情報は常に記録（新規・更新共通）
+  if (map['最終更新者']) {
+    sheet.getRange(targetRow, map['最終更新者']).setValue(userEmail);
+  }
+  if (map['更新日時']) {
+    sheet.getRange(targetRow, map['更新日時']).setValue(now);
+  }
 }
 
 // =============================================================================
@@ -191,6 +254,9 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
       console.log(`保存: ${formKey} → ${sheetColumnName} = "${val}" (列${col})`);
       sh.getRange(targetRow, col).setValue(val);
     }
+
+    // === 登録者・更新者情報を記録 ===
+    recordUserActivity(sh, targetRow, true); // true = 新規登録
 
     let message = mgmtKey ? `OK: 管理番号='${mgmtKey}' を登録しました` : `OK: 登録しました`;
 
@@ -395,7 +461,10 @@ function saveProductToSheet(processedData, managementNumber) {
   
   // 商品状態(詳細)の動的保存
   saveProductDetailField(sh, targetRow, processedData);
-  
+
+  // === 登録者・更新者情報を記録 ===
+  recordUserActivity(sh, targetRow, true); // true = 新規登録
+
   // 管理番号の書き込み（別途処理）
   if (managementNumber) {
     const headersAll = sh.getRange(1, 1, 1, lastCol).getValues()[0];
