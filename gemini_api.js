@@ -481,16 +481,17 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
     };
 
     // 品番・型番がある場合はGoogle Search Groundingを有効化
-    // 一時的に無効化（動作確認のため）
-    // if (productInfo && productInfo.modelNumber && productInfo.modelNumber.trim()) {
-    //   requestBody.tools = [{
-    //     googleSearch: {}
-    //   }];
-    //
-    //   if (DEBUG_MODE) {
-    //     Logger.log('[Gemini API] Google Search Grounding有効 - 品番:', productInfo.modelNumber);
-    //   }
-    // }
+    let useGoogleSearch = false;
+    if (productInfo && productInfo.modelNumber && productInfo.modelNumber.trim()) {
+      requestBody.tools = [{
+        googleSearch: {}
+      }];
+      useGoogleSearch = true;
+
+      if (DEBUG_MODE) {
+        Logger.log('[Gemini API] ✅ Google Search Grounding有効 - 品番: ' + productInfo.modelNumber);
+      }
+    }
 
     // HTTPリクエストオプション
     const options = {
@@ -518,7 +519,62 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
     // ステータスコードのチェック
     if (statusCode !== 200) {
       const errorData = JSON.parse(responseText);
-      throw new Error(`NG(API): Gemini API呼び出しエラー (${statusCode}): ${errorData.error?.message || 'Unknown error'}`);
+      const errorMessage = errorData.error?.message || 'Unknown error';
+      
+      // Google Search Grounding関連のエラーの場合は再試行
+      if (useGoogleSearch && (errorMessage.includes('google_search') || errorMessage.includes('googleSearch') || errorMessage.includes('grounding'))) {
+        Logger.log('[Gemini API] ⚠️ Google Search Groundingがサポートされていません。Google Searchなしで再試行します。');
+        
+        // Google Search Groundingを無効化して再試行
+        delete requestBody.tools;
+        
+        const retryOptions = {
+          method: 'post',
+          contentType: 'application/json',
+          payload: JSON.stringify(requestBody),
+          muteHttpExceptions: true
+        };
+        
+        const retryResponse = UrlFetchApp.fetch(url, retryOptions);
+        const retryStatusCode = retryResponse.getResponseCode();
+        const retryResponseText = retryResponse.getContentText();
+        
+        if (DEBUG_MODE) {
+          Logger.log('[Gemini API] 再試行 ステータスコード: ' + retryStatusCode);
+        }
+        
+        if (retryStatusCode !== 200) {
+          const retryErrorData = JSON.parse(retryResponseText);
+          throw new Error(`NG(API): Gemini API呼び出しエラー (${retryStatusCode}): ${retryErrorData.error?.message || 'Unknown error'}`);
+        }
+        
+        // 再試行成功時は、このレスポンスを使用して処理を続行
+        const retryResponseData = JSON.parse(retryResponseText);
+        
+        if (!retryResponseData.candidates || retryResponseData.candidates.length === 0) {
+          throw new Error('NG(API): Gemini APIから結果が返されませんでした。');
+        }
+        
+        const retryCandidate = retryResponseData.candidates[0];
+        
+        if (retryCandidate.finishReason === 'SAFETY') {
+          throw new Error('NG(API): 安全性フィルタにより生成がブロックされました。プロンプトを見直してください。');
+        }
+        
+        if (!retryCandidate.content || !retryCandidate.content.parts || retryCandidate.content.parts.length === 0) {
+          throw new Error('NG(API): 生成されたテキストが空です。');
+        }
+        
+        const retryGeneratedText = retryCandidate.content.parts[0].text;
+        
+        if (DEBUG_MODE) {
+          Logger.log('[Gemini API] 生成されたテキスト（再試行）: ' + retryGeneratedText);
+        }
+        
+        return retryGeneratedText.trim();
+      }
+      
+      throw new Error(`NG(API): Gemini API呼び出しエラー (${statusCode}): ${errorMessage}`);
     }
 
     // レスポンスのパース
