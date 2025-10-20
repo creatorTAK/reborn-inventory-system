@@ -153,7 +153,7 @@
   '大分類(カテゴリ)','中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2',
   'サイズ','商品の状態',
   'アイテム名',
-  '商品の説明',
+  // '商品の説明', // リセット時にクリアしない（updateDescriptionFromDetailで更新）
   '商品状態詳細',
   'サイズ(表記)','サイズ(表記)_靴','その他のサイズ表記_靴','普段のサイズ_靴','フィット感_靴',
   '肩幅','身幅','袖丈','着丈','ウエスト','ヒップ','股上','股下',
@@ -2921,13 +2921,17 @@
     }
     productInfo.material = materials.join(', ');
 
-    // カラー情報を収集
+    // カラー情報を収集（selectドロップダウンから）
     const colors = [];
-    const colorCheckboxes = document.querySelectorAll('input[id^="color_"]:checked');
-    colorCheckboxes.forEach(checkbox => {
-      colors.push(checkbox.nextSibling.textContent.trim());
-    });
+    for (let i = 1; i <= 10; i++) {
+      const colorValue = _val(`カラー${i}`);
+      if (colorValue) {
+        colors.push(colorValue);
+        debug.log(`カラー${i}: ${colorValue}`);
+      }
+    }
     productInfo.color = colors.join(', ');
+    debug.log(`収集したカラー情報: "${productInfo.color}"`);
 
     // 商品属性を収集（商品名ブロックから）
     const attributes = [];
@@ -3865,8 +3869,17 @@
 
     const sizeHyokiTop = document.getElementById('サイズ(表記)_トップス');
     const sizeHyokiBottom = document.getElementById('サイズ(表記)_ボトムス');
+    const sizeHyokiShoes = document.getElementById('サイズ(表記)_靴');
+    const otherSizeShoes = document.getElementById('その他のサイズ表記_靴');
+    const usualSizeShoes = document.getElementById('普段のサイズ_靴');
+    const fitShoes = document.getElementById('フィット感_靴');
+
     if (sizeHyokiTop) sizeHyokiTop.value = '';
     if (sizeHyokiBottom) sizeHyokiBottom.value = '';
+    if (sizeHyokiShoes) sizeHyokiShoes.value = '';
+    if (otherSizeShoes) otherSizeShoes.value = '';
+    if (usualSizeShoes) usualSizeShoes.value = '';
+    if (fitShoes) fitShoes.value = '';
 
     const sizeSection = document.getElementById('sizeSection');
     if (sizeSection) sizeSection.style.display = 'none';
@@ -3884,9 +3897,15 @@
 
     // 9. 管理番号関連をリセット
     const p1 = document.getElementById('prefix1');
-    if (p1) p1.value = '';
+    if (p1) {
+      p1.value = '';
+      console.log('prefix1をクリアしました');
+    }
     const shelfField = document.getElementById('棚番号');
-    if (shelfField) shelfField.value = '';
+    if (shelfField) {
+      shelfField.value = '';
+      console.log('棚番号をクリアしました');
+    }
 
     // 動的に生成される管理番号フィールドをクリア
     const mgmtShelfFirst = document.getElementById('mgmt_shelf_first');
@@ -3904,7 +3923,8 @@
 
     // 管理番号の配置チェックボックスと形式は保持（ユーザーの好みなので）
 
-    buildShelf();
+    // buildShelf()を呼ぶと値が戻されるのでコメントアウト
+    // buildShelf();
 
     // 10. ブランドフィールドをクリア
     const brandEnBasic = document.getElementById('ブランド(英語)');
@@ -3964,11 +3984,16 @@
     }
 
     // 15. プレビューを再構築（商品名は空、商品の説明はデフォルト値）
-    console.log('商品名プレビュー再構築');
-    updateNamePreview();
+    console.log('ブランド表示を更新');
+    updateBrandDisplay(); // ブランド情報をクリア
 
+    console.log('商品名プレビュー再構築');
+    // updateBrandDisplay()が非同期なので、少し待ってから商品名プレビューを更新
+    setTimeout(() => {
+      updateNamePreview();
       console.log('商品の説明デフォルト値復活');
       updateDescriptionFromDetail();
+    }, 100);
 
     // 16. 画像をクリア
     uploadedImages = [];

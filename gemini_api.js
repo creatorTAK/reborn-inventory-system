@@ -192,11 +192,17 @@ function buildDescriptionPrompt(productInfo, aiConfig, imageCount) {
     if (productInfo.brandKana) {
       prompt += `（${productInfo.brandKana}）`;
     }
+    if (DEBUG_MODE) Logger.log('[Gemini API] ✅ ブランド情報を追加');
+  } else if (DEBUG_MODE) {
+    Logger.log('[Gemini API] ❌ ブランド情報スキップ - includeBrand:', config.includeBrand, 'brandName:', productInfo.brandName);
   }
 
   if (config.includeCategory !== false && productInfo.category) {
     prompt += `
 カテゴリ: ${productInfo.category}`;
+    if (DEBUG_MODE) Logger.log('[Gemini API] ✅ カテゴリ情報を追加');
+  } else if (DEBUG_MODE) {
+    Logger.log('[Gemini API] ❌ カテゴリ情報スキップ - includeCategory:', config.includeCategory, 'category:', productInfo.category);
   }
 
   prompt += `
@@ -205,26 +211,45 @@ function buildDescriptionPrompt(productInfo, aiConfig, imageCount) {
   if (config.includeSize !== false && productInfo.size) {
     prompt += `
 サイズ: ${productInfo.size}`;
+    if (DEBUG_MODE) Logger.log('[Gemini API] ✅ サイズ情報を追加');
+  } else if (DEBUG_MODE) {
+    Logger.log('[Gemini API] ❌ サイズ情報スキップ - includeSize:', config.includeSize, 'size:', productInfo.size);
   }
 
   if (config.includeCondition !== false && productInfo.condition) {
     prompt += `
 状態: ${productInfo.condition}`;
+    if (DEBUG_MODE) Logger.log('[Gemini API] ✅ 商品状態を追加');
+  } else if (DEBUG_MODE) {
+    Logger.log('[Gemini API] ❌ 商品状態スキップ - includeCondition:', config.includeCondition, 'condition:', productInfo.condition);
   }
 
   if (config.includeMaterial !== false && productInfo.material) {
     prompt += `
 素材: ${productInfo.material}`;
+    if (DEBUG_MODE) Logger.log('[Gemini API] ✅ 素材情報を追加');
+  } else if (DEBUG_MODE) {
+    Logger.log('[Gemini API] ❌ 素材情報スキップ - includeMaterial:', config.includeMaterial, 'material:', productInfo.material);
   }
 
   if (config.includeColor !== false && productInfo.color) {
     prompt += `
 カラー: ${productInfo.color}`;
+    if (DEBUG_MODE) {
+      Logger.log('[Gemini API] カラー情報を追加:', productInfo.color);
+    }
+  } else if (DEBUG_MODE) {
+    Logger.log('[Gemini API] カラー情報スキップ - includeColor:', config.includeColor, 'color:', productInfo.color);
   }
 
   if (config.includeAttributes !== false && productInfo.attributes) {
     prompt += `
 商品属性: ${productInfo.attributes}`;
+    if (DEBUG_MODE) {
+      Logger.log('[Gemini API] 商品属性を追加:', productInfo.attributes);
+    }
+  } else if (DEBUG_MODE) {
+    Logger.log('[Gemini API] 商品属性スキップ - includeAttributes:', config.includeAttributes, 'attributes:', productInfo.attributes);
   }
 
   // 品番・型番がある場合は強調
@@ -330,11 +355,17 @@ ${imageCount}枚の商品画像が添付されています。
   if (config.includeCoordinate !== false) {
     prompt += `
    - おすすめのコーディネート提案`;
+    if (DEBUG_MODE) Logger.log('[Gemini API] ✅ コーディネート提案を追加');
+  } else if (DEBUG_MODE) {
+    Logger.log('[Gemini API] ❌ コーディネート提案スキップ - includeCoordinate:', config.includeCoordinate);
   }
 
   if (config.includeScene !== false) {
     prompt += `
    - 着用シーンの提案`;
+    if (DEBUG_MODE) Logger.log('[Gemini API] ✅ 着用シーンを追加');
+  } else if (DEBUG_MODE) {
+    Logger.log('[Gemini API] ❌ 着用シーンスキップ - includeScene:', config.includeScene);
   }
 
   prompt += `
@@ -343,6 +374,14 @@ ${imageCount}枚の商品画像が添付されています。
 7. 過度な誇張表現は避ける
 
 説明文のみを出力してください。余計な前置きや注釈は不要です。`;
+
+  // デバッグ: プロンプト全体を出力
+  if (DEBUG_MODE) {
+    Logger.log('[Gemini API] 生成したプロンプト:');
+    Logger.log('='.repeat(80));
+    Logger.log(prompt);
+    Logger.log('='.repeat(80));
+  }
 
   return prompt;
 }
@@ -374,11 +413,11 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
     images = images || [];
 
     if (DEBUG_MODE) {
-      console.log(`[Gemini API] 画像数: ${images.length}`);
+      Logger.log(`[Gemini API] 画像数: ${images.length}`);
       if (images.length > 0) {
-        console.log('[Gemini API] ✅ 画像あり - Vision機能を使用します');
+        Logger.log('[Gemini API] ✅ 画像あり - Vision機能を使用します');
       } else {
-        console.log('[Gemini API] 画像なし - テキストのみで生成します');
+        Logger.log('[Gemini API] 画像なし - テキストのみで生成します');
       }
     }
 
@@ -399,14 +438,14 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
         });
 
         if (DEBUG_MODE) {
-          console.log(`[Gemini API] 📷 画像 ${index + 1}/${images.length}:`, image.mimeType);
-          console.log(`[Gemini API]   データサイズ: ${image.data.length} 文字`);
-          console.log(`[Gemini API]   データプレビュー: ${dataPreview}`);
+          Logger.log(`[Gemini API] 📷 画像 ${index + 1}/${images.length}:`, image.mimeType);
+          Logger.log(`[Gemini API]   データサイズ: ${image.data.length} 文字`);
+          Logger.log(`[Gemini API]   データプレビュー: ${dataPreview}`);
         }
       });
 
       if (DEBUG_MODE) {
-        console.log(`[Gemini API] ✅ ${images.length}枚の画像をリクエストに含めました`);
+        Logger.log(`[Gemini API] ✅ ${images.length}枚の画像をリクエストに含めました`);
       }
     }
 
@@ -442,20 +481,16 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
     };
 
     // 品番・型番がある場合はGoogle Search Groundingを有効化
-    if (productInfo && productInfo.modelNumber && productInfo.modelNumber.trim()) {
-      requestBody.tools = [{
-        googleSearchRetrieval: {
-          dynamicRetrievalConfig: {
-            mode: "MODE_DYNAMIC",
-            dynamicThreshold: 0.7
-          }
-        }
-      }];
-
-      if (DEBUG_MODE) {
-        console.log('[Gemini API] Google Search Grounding有効 - 品番:', productInfo.modelNumber);
-      }
-    }
+    // 一時的に無効化（動作確認のため）
+    // if (productInfo && productInfo.modelNumber && productInfo.modelNumber.trim()) {
+    //   requestBody.tools = [{
+    //     googleSearch: {}
+    //   }];
+    //
+    //   if (DEBUG_MODE) {
+    //     Logger.log('[Gemini API] Google Search Grounding有効 - 品番:', productInfo.modelNumber);
+    //   }
+    // }
 
     // HTTPリクエストオプション
     const options = {
@@ -466,8 +501,8 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
     };
 
     if (DEBUG_MODE) {
-      console.log('[Gemini API] リクエスト送信:', url);
-      console.log('[Gemini API] プロンプト:', prompt);
+      Logger.log('[Gemini API] リクエスト送信:', url);
+      Logger.log('[Gemini API] プロンプト:', prompt);
     }
 
     // API呼び出し
@@ -476,8 +511,8 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
     const responseText = response.getContentText();
 
     if (DEBUG_MODE) {
-      console.log('[Gemini API] ステータスコード:', statusCode);
-      console.log('[Gemini API] レスポンス:', responseText);
+      Logger.log('[Gemini API] ステータスコード:', statusCode);
+      Logger.log('[Gemini API] レスポンス:', responseText);
     }
 
     // ステータスコードのチェック
@@ -508,7 +543,7 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
     const generatedText = candidate.content.parts[0].text;
 
     if (DEBUG_MODE) {
-      console.log('[Gemini API] 生成されたテキスト:', generatedText);
+      Logger.log('[Gemini API] 生成されたテキスト:', generatedText);
     }
 
     return generatedText.trim();
@@ -542,7 +577,7 @@ function generateProductDescription(productInfo, images) {
     // 画像データの検証
     images = images || [];
     if (images.length > 0) {
-      console.log(`[情報] ${images.length}枚の画像を使用してAI生成します`);
+      Logger.log(`[情報] ${images.length}枚の画像を使用してAI生成します`);
     }
 
     // AI生成設定を取得
@@ -551,8 +586,24 @@ function generateProductDescription(productInfo, images) {
       const config = loadConfigMaster();
       aiConfig = config && config.AI生成設定 ? config.AI生成設定 : {};
     } catch (error) {
-      console.warn('[警告] AI生成設定の読み込みに失敗。デフォルト設定を使用します:', error);
+      Logger.log('[警告] AI生成設定の読み込みに失敗。デフォルト設定を使用します:', error);
       aiConfig = {};
+    }
+
+    // デバッグ: 商品情報を出力
+    if (DEBUG_MODE) {
+      Logger.log('[Gemini API] 収集した商品情報:', JSON.stringify(productInfo, null, 2));
+      Logger.log('[Gemini API] AI設定:', JSON.stringify(aiConfig, null, 2));
+      Logger.log('[Gemini API] 含める要素の設定:');
+      Logger.log('  - includeBrand:', aiConfig.includeBrand, '(デフォルト: true)');
+      Logger.log('  - includeCategory:', aiConfig.includeCategory, '(デフォルト: true)');
+      Logger.log('  - includeSize:', aiConfig.includeSize, '(デフォルト: true)');
+      Logger.log('  - includeMaterial:', aiConfig.includeMaterial, '(デフォルト: true)');
+      Logger.log('  - includeColor:', aiConfig.includeColor, '(デフォルト: true)');
+      Logger.log('  - includeAttributes:', aiConfig.includeAttributes, '(デフォルト: true)');
+      Logger.log('  - includeCondition:', aiConfig.includeCondition, '(デフォルト: true)');
+      Logger.log('  - includeCoordinate:', aiConfig.includeCoordinate, '(デフォルト: true)');
+      Logger.log('  - includeScene:', aiConfig.includeScene, '(デフォルト: true)');
     }
 
     // プロンプトの構築（画像の枚数を渡す）
@@ -566,15 +617,15 @@ function generateProductDescription(productInfo, images) {
     const maxLength = getMaxLengthFromConfig(aiConfig);
 
     if (generatedText.length < minLength) {
-      console.warn(`[警告] 生成された説明文が短すぎます (${generatedText.length}文字)`);
+      Logger.log(`[警告] 生成された説明文が短すぎます (${generatedText.length}文字)`);
     } else if (generatedText.length > maxLength) {
-      console.warn(`[警告] 生成された説明文が長すぎます (${generatedText.length}文字)`);
+      Logger.log(`[警告] 生成された説明文が長すぎます (${generatedText.length}文字)`);
     }
 
     return generatedText;
 
   } catch (error) {
-    console.error('[エラー] 商品説明文の生成に失敗:', error);
+    Logger.log('[エラー] 商品説明文の生成に失敗:', error);
     throw error;
   }
 }
