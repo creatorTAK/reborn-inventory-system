@@ -220,6 +220,37 @@ docs/icon-*.png              # アプリアイコン
 
 ## 開発ルール
 
+### 📋 TDD（テスト駆動開発）+ Issue管理
+
+**2025年10月21日導入**
+
+#### Issue管理の基本フロー
+
+```
+不具合発見 → Issue起票 → TDD判断 → 実装 → テスト → アーカイブ
+```
+
+**Issue起票ルール:**
+1. バグや機能要望を発見したら `docs/issues.md` に起票
+2. テンプレートは `docs/ISSUE_TEMPLATE.md` を参照
+3. Issue ID体系:
+   - `RESET-xxx`: リセット機能関連
+   - `BUG-xxx`: バグ修正
+   - `FEAT-xxx`: 新機能追加
+   - `PERF-xxx`: パフォーマンス改善
+
+**TDD適用判断:**
+- ✅ **適用する**: 複雑な機能改修、重要なバグ修正、データ整合性に関わる処理
+- ❌ **適用しない**: UI微調整、ドキュメント更新、軽微なバグ
+
+**完了後:**
+- Issueを `docs/issues-closed.md` に移動
+- 実装内容を `CLAUDE.md` に反映
+
+**詳細:** [docs/TDD_POLICY.md](docs/TDD_POLICY.md) を参照
+
+---
+
 ### ✅ 開発時のチェックリスト
 
 #### フィールド追加時
@@ -337,6 +368,89 @@ docs/icon-*.png              # アプリアイコン
 ---
 
 ## 最新の更新内容
+
+**最終更新日**: 2025年10月21日（🔧 **リセット機能の全面改修 + TDD導入** ✅）
+
+### 最新更新（2025年10月21日）
+
+#### 🔧 リセット機能の全面改修（RESET-005）✅ **100%完成**
+
+**「次の商品へ」機能として全面リニューアル**
+
+商品登録後のリセット機能を完全に再設計。設定を保持したまま次の商品登録へスムーズに移行できるようになりました。
+
+**主要な改善点:**
+- ✅ モジュラーアーキテクチャ（14個の独立した関数）
+- ✅ エラー耐性（1つのセクションのエラーが他に影響しない）
+- ✅ 商品説明の部分保持（割引情報・ハッシュタグを保持）
+- ✅ デフォルト値の自動再適用（セールスワード・配送・仕入・出品）
+- ✅ 約470行の新規コード、旧関数はバックアップとして保存
+
+**実装ファイル:** `sp_scripts.html:3741-4214`
+
+**新規関数一覧:**
+```javascript
+// メインオーケストレーター
+function onReset() { /* Phase 1-3の処理を統括 */ }
+
+// データクリア (Phase 1)
+function clearField(fieldId) { /* 汎用クリア */ }
+function resetManagementNumber() { /* 管理番号ブロック */ }
+function resetBasicInfo() { /* 基本情報ブロック */ }
+function resetProductName() { /* 商品名ブロック */ }
+function resetProductDetails() { /* 商品詳細ブロック */ }
+function resetDescriptionBlock() { /* 商品説明（部分保持） */ }
+function resetProcureListingInfo() { /* 仕入・出品情報 */ }
+
+// セクション初期化
+function resetAttributeSections() { /* 属性→1つに */ }
+function resetColorSections() { /* カラー→1つに */ }
+function resetMaterialSections() { /* 素材→1つに */ }
+function resetSizeSection() { /* サイズ非表示に */ }
+function resetProductImages() { /* 画像全削除 */ }
+
+// デフォルト値再適用 (Phase 2)
+function applyDefaultValuesAfterReset() { /* セールスワード・配送・仕入・出品 */ }
+
+// プレビュー更新 (Phase 3)
+function updateAllPreviewsAfterReset() { /* ブランド・商品名・説明 */ }
+```
+
+**詳細:** [docs/issues-closed.md](docs/issues-closed.md) の RESET-005 を参照
+
+---
+
+#### 📋 TDD（テスト駆動開発）+ Issue管理システム導入 ✅ **100%完成**
+
+**手動TDDワークフローの確立**
+
+**新規ドキュメント:**
+- `docs/TDD_POLICY.md` - TDD運用ルール + Issue管理ルール
+- `docs/ISSUE_TEMPLATE.md` - Issue起票テンプレート（バグ・機能・改善）
+- `docs/issues.md` - 未完了Issue一覧
+- `docs/issues-closed.md` - 完了Issueアーカイブ
+- `docs/RESET_FUNCTION_DESIGN.md` - リセット機能設計書（参考資料）
+
+**運用フロー:**
+```
+不具合発見 → Issue起票 → TDD判断 → 実装 → テスト → アーカイブ
+```
+
+**TDD適用判断:**
+- ✅ 適用する: 複雑な機能改修、重要なバグ修正、データ整合性に関わる処理
+- ❌ 適用しない: UI微調整、ドキュメント更新、軽微なバグ
+
+**Issue ID体系:**
+- `RESET-xxx`: リセット機能関連
+- `BUG-xxx`: バグ修正
+- `FEAT-xxx`: 新機能追加
+- `PERF-xxx`: パフォーマンス改善
+
+**詳細:** [docs/TDD_POLICY.md](docs/TDD_POLICY.md) を参照
+
+---
+
+### 過去の更新（2025年10月20日）
 
 **最終更新日**: 2025年10月20日（📚 **ドキュメント構成の最適化** ✅）
 
