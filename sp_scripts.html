@@ -3738,13 +3738,441 @@
       .saveProduct(d);
   }
 
+  // ==================== リセット機能（新実装） ====================
+  // Issue: RESET-005
+  // 「次の商品へ」機能として全面改修
+
   /**
-   * フォーム全体をリセット
+   * ヘルパー関数: フィールドをクリア
+   */
+  function clearField(fieldId) {
+    try {
+      const el = document.getElementById(fieldId);
+      if (el) {
+        el.value = '';
+      }
+    } catch (error) {
+      console.error(`[clearField] エラー (${fieldId}):`, error);
+    }
+  }
+
+  /**
+   * 管理番号ブロックをリセット
+   */
+  function resetManagementNumber() {
+    try {
+      console.log('[Reset] 管理番号ブロック開始');
+
+      // 基本フィールド
+      clearField('prefix1');
+      clearField('棚番号');
+      clearField('管理番号');
+      clearField('担当者');
+
+      // 動的生成フィールド
+      clearField('mgmt_shelf_first');
+      clearField('mgmt_shelf_second');
+      clearField('mgmt_custom_first');
+      clearField('mgmt_custom_second');
+
+      console.log('[Reset] 管理番号ブロック完了');
+    } catch (error) {
+      console.error('[Reset] 管理番号ブロックエラー:', error);
+    }
+  }
+
+  /**
+   * 基本情報ブロックをリセット
+   */
+  function resetBasicInfo() {
+    try {
+      console.log('[Reset] 基本情報ブロック開始');
+
+      // カテゴリー
+      clearField('大分類(カテゴリ)');
+      ['中分類(カテゴリ)', '小分類(カテゴリ)', '細分類(カテゴリ)', '細分類2'].forEach(id => {
+        if (typeof resetSelect === 'function') {
+          resetSelect(id, true);
+        }
+      });
+
+      // 細分類行を非表示
+      const saibunruiRow = document.getElementById('saibunruiRow');
+      if (saibunruiRow) saibunruiRow.style.display = 'none';
+
+      // ブランド
+      clearField('ブランド(英語)');
+      clearField('ブランド(カナ)');
+      if (typeof hideSuggest === 'function') {
+        hideSuggest('ブランド(英語)');
+      }
+
+      // その他
+      clearField('アイテム名');
+      clearField('サイズ');
+      clearField('商品の状態');
+
+      console.log('[Reset] 基本情報ブロック完了');
+    } catch (error) {
+      console.error('[Reset] 基本情報ブロックエラー:', error);
+    }
+  }
+
+  /**
+   * 商品名ブロックをリセット
+   */
+  function resetProductName() {
+    try {
+      console.log('[Reset] 商品名ブロック開始');
+
+      // 商品名プレビュー
+      clearField('商品名プレビュー');
+
+      // ブランド情報
+      clearField('商品名_ブランド(英語)');
+      clearField('商品名_ブランド(カナ)');
+
+      // ブランドチェックボックスをチェック状態に
+      const brandEnCheckbox = document.getElementById('商品名_ブランド(英語)_チェック');
+      const brandKanaCheckbox = document.getElementById('商品名_ブランド(カナ)_チェック');
+      if (brandEnCheckbox) brandEnCheckbox.checked = true;
+      if (brandKanaCheckbox) brandKanaCheckbox.checked = true;
+
+      // アイテム名
+      clearField('商品名_アイテム名');
+
+      // 商品属性（2個目以降を削除）
+      resetAttributeSections();
+
+      console.log('[Reset] 商品名ブロック完了');
+    } catch (error) {
+      console.error('[Reset] 商品名ブロックエラー:', error);
+    }
+  }
+
+  /**
+   * 商品詳細ブロックをリセット
+   */
+  function resetProductDetails() {
+    try {
+      console.log('[Reset] 商品詳細ブロック開始');
+
+      // サイズセクション
+      resetSizeSection();
+
+      // カラー
+      resetColorSections();
+
+      // 素材
+      resetMaterialSections();
+
+      // 商品の状態詳細
+      clearField('商品状態詳細');
+
+      // AI生成情報
+      clearField('AI用商品属性');
+      clearField('品番型番');
+      resetProductImages();
+
+      console.log('[Reset] 商品詳細ブロック完了');
+    } catch (error) {
+      console.error('[Reset] 商品詳細ブロックエラー:', error);
+    }
+  }
+
+  /**
+   * 商品説明ブロックをリセット（部分保持）
+   */
+  function resetDescriptionBlock() {
+    try {
+      console.log('[Reset] 商品説明ブロック開始');
+
+      // 現在の説明文を取得
+      const descTextarea = document.getElementById('商品の説明');
+      if (!descTextarea) return;
+
+      // TODO Phase 2: 割引情報とハッシュタグを抽出して保持
+      // 現時点では全クリア
+      descTextarea.value = '';
+
+      console.log('[Reset] 商品説明ブロック完了');
+    } catch (error) {
+      console.error('[Reset] 商品説明ブロックエラー:', error);
+    }
+  }
+
+  /**
+   * デフォルト値を再適用
+   */
+  function applyDefaultValuesAfterReset() {
+    try {
+      console.log('[Reset] デフォルト値適用開始');
+
+      // セールスワード
+      if (typeof defaultSalesword !== 'undefined' && defaultSalesword &&
+          defaultSalesword.カテゴリ && defaultSalesword.セールスワード) {
+        setTimeout(() => {
+          if (typeof applyDefaultSalesword === 'function') {
+            applyDefaultSalesword(defaultSalesword);
+            console.log('デフォルトセールスワードを再適用しました');
+          }
+        }, 100);
+      }
+
+      // 配送情報
+      if (typeof applyShippingDefaults === 'function') {
+        applyShippingDefaults();
+      }
+
+      // 仕入・出品情報
+      if (typeof applyProcureListingDefaults === 'function') {
+        applyProcureListingDefaults();
+      }
+
+      console.log('[Reset] デフォルト値適用完了');
+    } catch (error) {
+      console.error('[Reset] デフォルト値適用エラー:', error);
+    }
+  }
+
+  /**
+   * プレビューを更新
+   */
+  function updateAllPreviewsAfterReset() {
+    try {
+      console.log('[Reset] プレビュー更新開始');
+
+      // ブランド表示を更新
+      if (typeof updateBrandDisplay === 'function') {
+        updateBrandDisplay();
+      }
+
+      // 商品名プレビュー・商品の説明を更新
+      setTimeout(() => {
+        if (typeof updateNamePreview === 'function') {
+          updateNamePreview();
+        }
+        if (typeof updateDescriptionFromDetail === 'function') {
+          updateDescriptionFromDetail();
+        }
+      }, 100);
+
+      console.log('[Reset] プレビュー更新完了');
+    } catch (error) {
+      console.error('[Reset] プレビュー更新エラー:', error);
+    }
+  }
+
+  /**
+   * 商品属性セクションを1つに戻す
+   */
+  function resetAttributeSections() {
+    try {
+      const attributeItems = document.querySelectorAll('.attribute-item');
+      attributeItems.forEach((item, index) => {
+        if (index === 0) {
+          // 1個目はクリア
+          clearField('商品属性1_カテゴリ');
+          clearField('商品属性1_値');
+          const valueSelect = document.getElementById('商品属性1_値');
+          if (valueSelect) valueSelect.disabled = true;
+        } else {
+          // 2個目以降は削除
+          item.remove();
+        }
+      });
+      if (typeof attributeCount !== 'undefined') attributeCount = 1;
+      if (typeof updateAttributeRemoveButtons === 'function') {
+        updateAttributeRemoveButtons();
+      }
+    } catch (error) {
+      console.error('[resetAttributeSections] エラー:', error);
+    }
+  }
+
+  /**
+   * カラーセクションを1つに戻す
+   */
+  function resetColorSections() {
+    try {
+      const colorItems = document.querySelectorAll('.color-item');
+      colorItems.forEach((item, index) => {
+        if (index === 0) {
+          clearField('カラー1');
+        } else {
+          item.remove();
+        }
+      });
+      if (typeof colorCount !== 'undefined') colorCount = 1;
+      if (typeof updateColorRemoveButtons === 'function') {
+        updateColorRemoveButtons();
+      }
+    } catch (error) {
+      console.error('[resetColorSections] エラー:', error);
+    }
+  }
+
+  /**
+   * 素材セクションを1つに戻す
+   */
+  function resetMaterialSections() {
+    try {
+      const materialItems = document.querySelectorAll('.material-item');
+      materialItems.forEach((item, index) => {
+        if (index === 0) {
+          clearField('素材1_箇所');
+          clearField('素材1_種類1');
+          clearField('素材1_％1');
+          clearField('素材1_種類2');
+          clearField('素材1_％2');
+        } else {
+          item.remove();
+        }
+      });
+      if (typeof materialCount !== 'undefined') materialCount = 1;
+      if (typeof updateRemoveButtons === 'function') {
+        updateRemoveButtons();
+      }
+    } catch (error) {
+      console.error('[resetMaterialSections] エラー:', error);
+    }
+  }
+
+  /**
+   * サイズセクションを非表示に戻す
+   */
+  function resetSizeSection() {
+    try {
+      // サイズセクション非表示
+      const sizeSection = document.getElementById('sizeSection');
+      if (sizeSection) sizeSection.style.display = 'none';
+
+      // アイコン・ラベルを初期状態に
+      const sizeIconDisplay = document.getElementById('sizeIconDisplay');
+      const sizeLabelDisplay = document.getElementById('sizeLabelDisplay');
+      if (sizeIconDisplay) sizeIconDisplay.textContent = '👕';
+      if (sizeLabelDisplay) sizeLabelDisplay.textContent = 'サイズ';
+
+      // 全サイズフィールドをクリア
+      const sizeHyokiTop = document.getElementById('サイズ(表記)_トップス');
+      const sizeHyokiBottom = document.getElementById('サイズ(表記)_ボトムス');
+      const sizeHyokiShoes = document.getElementById('サイズ(表記)_靴');
+      const otherSizeShoes = document.getElementById('その他のサイズ表記_靴');
+      const usualSizeShoes = document.getElementById('普段のサイズ_靴');
+      const fitShoes = document.getElementById('フィット感_靴');
+
+      if (sizeHyokiTop) sizeHyokiTop.value = '';
+      if (sizeHyokiBottom) sizeHyokiBottom.value = '';
+      if (sizeHyokiShoes) sizeHyokiShoes.value = '';
+      if (otherSizeShoes) otherSizeShoes.value = '';
+      if (usualSizeShoes) usualSizeShoes.value = '';
+      if (fitShoes) fitShoes.value = '';
+
+      // サイズフィールド（実寸）
+      ['肩幅', '身幅', '袖丈', '着丈', 'ウエスト', 'ヒップ', '股上', '股下'].forEach(id => {
+        clearField(id);
+      });
+
+      // shoulderWidthLabel を「肩幅」に戻す
+      const shoulderLabel = document.getElementById('shoulderWidthLabel');
+      if (shoulderLabel) shoulderLabel.textContent = '肩幅';
+    } catch (error) {
+      console.error('[resetSizeSection] エラー:', error);
+    }
+  }
+
+  /**
+   * 商品画像を全削除
+   */
+  function resetProductImages() {
+    try {
+      // グローバル変数をクリア
+      if (typeof AI_GENERATED_TEXT !== 'undefined') AI_GENERATED_TEXT = '';
+      if (typeof uploadedImages !== 'undefined') uploadedImages = [];
+
+      // プレビューコンテナを非表示
+      const container = document.getElementById('imagePreviewContainer');
+      if (container) container.style.display = 'none';
+
+      // ファイル入力をリセット
+      const fileInput = document.getElementById('productImages');
+      if (fileInput) fileInput.value = '';
+
+      // プレビューを更新
+      if (typeof displayImagePreviews === 'function') {
+        displayImagePreviews();
+      }
+
+      console.log('[Reset] 商品画像をクリア');
+    } catch (error) {
+      console.error('[resetProductImages] エラー:', error);
+    }
+  }
+
+  /**
+   * フォーム全体をリセット（「次の商品へ」機能）
+   * RESET-005: リセット機能の全面改修
+   */
+  function onReset() {
+    try {
+      console.log('=== リセット開始（新実装） ===');
+
+      // Phase 1: データクリア
+      resetManagementNumber();
+      resetBasicInfo();
+      resetProductName();
+      resetProductDetails();
+      resetDescriptionBlock();
+
+      // Phase 2: デフォルト値再適用
+      applyDefaultValuesAfterReset();
+
+      // Phase 3: プレビュー更新
+      updateAllPreviewsAfterReset();
+
+      // メッセージをクリア
+      if (typeof show === 'function') {
+        show('');
+      }
+
+      // ハッシュタグ・割引情報のチェックボックスを全てチェック
+      document.querySelectorAll('input[id^="hashtag-checkbox-"]').forEach(cb => {
+        cb.checked = true;
+      });
+      document.querySelectorAll('input[id^="discount-checkbox-"]').forEach(cb => {
+        cb.checked = true;
+      });
+
+      // 折りたたみ状態をリセット（閉じる）
+      const hashtagSection = document.getElementById('hashtagSection');
+      const hashtagToggle = document.getElementById('hashtagToggle');
+      if (hashtagSection && hashtagToggle) {
+        hashtagSection.style.display = 'none';
+        hashtagToggle.textContent = '▼';
+      }
+
+      const discountSection = document.getElementById('discountSection');
+      const discountToggle = document.getElementById('discountToggle');
+      if (discountSection && discountToggle) {
+        discountSection.style.display = 'none';
+        discountToggle.textContent = '▼';
+      }
+
+      console.log('=== リセット完了（新実装） ===');
+    } catch (error) {
+      console.error('リセット処理エラー:', error);
+      alert('リセット処理中にエラーが発生しました。ページを再読み込みしてください。');
+    }
+  }
+
+  // ==================== 旧リセット機能（バックアップ） ====================
+  /**
+   * フォーム全体をリセット（旧実装）
    * すべての入力フィールドをクリアし、デフォルト値（配送情報、仕入・出品情報）を再適用
    * 管理番号の配置設定と形式は保持される（ユーザーの運用方針のため）
    * @throws {Error} リセット処理中にエラーが発生した場合
    */
-  function onReset() {
+  function onReset_OLD() {
     try {
       console.log('=== リセット開始 ===');
 
