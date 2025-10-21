@@ -87,6 +87,7 @@ clauded
 | **PRODUCT_SYSTEM_ENHANCEMENT.md** | 商品システム強化計画 |
 | **SPREADSHEET_COLUMN_SETUP.md** | スプレッドシート列設定 |
 | **REBORN_PRIORITY_ROADMAP.md** | 開発優先順位ロードマップ |
+| **CLAUDE_AGENT_SDK_TEAM_SAAS.md** | Agent SDK × チーム連携・SaaS化の活用イメージ（Phase 4専用） |
 
 ### 5. 一時的/デバッグ用ドキュメント（通常は参照不要）
 
