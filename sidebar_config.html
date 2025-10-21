@@ -36,13 +36,28 @@
       margin-bottom: 0;
       flex-wrap: nowrap;
       overflow-x: auto;
-      position: sticky;
-      top: 0;
+      overflow-y: hidden;
       z-index: 100; /* コンテンツより上、タブナビゲーションヘッダー（z-index: 1000）より下に表示 */
       border-bottom: none;
       background: #f8f9fa;
       padding: 8px 8px 0 8px;
       border-radius: 8px 8px 0 0;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+
+    /* タブナビゲーションのスクロールバーを細く */
+    .nav-tabs::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .nav-tabs::-webkit-scrollbar-thumb {
+      background: #cbd5e0;
+      border-radius: 2px;
+    }
+
+    .nav-tabs::-webkit-scrollbar-track {
+      background: #f7fafc;
     }
     .nav-tabs .nav-link {
       font-size: 13px;
@@ -222,6 +237,9 @@
       </li>
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="ai-tab" data-bs-toggle="tab" data-bs-target="#ai" type="button" role="tab">✨ AI生成設定</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="image-tab" data-bs-toggle="tab" data-bs-target="#image" type="button" role="tab">📷 画像管理</button>
       </li>
     </ul>
 
@@ -956,6 +974,73 @@
         <button type="button" onclick="clearAiSettings()" style="width: 100%; padding: 10px; background: white; border: 2px solid #ef4444; border-radius: 8px; color: #ef4444; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 16px; transition: all 0.2s;" onmouseover="this.style.background='#fef2f2';" onmouseout="this.style.background='white';">
           🗑️ すべてクリア（デフォルトに戻す）
         </button>
+      </div>
+
+      <!-- 画像管理設定 -->
+      <div class="tab-pane fade" id="image" role="tabpanel">
+        <div class="section-title">📷 画像管理設定</div>
+
+        <!-- ヒント -->
+        <div style="font-size: 11px; color: #6b7280; padding: 10px 12px; background: #f0f9ff; border-radius: 6px; border-left: 3px solid #3b82f6; margin-bottom: 16px; line-height: 1.6;">
+          <div onclick="toggleConfigHint('image', 'overview')" style="cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; color: #3b82f6; font-weight: 600; margin-bottom: 4px;">
+            <span>💡 概要</span>
+            <span id="image-overview-icon">▶</span>
+          </div>
+          <div id="image-overview-content" style="display: none; padding-left: 12px; margin-bottom: 8px;">
+            商品画像の管理方法を設定します。チーム利用やAPI連携を行う場合は、商品画像をGoogle Driveに保存することで、撮影者と出品者で画像を共有したり、複数のプラットフォームに同じ画像を使い回すことができます
+          </div>
+          <div onclick="toggleConfigHint('image', 'hint')" style="cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; color: #3b82f6; font-weight: 600; margin-bottom: 4px;">
+            <span>📌 使い方</span>
+            <span id="image-hint-icon">▶</span>
+          </div>
+          <div id="image-hint-content" style="display: none; padding-left: 12px;">
+            1. ☑️ 「商品画像をGoogle Driveに保存する」をONにする<br>
+            2. 💾 設定を保存<br>
+            3. 📸 商品登録画面に「商品画像」ブロックが表示される<br>
+            4. 🖼️ 最大20枚の画像をアップロード可能<br>
+            5. 💾 保存時にGoogle Driveに自動保存<br>
+            <br>
+            <strong>ONにするべき人：</strong><br>
+            ✓ チームで利用している（撮影者と出品者が別）<br>
+            ✓ メルカリShops APIで自動出品したい（Phase 3以降）<br>
+            ✓ BASE/Instagramなど複数プラットフォームに出品<br>
+            <br>
+            <strong>OFFでOKな人：</strong><br>
+            ✓ 個人利用のみ<br>
+            ✓ 通常のメルカリアプリで手動出品<br>
+            ✓ 画像を保存する必要がない
+          </div>
+        </div>
+
+        <!-- 商品画像保存設定 -->
+        <div style="margin-bottom: 24px;">
+          <div style="background: white; padding: 16px; border-radius: 8px; border: 2px solid #e5e7eb;">
+            <label style="display: flex; align-items: center; cursor: pointer; user-select: none;">
+              <input
+                type="checkbox"
+                id="enableProductImageSave"
+                onchange="toggleProductImageSave()"
+                style="width: 20px; height: 20px; margin-right: 12px; cursor: pointer;"
+              />
+              <div style="flex: 1;">
+                <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 4px;">
+                  商品画像をGoogle Driveに保存する
+                </div>
+                <div style="font-size: 11px; color: #6b7280; line-height: 1.5;">
+                  ONにすると商品登録画面に「商品画像」ブロックが表示され、<br>
+                  最大20枚の画像をGoogle Driveに保存できます
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <!-- 現在の状態表示 -->
+          <div id="imageSettingStatus" style="margin-top: 12px; padding: 12px; border-radius: 6px; background: #f9fafb; border-left: 3px solid #9ca3af;">
+            <div style="font-size: 12px; color: #6b7280;">
+              <strong>現在の設定:</strong> <span id="imageSettingStatusText">OFF（商品画像ブロックは非表示）</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 管理番号設定 -->
@@ -2614,6 +2699,73 @@
       console.log('テーマ選択完了:', theme);
     }
 
+    // ================= 設定管理モジュール（localStorage + PropertiesService ハイブリッド） =================
+
+    /**
+     * localStorageキー定義
+     */
+    const CONFIG_STORAGE_KEYS = {
+      CONDITION_BUTTONS: 'rebornConfig_conditionButtons',
+      HASHTAG: 'rebornConfig_hashtag',
+      DISCOUNT: 'rebornConfig_discount',
+      SHIPPING_DEFAULT: 'rebornConfig_shippingDefault',
+      PROCURE_LISTING_DEFAULT: 'rebornConfig_procureListingDefault',
+      MANAGEMENT_NUMBER: 'rebornConfig_managementNumber',
+      SALESWORD: 'rebornConfig_salesword',
+      AI_SETTINGS: 'rebornConfig_aiSettings',
+      DESIGN_THEME: 'rebornTheme', // 既存
+      IMAGE_SAVE: 'enableProductImageSave' // 既存
+    };
+
+    /**
+     * 全設定をlocalStorageに保存
+     */
+    function saveConfigToLocalStorage(config) {
+      try {
+        localStorage.setItem(CONFIG_STORAGE_KEYS.CONDITION_BUTTONS, JSON.stringify(config['商品状態ボタン']));
+        localStorage.setItem(CONFIG_STORAGE_KEYS.HASHTAG, JSON.stringify(config['ハッシュタグ']));
+        localStorage.setItem(CONFIG_STORAGE_KEYS.DISCOUNT, JSON.stringify(config['割引情報']));
+        localStorage.setItem(CONFIG_STORAGE_KEYS.SHIPPING_DEFAULT, JSON.stringify(config['配送デフォルト']));
+        localStorage.setItem(CONFIG_STORAGE_KEYS.PROCURE_LISTING_DEFAULT, JSON.stringify(config['仕入出品デフォルト']));
+        localStorage.setItem(CONFIG_STORAGE_KEYS.MANAGEMENT_NUMBER, JSON.stringify(config['管理番号設定']));
+        localStorage.setItem(CONFIG_STORAGE_KEYS.SALESWORD, JSON.stringify(config['よく使うセールスワード']));
+        localStorage.setItem(CONFIG_STORAGE_KEYS.AI_SETTINGS, JSON.stringify(config['AI生成設定']));
+        localStorage.setItem(CONFIG_STORAGE_KEYS.DESIGN_THEME, config['デザインテーマ']);
+
+        console.log('✅ 全設定をlocalStorageに保存しました');
+        return true;
+      } catch (e) {
+        console.error('❌ localStorage保存エラー:', e);
+        return false;
+      }
+    }
+
+    /**
+     * 設定変更を商品登録画面に通知（postMessage）
+     */
+    function notifyConfigChange() {
+      try {
+        // 全てのwindowに通知（親、兄弟iframe含む）
+        if (window.parent) {
+          window.parent.postMessage({
+            type: 'configChanged',
+            timestamp: new Date().getTime()
+          }, '*');
+        }
+
+        if (window.top && window.top !== window.parent) {
+          window.top.postMessage({
+            type: 'configChanged',
+            timestamp: new Date().getTime()
+          }, '*');
+        }
+
+        console.log('📤 設定変更をpostMessageで通知しました');
+      } catch (e) {
+        console.warn('postMessage送信エラー（無視しても問題ありません）:', e);
+      }
+    }
+
     /**
      * 設定を保存
      */
@@ -2621,6 +2773,28 @@
       console.log('=== saveConfig 開始 ===');
       const managementConfig = collectManagementConfig();
       console.log('管理番号設定:', managementConfig);
+
+      // 画像管理設定をLocalStorageに保存
+      const imageCheckbox = document.getElementById('enableProductImageSave');
+      let imageSettingMessage = '';
+      if (imageCheckbox) {
+        const imageEnabled = imageCheckbox.checked;
+        localStorage.setItem('enableProductImageSave', imageEnabled.toString());
+        console.log('💾 画像管理設定をLocalStorageに保存:', imageEnabled);
+
+        // ステータステキストを更新
+        const statusText = document.getElementById('imageSettingStatusText');
+        if (statusText) {
+          statusText.textContent = imageEnabled
+            ? 'ON（商品画像ブロックが表示されます）'
+            : 'OFF（商品画像ブロックは非表示）';
+        }
+
+        // アラートメッセージに追加
+        imageSettingMessage = imageEnabled
+          ? '\n\n📷 商品画像ブロック: ON → 商品登録画面に表示されます'
+          : '\n\n📷 商品画像ブロック: OFF → 非表示になります';
+      }
 
       const newConfig = {
         商品状態ボタン: collectConditionButtons(),
@@ -2636,34 +2810,36 @@
 
       console.log('保存する設定全体:', newConfig);
 
+      // 1. 即座にlocalStorageに保存（リロード不要で反映）
+      const localStorageSaved = saveConfigToLocalStorage(newConfig);
+
+      // 2. postMessageで商品登録画面に通知（リロード不要で反映）
+      notifyConfigChange();
+
+      // 3. PropertiesServiceに保存（バックアップ・他端末同期用）
       if (google && google.script && google.script.run) {
         google.script.run
           .withSuccessHandler(function(result) {
             console.log('保存結果:', result);
             if (result.success) {
-              // デザインテーマをLocalStorageに保存（即座反映のため）
-              try {
-                const theme = document.getElementById('selected-design-theme').value;
-                localStorage.setItem('rebornTheme', theme);
-                console.log('💾 デザインテーマをLocalStorageに保存:', theme);
-              } catch (e) {
-                console.warn('LocalStorage保存エラー:', e);
-              }
-
-              alert('✅ 設定を保存しました\n\n📌 変更を反映するには：\n商品登録メニューを開き直してください\n（スーパーリロード: Cmd+Shift+R）');
+              alert('✅ 設定完了しました');
               // キャッシュをクリア
               google.script.run.clearConfigCache();
             } else {
-              alert('保存に失敗しました: ' + result.error);
+              alert('サーバーへの保存に失敗しましたが、\nローカル設定は保存されています\n\nエラー: ' + result.error);
             }
           })
           .withFailureHandler(function(error) {
             console.error('保存エラー:', error);
-            alert('保存中にエラーが発生しました: ' + error);
+            alert('サーバーへの保存に失敗しましたが、\nローカル設定は保存されています\n\nエラー: ' + error);
           })
           .saveConfigMaster(newConfig);
       } else {
-        console.error('google.script.run が利用できません');
+        if (localStorageSaved) {
+          alert('✅ 設定完了しました');
+        } else {
+          alert('❌ 設定の保存に失敗しました');
+        }
       }
     }
 
@@ -4356,6 +4532,160 @@ ${prompt || '（未設定）'}
       appId: "1:345653439471:web:7620819ce3f022d9cd241a",
       measurementId: "G-SX48K45X75"
     };
+
+    // ================= 画像管理設定 =================
+
+    /**
+     * 画像管理設定の初期化
+     */
+    window.initImageSettings = function() {
+      const checkbox = document.getElementById('enableProductImageSave');
+      const statusText = document.getElementById('imageSettingStatusText');
+
+      // まずlocalStorageから読み込み（高速表示）
+      const localStorageValue = localStorage.getItem('enableProductImageSave');
+      let enabled = localStorageValue === 'true';
+
+      console.log('🔍 [設定画面] 画像管理設定を初期化:');
+      console.log('  - localStorage値:', localStorageValue);
+      console.log('  - 有効:', enabled);
+
+      // UIを即座に更新
+      if (checkbox) {
+        checkbox.checked = enabled;
+      }
+
+      if (statusText) {
+        statusText.textContent = enabled
+          ? 'ON（商品画像ブロックが表示されます）'
+          : 'OFF（商品画像ブロックは非表示）';
+      }
+
+      // バックグラウンドでサーバーから読み込み（iOS/スマホ対応・バックアップ復元）
+      if (google && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(serverEnabled) {
+            console.log('📥 サーバーから読み込み:', serverEnabled);
+
+            // サーバーの値とlocalStorageの値が異なる場合は同期
+            if (serverEnabled !== enabled) {
+              console.log('⚠️ サーバーとlocalStorageの値が異なるため同期します');
+              enabled = serverEnabled;
+
+              // localStorageを更新
+              try {
+                localStorage.setItem('enableProductImageSave', enabled.toString());
+              } catch (e) {
+                console.warn('localStorage更新エラー（iOS/スマホでは制限される場合があります）');
+              }
+
+              // UIを更新
+              if (checkbox) {
+                checkbox.checked = enabled;
+              }
+
+              if (statusText) {
+                statusText.textContent = enabled
+                  ? 'ON（商品画像ブロックが表示されます）'
+                  : 'OFF（商品画像ブロックは非表示）';
+              }
+            }
+          })
+          .withFailureHandler(function(error) {
+            console.error('❌ サーバーからの読み込みエラー:', error);
+          })
+          .loadImageSettingFromServer();
+      }
+    };
+
+    /**
+     * 商品画像保存設定の切り替え
+     */
+    window.toggleProductImageSave = function() {
+      const checkbox = document.getElementById('enableProductImageSave');
+      const statusText = document.getElementById('imageSettingStatusText');
+
+      console.log('🔘 toggleProductImageSave呼び出し');
+      console.log('  - チェックボックス:', checkbox);
+
+      if (!checkbox || !statusText) {
+        console.error('❌ チェックボックスまたはステータステキストが見つかりません');
+        return;
+      }
+
+      const enabled = checkbox.checked;
+      console.log('  - チェック状態:', enabled);
+
+      // ステータステキストを更新
+      statusText.textContent = enabled
+        ? 'ON（商品画像ブロックが表示されます）'
+        : 'OFF（商品画像ブロックは非表示）';
+
+      // 1. localStorageに保存（PC/デスクトップ用・高速）
+      try {
+        localStorage.setItem('enableProductImageSave', enabled.toString());
+        console.log('✅ localStorage保存:', enabled);
+
+        // 保存確認
+        const saved = localStorage.getItem('enableProductImageSave');
+        console.log('  - 保存確認:', saved);
+      } catch (e) {
+        console.error('⚠️ localStorage保存エラー（iOS/スマホでは制限される場合があります）:', e);
+      }
+
+      // 2. PropertiesServiceに保存（iOS/スマホ用・永続化）
+      if (google && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (result.success) {
+              console.log('✅ サーバー保存成功（iOS/スマホでも永続化されます）');
+            } else {
+              console.error('❌ サーバー保存失敗:', result.error);
+            }
+          })
+          .withFailureHandler(function(error) {
+            console.error('❌ サーバー保存失敗:', error);
+          })
+          .saveImageSettingToServer(enabled);
+      }
+    };
+
+    /**
+     * 画像管理設定を保存
+     */
+    window.saveImageSettings = function() {
+      const checkbox = document.getElementById('enableProductImageSave');
+
+      console.log('💾 saveImageSettings呼び出し');
+
+      if (!checkbox) {
+        alert('設定の読み込みに失敗しました');
+        return;
+      }
+
+      const enabled = checkbox.checked;
+      localStorage.setItem('enableProductImageSave', enabled.toString());
+
+      alert('✅ 設定完了しました');
+
+      console.log('✅ 画像管理設定を保存しました:', enabled);
+    };
+
+    // localStorage全体をコンソールに表示（デバッグ用）
+    window.debugLocalStorage = function() {
+      console.log('📦 localStorage全体:');
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        const value = localStorage.getItem(key);
+        console.log(`  - ${key}:`, value);
+      }
+    };
+
+    // DOMContentLoaded時に初期化
+    document.addEventListener('DOMContentLoaded', function() {
+      window.debugLocalStorage(); // デバッグ用
+      window.initImageSettings();
+    });
 
     // Firebase初期化
     async function initFirebaseMessaging() {
