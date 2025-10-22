@@ -15,6 +15,116 @@
 
 ## 📚 完了Issue一覧
 
+## UI-003 | バグ修正: 設定画面から戻ると色が旧バージョンに戻る ✅ DONE (完了日: 2025-10-22)
+
+### 📌 基本情報
+- [x] カテゴリ: バグ修正 + UI改善
+- [x] 優先度: 高（ユーザー体験に直結）
+- [x] 影響範囲: PWA全体（カラーテーマ、ナビゲーション）
+- [x] 発見日: 2025-10-22
+
+### 🐛 不具合内容
+設定画面を開いて商品登録に戻ると、ボタンの色が紫から緑に戻ってしまう。アプリをタスクキルして再起動すると紫に戻るが、設定画面との行き来で常に色が戻る現象が発生。
+
+**症状:**
+1. 商品登録画面：紫色のボタン（正常）
+2. 設定画面を開く
+3. 商品登録に戻る → **緑色のボタンに戻る（異常）**
+4. タスクキル＆再起動 → 紫色に戻る（正常）
+
+**ユーザーからのフィードバック:**
+> "設定から商品登録がダメですね。保存とかはしなくても、戻るだけで前の色に戻ってしまいます。アプリをタスクキルして開き直すと紫に戻りますが。"
+
+### 🔍 原因分析
+`docs/index.html` に**古いApps ScriptデプロイURL**が2箇所残っており、設定画面からのナビゲーション時に古いバージョン（緑色ボタン）を読み込んでいた。
+
+**問題のコード箇所:**
+
+1. **514行目 - GAS_API_URL:**
+```javascript
+// 古いURL（緑色バージョン）
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec';
+```
+
+2. **719行目 - navigateToPage関数:**
+```javascript
+function navigateToPage(page) {
+  const iframe = document.getElementById('gas-iframe');
+  // 古いURL（緑色バージョン）
+  const baseUrl = 'https://script.google.com/macros/s/AKfycbxgrHJ5FkYiNDulGavakaHWSMxeBxz6nQ0db_RTalqWdPOx7HZpmGX70sbP9Z3hUvfd4g/exec';
+  ...
+}
+```
+
+### ✅ 修正内容
+
+**1. 古いURLを新しいURLに更新:**
+```javascript
+// 新しいURL（紫色バージョン）
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxEAnrtYFBuB3Qi9mv_eduEB5Ebp_GBdEFjpSD1X80uey3G8aE_p6D78VEJ40KnsS5OaQ/exec';
+
+const baseUrl = 'https://script.google.com/macros/s/AKfycbxEAnrtYFBuB3Qi9mv_eduEB5Ebp_GBdEFjpSD1X80uey3G8aE_p6D78VEJ40KnsS5OaQ/exec';
+```
+
+**2. キャッシュ制御metaタグを追加:**
+- `sidebar_product.html`
+- `sidebar_config.html`
+
+```html
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+```
+
+**3. UI改善 - ブロックヘッダーの色調整:**
+- sp_styles.html: ブロックヘッダー背景を薄いグレーに変更
+```css
+/* 変更前（濃いグレー） */
+background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+
+/* 変更後（薄いグレー） */
+background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+```
+
+**4. 設定画面のボタン色を統一:**
+- AIプリセットボタン（カジュアル、丁寧、簡潔、詳細）: 緑 → 紫
+- 保存ボタン: 緑 → 紫グラデーション
+
+### 📍 関連ファイル
+- `docs/index.html` (514行目、719行目)
+- `sidebar_product.html` (metaタグ追加)
+- `sidebar_config.html` (metaタグ追加、ボタン色変更)
+- `sp_styles.html` (ヘッダー色変更)
+
+### 📝 確認結果
+- [x] 設定画面を開いて商品登録に戻っても紫色を維持
+- [x] ブロックヘッダーが薄いグレーに変更
+- [x] 設定画面のボタンが全て紫色に統一
+- [x] デグレード確認: OK
+
+**ユーザーフィードバック:**
+> "OKです。解消されました。原因がわかってよかったです。"
+
+### 📦 デプロイ履歴
+
+**Commit:**
+- `05cdce9` - fix: 設定画面から戻る際の色戻りバグを修正 + UIカラー調整
+
+**Cloudflare Pages:** 自動デプロイ (2025-10-22)
+
+**clasp push:** 2025-10-22 (50ファイル)
+
+### 教訓
+- **PWAアーキテクチャの複雑性**: Cloudflare Pages (docs/index.html) → iframe → Apps Script という構造のため、両方のURLを同期する必要がある
+- **デプロイURL管理の重要性**: Apps Scriptで新しいデプロイを作成した際は、必ずdocs/index.htmlの全てのURL参照箇所を更新する
+- **URL参照箇所の洗い出し**: 今後は`grep -n "AKfyc" docs/index.html`で全てのURL参照を確認してから更新すべき
+- **キャッシュ対策**: HTMLファイルにno-cache設定を追加することで、ブラウザキャッシュによる古いバージョン表示を防げる
+
+### 状態
+- [x] ✅ DONE (完了日: 2025-10-22)
+
+---
+
 ## UI-002 | 緊急バグ修正: JavaScript構文エラーによる全機能停止 ✅ DONE (完了日: 2025-10-22)
 
 ### 📌 基本情報
