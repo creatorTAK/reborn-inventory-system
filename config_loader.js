@@ -497,6 +497,40 @@ function clearConfigCache() {
 }
 
 /**
+ * 画像管理設定をPropertiesServiceに保存（軽量・高速）
+ * @param {boolean} enabled - 画像管理設定の有効/無効
+ * @returns {Object} 結果オブジェクト {success: boolean, error?: string}
+ */
+function saveImageSettingToServer(enabled) {
+  try {
+    const userProperties = PropertiesService.getUserProperties();
+    userProperties.setProperty('enableProductImageSave', enabled.toString());
+    console.log('✅ 画像管理設定をPropertiesServiceに保存:', enabled);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ 画像管理設定保存エラー:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 画像管理設定をPropertiesServiceから読み込み
+ * @returns {boolean} 画像管理設定の有効/無効
+ */
+function loadImageSettingFromServer() {
+  try {
+    const userProperties = PropertiesService.getUserProperties();
+    const value = userProperties.getProperty('enableProductImageSave');
+    const enabled = value === 'true';
+    console.log('✅ 画像管理設定をPropertiesServiceから読み込み:', enabled);
+    return enabled;
+  } catch (error) {
+    console.error('❌ 画像管理設定読み込みエラー:', error);
+    return false; // デフォルトはOFF
+  }
+}
+
+/**
  * 設定マスタシートに設定を保存
  * @param {Object} newConfig - 保存する設定データ
  * @returns {Object} 結果オブジェクト {success: boolean, error?: string}

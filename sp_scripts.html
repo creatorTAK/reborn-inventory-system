@@ -23,6 +23,20 @@
   // 設定マスタ全体をキャッシュ
   let CACHED_CONFIG = null;
 
+  // localStorageキー定義（設定システム用）
+  const CONFIG_STORAGE_KEYS = {
+    CONDITION_BUTTONS: 'rebornConfig_conditionButtons',
+    HASHTAG: 'rebornConfig_hashtag',
+    DISCOUNT: 'rebornConfig_discount',
+    SHIPPING_DEFAULT: 'rebornConfig_shippingDefault',
+    PROCURE_LISTING_DEFAULT: 'rebornConfig_procureListingDefault',
+    MANAGEMENT_NUMBER: 'rebornConfig_managementNumber',
+    SALESWORD: 'rebornConfig_salesword',
+    AI_SETTINGS: 'rebornConfig_aiSettings',
+    DESIGN_THEME: 'rebornTheme',
+    IMAGE_SAVE: 'enableProductImageSave'
+  };
+
   // ==================== テーマの即座適用（ちらつき防止） ====================
   // ページ読み込み直後にLocalStorageからテーマを復元
   (function() {
@@ -47,22 +61,71 @@
     }
   }
 
-  // 設定マスタ全体を読み込む
+  // 設定マスタ全体を読み込む（localStorage優先、サーバーでバックアップ同期）
   function loadAllConfig() {
+    console.log('🚀 設定読み込み開始（ハイブリッド方式）');
+
+    // 1. まずlocalStorageから即座に読み込み（高速表示）
+    try {
+      if (!CACHED_CONFIG) {
+        CACHED_CONFIG = {};
+      }
+
+      const conditionButtons = localStorage.getItem('rebornConfig_conditionButtons');
+      const hashtag = localStorage.getItem('rebornConfig_hashtag');
+      const discount = localStorage.getItem('rebornConfig_discount');
+      const shippingDefault = localStorage.getItem('rebornConfig_shippingDefault');
+      const procureListingDefault = localStorage.getItem('rebornConfig_procureListingDefault');
+      const managementNumber = localStorage.getItem('rebornConfig_managementNumber');
+      const salesword = localStorage.getItem('rebornConfig_salesword');
+      const aiSettings = localStorage.getItem('rebornConfig_aiSettings');
+
+      if (conditionButtons) CACHED_CONFIG['商品状態ボタン'] = JSON.parse(conditionButtons);
+      if (hashtag) CACHED_CONFIG['ハッシュタグ'] = JSON.parse(hashtag);
+      if (discount) CACHED_CONFIG['割引情報'] = JSON.parse(discount);
+      if (shippingDefault) CACHED_CONFIG['配送デフォルト'] = JSON.parse(shippingDefault);
+      if (procureListingDefault) CACHED_CONFIG['仕入出品デフォルト'] = JSON.parse(procureListingDefault);
+      if (managementNumber) CACHED_CONFIG['管理番号設定'] = JSON.parse(managementNumber);
+      if (salesword) CACHED_CONFIG['よく使うセールスワード'] = JSON.parse(salesword);
+      if (aiSettings) CACHED_CONFIG['AI生成設定'] = JSON.parse(aiSettings);
+
+      console.log('✅ Step 1: localStorageから読み込み完了:', CACHED_CONFIG);
+    } catch (e) {
+      console.error('localStorage読み込みエラー:', e);
+    }
+
+    // 2. バックグラウンドでサーバーから読み込んで同期（バックアップ復元）
     if (google && google.script && google.script.run) {
       google.script.run
         .withSuccessHandler(function(config) {
           if (config) {
+            console.log('📥 Step 2: サーバーから設定を取得しました:', config);
+
+            // サーバーの設定でCACHED_CONFIGとlocalStorageを更新（同期）
             CACHED_CONFIG = config;
-            console.log('設定マスタ全体を読み込みました:', config);
+
+            // localStorageにも保存（バックアップ復元 + 次回起動の高速化）
+            try {
+              localStorage.setItem(CONFIG_STORAGE_KEYS.CONDITION_BUTTONS, JSON.stringify(config['商品状態ボタン'] || []));
+              localStorage.setItem(CONFIG_STORAGE_KEYS.HASHTAG, JSON.stringify(config['ハッシュタグ'] || {}));
+              localStorage.setItem(CONFIG_STORAGE_KEYS.DISCOUNT, JSON.stringify(config['割引情報'] || {}));
+              localStorage.setItem(CONFIG_STORAGE_KEYS.SHIPPING_DEFAULT, JSON.stringify(config['配送デフォルト'] || {}));
+              localStorage.setItem(CONFIG_STORAGE_KEYS.PROCURE_LISTING_DEFAULT, JSON.stringify(config['仕入出品デフォルト'] || {}));
+              localStorage.setItem(CONFIG_STORAGE_KEYS.MANAGEMENT_NUMBER, JSON.stringify(config['管理番号設定'] || {}));
+              localStorage.setItem(CONFIG_STORAGE_KEYS.SALESWORD, JSON.stringify(config['よく使うセールスワード'] || {}));
+              localStorage.setItem(CONFIG_STORAGE_KEYS.AI_SETTINGS, JSON.stringify(config['AI生成設定'] || {}));
+              if (config['デザインテーマ']) {
+                localStorage.setItem(CONFIG_STORAGE_KEYS.DESIGN_THEME, config['デザインテーマ']);
+              }
+              console.log('✅ サーバー設定をlocalStorageに同期しました');
+            } catch (e) {
+              console.warn('localStorage同期エラー:', e);
+            }
 
             // デザインテーマを適用
             if (config.デザインテーマ) {
               const theme = config.デザインテーマ;
               console.log('✅ デザインテーマを読み込みました:', theme);
-
-              // LocalStorageに保存
-              saveThemeToLocalStorage(theme);
 
               // テーマクラスを適用（LocalStorageと異なる場合のみ）
               if (theme !== 'casual') {
@@ -76,13 +139,11 @@
                 document.body.classList.remove('theme-modern');
                 console.log('ℹ️ カジュアルテーマ（デフォルト）を使用');
               }
-            } else {
-              console.log('⚠️ デザインテーマ設定が見つかりません。デフォルト（casual）を使用します。');
             }
           }
         })
         .withFailureHandler(function(error) {
-          console.error('設定マスタ読み込みエラー:', error);
+          console.error('❌ サーバー設定読み込みエラー（localStorageを使用）:', error);
         })
         .loadConfigMaster();
     }
@@ -2662,7 +2723,7 @@
 
     // 既存の画像数と新規画像数の合計が3を超える場合は警告
     if (uploadedImages.length + files.length > 3) {
-      alert('画像は最大3枚までアップロードできます');
+      alert('AI生成用の画像は最大3枚までアップロードできます');
       return;
     }
 
@@ -2771,6 +2832,206 @@
       mimeType: img.mimeType
     }));
   }
+
+  // ================= 商品画像ブロック（Google Drive保存用） =================
+
+  // 商品画像を保存する配列（最大20枚）
+  let productImages = [];
+
+  /**
+   * ページ読み込み時に設定を確認して、商品画像ブロックの表示/非表示を切り替え
+   */
+  function checkProductImageBlockVisibility() {
+    const block = document.getElementById('productImagesBlock');
+
+    // まずlocalStorageから読み込み（高速表示）
+    const localStorageValue = localStorage.getItem('enableProductImageSave');
+    let enabled = localStorageValue === 'true';
+
+    console.log('🔍 商品画像ブロック表示チェック:');
+    console.log('  - localStorage値:', localStorageValue);
+    console.log('  - 有効:', enabled);
+    console.log('  - ブロック要素:', block ? '存在' : '見つからない');
+
+    // UIを即座に更新
+    if (block) {
+      block.style.display = enabled ? '' : 'none';
+      console.log('  - 表示状態:', enabled ? '表示' : '非表示');
+    } else {
+      console.error('❌ productImagesBlock要素が見つかりません');
+      return;
+    }
+
+    // バックグラウンドでサーバーから読み込み（iOS/スマホ対応・バックアップ復元）
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(serverEnabled) {
+          console.log('📥 [商品登録画面] サーバーから読み込み:', serverEnabled);
+
+          // サーバーの値とlocalStorageの値が異なる場合は同期
+          if (serverEnabled !== enabled) {
+            console.log('⚠️ サーバーとlocalStorageの値が異なるため同期します');
+            enabled = serverEnabled;
+
+            // localStorageを更新
+            try {
+              localStorage.setItem('enableProductImageSave', enabled.toString());
+            } catch (e) {
+              console.warn('localStorage更新エラー（iOS/スマホでは制限される場合があります）');
+            }
+
+            // UIを更新
+            if (block) {
+              block.style.display = enabled ? '' : 'none';
+              console.log('  - 同期後の表示状態:', enabled ? '表示' : '非表示');
+            }
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('❌ サーバーからの読み込みエラー:', error);
+        })
+        .loadImageSettingFromServer();
+    }
+  }
+
+  /**
+   * 商品画像アップロード処理
+   * @param {Event} event - ファイル選択イベント
+   */
+  function handleProductImageUpload(event) {
+    const files = event.target.files;
+
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    // 既存の画像数と新規画像数の合計が20を超える場合は警告
+    if (productImages.length + files.length > 20) {
+      alert('商品画像は最大20枚までアップロードできます');
+      return;
+    }
+
+    // 各ファイルをBase64に変換
+    Array.from(files).forEach((file, index) => {
+      // ファイルサイズチェック（10MB制限）
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`${file.name}のサイズが大きすぎます（最大10MB）`);
+        return;
+      }
+
+      // 画像ファイルかチェック
+      if (!file.type.startsWith('image/')) {
+        alert(`${file.name}は画像ファイルではありません`);
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        const base64Data = e.target.result;
+
+        productImages.push({
+          name: file.name,
+          data: base64Data,
+          mimeType: file.type
+        });
+
+        // プレビューを更新
+        displayProductImagesPreview();
+
+        debug.log(`商品画像をアップロードしました: ${file.name}`);
+      };
+
+      reader.onerror = function(error) {
+        console.error('画像の読み込みに失敗しました:', error);
+        alert(`${file.name}の読み込みに失敗しました`);
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * 商品画像プレビューを表示
+   */
+  function displayProductImagesPreview() {
+    const container = document.getElementById('productImagesPreviewContainer');
+    const list = document.getElementById('productImagesPreviewList');
+    const count = document.getElementById('productImageCount');
+
+    if (!container || !list || !count) {
+      console.error('商品画像プレビュー要素が見つかりません');
+      return;
+    }
+
+    // 画像がない場合は非表示
+    if (productImages.length === 0) {
+      container.style.display = 'none';
+      return;
+    }
+
+    // 画像がある場合は表示
+    container.style.display = 'block';
+    count.textContent = productImages.length;
+
+    // プレビューリストをクリア
+    list.innerHTML = '';
+
+    // 各画像のプレビューを作成
+    productImages.forEach((image, index) => {
+      const previewItem = document.createElement('div');
+      previewItem.style.cssText = 'position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 2px solid #e5e7eb;';
+
+      previewItem.innerHTML = `
+        <img src="${image.data}" alt="${image.name}" style="width: 100%; height: 100%; object-fit: cover;">
+        <button
+          type="button"
+          onclick="removeProductImage(${index})"
+          style="position: absolute; top: 4px; right: 4px; background: rgba(239, 68, 68, 0.9); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;"
+          title="削除"
+        >×</button>
+      `;
+
+      list.appendChild(previewItem);
+    });
+  }
+
+  /**
+   * 商品画像を削除
+   * @param {number} index - 削除する画像のインデックス
+   */
+  function removeProductImage(index) {
+    productImages.splice(index, 1);
+    displayProductImagesPreview();
+    debug.log(`商品画像を削除しました (index: ${index})`);
+  }
+
+  /**
+   * すべての商品画像を削除
+   */
+  function clearAllProductImages() {
+    if (productImages.length === 0) {
+      return;
+    }
+
+    if (confirm(`${productImages.length}枚の画像をすべて削除しますか？`)) {
+      productImages = [];
+      displayProductImagesPreview();
+
+      // ファイル入力もリセット
+      const fileInput = document.getElementById('productImagesForSave');
+      if (fileInput) {
+        fileInput.value = '';
+      }
+
+      debug.log('すべての商品画像を削除しました');
+    }
+  }
+
+  // ページ読み込み時に設定を確認
+  document.addEventListener('DOMContentLoaded', function() {
+    checkProductImageBlockVisibility();
+  });
 
   // ================= AI生成機能 =================
 
@@ -3638,15 +3899,9 @@
       d['サイズ(表記)'] = sizeHyoki;
     }
 
-    // === 画像URLを追加（最大3枚） ===
-    if (uploadedImages && uploadedImages.length > 0) {
-      uploadedImages.forEach((img, index) => {
-        if (index < 3) {
-          d[`画像URL${index + 1}`] = img.data; // data URLをそのまま保存
-        }
-      });
-      debug.log(`画像URLを追加しました: ${uploadedImages.length}枚`);
-    }
+    // === 画像はGoogle Driveにアップロード後にJSON形式で保存 ===
+    // 画像アップロードはonSave()関数で処理します
+    // ここでは何もしません（Base64データをスプレッドシートに保存するとエラーになるため）
 
     // === AI生成履歴を追加 ===
     debug.log(`AI_GENERATED_TEXT: "${AI_GENERATED_TEXT ? AI_GENERATED_TEXT.substring(0, 50) + '...' : '(空)'}"`);
@@ -3692,12 +3947,61 @@
     if (ng) {
       return show(ng);
     }
-    show('送信中…');
 
     if (!(google && google.script && google.script.run)) {
       show('NG(ENV): google.script.run が無効です');
       return;
     }
+
+    // 商品画像がある場合は先にGoogle Driveにアップロード
+    if (productImages && productImages.length > 0) {
+      show('商品画像をアップロード中…');
+
+      // 商品IDを取得（棚番号を使用）
+      const productId = d['棚番号'] || 'unknown_' + new Date().getTime();
+
+      // アップロード用データを準備
+      const imagesToUpload = productImages.map(img => ({
+        data: img.data,
+        name: img.name
+      }));
+
+      // Google Driveにアップロード
+      google.script.run
+        .withSuccessHandler(function(uploadResult) {
+          if (uploadResult.success) {
+            debug.log(`商品画像アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
+
+            // JSON形式でURLを保存
+            const imageUrlsJson = JSON.stringify(uploadResult.urls);
+            d['JSON_データ'] = imageUrlsJson;
+
+            // スプレッドシートに保存
+            show('データを保存中…');
+            saveProductToSheet(d);
+          } else {
+            show(`NG(IMAGE_UPLOAD): ${uploadResult.error}`);
+          }
+        })
+        .withFailureHandler(function(error) {
+          show(`NG(IMAGE_UPLOAD): ${error && error.message ? error.message : error}`);
+        })
+        .uploadImagesToGoogleDrive({
+          images: imagesToUpload,
+          productId: productId
+        });
+    } else {
+      // 商品画像がない場合は直接保存
+      show('送信中…');
+      saveProductToSheet(d);
+    }
+  }
+
+  /**
+   * スプレッドシートに商品データを保存
+   * @param {Object} d - 商品データ
+   */
+  function saveProductToSheet(d) {
     google.script.run
       .withSuccessHandler(function(result) {
         show(result);
@@ -3713,20 +4017,34 @@
         console.log('保存成功：開閉状態と管理番号配置を保存しました');
 
         // === 保存成功後に画像データとAI生成テキストをクリア ===
+        // AI生成用画像（uploadedImages）をクリア
         if (uploadedImages && uploadedImages.length > 0) {
           uploadedImages = [];
-          // プレビューも非表示
           const container = document.getElementById('imagePreviewContainer');
           if (container) {
             container.style.display = 'none';
           }
-          // ファイル入力もリセット
           const fileInput = document.getElementById('productImages');
           if (fileInput) {
             fileInput.value = '';
           }
-          debug.log('保存成功後に画像データをクリアしました');
+          debug.log('保存成功後にAI生成用画像データをクリアしました');
         }
+
+        // 商品画像（productImages）をクリア
+        if (productImages && productImages.length > 0) {
+          productImages = [];
+          const container = document.getElementById('productImagesPreviewContainer');
+          if (container) {
+            container.style.display = 'none';
+          }
+          const fileInput = document.getElementById('productImagesForSave');
+          if (fileInput) {
+            fileInput.value = '';
+          }
+          debug.log('保存成功後に商品画像データをクリアしました');
+        }
+
         if (AI_GENERATED_TEXT) {
           AI_GENERATED_TEXT = '';
           debug.log('保存成功後にAI生成テキストをクリアしました');
@@ -5549,6 +5867,35 @@ if (staffSelect) {
   }
 
   /**
+   * AI生成サブブロックの折りたたみ切り替え
+   */
+  function toggleAiSubBlock(header) {
+    const subBlock = header.closest('.ai-sub-block');
+    if (!subBlock) return;
+
+    const content = subBlock.querySelector('.ai-sub-content');
+    const button = subBlock.querySelector('.ai-sub-collapse-btn');
+    if (!content || !button) return;
+
+    const isOpen = content.style.display !== 'none';
+
+    if (isOpen) {
+      content.style.display = 'none';
+      button.textContent = '▶';
+    } else {
+      content.style.display = 'block';
+      button.textContent = '▼';
+    }
+  }
+ else {
+      content.style.display = 'block';
+      button.textContent = '▼';
+    }
+
+    // 開閉状態の保存は「保存」ボタン押下時に行う
+  }
+
+  /**
    * 商品名ブロックの開閉トグル
    * @param {HTMLElement} button - クリックされた開閉ボタン
    */
@@ -5894,4 +6241,78 @@ if (staffSelect) {
   } else {
     setTimeout(initFirebaseMessaging, 2000);
   }
+
+  // ================= 設定変更リスナー（postMessage） =================
+
+  /**
+   * localStorageキー定義（sidebar_config.htmlと同じ）
+   */
+  const CONFIG_STORAGE_KEYS = {
+    CONDITION_BUTTONS: 'rebornConfig_conditionButtons',
+    HASHTAG: 'rebornConfig_hashtag',
+    DISCOUNT: 'rebornConfig_discount',
+    SHIPPING_DEFAULT: 'rebornConfig_shippingDefault',
+    PROCURE_LISTING_DEFAULT: 'rebornConfig_procureListingDefault',
+    MANAGEMENT_NUMBER: 'rebornConfig_managementNumber',
+    SALESWORD: 'rebornConfig_salesword',
+    AI_SETTINGS: 'rebornConfig_aiSettings',
+    DESIGN_THEME: 'rebornTheme',
+    IMAGE_SAVE: 'enableProductImageSave'
+  };
+
+  /**
+   * localStorageから設定を読み込んでCACHED_CONFIGを更新
+   */
+  function reloadConfigFromLocalStorage() {
+    try {
+      console.log('🔄 localStorageから設定を再読み込み中...');
+
+      // グローバルCACHED_CONFIG変数を更新
+      if (!CACHED_CONFIG) {
+        CACHED_CONFIG = {};
+      }
+
+      const conditionButtons = localStorage.getItem(CONFIG_STORAGE_KEYS.CONDITION_BUTTONS);
+      const hashtag = localStorage.getItem(CONFIG_STORAGE_KEYS.HASHTAG);
+      const discount = localStorage.getItem(CONFIG_STORAGE_KEYS.DISCOUNT);
+      const shippingDefault = localStorage.getItem(CONFIG_STORAGE_KEYS.SHIPPING_DEFAULT);
+      const procureListingDefault = localStorage.getItem(CONFIG_STORAGE_KEYS.PROCURE_LISTING_DEFAULT);
+      const managementNumber = localStorage.getItem(CONFIG_STORAGE_KEYS.MANAGEMENT_NUMBER);
+      const salesword = localStorage.getItem(CONFIG_STORAGE_KEYS.SALESWORD);
+      const aiSettings = localStorage.getItem(CONFIG_STORAGE_KEYS.AI_SETTINGS);
+      const theme = localStorage.getItem(CONFIG_STORAGE_KEYS.DESIGN_THEME);
+
+      if (conditionButtons) CACHED_CONFIG['商品状態ボタン'] = JSON.parse(conditionButtons);
+      if (hashtag) CACHED_CONFIG['ハッシュタグ'] = JSON.parse(hashtag);
+      if (discount) CACHED_CONFIG['割引情報'] = JSON.parse(discount);
+      if (shippingDefault) CACHED_CONFIG['配送デフォルト'] = JSON.parse(shippingDefault);
+      if (procureListingDefault) CACHED_CONFIG['仕入出品デフォルト'] = JSON.parse(procureListingDefault);
+      if (managementNumber) CACHED_CONFIG['管理番号設定'] = JSON.parse(managementNumber);
+      if (salesword) CACHED_CONFIG['よく使うセールスワード'] = JSON.parse(salesword);
+      if (aiSettings) CACHED_CONFIG['AI生成設定'] = JSON.parse(aiSettings);
+      if (theme) CACHED_CONFIG['デザインテーマ'] = theme;
+
+      console.log('✅ CACHED_CONFIGを更新しました:', CACHED_CONFIG);
+
+      // 商品画像ブロックの表示/非表示を更新
+      checkProductImageBlockVisibility();
+
+      console.log('✅ 設定を再読み込みしました');
+    } catch (e) {
+      console.error('❌ localStorage読み込みエラー:', e);
+    }
+  }
+
+  /**
+   * postMessageリスナー（設定変更通知を受け取る）
+   */
+  window.addEventListener('message', function(event) {
+    // configChangedメッセージを受け取ったら設定を再読み込み
+    if (event.data && event.data.type === 'configChanged') {
+      console.log('📥 設定変更通知を受信しました');
+      reloadConfigFromLocalStorage();
+    }
+  });
+
+  console.log('✅ 設定変更リスナーを登録しました');
 </script>
