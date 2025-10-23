@@ -68,9 +68,9 @@
 - [x] resizeImage関数の実装（sp_scripts.html, 行2911-2953）
 - [x] handleProductImageUpload関数を非同期処理に変更（行3049-3070）
 - [x] Canvas APIで横幅800px、JPEG品質70%にリサイズ
-- [ ] Gitコミット
-- [ ] clasp push
-- [ ] 手動デプロイ
+- [x] Gitコミット
+- [x] clasp push
+- [x] 手動デプロイ
 - [ ] 本番環境でのパフォーマンステスト
 
 #### 📝 テスト結果

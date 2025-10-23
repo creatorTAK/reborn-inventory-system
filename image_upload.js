@@ -26,21 +26,28 @@ function getOrCreateImageFolder_() {
 
 /**
  * 商品ごとのサブフォルダを取得または作成
- * @param {string} productId - 商品ID（棚番号など）
+ * @param {string} productId - 商品ID（管理番号）
  * @returns {Folder} 商品専用フォルダ
  */
 function getOrCreateProductFolder_(productId) {
   const rootFolder = getOrCreateImageFolder_();
-  const subFolderName = `商品_${productId}_${new Date().getTime()}`;
+  let folderName = productId;
 
-  // 既存のフォルダを検索（同じ商品IDの場合）
-  const existingFolders = rootFolder.getFoldersByName(subFolderName);
-  if (existingFolders.hasNext()) {
-    return existingFolders.next();
+  // 同じ名前のフォルダが既に存在する場合は番号を付ける
+  let counter = 1;
+  while (true) {
+    const existingFolders = rootFolder.getFoldersByName(folderName);
+    if (!existingFolders.hasNext()) {
+      // フォルダが存在しない場合は作成
+      const newFolder = rootFolder.createFolder(folderName);
+      // フォルダレベルで共有設定（リンクを知っている全員が閲覧可能）
+      newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      return newFolder;
+    }
+    // フォルダが既に存在する場合は番号を付けて再試行
+    counter++;
+    folderName = `${productId}_${counter}`;
   }
-
-  // 新規作成
-  return rootFolder.createFolder(subFolderName);
 }
 
 /**
@@ -107,22 +114,15 @@ function uploadImagesToGoogleDrive(params) {
         // Google Driveにアップロード
         const file = folder.createFile(blob);
 
-        // 共有設定（リンクを知っている全員が閲覧可能）
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-        // URL情報を保存
+        // URL情報を保存（フォルダレベルで共有設定済み）
         uploadedUrls.push({
           url: file.getUrl(),
           id: file.getId(),
           name: fileName,
-          forAI: img.forAI || false,
-          uploadedAt: new Date().toISOString()
+          forAI: img.forAI || false
         });
 
-        Logger.log(`画像アップロード成功: ${fileName} (${index + 1}/${params.images.length})`);
-
       } catch (err) {
-        Logger.log(`画像${index + 1}のアップロード失敗: ${err.message}`);
         // 個別の画像エラーは記録するが、処理は継続
         uploadedUrls.push({
           error: err.message,
@@ -143,7 +143,6 @@ function uploadImagesToGoogleDrive(params) {
     };
 
   } catch (error) {
-    Logger.log(`画像アップロードエラー: ${error.message}`);
     return {
       success: false,
       error: error.message,

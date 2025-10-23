@@ -3017,7 +3017,7 @@
    * 商品画像アップロード処理
    * @param {Event} event - ファイル選択イベント
    */
-  function handleProductImageUpload(event) {
+  async function handleProductImageUpload(event) {
     const files = event.target.files;
 
     if (!files || files.length === 0) {
@@ -3030,52 +3030,70 @@
       return;
     }
 
-    // 各ファイルをBase64に変換
-    Array.from(files).forEach((file, index) => {
-      // ファイルサイズチェック（10MB制限）
-      if (file.size > 10 * 1024 * 1024) {
-        alert(`${file.name}のサイズが大きすぎます（最大10MB）`);
-        return;
-      }
-
-      // 画像ファイルかチェック
-      if (!file.type.startsWith('image/')) {
-        alert(`${file.name}は画像ファイルではありません`);
-        return;
-      }
-
-      const reader = new FileReader();
-
-      reader.onload = async function(e) {
-        const base64Data = e.target.result;
-
-        try {
-          // 画像を自動リサイズ
-          const resizedBase64 = await resizeImage(base64Data, file.name);
-
-          productImages.push({
-            name: file.name,
-            data: resizedBase64,
-            mimeType: 'image/jpeg' // リサイズ後はJPEGになる
-          });
-
-          // プレビューを更新
-          displayProductImagesPreview();
-
-          debug.log(`商品画像をアップロードしました（リサイズ済み）: ${file.name}`);
-        } catch (error) {
-          console.error('画像のリサイズに失敗しました:', error);
-          alert(`${file.name}の処理に失敗しました`);
+    // 各ファイルを並列処理するPromise配列を作成
+    const processPromises = Array.from(files).map((file) => {
+      return new Promise(async (resolve, reject) => {
+        // ファイルサイズチェック（10MB制限）
+        if (file.size > 10 * 1024 * 1024) {
+          alert(`${file.name}のサイズが大きすぎます（最大10MB）`);
+          reject(new Error('File too large'));
+          return;
         }
-      };
 
-      reader.onerror = function(error) {
-        console.error('画像の読み込みに失敗しました:', error);
-        alert(`${file.name}の読み込みに失敗しました`);
-      };
+        // 画像ファイルかチェック
+        if (!file.type.startsWith('image/')) {
+          alert(`${file.name}は画像ファイルではありません`);
+          reject(new Error('Not an image file'));
+          return;
+        }
 
-      reader.readAsDataURL(file);
+        const reader = new FileReader();
+
+        reader.onload = async function(e) {
+          const base64Data = e.target.result;
+
+          try {
+            // 画像を自動リサイズ
+            const resizedBase64 = await resizeImage(base64Data, file.name);
+
+            resolve({
+              name: file.name,
+              data: resizedBase64,
+              mimeType: 'image/jpeg' // リサイズ後はJPEGになる
+            });
+
+            debug.log(`商品画像をアップロードしました（リサイズ済み）: ${file.name}`);
+          } catch (error) {
+            console.error('画像のリサイズに失敗しました:', error);
+            alert(`${file.name}の処理に失敗しました`);
+            reject(error);
+          }
+        };
+
+        reader.onerror = function(error) {
+          console.error('画像の読み込みに失敗しました:', error);
+          alert(`${file.name}の読み込みに失敗しました`);
+          reject(error);
+        };
+
+        reader.readAsDataURL(file);
+      });
     });
+
+    try {
+      // 全ての画像を並列処理
+      const processedImages = await Promise.all(processPromises);
+
+      // 成功した画像のみを追加
+      productImages.push(...processedImages.filter(img => img != null));
+
+      // プレビューを一度だけ更新
+      displayProductImagesPreview();
+
+      debug.log(`${processedImages.length}枚の画像を並列処理しました`);
+    } catch (error) {
+      console.error('画像処理中にエラーが発生しました:', error);
+    }
   }
 
   /**

@@ -30,16 +30,13 @@ const PRODUCT_FIELDS = [
   '登録日時',
   '最終更新者',
   '更新日時',
-  '画像URL1',
-  '画像URL2',
-  '画像URL3',
 
   // === Phase 4: 将来使用（今は空欄） ===
   'AI生成履歴',      // JSON形式
   'メルカリURL',
   '競合価格履歴',    // JSON形式
   'AIタグ',
-  'JSON_データ',     // Agent SDK用
+  'JSON_データ',     // 商品画像URL（JSON形式で最大20枚）
   'Agent分析結果'    // JSON形式
 ];
 
@@ -258,11 +255,7 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
     // === 登録者・更新者情報を記録 ===
     recordUserActivity(sh, targetRow, true); // true = 新規登録
 
-    let message = mgmtKey ? `OK: 管理番号='${mgmtKey}' を登録しました` : `OK: 登録しました`;
-
-    if (form['商品状態詳細']) {
-      message += ` ※商品状態(詳細)も保存`;
-    }
+    let message = '登録完了しました';
 
     // 🔔 商品登録完了の通知を送信
     try {
