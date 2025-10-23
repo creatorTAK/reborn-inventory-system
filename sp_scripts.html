@@ -2895,48 +2895,6 @@
   }
 
   /**
-   * 画像を自動リサイズ（横幅800px、JPEG品質70%）
-   * @param {string} base64Data - 元のBase64画像データ
-   * @param {string} fileName - ファイル名
-   * @returns {Promise<string>} リサイズ後のBase64データ
-   */
-  function resizeImage(base64Data, fileName) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-
-      img.onload = function() {
-        const MAX_WIDTH = 800;
-        let width = img.width;
-        let height = img.height;
-
-        // 横幅が800pxより大きい場合のみリサイズ
-        if (width > MAX_WIDTH) {
-          height = Math.round((height * MAX_WIDTH) / width);
-          width = MAX_WIDTH;
-        }
-
-        // Canvasでリサイズ
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // JPEG品質70%で再エンコード
-        const resizedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-
-        resolve(resizedBase64);
-      };
-
-      img.onerror = function() {
-        reject(new Error('画像の読み込みに失敗しました'));
-      };
-
-      img.src = base64Data;
-    });
-  }
-
-  /**
    * 商品画像アップロード処理
    * @param {Event} event - ファイル選択イベント
    */
@@ -2953,7 +2911,7 @@
       return;
     }
 
-    // 各ファイルをBase64に変換してリサイズ
+    // 各ファイルをBase64に変換
     Array.from(files).forEach((file, index) => {
       // ファイルサイズチェック（10MB制限）
       if (file.size > 10 * 1024 * 1024) {
@@ -2969,25 +2927,19 @@
 
       const reader = new FileReader();
 
-      reader.onload = async function(e) {
+      reader.onload = function(e) {
         const base64Data = e.target.result;
 
-        try {
-          // 画像を自動リサイズ
-          const resizedBase64 = await resizeImage(base64Data, file.name);
+        productImages.push({
+          name: file.name,
+          data: base64Data,
+          mimeType: file.type
+        });
 
-          productImages.push({
-            name: file.name,
-            data: resizedBase64,
-            mimeType: 'image/jpeg' // リサイズ後はJPEGになる
-          });
+        // プレビューを更新
+        displayProductImagesPreview();
 
-          // プレビューを更新
-          displayProductImagesPreview();
-        } catch (error) {
-          console.error('画像のリサイズに失敗しました:', error);
-          alert(`${file.name}の処理に失敗しました`);
-        }
+        debug.log(`商品画像をアップロードしました: ${file.name}`);
       };
 
       reader.onerror = function(error) {
