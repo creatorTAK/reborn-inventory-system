@@ -39,16 +39,16 @@
 - `web_push.js` (sendPushNotification関数)
 - `product.js` (saveProduct関数 - 通知送信トリガー)
 
-#### 🔍 調査項目
-- [ ] web_push.jsのsendPushNotification関数を確認
-- [ ] 通知送信が重複して呼ばれていないか
-- [ ] FCMトークン登録状況を確認（同じ端末に複数トークン？）
-- [ ] 「FCM通知登録」シートのデータ確認
+#### 🔍 調査結果
+- [x] web_push.jsのsendFCMToTokenV1関数を確認
+- [x] **原因特定**: `notification`と`data`の両方を送信していた
+  - バックグラウンド: FCMが`notification`を自動表示（1個目） + Service Workerが`data`から表示（2個目）
+  - フォアグラウンド: `onMessage`ハンドラーが手動表示（1個のみ）
 
-#### ✏️ 修正内容
-- [ ] 原因特定
-- [ ] 修正実装
-- [ ] テスト実行
+#### 🔧 修正内容
+- [x] web_push.js: `notification`フィールドを削除（行310-313）
+- [x] `data`フィールドのみ送信に変更
+- [x] 重複した`getActiveFCMTokens`関数を削除
 - [ ] Gitコミット
 - [ ] clasp push
 - [ ] 手動デプロイ
