@@ -2895,6 +2895,48 @@
   }
 
   /**
+   * 画像を自動リサイズ（横幅800px、JPEG品質70%）
+   * @param {string} base64Data - 元のBase64画像データ
+   * @param {string} fileName - ファイル名
+   * @returns {Promise<string>} リサイズ後のBase64データ
+   */
+  function resizeImage(base64Data, fileName) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+
+      img.onload = function() {
+        const MAX_WIDTH = 800;
+        let width = img.width;
+        let height = img.height;
+
+        // 横幅が800pxより大きい場合のみリサイズ
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        // Canvasでリサイズ
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // JPEG品質70%で再エンコード
+        const resizedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+
+        resolve(resizedBase64);
+      };
+
+      img.onerror = function() {
+        reject(new Error('画像の読み込みに失敗しました'));
+      };
+
+      img.src = base64Data;
+    });
+  }
+
+  /**
    * 商品画像アップロード処理
    * @param {Event} event - ファイル選択イベント
    */
@@ -2911,7 +2953,7 @@
       return;
     }
 
-    // 各ファイルをBase64に変換
+    // 各ファイルをBase64に変換してリサイズ
     Array.from(files).forEach((file, index) => {
       // ファイルサイズチェック（10MB制限）
       if (file.size > 10 * 1024 * 1024) {
@@ -2927,19 +2969,25 @@
 
       const reader = new FileReader();
 
-      reader.onload = function(e) {
+      reader.onload = async function(e) {
         const base64Data = e.target.result;
 
-        productImages.push({
-          name: file.name,
-          data: base64Data,
-          mimeType: file.type
-        });
+        try {
+          // 画像を自動リサイズ
+          const resizedBase64 = await resizeImage(base64Data, file.name);
 
-        // プレビューを更新
-        displayProductImagesPreview();
+          productImages.push({
+            name: file.name,
+            data: resizedBase64,
+            mimeType: 'image/jpeg' // リサイズ後はJPEGになる
+          });
 
-        debug.log(`商品画像をアップロードしました: ${file.name}`);
+          // プレビューを更新
+          displayProductImagesPreview();
+        } catch (error) {
+          console.error('画像のリサイズに失敗しました:', error);
+          alert(`${file.name}の処理に失敗しました`);
+        }
       };
 
       reader.onerror = function(error) {
@@ -3955,10 +4003,12 @@
 
     // 商品画像がある場合は先にGoogle Driveにアップロード
     if (productImages && productImages.length > 0) {
-      show('商品画像をアップロード中…');
+      // ローディングオーバーレイを表示
+      showLoadingOverlay('データを保存中...', `画像をアップロード中... (0/${productImages.length})`);
+      updateLoadingProgress(10, `画像をアップロード中... (0/${productImages.length})`);
 
-      // 商品IDを取得（棚番号を使用）
-      const productId = d['棚番号'] || 'unknown_' + new Date().getTime();
+      // 商品IDを取得（管理番号を使用）
+      const productId = d['管理番号'] || 'unknown_' + new Date().getTime();
 
       // アップロード用データを準備
       const imagesToUpload = productImages.map(img => ({
@@ -3976,23 +4026,26 @@
             const imageUrlsJson = JSON.stringify(uploadResult.urls);
             d['JSON_データ'] = imageUrlsJson;
 
-            // スプレッドシートに保存
-            show('データを保存中…');
+            // スプレッドシートに保存（進捗70%）
+            updateLoadingProgress(70, 'スプレッドシートに保存中...');
             saveProductToSheet(d);
           } else {
+            hideLoadingOverlay();
             show(`NG(IMAGE_UPLOAD): ${uploadResult.error}`);
           }
         })
         .withFailureHandler(function(error) {
+          hideLoadingOverlay();
           show(`NG(IMAGE_UPLOAD): ${error && error.message ? error.message : error}`);
         })
-        .uploadImagesToGoogleDrive({
+        .uploadImagesToR2({
           images: imagesToUpload,
           productId: productId
         });
     } else {
       // 商品画像がない場合は直接保存
-      show('送信中…');
+      showLoadingOverlay('データを保存中...', 'スプレッドシートに保存中...');
+      updateLoadingProgress(50, 'スプレッドシートに保存中...');
       saveProductToSheet(d);
     }
   }
@@ -4004,53 +4057,63 @@
   function saveProductToSheet(d) {
     google.script.run
       .withSuccessHandler(function(result) {
-        show(result);
-        // 保存成功後も商品の説明エリアの高さを保持
-        const descTextarea = document.getElementById('商品の説明');
-        if (descTextarea) {
-          autoResizeTextarea(descTextarea);
-        }
-        // 保存成功後に開閉状態と管理番号配置を保存
-        saveDescriptionBlocksCollapseState();
-        saveTitleBlocksCollapseState();
-        saveManagementNumberPlacementSettings();
-        console.log('保存成功：開閉状態と管理番号配置を保存しました');
+        // 100%の進捗を表示
+        updateLoadingProgress(100, '保存完了！');
 
-        // === 保存成功後に画像データとAI生成テキストをクリア ===
-        // AI生成用画像（uploadedImages）をクリア
-        if (uploadedImages && uploadedImages.length > 0) {
-          uploadedImages = [];
-          const container = document.getElementById('imagePreviewContainer');
-          if (container) {
-            container.style.display = 'none';
-          }
-          const fileInput = document.getElementById('productImages');
-          if (fileInput) {
-            fileInput.value = '';
-          }
-          debug.log('保存成功後にAI生成用画像データをクリアしました');
-        }
+        // 500ms後にオーバーレイを非表示にして既存の処理を続行
+        setTimeout(() => {
+          hideLoadingOverlay();
 
-        // 商品画像（productImages）をクリア
-        if (productImages && productImages.length > 0) {
-          productImages = [];
-          const container = document.getElementById('productImagesPreviewContainer');
-          if (container) {
-            container.style.display = 'none';
+          show(''); // メッセージをクリア
+          alert(result);
+          // 保存成功後も商品の説明エリアの高さを保持
+          const descTextarea = document.getElementById('商品の説明');
+          if (descTextarea) {
+            autoResizeTextarea(descTextarea);
           }
-          const fileInput = document.getElementById('productImagesForSave');
-          if (fileInput) {
-            fileInput.value = '';
-          }
-          debug.log('保存成功後に商品画像データをクリアしました');
-        }
+          // 保存成功後に開閉状態と管理番号配置を保存
+          saveDescriptionBlocksCollapseState();
+          saveTitleBlocksCollapseState();
+          saveManagementNumberPlacementSettings();
+          console.log('保存成功：開閉状態と管理番号配置を保存しました');
 
-        if (AI_GENERATED_TEXT) {
-          AI_GENERATED_TEXT = '';
-          debug.log('保存成功後にAI生成テキストをクリアしました');
-        }
+          // === 保存成功後に画像データとAI生成テキストをクリア ===
+          // AI生成用画像（uploadedImages）をクリア
+          if (uploadedImages && uploadedImages.length > 0) {
+            uploadedImages = [];
+            const container = document.getElementById('imagePreviewContainer');
+            if (container) {
+              container.style.display = 'none';
+            }
+            const fileInput = document.getElementById('productImages');
+            if (fileInput) {
+              fileInput.value = '';
+            }
+            debug.log('保存成功後にAI生成用画像データをクリアしました');
+          }
+
+          // 商品画像（productImages）をクリア
+          if (productImages && productImages.length > 0) {
+            productImages = [];
+            const container = document.getElementById('productImagesPreviewContainer');
+            if (container) {
+              container.style.display = 'none';
+            }
+            const fileInput = document.getElementById('productImagesForSave');
+            if (fileInput) {
+              fileInput.value = '';
+            }
+            debug.log('保存成功後に商品画像データをクリアしました');
+          }
+
+          if (AI_GENERATED_TEXT) {
+            AI_GENERATED_TEXT = '';
+            debug.log('保存成功後にAI生成テキストをクリアしました');
+          }
+        }, 500);
       })
       .withFailureHandler(function(error) {
+        hideLoadingOverlay();
         show(`NG(UNKNOWN): ${error && error.message ? error.message : error}`);
       })
       .saveProduct(d);
@@ -6308,4 +6371,83 @@ if (staffSelect) {
   });
 
   console.log('✅ 設定変更リスナーを登録しました');
+
+  // ==================== ローディングオーバーレイ ====================
+
+  /**
+   * ローディングオーバーレイを初期化
+   */
+  function initLoadingOverlay() {
+    // オーバーレイHTMLを動的に生成
+    const overlayHTML = `
+      <div id="loadingOverlay">
+        <div class="loading-content">
+          <div class="loading-spinner"></div>
+          <div class="loading-title" id="loadingTitle">データを保存中...</div>
+          <div class="loading-message" id="loadingMessage">しばらくお待ちください</div>
+          <div class="loading-progress">
+            <div class="loading-progress-bar" id="loadingProgressBar"></div>
+          </div>
+          <div class="loading-progress-text" id="loadingProgressText">0%</div>
+        </div>
+      </div>
+    `;
+
+    // bodyに追加
+    document.body.insertAdjacentHTML('beforeend', overlayHTML);
+    console.log('✅ ローディングオーバーレイを初期化しました');
+  }
+
+  /**
+   * ローディングオーバーレイを表示
+   * @param {string} title - タイトルテキスト（デフォルト: "データを保存中..."）
+   * @param {string} message - メッセージテキスト（デフォルト: "しばらくお待ちください"）
+   */
+  function showLoadingOverlay(title = 'データを保存中...', message = 'しばらくお待ちください') {
+    const overlay = document.getElementById('loadingOverlay');
+    const titleEl = document.getElementById('loadingTitle');
+    const messageEl = document.getElementById('loadingMessage');
+
+    if (overlay) {
+      titleEl.textContent = title;
+      messageEl.textContent = message;
+      overlay.classList.add('active');
+      updateLoadingProgress(0, '0%');
+    }
+  }
+
+  /**
+   * ローディングオーバーレイを非表示
+   */
+  function hideLoadingOverlay() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+      overlay.classList.remove('active');
+    }
+  }
+
+  /**
+   * ローディング進捗を更新
+   * @param {number} percent - 進捗率（0-100）
+   * @param {string} text - 進捗テキスト（例: "画像アップロード中 (2/3)"）
+   */
+  function updateLoadingProgress(percent, text) {
+    const progressBar = document.getElementById('loadingProgressBar');
+    const progressText = document.getElementById('loadingProgressText');
+    const messageEl = document.getElementById('loadingMessage');
+
+    if (progressBar) {
+      progressBar.style.width = percent + '%';
+    }
+    if (progressText) {
+      progressText.textContent = text;
+    }
+    if (messageEl && text !== `${Math.round(percent)}%`) {
+      messageEl.textContent = text;
+    }
+  }
+
+  // DOMContentLoaded後にオーバーレイを初期化
+  document.addEventListener('DOMContentLoaded', initLoadingOverlay);
+
 </script>
