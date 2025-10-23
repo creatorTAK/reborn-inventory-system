@@ -4103,12 +4103,29 @@
     if (productImages && productImages.length > 0) {
       // ローディングオーバーレイを表示
       showLoadingOverlay('登録中...', 'しばらくお待ちください');
-      updateLoadingProgress(50, '登録中...');
+      updateLoadingProgress(0, '登録中...');
 
-      // 3秒後に自動的にオーバーレイを閉じる（楽観的UI）
-      setTimeout(() => {
-        hideLoadingOverlay();
-      }, 3000);
+      // 3秒間でプログレスバーを0%→100%にアニメーション
+      const startTime = Date.now();
+      const duration = 3000; // 3秒
+
+      const animateProgress = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min((elapsed / duration) * 100, 100);
+
+        updateLoadingProgress(progress, '登録中...');
+
+        if (progress < 100) {
+          requestAnimationFrame(animateProgress);
+        } else {
+          // 100%に達したら自動的に閉じる
+          setTimeout(() => {
+            hideLoadingOverlay();
+          }, 200); // 100%を少し見せる
+        }
+      };
+
+      requestAnimationFrame(animateProgress);
 
       // 商品IDを取得（管理番号を使用）
       const productId = d['管理番号'] || 'unknown_' + new Date().getTime();
