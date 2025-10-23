@@ -15,6 +15,82 @@
 
 ## 📚 完了Issue一覧
 
+## BUG-002 | バグ修正: clasp push時にdocs/をGASに誤プッシュしてシステムクラッシュ ✅ DONE (完了日: 2025-10-23)
+
+### 📌 基本情報
+- [x] カテゴリ: バグ修正（重大）
+- [x] 優先度: 最高
+- [x] 影響範囲: システム全体（アプリ起動不能）
+- [x] 発見日: 2025-10-23
+
+### 🐛 不具合内容
+`.claspignore`に`docs/**`が含まれていなかったため、`clasp push`実行時に：
+1. ブラウザ用Service Worker（docs/firebase-messaging-sw.js等）がGASにプッシュされた
+2. GASはサーバーサイド環境なので`importScripts`関数が存在しない
+3. 「ReferenceError: importScripts is not defined」エラーでアプリ全体が起動不能
+
+### ✅ 期待動作
+- docs/配下のファイルはGASにプッシュされない
+- clasp push前に必ず.claspignoreを検証する
+
+### 📍 関連ファイル
+- `.claspignore`
+- `docs/firebase-messaging-sw.js`（他6ファイル）
+
+### ✏️ 修正内容
+- [x] .claspignoreに`docs/**`を追加
+- [x] GASエディタからdocs/配下の7ファイルを手動削除
+- [x] 手動デプロイ
+- [x] アプリ復旧確認
+
+### 📝 確認結果
+- [x] アプリ正常起動
+- [x] デグレード確認: OK
+
+### 🔒 再発防止策
+- [x] Serena Memoryに「MANDATORY_BEFORE_CLASP_OPERATIONS」作成
+- [x] .claspignore確定版作成
+
+---
+
+## BUG-001 | バグ修正: フォアグラウンド通知が表示されない ✅ DONE (完了日: 2025-10-23)
+
+### 📌 基本情報
+- [x] カテゴリ: バグ修正
+- [x] 優先度: 高
+- [x] 影響範囲: FCM通知機能
+- [x] 発見日: 2025-10-23
+
+### 🐛 不具合内容
+商品登録時、操作端末でフォアグラウンド通知が表示されない。
+- バックグラウンド通知：動作OK
+- フォアグラウンド通知：表示されない
+
+**原因：**
+web_push.jsがFCMメッセージとして「dataのみ」を送信していた。dataメッセージはフォアグラウンドで自動表示されない。
+
+### ✅ 期待動作
+- 操作端末でもフォアグラウンド通知が表示される
+- notification + data の両方を送信
+
+### 📍 関連ファイル
+- `web_push.js` (sendFCMToTokenV1関数, 300-327行目)
+- `sp_scripts.html` (onMessage()ハンドラー, 6317-6338行目)
+
+### ✏️ 修正内容
+- [x] web_push.jsのFCMメッセージに`notification`フィールドを追加
+- [x] `notification + data`の両方を送信する形式に変更
+- [x] clasp push
+- [x] 手動デプロイ
+- [x] 動作確認
+
+### 📝 確認結果
+- [x] フォアグラウンド通知表示OK
+- [x] バックグラウンド通知も引き続き動作
+- [x] デグレード確認: OK
+
+---
+
 ## UI-003 | バグ修正: 設定画面から戻ると色が旧バージョンに戻る ✅ DONE (完了日: 2025-10-22)
 
 ### 📌 基本情報
