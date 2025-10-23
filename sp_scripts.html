@@ -224,6 +224,35 @@
     }
   }
 
+  /**
+   * 楽観的UI: ユーザーに画面を閉じる選択肢を提供
+   * 画像アップロードが続行中でも画面を閉じられるようにする
+   */
+  function allowEarlyClose() {
+    const titleEl = document.getElementById('loadingTitle');
+    const messageEl = document.getElementById('loadingMessage');
+    const loadingContent = document.querySelector('.loading-content');
+
+    if (titleEl) {
+      titleEl.textContent = '登録を受け付けました';
+    }
+    if (messageEl) {
+      messageEl.textContent = '画像のアップロードはバックグラウンドで続行中です';
+    }
+
+    // 「閉じる」ボタンを追加（既に存在しない場合のみ）
+    if (loadingContent && !document.getElementById('earlyCloseButton')) {
+      const closeButton = document.createElement('button');
+      closeButton.id = 'earlyCloseButton';
+      closeButton.textContent = '閉じる';
+      closeButton.style.cssText = 'margin-top: 20px; padding: 10px 30px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: 500;';
+      closeButton.onclick = function() {
+        hideLoadingOverlay();
+      };
+      loadingContent.appendChild(closeButton);
+    }
+  }
+
   // 配送デフォルト設定（設定マスタから読み込む）
   let SHIPPING_DEFAULTS = {
     '配送料の負担': '送料込み(出品者負担)',
@@ -4103,6 +4132,11 @@
       // ローディングオーバーレイを表示
       showLoadingOverlay('データを保存中...', `画像をアップロード中... (0/${productImages.length})`);
       updateLoadingProgress(10, `画像をアップロード中... (0/${productImages.length})`);
+
+      // 3秒後に「閉じる」ボタンを表示（楽観的UI）
+      setTimeout(() => {
+        allowEarlyClose();
+      }, 3000);
 
       // 商品IDを取得（管理番号を使用）
       const productId = d['管理番号'] || 'unknown_' + new Date().getTime();
