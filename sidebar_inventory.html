@@ -1,76 +1,548 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8">
-<style>
-  body{font-family:system-ui,-apple-system,Roboto;margin:12px}
-  h3{margin:0 0 12px}
-  label{display:block;margin:8px 0 4px;font-size:12px;color:#555}
-  input,select,button{width:100%;box-sizing:border-box;padding:8px}
-  button{border:1px solid #ccc;background:#fff;border-radius:6px;cursor:pointer}
-  button:hover{background:#f5f5f5}
-  .row{display:flex;gap:8px}
-  .row>*{flex:1}
-  #msg{margin-top:8px;font-size:12px;white-space:pre-wrap}
-</style></head>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      padding: 16px;
+      background-color: #f8f9fa;
+    }
+    .dashboard-card {
+      margin-bottom: 16px;
+    }
+    .status-badge {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+    }
+    .product-card {
+      margin-bottom: 12px;
+      transition: transform 0.2s;
+    }
+    .product-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .product-image {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 8px 8px 0 0;
+    }
+    .filter-section {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .pagination-container {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+    }
+  </style>
+</head>
 <body>
-  <h3>在庫管理（最小）</h3>
-
-  <label>管理番号 (例: AA-1013)</label>
-  <input id="code" placeholder="AA-1013">
-
-  <div class="row" style="margin-top:8px;">
-    <button id="btnJump">検索/ジャンプ</button>
-    <button id="btnWho">担当者表示</button>
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
   </div>
 
-  <label style="margin-top:12px;">担当者（読み取り専用）</label>
-  <input id="person" readonly placeholder="検索後に自動表示">
+  <!-- ダッシュボード -->
+  <div class="dashboard-card" id="dashboardSection">
+    <h5 class="mb-3">📊 在庫状況ダッシュボード</h5>
+    <div class="row g-2">
+      <div class="col-6 col-md-4">
+        <div class="card text-center">
+          <div class="card-body py-2">
+            <div class="text-muted small">総商品数</div>
+            <h5 class="mb-0" id="statTotal">-</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4">
+        <div class="card text-center">
+          <div class="card-body py-2">
+            <div class="text-muted small">登録済み</div>
+            <h5 class="mb-0" id="statRegistered">-</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4">
+        <div class="card text-center">
+          <div class="card-body py-2">
+            <div class="text-muted small">出品準備中</div>
+            <h5 class="mb-0" id="statPreparing">-</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4">
+        <div class="card text-center bg-primary text-white">
+          <div class="card-body py-2">
+            <div class="small">出品中</div>
+            <h5 class="mb-0" id="statListed">-</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4">
+        <div class="card text-center bg-success text-white">
+          <div class="card-body py-2">
+            <div class="small">販売済み</div>
+            <h5 class="mb-0" id="statSold">-</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4">
+        <div class="card text-center">
+          <div class="card-body py-2">
+            <div class="text-muted small">取り下げ</div>
+            <h5 class="mb-0" id="statWithdrawn">-</h5>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row g-2 mt-2">
+      <div class="col-6">
+        <div class="card">
+          <div class="card-body py-2">
+            <div class="text-muted small">総利益金額</div>
+            <h6 class="mb-0" id="statTotalProfit">-</h6>
+          </div>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="card">
+          <div class="card-body py-2">
+            <div class="text-muted small">平均在庫日数</div>
+            <h6 class="mb-0" id="statAvgDays">-</h6>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-  <label style="margin-top:12px;">ステータス</label>
-  <select id="status">
-    <option value="">--選択--</option>
-    <option>在庫</option>
-    <option>販売</option>
-  </select>
-  <button id="btnSave" style="margin-top:8px;">ステータスを保存</button>
+  <!-- 検索・フィルタ -->
+  <div class="filter-section">
+    <h5 class="mb-3">🔍 検索・絞り込み</h5>
+    
+    <!-- ステータスフィルタ -->
+    <div class="mb-3">
+      <label class="form-label small">ステータス（複数選択可）</label>
+      <div class="d-flex flex-wrap gap-2">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="登録済み" id="status1">
+          <label class="form-check-label small" for="status1">登録済み</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="出品準備中" id="status2">
+          <label class="form-check-label small" for="status2">出品準備中</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="出品中" id="status3" checked>
+          <label class="form-check-label small" for="status3">出品中</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="販売済み" id="status4">
+          <label class="form-check-label small" for="status4">販売済み</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="取り下げ" id="status5">
+          <label class="form-check-label small" for="status5">取り下げ</label>
+        </div>
+      </div>
+    </div>
 
-  <div id="msg"></div>
+    <!-- テキスト検索 -->
+    <div class="mb-3">
+      <label for="searchText" class="form-label small">商品名・管理番号で検索</label>
+      <input type="text" class="form-control form-control-sm" id="searchText" placeholder="例: AA-1001, UNIQLO">
+    </div>
 
-<script>
-  const $=id=>document.getElementById(id);
-  const setMsg=t=>{ $('msg').textContent = t||''; };
+    <!-- 詳細フィルタ（折りたたみ） -->
+    <div class="accordion" id="advancedFilters">
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed py-2 small" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFilters">
+            詳細フィルタ
+          </button>
+        </h2>
+        <div id="collapseFilters" class="accordion-collapse collapse" data-bs-parent="#advancedFilters">
+          <div class="accordion-body">
+            <div class="row g-2">
+              <div class="col-6">
+                <label for="filterBrand" class="form-label small">ブランド</label>
+                <input type="text" class="form-control form-control-sm" id="filterBrand" placeholder="UNIQLO">
+              </div>
+              <div class="col-6">
+                <label for="filterCategory" class="form-label small">カテゴリ</label>
+                <input type="text" class="form-control form-control-sm" id="filterCategory" placeholder="メンズ">
+              </div>
+              <div class="col-6">
+                <label for="filterSize" class="form-label small">サイズ</label>
+                <input type="text" class="form-control form-control-sm" id="filterSize" placeholder="M">
+              </div>
+              <div class="col-6">
+                <label for="filterColor" class="form-label small">カラー</label>
+                <input type="text" class="form-control form-control-sm" id="filterColor" placeholder="ブルー">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-  $('btnJump').addEventListener('click', ()=>{
-    const code = ($('code').value||'').trim();
-    if(!code){ setMsg('管理番号を入力してください'); return; }
-    setMsg('検索中…');
-    google.script.run
-      .withSuccessHandler(res=> setMsg(res||''))
-      .withFailureHandler(err=> setMsg('エラー：' + (err && err.message ? err.message : err)))
-      .jumpToRowByCode(code);
-  });
+    <!-- ソート -->
+    <div class="row g-2 mt-2">
+      <div class="col-6">
+        <label for="sortBy" class="form-label small">並び順</label>
+        <select class="form-select form-select-sm" id="sortBy">
+          <option value="registeredAt">登録日時</option>
+          <option value="listingDate">出品日</option>
+          <option value="saleDate">販売日</option>
+          <option value="profit">利益金額</option>
+        </select>
+      </div>
+      <div class="col-6">
+        <label for="sortOrder" class="form-label small">順序</label>
+        <select class="form-select form-select-sm" id="sortOrder">
+          <option value="desc">新しい順</option>
+          <option value="asc">古い順</option>
+        </select>
+      </div>
+    </div>
 
-  $('btnWho').addEventListener('click', ()=>{
-    const code = ($('code').value||'').trim();
-    if(!code){ setMsg('管理番号を入力してください'); return; }
-    setMsg('担当者取得中…');
-    google.script.run
-      .withSuccessHandler(name=>{ $('person').value = name || ''; setMsg(''); })
-      .withFailureHandler(err=> setMsg('エラー：' + (err && err.message ? err.message : err)))
-      .getPersonByManageNo(code);
-  });
+    <!-- 検索ボタン -->
+    <div class="d-grid gap-2 mt-3">
+      <button class="btn btn-primary btn-sm" id="btnSearch">🔍 検索</button>
+      <button class="btn btn-outline-secondary btn-sm" id="btnReset">リセット</button>
+    </div>
+  </div>
 
-  $('btnSave').addEventListener('click', ()=>{
-    const code = ($('code').value||'').trim();
-    const status = ($('status').value||'').trim();
-    if(!code){ setMsg('管理番号を入力してください'); return; }
-    if(!status){ setMsg('ステータスを選択してください'); return; }
-    setMsg('保存中…');
-    google.script.run
-      .withSuccessHandler(res=> setMsg(res||''))
-      .withFailureHandler(err=> setMsg('エラー：' + (err && err.message ? err.message : err)))
-      .updateStatus(code, status);
-  });
-</script>
+  <!-- 検索結果 -->
+  <div id="resultsSection">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0">検索結果: <span id="resultCount">0</span>件</h6>
+      <select class="form-select form-select-sm" style="width: auto;" id="perPage">
+        <option value="20">20件/ページ</option>
+        <option value="50" selected>50件/ページ</option>
+        <option value="100">100件/ページ</option>
+      </select>
+    </div>
+
+    <!-- 商品一覧 -->
+    <div id="productList"></div>
+
+    <!-- ページネーション -->
+    <div class="pagination-container" id="paginationContainer"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // グローバル変数
+    let currentPage = 1;
+    let currentFilters = {};
+    let currentSort = { sortBy: 'registeredAt', sortOrder: 'desc' };
+
+    // 初期化
+    document.addEventListener('DOMContentLoaded', function() {
+      loadDashboard();
+      search();
+
+      // イベントリスナー
+      document.getElementById('btnSearch').addEventListener('click', () => {
+        currentPage = 1;
+        search();
+      });
+
+      document.getElementById('btnReset').addEventListener('click', resetFilters);
+
+      document.getElementById('perPage').addEventListener('change', () => {
+        currentPage = 1;
+        search();
+      });
+
+      document.getElementById('sortBy').addEventListener('change', () => {
+        currentSort.sortBy = document.getElementById('sortBy').value;
+        search();
+      });
+
+      document.getElementById('sortOrder').addEventListener('change', () => {
+        currentSort.sortOrder = document.getElementById('sortOrder').value;
+        search();
+      });
+    });
+
+    // ダッシュボード読み込み
+    function loadDashboard() {
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function(response) {
+          hideLoading();
+          if (response.success) {
+            const data = response.data;
+            document.getElementById('statTotal').textContent = data.total;
+            document.getElementById('statRegistered').textContent = data.statusCounts.registered;
+            document.getElementById('statPreparing').textContent = data.statusCounts.preparingListing;
+            document.getElementById('statListed').textContent = data.statusCounts.listed;
+            document.getElementById('statSold').textContent = data.statusCounts.sold;
+            document.getElementById('statWithdrawn').textContent = data.statusCounts.withdrawn;
+            document.getElementById('statTotalProfit').textContent = formatCurrency(data.totalProfit);
+            document.getElementById('statAvgDays').textContent = data.averageInventoryDays + '日';
+          } else {
+            showError('ダッシュボード読み込みエラー: ' + response.error);
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          showError('ダッシュボード読み込みエラー: ' + error.message);
+        })
+        .getStatisticsAPI({});
+    }
+
+    // 検索
+    function search() {
+      showLoading();
+
+      // フィルタ収集
+      const statusCheckboxes = document.querySelectorAll('input[type="checkbox"][id^="status"]:checked');
+      const statusValues = Array.from(statusCheckboxes).map(cb => cb.value);
+      
+      const filters = {
+        status: statusValues.join(','),
+        searchText: document.getElementById('searchText').value.trim(),
+        brand: document.getElementById('filterBrand').value.trim(),
+        category: document.getElementById('filterCategory').value.trim(),
+        size: document.getElementById('filterSize').value.trim(),
+        color: document.getElementById('filterColor').value.trim(),
+        page: currentPage,
+        perPage: parseInt(document.getElementById('perPage').value),
+        sortBy: document.getElementById('sortBy').value,
+        sortOrder: document.getElementById('sortOrder').value
+      };
+
+      currentFilters = filters;
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          hideLoading();
+          if (response.success) {
+            const data = response.data;
+            displayProducts(data.products);
+            displayPagination(data.page, data.totalPages, data.totalCount);
+            document.getElementById('resultCount').textContent = data.totalCount;
+          } else {
+            showError('検索エラー: ' + response.error);
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          showError('検索エラー: ' + error.message);
+        })
+        .searchInventoryAPI(filters);
+    }
+
+    // 商品表示
+    function displayProducts(products) {
+      const container = document.getElementById('productList');
+      
+      if (!products || products.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">商品が見つかりませんでした。</div>';
+        return;
+      }
+
+      let html = '<div class="row g-2">';
+      
+      products.forEach(product => {
+        const statusClass = getStatusClass(product.status);
+        const imageUrl = product.imageUrl1 || 'https://via.placeholder.com/300x200?text=No+Image';
+        
+        html += `
+          <div class="col-12 col-md-6">
+            <div class="card product-card">
+              <img src="${imageUrl}" class="product-image" alt="${product.productName || '商品画像'}">
+              <div class="card-body p-2">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                  <span class="badge ${statusClass} status-badge">${product.status}</span>
+                  <small class="text-muted">${product.managementNumber}</small>
+                </div>
+                <h6 class="card-title mb-1 small">${product.brand || ''} ${product.productName || ''}</h6>
+                <div class="small text-muted mb-2">
+                  ${product.category || ''} / ${product.size || ''} / ${product.color || ''}
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="small">
+                    <strong>出品: ${formatCurrency(product.listingAmount)}</strong><br>
+                    <span class="text-success">利益: ${formatCurrency(product.profit)}</span>
+                  </div>
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="viewProduct('${product.managementNumber}')">詳細</button>
+                    <button class="btn btn-outline-secondary" onclick="duplicateProduct('${product.managementNumber}')">複製</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    // ページネーション表示
+    function displayPagination(currentPage, totalPages, totalCount) {
+      const container = document.getElementById('paginationContainer');
+      
+      if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+      }
+
+      let html = '<nav><ul class="pagination pagination-sm">';
+      
+      // 前へ
+      html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${currentPage - 1}); return false;">前へ</a>
+              </li>`;
+      
+      // ページ番号
+      const startPage = Math.max(1, currentPage - 2);
+      const endPage = Math.min(totalPages, currentPage + 2);
+      
+      if (startPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1); return false;">1</a></li>`;
+        if (startPage > 2) {
+          html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                  <a class="page-link" href="#" onclick="changePage(${i}); return false;">${i}</a>
+                </li>`;
+      }
+      
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+          html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${totalPages}); return false;">${totalPages}</a></li>`;
+      }
+      
+      // 次へ
+      html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${currentPage + 1}); return false;">次へ</a>
+              </li>`;
+      
+      html += '</ul></nav>';
+      container.innerHTML = html;
+    }
+
+    // ページ変更
+    function changePage(page) {
+      currentPage = page;
+      search();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // フィルタリセット
+    function resetFilters() {
+      document.getElementById('searchText').value = '';
+      document.getElementById('filterBrand').value = '';
+      document.getElementById('filterCategory').value = '';
+      document.getElementById('filterSize').value = '';
+      document.getElementById('filterColor').value = '';
+      
+      // ステータスは「出品中」のみチェック
+      document.querySelectorAll('input[type="checkbox"][id^="status"]').forEach(cb => {
+        cb.checked = (cb.value === '出品中');
+      });
+      
+      document.getElementById('sortBy').value = 'registeredAt';
+      document.getElementById('sortOrder').value = 'desc';
+      
+      currentPage = 1;
+      search();
+    }
+
+    // 商品詳細表示（Phase 1-4で実装）
+    function viewProduct(managementNumber) {
+      alert('商品詳細表示機能は Phase 1-4 で実装予定です。\n管理番号: ' + managementNumber);
+    }
+
+    // 商品複製（Phase 1-2で実装）
+    function duplicateProduct(managementNumber) {
+      if (!confirm('商品「' + managementNumber + '」を複製しますか？')) return;
+      
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function(response) {
+          hideLoading();
+          if (response.success) {
+            alert('商品を複製しました！\n新しい管理番号: ' + response.data.newManagementNumber);
+            loadDashboard();
+            search();
+          } else {
+            showError('複製エラー: ' + response.error);
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          showError('複製エラー: ' + error.message);
+        })
+        .duplicateProductAPI({ managementNumber: managementNumber });
+    }
+
+    // ユーティリティ関数
+    function getStatusClass(status) {
+      const statusClasses = {
+        '登録済み': 'bg-secondary',
+        '出品準備中': 'bg-info',
+        '出品中': 'bg-primary',
+        '販売済み': 'bg-success',
+        '取り下げ': 'bg-warning'
+      };
+      return statusClasses[status] || 'bg-secondary';
+    }
+
+    function formatCurrency(value) {
+      if (!value && value !== 0) return '-';
+      return '¥' + Number(value).toLocaleString();
+    }
+
+    function showLoading() {
+      document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    function hideLoading() {
+      document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    function showError(message) {
+      alert(message);
+    }
+  </script>
 </body>
 </html>

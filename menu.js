@@ -440,6 +440,9 @@ function doGet(e) {
     } else if (menuType === 'product') {
       template = HtmlService.createTemplateFromFile('sidebar_product');
       title = 'REBORN';
+    } else if (menuType === 'inventory') {
+      template = HtmlService.createTemplateFromFile('sidebar_inventory');
+      title = 'REBORN - 在庫管理';
     } else {
       // 不明なメニューの場合はデフォルトで商品登録
       template = HtmlService.createTemplateFromFile('sidebar_product');
@@ -481,7 +484,10 @@ function showProductSidebar() {
 }
 
 function showInventorySidebar() {
-  SpreadsheetApp.getUi().alert('情報', '在庫管理機能は準備中です', SpreadsheetApp.getUi().ButtonSet.OK);
+  const html = HtmlService.createHtmlOutputFromFile('sidebar_inventory')
+    .setTitle('📦 在庫管理')
+    .setWidth(400);
+  SpreadsheetApp.getUi().showSidebar(html);
 }
 
 function showMasterDataManager() {

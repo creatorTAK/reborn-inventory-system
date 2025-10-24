@@ -190,17 +190,17 @@ function safeAddKeyword(category, keyword) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const masterSheet = ss.getSheetByName('マスタデータ');
-    
+
     // 最後の行を取得（時間をかけない方法）
     const lastRow = masterSheet.getLastRow();
-    
+
     // 新しい行に直接追加（最小限の操作）
     const newRow = lastRow + 1;
     const range = masterSheet.getRange(newRow, 1, 1, 2); // カテゴリとキーワードの2列のみ
-    
+
     range.setValues([[category, keyword]]);
     SpreadsheetApp.flush();
-    
+
     console.log(`✅ キーワード追加成功: ${category} - ${keyword}`);
     return true;
   } catch (error) {
@@ -208,5 +208,58 @@ function safeAddKeyword(category, keyword) {
     return false;
   } finally {
     console.timeEnd('安全なキーワード追加');
+  }
+}
+
+// === 商品データシート列構造確認関数 ===
+function getProductDataColumnStructure() {
+  console.log('=== 在庫/売上管理表 列構造確認 ===\n');
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const productSheet = ss.getSheetByName('在庫/売上管理表');
+
+    if (!productSheet) {
+      console.log('❌ 在庫/売上管理表シートが見つかりません');
+      console.log('利用可能なシート名:');
+      ss.getSheets().forEach(sheet => console.log(`  - ${sheet.getName()}`));
+      return null;
+    }
+
+    // ヘッダー行を取得
+    const lastCol = productSheet.getLastColumn();
+    const headers = productSheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+    console.log(`総列数: ${lastCol}`);
+    console.log('\n列構造:');
+    headers.forEach((header, index) => {
+      console.log(`  ${String.fromCharCode(65 + index)}列 (${index + 1}): ${header}`);
+    });
+
+    // データ行数も確認
+    const lastRow = productSheet.getLastRow();
+    console.log(`\nデータ行数: ${lastRow - 1}行（ヘッダー除く）`);
+
+    // サンプルデータを1行表示
+    if (lastRow > 1) {
+      console.log('\nサンプルデータ（2行目）:');
+      const sampleData = productSheet.getRange(2, 1, 1, lastCol).getValues()[0];
+      headers.forEach((header, index) => {
+        const value = sampleData[index];
+        const displayValue = String(value).length > 30 ? String(value).substring(0, 30) + '...' : value;
+        console.log(`  ${header}: ${displayValue}`);
+      });
+    }
+
+    // 結果を配列で返す
+    return {
+      headers: headers,
+      totalColumns: lastCol,
+      totalRows: lastRow - 1
+    };
+
+  } catch (error) {
+    console.log('❌ 列構造確認エラー:', error.toString());
+    return null;
   }
 }
