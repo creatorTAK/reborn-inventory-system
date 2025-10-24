@@ -245,8 +245,9 @@
     <div class="d-flex justify-content-between align-items-center mb-2">
       <h6 class="mb-0">検索結果: <span id="resultCount">0</span>件</h6>
       <select class="form-select form-select-sm" style="width: auto;" id="perPage">
+        <option value="10" selected>10件/ページ</option>
         <option value="20">20件/ページ</option>
-        <option value="50" selected>50件/ページ</option>
+        <option value="50">50件/ページ</option>
         <option value="100">100件/ページ</option>
       </select>
     </div>
@@ -267,68 +268,40 @@
 
     // 初期化
     document.addEventListener('DOMContentLoaded', function() {
-      loadDashboard();
-      search();
+      loadDashboardAndSearch();
 
       // イベントリスナー
       document.getElementById('btnSearch').addEventListener('click', () => {
         currentPage = 1;
-        search();
+        loadDashboardAndSearch();
       });
 
       document.getElementById('btnReset').addEventListener('click', resetFilters);
 
       document.getElementById('perPage').addEventListener('change', () => {
         currentPage = 1;
-        search();
+        loadDashboardAndSearch();
       });
 
       document.getElementById('sortBy').addEventListener('change', () => {
         currentSort.sortBy = document.getElementById('sortBy').value;
-        search();
+        loadDashboardAndSearch();
       });
 
       document.getElementById('sortOrder').addEventListener('change', () => {
         currentSort.sortOrder = document.getElementById('sortOrder').value;
-        search();
+        loadDashboardAndSearch();
       });
     });
 
-    // ダッシュボード読み込み
-    function loadDashboard() {
-      showLoading();
-      google.script.run
-        .withSuccessHandler(function(response) {
-          hideLoading();
-          if (response.success) {
-            const data = response.data;
-            document.getElementById('statTotal').textContent = data.total;
-            document.getElementById('statRegistered').textContent = data.statusCounts.registered;
-            document.getElementById('statPreparing').textContent = data.statusCounts.preparingListing;
-            document.getElementById('statListed').textContent = data.statusCounts.listed;
-            document.getElementById('statSold').textContent = data.statusCounts.sold;
-            document.getElementById('statWithdrawn').textContent = data.statusCounts.withdrawn;
-            document.getElementById('statTotalProfit').textContent = formatCurrency(data.totalProfit);
-            document.getElementById('statAvgDays').textContent = data.averageInventoryDays + '日';
-          } else {
-            showError('ダッシュボード読み込みエラー: ' + response.error);
-          }
-        })
-        .withFailureHandler(function(error) {
-          hideLoading();
-          showError('ダッシュボード読み込みエラー: ' + error.message);
-        })
-        .getStatisticsAPI({});
-    }
-
-    // 検索
-    function search() {
+    // ダッシュボードと商品一覧を一度に読み込み（統合API）
+    function loadDashboardAndSearch() {
       showLoading();
 
       // フィルタ収集
       const statusCheckboxes = document.querySelectorAll('input[type="checkbox"][id^="status"]:checked');
       const statusValues = Array.from(statusCheckboxes).map(cb => cb.value);
-      
+
       const filters = {
         status: statusValues.join(','),
         searchText: document.getElementById('searchText').value.trim(),
@@ -349,18 +322,31 @@
           hideLoading();
           if (response.success) {
             const data = response.data;
+
+            // ダッシュボード更新
+            const stats = data.statistics;
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statRegistered').textContent = stats.statusCounts.registered;
+            document.getElementById('statPreparing').textContent = stats.statusCounts.preparingListing;
+            document.getElementById('statListed').textContent = stats.statusCounts.listed;
+            document.getElementById('statSold').textContent = stats.statusCounts.sold;
+            document.getElementById('statWithdrawn').textContent = stats.statusCounts.withdrawn;
+            document.getElementById('statTotalProfit').textContent = formatCurrency(stats.totalProfit);
+            document.getElementById('statAvgDays').textContent = stats.averageInventoryDays + '日';
+
+            // 商品一覧更新
             displayProducts(data.products);
             displayPagination(data.page, data.totalPages, data.totalCount);
             document.getElementById('resultCount').textContent = data.totalCount;
           } else {
-            showError('検索エラー: ' + response.error);
+            showError('読み込みエラー: ' + response.error);
           }
         })
         .withFailureHandler(function(error) {
           hideLoading();
-          showError('検索エラー: ' + error.message);
+          showError('読み込みエラー: ' + error.message);
         })
-        .searchInventoryAPI(filters);
+        .getInventoryDashboardAPI(filters);
     }
 
     // 商品表示
@@ -463,7 +449,7 @@
     // ページ変更
     function changePage(page) {
       currentPage = page;
-      search();
+      loadDashboardAndSearch();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -484,7 +470,7 @@
       document.getElementById('sortOrder').value = 'desc';
       
       currentPage = 1;
-      search();
+      loadDashboardAndSearch();
     }
 
     // 商品詳細表示（Phase 1-4で実装）
@@ -502,8 +488,7 @@
           hideLoading();
           if (response.success) {
             alert('商品を複製しました！\n新しい管理番号: ' + response.data.newManagementNumber);
-            loadDashboard();
-            search();
+            loadDashboardAndSearch();
           } else {
             showError('複製エラー: ' + response.error);
           }

@@ -813,6 +813,307 @@ function getStatisticsAPI(params) {
   }
 }
 
+/**
+ * 在庫ダッシュボードAPI（統合版）
+ * 1回のスプレッドシートスキャンで統計情報と商品一覧の両方を取得
+ * パフォーマンス改善のため、searchInventoryAPIとgetStatisticsAPIを統合
+ */
+function getInventoryDashboardAPI(params) {
+  try {
+    // フィルタ条件
+    const filters = {
+      status: params.status || '',
+      brand: params.brand || '',
+      category: params.category || '',
+      person: params.person || '',
+      size: params.size || '',
+      color: params.color || '',
+      searchText: params.searchText || '',
+      dateFrom: params.dateFrom || '',
+      dateTo: params.dateTo || '',
+      dateType: params.dateType || 'purchase'
+    };
+
+    // ページネーション
+    const page = parseInt(params.page) || 1;
+    const perPage = parseInt(params.perPage) || 10;
+
+    // ソート
+    const sortBy = params.sortBy || 'registeredAt';
+    const sortOrder = params.sortOrder || 'desc';
+
+    const sh = getSheet();
+    const lastRow = sh.getLastRow();
+
+    if (lastRow < INVENTORY_START_ROW) {
+      return jsonSuccessResponse({
+        statistics: {
+          total: 0,
+          statusCounts: {
+            registered: 0,
+            preparingListing: 0,
+            listed: 0,
+            sold: 0,
+            withdrawn: 0
+          },
+          totalPurchaseAmount: 0,
+          totalListingAmount: 0,
+          totalSaleAmount: 0,
+          totalProfit: 0,
+          averageProfit: 0,
+          averageInventoryDays: 0
+        },
+        products: [],
+        count: 0,
+        totalCount: 0,
+        page: page,
+        perPage: perPage,
+        totalPages: 0
+      });
+    }
+
+    const { map } = getHeaderMapCommon();
+    const managementCol = colByName(sh, INVENTORY_HEADERS.key);
+
+    // 統計用変数
+    let total = 0;
+    const statusCounts = {
+      registered: 0,
+      preparingListing: 0,
+      listed: 0,
+      sold: 0,
+      withdrawn: 0
+    };
+    let totalPurchaseAmount = 0;
+    let totalListingAmount = 0;
+    let totalSaleAmount = 0;
+    let totalProfit = 0;
+    let totalInventoryDays = 0;
+    let inventoryDaysCount = 0;
+
+    // 商品一覧用配列
+    const allResults = [];
+
+    // ステータスフィルタ（複数選択対応）
+    const statusFilters = filters.status ? filters.status.split(',').map(s => s.trim()) : [];
+
+    // 1回のループで統計と商品一覧の両方を処理
+    for (let row = INVENTORY_START_ROW; row <= lastRow; row++) {
+      const managementNumber = getCellValue(sh, row, managementCol);
+      if (!managementNumber) continue;
+
+      total++;
+
+      // 基本情報取得
+      const status = getCellValue(sh, row, map['ステータス']);
+      const brand = getCellValue(sh, row, map['ブランド(英語)']);
+      const category = getCellValue(sh, row, map['大分類']);
+      const person = getCellValue(sh, row, map['担当者']);
+      const size = getCellValue(sh, row, map['サイズ']);
+      const color = getCellValue(sh, row, map['カラー(選択)']);
+      const productName = getCellValue(sh, row, map['商品名(タイトル)']);
+      const purchaseAmount = Number(getCellValue(sh, row, map['仕入金額'])) || 0;
+      const listingAmount = Number(getCellValue(sh, row, map['出品金額'])) || 0;
+      const saleAmount = Number(getCellValue(sh, row, map['販売金額'])) || 0;
+      const profit = Number(getCellValue(sh, row, map['利益金額'])) || 0;
+      const inventoryDays = Number(getCellValue(sh, row, map['在庫日数'])) || 0;
+
+      // 統計集計
+      if (status === '登録済み') {
+        statusCounts.registered++;
+      } else if (status === '出品準備中') {
+        statusCounts.preparingListing++;
+      } else if (status === '出品中') {
+        statusCounts.listed++;
+      } else if (status === '販売済み') {
+        statusCounts.sold++;
+      } else if (status === '取り下げ') {
+        statusCounts.withdrawn++;
+      }
+
+      totalPurchaseAmount += purchaseAmount;
+      
+      if (status === '出品中' || status === '販売済み') {
+        totalListingAmount += listingAmount;
+      }
+
+      if (status === '販売済み') {
+        totalSaleAmount += saleAmount;
+        totalProfit += profit;
+        if (inventoryDays > 0) {
+          totalInventoryDays += inventoryDays;
+          inventoryDaysCount++;
+        }
+      }
+
+      // フィルタ適用（商品一覧用）
+      let matchesFilter = true;
+
+      if (statusFilters.length > 0 && !statusFilters.includes(status)) {
+        matchesFilter = false;
+      }
+      if (filters.brand && brand !== filters.brand) {
+        matchesFilter = false;
+      }
+      if (filters.category && category !== filters.category) {
+        matchesFilter = false;
+      }
+      if (filters.person && person !== filters.person) {
+        matchesFilter = false;
+      }
+      if (filters.size && size !== filters.size) {
+        matchesFilter = false;
+      }
+      if (filters.color && color !== filters.color) {
+        matchesFilter = false;
+      }
+
+      // テキスト検索
+      if (filters.searchText && matchesFilter) {
+        const searchLower = filters.searchText.toLowerCase();
+        const matchNumber = (managementNumber || '').toLowerCase().includes(searchLower);
+        const matchName = (productName || '').toLowerCase().includes(searchLower);
+        if (!matchNumber && !matchName) {
+          matchesFilter = false;
+        }
+      }
+
+      // 日付範囲フィルタ
+      if ((filters.dateFrom || filters.dateTo) && matchesFilter) {
+        let targetDate = null;
+        if (filters.dateType === 'purchase') {
+          targetDate = getCellValue(sh, row, map['仕入日']);
+        } else if (filters.dateType === 'listing') {
+          targetDate = getCellValue(sh, row, map['出品日']);
+        } else if (filters.dateType === 'sale') {
+          targetDate = getCellValue(sh, row, map['販売日']);
+        }
+
+        if (targetDate) {
+          const dateObj = new Date(targetDate);
+          if (filters.dateFrom) {
+            const fromDate = new Date(filters.dateFrom);
+            if (dateObj < fromDate) {
+              matchesFilter = false;
+            }
+          }
+          if (filters.dateTo) {
+            const toDate = new Date(filters.dateTo);
+            toDate.setHours(23, 59, 59, 999);
+            if (dateObj > toDate) {
+              matchesFilter = false;
+            }
+          }
+        } else if (filters.dateFrom || filters.dateTo) {
+          matchesFilter = false;
+        }
+      }
+
+      // フィルタに合致する商品を配列に追加
+      if (matchesFilter) {
+        const productInfo = {
+          managementNumber: managementNumber,
+          person: person,
+          productName: productName,
+          category: category,
+          brand: brand,
+          itemName: getCellValue(sh, row, map['アイテム名']),
+          size: size,
+          color: color,
+          status: status,
+          purchaseDate: getCellValue(sh, row, map['仕入日']),
+          purchaseAmount: purchaseAmount,
+          listingDate: getCellValue(sh, row, map['出品日']),
+          listingAmount: listingAmount,
+          saleDate: getCellValue(sh, row, map['販売日']),
+          saleAmount: saleAmount,
+          profit: profit,
+          profitRate: getCellValue(sh, row, map['利益率']),
+          inventoryDays: inventoryDays,
+          registrant: getCellValue(sh, row, map['登録者']),
+          registeredAt: getCellValue(sh, row, map['登録日時']),
+          lastEditor: getCellValue(sh, row, map['最終更新者']),
+          updatedAt: getCellValue(sh, row, map['更新日時']),
+          imageUrl1: getCellValue(sh, row, map['画像URL1']),
+          imageUrl2: getCellValue(sh, row, map['画像URL2']),
+          imageUrl3: getCellValue(sh, row, map['画像URL3'])
+        };
+        allResults.push(productInfo);
+      }
+    }
+
+    // ソート
+    allResults.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch(sortBy) {
+        case 'registeredAt':
+          aVal = a.registeredAt ? new Date(a.registeredAt).getTime() : 0;
+          bVal = b.registeredAt ? new Date(b.registeredAt).getTime() : 0;
+          break;
+        case 'listingDate':
+          aVal = a.listingDate ? new Date(a.listingDate).getTime() : 0;
+          bVal = b.listingDate ? new Date(b.listingDate).getTime() : 0;
+          break;
+        case 'saleDate':
+          aVal = a.saleDate ? new Date(a.saleDate).getTime() : 0;
+          bVal = b.saleDate ? new Date(b.saleDate).getTime() : 0;
+          break;
+        case 'profit':
+          aVal = parseFloat(a.profit) || 0;
+          bVal = parseFloat(b.profit) || 0;
+          break;
+        case 'purchaseDate':
+          aVal = a.purchaseDate ? new Date(a.purchaseDate).getTime() : 0;
+          bVal = b.purchaseDate ? new Date(b.purchaseDate).getTime() : 0;
+          break;
+        default:
+          aVal = a.registeredAt ? new Date(a.registeredAt).getTime() : 0;
+          bVal = b.registeredAt ? new Date(b.registeredAt).getTime() : 0;
+      }
+
+      if (sortOrder === 'asc') {
+        return aVal - bVal;
+      } else {
+        return bVal - aVal;
+      }
+    });
+
+    // ページネーション
+    const totalCount = allResults.length;
+    const totalPages = Math.ceil(totalCount / perPage);
+    const startIndex = (page - 1) * perPage;
+    const endIndex = startIndex + perPage;
+    const paginatedResults = allResults.slice(startIndex, endIndex);
+
+    // 統計情報と商品一覧を返す
+    return jsonSuccessResponse({
+      statistics: {
+        total: total,
+        statusCounts: statusCounts,
+        totalPurchaseAmount: totalPurchaseAmount,
+        totalListingAmount: totalListingAmount,
+        totalSaleAmount: totalSaleAmount,
+        totalProfit: totalProfit,
+        averageProfit: statusCounts.sold > 0 ? Math.round(totalProfit / statusCounts.sold) : 0,
+        averageInventoryDays: inventoryDaysCount > 0 ? Math.round(totalInventoryDays / inventoryDaysCount) : 0
+      },
+      products: paginatedResults,
+      count: paginatedResults.length,
+      totalCount: totalCount,
+      page: page,
+      perPage: perPage,
+      totalPages: totalPages,
+      filters: filters,
+      sortBy: sortBy,
+      sortOrder: sortOrder
+    });
+
+  } catch (error) {
+    return jsonErrorResponse(`ダッシュボード取得エラー: ${error.message}`);
+  }
+}
+
 
 /**
  * 商品複製API
