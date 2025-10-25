@@ -21,8 +21,10 @@ function doPost(e) {
     }
 
     if (action === 'subscribeFCM') {
-      // FCMトークンを保存
-      const result = saveFCMToken(requestBody.token);
+      // FCMトークンを保存（チーム利用対応: デバイス情報も保存）
+      const token = requestBody.token;
+      const deviceInfo = requestBody.deviceInfo || null;
+      const result = saveFCMToken(token, deviceInfo);
       return ContentService.createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
     }
@@ -113,9 +115,38 @@ function doGet(e) {
       }
 
       if (action === 'subscribeFCM') {
-        // FCMトークンを保存（GETメソッド）
+        // FCMトークンを保存（GETメソッド、チーム利用対応）
         const token = e.parameter.token;
-        const result = saveFCMToken(token);
+        const deviceInfoParam = e.parameter.deviceInfo;
+        const userIdParam = e.parameter.userId;
+
+        // デバッグログをスプレッドシートに書き込む
+        try {
+          const ss = SpreadsheetApp.getActiveSpreadsheet();
+          let debugSheet = ss.getSheetByName('FCM登録デバッグ');
+          if (!debugSheet) {
+            debugSheet = ss.insertSheet('FCM登録デバッグ');
+            debugSheet.appendRow(['タイムスタンプ', 'トークン（先頭20文字）', 'deviceInfoParam', 'userIdParam', 'userId (decoded)']);
+          }
+
+          const deviceInfo = deviceInfoParam ? JSON.parse(decodeURIComponent(deviceInfoParam)) : null;
+          const userId = userIdParam ? decodeURIComponent(userIdParam) : null;
+
+          debugSheet.appendRow([
+            Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss'),
+            token ? token.substring(0, 20) + '...' : 'null',
+            deviceInfoParam ? 'あり（' + deviceInfoParam.substring(0, 30) + '...）' : 'null',
+            userIdParam || 'null',
+            userId || 'null'
+          ]);
+        } catch (debugError) {
+          Logger.log('Debug sheet error: ' + debugError);
+        }
+
+        const deviceInfo = deviceInfoParam ? JSON.parse(decodeURIComponent(deviceInfoParam)) : null;
+        const userId = userIdParam ? decodeURIComponent(userIdParam) : null;
+
+        const result = saveFCMToken(token, deviceInfo, userId);
         return ContentService.createTextOutput(JSON.stringify(result))
           .setMimeType(ContentService.MimeType.JSON);
       }
@@ -192,6 +223,66 @@ function doGet(e) {
           status: 'success',
           history: history
         }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      if (action === 'getInventoryDashboard') {
+        // 在庫管理ダッシュボード（統合API）
+        const params = {
+          statuses: e.parameter.statuses ? e.parameter.statuses.split(',') : [],
+          page: parseInt(e.parameter.page) || 1,
+          limit: parseInt(e.parameter.limit) || 10,
+          sortBy: e.parameter.sortBy || 'registeredAt',
+          sortOrder: e.parameter.sortOrder || 'desc',
+          searchText: e.parameter.searchText || '',
+          brand: e.parameter.brand || '',
+          category: e.parameter.category || '',
+          size: e.parameter.size || '',
+          color: e.parameter.color || ''
+        };
+
+        const result = getInventoryDashboardAPI(params);
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      if (action === 'getProductDetail') {
+        // 商品詳細取得
+        const managementNumber = e.parameter.managementNumber;
+        const result = getProductDetailAPI({ managementNumber: managementNumber });
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      if (action === 'updateProductStatus') {
+        // ステータス更新
+        const params = {
+          managementNumber: e.parameter.managementNumber,
+          newStatus: e.parameter.newStatus
+        };
+        const result = updateProductStatusAPI(params);
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      if (action === 'updateProduct') {
+        // 商品フィールド更新
+        const params = {
+          managementNumber: e.parameter.managementNumber,
+          field: e.parameter.field,
+          value: e.parameter.value,
+          editor: e.parameter.editor || 'unknown'
+        };
+        const result = updateProductAPI(params);
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      if (action === 'duplicateProduct') {
+        // 商品複製
+        const managementNumber = e.parameter.managementNumber;
+        const result = duplicateProductAPI({ managementNumber: managementNumber });
+        return ContentService.createTextOutput(JSON.stringify(result))
           .setMimeType(ContentService.MimeType.JSON);
       }
 
