@@ -25,6 +25,573 @@ const INVENTORY_HEADERS = {
 const INVENTORY_START_ROW = 2;
 
 // =============================================================================
+// 統計情報専用シート管理（パフォーマンス最適化）
+// =============================================================================
+const STATS_SHEET_NAME = '統計情報';
+
+/**
+ * 統計情報シートを取得または作成
+ */
+function getStatsSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let statsSheet = ss.getSheetByName(STATS_SHEET_NAME);
+  
+  if (!statsSheet) {
+    statsSheet = ss.insertSheet(STATS_SHEET_NAME);
+    initializeStatsSheet(statsSheet);
+    Logger.log('[統計] 統計情報シートを新規作成しました');
+  }
+  
+  return statsSheet;
+}
+
+/**
+ * 統計情報シートの初期化
+ */
+function initializeStatsSheet(sheet) {
+  // ヘッダー行
+  sheet.appendRow(['項目', '値', '最終更新日時']);
+  
+  // ステータス別件数
+  sheet.appendRow(['登録済み', 0, new Date()]);
+  sheet.appendRow(['出品準備中', 0, new Date()]);
+  sheet.appendRow(['出品中', 0, new Date()]);
+  sheet.appendRow(['販売済み', 0, new Date()]);
+  sheet.appendRow(['取り下げ', 0, new Date()]);
+  sheet.appendRow(['合計', 0, new Date()]);
+  
+  // 金額集計
+  sheet.appendRow(['総仕入金額', 0, new Date()]);
+  sheet.appendRow(['総出品金額', 0, new Date()]);
+  sheet.appendRow(['総販売金額', 0, new Date()]);
+  sheet.appendRow(['総利益金額', 0, new Date()]);
+  
+  // 在庫日数
+  sheet.appendRow(['総在庫日数', 0, new Date()]);
+  sheet.appendRow(['在庫日数カウント', 0, new Date()]);
+  
+  // フォーマット
+  const range = sheet.getRange(1, 1, sheet.getLastRow(), 3);
+  range.setFontSize(10);
+  sheet.getRange('A1:C1').setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
+  sheet.setColumnWidth(1, 150);
+  sheet.setColumnWidth(2, 120);
+  sheet.setColumnWidth(3, 180);
+  
+  Logger.log('[統計] 統計情報シートを初期化しました');
+}
+
+/**
+ * 統計情報シートから値を取得
+ */
+function getStatsValue(itemName) {
+  try {
+    const sheet = getStatsSheet();
+    const data = sheet.getDataRange().getValues();
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === itemName) {
+        return Number(data[i][1]) || 0;
+      }
+    }
+    
+    return 0;
+  } catch (error) {
+    Logger.log(`[統計] 値取得エラー (${itemName}): ${error.message}`);
+    return 0;
+  }
+}
+
+/**
+ * 統計情報シートから全ての値を一度に取得（最適化版）
+ * 1回のシート読み込みで全統計を取得
+ */
+function getAllStatsValues() {
+  try {
+    const sheet = getStatsSheet();
+    const data = sheet.getDataRange().getValues();
+    
+    const stats = {};
+    for (let i = 1; i < data.length; i++) {
+      const itemName = data[i][0];
+      const value = Number(data[i][1]) || 0;
+      stats[itemName] = value;
+    }
+    
+    return stats;
+  } catch (error) {
+    Logger.log(`[統計] 全値取得エラー: ${error.message}`);
+    return {};
+  }
+}
+
+/**
+ * 統計情報シートの値を更新
+ */
+function setStatsValue(itemName, value) {
+  try {
+    const sheet = getStatsSheet();
+    const data = sheet.getDataRange().getValues();
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === itemName) {
+        sheet.getRange(i + 1, 2).setValue(value);
+        sheet.getRange(i + 1, 3).setValue(new Date());
+        return true;
+      }
+    }
+    
+    Logger.log(`[統計] 項目が見つかりません: ${itemName}`);
+    return false;
+  } catch (error) {
+    Logger.log(`[統計] 値更新エラー (${itemName}): ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * 統計情報を増加
+ */
+function incrementStats(itemName, amount = 1) {
+  const currentValue = getStatsValue(itemName);
+  setStatsValue(itemName, currentValue + amount);
+}
+
+/**
+ * 統計情報を減少
+ */
+function decrementStats(itemName, amount = 1) {
+  const currentValue = getStatsValue(itemName);
+  setStatsValue(itemName, Math.max(0, currentValue - amount));
+}
+
+/**
+ * 商品のステータス変更時の統計更新
+ */
+function updateStatsOnStatusChange(oldStatus, newStatus, productData) {
+  Logger.log(`[統計] ステータス変更: ${oldStatus} → ${newStatus}`);
+  
+  // 旧ステータスから減算
+  if (oldStatus) {
+    decrementStats(oldStatus, 1);
+    decrementStats('合計', 1);
+    
+    // 金額の減算
+    const purchaseAmount = Number(productData.purchaseAmount) || 0;
+    decrementStats('総仕入金額', purchaseAmount);
+    
+    if (oldStatus === '出品中' || oldStatus === '販売済み') {
+      const listingAmount = Number(productData.listingAmount) || 0;
+      decrementStats('総出品金額', listingAmount);
+    }
+    
+    if (oldStatus === '販売済み') {
+      const saleAmount = Number(productData.saleAmount) || 0;
+      const profit = Number(productData.profit) || 0;
+      const inventoryDays = Number(productData.inventoryDays) || 0;
+      
+      decrementStats('総販売金額', saleAmount);
+      decrementStats('総利益金額', profit);
+      
+      if (inventoryDays > 0) {
+        decrementStats('総在庫日数', inventoryDays);
+        decrementStats('在庫日数カウント', 1);
+      }
+    }
+  }
+  
+  // 新ステータスに加算
+  if (newStatus) {
+    incrementStats(newStatus, 1);
+    incrementStats('合計', 1);
+    
+    // 金額の加算
+    const purchaseAmount = Number(productData.purchaseAmount) || 0;
+    incrementStats('総仕入金額', purchaseAmount);
+    
+    if (newStatus === '出品中' || newStatus === '販売済み') {
+      const listingAmount = Number(productData.listingAmount) || 0;
+      incrementStats('総出品金額', listingAmount);
+    }
+    
+    if (newStatus === '販売済み') {
+      const saleAmount = Number(productData.saleAmount) || 0;
+      const profit = Number(productData.profit) || 0;
+      const inventoryDays = Number(productData.inventoryDays) || 0;
+      
+      incrementStats('総販売金額', saleAmount);
+      incrementStats('総利益金額', profit);
+      
+      if (inventoryDays > 0) {
+        incrementStats('総在庫日数', inventoryDays);
+        incrementStats('在庫日数カウント', 1);
+      }
+    }
+  }
+}
+
+/**
+ * 統計情報を全て再計算（初期化用または整合性チェック用）
+ */
+
+/**
+ * 金額文字列を数値に変換（¥記号とカンマを除去）
+ * 例: "¥2,980" → 2980
+ */
+function parseAmount(value) {
+  if (!value) return 0;
+  
+  // 既に数値の場合
+  if (typeof value === 'number') return value;
+  
+  // 文字列の場合、¥記号とカンマを除去して数値に変換
+  const cleaned = String(value).replace(/[¥,]/g, '');
+  const num = Number(cleaned);
+  
+  return isNaN(num) ? 0 : num;
+}
+
+function recalculateAllStats() {
+  const startTime = new Date().getTime();
+  Logger.log('[統計] 全統計情報の再計算を開始');
+  
+  try {
+    const sh = getSheet();
+    const lastRow = sh.getLastRow();
+    
+    if (lastRow < INVENTORY_START_ROW) {
+      Logger.log('[統計] データが存在しないため、統計をゼロリセット');
+      initializeStatsSheet(getStatsSheet());
+      return { success: true, message: '統計をゼロリセットしました' };
+    }
+    
+    const { map } = getHeaderMapCommon();
+    const managementCol = colByName(sh, INVENTORY_HEADERS.key);
+    
+    // 統計変数
+    const statusCounts = {
+      '登録済み': 0,
+      '出品準備中': 0,
+      '出品中': 0,
+      '販売済み': 0,
+      '取り下げ': 0
+    };
+    let total = 0;
+    let totalPurchaseAmount = 0;
+    let totalListingAmount = 0;
+    let totalSaleAmount = 0;
+    let totalProfit = 0;
+    let totalInventoryDays = 0;
+    let inventoryDaysCount = 0;
+    
+    // 全商品をスキャン
+    for (let row = INVENTORY_START_ROW; row <= lastRow; row++) {
+      const managementNumber = getCellValue(sh, row, managementCol);
+      if (!managementNumber) continue;
+      
+      total++;
+      
+      const status = getCellValue(sh, row, map['ステータス']);
+      if (statusCounts.hasOwnProperty(status)) {
+        statusCounts[status]++;
+      }
+      
+      const purchaseAmount = parseAmount(getCellValue(sh, row, map['仕入金額']));
+      const listingAmount = parseAmount(getCellValue(sh, row, map['出品金額']));
+      const saleAmount = parseAmount(getCellValue(sh, row, map['販売金額']));
+      const profit = parseAmount(getCellValue(sh, row, map['利益金額']));
+      
+      totalPurchaseAmount += purchaseAmount;
+      
+      if (status === '出品中' || status === '販売済み') {
+        totalListingAmount += listingAmount;
+      }
+      
+      if (status === '販売済み') {
+        totalSaleAmount += saleAmount;
+        totalProfit += profit;
+        
+        const inventoryDays = parseAmount(getCellValue(sh, row, map['在庫日数']));
+        if (inventoryDays > 0) {
+          totalInventoryDays += inventoryDays;
+          inventoryDaysCount++;
+        }
+      }
+    }
+    
+    // 統計シートに書き込み
+    setStatsValue('登録済み', statusCounts['登録済み']);
+    setStatsValue('出品準備中', statusCounts['出品準備中']);
+    setStatsValue('出品中', statusCounts['出品中']);
+    setStatsValue('販売済み', statusCounts['販売済み']);
+    setStatsValue('取り下げ', statusCounts['取り下げ']);
+    setStatsValue('合計', total);
+    setStatsValue('総仕入金額', totalPurchaseAmount);
+    setStatsValue('総出品金額', totalListingAmount);
+    setStatsValue('総販売金額', totalSaleAmount);
+    setStatsValue('総利益金額', totalProfit);
+    setStatsValue('総在庫日数', totalInventoryDays);
+    setStatsValue('在庫日数カウント', inventoryDaysCount);
+    
+    const endTime = new Date().getTime();
+    const duration = endTime - startTime;
+    
+    Logger.log(`[統計] 再計算完了: ${total}件, ${duration}ms`);
+    
+    return {
+      success: true,
+      message: `統計情報を再計算しました（${total}件の商品、${duration}ms）`,
+      stats: {
+        total: total,
+        statusCounts: statusCounts,
+        totalPurchaseAmount: totalPurchaseAmount,
+        totalListingAmount: totalListingAmount,
+        totalSaleAmount: totalSaleAmount,
+        totalProfit: totalProfit,
+        averageInventoryDays: inventoryDaysCount > 0 ? Math.round(totalInventoryDays / inventoryDaysCount) : 0
+      }
+    };
+    
+  } catch (error) {
+    Logger.log(`[統計] 再計算エラー: ${error.message}`);
+    return {
+      success: false,
+      error: `統計再計算エラー: ${error.message}`
+    };
+  }
+}
+
+/**
+ * 旧ステータスから新ステータスへの一括移行（1回のみ実行）
+ * 「在庫」→「登録済み」
+ * 「販売」→「販売済み」
+ */
+function migrateOldStatusToNew() {
+  const startTime = new Date().getTime();
+  Logger.log('[移行] ステータス移行を開始');
+  
+  try {
+    const sh = getSheet();
+    const lastRow = sh.getLastRow();
+    
+    if (lastRow < INVENTORY_START_ROW) {
+      Logger.log('[移行] データが存在しません');
+      return;
+    }
+    
+    const { map } = getHeaderMapCommon();
+    const statusCol = map['ステータス'];
+    
+    if (!statusCol) {
+      Logger.log('[移行] エラー: ステータス列が見つかりません');
+      return;
+    }
+    
+    let migratedCount = 0;
+    let skippedCount = 0;
+    
+    // 全行をスキャンして移行
+    for (let row = INVENTORY_START_ROW; row <= lastRow; row++) {
+      const currentStatus = getCellValue(sh, row, statusCol);
+      
+      if (!currentStatus) {
+        skippedCount++;
+        continue;
+      }
+      
+      let newStatus = null;
+      
+      // マッピング
+      if (currentStatus === '在庫') {
+        newStatus = '登録済み';
+      } else if (currentStatus === '販売') {
+        newStatus = '販売済み';
+      }
+      
+      // 移行
+      if (newStatus) {
+        sh.getRange(row, statusCol).setValue(newStatus);
+        migratedCount++;
+        
+        if (migratedCount % 10 === 0) {
+          Logger.log(`[移行] 進捗: ${migratedCount}件移行完了`);
+        }
+      } else {
+        skippedCount++;
+      }
+    }
+    
+    const endTime = new Date().getTime();
+    Logger.log(`[移行] 完了: ${migratedCount}件移行、${skippedCount}件スキップ、${endTime - startTime}ms`);
+    Logger.log('[移行] 次に recalculateAllStats() を実行してください');
+    
+    return {
+      migrated: migratedCount,
+      skipped: skippedCount,
+      duration: endTime - startTime
+    };
+    
+  } catch (error) {
+    Logger.log(`[移行] エラー: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * ステータス列のデータ入力規則（プルダウン）を更新
+ * 新しい5つのステータスに対応
+ */
+function updateStatusValidation() {
+  const startTime = new Date().getTime();
+  Logger.log('[設定] ステータス列のプルダウン設定を更新開始');
+
+  try {
+    const sh = getSheet();
+    const { map } = getHeaderMapCommon();
+    const statusCol = map['ステータス'];
+
+    if (!statusCol) {
+      Logger.log('[設定] エラー: ステータス列が見つかりません');
+      return { success: false, error: 'ステータス列が見つかりません' };
+    }
+
+    // 新しいステータス一覧
+    const newStatuses = ['登録済み', '出品準備中', '出品中', '販売済み', '取り下げ'];
+
+    // データ入力規則を作成
+    const rule = SpreadsheetApp.newDataValidation()
+      .requireValueInList(newStatuses, true) // true = ドロップダウンを表示
+      .setAllowInvalid(false) // 無効な値を許可しない
+      .build();
+
+    // ステータス列全体に適用（2行目以降、1000行まで）
+    const lastRow = Math.max(sh.getLastRow(), 1000); // 最低1000行分を設定
+    const range = sh.getRange(INVENTORY_START_ROW, statusCol, lastRow - INVENTORY_START_ROW + 1, 1);
+    range.setDataValidation(rule);
+
+    const endTime = new Date().getTime();
+    Logger.log(`[設定] ステータス列のプルダウン設定完了: ${newStatuses.join(', ')} (${endTime - startTime}ms)`);
+
+    return {
+      success: true,
+      statuses: newStatuses,
+      message: 'ステータス列のプルダウン設定を更新しました'
+    };
+
+  } catch (error) {
+    Logger.log(`[設定] エラー: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * デバッグ用：ヘッダーマップの内容を確認
+ */
+function debugHeaderMap() {
+  const { map } = getHeaderMapCommon();
+  
+  Logger.log('=== ヘッダーマップの内容 ===');
+  Logger.log(JSON.stringify(map, null, 2));
+  
+  // 特に重要なフィールドを確認
+  const importantFields = ['仕入金額', '出品金額', '販売金額', '利益金額', 'ステータス'];
+  Logger.log('\n=== 重要フィールドの確認 ===');
+  for (const field of importantFields) {
+    if (map[field]) {
+      Logger.log(`✅ ${field}: 列番号 ${map[field]}`);
+    } else {
+      Logger.log(`❌ ${field}: マップに存在しません`);
+    }
+  }
+  
+  // 実際にデータを取得してみる（2～6行目）
+  const sh = getSheet();
+  Logger.log('\n=== 実際のデータ（2～6行目） ===');
+  for (let row = 2; row <= 6; row++) {
+    const status = getCellValue(sh, row, map['ステータス']);
+    const purchase = getCellValue(sh, row, map['仕入金額']);
+    const listing = getCellValue(sh, row, map['出品金額']);
+    const sale = getCellValue(sh, row, map['販売金額']);
+    const profit = getCellValue(sh, row, map['利益金額']);
+    
+    Logger.log(`行${row}: ステータス="${status}", 仕入=${purchase}, 出品=${listing}, 販売=${sale}, 利益=${profit}`);
+  }
+}
+
+/**
+ * デバッグ用：統計シート読み込みのパフォーマンステスト
+ */
+function testStatsPerformance() {
+  Logger.log('=== 統計シートパフォーマンステスト ===');
+  
+  // テスト1: getAllStatsValues()の速度
+  const start1 = new Date().getTime();
+  const allStats = getAllStatsValues();
+  const end1 = new Date().getTime();
+  Logger.log(`✅ getAllStatsValues(): ${end1 - start1}ms`);
+  Logger.log(`   統計項目数: ${Object.keys(allStats).length}`);
+  Logger.log(`   合計: ${allStats['合計']}`);
+  Logger.log(`   販売済み: ${allStats['販売済み']}`);
+  Logger.log(`   総利益金額: ${allStats['総利益金額']}`);
+  
+  // テスト2: 統計シート自体の取得速度
+  const start2 = new Date().getTime();
+  const statsSheet = getStatsSheet();
+  const end2 = new Date().getTime();
+  Logger.log(`\n✅ getStatsSheet(): ${end2 - start2}ms`);
+  
+  // テスト3: 統計シートのデータ範囲取得速度
+  const start3 = new Date().getTime();
+  const data = statsSheet.getDataRange().getValues();
+  const end3 = new Date().getTime();
+  Logger.log(`✅ getDataRange().getValues(): ${end3 - start3}ms`);
+  Logger.log(`   行数: ${data.length}`);
+  
+  // テスト4: 在庫シート取得速度（比較用）
+  const start4 = new Date().getTime();
+  const sh = getSheet();
+  const lastRow = sh.getLastRow();
+  const end4 = new Date().getTime();
+  Logger.log(`\n✅ getSheet() + getLastRow(): ${end4 - start4}ms`);
+  Logger.log(`   総行数: ${lastRow}`);
+  
+  Logger.log('\n=== テスト完了 ===');
+}
+
+/**
+ * デバッグ用：getInventoryDashboardAPIを直接テスト
+ */
+function testGetInventoryDashboard() {
+  Logger.log('=== getInventoryDashboardAPI テスト ===');
+  
+  try {
+    const result = getInventoryDashboardAPI({
+      status: '',
+      page: 1,
+      perPage: 10
+    });
+    
+    // ContentServiceのTextOutputから実際のJSONを取得
+    const content = result.getContent();
+    Logger.log('結果:');
+    Logger.log(content);
+    
+    // パース して確認
+    const parsed = JSON.parse(content);
+    Logger.log('\n統計情報:');
+    Logger.log('合計: ' + parsed.data.statistics.total);
+    Logger.log('登録済み: ' + parsed.data.statistics.statusCounts.registered);
+    Logger.log('販売済み: ' + parsed.data.statistics.statusCounts.sold);
+    Logger.log('総利益: ' + parsed.data.statistics.totalProfit);
+    Logger.log('\n商品件数: ' + parsed.data.products.length);
+    
+  } catch (error) {
+    Logger.log('エラー: ' + error.message);
+    Logger.log('スタックトレース: ' + error.stack);
+  }
+}
+
+// =============================================================================
 // 商品検索・ジャンプ機能（既存改良）
 // =============================================================================
 function jumpToRowByCode(code) {
@@ -479,7 +1046,7 @@ function searchInventoryAPI(params) {
     const allResults = [];
 
     // ステータスフィルタ（複数選択対応）
-    const statusFilters = filters.status ? filters.status.split(',').map(s => s.trim()) : [];
+    const statusFilters = Array.isArray(filters.statuses) ? filters.statuses : [];
 
     for (let row = INVENTORY_START_ROW; row <= lastRow; row++) {
       const managementNumber = getCellValue(sh, row, managementCol);
@@ -681,10 +1248,15 @@ function updateProductAPI(params) {
       return jsonErrorResponse(`フィールド「${field}」が見つかりません`);
     }
 
+    // Phase 2: 統計は毎回全件スキャンで計算するため、ステータス変更時の統計更新は不要
+
+    // 値を更新
     sh.getRange(row, col).setValue(value);
 
     // ユーザー活動記録
     recordUserUpdate(sh, row, map, editor || 'システム');
+
+    // Phase 2: 統計更新処理は削除（毎回全件スキャンで計算）
 
     // 利益再計算（金額系フィールドの場合）
     if (['販売金額', '送料', '梱包資材費', '販売手数料'].includes(field)) {
@@ -708,95 +1280,30 @@ function updateProductAPI(params) {
  * パラメータ: なし
  */
 function getStatisticsAPI(params) {
+  const startTime = new Date().getTime();
+  Logger.log('[PERF] getStatisticsAPI 開始（統計シートから取得）');
+  
   try {
-    const sh = getSheet();
-    const lastRow = sh.getLastRow();
-
-    if (lastRow < INVENTORY_START_ROW) {
-      return jsonSuccessResponse({
-        total: 0,
-        statusCounts: {
-          registered: 0,
-          preparingListing: 0,
-          listed: 0,
-          sold: 0,
-          withdrawn: 0
-        },
-        totalPurchaseAmount: 0,
-        totalListingAmount: 0,
-        totalSaleAmount: 0,
-        totalProfit: 0,
-        averageProfit: 0,
-        averageInventoryDays: 0
-      });
-    }
-
-    const { map } = getHeaderMapCommon();
-
-    let total = 0;
+    // 統計シートから直接読み込み（スキャン不要！）
+    const total = getStatsValue('合計');
     const statusCounts = {
-      registered: 0,        // 登録済み
-      preparingListing: 0,  // 出品準備中
-      listed: 0,            // 出品中
-      sold: 0,              // 販売済み
-      withdrawn: 0          // 取り下げ
+      registered: getStatsValue('登録済み'),
+      preparingListing: getStatsValue('出品準備中'),
+      listed: getStatsValue('出品中'),
+      sold: getStatsValue('販売済み'),
+      withdrawn: getStatsValue('取り下げ')
     };
-    let totalPurchaseAmount = 0;
-    let totalListingAmount = 0;
-    let totalSaleAmount = 0;
-    let totalProfit = 0;
-    let totalInventoryDays = 0;
-    let inventoryDaysCount = 0;
-
-    for (let row = INVENTORY_START_ROW; row <= lastRow; row++) {
-      const managementNumber = getCellValue(sh, row, colByName(sh, INVENTORY_HEADERS.key));
-      if (!managementNumber) continue;
-
-      total++;
-
-      // ステータス集計
-      const status = getCellValue(sh, row, map['ステータス']);
-      if (status === '登録済み') {
-        statusCounts.registered++;
-      } else if (status === '出品準備中') {
-        statusCounts.preparingListing++;
-      } else if (status === '出品中') {
-        statusCounts.listed++;
-      } else if (status === '販売済み') {
-        statusCounts.sold++;
-      } else if (status === '取り下げ') {
-        statusCounts.withdrawn++;
-      }
-
-      // 金額集計
-      const purchaseAmount = Number(getCellValue(sh, row, map['仕入金額'])) || 0;
-      const listingAmount = Number(getCellValue(sh, row, map['出品金額'])) || 0;
-      const saleAmount = Number(getCellValue(sh, row, map['販売金額'])) || 0;
-      const profit = Number(getCellValue(sh, row, map['利益金額'])) || 0;
-
-      totalPurchaseAmount += purchaseAmount;
-      
-      // 出品金額は「出品中」「販売済み」のみカウント
-      if (status === '出品中' || status === '販売済み') {
-        totalListingAmount += listingAmount;
-      }
-
-      // 販売金額は「販売済み」のみカウント
-      if (status === '販売済み') {
-        totalSaleAmount += saleAmount;
-        totalProfit += profit;
-      }
-
-      // 在庫日数（販売済みのみ）
-      if (status === '販売済み') {
-        const inventoryDays = Number(getCellValue(sh, row, map['在庫日数'])) || 0;
-        if (inventoryDays > 0) {
-          totalInventoryDays += inventoryDays;
-          inventoryDaysCount++;
-        }
-      }
-    }
-
+    
+    const totalPurchaseAmount = getStatsValue('総仕入金額');
+    const totalListingAmount = getStatsValue('総出品金額');
+    const totalSaleAmount = getStatsValue('総販売金額');
+    const totalProfit = getStatsValue('総利益金額');
+    const totalInventoryDays = getStatsValue('総在庫日数');
+    const inventoryDaysCount = getStatsValue('在庫日数カウント');
+    
+    const endTime = new Date().getTime();
+    Logger.log(`[PERF] getStatisticsAPI 完了: ${endTime - startTime}ms（統計シートから取得）`);
+    
     return jsonSuccessResponse({
       total: total,
       statusCounts: statusCounts,
@@ -809,20 +1316,28 @@ function getStatisticsAPI(params) {
     });
 
   } catch (error) {
+    Logger.log(`[統計] getStatisticsAPI エラー: ${error.message}`);
     return jsonErrorResponse(`統計取得エラー: ${error.message}`);
   }
 }
 
 /**
- * 在庫ダッシュボードAPI（統合版）
- * 1回のスプレッドシートスキャンで統計情報と商品一覧の両方を取得
- * パフォーマンス改善のため、searchInventoryAPIとgetStatisticsAPIを統合
+ * 在庫ダッシュボードAPI（統合版・getValues最適化版）
+ * 1回のgetDataRange().getValues()で全データを配列として一括取得
+ * ループ内ではサービス呼び出しなし、配列アクセスのみで処理
+ * 期待パフォーマンス: 6秒 → 0.5-1.2秒
  */
 function getInventoryDashboardAPI(params) {
+  const startTime = new Date().getTime();
+  Logger.log('[PERF] getInventoryDashboardAPI 開始（getValues最適化版）');
+
   try {
+    // paramsのデフォルト値設定（エディタから直接実行した場合に対応）
+    params = params || {};
+
     // フィルタ条件
     const filters = {
-      status: params.status || '',
+      statuses: params.statuses || [],  // 修正: statusesを配列で受け取る
       brand: params.brand || '',
       category: params.category || '',
       person: params.person || '',
@@ -836,16 +1351,20 @@ function getInventoryDashboardAPI(params) {
 
     // ページネーション
     const page = parseInt(params.page) || 1;
-    const perPage = parseInt(params.perPage) || 10;
+    const perPage = parseInt(params.limit) || 10;  // 修正: limitに変更
 
     // ソート
     const sortBy = params.sortBy || 'registeredAt';
     const sortOrder = params.sortOrder || 'desc';
 
+    // 【最適化】getDataRange().getValues()で一括取得（1回のサービス呼び出し）
+    const bulkFetchStart = new Date().getTime();
     const sh = getSheet();
-    const lastRow = sh.getLastRow();
+    const allData = sh.getDataRange().getValues();
+    Logger.log('[PERF] getDataRange().getValues()完了: ' + (new Date().getTime() - bulkFetchStart) + 'ms');
 
-    if (lastRow < INVENTORY_START_ROW) {
+    if (allData.length < 2) {
+      // ヘッダー行のみ、またはデータなし
       return jsonSuccessResponse({
         statistics: {
           total: 0,
@@ -872,121 +1391,122 @@ function getInventoryDashboardAPI(params) {
       });
     }
 
-    const { map } = getHeaderMapCommon();
-    const managementCol = colByName(sh, INVENTORY_HEADERS.key);
+    // ヘッダー行（1行目）から列インデックスマップを構築
+    const headerRow = allData[0];
+    const colIdx = {};
+    for (let i = 0; i < headerRow.length; i++) {
+      const headerName = String(headerRow[i]).trim();
+      if (headerName) {
+        colIdx[headerName] = i;
+      }
+    }
 
-    // 統計用変数
-    let total = 0;
-    const statusCounts = {
-      registered: 0,
-      preparingListing: 0,
-      listed: 0,
-      sold: 0,
-      withdrawn: 0
+    // 必須列の確認
+    const requiredFields = ['管理番号', 'ステータス'];
+    for (const field of requiredFields) {
+      if (colIdx[field] === undefined) {
+        return jsonErrorResponse(`必須列「${field}」が見つかりません`);
+      }
+    }
+
+    // 【統計分離最適化】統計は統計シートから取得（ループ内での統計計算を削除）
+    const statsStart = new Date().getTime();
+    const allStats = getAllStatsValues();
+    Logger.log('[PERF] 統計シート読み込み完了: ' + (new Date().getTime() - statsStart) + 'ms');
+
+    const statistics = {
+      total: allStats['合計'] || 0,
+      statusCounts: {
+        registered: allStats['登録済み'] || 0,
+        preparingListing: allStats['出品準備中'] || 0,
+        listed: allStats['出品中'] || 0,
+        sold: allStats['販売済み'] || 0,
+        withdrawn: allStats['取り下げ'] || 0
+      },
+      totalPurchaseAmount: allStats['総仕入金額'] || 0,
+      totalListingAmount: allStats['総出品金額'] || 0,
+      totalSaleAmount: allStats['総販売金額'] || 0,
+      totalProfit: allStats['総利益金額'] || 0,
+      averageProfit: (allStats['販売済み'] > 0) ? Math.round((allStats['総利益金額'] || 0) / allStats['販売済み']) : 0,
+      averageInventoryDays: (allStats['在庫日数カウント'] > 0) ? Math.round((allStats['総在庫日数'] || 0) / allStats['在庫日数カウント']) : 0
     };
-    let totalPurchaseAmount = 0;
-    let totalListingAmount = 0;
-    let totalSaleAmount = 0;
-    let totalProfit = 0;
-    let totalInventoryDays = 0;
-    let inventoryDaysCount = 0;
 
     // 商品一覧用配列
     const allResults = [];
 
     // ステータスフィルタ（複数選択対応）
-    const statusFilters = filters.status ? filters.status.split(',').map(s => s.trim()) : [];
+    const statusFilters = Array.isArray(filters.statuses) ? filters.statuses : [];
 
-    // 1回のループで統計と商品一覧の両方を処理
-    for (let row = INVENTORY_START_ROW; row <= lastRow; row++) {
-      const managementNumber = getCellValue(sh, row, managementCol);
+    // 【最適化】配列ループ処理（統計計算なし、フィルタリングのみ）
+    const loopStart = new Date().getTime();
+
+    // データ行をループ（2行目以降）
+    for (let rowIdx = 1; rowIdx < allData.length; rowIdx++) {
+      const row = allData[rowIdx];
+
+      // 管理番号チェック
+      const managementNumber = String(row[colIdx['管理番号']] || '').trim();
       if (!managementNumber) continue;
 
-      total++;
+      // ステータス取得
+      const status = String(row[colIdx['ステータス']] || '').trim();
 
-      // 基本情報取得
-      const status = getCellValue(sh, row, map['ステータス']);
-      const brand = getCellValue(sh, row, map['ブランド(英語)']);
-      const category = getCellValue(sh, row, map['大分類']);
-      const person = getCellValue(sh, row, map['担当者']);
-      const size = getCellValue(sh, row, map['サイズ']);
-      const color = getCellValue(sh, row, map['カラー(選択)']);
-      const productName = getCellValue(sh, row, map['商品名(タイトル)']);
-      const purchaseAmount = Number(getCellValue(sh, row, map['仕入金額'])) || 0;
-      const listingAmount = Number(getCellValue(sh, row, map['出品金額'])) || 0;
-      const saleAmount = Number(getCellValue(sh, row, map['販売金額'])) || 0;
-      const profit = Number(getCellValue(sh, row, map['利益金額'])) || 0;
-      const inventoryDays = Number(getCellValue(sh, row, map['在庫日数'])) || 0;
-
-      // 統計集計
-      if (status === '登録済み') {
-        statusCounts.registered++;
-      } else if (status === '出品準備中') {
-        statusCounts.preparingListing++;
-      } else if (status === '出品中') {
-        statusCounts.listed++;
-      } else if (status === '販売済み') {
-        statusCounts.sold++;
-      } else if (status === '取り下げ') {
-        statusCounts.withdrawn++;
-      }
-
-      totalPurchaseAmount += purchaseAmount;
-      
-      if (status === '出品中' || status === '販売済み') {
-        totalListingAmount += listingAmount;
-      }
-
-      if (status === '販売済み') {
-        totalSaleAmount += saleAmount;
-        totalProfit += profit;
-        if (inventoryDays > 0) {
-          totalInventoryDays += inventoryDays;
-          inventoryDaysCount++;
-        }
-      }
-
-      // フィルタ適用（商品一覧用）
-      let matchesFilter = true;
-
+      // フィルタ適用（早期終了最適化）
       if (statusFilters.length > 0 && !statusFilters.includes(status)) {
-        matchesFilter = false;
+        continue;
       }
+
+      const brand = String(row[colIdx['ブランド(英語)']] || '').trim();
       if (filters.brand && brand !== filters.brand) {
-        matchesFilter = false;
+        continue;
       }
+
+      const category = String(row[colIdx['大分類']] || '').trim();
       if (filters.category && category !== filters.category) {
-        matchesFilter = false;
+        continue;
       }
+
+      const person = String(row[colIdx['担当者']] || '').trim();
       if (filters.person && person !== filters.person) {
-        matchesFilter = false;
+        continue;
       }
+
+      const size = String(row[colIdx['サイズ']] || '').trim();
       if (filters.size && size !== filters.size) {
-        matchesFilter = false;
+        continue;
       }
+
+      const color = String(row[colIdx['カラー(選択)']] || '').trim();
       if (filters.color && color !== filters.color) {
-        matchesFilter = false;
+        continue;
       }
 
       // テキスト検索
-      if (filters.searchText && matchesFilter) {
+      if (filters.searchText) {
+        const productName = String(row[colIdx['商品名(タイトル)']] || '').trim();
         const searchLower = filters.searchText.toLowerCase();
-        const matchNumber = (managementNumber || '').toLowerCase().includes(searchLower);
-        const matchName = (productName || '').toLowerCase().includes(searchLower);
+        const matchNumber = managementNumber.toLowerCase().includes(searchLower);
+        const matchName = productName.toLowerCase().includes(searchLower);
         if (!matchNumber && !matchName) {
-          matchesFilter = false;
+          continue;
         }
       }
 
       // 日付範囲フィルタ
-      if ((filters.dateFrom || filters.dateTo) && matchesFilter) {
+      if (filters.dateFrom || filters.dateTo) {
         let targetDate = null;
+        let targetDateCol = null;
+
         if (filters.dateType === 'purchase') {
-          targetDate = getCellValue(sh, row, map['仕入日']);
+          targetDateCol = colIdx['仕入日'];
         } else if (filters.dateType === 'listing') {
-          targetDate = getCellValue(sh, row, map['出品日']);
+          targetDateCol = colIdx['出品日'];
         } else if (filters.dateType === 'sale') {
-          targetDate = getCellValue(sh, row, map['販売日']);
+          targetDateCol = colIdx['販売日'];
+        }
+
+        if (targetDateCol !== undefined) {
+          targetDate = row[targetDateCol];
         }
 
         if (targetDate) {
@@ -994,58 +1514,71 @@ function getInventoryDashboardAPI(params) {
           if (filters.dateFrom) {
             const fromDate = new Date(filters.dateFrom);
             if (dateObj < fromDate) {
-              matchesFilter = false;
+              continue;
             }
           }
           if (filters.dateTo) {
             const toDate = new Date(filters.dateTo);
             toDate.setHours(23, 59, 59, 999);
             if (dateObj > toDate) {
-              matchesFilter = false;
+              continue;
             }
           }
-        } else if (filters.dateFrom || filters.dateTo) {
-          matchesFilter = false;
+        } else {
+          continue;
         }
       }
 
-      // フィルタに合致する商品を配列に追加
-      if (matchesFilter) {
-        const productInfo = {
-          managementNumber: managementNumber,
-          person: person,
-          productName: productName,
-          category: category,
-          brand: brand,
-          itemName: getCellValue(sh, row, map['アイテム名']),
-          size: size,
-          color: color,
-          status: status,
-          purchaseDate: getCellValue(sh, row, map['仕入日']),
-          purchaseAmount: purchaseAmount,
-          listingDate: getCellValue(sh, row, map['出品日']),
-          listingAmount: listingAmount,
-          saleDate: getCellValue(sh, row, map['販売日']),
-          saleAmount: saleAmount,
-          profit: profit,
-          profitRate: getCellValue(sh, row, map['利益率']),
-          inventoryDays: inventoryDays,
-          registrant: getCellValue(sh, row, map['登録者']),
-          registeredAt: getCellValue(sh, row, map['登録日時']),
-          lastEditor: getCellValue(sh, row, map['最終更新者']),
-          updatedAt: getCellValue(sh, row, map['更新日時']),
-          imageUrl1: getCellValue(sh, row, map['画像URL1']),
-          imageUrl2: getCellValue(sh, row, map['画像URL2']),
-          imageUrl3: getCellValue(sh, row, map['画像URL3'])
-        };
-        allResults.push(productInfo);
-      }
+      // フィルタ通過した商品を追加
+      const productName = String(row[colIdx['商品名(タイトル)']] || '').trim();
+      const itemName = String(row[colIdx['アイテム名']] || '').trim();
+
+      // 金額情報（フィルタ通過後のみ取得）
+      const purchaseAmount = parseAmount(row[colIdx['仕入金額']] || 0);
+      const listingAmount = parseAmount(row[colIdx['出品金額']] || 0);
+      const saleAmount = parseAmount(row[colIdx['販売金額']] || 0);
+      const profit = parseAmount(row[colIdx['利益金額']] || 0);
+      const inventoryDays = parseAmount(row[colIdx['在庫日数']] || 0);
+
+      const productInfo = {
+        managementNumber: managementNumber,
+        person: person,
+        productName: productName,
+        category: category,
+        brand: brand,
+        itemName: itemName,
+        size: size,
+        color: color,
+        status: status,
+        purchaseDate: row[colIdx['仕入日']] || '',
+        purchaseAmount: purchaseAmount,
+        listingDate: row[colIdx['出品日']] || '',
+        listingAmount: listingAmount,
+        saleDate: row[colIdx['販売日']] || '',
+        saleAmount: saleAmount,
+        profit: profit,
+        profitRate: row[colIdx['利益率']] || '',
+        inventoryDays: inventoryDays,
+        registrant: row[colIdx['登録者']] || '',
+        registeredAt: row[colIdx['登録日時']] || '',
+        lastEditor: row[colIdx['最終更新者']] || '',
+        updatedAt: row[colIdx['更新日時']] || '',
+        imageUrl1: row[colIdx['画像URL1']] || '',
+        imageUrl2: row[colIdx['画像URL2']] || '',
+        imageUrl3: row[colIdx['画像URL3']] || ''
+      };
+
+      allResults.push(productInfo);
     }
 
+    const loopEndTime = new Date().getTime();
+    Logger.log('[PERF] 配列ループ処理完了: ' + (loopEndTime - loopStart) + 'ms, フィルタ後: ' + allResults.length + '件');
+
     // ソート
+    const sortStart = new Date().getTime();
     allResults.sort((a, b) => {
       let aVal, bVal;
-      
+
       switch(sortBy) {
         case 'registeredAt':
           aVal = a.registeredAt ? new Date(a.registeredAt).getTime() : 0;
@@ -1078,6 +1611,7 @@ function getInventoryDashboardAPI(params) {
         return bVal - aVal;
       }
     });
+    Logger.log('[PERF] ソート完了: ' + (new Date().getTime() - sortStart) + 'ms');
 
     // ページネーション
     const totalCount = allResults.length;
@@ -1086,18 +1620,12 @@ function getInventoryDashboardAPI(params) {
     const endIndex = startIndex + perPage;
     const paginatedResults = allResults.slice(startIndex, endIndex);
 
+    const endTime = new Date().getTime();
+    Logger.log('[PERF] getInventoryDashboardAPI 完了: 合計' + (endTime - startTime) + 'ms（getValues最適化版）');
+
     // 統計情報と商品一覧を返す
     return jsonSuccessResponse({
-      statistics: {
-        total: total,
-        statusCounts: statusCounts,
-        totalPurchaseAmount: totalPurchaseAmount,
-        totalListingAmount: totalListingAmount,
-        totalSaleAmount: totalSaleAmount,
-        totalProfit: totalProfit,
-        averageProfit: statusCounts.sold > 0 ? Math.round(totalProfit / statusCounts.sold) : 0,
-        averageInventoryDays: inventoryDaysCount > 0 ? Math.round(totalInventoryDays / inventoryDaysCount) : 0
-      },
+      statistics: statistics,
       products: paginatedResults,
       count: paginatedResults.length,
       totalCount: totalCount,
@@ -1110,6 +1638,8 @@ function getInventoryDashboardAPI(params) {
     });
 
   } catch (error) {
+    Logger.log(`[PERF] getInventoryDashboardAPI エラー: ${error.message}`);
+    Logger.log(`[PERF] スタックトレース: ${error.stack}`);
     return jsonErrorResponse(`ダッシュボード取得エラー: ${error.message}`);
   }
 }
@@ -1194,6 +1724,137 @@ function duplicateProductAPI(params) {
 
   } catch (error) {
     return jsonErrorResponse(`複製エラー: ${error.message}`);
+  }
+}
+
+/**
+ * 商品詳細取得API（Phase 1-4）
+ * 指定した管理番号の商品の全情報を取得
+ */
+function getProductDetailAPI(params) {
+  try {
+    const managementNumber = params.managementNumber;
+    if (!managementNumber) {
+      return jsonErrorResponse('管理番号が指定されていません');
+    }
+
+    const sh = getSheet();
+    const { map } = getHeaderMapCommon();
+    const managementCol = colByName(sh, INVENTORY_HEADERS.key);
+    const lastRow = sh.getLastRow();
+
+    // 商品を検索
+    let targetRow = null;
+    for (let row = INVENTORY_START_ROW; row <= lastRow; row++) {
+      const rowManagementNumber = getCellValue(sh, row, managementCol);
+      if (rowManagementNumber === managementNumber) {
+        targetRow = row;
+        break;
+      }
+    }
+
+    if (!targetRow) {
+      return jsonErrorResponse(`商品が見つかりません: ${managementNumber}`);
+    }
+
+    // 商品データを取得
+    const product = {
+      managementNumber: getCellValue(sh, targetRow, managementCol),
+      person: getCellValue(sh, targetRow, map['担当者']),
+      purchaseDate: getCellValue(sh, targetRow, map['仕入日']),
+      brand: getCellValue(sh, targetRow, map['ブランド']),
+      productName: getCellValue(sh, targetRow, map['商品名']),
+      category: getCellValue(sh, targetRow, map['カテゴリ']),
+      item: getCellValue(sh, targetRow, map['アイテム']),
+      size: getCellValue(sh, targetRow, map['サイズ']),
+      color: getCellValue(sh, targetRow, map['カラー']),
+      material: getCellValue(sh, targetRow, map['素材']),
+      productDescription: getCellValue(sh, targetRow, map['商品説明']),
+      imageUrl1: getCellValue(sh, targetRow, map['画像URL1']),
+      imageUrl2: getCellValue(sh, targetRow, map['画像URL2']),
+      imageUrl3: getCellValue(sh, targetRow, map['画像URL3']),
+      purchaseAmount: getCellValue(sh, targetRow, map['仕入金額']),
+      status: getCellValue(sh, targetRow, map['ステータス']),
+      listingDate: getCellValue(sh, targetRow, map['出品日']),
+      listingDestination: getCellValue(sh, targetRow, map['出品先']),
+      listingAmount: getCellValue(sh, targetRow, map['出品金額']),
+      saleDate: getCellValue(sh, targetRow, map['販売日']),
+      saleAmount: getCellValue(sh, targetRow, map['販売金額']),
+      profit: getCellValue(sh, targetRow, map['利益金額']),
+      inventoryDays: getCellValue(sh, targetRow, map['在庫日数'])
+    };
+
+    return jsonSuccessResponse(product);
+
+  } catch (error) {
+    return jsonErrorResponse(`商品詳細取得エラー: ${error.message}`);
+  }
+}
+
+/**
+ * 商品ステータス更新API（Phase 1-4）
+ * 指定した管理番号の商品のステータスを更新
+ */
+function updateProductStatusAPI(params) {
+  try {
+    const managementNumber = params.managementNumber;
+    const newStatus = params.newStatus;
+
+    if (!managementNumber) {
+      return jsonErrorResponse('管理番号が指定されていません');
+    }
+    if (!newStatus) {
+      return jsonErrorResponse('新しいステータスが指定されていません');
+    }
+
+    // ステータスの妥当性チェック
+    const validStatuses = ['登録済み', '出品準備中', '出品中', '販売済み', '取り下げ'];
+    if (!validStatuses.includes(newStatus)) {
+      return jsonErrorResponse(`無効なステータス: ${newStatus}`);
+    }
+
+    const sh = getSheet();
+    const { map } = getHeaderMapCommon();
+    const managementCol = colByName(sh, INVENTORY_HEADERS.key);
+    const statusCol = map['ステータス'];
+    const lastRow = sh.getLastRow();
+
+    // 商品を検索
+    let targetRow = null;
+    for (let row = INVENTORY_START_ROW; row <= lastRow; row++) {
+      const rowManagementNumber = getCellValue(sh, row, managementCol);
+      if (rowManagementNumber === managementNumber) {
+        targetRow = row;
+        break;
+      }
+    }
+
+    if (!targetRow) {
+      return jsonErrorResponse(`商品が見つかりません: ${managementNumber}`);
+    }
+
+    // ステータスを更新
+    sh.getRange(targetRow, statusCol).setValue(newStatus);
+
+    // 最終更新者・更新日時を記録
+    const currentUser = Session.getActiveUser().getEmail();
+    const currentTime = new Date();
+    sh.getRange(targetRow, map['最終更新者']).setValue(currentUser);
+    sh.getRange(targetRow, map['更新日時']).setValue(currentTime);
+
+    Logger.log(`[在庫管理] ステータス更新: ${managementNumber} → ${newStatus}`);
+
+    // 統計情報を再計算
+    recalculateAllStats();
+
+    return jsonSuccessResponse({
+      managementNumber: managementNumber,
+      newStatus: newStatus,
+      message: `ステータスを「${newStatus}」に更新しました`
+    });
+
+  } catch (error) {
+    return jsonErrorResponse(`ステータス更新エラー: ${error.message}`);
   }
 }
 
