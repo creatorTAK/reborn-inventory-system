@@ -329,14 +329,14 @@
       const statusValues = Array.from(statusCheckboxes).map(cb => cb.value);
 
       const filters = {
-        status: statusValues.join(','),
+        statuses: statusValues.join(','),  // 修正: statusesを使用
         searchText: document.getElementById('searchText').value.trim(),
         brand: document.getElementById('filterBrand').value.trim(),
         category: document.getElementById('filterCategory').value.trim(),
         size: document.getElementById('filterSize').value.trim(),
         color: document.getElementById('filterColor').value.trim(),
         page: currentPage,
-        perPage: parseInt(document.getElementById('perPage').value),
+        limit: parseInt(document.getElementById('perPage').value),  // 修正: limitを使用
         sortBy: document.getElementById('sortBy').value,
         sortOrder: document.getElementById('sortOrder').value
       };
@@ -346,8 +346,25 @@
       const apiCallTime = performance.now();
       console.log('🔍 [PERF] API呼び出し開始:', (apiCallTime - startTime).toFixed(0) + 'ms');
 
-      google.script.run
-        .withSuccessHandler(function(response) {
+      // fetch()ベースのAPI呼び出しに変更
+      const gasUrl = window.location.href.split('?')[0];
+      const params = new URLSearchParams({
+        action: 'getInventoryDashboard',
+        statuses: filters.statuses,
+        page: filters.page,
+        limit: filters.limit,
+        sortBy: filters.sortBy,
+        sortOrder: filters.sortOrder,
+        searchText: filters.searchText,
+        brand: filters.brand,
+        category: filters.category,
+        size: filters.size,
+        color: filters.color
+      });
+
+      fetch(gasUrl + '?' + params.toString())
+        .then(response => response.json())
+        .then(function(response) {
           const apiResponseTime = performance.now();
           console.log('🔍 [PERF] API応答受信:', (apiResponseTime - apiCallTime).toFixed(0) + 'ms');
 
@@ -380,14 +397,13 @@
             showError('読み込みエラー: ' + response.error);
           }
         })
-        .withFailureHandler(function(error) {
+        .catch(function(error) {
           const errorTime = performance.now();
           console.error('❌ [PERF] API失敗:', (errorTime - apiCallTime).toFixed(0) + 'ms');
           console.error('❌ [PERF] エラー詳細:', error);
           hideLoading();
           showError('読み込みエラー: ' + error.message);
-        })
-        .getInventoryDashboardAPI(filters);
+        });
     }
 
     // 商品表示
@@ -518,8 +534,16 @@
     function viewProduct(managementNumber) {
       showLoading();
 
-      google.script.run
-        .withSuccessHandler(function(response) {
+      // fetch()ベースのAPI呼び出しに変更
+      const gasUrl = window.location.href.split('?')[0];
+      const params = new URLSearchParams({
+        action: 'getProductDetail',
+        managementNumber: managementNumber
+      });
+
+      fetch(gasUrl + '?' + params.toString())
+        .then(response => response.json())
+        .then(function(response) {
           hideLoading();
           if (response.success) {
             currentProduct = response.data;
@@ -532,11 +556,10 @@
             showError('商品詳細の取得エラー: ' + response.error);
           }
         })
-        .withFailureHandler(function(error) {
+        .catch(function(error) {
           hideLoading();
           showError('商品詳細の取得エラー: ' + error.message);
-        })
-        .getProductDetailAPI({ managementNumber: managementNumber });
+        });
     }
 
     // 商品詳細をモーダルに表示
@@ -703,21 +726,29 @@
       if (!confirm('商品「' + managementNumber + '」を複製しますか？')) return;
 
       showLoading();
-      google.script.run
-        .withSuccessHandler(function(response) {
+      // fetch()ベースのAPI呼び出しに変更
+      const gasUrl = window.location.href.split('?')[0];
+      const params = new URLSearchParams({
+        action: 'duplicateProduct',
+        managementNumber: managementNumber
+      });
+
+      fetch(gasUrl + '?' + params.toString())
+        .then(response => response.json())
+        .then(function(response) {
           hideLoading();
           if (response.success) {
-            alert('商品を複製しました！\n新しい管理番号: ' + response.data.newManagementNumber);
+            alert('商品を複製しました！
+新しい管理番号: ' + response.data.newManagementNumber);
             loadDashboardAndSearch();
           } else {
             showError('複製エラー: ' + response.error);
           }
         })
-        .withFailureHandler(function(error) {
+        .catch(function(error) {
           hideLoading();
           showError('複製エラー: ' + error.message);
-        })
-        .duplicateProductAPI({ managementNumber: managementNumber });
+        });
     }
 
     // 商品ステータス・情報保存
@@ -793,8 +824,17 @@
 
       // ステータス更新
       if (statusChanged) {
-        google.script.run
-          .withSuccessHandler(function(response) {
+        // fetch()ベースのAPI呼び出しに変更
+        const gasUrl = window.location.href.split('?')[0];
+        const params = new URLSearchParams({
+          action: 'updateProductStatus',
+          managementNumber: currentProduct.managementNumber,
+          newStatus: newStatus
+        });
+
+        fetch(gasUrl + '?' + params.toString())
+          .then(response => response.json())
+          .then(function(response) {
             updateCount++;
             if (!response.success) {
               hideLoading();
@@ -803,20 +843,27 @@
               completeUpdate();
             }
           })
-          .withFailureHandler(function(error) {
+          .catch(function(error) {
             hideLoading();
             showError('ステータス更新エラー: ' + error.message);
-          })
-          .updateProductStatusAPI({
-            managementNumber: currentProduct.managementNumber,
-            newStatus: newStatus
           });
       }
 
       // フィールド更新
       changedFields.forEach(change => {
-        google.script.run
-          .withSuccessHandler(function(response) {
+        // fetch()ベースのAPI呼び出しに変更
+        const gasUrl = window.location.href.split('?')[0];
+        const params = new URLSearchParams({
+          action: 'updateProduct',
+          managementNumber: currentProduct.managementNumber,
+          field: change.field,
+          value: change.value,
+          editor: '在庫管理画面'
+        });
+
+        fetch(gasUrl + '?' + params.toString())
+          .then(response => response.json())
+          .then(function(response) {
             updateCount++;
             if (!response.success) {
               hideLoading();
@@ -825,15 +872,9 @@
               completeUpdate();
             }
           })
-          .withFailureHandler(function(error) {
+          .catch(function(error) {
             hideLoading();
             showError(`フィールド「${change.field}」更新エラー: ` + error.message);
-          })
-          .updateProductAPI({
-            managementNumber: currentProduct.managementNumber,
-            field: change.field,
-            value: change.value,
-            editor: '在庫管理画面'
           });
       });
 
