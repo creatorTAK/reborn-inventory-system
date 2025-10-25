@@ -381,6 +381,18 @@
       <div class="setup-title">🔔 通知設定</div>
       <div class="setup-subtitle">初回のみ - 商品登録の通知を受け取るための設定です</div>
 
+      <!-- ⓪ ユーザーID入力 -->
+      <div class="step-section">
+        <div>
+          <span class="step-number">⓪</span>
+          <span class="step-title">ユーザーID（メールアドレス）</span>
+        </div>
+        <input type="email" id="user-email-input" placeholder="your-email@example.com"
+               style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; margin-top: 8px;">
+        <button class="step-button" onclick="saveUserEmail()" style="margin-top: 8px;">保存</button>
+        <div id="step0-result" class="step-result"></div>
+      </div>
+
       <!-- ① 通知を許可 -->
       <div class="step-section">
         <div>
@@ -545,6 +557,49 @@
       // セットアップ完了済みの場合は何もしない（デフォルトでアプリ画面が表示されている）
     });
 
+    // ⓪ ユーザーIDを保存
+    function saveUserEmail() {
+      const emailInput = document.getElementById('user-email-input');
+      const resultDiv = document.getElementById('step0-result');
+      const step1Button = document.querySelector('button[onclick="requestNotificationPermission()"]');
+
+      const email = emailInput.value.trim();
+
+      if (!email) {
+        resultDiv.textContent = '❌ メールアドレスを入力してください';
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+        return;
+      }
+
+      // 簡易的なメールアドレス検証
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        resultDiv.textContent = '❌ 有効なメールアドレスを入力してください';
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+        return;
+      }
+
+      // LocalStorageに保存
+      try {
+        localStorage.setItem('reborn_user_email', email);
+        console.log('✅ ユーザーID保存:', email);
+
+        resultDiv.textContent = '✅ ユーザーIDを保存しました！\n次に「① 通知を許可」ボタンを押してください。';
+        resultDiv.className = 'step-result success';
+        resultDiv.style.display = 'block';
+
+        // 入力フィールドを無効化
+        emailInput.disabled = true;
+      } catch (error) {
+        console.error('❌ LocalStorage保存エラー:', error);
+        resultDiv.textContent = '❌ 保存に失敗しました: ' + error.message;
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+      }
+    }
+
     // ① 通知を許可
     async function requestNotificationPermission() {
       const resultDiv = document.getElementById('step1-result');
@@ -630,9 +685,14 @@
           };
           console.log('📱 デバイス情報:', deviceInfo);
 
-          // GASにトークンとデバイス情報を送信
+          // LocalStorageからユーザーIDを取得
+          const userEmail = localStorage.getItem('reborn_user_email') || 'unknown';
+          console.log('📧 ユーザーID:', userEmail);
+
+          // GASにトークン、デバイス情報、ユーザーIDを送信
           const response = await fetch(GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(currentToken) +
-                                      '&deviceInfo=' + encodeURIComponent(JSON.stringify(deviceInfo)));
+                                      '&deviceInfo=' + encodeURIComponent(JSON.stringify(deviceInfo)) +
+                                      '&userId=' + encodeURIComponent(userEmail));
 
           if (response.ok) {
             const data = await response.json();
