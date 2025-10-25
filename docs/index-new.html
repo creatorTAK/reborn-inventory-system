@@ -273,11 +273,33 @@
       }
     }
 
-    // FCMトークンをGASに保存
+    // デバイス情報を取得（端末識別用）
+    function getDeviceInfo() {
+      try {
+        return {
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+          language: navigator.language,
+          screenSize: `${screen.width}x${screen.height}`,
+          timestamp: new Date().toISOString()
+        };
+      } catch (error) {
+        console.error('デバイス情報取得エラー:', error);
+        return null;
+      }
+    }
+
+    // FCMトークンをGASに保存（チーム利用対応: デバイス情報も送信）
     async function saveFCMTokenToGAS(token) {
       try {
         console.log('🔄 FCMトークンをGASに保存中...');
-        const url = GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(token);
+
+        // デバイス情報を取得
+        const deviceInfo = getDeviceInfo();
+        console.log('📱 デバイス情報:', deviceInfo);
+
+        const url = GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(token) +
+                   (deviceInfo ? '&deviceInfo=' + encodeURIComponent(JSON.stringify(deviceInfo)) : '');
         console.log('📤 リクエストURL:', url);
 
         const response = await fetch(url);
