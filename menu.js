@@ -232,8 +232,10 @@ function doGet(e) {
         // デバッグログをスプレッドシートに書き込む
         try {
           const ss = SpreadsheetApp.getActiveSpreadsheet();
-          let debugSheet = ss.getSheetByName('在庫管理デバッグ');
+          // 既存のFCM登録デバッグシートを使用
+          let debugSheet = ss.getSheetByName('FCM登録デバッグ');
           if (!debugSheet) {
+            // なければ新規作成
             debugSheet = ss.insertSheet('在庫管理デバッグ');
             debugSheet.appendRow(['タイムスタンプ', 'アクション', '受信パラメータ', '結果', 'エラー詳細', '商品件数']);
           }
