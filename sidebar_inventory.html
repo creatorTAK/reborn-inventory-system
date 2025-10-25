@@ -69,6 +69,25 @@
     </div>
   </div>
 
+  <!-- 商品詳細モーダル -->
+  <div class="modal fade" id="productDetailModal" tabindex="-1" aria-labelledby="productDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="productDetailModalLabel">📦 商品詳細</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="productDetailBody">
+          <!-- 商品詳細が動的に挿入される -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+          <button type="button" class="btn btn-primary" id="btnSaveProductStatus">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ダッシュボード -->
   <div class="dashboard-card" id="dashboardSection">
     <h5 class="mb-3">📊 在庫状況ダッシュボード</h5>
@@ -152,11 +171,11 @@
       <label class="form-label small">ステータス（複数選択可）</label>
       <div class="d-flex flex-wrap gap-2">
         <div class="form-check">
-          <input class="form-check-input" type="checkbox" value="登録済み" id="status1">
+          <input class="form-check-input" type="checkbox" value="登録済み" id="status1" checked>
           <label class="form-check-label small" for="status1">登録済み</label>
         </div>
         <div class="form-check">
-          <input class="form-check-input" type="checkbox" value="出品準備中" id="status2">
+          <input class="form-check-input" type="checkbox" value="出品準備中" id="status2" checked>
           <label class="form-check-label small" for="status2">出品準備中</label>
         </div>
         <div class="form-check">
@@ -164,11 +183,11 @@
           <label class="form-check-label small" for="status3">出品中</label>
         </div>
         <div class="form-check">
-          <input class="form-check-input" type="checkbox" value="販売済み" id="status4">
+          <input class="form-check-input" type="checkbox" value="販売済み" id="status4" checked>
           <label class="form-check-label small" for="status4">販売済み</label>
         </div>
         <div class="form-check">
-          <input class="form-check-input" type="checkbox" value="取り下げ" id="status5">
+          <input class="form-check-input" type="checkbox" value="取り下げ" id="status5" checked>
           <label class="form-check-label small" for="status5">取り下げ</label>
         </div>
       </div>
@@ -265,6 +284,7 @@
     let currentPage = 1;
     let currentFilters = {};
     let currentSort = { sortBy: 'registeredAt', sortOrder: 'desc' };
+    let currentProduct = null; // 現在表示中の商品データ
 
     // 初期化
     document.addEventListener('DOMContentLoaded', function() {
@@ -292,10 +312,16 @@
         currentSort.sortOrder = document.getElementById('sortOrder').value;
         loadDashboardAndSearch();
       });
+
+      // 商品詳細モーダル - 保存ボタン
+      document.getElementById('btnSaveProductStatus').addEventListener('click', saveProductStatus);
     });
 
     // ダッシュボードと商品一覧を一度に読み込み（統合API）
     function loadDashboardAndSearch() {
+      const startTime = performance.now();
+      console.log('🔍 [PERF] 読み込み開始');
+
       showLoading();
 
       // フィルタ収集
@@ -317,8 +343,14 @@
 
       currentFilters = filters;
 
+      const apiCallTime = performance.now();
+      console.log('🔍 [PERF] API呼び出し開始:', (apiCallTime - startTime).toFixed(0) + 'ms');
+
       google.script.run
         .withSuccessHandler(function(response) {
+          const apiResponseTime = performance.now();
+          console.log('🔍 [PERF] API応答受信:', (apiResponseTime - apiCallTime).toFixed(0) + 'ms');
+
           hideLoading();
           if (response.success) {
             const data = response.data;
@@ -338,11 +370,20 @@
             displayProducts(data.products);
             displayPagination(data.page, data.totalPages, data.totalCount);
             document.getElementById('resultCount').textContent = data.totalCount;
+
+            const renderEndTime = performance.now();
+            console.log('🔍 [PERF] 画面描画完了:', (renderEndTime - apiResponseTime).toFixed(0) + 'ms');
+            console.log('✅ [PERF] 合計時間:', (renderEndTime - startTime).toFixed(0) + 'ms (' + ((renderEndTime - startTime) / 1000).toFixed(1) + '秒)');
+            console.log('📊 [PERF] 統計:', stats.total + '件中' + data.products.length + '件表示');
           } else {
+            console.error('❌ [PERF] エラー:', response.error);
             showError('読み込みエラー: ' + response.error);
           }
         })
         .withFailureHandler(function(error) {
+          const errorTime = performance.now();
+          console.error('❌ [PERF] API失敗:', (errorTime - apiCallTime).toFixed(0) + 'ms');
+          console.error('❌ [PERF] エラー詳細:', error);
           hideLoading();
           showError('読み込みエラー: ' + error.message);
         })
@@ -461,9 +502,9 @@
       document.getElementById('filterSize').value = '';
       document.getElementById('filterColor').value = '';
       
-      // ステータスは「出品中」のみチェック
+      // ステータスは全てチェック
       document.querySelectorAll('input[type="checkbox"][id^="status"]').forEach(cb => {
-        cb.checked = (cb.value === '出品中');
+        cb.checked = true;
       });
       
       document.getElementById('sortBy').value = 'registeredAt';
@@ -473,15 +514,194 @@
       loadDashboardAndSearch();
     }
 
-    // 商品詳細表示（Phase 1-4で実装）
+    // 商品詳細表示
     function viewProduct(managementNumber) {
-      alert('商品詳細表示機能は Phase 1-4 で実装予定です。\n管理番号: ' + managementNumber);
+      showLoading();
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          hideLoading();
+          if (response.success) {
+            currentProduct = response.data;
+            displayProductDetail(response.data);
+
+            // モーダルを表示
+            const modal = new bootstrap.Modal(document.getElementById('productDetailModal'));
+            modal.show();
+          } else {
+            showError('商品詳細の取得エラー: ' + response.error);
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          showError('商品詳細の取得エラー: ' + error.message);
+        })
+        .getProductDetailAPI({ managementNumber: managementNumber });
+    }
+
+    // 商品詳細をモーダルに表示
+    function displayProductDetail(product) {
+      const container = document.getElementById('productDetailBody');
+
+      // 「登録済み」「出品準備中」のみ編集可能
+      const isEditable = (product.status === '登録済み' || product.status === '出品準備中');
+
+      // 画像HTML生成
+      let imagesHtml = '';
+      if (product.imageUrl1 || product.imageUrl2 || product.imageUrl3) {
+        imagesHtml = '<div class="mb-3"><label class="form-label fw-bold">商品画像</label><div class="row g-2">';
+        [product.imageUrl1, product.imageUrl2, product.imageUrl3].forEach((url, index) => {
+          if (url) {
+            imagesHtml += `
+              <div class="col-4">
+                <img src="${url}" class="img-thumbnail" style="width: 100%; height: 120px; object-fit: cover;" alt="画像${index + 1}">
+              </div>
+            `;
+          }
+        });
+        imagesHtml += '</div></div>';
+      }
+
+      // ステータス選択HTML
+      const statusOptions = ['登録済み', '出品準備中', '出品中', '販売済み', '取り下げ'];
+      let statusSelectHtml = '<select class="form-select" id="productStatus">';
+      statusOptions.forEach(status => {
+        const selected = status === product.status ? 'selected' : '';
+        statusSelectHtml += `<option value="${status}" ${selected}>${status}</option>`;
+      });
+      statusSelectHtml += '</select>';
+
+      // フィールド生成ヘルパー関数
+      const createField = (value, fieldName, fieldType = 'text') => {
+        if (isEditable) {
+          if (fieldType === 'textarea') {
+            return `<textarea class="form-control form-control-sm" id="${fieldName}" rows="4">${value || ''}</textarea>`;
+          } else if (fieldType === 'number') {
+            return `<input type="number" class="form-control form-control-sm" id="${fieldName}" value="${value || ''}" min="0">`;
+          } else {
+            return `<input type="text" class="form-control form-control-sm" id="${fieldName}" value="${value || ''}">`;
+          }
+        } else {
+          if (fieldType === 'textarea') {
+            return `<div class="form-control-plaintext" style="white-space: pre-wrap;">${value || '-'}</div>`;
+          } else if (fieldType === 'number') {
+            return `<div class="form-control-plaintext">${formatCurrency(value)}</div>`;
+          } else {
+            return `<div class="form-control-plaintext">${value || '-'}</div>`;
+          }
+        }
+      };
+
+      container.innerHTML = `
+        <div class="row g-3">
+          <!-- 基本情報 -->
+          <div class="col-12">
+            <h6 class="border-bottom pb-2">📝 基本情報</h6>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">管理番号</label>
+            <div class="form-control-plaintext">${product.managementNumber || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">ステータス</label>
+            ${statusSelectHtml}
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">仕入担当者</label>
+            <div class="form-control-plaintext">${product.person || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">仕入日</label>
+            <div class="form-control-plaintext">${product.purchaseDate || '-'}</div>
+          </div>
+
+          <!-- 商品情報 -->
+          <div class="col-12">
+            <h6 class="border-bottom pb-2 mt-2">🏷️ 商品情報 ${isEditable ? '<span class="badge bg-success small">編集可能</span>' : ''}</h6>
+          </div>
+          ${imagesHtml}
+          <div class="col-12">
+            <label class="form-label fw-bold small">ブランド</label>
+            ${createField(product.brand, 'productBrand')}
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-bold small">商品名</label>
+            ${createField(product.productName, 'productName')}
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">カテゴリ</label>
+            ${createField(product.category, 'productCategory')}
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">アイテム</label>
+            ${createField(product.item, 'productItem')}
+          </div>
+          <div class="col-4">
+            <label class="form-label fw-bold small">サイズ</label>
+            ${createField(product.size, 'productSize')}
+          </div>
+          <div class="col-4">
+            <label class="form-label fw-bold small">カラー</label>
+            ${createField(product.color, 'productColor')}
+          </div>
+          <div class="col-4">
+            <label class="form-label fw-bold small">素材</label>
+            ${createField(product.material, 'productMaterial')}
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-bold small">商品説明</label>
+            ${createField(product.productDescription, 'productDescription', 'textarea')}
+          </div>
+
+          <!-- 金額情報 -->
+          <div class="col-12">
+            <h6 class="border-bottom pb-2 mt-2">💰 金額情報 ${isEditable ? '<span class="badge bg-success small">編集可能</span>' : ''}</h6>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">仕入金額</label>
+            ${createField(product.purchaseAmount, 'purchaseAmount', 'number')}
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">出品金額</label>
+            ${createField(product.listingAmount, 'listingAmount', 'number')}
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">販売金額</label>
+            <div class="form-control-plaintext">${formatCurrency(product.saleAmount)}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">利益金額</label>
+            <div class="form-control-plaintext text-success fw-bold">${formatCurrency(product.profit)}</div>
+          </div>
+
+          <!-- 出品・販売情報 -->
+          <div class="col-12">
+            <h6 class="border-bottom pb-2 mt-2">📢 出品・販売情報</h6>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">出品日</label>
+            <div class="form-control-plaintext">${product.listingDate || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">出品先</label>
+            <div class="form-control-plaintext">${product.listingDestination || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">販売日</label>
+            <div class="form-control-plaintext">${product.saleDate || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">在庫日数</label>
+            <div class="form-control-plaintext">${product.inventoryDays ? product.inventoryDays + '日' : '-'}</div>
+          </div>
+        </div>
+      `;
     }
 
     // 商品複製（Phase 1-2で実装）
     function duplicateProduct(managementNumber) {
       if (!confirm('商品「' + managementNumber + '」を複製しますか？')) return;
-      
+
       showLoading();
       google.script.run
         .withSuccessHandler(function(response) {
@@ -498,6 +718,137 @@
           showError('複製エラー: ' + error.message);
         })
         .duplicateProductAPI({ managementNumber: managementNumber });
+    }
+
+    // 商品ステータス・情報保存
+    function saveProductStatus() {
+      if (!currentProduct) {
+        showError('商品データが見つかりません');
+        return;
+      }
+
+      const newStatus = document.getElementById('productStatus').value;
+      const oldStatus = currentProduct.status;
+      const isEditable = (oldStatus === '登録済み' || oldStatus === '出品準備中');
+
+      // 変更されたフィールドを収集
+      const changedFields = [];
+      if (isEditable) {
+        const fieldMappings = [
+          { id: 'productBrand', apiName: 'ブランド', oldValue: currentProduct.brand },
+          { id: 'productName', apiName: '商品名', oldValue: currentProduct.productName },
+          { id: 'productCategory', apiName: 'カテゴリ', oldValue: currentProduct.category },
+          { id: 'productItem', apiName: 'アイテム', oldValue: currentProduct.item },
+          { id: 'productSize', apiName: 'サイズ', oldValue: currentProduct.size },
+          { id: 'productColor', apiName: 'カラー', oldValue: currentProduct.color },
+          { id: 'productMaterial', apiName: '素材', oldValue: currentProduct.material },
+          { id: 'productDescription', apiName: '商品説明', oldValue: currentProduct.productDescription },
+          { id: 'purchaseAmount', apiName: '仕入金額', oldValue: currentProduct.purchaseAmount, isNumber: true },
+          { id: 'listingAmount', apiName: '出品金額', oldValue: currentProduct.listingAmount, isNumber: true }
+        ];
+
+        fieldMappings.forEach(field => {
+          const element = document.getElementById(field.id);
+          if (element) {
+            let newValue = element.value.trim();
+            if (field.isNumber) {
+              newValue = newValue ? parseFloat(newValue) : '';
+            }
+            const oldValue = field.oldValue || '';
+            if (String(newValue) !== String(oldValue)) {
+              changedFields.push({ field: field.apiName, value: newValue });
+            }
+          }
+        });
+      }
+
+      const statusChanged = (newStatus !== oldStatus);
+
+      // 変更がない場合
+      if (!statusChanged && changedFields.length === 0) {
+        alert('変更がありません');
+        return;
+      }
+
+      // 確認ダイアログ
+      let confirmMessage = '';
+      if (statusChanged && changedFields.length > 0) {
+        confirmMessage = `ステータスを「${oldStatus}」から「${newStatus}」に変更し、${changedFields.length}件のフィールドを更新しますか？`;
+      } else if (statusChanged) {
+        confirmMessage = `ステータスを「${oldStatus}」から「${newStatus}」に変更しますか？`;
+      } else {
+        confirmMessage = `${changedFields.length}件のフィールドを更新しますか？`;
+      }
+
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      showLoading();
+
+      // 更新処理を実行
+      let updatePromises = [];
+      let updateCount = 0;
+      const totalUpdates = (statusChanged ? 1 : 0) + changedFields.length;
+
+      // ステータス更新
+      if (statusChanged) {
+        google.script.run
+          .withSuccessHandler(function(response) {
+            updateCount++;
+            if (!response.success) {
+              hideLoading();
+              showError('ステータス更新エラー: ' + response.error);
+            } else if (updateCount === totalUpdates) {
+              completeUpdate();
+            }
+          })
+          .withFailureHandler(function(error) {
+            hideLoading();
+            showError('ステータス更新エラー: ' + error.message);
+          })
+          .updateProductStatusAPI({
+            managementNumber: currentProduct.managementNumber,
+            newStatus: newStatus
+          });
+      }
+
+      // フィールド更新
+      changedFields.forEach(change => {
+        google.script.run
+          .withSuccessHandler(function(response) {
+            updateCount++;
+            if (!response.success) {
+              hideLoading();
+              showError(`フィールド「${change.field}」更新エラー: ` + response.error);
+            } else if (updateCount === totalUpdates) {
+              completeUpdate();
+            }
+          })
+          .withFailureHandler(function(error) {
+            hideLoading();
+            showError(`フィールド「${change.field}」更新エラー: ` + error.message);
+          })
+          .updateProductAPI({
+            managementNumber: currentProduct.managementNumber,
+            field: change.field,
+            value: change.value,
+            editor: '在庫管理画面'
+          });
+      });
+
+      function completeUpdate() {
+        hideLoading();
+        alert('商品情報を更新しました');
+
+        // モーダルを閉じる
+        const modalElement = document.getElementById('productDetailModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        modal.hide();
+
+        // 一覧を再読み込み
+        loadDashboardAndSearch();
+      }
     }
 
     // ユーティリティ関数
