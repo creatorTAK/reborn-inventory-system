@@ -228,22 +228,77 @@ function doGet(e) {
 
       if (action === 'getInventoryDashboard') {
         // 在庫管理ダッシュボード（統合API）
-        const params = {
-          statuses: e.parameter.statuses ? e.parameter.statuses.split(',') : [],
-          page: parseInt(e.parameter.page) || 1,
-          limit: parseInt(e.parameter.limit) || 10,
-          sortBy: e.parameter.sortBy || 'registeredAt',
-          sortOrder: e.parameter.sortOrder || 'desc',
-          searchText: e.parameter.searchText || '',
-          brand: e.parameter.brand || '',
-          category: e.parameter.category || '',
-          size: e.parameter.size || '',
-          color: e.parameter.color || ''
-        };
 
-        const result = getInventoryDashboardAPI(params);
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
+        // デバッグログをスプレッドシートに書き込む
+        try {
+          const ss = SpreadsheetApp.getActiveSpreadsheet();
+          let debugSheet = ss.getSheetByName('在庫管理デバッグ');
+          if (!debugSheet) {
+            debugSheet = ss.insertSheet('在庫管理デバッグ');
+            debugSheet.appendRow(['タイムスタンプ', 'アクション', '受信パラメータ', '結果', 'エラー詳細', '商品件数']);
+          }
+
+          const timestamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+          const rawParams = JSON.stringify(e.parameter);
+
+          const params = {
+            statuses: e.parameter.statuses ? e.parameter.statuses.split(',') : [],
+            page: parseInt(e.parameter.page) || 1,
+            limit: parseInt(e.parameter.limit) || 10,
+            sortBy: e.parameter.sortBy || 'registeredAt',
+            sortOrder: e.parameter.sortOrder || 'desc',
+            searchText: e.parameter.searchText || '',
+            brand: e.parameter.brand || '',
+            category: e.parameter.category || '',
+            size: e.parameter.size || '',
+            color: e.parameter.color || ''
+          };
+
+          let result, resultStatus, errorDetail, productCount;
+          try {
+            result = getInventoryDashboardAPI(params);
+            resultStatus = result.success ? 'SUCCESS' : 'ERROR';
+            errorDetail = result.success ? '-' : (result.error || 'Unknown error');
+            productCount = result.success && result.data && result.data.products ? result.data.products.length : 0;
+          } catch (apiError) {
+            resultStatus = 'EXCEPTION';
+            errorDetail = apiError.toString();
+            productCount = 0;
+            result = { success: false, error: apiError.toString() };
+          }
+
+          // デバッグ情報をスプレッドシートに記録
+          debugSheet.appendRow([
+            timestamp,
+            'getInventoryDashboard',
+            rawParams,
+            resultStatus,
+            errorDetail,
+            productCount
+          ]);
+
+          return ContentService.createTextOutput(JSON.stringify(result))
+            .setMimeType(ContentService.MimeType.JSON);
+
+        } catch (debugError) {
+          Logger.log('Debug sheet error: ' + debugError);
+          // デバッグエラーでも処理は続行
+          const params = {
+            statuses: e.parameter.statuses ? e.parameter.statuses.split(',') : [],
+            page: parseInt(e.parameter.page) || 1,
+            limit: parseInt(e.parameter.limit) || 10,
+            sortBy: e.parameter.sortBy || 'registeredAt',
+            sortOrder: e.parameter.sortOrder || 'desc',
+            searchText: e.parameter.searchText || '',
+            brand: e.parameter.brand || '',
+            category: e.parameter.category || '',
+            size: e.parameter.size || '',
+            color: e.parameter.color || ''
+          };
+          const result = getInventoryDashboardAPI(params);
+          return ContentService.createTextOutput(JSON.stringify(result))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
       }
 
       if (action === 'getProductDetail') {
