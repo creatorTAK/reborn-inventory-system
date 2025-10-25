@@ -227,127 +227,69 @@ function doGet(e) {
       }
 
       if (action === 'getInventoryDashboard') {
-        // 在庫管理ダッシュボード（統合API）
-
-        // デバッグログをスプレッドシートに書き込む
-        try {
-          const ss = SpreadsheetApp.getActiveSpreadsheet();
-          // 既存のFCM登録デバッグシートを使用
-          let debugSheet = ss.getSheetByName('FCM登録デバッグ');
-          if (!debugSheet) {
-            // なければ新規作成
-            debugSheet = ss.insertSheet('在庫管理デバッグ');
-            debugSheet.appendRow(['タイムスタンプ', 'アクション', '受信パラメータ', '結果', 'エラー詳細', '商品件数']);
-          }
-
-          const timestamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
-          const rawParams = JSON.stringify(e.parameter);
-
-          const params = {
-            statuses: e.parameter.statuses ? e.parameter.statuses.split(',') : [],
-            page: parseInt(e.parameter.page) || 1,
-            limit: parseInt(e.parameter.limit) || 10,
-            sortBy: e.parameter.sortBy || 'registeredAt',
-            sortOrder: e.parameter.sortOrder || 'desc',
-            searchText: e.parameter.searchText || '',
-            brand: e.parameter.brand || '',
-            category: e.parameter.category || '',
-            size: e.parameter.size || '',
-            color: e.parameter.color || ''
-          };
-
-          let result, resultStatus, errorDetail, productCount;
-          try {
-            result = getInventoryDashboardAPI(params);
-            resultStatus = result.success ? 'SUCCESS' : 'ERROR';
-            errorDetail = result.success ? '-' : (result.error || 'Unknown error');
-            productCount = result.success && result.data && result.data.products ? result.data.products.length : 0;
-          } catch (apiError) {
-            resultStatus = 'EXCEPTION';
-            errorDetail = apiError.toString();
-            productCount = 0;
-            result = { success: false, error: apiError.toString() };
-          }
-
-          // デバッグ情報をスプレッドシートに記録
-          debugSheet.appendRow([
-            timestamp,
-            'getInventoryDashboard',
-            rawParams,
-            resultStatus,
-            errorDetail,
-            productCount
-          ]);
-
-          return ContentService.createTextOutput(JSON.stringify(result))
-            .setMimeType(ContentService.MimeType.JSON);
-
-        } catch (debugError) {
-          Logger.log('Debug sheet error: ' + debugError);
-          // デバッグエラーでも処理は続行
-          const params = {
-            statuses: e.parameter.statuses ? e.parameter.statuses.split(',') : [],
-            page: parseInt(e.parameter.page) || 1,
-            limit: parseInt(e.parameter.limit) || 10,
-            sortBy: e.parameter.sortBy || 'registeredAt',
-            sortOrder: e.parameter.sortOrder || 'desc',
-            searchText: e.parameter.searchText || '',
-            brand: e.parameter.brand || '',
-            category: e.parameter.category || '',
-            size: e.parameter.size || '',
-            color: e.parameter.color || ''
-          };
-          const result = getInventoryDashboardAPI(params);
-          return ContentService.createTextOutput(JSON.stringify(result))
-            .setMimeType(ContentService.MimeType.JSON);
-        }
+        const start = new Date();
+        const params = {
+          statuses: e.parameter.statuses ? e.parameter.statuses.split(',') : [],
+          page: parseInt(e.parameter.page) || 1,
+          limit: parseInt(e.parameter.limit) || 10,
+          sortBy: e.parameter.sortBy || 'registeredAt',
+          sortOrder: e.parameter.sortOrder || 'desc',
+          searchText: e.parameter.searchText || '',
+          brand: e.parameter.brand || '',
+          category: e.parameter.category || '',
+          size: e.parameter.size || '',
+          color: e.parameter.color || ''
+        };
+        logDebug_Reach(action, e.parameter, start);
+        const result = getInventoryDashboardAPI(params);
+        return jsonOk_(result);
       }
 
       if (action === 'getProductDetail') {
-        // 商品詳細取得
-        const managementNumber = e.parameter.managementNumber;
-        const result = getProductDetailAPI({ managementNumber: managementNumber });
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
+        const start = new Date();
+        logDebug_Reach(action, e.parameter, start);
+        const result = getProductDetailAPI({ managementNumber: e.parameter.managementNumber });
+        return jsonOk_(result);
       }
 
       if (action === 'updateProductStatus') {
-        // ステータス更新
+        const start = new Date();
         const params = {
           managementNumber: e.parameter.managementNumber,
           newStatus: e.parameter.newStatus
         };
+        logDebug_Reach(action, e.parameter, start);
         const result = updateProductStatusAPI(params);
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
+        return jsonOk_(result);
       }
 
       if (action === 'updateProduct') {
-        // 商品フィールド更新
+        const start = new Date();
         const params = {
           managementNumber: e.parameter.managementNumber,
           field: e.parameter.field,
           value: e.parameter.value,
           editor: e.parameter.editor || 'unknown'
         };
+        logDebug_Reach(action, e.parameter, start);
         const result = updateProductAPI(params);
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
+        return jsonOk_(result);
       }
 
       if (action === 'duplicateProduct') {
-        // 商品複製
-        const managementNumber = e.parameter.managementNumber;
-        const result = duplicateProductAPI({ managementNumber: managementNumber });
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
+        const start = new Date();
+        logDebug_Reach(action, e.parameter, start);
+        const result = duplicateProductAPI({ managementNumber: e.parameter.managementNumber });
+        return jsonOk_(result);
       }
 
-      // その他のアクションは将来追加
-      return ContentService.createTextOutput(JSON.stringify({
-        status: 'error',
-        message: '不明なアクション: ' + action
-      })).setMimeType(ContentService.MimeType.JSON);
+      if (action === 'ping') {
+        // ヘルスチェック用
+        return jsonOk_({ serverTime: new Date().toISOString(), message: 'pong' });
+      }
+
+      // 不明なアクション
+      return jsonError_('不明なアクション: ' + action);
     }
 
     const menuType = (e && e.parameter && e.parameter.menu) ? e.parameter.menu : 'product';
@@ -682,4 +624,61 @@ function onOpen() {
     .addSeparator()
     .addItem('🔧 APIキー検証', 'validateAllApiKeys')
     .addToUi();
+}
+
+// ========================================
+// CORS対応のJSON レスポンスヘルパー関数
+// ========================================
+
+/**
+ * JSON 成功レスポンス + CORS
+ */
+function jsonOk_(obj) {
+  const out = ContentService.createTextOutput(JSON.stringify({ ok: true, data: obj }))
+    .setMimeType(ContentService.MimeType.JSON);
+  setCORS_(out);
+  return out;
+}
+
+/**
+ * JSON エラーレスポンス + CORS
+ */
+function jsonError_(message) {
+  const out = ContentService.createTextOutput(JSON.stringify({ ok: false, error: message }))
+    .setMimeType(ContentService.MimeType.JSON);
+  setCORS_(out);
+  return out;
+}
+
+/**
+ * CORS ヘッダ付与
+ */
+function setCORS_(textOutput) {
+  textOutput.setHeader('Access-Control-Allow-Origin', '*');
+  textOutput.setHeader('Vary', 'Origin');
+  return textOutput;
+}
+
+/**
+ * 到達ログ（デバッグ用）
+ */
+function logDebug_Reach(action, params, startTime) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sh = ss.getSheetByName('FCM登録デバッグ');
+    if (!sh) {
+      sh = ss.insertSheet('FCM登録デバッグ');
+      sh.appendRow(['タイムスタンプ', 'ソース', 'アクション', 'パラメータ', '処理時間']);
+    }
+    sh.appendRow([
+      new Date(),
+      'menu.doGet',
+      action,
+      JSON.stringify(params).substring(0, 200),
+      (new Date() - startTime) + 'ms'
+    ]);
+  } catch (e) {
+    // ログ失敗は握りつぶし
+    Logger.log('logDebug_Reach error: ' + e);
+  }
 }
