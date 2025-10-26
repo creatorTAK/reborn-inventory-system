@@ -311,13 +311,8 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
 
     let message = '登録完了しました';
 
-    // 🔔 商品登録完了の通知を送信
-    try {
-      sendProductRegistrationNotification(form, mgmtKey);
-    } catch (notificationError) {
-      console.error('通知送信エラー:', notificationError);
-      // 通知エラーは商品登録の成功には影響させない
-    }
+    // 🔔 商品登録完了の通知はフロントエンド側でsendProductNotificationAsyncを呼び出す
+    // （sp_scripts.html: saveProduct成功後に非同期で送信）
 
     return message;
       
@@ -667,71 +662,6 @@ function duplicateProduct(managementNumber, modifications = {}) {
     return handleProductError(error);
   }
 }
-
-/**
- * 商品登録完了の通知を送信
- * @param {Object} form - 商品フォームデータ
- * @param {String} managementNumber - 管理番号
- */
-function sendProductRegistrationNotification(form, managementNumber) {
-  try {
-    // 通知内容を作成
-    const brandName = form['ブランド(英語)'] || form['ブランド(カナ)'] || '';
-    const itemName = form['アイテム名'] || '';
-    const category = form['大分類(カテゴリ)'] || form['大分類'] || '';
-    const listingDestination = form['出品先'] || '';
-    const listingAmount = form['出品金額'] || '';
-
-    // 通知タイトル
-    const title = '✅ 商品登録完了';
-
-    // 通知本文
-    let body = managementNumber ? `管理番号: ${managementNumber}` : '商品を登録しました';
-
-    // ブランド名 + アイテム名
-    if (brandName) {
-      body += `\n${brandName}`;
-    }
-
-    if (itemName) {
-      body += ` ${itemName}`;
-    } else if (category) {
-      body += ` ${category}`;
-    }
-
-    // 出品先
-    if (listingDestination) {
-      body += `\n出品先: ${listingDestination}`;
-    }
-
-    // 出品金額
-    if (listingAmount) {
-      const amount = Number(listingAmount);
-      if (!isNaN(amount)) {
-        body += `\n出品金額: ${amount.toLocaleString()}円`;
-      }
-    }
-
-    // FCM通知を送信（web_push.jsの関数を呼び出す）
-    // 非同期で送信（商品登録処理をブロックしない）
-    try {
-      // sendFCMNotificationはweb_push.jsで定義されている
-      if (typeof sendFCMNotification === 'function') {
-        sendFCMNotification(title, body);
-        Logger.log(`通知を送信しました: ${title} - ${body}`);
-      } else {
-        Logger.log('sendFCMNotification関数が見つかりません');
-      }
-    } catch (fcmError) {
-      Logger.log('FCM通知送信エラー:', fcmError);
-      // エラーをスローしない（商品登録の成功には影響させない）
-    }
-  } catch (error) {
-    Logger.log('sendProductRegistrationNotification エラー:', error);
-    // エラーをスローしない
-  }
-}
-
 function testSaveProductBasic() {
   try {
     const testForm = {
