@@ -1963,6 +1963,322 @@ function jsonErrorResponse(errorMessage) {
 }
 
 // =============================================================================
+// 販売記録機能 API (INV-004)
+// =============================================================================
+
+/**
+ * 発送方法マスタ取得API
+ * シート「発送方法マスタ」からデータを取得
+ */
+function getShippingMethodMasterAPI() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetName = '発送方法マスタ';
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      return { success: false, message: `シート「${sheetName}」が見つかりません` };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return { success: true, data: [] };
+    }
+    
+    const headers = data[0];
+    const master = [];
+    
+    // ヘッダー行からインデックスを取得
+    const method1Idx = headers.indexOf('発送方法1');
+    const method2Idx = headers.indexOf('発送方法2');
+    const feeIdx = headers.indexOf('送料');
+    
+    if (method1Idx === -1 || method2Idx === -1 || feeIdx === -1) {
+      return { 
+        success: false, 
+        message: '必要な列（発送方法1、発送方法2、送料）が見つかりません' 
+      };
+    }
+    
+    // データ行を処理
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row[method1Idx]) continue; // 空行スキップ
+      
+      master.push({
+        method1: row[method1Idx],
+        method2: row[method2Idx],
+        fee: Number(row[feeIdx]) || 0
+      });
+    }
+    
+    Logger.log(`[発送方法マスタ] ${master.length}件取得`);
+    return { success: true, data: master };
+    
+  } catch (error) {
+    Logger.log(`[ERROR] getShippingMethodMasterAPI: ${error.message}`);
+    return { success: false, message: error.toString() };
+  }
+}
+
+/**
+ * 備品在庫リスト取得API
+ * シート「備品在庫リスト」からデータを取得
+ */
+function getPackagingMaterialsMasterAPI() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetName = '備品在庫リスト';
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      return { success: false, message: `シート「${sheetName}」が見つかりません` };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return { success: true, data: [] };
+    }
+    
+    const headers = data[0];
+    const master = [];
+    
+    // 列インデックスを取得
+    const colMap = {};
+    headers.forEach((header, index) => {
+      colMap[header] = index;
+    });
+    
+    // 必須列のチェック
+    const requiredCols = ['略称', '1個あたり'];
+    for (const col of requiredCols) {
+      if (colMap[col] === undefined) {
+        return { 
+          success: false, 
+          message: `必要な列「${col}」が見つかりません` 
+        };
+      }
+    }
+    
+    // データ行を処理
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const abbreviation = row[colMap['略称']];
+      if (!abbreviation) continue; // 空行スキップ
+      
+      master.push({
+        productName: row[colMap['商品名']] || '',
+        abbreviation: abbreviation,
+        unitCost: Number(row[colMap['1個あたり']]) || 0,
+        inStock: Number(row[colMap['入庫数合計']]) || 0,
+        outStock: Number(row[colMap['出庫数合計']]) || 0,
+        inventory: Number(row[colMap['在庫数']]) || 0
+      });
+    }
+    
+    Logger.log(`[備品在庫リスト] ${master.length}件取得`);
+    return { success: true, data: master };
+    
+  } catch (error) {
+    Logger.log(`[ERROR] getPackagingMaterialsMasterAPI: ${error.message}`);
+    return { success: false, message: error.toString() };
+  }
+}
+
+/**
+ * 管理番号から商品情報を取得するAPI
+ */
+function getProductByManagementNumberAPI(managementNumber) {
+  try {
+    if (!managementNumber) {
+      return { success: false, message: '管理番号が指定されていません' };
+    }
+    
+    const result = getProductInfo(managementNumber);
+    
+    if (!result.success) {
+      return { success: false, message: result.error };
+    }
+    
+    return { success: true, data: result.data };
+    
+  } catch (error) {
+    Logger.log(`[ERROR] getProductByManagementNumberAPI: ${error.message}`);
+    return { success: false, message: error.toString() };
+  }
+}
+
+/**
+ * 販売記録保存API
+ * 販売情報、発送情報、梱包資材情報を保存し、利益を計算
+ */
+function saveSalesRecordAPI(salesData) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetName = '在庫/売上管理表';
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      return { success: false, message: `シート「${sheetName}」が見つかりません` };
+    }
+    
+    // ヘッダー取得
+    const { map } = getHeaderMapCommon();
+    
+    // 管理番号で行を検索
+    const dataRange = sheet.getDataRange();
+    const data = dataRange.getValues();
+    let targetRow = -1;
+    
+    const managementCol = map['管理番号'];
+    if (!managementCol) {
+      return { success: false, message: '管理番号列が見つかりません' };
+    }
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][managementCol - 1] === salesData.managementNumber) {
+        targetRow = i + 1; // スプレッドシートの行番号（1-indexed）
+        break;
+      }
+    }
+    
+    if (targetRow === -1) {
+      return { success: false, message: '商品が見つかりません' };
+    }
+    
+    // 販売情報を書き込み
+    const updateFields = {
+      '販売日': salesData.salesDate,
+      '販売先': salesData.salesPlatform,
+      '販売金額': salesData.salesAmount,
+      '発送方法1': salesData.shippingMethod1,
+      '発送方法2': salesData.shippingMethod2,
+      '送料': salesData.shippingFee,
+      '梱包資材費合計': salesData.packagingCostTotal,
+      'プラットフォーム手数料': salesData.platformFee,
+      '決済手数料': salesData.paymentFee,
+      '最終利益': salesData.finalProfit,
+      'ステータス': '販売済み'
+    };
+    
+    for (const [fieldName, value] of Object.entries(updateFields)) {
+      const col = map[fieldName];
+      if (col) {
+        sheet.getRange(targetRow, col).setValue(value);
+      } else {
+        Logger.log(`[警告] 列「${fieldName}」が見つかりません`);
+      }
+    }
+    
+    // 梱包資材を書き込み（最大3個想定）
+    for (let i = 0; i < salesData.packagingMaterials.length && i < 3; i++) {
+      const colName = `梱包資材${i + 1}`;
+      const col = map[colName];
+      if (col) {
+        sheet.getRange(targetRow, col).setValue(salesData.packagingMaterials[i].abbreviation);
+      } else {
+        Logger.log(`[警告] 列「${colName}」が見つかりません`);
+      }
+    }
+    
+    // ユーザー活動記録
+    recordUserUpdate(sheet, targetRow, map, 'システム');
+    
+    // 備品在庫リストの出庫処理
+    const inventoryResult = updatePackagingInventory(salesData.packagingMaterials);
+    if (!inventoryResult.success) {
+      Logger.log(`[警告] 備品在庫更新に失敗: ${inventoryResult.message}`);
+    }
+    
+    // 統計情報を再計算
+    recalculateAllStats();
+    
+    Logger.log(`[販売記録] ${salesData.managementNumber} を保存しました`);
+    return { success: true, message: '販売記録を保存しました' };
+    
+  } catch (error) {
+    Logger.log(`[ERROR] saveSalesRecordAPI: ${error.message}`);
+    return { success: false, message: error.toString() };
+  }
+}
+
+/**
+ * 備品在庫更新処理
+ * 梱包資材の出庫数を増やし、在庫数を減らす
+ */
+function updatePackagingInventory(packagingMaterials) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetName = '備品在庫リスト';
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      return { 
+        success: false, 
+        message: `シート「${sheetName}」が見つかりません` 
+      };
+    }
+    
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) {
+      return { success: true, message: '備品在庫リストにデータがありません' };
+    }
+    
+    const headers = data[0];
+    
+    // 列インデックスを取得
+    const colMap = {};
+    headers.forEach((header, index) => {
+      colMap[header] = index;
+    });
+    
+    // 必須列のチェック
+    if (colMap['略称'] === undefined || colMap['出庫数合計'] === undefined) {
+      return { 
+        success: false, 
+        message: '必要な列（略称、出庫数合計）が見つかりません' 
+      };
+    }
+    
+    // 各梱包資材の出庫数を更新
+    let updatedCount = 0;
+    
+    for (const material of packagingMaterials) {
+      if (!material.abbreviation || material.abbreviation === 'なし') {
+        continue; // 「なし」はスキップ
+      }
+      
+      let found = false;
+      
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][colMap['略称']] === material.abbreviation) {
+          const targetRow = i + 1; // 1-indexed
+          const currentOutStock = Number(data[i][colMap['出庫数合計']]) || 0;
+          
+          // 出庫数を1増加
+          sheet.getRange(targetRow, colMap['出庫数合計'] + 1).setValue(currentOutStock + 1);
+          
+          updatedCount++;
+          found = true;
+          break;
+        }
+      }
+      
+      if (!found) {
+        Logger.log(`[警告] 梱包資材「${material.abbreviation}」が備品在庫リストに見つかりません`);
+      }
+    }
+    
+    Logger.log(`[備品在庫] ${updatedCount}件の出庫処理を実行しました`);
+    return { success: true, message: `${updatedCount}件の備品在庫を更新しました` };
+    
+  } catch (error) {
+    Logger.log(`[ERROR] updatePackagingInventory: ${error.message}`);
+    return { success: false, message: error.toString() };
+  }
+}
+
+// =============================================================================
 // Phase 4: 将来実装する関数（コメントアウト）
 // =============================================================================
 
