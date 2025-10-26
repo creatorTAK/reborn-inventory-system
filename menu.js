@@ -631,32 +631,20 @@ function onOpen() {
 // ========================================
 
 /**
- * JSON 成功レスポンス + CORS
+ * JSON 成功レスポンス
+ * 注：GASは自動的にCORSを処理するため、手動ヘッダー設定不要
  */
 function jsonOk_(obj) {
-  const out = ContentService.createTextOutput(JSON.stringify({ ok: true, data: obj }))
+  return ContentService.createTextOutput(JSON.stringify({ ok: true, data: obj }))
     .setMimeType(ContentService.MimeType.JSON);
-  setCORS_(out);
-  return out;
 }
 
 /**
- * JSON エラーレスポンス + CORS
+ * JSON エラーレスポンス
  */
 function jsonError_(message) {
-  const out = ContentService.createTextOutput(JSON.stringify({ ok: false, error: message }))
+  return ContentService.createTextOutput(JSON.stringify({ ok: false, error: message }))
     .setMimeType(ContentService.MimeType.JSON);
-  setCORS_(out);
-  return out;
-}
-
-/**
- * CORS ヘッダ付与
- */
-function setCORS_(textOutput) {
-  textOutput.setHeader('Access-Control-Allow-Origin', '*');
-  textOutput.setHeader('Vary', 'Origin');
-  return textOutput;
 }
 
 /**
