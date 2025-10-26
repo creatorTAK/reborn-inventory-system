@@ -242,14 +242,15 @@ function doGet(e) {
         };
         logDebug_Reach(action, e.parameter, start);
         const result = getInventoryDashboardAPI(params);
-        return jsonOk_(result);
+        // inventory.js関数は既に{success: true/false, data/error: ...}形式を返す
+        return toContentService_(result);
       }
 
       if (action === 'getProductDetail') {
         const start = new Date();
         logDebug_Reach(action, e.parameter, start);
         const result = getProductDetailAPI({ managementNumber: e.parameter.managementNumber });
-        return jsonOk_(result);
+        return toContentService_(result);
       }
 
       if (action === 'updateProductStatus') {
@@ -260,7 +261,7 @@ function doGet(e) {
         };
         logDebug_Reach(action, e.parameter, start);
         const result = updateProductStatusAPI(params);
-        return jsonOk_(result);
+        return toContentService_(result);
       }
 
       if (action === 'updateProduct') {
@@ -273,14 +274,14 @@ function doGet(e) {
         };
         logDebug_Reach(action, e.parameter, start);
         const result = updateProductAPI(params);
-        return jsonOk_(result);
+        return toContentService_(result);
       }
 
       if (action === 'duplicateProduct') {
         const start = new Date();
         logDebug_Reach(action, e.parameter, start);
         const result = duplicateProductAPI({ managementNumber: e.parameter.managementNumber });
-        return jsonOk_(result);
+        return toContentService_(result);
       }
 
       if (action === 'ping') {
@@ -568,13 +569,134 @@ function doGet(e) {
         message: error.message,
         stack: error.stack
       }))
-        .setMimeType(ContentService.MimeType.JSON);
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeader('Access-Control-Allow-Origin', '*')
+        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
     }
 
     // 通常のエラー時の表示
     return HtmlService.createHtmlOutput(
       '<h1>エラーが発生しました</h1><p>' + error.message + '</p><p>' + error.stack + '</p>'
     );
+  }
+}
+
+/**
+ * テスト用：doGet()をローカルでテストする関数
+ * GASエディタでこの関数を実行して、doGet()の動作を確認できます
+ */
+function testDoGet() {
+  try {
+    const e = {
+      parameter: {
+        menu: 'inventory'
+      }
+    };
+
+    Logger.log('=== testDoGet開始 ===');
+    const result = doGet(e);
+    Logger.log('Result type: ' + typeof result);
+    Logger.log('Has evaluate: ' + (result && typeof result.evaluate === 'function'));
+
+    if (result && typeof result.evaluate === 'function') {
+      Logger.log('Evaluating...');
+      const html = result.evaluate();
+      Logger.log('HTML generated successfully');
+      Logger.log('HTML content length: ' + html.getContent().length);
+      Logger.log('First 200 chars: ' + html.getContent().substring(0, 200));
+      return { success: true, message: 'HTML template generated successfully', contentLength: html.getContent().length };
+    } else {
+      Logger.log('ERROR: result is not a template');
+      Logger.log('result: ' + JSON.stringify(result));
+      return { success: false, message: 'Result is not a template', result: result };
+    }
+  } catch (error) {
+    Logger.log('ERROR: ' + error.toString());
+    Logger.log('Stack: ' + error.stack);
+    return { success: false, message: error.toString(), stack: error.stack };
+  }
+}
+
+/**
+ * テスト用：超シンプルな関数（google.script.run検証用）
+ */
+function testHelloWorld() {
+  return { success: true, data: 'Hello World from GAS!' };
+}
+
+/**
+ * テスト用：getInventoryDashboardAPIと同じ形式で固定データを返す
+ */
+function testInventoryDashboardMock() {
+  return {
+    success: true,
+    data: {
+      statistics: {
+        total: 1,
+        statusCounts: {
+          registered: 1,
+          preparingListing: 0,
+          listed: 0,
+          sold: 0,
+          withdrawn: 0
+        },
+        totalPurchaseAmount: 1000,
+        totalListingAmount: 2000,
+        totalSaleAmount: 0,
+        totalProfit: 0,
+        averageProfit: 0,
+        averageInventoryDays: 0
+      },
+      products: [
+        {
+          managementNumber: 'TEST-001',
+          brand: 'テストブランド',
+          productName: 'テスト商品',
+          status: '登録済み',
+          purchaseAmount: 1000,
+          listingAmount: 2000,
+          category: 'メンズ',
+          size: 'M',
+          color: 'ブルー'
+        }
+      ],
+      count: 1,
+      totalCount: 1,
+      page: 1,
+      perPage: 10,
+      totalPages: 1
+    }
+  };
+}
+
+/**
+ * テスト用：getInventoryDashboardAPIを直接テスト
+ */
+function testInventoryAPI() {
+  try {
+    Logger.log('=== testInventoryAPI開始 ===');
+    const params = {
+      statuses: ['登録済み', '出品準備中', '出品中'],
+      page: 1,
+      limit: 10,
+      sortBy: 'registeredAt',
+      sortOrder: 'desc',
+      searchText: '',
+      brand: '',
+      category: '',
+      size: '',
+      color: ''
+    };
+
+    const result = getInventoryDashboardAPI(params);
+    Logger.log('Result type: ' + typeof result);
+    Logger.log('Result: ' + JSON.stringify(result).substring(0, 500));
+    return result;
+  } catch (error) {
+    Logger.log('ERROR: ' + error.toString());
+    Logger.log('Stack: ' + error.stack);
+    return { success: false, error: error.toString() };
   }
 }
 
@@ -643,12 +765,26 @@ function onOpen() {
 // ========================================
 
 /**
+ * オブジェクトをContentServiceでラップ（inventory.js用）
+ */
+function toContentService_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeader('Access-Control-Allow-Origin', '*')
+    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+/**
  * JSON 成功レスポンス
  * 注：GASは自動的にCORSを処理するため、手動ヘッダー設定不要
  */
 function jsonOk_(obj) {
   return ContentService.createTextOutput(JSON.stringify({ ok: true, data: obj }))
-    .setMimeType(ContentService.MimeType.JSON);
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeader('Access-Control-Allow-Origin', '*')
+    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    .setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
 /**
@@ -656,7 +792,10 @@ function jsonOk_(obj) {
  */
 function jsonError_(message) {
   return ContentService.createTextOutput(JSON.stringify({ ok: false, error: message }))
-    .setMimeType(ContentService.MimeType.JSON);
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeader('Access-Control-Allow-Origin', '*')
+    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    .setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
 /**

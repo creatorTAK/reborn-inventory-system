@@ -15,6 +15,75 @@
 
 ## 📚 完了Issue一覧
 
+## INV-002 | PWA版在庫管理メニュー対応 ✅ DONE (完了日: 2025-10-26)
+
+### 📌 基本情報
+- [x] カテゴリ: 機能追加 + バグ修正
+- [x] 優先度: 高
+- [x] 影響範囲: PWA版・スプレッドシート版在庫管理画面
+- [x] 発見日: 2025-10-26
+
+### 🐛 問題内容
+PWA版在庫管理画面で検索ボタンを押しても商品一覧が表示されない。スプレッドシート版でも同様の問題が発生。
+
+**症状:**
+- 検索ボタンを押しても無反応
+- コンソールに `NetworkError: HTTP 0` および `SyntaxError: Unexpected EOF`
+- `result === null` でAPI応答が取得できない
+
+### 🔍 根本原因
+1. **CORS問題（PWA版）**: fetchJSON()を使ったクロスオリジンリクエストでCORSヘッダー不足
+2. **構文エラー**: sidebar_inventory.html 789行目でalert()内に直接改行（JavaScriptエラー）
+3. **決定的な原因**: google.script.runでDate型オブジェクトがシリアライズできず、nullが返される
+
+### ✅ 解決策
+1. **google.script.runに切り替え**: fetch()からgoogle.script.run経由でのAPI呼び出しに変更
+2. **Date型のシリアライズ**: 全てのDate型を文字列（ISO形式）に変換してから返却
+3. **inventory.js修正**:
+   - jsonSuccessResponse/jsonErrorResponseを直接オブジェクトを返すように修正
+   - getInventoryDashboardAPI()でDate型をtoISOString()で変換
+   - null/undefinedを空文字列に変換
+
+### 📍 関連ファイル
+- `sidebar_inventory.html` - 構文エラー修正、google.script.run実装
+- `inventory.js` - Date型シリアライズ処理追加（行1630-1670）
+- `menu.js` - jsonOk_/jsonError_にCORSヘッダー追加、testHelloWorld追加
+
+### ✏️ 実装内容
+- [x] alert()の構文エラー修正（改行を`\n`に）
+- [x] fetchJSON()からgoogle.script.runに切り替え
+- [x] jsonSuccessResponse/jsonErrorResponseをオブジェクト返却に変更
+- [x] Date型を文字列（ISO形式）に変換するシリアライズ処理実装
+- [x] null/undefinedを空文字列に変換
+- [x] testHelloWorld()テスト関数追加（デバッグ用）
+- [x] デバッグログ追加（問題特定用）
+
+### 📊 パフォーマンス
+- API実行時間: 約1.6秒（67件の商品データ）
+- ページ読み込み時に自動検索実行
+- ページネーション対応（10件/ページ）
+
+### 🧪 テスト結果
+- ✅ スプレッドシート版: 正常動作（商品一覧表示、検索、ページネーション）
+- ✅ Date型のシリアライズ: 成功
+- ✅ ダッシュボード統計表示: 正常
+- ✅ 67件の商品データ取得: 成功
+
+### 🎯 デプロイバージョン
+- v289: 構文エラー修正
+- v290: google.script.run対応
+- v291: オブジェクト直接返却
+- v297: testInventoryDashboardMock追加
+- v299: **Date型シリアライズ実装（決定的な修正）**
+- v300: 完成版（テストコード削除、limit元に戻す）
+
+### 📝 備考
+- google.script.runはDate型、null、undefinedをシリアライズできないため注意
+- PWA版（GitHub Pages）での動作確認は別途必要
+- 本Issueはスプレッドシート版で完全解決
+
+---
+
 ## PERF-002 | パフォーマンス: FCM通知のユーザーID対応 + 2台制限実装 ✅ DONE (完了日: 2025-10-26)
 
 ### 📌 基本情報

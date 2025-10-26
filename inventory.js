@@ -1328,12 +1328,16 @@ function getStatisticsAPI(params) {
  * 期待パフォーマンス: 6秒 → 0.5-1.2秒
  */
 function getInventoryDashboardAPI(params) {
+  Logger.log('🎯 [DEBUG] getInventoryDashboardAPI 呼び出し開始');
+  Logger.log('🎯 [DEBUG] params: ' + JSON.stringify(params));
+
   const startTime = new Date().getTime();
   Logger.log('[PERF] getInventoryDashboardAPI 開始（getValues最適化版）');
 
   try {
     // paramsのデフォルト値設定（エディタから直接実行した場合に対応）
     params = params || {};
+    Logger.log('🎯 [DEBUG] paramsデフォルト設定完了');
 
     // フィルタ条件
     const filters = {
@@ -1540,6 +1544,27 @@ function getInventoryDashboardAPI(params) {
       const profit = parseAmount(row[colIdx['利益金額']] || 0);
       const inventoryDays = parseAmount(row[colIdx['在庫日数']] || 0);
 
+      // JSON_データ列から商品画像URL配列を取得（最大20枚）
+      let productImages = [];
+      const jsonDataCol = colIdx['JSON_データ'];
+      if (jsonDataCol !== undefined) {
+        const jsonDataRaw = row[jsonDataCol];
+        if (jsonDataRaw && String(jsonDataRaw).trim()) {
+          try {
+            const parsedData = JSON.parse(String(jsonDataRaw));
+            if (Array.isArray(parsedData)) {
+              // forAI: false の商品画像のみ抽出（最大20枚）
+              productImages = parsedData
+                .filter(img => !img.forAI && img.url)
+                .map(img => img.url);
+            }
+          } catch (parseError) {
+            // JSON パースエラーは無視（画像なしとして扱う）
+            Logger.log(`JSON_データ列のパースエラー（管理番号: ${managementNumber}）: ${parseError.message}`);
+          }
+        }
+      }
+
       const productInfo = {
         managementNumber: managementNumber,
         person: person,
@@ -1565,7 +1590,8 @@ function getInventoryDashboardAPI(params) {
         updatedAt: row[colIdx['更新日時']] || '',
         imageUrl1: row[colIdx['画像URL1']] || '',
         imageUrl2: row[colIdx['画像URL2']] || '',
-        imageUrl3: row[colIdx['画像URL3']] || ''
+        imageUrl3: row[colIdx['画像URL3']] || '',
+        images: productImages  // 商品画像URL配列（最大20枚、R2保存）
       };
 
       allResults.push(productInfo);
@@ -1623,11 +1649,35 @@ function getInventoryDashboardAPI(params) {
     const endTime = new Date().getTime();
     Logger.log('[PERF] getInventoryDashboardAPI 完了: 合計' + (endTime - startTime) + 'ms（getValues最適化版）');
 
+    // 🎯 google.script.run対応：Date型を文字列に変換
+    Logger.log('🎯 [DEBUG] Date型を文字列に変換中...');
+    const serializedProducts = paginatedResults.map(function(product) {
+      const serialized = {};
+      for (var key in product) {
+        if (product.hasOwnProperty(key)) {
+          var value = product[key];
+          // Date型を文字列に変換
+          if (value instanceof Date) {
+            serialized[key] = value.toISOString();
+          } else if (value === null || value === undefined) {
+            serialized[key] = '';  // null/undefinedを空文字列に
+          } else {
+            serialized[key] = value;
+          }
+        }
+      }
+      return serialized;
+    });
+
+    Logger.log('🎯 [DEBUG] シリアライズ完了: ' + serializedProducts.length + '件');
+
     // 統計情報と商品一覧を返す
-    return jsonSuccessResponse({
+    Logger.log('🎯 [DEBUG] jsonSuccessResponse()を呼び出します');
+
+    const response = jsonSuccessResponse({
       statistics: statistics,
-      products: paginatedResults,
-      count: paginatedResults.length,
+      products: serializedProducts,  // シリアライズ済みproducts
+      count: serializedProducts.length,
       totalCount: totalCount,
       page: page,
       perPage: perPage,
@@ -1636,6 +1686,10 @@ function getInventoryDashboardAPI(params) {
       sortBy: sortBy,
       sortOrder: sortOrder
     });
+
+    Logger.log('🎯 [DEBUG] response作成完了: ' + typeof response);
+    Logger.log('🎯 [DEBUG] response.success: ' + response.success);
+    return response;
 
   } catch (error) {
     Logger.log(`[PERF] getInventoryDashboardAPI エラー: ${error.message}`);
@@ -1894,16 +1948,18 @@ function recordUserUpdate(sheet, row, headerMap, editorName) {
 // JSON レスポンスヘルパー
 // =============================================================================
 
+/**
+ * 成功レスポンス（google.script.run用：直接オブジェクトを返す）
+ */
 function jsonSuccessResponse(data) {
-  return ContentService
-    .createTextOutput(JSON.stringify({ success: true, data: data }))
-    .setMimeType(ContentService.MimeType.JSON);
+  return { success: true, data: data };
 }
 
+/**
+ * エラーレスポンス（google.script.run用：直接オブジェクトを返す）
+ */
 function jsonErrorResponse(errorMessage) {
-  return ContentService
-    .createTextOutput(JSON.stringify({ success: false, error: errorMessage }))
-    .setMimeType(ContentService.MimeType.JSON);
+  return { success: false, error: errorMessage };
 }
 
 // =============================================================================
