@@ -337,6 +337,15 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
  * @param {String} managementNumber - 管理番号
  */
 function sendProductRegistrationNotification(form, managementNumber) {
+  const debugLogs = [];
+
+  function debugLog(message) {
+    Logger.log(message);
+    debugLogs.push(new Date().toLocaleTimeString('ja-JP') + ' - ' + message);
+  }
+
+  debugLog('[sendProductRegistrationNotification] 開始: ' + managementNumber);
+
   try {
     // 通知内容を作成
     const brandName = form['ブランド(英語)'] || form['ブランド(カナ)'] || '';
@@ -344,6 +353,8 @@ function sendProductRegistrationNotification(form, managementNumber) {
     const category = form['大分類(カテゴリ)'] || form['大分類'] || '';
     const listingDestination = form['出品先'] || '';
     const listingAmount = form['出品金額'] || '';
+
+    debugLog('[sendProductRegistrationNotification] データ取得完了');
 
     // 通知タイトル
     const title = '✅ 商品登録完了';
@@ -375,22 +386,55 @@ function sendProductRegistrationNotification(form, managementNumber) {
       }
     }
 
+    debugLog('[sendProductRegistrationNotification] 通知本文作成完了');
+
     // FCM通知を送信（web_push.jsの関数を呼び出す）
     // 非同期で送信（商品登録処理をブロックしない）
     try {
+      debugLog('[sendProductRegistrationNotification] sendFCMNotification確認中...');
+      debugLog('[sendProductRegistrationNotification] typeof sendFCMNotification = ' + typeof sendFCMNotification);
+
       // sendFCMNotificationはweb_push.jsで定義されている
       if (typeof sendFCMNotification === 'function') {
+        debugLog('[sendProductRegistrationNotification] sendFCMNotification呼び出し開始');
         sendFCMNotification(title, body);
-        Logger.log(`通知を送信しました: ${title} - ${body}`);
+        debugLog('[sendProductRegistrationNotification] sendFCMNotification呼び出し完了');
       } else {
-        Logger.log('sendFCMNotification関数が見つかりません');
+        debugLog('[sendProductRegistrationNotification] ERROR: sendFCMNotification関数が見つかりません');
       }
     } catch (fcmError) {
-      Logger.log('FCM通知送信エラー:', fcmError);
+      debugLog('[sendProductRegistrationNotification] FCM通知送信エラー: ' + fcmError);
       // エラーをスローしない（商品登録の成功には影響させない）
     }
+    debugLog('[sendProductRegistrationNotification] 完了');
+
+    // デバッグログをスプレッドシートに出力
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      let debugSheet = ss.getSheetByName('デバッグログ');
+      if (!debugSheet) {
+        debugSheet = ss.insertSheet('デバッグログ');
+        debugSheet.appendRow(['日時', '管理番号', 'ログ']);
+      }
+      debugSheet.appendRow([new Date(), managementNumber, debugLogs.join('\n')]);
+    } catch (sheetError) {
+      Logger.log('デバッグログシート書き込みエラー: ' + sheetError);
+    }
+
   } catch (error) {
-    Logger.log('sendProductRegistrationNotification エラー:', error);
+    debugLog('[sendProductRegistrationNotification] 外側エラー: ' + error);
+    // デバッグログをスプレッドシートに出力（エラー時も）
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      let debugSheet = ss.getSheetByName('デバッグログ');
+      if (!debugSheet) {
+        debugSheet = ss.insertSheet('デバッグログ');
+        debugSheet.appendRow(['日時', '管理番号', 'ログ']);
+      }
+      debugSheet.appendRow([new Date(), managementNumber, debugLogs.join('\n') + '\nERROR: ' + error]);
+    } catch (sheetError) {
+      Logger.log('デバッグログシート書き込みエラー: ' + sheetError);
+    }
     // エラーをスローしない
   }
 }
