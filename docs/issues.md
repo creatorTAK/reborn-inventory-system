@@ -77,11 +77,11 @@ try {
 
 ### ✏️ 修正内容
 
-- [ ] 6e6edacから通知送信コードを復元
-  - [ ] saveProduct()関数に通知送信呼び出しを追加
-  - [ ] sendProductRegistrationNotification()関数を復元
-- [ ] clasp push
-- [ ] GAS手動デプロイ
+- [x] 6e6edacから通知送信コードを復元
+  - [x] saveProduct()関数に通知送信呼び出しを追加（product.js:314-320行目）
+  - [x] sendProductRegistrationNotification()関数を復元（product.js:331-393行目）
+- [x] clasp push（52ファイル）
+- [ ] GAS手動デプロイ **← 次のステップ**
 - [ ] テストケース実行
 
 ### 🧪 テストケース
@@ -392,5 +392,5 @@ Phase 1の在庫管理システムを実装する。以下の機能を含む：
 
 ---
 
-**総Issue数: 2件**
+**総Issue数: 3件**
 **最終更新: 2025-10-26**
