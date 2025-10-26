@@ -392,15 +392,21 @@ function sendProductRegistrationNotification(form, managementNumber) {
     // 非同期で送信（商品登録処理をブロックしない）
     try {
       debugLog('[sendProductRegistrationNotification] sendFCMNotification確認中...');
+
+      // グローバルスコープから関数を取得（ファイル読み込み順序の問題を回避）
+      const sendFunc = this['sendFCMNotification'] || globalThis['sendFCMNotification'];
+
       debugLog('[sendProductRegistrationNotification] typeof sendFCMNotification = ' + typeof sendFCMNotification);
+      debugLog('[sendProductRegistrationNotification] typeof sendFunc = ' + typeof sendFunc);
 
       // sendFCMNotificationはweb_push.jsで定義されている
-      if (typeof sendFCMNotification === 'function') {
+      if (typeof sendFunc === 'function') {
         debugLog('[sendProductRegistrationNotification] sendFCMNotification呼び出し開始');
-        sendFCMNotification(title, body);
+        sendFunc(title, body);
         debugLog('[sendProductRegistrationNotification] sendFCMNotification呼び出し完了');
       } else {
         debugLog('[sendProductRegistrationNotification] ERROR: sendFCMNotification関数が見つかりません');
+        debugLog('[sendProductRegistrationNotification] グローバルオブジェクトのキー: ' + Object.keys(this).join(', ').substring(0, 200));
       }
     } catch (fcmError) {
       debugLog('[sendProductRegistrationNotification] FCM通知送信エラー: ' + fcmError);
