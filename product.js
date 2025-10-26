@@ -311,8 +311,13 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
 
     let message = '登録完了しました';
 
-    // 🔔 商品登録完了の通知はフロントエンド側でsendProductNotificationAsyncを呼び出す
-    // （sp_scripts.html: saveProduct成功後に非同期で送信）
+    // 🔔 商品登録完了の通知を送信
+    try {
+      sendProductRegistrationNotification(form, mgmtKey);
+    } catch (notificationError) {
+      console.error('通知送信エラー:', notificationError);
+      // 通知エラーは商品登録の成功には影響させない
+    }
 
     return message;
       
