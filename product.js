@@ -313,9 +313,12 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
 
     // 🔔 商品登録完了の通知を送信
     try {
+      Logger.log('[saveProduct] 通知送信開始: ' + mgmtKey);
       sendProductRegistrationNotification(form, mgmtKey);
+      Logger.log('[saveProduct] 通知送信完了: ' + mgmtKey);
     } catch (notificationError) {
-      console.error('通知送信エラー:', notificationError);
+      Logger.log('[saveProduct] 通知送信エラー: ' + notificationError);
+      Logger.log('[saveProduct] エラースタック: ' + notificationError.stack);
       // 通知エラーは商品登録の成功には影響させない
     }
 
@@ -706,5 +709,69 @@ function sendProductNotificationAsync(form, managementNumber) {
   } catch (error) {
     console.error('[非同期通知] 送信エラー:', error);
     return `通知送信エラー: ${error.message}`;
+  }
+}
+
+/**
+ * 通知テスト関数 - GASエディタから直接実行
+ */
+function testNotification() {
+  try {
+    Logger.log('=== 通知テスト開始 ===');
+
+    const testForm = {
+      'ブランド(英語)': 'TEST BRAND',
+      'アイテム名': 'テスト商品',
+      '出品先': 'メルカリ',
+      '出品金額': '10000'
+    };
+
+    Logger.log('テストデータ:', JSON.stringify(testForm));
+
+    sendProductRegistrationNotification(testForm, 'TEST-001');
+
+    Logger.log('=== 通知テスト完了 ===');
+    return 'テスト完了 - ログと通知ログシートを確認してください';
+  } catch (error) {
+    Logger.log('=== 通知テストエラー ===');
+    Logger.log('エラー:', error);
+    Logger.log('スタックトレース:', error.stack);
+    return 'エラー: ' + error.message;
+  }
+}
+
+/**
+ * saveProduct全体のテスト - 通知も含めて
+ */
+function testSaveProductWithNotification() {
+  try {
+    Logger.log('=== saveProductテスト開始 ===');
+
+    const testForm = {
+      '棚番号': 'AA',
+      '商品番号': '9999',
+      '担当者': 'テスト',
+      'ブランド(英語)': 'TEST BRAND',
+      'アイテム名': 'テスト商品',
+      '出品先': 'メルカリ',
+      '出品金額': '10000',
+      '商品名(タイトル)': 'テスト用商品タイトル',
+      '商品状態詳細': 'テスト用'
+    };
+
+    Logger.log('テストフォーム:', JSON.stringify(testForm));
+
+    const result = saveProduct(testForm);
+
+    Logger.log('saveProduct結果:', result);
+    Logger.log('=== saveProductテスト完了 ===');
+    Logger.log('通知が届いたか、通知ログシート（管理番号: AA-9999）を確認してください');
+
+    return result;
+  } catch (error) {
+    Logger.log('=== saveProductテストエラー ===');
+    Logger.log('エラー:', error);
+    Logger.log('スタックトレース:', error.stack);
+    return 'エラー: ' + error.message;
   }
 }
