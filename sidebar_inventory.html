@@ -307,7 +307,7 @@
     // 初期化
     document.addEventListener('DOMContentLoaded', function() {
       console.log('🔍 [DEBUG] DOMContentLoaded - 初期化開始');
-      loadDashboardAndSearch();
+      loadDashboard();  // 初期表示は統計のみ
 
       // イベントリスナー
       document.getElementById('btnSearch').addEventListener('click', () => {
@@ -336,7 +336,41 @@
       document.getElementById('btnSaveProductStatus').addEventListener('click', saveProductStatus);
     });
 
-    // ダッシュボードと商品一覧を一度に読み込み（統合API）
+    // ダッシュボード統計のみをロード（初期表示用）
+    function loadDashboard() {
+      console.log('📊 [DEBUG] ダッシュボード統計のみ読み込み開始');
+      showLoading();
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+
+          if (result && result.success && result.data) {
+            const stats = result.data;
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statRegistered').textContent = stats.statusCounts.registered;
+            document.getElementById('statPreparing').textContent = stats.statusCounts.preparingListing;
+            document.getElementById('statListed').textContent = stats.statusCounts.listed;
+            document.getElementById('statSold').textContent = stats.statusCounts.sold;
+            document.getElementById('statWithdrawn').textContent = stats.statusCounts.withdrawn;
+            document.getElementById('statTotalProfit').textContent = formatCurrency(stats.totalProfit);
+            document.getElementById('statAvgDays').textContent = stats.averageInventoryDays + '日';
+
+            console.log('✅ [DEBUG] ダッシュボード統計読み込み完了');
+          } else {
+            console.error('❌ API内部エラー:', result.error);
+            showError('読み込みエラー: ' + (result.error || '不明なエラー'));
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          console.error('❌ [ERROR] ダッシュボード読み込みエラー:', error);
+          showError('読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
+        })
+        .getStatisticsAPI({});
+    }
+
+    // ダッシュボードと商品一覧を一度に読み込み（検索実行時）
     function loadDashboardAndSearch() {
       const startTime = performance.now();
       console.log('🔍 [PERF] 読み込み開始');
