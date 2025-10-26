@@ -189,7 +189,7 @@
       titleEl.textContent = title;
       messageEl.textContent = message;
       overlay.classList.add('active');
-      updateLoadingProgress(0, '0%');
+      updateLoadingProgress(0, '0%'); // プログレスバーを初期化
     }
   }
 
@@ -4099,48 +4099,32 @@
       return;
     }
 
-    // 商品画像がある場合は先にGoogle Driveにアップロード
+    // 楽観的UI: ローディング画面を表示し、1.5秒で0→100%アニメーション
+    showLoadingOverlay('登録中', 'データを保存中...');
+
+    const startTime = Date.now();
+    const duration = 1500; // 1.5秒
+
+    const animateProgress = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min((elapsed / duration) * 100, 100);
+
+      updateLoadingProgress(progress, `${Math.round(progress)}%`);
+
+      if (progress < 100) {
+        requestAnimationFrame(animateProgress);
+      } else {
+        // 100%到達 → すぐにローディング画面を閉じる
+        setTimeout(() => {
+          hideLoadingOverlay();
+        }, 100);
+      }
+    };
+
+    requestAnimationFrame(animateProgress);
+
+    // バックグラウンドで実際の保存処理
     if (productImages && productImages.length > 0) {
-      // ローディングオーバーレイを表示
-      showLoadingOverlay('登録中', 'データを準備中...');
-      updateLoadingProgress(0, '0%');
-
-      // 3秒間でプログレスバーを0%→100%にアニメーション
-      const startTime = Date.now();
-      const duration = 3000; // 3秒
-
-      const animateProgress = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min((elapsed / duration) * 100, 100);
-
-        // 進捗に応じてメッセージを変更
-        let message = 'データを準備中...';
-        if (progress > 50 && progress <= 90) {
-          message = '処理中...';
-        } else if (progress > 90) {
-          message = '完了しました！';
-        }
-
-        updateLoadingProgress(progress, `${Math.round(progress)}%`);
-
-        // メッセージを更新
-        const messageEl = document.getElementById('loadingMessage');
-        if (messageEl) {
-          messageEl.textContent = message;
-        }
-
-        if (progress < 100) {
-          requestAnimationFrame(animateProgress);
-        } else {
-          // 100%に達したら自動的に閉じる
-          setTimeout(() => {
-            hideLoadingOverlay();
-          }, 200); // 100%を少し見せる
-        }
-      };
-
-      requestAnimationFrame(animateProgress);
-
       // 商品IDを取得（管理番号を使用）
       const productId = d['管理番号'] || 'unknown_' + new Date().getTime();
 
@@ -4160,16 +4144,13 @@
             const imageUrlsJson = JSON.stringify(uploadResult.urls);
             d['JSON_データ'] = imageUrlsJson;
 
-            // スプレッドシートに保存（進捗70%）
-            updateLoadingProgress(70, 'スプレッドシートに保存中...');
+            // スプレッドシートに保存
             saveProductToSheet(d);
           } else {
-            hideLoadingOverlay();
             show(`NG(IMAGE_UPLOAD): ${uploadResult.error}`);
           }
         })
         .withFailureHandler(function(error) {
-          hideLoadingOverlay();
           show(`NG(IMAGE_UPLOAD): ${error && error.message ? error.message : error}`);
         })
         .uploadImagesToR2({
@@ -4178,8 +4159,6 @@
         });
     } else {
       // 商品画像がない場合は直接保存
-      showLoadingOverlay('データを保存中...', 'スプレッドシートに保存中...');
-      updateLoadingProgress(50, 'スプレッドシートに保存中...');
       saveProductToSheet(d);
     }
   }
@@ -4191,60 +4170,69 @@
   function saveProductToSheet(d) {
     google.script.run
       .withSuccessHandler(function(result) {
-        // 100%の進捗を表示
-        updateLoadingProgress(100, '保存完了！');
+        // 楽観的UI: ローディングは既にアニメーションで閉じている
+        // 保存完了後の処理のみ実行
 
-        // 500ms後にオーバーレイを非表示にして既存の処理を続行
-        setTimeout(() => {
-          hideLoadingOverlay();
+        show(''); // メッセージをクリア
+        // alert(result); // 削除: 通知で完結するため不要
+        // 保存成功後も商品の説明エリアの高さを保持
+        const descTextarea = document.getElementById('商品の説明');
+        if (descTextarea) {
+          autoResizeTextarea(descTextarea);
+        }
+        // 保存成功後に開閉状態と管理番号配置を保存
+        saveDescriptionBlocksCollapseState();
+        saveTitleBlocksCollapseState();
+        saveManagementNumberPlacementSettings();
+        console.log('保存成功：開閉状態と管理番号配置を保存しました');
 
-          show(''); // メッセージをクリア
-          // alert(result); // 削除: 通知で完結するため不要
-          // 保存成功後も商品の説明エリアの高さを保持
-          const descTextarea = document.getElementById('商品の説明');
-          if (descTextarea) {
-            autoResizeTextarea(descTextarea);
+        // === 保存成功後に画像データとAI生成テキストをクリア ===
+        // AI生成用画像（uploadedImages）をクリア
+        if (uploadedImages && uploadedImages.length > 0) {
+          uploadedImages = [];
+          const container = document.getElementById('imagePreviewContainer');
+          if (container) {
+            container.style.display = 'none';
           }
-          // 保存成功後に開閉状態と管理番号配置を保存
-          saveDescriptionBlocksCollapseState();
-          saveTitleBlocksCollapseState();
-          saveManagementNumberPlacementSettings();
-          console.log('保存成功：開閉状態と管理番号配置を保存しました');
-
-          // === 保存成功後に画像データとAI生成テキストをクリア ===
-          // AI生成用画像（uploadedImages）をクリア
-          if (uploadedImages && uploadedImages.length > 0) {
-            uploadedImages = [];
-            const container = document.getElementById('imagePreviewContainer');
-            if (container) {
-              container.style.display = 'none';
-            }
-            const fileInput = document.getElementById('productImages');
-            if (fileInput) {
-              fileInput.value = '';
-            }
-            debug.log('保存成功後にAI生成用画像データをクリアしました');
+          const fileInput = document.getElementById('productImages');
+          if (fileInput) {
+            fileInput.value = '';
           }
+          debug.log('保存成功後にAI生成用画像データをクリアしました');
+        }
 
-          // 商品画像（productImages）をクリア
-          if (productImages && productImages.length > 0) {
-            productImages = [];
-            const container = document.getElementById('productImagesPreviewContainer');
-            if (container) {
-              container.style.display = 'none';
-            }
-            const fileInput = document.getElementById('productImagesForSave');
-            if (fileInput) {
-              fileInput.value = '';
-            }
-            debug.log('保存成功後に商品画像データをクリアしました');
+        // 商品画像（productImages）をクリア
+        if (productImages && productImages.length > 0) {
+          productImages = [];
+          const container = document.getElementById('productImagesPreviewContainer');
+          if (container) {
+            container.style.display = 'none';
           }
+          const fileInput = document.getElementById('productImagesForSave');
+          if (fileInput) {
+            fileInput.value = '';
+          }
+          debug.log('保存成功後に商品画像データをクリアしました');
+        }
 
-          if (AI_GENERATED_TEXT) {
-            AI_GENERATED_TEXT = '';
-            debug.log('保存成功後にAI生成テキストをクリアしました');
-          }
-        }, 500);
+        if (AI_GENERATED_TEXT) {
+          AI_GENERATED_TEXT = '';
+          debug.log('保存成功後にAI生成テキストをクリアしました');
+        }
+
+        // === 非同期で通知を送信（保存処理と切り離し） ===
+        const managementNumber = d['管理番号'];
+        if (managementNumber) {
+          console.log('[非同期通知] バックグラウンドで通知送信を開始:', managementNumber);
+          google.script.run
+            .withSuccessHandler(function(notifResult) {
+              console.log('[非同期通知] 完了:', notifResult);
+            })
+            .withFailureHandler(function(notifError) {
+              console.error('[非同期通知] エラー:', notifError);
+            })
+            .sendProductNotificationAsync(d, managementNumber);
+        }
       })
       .withFailureHandler(function(error) {
         hideLoadingOverlay();

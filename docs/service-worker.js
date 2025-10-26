@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v2';
+const CACHE_NAME = 'reborn-v3'; // クロスオリジン対応版
 const urlsToCache = [
   '/reborn-inventory-system/',
   '/reborn-inventory-system/index.html',
@@ -43,6 +43,16 @@ self.addEventListener('activate', (event) => {
 
 // ネットワークリクエストの処理
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // ★ クロスオリジン（script.google.com 等）は一切キャッシュせず素通し
+  if (url.origin !== self.location.origin) {
+    console.log('[Service Worker] Cross-origin fetch (bypass cache):', url.href);
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // 同一オリジンのリクエストはキャッシュ戦略を使う
   event.respondWith(
     caches.match(event.request)
       .then((response) => {

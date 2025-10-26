@@ -152,6 +152,7 @@ function recordUserActivity(sheet, targetRow, isNew = true) {
 // メイン保存関数
 // =============================================================================
 function saveProduct(form) {
+  const perfStart = new Date().getTime();
   try {
     // ★★★ フォームIDとスプレッドシート列名のマッピング ★★★
     const fieldMapping = {
@@ -228,43 +229,87 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
       targetRow = 2;
     }
 
-    // === データ保存 ===
+    // === データ保存（一括書き込み最適化） ===
+    // 現在の行データを取得
+    const rowData = sh.getRange(targetRow, 1, 1, lastCol).getValues()[0];
+
+    // フォームデータを配列に反映
     for (const formKey of Object.keys(form)) {
       // マッピングを適用
       const sheetColumnName = fieldMapping[formKey] || formKey;
       const col = map[sheetColumnName];
-      
+
       if (!col) {
         console.log(`列未発見: フォーム[${formKey}] → シート[${sheetColumnName}]`);
         continue;
       }
-      
+
       let val = form[formKey];
-      
+
       // データ型変換
       if (formKey === '商品番号' && val !== '' && val != null) {
         val = Number(val);
       } else {
         val = (val == null) ? '' : String(val).trim();
       }
-      
+
       console.log(`保存: ${formKey} → ${sheetColumnName} = "${val}" (列${col})`);
-      sh.getRange(targetRow, col).setValue(val);
+      rowData[col - 1] = val; // 配列は0始まり、列は1始まり
     }
 
-    // === 登録者・更新者情報を記録 ===
-    recordUserActivity(sh, targetRow, true); // true = 新規登録
+    // === ステータスのデフォルト値設定（Phase 1-4） ===
+    const statusCol = map['ステータス'];
+    if (statusCol) {
+      if (!rowData[statusCol - 1] || String(rowData[statusCol - 1]).trim() === '') {
+        rowData[statusCol - 1] = '登録済み';
+        console.log('ステータスを自動設定: 登録済み');
+      }
+    }
+
+    // === 登録者・更新者情報を配列に設定 ===
+    let userEmail = '';
+    try {
+      userEmail = Session.getEffectiveUser().getEmail();
+    } catch (e) {
+      try {
+        userEmail = Session.getActiveUser().getEmail();
+      } catch (e2) {
+        userEmail = SpreadsheetApp.getActiveSpreadsheet().getOwner().getEmail();
+      }
+    }
+
+    const now = new Date();
+
+    if (map['登録者']) {
+      rowData[map['登録者'] - 1] = userEmail;
+    }
+    if (map['登録日時']) {
+      rowData[map['登録日時'] - 1] = now;
+    }
+    if (map['最終更新者']) {
+      rowData[map['最終更新者'] - 1] = userEmail;
+    }
+    if (map['更新日時']) {
+      rowData[map['更新日時'] - 1] = now;
+    }
+
+    // === 一括書き込み実行 ===
+    const writeStart = new Date().getTime();
+    sh.getRange(targetRow, 1, 1, lastCol).setValues([rowData]);
+    const writeEnd = new Date().getTime();
+    console.log(`[PERF] 一括書き込み完了: ${writeEnd - writeStart}ms`);
+
+    // === 統計情報を更新 ===
+    try {
+      // Phase 2: 統計は毎回全件スキャンで計算するため、ここでの更新は不要
+    } catch (statsError) {
+      // 統計更新処理は削除（Phase 2では不要）
+    }
+
+    const perfEnd = new Date().getTime();
+    console.log(`[PERF] saveProduct完了（通知送信前）: ${perfEnd - perfStart}ms`);
 
     let message = '登録完了しました';
-
-    // 🔔 商品登録完了の通知を送信
-    try {
-      sendProductRegistrationNotification(form, mgmtKey);
-    } catch (notificationError) {
-      console.error('通知送信エラー:', notificationError);
-      // 通知エラーは商品登録の成功には影響させない
-    }
-
     return message;
       
   } catch (e) {
@@ -631,5 +676,27 @@ function testSaveProductBasic() {
   } catch (error) {
     console.error('テストエラー:', error);
     return `テストエラー: ${error.message}`;
+  }
+}
+
+/**
+ * 商品登録完了通知を非同期で送信
+ * saveProduct() から切り離すことで、保存処理の完了を早くする
+ *
+ * @param {Object} form - 商品フォームデータ
+ * @param {string} managementNumber - 管理番号
+ * @returns {string} 結果メッセージ
+ */
+function sendProductNotificationAsync(form, managementNumber) {
+  const notifStart = new Date().getTime();
+  try {
+    console.log('[非同期通知] 通知送信開始:', managementNumber);
+    sendProductRegistrationNotification(form, managementNumber);
+    const notifEnd = new Date().getTime();
+    console.log(`[PERF] 非同期通知送信完了: ${notifEnd - notifStart}ms`);
+    return '通知送信完了';
+  } catch (error) {
+    console.error('[非同期通知] 送信エラー:', error);
+    return `通知送信エラー: ${error.message}`;
   }
 }

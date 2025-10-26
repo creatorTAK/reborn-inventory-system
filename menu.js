@@ -288,6 +288,15 @@ function doGet(e) {
         return jsonOk_({ serverTime: new Date().toISOString(), message: 'pong' });
       }
 
+      if (action === 'echo') {
+        // デバッグ用：全てのパラメータをそのまま返す
+        return jsonOk_({
+          query: e.parameter,
+          timestamp: new Date().toISOString(),
+          message: 'echo OK'
+        });
+      }
+
       // 不明なアクション
       return jsonError_('不明なアクション: ' + action);
     }
@@ -541,6 +550,9 @@ function doGet(e) {
 
     // Web Appとして開かれていることを示すフラグ（戻るボタン表示用）
     template.showBackButton = true;
+
+    // GAS自身のURL（Web App /exec）をテンプレート変数として渡す（クロスオリジン対策）
+    template.GAS_BASE_URL = ScriptApp.getService().getUrl();
 
     // Web Appとして開く場合はwidthを指定しない（画面幅いっぱいに表示）
     return template.evaluate()
