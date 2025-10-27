@@ -2154,10 +2154,10 @@ function saveSalesRecordAPI(salesData) {
       '発送方法1': salesData.shippingMethod1,
       '発送方法2': salesData.shippingMethod2,
       '送料': salesData.shippingFee,
-      '梱包資材費合計': salesData.packagingCostTotal,
-      'プラットフォーム手数料': salesData.platformFee,
-      '決済手数料': salesData.paymentFee,
-      '最終利益': salesData.finalProfit,
+      '梱包資材費': salesData.packagingCostTotal,
+      '販売手数料': salesData.platformFee,
+      '利益金額': salesData.finalProfit,
+      '利益率': salesData.profitRate,
       'ステータス': '販売済み'
     };
     
@@ -2172,12 +2172,24 @@ function saveSalesRecordAPI(salesData) {
     
     // 梱包資材を書き込み（最大3個想定）
     for (let i = 0; i < salesData.packagingMaterials.length && i < 3; i++) {
-      const colName = `梱包資材${i + 1}`;
-      const col = map[colName];
-      if (col) {
-        sheet.getRange(targetRow, col).setValue(salesData.packagingMaterials[i].abbreviation);
+      const material = salesData.packagingMaterials[i];
+
+      // 梱包資材の略称を書き込み
+      const materialColName = `梱包資材${i + 1}`;
+      const materialCol = map[materialColName];
+      if (materialCol) {
+        sheet.getRange(targetRow, materialCol).setValue(material.abbreviation);
       } else {
-        Logger.log(`[警告] 列「${colName}」が見つかりません`);
+        Logger.log(`[警告] 列「${materialColName}」が見つかりません`);
+      }
+
+      // 梱包費を書き込み
+      const costColName = `梱包費${i + 1}`;
+      const costCol = map[costColName];
+      if (costCol) {
+        sheet.getRange(targetRow, costCol).setValue(material.unitCost);
+      } else {
+        Logger.log(`[警告] 列「${costColName}」が見つかりません`);
       }
     }
     
