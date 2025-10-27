@@ -18,7 +18,15 @@ Read: /Users/yasuhirotakushi/Desktop/reborn-project/docs/TDD_POLICY.md
 - Issue管理ルール確認
 - TDD適用判断基準確認
 
-### 3. ユーザーに報告
+### 3. DEPLOYMENT_RULESを読む（重要）
+```
+Serena Memory: DEPLOYMENT_RULES
+```
+- **デプロイは必ず両方実施**（GAS + PWA）
+- デプロイフロー確認（4ステップ）
+- デプロイチェックリスト確認
+
+### 4. ユーザーに報告
 読んだ内容を簡潔に報告：
 - 未完了Issue数
 - 今回の作業に関連するIssue有無
@@ -27,3 +35,4 @@ Read: /Users/yasuhirotakushi/Desktop/reborn-project/docs/TDD_POLICY.md
 - 同じバグを繰り返す
 - 既存の不具合を見落とす
 - システム全体を破壊する可能性
+- **デプロイ手順を省略してPWA版が未更新になる**

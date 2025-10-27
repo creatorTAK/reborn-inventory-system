@@ -470,11 +470,23 @@ PWA版で画面遷移（商品登録、設定、在庫管理）が遅く、体�
   - [x] 「🚚 発送方法マスタ管理」追加
 - [ ] TC-INV-004-003 実行（テスト）- 次回実施
 
-#### Phase 3: 梱包資材マスタ管理UI ⏳ 未着手
-- [ ] バックエンドAPI実装（packaging_materials_manager.js 新規作成）
-- [ ] フロントエンド実装（packaging_materials_ui.html 新規作成）
-- [ ] メニュー項目追加（menu.js）
-- [ ] TC-INV-004-004 実行（テスト）
+#### Phase 3: 梱包資材マスタ管理UI ✅ 完了
+- [x] バックエンドAPI実装（packaging_materials_manager.js 新規作成）
+  - [x] getPackagingMaterialsAPI() - 全データ取得
+  - [x] addPackagingMaterialAPI(params) - 新規追加（重複チェック付き）
+  - [x] updatePackagingMaterialAPI(params) - 編集
+  - [x] deletePackagingMaterialAPI(rowIndex) - 削除
+- [x] フロントエンド実装（packaging_materials_ui.html 新規作成）
+  - [x] カード形式レイアウト（11項目対応）
+  - [x] 編集可能フィールド: 商品名、略称、発注先、商品リンク、商品画像URL、個数、価格、入庫数
+  - [x] 読み取り専用フィールド: 1個あたり（自動計算）、出庫数、在庫数（自動計算）
+  - [x] 在庫数アラート（10個以下で警告表示）
+  - [x] バリデーション（必須入力、重複チェック）
+- [x] メニュー項目追加（menu.js）
+  - [x] スプレッドシート: 「📦 梱包資材マスタ管理」追加
+  - [x] PWA: アコーディオンメニューに追加
+- [x] デプロイ（GAS @328 + PWA）
+- [ ] TC-INV-004-004 実行（テスト）- 次回実施
 
 #### Phase 4: 総合テスト ⏳ 未着手
 - [ ] 全テストケース実行
