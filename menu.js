@@ -756,6 +756,9 @@ function onOpen() {
     .addItem('🗂️ マスタデータ管理', 'showMasterDataManager')
     .addItem('⚙️ 設定管理', 'showConfigManager')
     .addSeparator()
+    .addItem('💰 販売記録機能セットアップ', 'setupSalesRecordingSheets')
+    .addItem('🚚 発送方法マスタ管理', 'showShippingMethodMasterManager')
+    .addSeparator()
     .addItem('🔧 APIキー検証', 'validateAllApiKeys')
     .addToUi();
 }
