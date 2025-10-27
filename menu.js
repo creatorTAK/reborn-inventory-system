@@ -543,6 +543,9 @@ function doGet(e) {
     } else if (menuType === 'inventory') {
       template = HtmlService.createTemplateFromFile('sidebar_inventory');
       title = 'REBORN - 在庫管理';
+    } else if (menuType === 'shipping-master') {
+      template = HtmlService.createTemplateFromFile('shipping_method_master_ui');
+      title = 'REBORN - 発送方法マスタ管理';
     } else {
       // 不明なメニューの場合はデフォルトで商品登録
       template = HtmlService.createTemplateFromFile('sidebar_product');
