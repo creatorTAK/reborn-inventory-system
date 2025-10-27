@@ -454,11 +454,21 @@ PWA版で画面遷移（商品登録、設定、在庫管理）が遅く、体�
 - [x] デプロイ（GAS @323 + PWA）
 - [x] UI改善（発送方法詳細の金額表示削除、梱包資材プルダウン非同期修正）
 
-#### Phase 2: 発送方法マスタ管理UI ⏳ 未着手
-- [ ] バックエンドAPI実装（shipping_method_master_manager.js 新規作成）
-- [ ] フロントエンド実装（shipping_method_master_ui.html 新規作成）
-- [ ] メニュー項目追加（menu.js）
-- [ ] TC-INV-004-003 実行（テスト）
+#### Phase 2: 発送方法マスタ管理UI ✅ 完了
+- [x] バックエンドAPI実装（shipping_method_master_manager.js 新規作成）
+  - [x] getShippingMethodsAPI() - 全発送方法取得
+  - [x] addShippingMethodAPI(params) - 新規追加（重複チェック付き）
+  - [x] updateShippingMethodAPI(params) - 編集
+  - [x] deleteShippingMethodAPI(rowIndex) - 削除
+- [x] フロントエンド実装（shipping_method_master_ui.html 新規作成）
+  - [x] 一覧表示（テーブル形式）
+  - [x] 新規追加モーダル
+  - [x] 編集モーダル
+  - [x] 削除確認ダイアログ
+  - [x] バリデーション（必須入力、重複チェック）
+- [x] メニュー項目追加（menu.js）
+  - [x] 「🚚 発送方法マスタ管理」追加
+- [ ] TC-INV-004-003 実行（テスト）- 次回実施
 
 #### Phase 3: 梱包資材マスタ管理UI ⏳ 未着手
 - [ ] バックエンドAPI実装（packaging_materials_manager.js 新規作成）
@@ -481,6 +491,13 @@ PWA版で画面遷移（商品登録、設定、在庫管理）が遅く、体�
 
 ### 🚀 デプロイ履歴
 - 2025-10-27: Phase 1 デプロイ（GAS @323 + PWA）
+  - 販売記録モーダル実装
+  - マスタシートセットアップスクリプト追加
+- 2025-10-27: UI改善デプロイ（GAS @323 + PWA）
+  - 発送方法詳細の金額表示削除
+  - 梱包資材プルダウン非同期読み込み修正
+- 2025-10-27: Phase 2 デプロイ（GAS @325）
+  - 発送方法マスタ管理UI実装
 
 ### 状態
 - [ ] ✅ DONE (完了日: )
