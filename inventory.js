@@ -2155,9 +2155,11 @@ function saveSalesRecordAPI(salesData) {
       '発送方法2': salesData.shippingMethod2,
       '送料': salesData.shippingFee,
       '梱包資材費': salesData.packagingCostTotal,
-      '販売手数料': salesData.platformFee,
+      '手数料': salesData.platformFee,
       '利益金額': salesData.finalProfit,
-      '利益率': salesData.profitRate,
+      '利益率': salesData.profitRate !== null && salesData.profitRate !== undefined
+        ? Math.round(salesData.profitRate * 100) / 100 + '%'
+        : '',
       'ステータス': '販売済み'
     };
     
