@@ -2158,8 +2158,8 @@ function saveSalesRecordAPI(salesData) {
       '手数料': salesData.platformFee,
       '利益金額': salesData.finalProfit,
       '利益率': salesData.profitRate !== null && salesData.profitRate !== undefined
-        ? Math.round(salesData.profitRate * 100) / 100 + '%'
-        : '',
+        ? Math.round(salesData.profitRate * 100) / 100
+        : null,
       'ステータス': '販売済み'
     };
     
