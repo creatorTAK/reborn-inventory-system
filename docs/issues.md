@@ -132,11 +132,18 @@ function deactivateFCMToken(token) {
 ```
 
 ### ✏️ 修正内容
+
+#### Phase 1: 無効トークン自動無効化 ✅ 完了
+- [x] web_push.js に deactivateFCMToken 関数を追加
+- [x] sendFCMToTokenV1 でエラー時に自動無効化を実行
+  - 404, NOT_FOUND, UNREGISTERED, INVALID_ARGUMENT を検知
+  - 該当トークンを「非アクティブ」に自動変更
+- [x] デプロイ（GAS @341 + PWA）
+
+#### Phase 2: トークンリフレッシュ処理 ⏳ 保留中（INV-004完了後）
 - [ ] index.html にトークンリフレッシュ処理を追加（方法B: 起動時チェック採用）
-- [ ] web_push.js に deactivateFCMToken 関数を追加
-- [ ] sendFCMToTokenV1 でエラー時に自動無効化を実行
-- [ ] テスト実行（トークン更新の確認）
-- [ ] デプロイ（GAS + PWA）
+- [ ] テスト実行（TC-NOTIF-003-001）
+- [ ] デプロイ（PWA）
 
 ### 🧪 テストケース
 
