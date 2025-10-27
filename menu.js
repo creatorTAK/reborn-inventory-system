@@ -546,6 +546,9 @@ function doGet(e) {
     } else if (menuType === 'shipping-master') {
       template = HtmlService.createTemplateFromFile('shipping_method_master_ui');
       title = 'REBORN - 発送方法マスタ管理';
+    } else if (menuType === 'packaging-master') {
+      template = HtmlService.createTemplateFromFile('packaging_materials_ui');
+      title = 'REBORN - 梱包資材マスタ管理';
     } else {
       // 不明なメニューの場合はデフォルトで商品登録
       template = HtmlService.createTemplateFromFile('sidebar_product');
@@ -761,6 +764,7 @@ function onOpen() {
     .addSeparator()
     .addItem('💰 販売記録機能セットアップ', 'setupSalesRecordingSheets')
     .addItem('🚚 発送方法マスタ管理', 'showShippingMethodMasterManager')
+    .addItem('📦 梱包資材マスタ管理', 'showPackagingMaterialsManager')
     .addSeparator()
     .addItem('🔧 APIキー検証', 'validateAllApiKeys')
     .addToUi();
