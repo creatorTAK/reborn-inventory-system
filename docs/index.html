@@ -16,6 +16,12 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 
+  <!-- Performance: プリコネクト（DNS解決・TCP・TLS接続を先行実行） -->
+  <link rel="dns-prefetch" href="https://script.google.com">
+  <link rel="dns-prefetch" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+
   <!-- GAS Web App URL（全iframe子ページから参照可能） -->
   <script>
     window.REBORN_CONFIG = {
@@ -440,6 +446,74 @@
       border: none;
       flex: 1;
     }
+
+    /* スケルトンUI（初期ロード中に表示） */
+    #skeleton-loader {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #f9fafb;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      box-sizing: border-box;
+      transition: opacity 0.3s ease-out;
+    }
+
+    #skeleton-loader.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .skeleton-header {
+      width: 100%;
+      height: 60px;
+      background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .skeleton-form {
+      width: 100%;
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .skeleton-input {
+      width: 100%;
+      height: 40px;
+      background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      border-radius: 6px;
+      margin-bottom: 16px;
+    }
+
+    .skeleton-button {
+      width: 120px;
+      height: 44px;
+      background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      border-radius: 6px;
+      margin-top: 10px;
+    }
+
+    @keyframes skeleton-pulse {
+      0% {
+        background-position: 200% 0;
+      }
+      100% {
+        background-position: -200% 0;
+      }
+    }
   </style>
 </head>
 <body>
@@ -546,6 +620,18 @@
       </div>
     </div>
 
+    <!-- スケルトンUI（初期ロード中のプレースホルダー） -->
+    <div id="skeleton-loader">
+      <div class="skeleton-header"></div>
+      <div class="skeleton-form">
+        <div class="skeleton-input"></div>
+        <div class="skeleton-input"></div>
+        <div class="skeleton-input"></div>
+        <div class="skeleton-input"></div>
+        <div class="skeleton-button"></div>
+      </div>
+    </div>
+
     <!-- GAS Web App を iframe で表示 -->
     <iframe
       id="gas-iframe"
@@ -615,8 +701,10 @@
     // Service Worker registration（グローバル変数）
     let swRegistration = null;
 
-    // ページ読み込み時の初期化
-    window.addEventListener('load', async () => {
+    // ページ読み込み時の初期化（DOMContentLoaded: より高速）
+    document.addEventListener('DOMContentLoaded', async () => {
+      console.log('⚡ DOMContentLoaded - 初期化開始');
+
       // Service Worker登録
       if ('serviceWorker' in navigator) {
         try {
@@ -639,6 +727,21 @@
         document.getElementById('app-screen').style.display = 'none';
       }
       // セットアップ完了済みの場合は何もしない（デフォルトでアプリ画面が表示されている）
+
+      // iframe読み込み完了時にスケルトンUIを非表示
+      const iframe = document.getElementById('gas-iframe');
+      const skeleton = document.getElementById('skeleton-loader');
+
+      if (iframe && skeleton) {
+        iframe.addEventListener('load', () => {
+          console.log('✅ iframe読み込み完了 - スケルトンUI非表示');
+          skeleton.classList.add('hidden');
+          // 0.3秒後に完全に削除（transitionと同期）
+          setTimeout(() => {
+            skeleton.style.display = 'none';
+          }, 300);
+        });
+      }
     });
 
     // ⓪ ユーザーIDを保存

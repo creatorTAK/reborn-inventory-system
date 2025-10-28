@@ -2,11 +2,21 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9';
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ
 const notificationCache = new Set();
+
+// 事前キャッシュするリソース（初回インストール時）
+const PRECACHE_RESOURCES = [
+  '/reborn-inventory-system/',
+  '/reborn-inventory-system/index.html',
+  '/reborn-inventory-system/manifest.json',
+  '/reborn-inventory-system/icon-180.png',
+  '/reborn-inventory-system/icon-192.png',
+  '/reborn-inventory-system/icon-512.png'
+];
 
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
@@ -118,10 +128,26 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Service Workerのインストール時に古いキャッシュを削除
+// Service Workerのインストール時に主要リソースを事前キャッシュ
 self.addEventListener('install', (event) => {
   console.log('[Service Worker] インストール中... バージョン:', CACHE_VERSION);
-  self.skipWaiting(); // 即座に有効化
+
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        console.log('[Service Worker] 事前キャッシュ開始');
+        return cache.addAll(PRECACHE_RESOURCES);
+      })
+      .then(() => {
+        console.log('[Service Worker] 事前キャッシュ完了');
+        return self.skipWaiting(); // 即座に有効化
+      })
+      .catch((error) => {
+        console.error('[Service Worker] 事前キャッシュエラー:', error);
+        // エラーが出てもインストール続行
+        return self.skipWaiting();
+      })
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -141,5 +167,51 @@ self.addEventListener('activate', (event) => {
       console.log('[Service Worker] すべてのクライアントを制御します');
       return self.clients.claim();
     })
+  );
+});
+
+// fetchイベント: Cache First戦略（2回目以降の起動を高速化）
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // GASドメイン（script.google.com）は常に最新版を取得（キャッシュしない）
+  if (url.hostname === 'script.google.com' ||
+      url.hostname.includes('googleusercontent.com')) {
+    return; // デフォルトのネットワークリクエスト
+  }
+
+  // Firebase関連のリクエストもキャッシュしない
+  if (url.hostname === 'www.gstatic.com' && url.pathname.includes('firebase')) {
+    return;
+  }
+
+  // それ以外: Cache First戦略
+  event.respondWith(
+    caches.match(event.request)
+      .then((cachedResponse) => {
+        if (cachedResponse) {
+          // キャッシュヒット: 即座に返す
+          return cachedResponse;
+        }
+
+        // キャッシュミス: ネットワークから取得
+        return fetch(event.request)
+          .then((networkResponse) => {
+            // 成功した場合のみキャッシュに保存
+            if (networkResponse && networkResponse.status === 200) {
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME)
+                .then((cache) => {
+                  cache.put(event.request, responseToCache);
+                });
+            }
+            return networkResponse;
+          })
+          .catch((error) => {
+            console.error('[Service Worker] Fetch error:', error);
+            // ネットワークエラー時、オフライン用のフォールバック可能
+            throw error;
+          });
+      })
   );
 });
