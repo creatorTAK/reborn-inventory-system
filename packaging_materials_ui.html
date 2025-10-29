@@ -903,7 +903,7 @@
 
             // 保存された順序を適用
             applyCategoryOrder();
-            applyMaterialOrder(); // 資材の並び順を適用
+            // 資材の並び順はスプレッドシートの順序を使用（localStorageは使用しない）
 
             // 全データをフラット化（編集・削除用）
             packagingMaterials = [];
@@ -969,11 +969,11 @@
               <div class="action-bar">
                 <div class="action-bar-left">
                   <div class="checkbox-wrapper">
-                    <input type="checkbox" id="selectAll-${catIndex}" onchange="toggleSelectAllCategory('${escapeHtml(category)}', ${catIndex})">
+                    <input type="checkbox" id="selectAll-${catIndex}" onchange="toggleSelectAllCategory('${escapeJs(category)}', ${catIndex})">
                     <label for="selectAll-${catIndex}">全選択</label>
                   </div>
                 </div>
-                <button class="delete-selected-btn" id="deleteBtn-${catIndex}" onclick="deleteSelectedItems('${escapeHtml(category)}');" disabled>選択削除</button>
+                <button class="delete-selected-btn" id="deleteBtn-${catIndex}" onclick="deleteSelectedItems('${escapeJs(category)}');" disabled>選択削除</button>
               </div>
               <div class="card-list">
         `;
@@ -991,7 +991,7 @@
             <div class="material-card">
               <!-- 商品名 + チェックボックス -->
               <div class="card-title-name" style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" class="item-checkbox" data-category="${escapeHtml(category)}" data-row-index="${item.rowIndex}" onchange="updateDeleteButton('${escapeHtml(category)}')">
+                <input type="checkbox" class="item-checkbox" data-category="${escapeHtml(category)}" data-row-index="${item.rowIndex}" onchange="updateDeleteButton('${escapeJs(category)}')">
                 <span>${escapeHtml(item.productName)}</span>
               </div>
 
@@ -1000,11 +1000,11 @@
                 <div class="card-image">${imageHtml}</div>
                 <div class="card-actions">
                   <div style="display: flex; gap: 4px; margin-bottom: 6px;">
-                    <button class="order-btn" onclick="moveMaterialUp('${escapeHtml(category)}', ${matIndex})" ${matIndex === 0 ? 'disabled' : ''} title="上に移動">↑</button>
-                    <button class="order-btn" onclick="moveMaterialDown('${escapeHtml(category)}', ${matIndex})" ${matIndex === materials.length - 1 ? 'disabled' : ''} title="下に移動">↓</button>
+                    <button class="order-btn" onclick="moveMaterialUp('${escapeJs(category)}', ${matIndex})" ${matIndex === 0 ? 'disabled' : ''} title="上に移動">↑</button>
+                    <button class="order-btn" onclick="moveMaterialDown('${escapeJs(category)}', ${matIndex})" ${matIndex === materials.length - 1 ? 'disabled' : ''} title="下に移動">↓</button>
                   </div>
                   <button class="btn btn-warning" onclick="openEditModal(${item.rowIndex})">編集</button>
-                  <button class="btn btn-danger" onclick="confirmDelete(${item.rowIndex}, '${escapeHtml(item.productName)}')">削除</button>
+                  <button class="btn btn-danger" onclick="confirmDelete(${item.rowIndex}, '${escapeJs(item.productName)}')">削除</button>
                 </div>
               </div>
 
@@ -1170,9 +1170,16 @@
      * カテゴリ順にソート（モーダルの表示順でスプレッドシートを並び替え）
      */
     function sortByCategory() {
-      if (!confirm('スプレッドシートの行を現在のカテゴリ表示順に並び替えますか？\n\n※この操作は元に戻せません。')) {
+      if (!confirm('スプレッドシートの行を現在の表示順（カテゴリ＋資材の並び順）に並び替えますか？\n\n※この操作は元に戻せません。\n※並び替えた順序がスプレッドシートに保存されます。')) {
         return;
       }
+
+      // カテゴリ別の資材順序を作成
+      const materialOrderByCategory = {};
+      categoryList.forEach(category => {
+        const materials = packagingMaterialsByCategory[category] || [];
+        materialOrderByCategory[category] = materials.map(m => m.productName);
+      });
 
       showLoading();
       google.script.run
@@ -1189,7 +1196,7 @@
           hideLoading();
           showMessage('error', 'エラーが発生しました: ' + (error.message || error));
         })
-        .sortPackagingMaterialsByCategoryAPI(categoryList); // モーダルの並び順を渡す
+        .sortPackagingMaterialsByCategoryAPI(categoryList, materialOrderByCategory); // カテゴリ順 + 資材順を渡す
     }
 
     /**
@@ -1282,7 +1289,9 @@
       try {
         const materials = packagingMaterialsByCategory[category] || [];
         const productNames = materials.map(m => m.productName);
-        localStorage.setItem(`packagingMaterialOrder_${category}`, JSON.stringify(productNames));
+        const safeKey = `packagingMaterialOrder_${encodeURIComponent(category)}`;
+        localStorage.setItem(safeKey, JSON.stringify(productNames));
+        console.log('資材順序を保存:', category, productNames);
       } catch (error) {
         console.error('資材順序の保存エラー:', error);
       }
@@ -1294,14 +1303,20 @@
     function applyMaterialOrder() {
       try {
         categoryList.forEach(category => {
-          const savedOrder = localStorage.getItem(`packagingMaterialOrder_${category}`);
-          if (!savedOrder) return;
+          const safeKey = `packagingMaterialOrder_${encodeURIComponent(category)}`;
+          const savedOrder = localStorage.getItem(safeKey);
+          if (!savedOrder) {
+            console.log('保存された順序なし:', category);
+            return;
+          }
 
           const savedList = JSON.parse(savedOrder);
           if (!Array.isArray(savedList)) return;
 
           const materials = packagingMaterialsByCategory[category] || [];
           if (materials.length === 0) return;
+
+          console.log('資材順序を適用:', category, savedList);
 
           // 保存された順序に従って並び替え
           const orderedMaterials = [];
@@ -1345,10 +1360,7 @@
       // 移動したカテゴリを記憶（リロード後に開くため）
       editingCategory = category;
 
-      // 順序を保存
-      saveMaterialOrder(category);
-
-      // 再描画
+      // 再描画（順序はカテゴリでソートボタンクリック時にスプレッドシートに保存される）
       renderTable();
     }
 
@@ -1369,10 +1381,7 @@
       // 移動したカテゴリを記憶（リロード後に開くため）
       editingCategory = category;
 
-      // 順序を保存
-      saveMaterialOrder(category);
-
-      // 再描画
+      // 再描画（順序はカテゴリでソートボタンクリック時にスプレッドシートに保存される）
       renderTable();
     }
 
@@ -1930,6 +1939,19 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    /**
+     * JavaScript文字列エスケープ（onclick属性内で使用）
+     */
+    function escapeJs(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r');
     }
 
     /**
