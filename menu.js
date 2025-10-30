@@ -549,6 +549,9 @@ function doGet(e) {
     } else if (menuType === 'packaging-master') {
       template = HtmlService.createTemplateFromFile('packaging_materials_ui');
       title = 'REBORN - 梱包資材マスタ管理';
+    } else if (menuType === 'inventory_history') {
+      template = HtmlService.createTemplateFromFile('inventory_history_viewer');
+      title = 'REBORN - 入出庫履歴';
     } else {
       // 不明なメニューの場合はデフォルトで商品登録
       template = HtmlService.createTemplateFromFile('sidebar_product');
@@ -730,6 +733,79 @@ function showInventoryHistoryViewer() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
+/**
+ * 入出庫履歴取得（HTMLから呼び出し用ラッパー）
+ */
+function getInventoryHistoryAPIWrapper(params) {
+  Logger.log('[ラッパー] getInventoryHistoryAPIWrapper called');
+  Logger.log('[ラッパー] params: ' + JSON.stringify(params));
+  
+  try {
+    // getInventoryHistoryAPIが存在するか確認
+    if (typeof getInventoryHistoryAPI === 'undefined') {
+      Logger.log('[ラッパー] ERROR: getInventoryHistoryAPI is undefined!');
+      return {
+        success: false,
+        message: 'getInventoryHistoryAPI関数が見つかりません',
+        data: []
+      };
+    }
+    
+    Logger.log('[ラッパー] getInventoryHistoryAPI found, calling...');
+    const result = getInventoryHistoryAPI(params);
+    Logger.log('[ラッパー] Result: ' + JSON.stringify(result));
+    return result;
+  } catch (error) {
+    Logger.log('[ラッパー] ERROR: ' + error.message);
+    return {
+      success: false,
+      message: 'エラー: ' + error.message,
+      data: []
+    };
+  }
+}
+
+/**
+ * 梱包資材取得（HTMLから呼び出し用ラッパー）
+ */
+function getPackagingMaterialsAPIWrapper() {
+  Logger.log('[ラッパー] getPackagingMaterialsAPIWrapper called');
+  
+  try {
+    if (typeof getPackagingMaterialsAPI === 'undefined') {
+      Logger.log('[ラッパー] ERROR: getPackagingMaterialsAPI is undefined!');
+      return {
+        success: false,
+        message: 'getPackagingMaterialsAPI関数が見つかりません',
+        data: []
+      };
+    }
+    
+    const result = getPackagingMaterialsAPI();
+    Logger.log('[ラッパー] Result: ' + JSON.stringify(result));
+    return result;
+  } catch (error) {
+    Logger.log('[ラッパー] ERROR: ' + error.message);
+    return {
+      success: false,
+      message: 'エラー: ' + error.message,
+      data: []
+    };
+  }
+}
+
+/**
+ * テスト用：固定値を返す関数
+ */
+function testSimpleReturn() {
+  Logger.log('[テスト] testSimpleReturn called');
+  return {
+    success: true,
+    message: 'テスト成功',
+    data: [{test: 'データ1'}, {test: 'データ2'}]
+  };
+}
+
 function showMasterDataManager() {
   SpreadsheetApp.getUi().alert('情報', 'マスタデータ管理機能は準備中です', SpreadsheetApp.getUi().ButtonSet.OK);
 }
@@ -789,8 +865,6 @@ function onOpen() {
     .addSeparator()
     .addItem('🚚 発送方法マスタ管理', 'showShippingMethodMasterManager')
     .addItem('📦 梱包資材マスタ管理', 'showPackagingMaterialsManager')
-    .addSeparator()
-    .addItem('🔧 入出庫履歴シート作成', 'createInventoryHistorySheetMenu')
     .addToUi();
 }
 

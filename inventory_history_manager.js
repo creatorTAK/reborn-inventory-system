@@ -427,7 +427,7 @@ function getInventoryHistoryAPI(params) {
 
     let data = values.map((row, index) => ({
       rowIndex: index + 2,
-      timestamp: row[0],
+      timestamp: row[0] ? new Date(row[0]).toISOString() : '',
       operator: row[1] || '',
       materialName: row[2] || '',
       type: row[3] || '',
@@ -550,4 +550,21 @@ function getInventoryByMaterialAPI(materialName) {
       outStock: 0
     };
   }
+}
+
+/**
+ * テスト: 入出庫履歴API動作確認
+ */
+function testGetInventoryHistoryAPI() {
+  const result = getInventoryHistoryAPI({});
+  Logger.log('API Result:');
+  Logger.log(result);
+  
+  if (result.success) {
+    Logger.log(`データ件数: ${result.data.length}件`);
+  } else {
+    Logger.log(`エラー: ${result.message}`);
+  }
+  
+  return result;
 }
