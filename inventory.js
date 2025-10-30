@@ -103,21 +103,75 @@ function getStatsValue(itemName) {
 }
 
 /**
- * 統計情報シートから全ての値を一度に取得（最適化版）
+ * 統計情報シートから全ての値を一度に取得（最適化版 + Phase 6 キャッシュ）
  * 1回のシート読み込みで全統計を取得
+ * Phase 6: PropertiesServiceでキャッシュ、最終更新時刻で判定
  */
 function getAllStatsValues() {
   try {
+    const t1 = new Date().getTime();
     const sheet = getStatsSheet();
+    const t2 = new Date().getTime();
+    Logger.log(`[PERF-DEBUG] getStatsSheet(): ${t2 - t1}ms`);
+
+    // Phase 6: キャッシュチェック
+    const properties = PropertiesService.getScriptProperties();
+    const cachedTimestamp = properties.getProperty('stats_cache_timestamp');
+
+    // 統計シートの最終更新時刻を取得（セルD1に記録されている想定）
+    let sheetTimestamp = null;
+    try {
+      sheetTimestamp = sheet.getRange('D1').getValue();
+      if (!sheetTimestamp || sheetTimestamp === '') {
+        // D1が空の場合は現在時刻を書き込む（初回のみ）
+        const now = new Date();
+        sheet.getRange('D1').setValue(now);
+        sheetTimestamp = now.getTime();
+        Logger.log(`[PERF] 統計シートD1を初期化: ${now}`);
+      } else {
+        sheetTimestamp = new Date(sheetTimestamp).getTime();
+      }
+    } catch (e) {
+      Logger.log(`[PERF] D1読み込みエラー: ${e.message}`);
+      // エラーの場合は現在時刻を使用
+      sheetTimestamp = new Date().getTime();
+    }
+
+    // キャッシュが有効かチェック
+    if (cachedTimestamp && sheetTimestamp && cachedTimestamp == sheetTimestamp) {
+      const cachedData = properties.getProperty('stats_cache_data');
+      if (cachedData) {
+        const t3 = new Date().getTime();
+        Logger.log(`[PERF] 統計キャッシュヒット: ${t3 - t1}ms`);
+        return JSON.parse(cachedData);
+      }
+    }
+
+    Logger.log(`[PERF] 統計キャッシュミス: 再取得します`);
+
     const data = sheet.getDataRange().getValues();
-    
+    const t3 = new Date().getTime();
+    Logger.log(`[PERF-DEBUG] getDataRange().getValues(): ${t3 - t2}ms (${data.length}行)`);
+
     const stats = {};
     for (let i = 1; i < data.length; i++) {
       const itemName = data[i][0];
       const value = Number(data[i][1]) || 0;
       stats[itemName] = value;
     }
-    
+
+    const t4 = new Date().getTime();
+    Logger.log(`[PERF-DEBUG] 辞書化処理: ${t4 - t3}ms`);
+
+    // Phase 6: キャッシュに保存
+    if (sheetTimestamp) {
+      properties.setProperty('stats_cache_data', JSON.stringify(stats));
+      properties.setProperty('stats_cache_timestamp', sheetTimestamp.toString());
+      Logger.log(`[PERF] 統計キャッシュ更新: タイムスタンプ=${sheetTimestamp}`);
+    }
+
+    Logger.log(`[PERF-DEBUG] getAllStatsValues() 合計: ${t4 - t1}ms`);
+
     return stats;
   } catch (error) {
     Logger.log(`[統計] 全値取得エラー: ${error.message}`);
@@ -127,20 +181,25 @@ function getAllStatsValues() {
 
 /**
  * 統計情報シートの値を更新
+ * Phase 6: 更新時にタイムスタンプ(D1)を更新してキャッシュを無効化
  */
 function setStatsValue(itemName, value) {
   try {
     const sheet = getStatsSheet();
     const data = sheet.getDataRange().getValues();
-    
+
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === itemName) {
         sheet.getRange(i + 1, 2).setValue(value);
         sheet.getRange(i + 1, 3).setValue(new Date());
+
+        // Phase 6: タイムスタンプを更新（キャッシュ無効化）
+        sheet.getRange('D1').setValue(new Date());
+
         return true;
       }
     }
-    
+
     Logger.log(`[統計] 項目が見つかりません: ${itemName}`);
     return false;
   } catch (error) {
@@ -1284,22 +1343,24 @@ function getStatisticsAPI(params) {
   Logger.log('[PERF] getStatisticsAPI 開始（統計シートから取得）');
   
   try {
-    // 統計シートから直接読み込み（スキャン不要！）
-    const total = getStatsValue('合計');
+    // 統計シートを1回だけ読み込み（11回→1回に削減！）
+    const allStats = getAllStatsValues();
+    
+    const total = allStats['合計'] || 0;
     const statusCounts = {
-      registered: getStatsValue('登録済み'),
-      preparingListing: getStatsValue('出品準備中'),
-      listed: getStatsValue('出品中'),
-      sold: getStatsValue('販売済み'),
-      withdrawn: getStatsValue('取り下げ')
+      registered: allStats['登録済み'] || 0,
+      preparingListing: allStats['出品準備中'] || 0,
+      listed: allStats['出品中'] || 0,
+      sold: allStats['販売済み'] || 0,
+      withdrawn: allStats['取り下げ'] || 0
     };
     
-    const totalPurchaseAmount = getStatsValue('総仕入金額');
-    const totalListingAmount = getStatsValue('総出品金額');
-    const totalSaleAmount = getStatsValue('総販売金額');
-    const totalProfit = getStatsValue('総利益金額');
-    const totalInventoryDays = getStatsValue('総在庫日数');
-    const inventoryDaysCount = getStatsValue('在庫日数カウント');
+    const totalPurchaseAmount = allStats['総仕入金額'] || 0;
+    const totalListingAmount = allStats['総出品金額'] || 0;
+    const totalSaleAmount = allStats['総販売金額'] || 0;
+    const totalProfit = allStats['総利益金額'] || 0;
+    const totalInventoryDays = allStats['総在庫日数'] || 0;
+    const inventoryDaysCount = allStats['在庫日数カウント'] || 0;
     
     const endTime = new Date().getTime();
     Logger.log(`[PERF] getStatisticsAPI 完了: ${endTime - startTime}ms（統計シートから取得）`);
@@ -1332,16 +1393,15 @@ function getInventoryDashboardAPI(params) {
   Logger.log('🎯 [DEBUG] params: ' + JSON.stringify(params));
 
   const startTime = new Date().getTime();
-  Logger.log('[PERF] getInventoryDashboardAPI 開始（getValues最適化版）');
+  Logger.log('[PERF] getInventoryDashboardAPI 開始（Phase 5: 全列インデックス方式）');
 
   try {
-    // paramsのデフォルト値設定（エディタから直接実行した場合に対応）
+    // paramsのデフォルト値設定
     params = params || {};
-    Logger.log('🎯 [DEBUG] paramsデフォルト設定完了');
 
     // フィルタ条件
     const filters = {
-      statuses: params.statuses || [],  // 修正: statusesを配列で受け取る
+      statuses: params.statuses || [],
       brand: params.brand || '',
       category: params.category || '',
       person: params.person || '',
@@ -1355,37 +1415,55 @@ function getInventoryDashboardAPI(params) {
 
     // ページネーション
     const page = parseInt(params.page) || 1;
-    const perPage = parseInt(params.limit) || 10;  // 修正: limitに変更
+    const perPage = parseInt(params.limit) || 10;
 
     // ソート
     const sortBy = params.sortBy || 'registeredAt';
     const sortOrder = params.sortOrder || 'desc';
 
-    // 【最適化】getDataRange().getValues()で一括取得（1回のサービス呼び出し）
-    const bulkFetchStart = new Date().getTime();
     const sh = getSheet();
-    const allData = sh.getDataRange().getValues();
-    Logger.log('[PERF] getDataRange().getValues()完了: ' + (new Date().getTime() - bulkFetchStart) + 'ms');
+    
+    // 【Phase 5】ステップ1: インデックス列定義（全必要列を含む）
+    // フィルタ・ソート・表示に必要な全列（詳細データ読み込みを不要にする）
+    const INDEX_COLUMNS = [
+      '管理番号',       // 0: 必須
+      'ステータス',     // 1: フィルタ
+      'ブランド(英語)', // 2: フィルタ
+      '大分類',         // 3: フィルタ
+      '担当者',         // 4: フィルタ
+      'サイズ',         // 5: フィルタ
+      'カラー(選択)',   // 6: フィルタ
+      '商品名(タイトル)', // 7: 検索・表示
+      '仕入日',         // 8: 日付フィルタ
+      '出品日',         // 9: 日付フィルタ
+      '販売日',         // 10: 日付フィルタ
+      '登録日時',       // 11: ソート
+      '利益金額',       // 12: ソート
+      '仕入金額',       // 13: 表示
+      '出品金額',       // 14: 表示
+      // 【Phase 5追加】詳細表示用の列
+      'アイテム名',     // 15: 詳細表示
+      '販売金額',       // 16: 詳細表示
+      '利益率',         // 17: 詳細表示
+      '在庫日数',       // 18: 詳細表示
+      '登録者',         // 19: 詳細表示
+      '最終更新者',     // 20: 詳細表示
+      '更新日時',       // 21: 詳細表示
+      '画像URL1',       // 22: 詳細表示
+      '画像URL2',       // 23: 詳細表示
+      '画像URL3',       // 24: 詳細表示
+      'JSON_データ'     // 25: 画像配列
+    ];
 
-    if (allData.length < 2) {
-      // ヘッダー行のみ、またはデータなし
+    // 【Phase 4】ステップ2: 軽量インデックス読み込み
+    const indexFetchStart = new Date().getTime();
+    const lastRow = sh.getLastRow();
+    const totalRows = lastRow - 1; // ヘッダー除く
+    
+    if (totalRows < 1) {
+      // データなし
       return jsonSuccessResponse({
-        statistics: {
-          total: 0,
-          statusCounts: {
-            registered: 0,
-            preparingListing: 0,
-            listed: 0,
-            sold: 0,
-            withdrawn: 0
-          },
-          totalPurchaseAmount: 0,
-          totalListingAmount: 0,
-          totalSaleAmount: 0,
-          totalProfit: 0,
-          averageProfit: 0,
-          averageInventoryDays: 0
-        },
+        statistics: getEmptyStatistics(),
         products: [],
         count: 0,
         totalCount: 0,
@@ -1395,25 +1473,38 @@ function getInventoryDashboardAPI(params) {
       });
     }
 
-    // ヘッダー行（1行目）から列インデックスマップを構築
-    const headerRow = allData[0];
-    const colIdx = {};
+    // ヘッダー行取得（全列必要）
+    const headerRow = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const fullColIdx = {};
     for (let i = 0; i < headerRow.length; i++) {
       const headerName = String(headerRow[i]).trim();
       if (headerName) {
-        colIdx[headerName] = i;
+        fullColIdx[headerName] = i;
       }
     }
 
-    // 必須列の確認
-    const requiredFields = ['管理番号', 'ステータス'];
-    for (const field of requiredFields) {
-      if (colIdx[field] === undefined) {
-        return jsonErrorResponse(`必須列「${field}」が見つかりません`);
+    // インデックス列の列番号を特定
+    const indexColNumbers = INDEX_COLUMNS.map(col => fullColIdx[col]);
+    
+    // 軽量データ読み込み（全行×15列のみ）
+    const indexData = [];
+    const BATCH_SIZE = 1000; // 1000行ずつ読み込み
+    for (let startRow = 2; startRow <= lastRow; startRow += BATCH_SIZE) {
+      const rowsToFetch = Math.min(BATCH_SIZE, lastRow - startRow + 1);
+      const batchData = sh.getRange(startRow, 1, rowsToFetch, sh.getLastColumn()).getValues();
+      
+      // 必要な列だけ抽出
+      for (let i = 0; i < batchData.length; i++) {
+        const row = batchData[i];
+        const indexRow = indexColNumbers.map(colNum => row[colNum]);
+        indexRow.push(startRow + i); // 元の行番号を追加
+        indexData.push(indexRow);
       }
     }
+    
+    Logger.log('[PERF] インデックス読み込み完了: ' + (new Date().getTime() - indexFetchStart) + 'ms (' + indexData.length + '行)');
 
-    // 【統計分離最適化】統計は統計シートから取得（ループ内での統計計算を削除）
+    // 【Phase 4】ステップ3: 統計情報取得（統計シートから）
     const statsStart = new Date().getTime();
     const allStats = getAllStatsValues();
     Logger.log('[PERF] 統計シート読み込み完了: ' + (new Date().getTime() - statsStart) + 'ms');
@@ -1435,59 +1526,58 @@ function getInventoryDashboardAPI(params) {
       averageInventoryDays: (allStats['在庫日数カウント'] > 0) ? Math.round((allStats['総在庫日数'] || 0) / allStats['在庫日数カウント']) : 0
     };
 
-    // 商品一覧用配列
-    const allResults = [];
-
-    // ステータスフィルタ（複数選択対応）
+    // 【Phase 4】ステップ4: フィルタリング（軽量データで実行）
+    const filterStart = new Date().getTime();
+    const matchedItems = [];
     const statusFilters = Array.isArray(filters.statuses) ? filters.statuses : [];
 
-    // 【最適化】配列ループ処理（統計計算なし、フィルタリングのみ）
-    const loopStart = new Date().getTime();
-
-    // データ行をループ（2行目以降）
-    for (let rowIdx = 1; rowIdx < allData.length; rowIdx++) {
-      const row = allData[rowIdx];
-
+    for (let i = 0; i < indexData.length; i++) {
+      const row = indexData[i];
+      const rowNumber = row[15]; // 最後の要素が行番号
+      
       // 管理番号チェック
-      const managementNumber = String(row[colIdx['管理番号']] || '').trim();
+      const managementNumber = String(row[0] || '').trim();
       if (!managementNumber) continue;
 
-      // ステータス取得
-      const status = String(row[colIdx['ステータス']] || '').trim();
-
-      // フィルタ適用（早期終了最適化）
+      // ステータスフィルタ
+      const status = String(row[1] || '').trim();
       if (statusFilters.length > 0 && !statusFilters.includes(status)) {
         continue;
       }
 
-      const brand = String(row[colIdx['ブランド(英語)']] || '').trim();
+      // ブランドフィルタ
+      const brand = String(row[2] || '').trim();
       if (filters.brand && brand !== filters.brand) {
         continue;
       }
 
-      const category = String(row[colIdx['大分類']] || '').trim();
+      // カテゴリフィルタ
+      const category = String(row[3] || '').trim();
       if (filters.category && category !== filters.category) {
         continue;
       }
 
-      const person = String(row[colIdx['担当者']] || '').trim();
+      // 担当者フィルタ
+      const person = String(row[4] || '').trim();
       if (filters.person && person !== filters.person) {
         continue;
       }
 
-      const size = String(row[colIdx['サイズ']] || '').trim();
+      // サイズフィルタ
+      const size = String(row[5] || '').trim();
       if (filters.size && size !== filters.size) {
         continue;
       }
 
-      const color = String(row[colIdx['カラー(選択)']] || '').trim();
+      // カラーフィルタ
+      const color = String(row[6] || '').trim();
       if (filters.color && color !== filters.color) {
         continue;
       }
 
       // テキスト検索
       if (filters.searchText) {
-        const productName = String(row[colIdx['商品名(タイトル)']] || '').trim();
+        const productName = String(row[7] || '').trim();
         const searchLower = filters.searchText.toLowerCase();
         const matchNumber = managementNumber.toLowerCase().includes(searchLower);
         const matchName = productName.toLowerCase().includes(searchLower);
@@ -1499,18 +1589,13 @@ function getInventoryDashboardAPI(params) {
       // 日付範囲フィルタ
       if (filters.dateFrom || filters.dateTo) {
         let targetDate = null;
-        let targetDateCol = null;
-
+        
         if (filters.dateType === 'purchase') {
-          targetDateCol = colIdx['仕入日'];
+          targetDate = row[8]; // 仕入日
         } else if (filters.dateType === 'listing') {
-          targetDateCol = colIdx['出品日'];
+          targetDate = row[9]; // 出品日
         } else if (filters.dateType === 'sale') {
-          targetDateCol = colIdx['販売日'];
-        }
-
-        if (targetDateCol !== undefined) {
-          targetDate = row[targetDateCol];
+          targetDate = row[10]; // 販売日
         }
 
         if (targetDate) {
@@ -1533,76 +1618,44 @@ function getInventoryDashboardAPI(params) {
         }
       }
 
-      // フィルタ通過した商品を追加
-      const productName = String(row[colIdx['商品名(タイトル)']] || '').trim();
-      const itemName = String(row[colIdx['アイテム名']] || '').trim();
-
-      // 金額情報（フィルタ通過後のみ取得）
-      const purchaseAmount = parseAmount(row[colIdx['仕入金額']] || 0);
-      const listingAmount = parseAmount(row[colIdx['出品金額']] || 0);
-      const saleAmount = parseAmount(row[colIdx['販売金額']] || 0);
-      const profit = parseAmount(row[colIdx['利益金額']] || 0);
-      const inventoryDays = parseAmount(row[colIdx['在庫日数']] || 0);
-
-      // JSON_データ列から商品画像URL配列を取得（最大20枚）
-      let productImages = [];
-      const jsonDataCol = colIdx['JSON_データ'];
-      if (jsonDataCol !== undefined) {
-        const jsonDataRaw = row[jsonDataCol];
-        if (jsonDataRaw && String(jsonDataRaw).trim()) {
-          try {
-            const parsedData = JSON.parse(String(jsonDataRaw));
-            if (Array.isArray(parsedData)) {
-              // forAI: false の商品画像のみ抽出（最大20枚）
-              productImages = parsedData
-                .filter(img => !img.forAI && img.url)
-                .map(img => img.url);
-            }
-          } catch (parseError) {
-            // JSON パースエラーは無視（画像なしとして扱う）
-            Logger.log(`JSON_データ列のパースエラー（管理番号: ${managementNumber}）: ${parseError.message}`);
-          }
-        }
-      }
-
-      const productInfo = {
+      // フィルタ通過 → マッチリストに追加（Phase 5: 全情報を含む）
+      matchedItems.push({
+        rowNumber: rowNumber,
         managementNumber: managementNumber,
-        person: person,
-        productName: productName,
-        category: category,
-        brand: brand,
-        itemName: itemName,
-        size: size,
-        color: color,
         status: status,
-        purchaseDate: row[colIdx['仕入日']] || '',
-        purchaseAmount: purchaseAmount,
-        listingDate: row[colIdx['出品日']] || '',
-        listingAmount: listingAmount,
-        saleDate: row[colIdx['販売日']] || '',
-        saleAmount: saleAmount,
-        profit: profit,
-        profitRate: row[colIdx['利益率']] || '',
-        inventoryDays: inventoryDays,
-        registrant: row[colIdx['登録者']] || '',
-        registeredAt: row[colIdx['登録日時']] || '',
-        lastEditor: row[colIdx['最終更新者']] || '',
-        updatedAt: row[colIdx['更新日時']] || '',
-        imageUrl1: row[colIdx['画像URL1']] || '',
-        imageUrl2: row[colIdx['画像URL2']] || '',
-        imageUrl3: row[colIdx['画像URL3']] || '',
-        images: productImages  // 商品画像URL配列（最大20枚、R2保存）
-      };
-
-      allResults.push(productInfo);
+        brand: brand,
+        category: category,
+        person: String(row[4] || '').trim(),
+        size: String(row[5] || '').trim(),
+        color: String(row[6] || '').trim(),
+        productName: String(row[7] || '').trim(),
+        purchaseDate: row[8],
+        listingDate: row[9],
+        saleDate: row[10],
+        registeredAt: row[11],
+        profit: parseAmount(row[12]),
+        purchaseAmount: parseAmount(row[13]),
+        listingAmount: parseAmount(row[14]),
+        // Phase 5追加：詳細データ
+        itemName: String(row[15] || '').trim(),
+        saleAmount: parseAmount(row[16]),
+        profitRate: row[17] || '',
+        inventoryDays: parseAmount(row[18]),
+        registrant: row[19] || '',
+        lastEditor: row[20] || '',
+        updatedAt: row[21] || '',
+        imageUrl1: row[22] || '',
+        imageUrl2: row[23] || '',
+        imageUrl3: row[24] || '',
+        jsonData: row[25] || ''
+      });
     }
 
-    const loopEndTime = new Date().getTime();
-    Logger.log('[PERF] 配列ループ処理完了: ' + (loopEndTime - loopStart) + 'ms, フィルタ後: ' + allResults.length + '件');
+    Logger.log('[PERF] フィルタリング完了: ' + (new Date().getTime() - filterStart) + 'ms (' + matchedItems.length + '件)');
 
-    // ソート
+    // 【Phase 4】ステップ5: ソート
     const sortStart = new Date().getTime();
-    allResults.sort((a, b) => {
+    matchedItems.sort((a, b) => {
       let aVal, bVal;
 
       switch(sortBy) {
@@ -1639,28 +1692,78 @@ function getInventoryDashboardAPI(params) {
     });
     Logger.log('[PERF] ソート完了: ' + (new Date().getTime() - sortStart) + 'ms');
 
-    // ページネーション
-    const totalCount = allResults.length;
+    // ページネーション計算
+    const totalCount = matchedItems.length;
     const totalPages = Math.ceil(totalCount / perPage);
     const startIndex = (page - 1) * perPage;
     const endIndex = startIndex + perPage;
-    const paginatedResults = allResults.slice(startIndex, endIndex);
+    const pageItems = matchedItems.slice(startIndex, endIndex);
 
-    const endTime = new Date().getTime();
-    Logger.log('[PERF] getInventoryDashboardAPI 完了: 合計' + (endTime - startTime) + 'ms（getValues最適化版）');
+    // 【Phase 5】ステップ6: インデックスデータからproductsを直接生成（詳細データ読み込み不要）
+    const productsStart = new Date().getTime();
+    const products = [];
 
-    // 🎯 google.script.run対応：Date型を文字列に変換
-    Logger.log('🎯 [DEBUG] Date型を文字列に変換中...');
-    const serializedProducts = paginatedResults.map(function(product) {
+    for (let i = 0; i < pageItems.length; i++) {
+      const item = pageItems[i];
+
+      // JSON_データ列から商品画像URL配列を取得
+      let productImages = [];
+      const jsonDataRaw = item.jsonData;
+      if (jsonDataRaw && String(jsonDataRaw).trim()) {
+        try {
+          const parsedData = JSON.parse(String(jsonDataRaw));
+          if (Array.isArray(parsedData)) {
+            productImages = parsedData
+              .filter(img => !img.forAI && img.url)
+              .map(img => img.url);
+          }
+        } catch (parseError) {
+          Logger.log(`JSON_データ列のパースエラー（管理番号: ${item.managementNumber}）: ${parseError.message}`);
+        }
+      }
+
+      products.push({
+        managementNumber: item.managementNumber,
+        person: item.person,
+        productName: item.productName,
+        category: item.category,
+        brand: item.brand,
+        itemName: item.itemName,
+        size: item.size,
+        color: item.color,
+        status: item.status,
+        purchaseDate: item.purchaseDate || '',
+        purchaseAmount: item.purchaseAmount,
+        listingDate: item.listingDate || '',
+        listingAmount: item.listingAmount,
+        saleDate: item.saleDate || '',
+        saleAmount: item.saleAmount,
+        profit: item.profit,
+        profitRate: item.profitRate,
+        inventoryDays: item.inventoryDays,
+        registrant: item.registrant,
+        registeredAt: item.registeredAt || '',
+        lastEditor: item.lastEditor,
+        updatedAt: item.updatedAt,
+        imageUrl1: item.imageUrl1,
+        imageUrl2: item.imageUrl2,
+        imageUrl3: item.imageUrl3,
+        images: productImages
+      });
+    }
+
+    Logger.log('[PERF] products生成完了: ' + (new Date().getTime() - productsStart) + 'ms (' + products.length + '件)');
+
+    // Date型を文字列に変換
+    const serializedProducts = products.map(function(product) {
       const serialized = {};
       for (var key in product) {
         if (product.hasOwnProperty(key)) {
           var value = product[key];
-          // Date型を文字列に変換
           if (value instanceof Date) {
             serialized[key] = value.toISOString();
           } else if (value === null || value === undefined) {
-            serialized[key] = '';  // null/undefinedを空文字列に
+            serialized[key] = '';
           } else {
             serialized[key] = value;
           }
@@ -1669,14 +1772,12 @@ function getInventoryDashboardAPI(params) {
       return serialized;
     });
 
-    Logger.log('🎯 [DEBUG] シリアライズ完了: ' + serializedProducts.length + '件');
+    const endTime = new Date().getTime();
+    Logger.log('[PERF] getInventoryDashboardAPI 完了: 合計' + (endTime - startTime) + 'ms（Phase 5: 全列インデックス方式）');
 
-    // 統計情報と商品一覧を返す
-    Logger.log('🎯 [DEBUG] jsonSuccessResponse()を呼び出します');
-
-    const response = jsonSuccessResponse({
+    return jsonSuccessResponse({
       statistics: statistics,
-      products: serializedProducts,  // シリアライズ済みproducts
+      products: serializedProducts,
       count: serializedProducts.length,
       totalCount: totalCount,
       page: page,
@@ -1687,15 +1788,31 @@ function getInventoryDashboardAPI(params) {
       sortOrder: sortOrder
     });
 
-    Logger.log('🎯 [DEBUG] response作成完了: ' + typeof response);
-    Logger.log('🎯 [DEBUG] response.success: ' + response.success);
-    return response;
-
   } catch (error) {
     Logger.log(`[PERF] getInventoryDashboardAPI エラー: ${error.message}`);
     Logger.log(`[PERF] スタックトレース: ${error.stack}`);
     return jsonErrorResponse(`ダッシュボード取得エラー: ${error.message}`);
   }
+}
+
+// ヘルパー関数: 空の統計を返す
+function getEmptyStatistics() {
+  return {
+    total: 0,
+    statusCounts: {
+      registered: 0,
+      preparingListing: 0,
+      listed: 0,
+      sold: 0,
+      withdrawn: 0
+    },
+    totalPurchaseAmount: 0,
+    totalListingAmount: 0,
+    totalSaleAmount: 0,
+    totalProfit: 0,
+    averageProfit: 0,
+    averageInventoryDays: 0
+  };
 }
 
 
@@ -2050,25 +2167,24 @@ function getPackagingMaterialsMasterAPI() {
     });
     
     // 必須列のチェック
-    const requiredCols = ['略称', '1個あたり'];
+    const requiredCols = ['商品名', '1個あたり'];
     for (const col of requiredCols) {
       if (colMap[col] === undefined) {
-        return { 
-          success: false, 
-          message: `必要な列「${col}」が見つかりません` 
+        return {
+          success: false,
+          message: `必要な列「${col}」が見つかりません`
         };
       }
     }
-    
+
     // データ行を処理
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      const abbreviation = row[colMap['略称']];
-      if (!abbreviation) continue; // 空行スキップ
-      
+      const productName = row[colMap['商品名']];
+      if (!productName) continue; // 空行スキップ
+
       master.push({
-        productName: row[colMap['商品名']] || '',
-        abbreviation: abbreviation,
+        productName: productName,
         unitCost: Number(row[colMap['1個あたり']]) || 0,
         inStock: Number(row[colMap['入庫数合計']]) || 0,
         outStock: Number(row[colMap['出庫数合計']]) || 0,
@@ -2158,7 +2274,7 @@ function saveSalesRecordAPI(salesData) {
       '手数料': salesData.platformFee,
       '利益金額': salesData.finalProfit,
       '利益率': salesData.profitRate !== null && salesData.profitRate !== undefined
-        ? Math.round(salesData.profitRate * 100) / 100
+        ? Math.round(salesData.profitRate * 100) / 10000
         : null,
       'ステータス': '販売済み'
     };
@@ -2172,15 +2288,23 @@ function saveSalesRecordAPI(salesData) {
       }
     }
     
-    // 梱包資材を書き込み（最大3個想定）
-    for (let i = 0; i < salesData.packagingMaterials.length && i < 3; i++) {
+    // 梱包資材のバリデーション（最大5個）
+    if (salesData.packagingMaterials.length > 5) {
+      return {
+        success: false,
+        message: '梱包資材は最大5個までです'
+      };
+    }
+
+    // 梱包資材を書き込み（最大5個対応）
+    for (let i = 0; i < salesData.packagingMaterials.length && i < 5; i++) {
       const material = salesData.packagingMaterials[i];
 
-      // 梱包資材の略称を書き込み
+      // 梱包資材の商品名を書き込み
       const materialColName = `梱包資材${i + 1}`;
       const materialCol = map[materialColName];
       if (materialCol) {
-        sheet.getRange(targetRow, materialCol).setValue(material.abbreviation);
+        sheet.getRange(targetRow, materialCol).setValue(material.productName);
       } else {
         Logger.log(`[警告] 列「${materialColName}」が見つかりません`);
       }
@@ -2199,9 +2323,34 @@ function saveSalesRecordAPI(salesData) {
     recordUserUpdate(sheet, targetRow, map, 'システム');
     
     // 備品在庫リストの出庫処理
-    const inventoryResult = updatePackagingInventory(salesData.packagingMaterials);
+    const inventoryResult = updatePackagingInventory(salesData.packagingMaterials, salesData.managementNumber);
     if (!inventoryResult.success) {
       Logger.log(`[警告] 備品在庫更新に失敗: ${inventoryResult.message}`);
+    }
+    
+    // 入出庫履歴に記録（一括処理で高速化）
+    if (salesData.packagingMaterials.length > 0) {
+      try {
+        const historyArray = salesData.packagingMaterials.map(material => ({
+          materialName: material.productName,
+          type: '出庫',
+          quantity: 1,
+          reason: '販売記録',
+          relatedSalesRecord: salesData.managementNumber,
+          note: `自動記録（販売記録保存時）`,
+          operator: 'システム'
+        }));
+        
+        const historyResult = addBatchInventoryHistoryAPI(historyArray);
+        
+        if (!historyResult.success) {
+          Logger.log(`[警告] 入出庫履歴記録に失敗: ${historyResult.message}`);
+        } else {
+          Logger.log(`[入出庫履歴] ${historyResult.count}件を一括記録しました`);
+        }
+      } catch (historyError) {
+        Logger.log(`[警告] 入出庫履歴記録エラー: ${historyError.message}`);
+      }
     }
     
     // 統計情報を再計算
@@ -2219,73 +2368,77 @@ function saveSalesRecordAPI(salesData) {
 /**
  * 備品在庫更新処理
  * 梱包資材の出庫数を増やし、在庫数を減らす
+ * @param {Array} packagingMaterials - 梱包資材リスト
+ * @param {string} managementNumber - 関連販売記録の管理番号（オプション）
  */
-function updatePackagingInventory(packagingMaterials) {
+function updatePackagingInventory(packagingMaterials, managementNumber) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheetName = '備品在庫リスト';
     const sheet = ss.getSheetByName(sheetName);
-    
+
     if (!sheet) {
-      return { 
-        success: false, 
-        message: `シート「${sheetName}」が見つかりません` 
+      return {
+        success: false,
+        message: `シート「${sheetName}」が見つかりません`
       };
     }
-    
+
     const data = sheet.getDataRange().getValues();
     if (data.length < 2) {
       return { success: true, message: '備品在庫リストにデータがありません' };
     }
-    
+
     const headers = data[0];
-    
+
     // 列インデックスを取得
     const colMap = {};
     headers.forEach((header, index) => {
       colMap[header] = index;
     });
-    
+
     // 必須列のチェック
-    if (colMap['略称'] === undefined || colMap['出庫数合計'] === undefined) {
-      return { 
-        success: false, 
-        message: '必要な列（略称、出庫数合計）が見つかりません' 
+    if (colMap['商品名'] === undefined || colMap['出庫数合計'] === undefined) {
+      return {
+        success: false,
+        message: '必要な列（商品名、出庫数合計）が見つかりません'
       };
     }
-    
+
     // 各梱包資材の出庫数を更新
     let updatedCount = 0;
-    
+
     for (const material of packagingMaterials) {
-      if (!material.abbreviation || material.abbreviation === 'なし') {
+      if (!material.productName || material.productName === 'なし') {
         continue; // 「なし」はスキップ
       }
-      
+
       let found = false;
-      
+
       for (let i = 1; i < data.length; i++) {
-        if (data[i][colMap['略称']] === material.abbreviation) {
+        if (data[i][colMap['商品名']] === material.productName) {
           const targetRow = i + 1; // 1-indexed
           const currentOutStock = Number(data[i][colMap['出庫数合計']]) || 0;
-          
+
           // 出庫数を1増加
           sheet.getRange(targetRow, colMap['出庫数合計'] + 1).setValue(currentOutStock + 1);
           
+          // 注: 入出庫履歴への記録はsaveSalesRecordAPIで実施（重複防止）
+
           updatedCount++;
           found = true;
           break;
         }
       }
-      
+
       if (!found) {
-        Logger.log(`[警告] 梱包資材「${material.abbreviation}」が備品在庫リストに見つかりません`);
+        Logger.log(`[警告] 梱包資材「${material.productName}」が備品在庫リストに見つかりません`);
       }
     }
-    
+
     Logger.log(`[備品在庫] ${updatedCount}件の出庫処理を実行しました`);
     return { success: true, message: `${updatedCount}件の備品在庫を更新しました` };
-    
+
   } catch (error) {
     Logger.log(`[ERROR] updatePackagingInventory: ${error.message}`);
     return { success: false, message: error.toString() };

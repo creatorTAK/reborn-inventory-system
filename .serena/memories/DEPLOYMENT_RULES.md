@@ -4,15 +4,13 @@
 
 ## ⚠️ 重要な原則
 
-**コード修正 = 必ず両方デプロイ**
-- GAS版（スプレッドシート）
-- PWA版（Cloudflare Pages）
-
-どちらか一方だけのデプロイは**NG**です。
+**コード修正 = 必ずGASデプロイ**
+- GAS版（スプレッドシート + PWA）
+- 既存デプロイIDを更新する方式（効率的）
 
 ---
 
-## 📋 標準デプロイフロー（必ず全手順実施）
+## 📋 標準デプロイフロー（効率化版）
 
 ### Step 1: GASコードアップロード
 ```bash
@@ -22,34 +20,30 @@ npx @google/clasp push
 - スプレッドシートのサイドバー/メニューには即反映
 - **Web Appには未反映**（次のステップが必須）
 
-### Step 2: GAS Web Appデプロイ
+### Step 2: GAS Web Appデプロイ（既存IDを更新）
 ```bash
-npx @google/clasp deploy
-```
-- 新しいデプロイIDが発行される
-- 例: `AKfycbw7O4NXLGDEMoYZbNLmT1QYcaY0eeniW__Yu4AsxK1LG1ouZkcU6SjmjZc5U0jtK7dVgw @323`
-- このIDを次のステップで使用
-
-### Step 3: PWA版のデプロイID更新
-```bash
-# docs/index.htmlの全箇所（4箇所）を新IDで更新
-Edit tool で replace_all: true を使用
+npx @google/clasp deploy --deploymentId AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA --description "変更内容の簡潔な説明"
 ```
 
-**更新対象:**
-- `GAS_BASE_URL`（1箇所）
-- iframe src（1箇所）
-- `GAS_API_URL`（1箇所）
-- `baseUrl`（1箇所）
+**重要ポイント:**
+- 同じデプロイIDを使い続ける（@345固定）
+- `--deploymentId` オプションで既存IDを更新
+- `--description` オプションで変更内容を記録
+- **index.html の更新不要**（デプロイIDが変わらないため）
 
-### Step 4: Cloudflare Pagesデプロイ
+**成功例:**
+```
+Updated deployment AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA @345
+```
+
+### Step 3: Cloudflare Pagesデプロイ（コード変更時のみ）
 ```bash
-git add docs/index.html
-git commit -m "deploy: Update GAS deployment ID to @XXX (変更内容)"
+# inventory.js, config.js 等のGASファイルのみ変更した場合 → 不要
+# docs/配下のファイルを変更した場合のみ実行:
+git add .
+git commit -m "変更内容"
 git push origin main
 ```
-- Cloudflare Pagesが自動デプロイ（1〜2分）
-- PWA版に反映
 
 ---
 
@@ -57,48 +51,92 @@ git push origin main
 
 コード修正後、以下を必ず実行：
 
+### GASファイル修正時（inventory.js, config.js, web_push.js等）
 - [ ] `npx @google/clasp push`
-- [ ] `npx @google/clasp deploy`
-- [ ] 新しいデプロイIDを確認
-- [ ] `docs/index.html`を新IDで更新（4箇所、replace_all: true）
-- [ ] `git add docs/index.html`
-- [ ] `git commit -m "deploy: ..."`
+- [ ] `npx @google/clasp deploy --deploymentId AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA --description "変更内容"`
+- [ ] ✅ 完了（index.html更新不要、git push不要）
+
+### PWAファイル修正時（docs/index.html, docs/styles.css等）
+- [ ] `git add .`
+- [ ] `git commit -m "変更内容"`
+- [ ] `git push origin main`
+- [ ] ✅ 完了（Cloudflare Pages自動デプロイ 1〜2分）
+
+### 両方修正時
+- [ ] `npx @google/clasp push`
+- [ ] `npx @google/clasp deploy --deploymentId AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA --description "変更内容"`
+- [ ] `git add .`
+- [ ] `git commit -m "deploy: 変更内容"`
 - [ ] `git push origin main`
 
-**全ステップ完了 = PWA版にも反映完了**
+---
+
+## 🔧 デプロイID管理
+
+**PWA用固定デプロイID:**
+```
+AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA
+```
+
+**バージョン番号:** @345
+
+**初回設定日:** 2025-10-28
+
+**重要:** このIDは変更しないこと。同じIDを使い続けることで：
+- デプロイ上限（20件）を気にしなくて良い
+- index.html の更新が不要
+- デプロイが高速化
 
 ---
 
 ## 🚫 やってはいけないこと
 
-❌ `npx @google/clasp push`だけで終わる
-❌ `npx @google/clasp deploy`を忘れる
-❌ `docs/index.html`の更新を忘れる
-❌ git pushを忘れる
-
-**1つでも欠けたら、PWA版は古いバージョンのまま**
+❌ `npx @google/clasp deploy`（オプションなし） → 新しいIDが発行されてしまう
+❌ 違うデプロイIDを使う → index.htmlとの不整合
+❌ GASファイル修正後にpushだけで終わる → Web Appに未反映
 
 ---
 
-## 📝 デプロイ時のコミットメッセージ例
+## 🔄 デプロイ上限エラーが出た場合
 
+もし `Scripts may only have up to 20 versioned deployments` エラーが出た場合：
+
+```bash
+# デプロイ一覧を確認
+npx @google/clasp deployments
+
+# 不要な古いデプロイを削除（PWA用固定デプロイ以外）
+npx @google/clasp undeploy [デプロイID]
 ```
-deploy: Update GAS deployment ID to @323 (販売記録UI改善反映)
-deploy: Update GAS deployment ID to @324 (在庫管理バグ修正)
-deploy: Update GAS deployment ID to @325 (パフォーマンス改善)
+
+**注意:** `AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA` は絶対に削除しないこと！
+
+---
+
+## 📝 デプロイ時のdescription例
+
+```bash
+# 例1: バグ修正
+--description "fix(INV-004): 利益率フォーマット修正"
+
+# 例2: 機能追加
+--description "feat(INV-005): 検索UI改善"
+
+# 例3: 通知修正
+--description "fix(NOTIF-003): FCMトークン自動更新対応"
 ```
 
 ---
 
 ## 🔄 デプロイ完了の確認方法
 
-1. PWA版を開く
+1. PWA版を開く（ハードリロード: Cmd+Shift+R / Ctrl+Shift+R）
 2. ブラウザのDevToolsを開く
-3. Consoleで以下を確認：
-   - ネットワークタブで新しいデプロイIDのリクエストが飛んでいるか
+3. Consoleで確認：
    - エラーが出ていないか
+   - 新機能が動作しているか
 
 ---
 
-**最終更新: 2025-10-27**
-**ルール策定理由: デプロイ手順の省略によりPWA版が未更新になる問題を防ぐため**
+**最終更新: 2025-10-28**
+**ルール改訂理由: デプロイ効率化（既存ID更新方式に変更）**

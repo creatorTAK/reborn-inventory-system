@@ -70,9 +70,23 @@ function uploadImagesToR2(params) {
         );
 
         // ファイル名生成（商品IDを含める）
+        // 日本語などの特殊文字を除去し、URL安全な形式にする
         const extension = mimeType.split('/')[1] || 'png';
         const timestamp = new Date().getTime();
-        const fileName = img.name || `${productId}_${timestamp}_${index + 1}.${extension}`;
+        const randomStr = Math.random().toString(36).substring(7);
+        
+        // 元のファイル名から拡張子を除去し、安全な文字のみに変換
+        let baseName = productId || 'image';
+        if (img.name) {
+          // 拡張子を除去
+          const nameWithoutExt = img.name.replace(/\.[^.]+$/, '');
+          // 英数字、ハイフン、アンダースコアのみ残し、他は除去
+          baseName = nameWithoutExt.replace(/[^a-zA-Z0-9_-]/g, '');
+          // 空になった場合はデフォルト値
+          if (!baseName) baseName = 'image';
+        }
+        
+        const fileName = `${timestamp}-${randomStr}-${baseName}.${extension}`;
         blob.setName(fileName);
 
         // リクエストオプションを配列に追加

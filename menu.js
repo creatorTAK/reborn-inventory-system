@@ -720,6 +720,16 @@ function showInventorySidebar() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
+/**
+ * 入出庫履歴を表示
+ */
+function showInventoryHistoryViewer() {
+  const html = HtmlService.createHtmlOutputFromFile('inventory_history_viewer')
+    .setTitle('📊 入出庫履歴')
+    .setWidth(800);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
 function showMasterDataManager() {
   SpreadsheetApp.getUi().alert('情報', 'マスタデータ管理機能は準備中です', SpreadsheetApp.getUi().ButtonSet.OK);
 }
@@ -735,6 +745,20 @@ function showConfigManager() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
+/**
+ * 入出庫履歴シート作成（メニューから実行）
+ */
+function createInventoryHistorySheetMenu() {
+  const result = createInventoryHistorySheet();
+  const ui = SpreadsheetApp.getUi();
+
+  if (result.success) {
+    ui.alert('✅ 成功', result.message, ui.ButtonSet.OK);
+  } else {
+    ui.alert('❌ エラー', result.message, ui.ButtonSet.OK);
+  }
+}
+
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
 
@@ -742,6 +766,7 @@ function onOpen() {
   ui.createMenu('📝 商品管理')
     .addItem('📝 商品登録', 'showProductSidebar')
     .addItem('📦 在庫管理', 'showInventorySidebar')
+    .addItem('📊 入出庫履歴', 'showInventoryHistoryViewer')
     .addToUi();
 
   // フィルタ・検索メニュー
@@ -762,11 +787,10 @@ function onOpen() {
     .addItem('🗂️ マスタデータ管理', 'showMasterDataManager')
     .addItem('⚙️ 設定管理', 'showConfigManager')
     .addSeparator()
-    .addItem('💰 販売記録機能セットアップ', 'setupSalesRecordingSheets')
     .addItem('🚚 発送方法マスタ管理', 'showShippingMethodMasterManager')
     .addItem('📦 梱包資材マスタ管理', 'showPackagingMaterialsManager')
     .addSeparator()
-    .addItem('🔧 APIキー検証', 'validateAllApiKeys')
+    .addItem('🔧 入出庫履歴シート作成', 'createInventoryHistorySheetMenu')
     .addToUi();
 }
 

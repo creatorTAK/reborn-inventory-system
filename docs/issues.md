@@ -76,17 +76,18 @@ FCMトークンの自動更新（refresh）がハンドリングされていな�
 ### 📍 関連ファイル
 - `入出庫履歴`シート（新規作成）
 - `inventory_history_manager.js`（新規作成）
-- `inventory.js` - saveSalesRecordAPI修正
-- `packaging_materials_manager.js`
-- `menu.js`
+- `inventory_history_viewer.html`（新規作成）- 履歴閲覧UI
+- `packaging_materials_ui.html` - 入庫登録UI
+- `inventory.js` - saveSalesRecordAPI修正（自動履歴記録）
+- `menu.js` - メニュー追加
 
 ### ✏️ 実装内容
 - [x] Phase 1: データ構造設計・シート作成
 - [x] Phase 2: バックエンドAPI実装
 - [x] Phase 3: 入庫UI実装
-- [ ] Phase 4: 履歴閲覧UI実装
-- [ ] Phase 5: 既存機能との統合
-- [ ] Phase 6: デプロイ・テスト
+- [x] Phase 4: 履歴閲覧UI実装（@416デプロイ完了）
+- [x] Phase 5: 既存機能との統合（販売記録時の自動履歴記録実装済み）
+- [ ] Phase 6: 動作テスト・バグ修正
 
 ### 状態
 - [ ] ✅ DONE (完了日: )

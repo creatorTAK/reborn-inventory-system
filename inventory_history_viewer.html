@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      padding: 16px;
+      background-color: #f8f9fa;
+    }
+    .filter-section {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .history-table {
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .table thead th {
+      background-color: #f59e0b;
+      color: white;
+      font-weight: 600;
+      border: none;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .table tbody tr:hover {
+      background-color: #f8f9fa;
+    }
+    .badge-type {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+    }
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+    }
+    .table-container {
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .export-section {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      margin-top: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+    <h4 class="mb-3">📊 入出庫履歴</h4>
+
+    <!-- フィルタリングセクション -->
+    <div class="filter-section">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label for="filterMaterial" class="form-label">資材名</label>
+          <select class="form-select" id="filterMaterial">
+            <option value="">すべて</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label for="filterType" class="form-label">種別</label>
+          <select class="form-select" id="filterType">
+            <option value="">すべて</option>
+            <option value="入庫">入庫</option>
+            <option value="出庫">出庫</option>
+            <option value="調整">調整</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label for="filterStartDate" class="form-label">開始日</label>
+          <input type="date" class="form-control" id="filterStartDate">
+        </div>
+        <div class="col-md-2">
+          <label for="filterEndDate" class="form-label">終了日</label>
+          <input type="date" class="form-control" id="filterEndDate">
+        </div>
+        <div class="col-md-1 d-flex align-items-end">
+          <button class="btn btn-primary w-100" id="btnSearch">🔍 検索</button>
+        </div>
+      </div>
+      <div class="row mt-2">
+        <div class="col-12">
+          <button class="btn btn-outline-secondary btn-sm" id="btnReset">🔄 リセット</button>
+          <span class="ms-3 text-muted" id="resultCount">0件</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 履歴テーブル -->
+    <div class="history-table">
+      <div class="table-container">
+        <table class="table table-striped table-hover mb-0">
+          <thead>
+            <tr>
+              <th style="width: 150px;">日時</th>
+              <th style="width: 120px;">操作者</th>
+              <th style="width: 200px;">資材名</th>
+              <th style="width: 80px;">種別</th>
+              <th style="width: 80px;">数量</th>
+              <th style="width: 150px;">理由</th>
+              <th style="width: 150px;">関連販売記録</th>
+              <th>備考</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+            <tr>
+              <td colspan="8" class="text-center text-muted py-4">データを読み込んでいます...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CSV出力セクション -->
+    <div class="export-section">
+      <button class="btn btn-success" id="btnExportCSV">📥 CSV出力</button>
+      <span class="text-muted ms-3">フィルタリング結果をCSV形式でダウンロード</span>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let currentHistoryData = [];
+
+    // ページ読み込み時の初期化
+    document.addEventListener('DOMContentLoaded', function() {
+      loadMaterialsList();
+      loadHistoryData();
+
+      // イベントリスナー設定
+      document.getElementById('btnSearch').addEventListener('click', loadHistoryData);
+      document.getElementById('btnReset').addEventListener('click', resetFilters);
+      document.getElementById('btnExportCSV').addEventListener('click', exportToCSV);
+    });
+
+    // ローディング表示/非表示
+    function showLoading() {
+      document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    function hideLoading() {
+      document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    // 資材リスト読み込み
+    function loadMaterialsList() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            const select = document.getElementById('filterMaterial');
+            select.innerHTML = '<option value="">すべて</option>';
+
+            result.materials.forEach(material => {
+              const option = document.createElement('option');
+              option.value = material.productName;
+              option.textContent = material.productName;
+              select.appendChild(option);
+            });
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('資材リスト読み込みエラー:', error);
+        })
+        .getPackagingMaterialsAPI();
+    }
+
+    // 履歴データ読み込み
+    function loadHistoryData() {
+      showLoading();
+
+      const params = {
+        materialName: document.getElementById('filterMaterial').value || undefined,
+        type: document.getElementById('filterType').value || undefined,
+        startDate: document.getElementById('filterStartDate').value || undefined,
+        endDate: document.getElementById('filterEndDate').value || undefined,
+        limit: 1000
+      };
+
+      // undefinedのキーを削除
+      Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+
+          if (result.success) {
+            currentHistoryData = result.data;
+            renderHistoryTable(result.data);
+            document.getElementById('resultCount').textContent = `${result.data.length}件`;
+          } else {
+            showError(result.message);
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          showError('データの読み込みに失敗しました: ' + error);
+        })
+        .getInventoryHistoryAPI(params);
+    }
+
+    // 履歴テーブル描画
+    function renderHistoryTable(data) {
+      const tbody = document.getElementById('historyTableBody');
+
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">該当するデータがありません</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.map(item => `
+        <tr>
+          <td>${formatDateTime(item.timestamp)}</td>
+          <td>${escapeHtml(item.operator)}</td>
+          <td>${escapeHtml(item.materialName)}</td>
+          <td>${getBadgeType(item.type)}</td>
+          <td class="text-end">${item.quantity.toLocaleString()}</td>
+          <td>${escapeHtml(item.reason)}</td>
+          <td>${escapeHtml(item.relatedSalesRecord)}</td>
+          <td>${escapeHtml(item.note)}</td>
+        </tr>
+      `).join('');
+    }
+
+    // 種別バッジ生成
+    function getBadgeType(type) {
+      const badges = {
+        '入庫': '<span class="badge bg-success badge-type">入庫</span>',
+        '出庫': '<span class="badge bg-danger badge-type">出庫</span>',
+        '調整': '<span class="badge bg-warning text-dark badge-type">調整</span>'
+      };
+      return badges[type] || type;
+    }
+
+    // 日時フォーマット
+    function formatDateTime(date) {
+      const d = new Date(date);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}`;
+    }
+
+    // HTMLエスケープ
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // フィルタリセット
+    function resetFilters() {
+      document.getElementById('filterMaterial').value = '';
+      document.getElementById('filterType').value = '';
+      document.getElementById('filterStartDate').value = '';
+      document.getElementById('filterEndDate').value = '';
+      loadHistoryData();
+    }
+
+    // CSV出力
+    function exportToCSV() {
+      if (currentHistoryData.length === 0) {
+        alert('出力するデータがありません');
+        return;
+      }
+
+      // CSVヘッダー
+      const headers = ['日時', '操作者', '資材名', '種別', '数量', '理由', '関連販売記録', '備考'];
+
+      // CSVデータ
+      const rows = currentHistoryData.map(item => [
+        formatDateTime(item.timestamp),
+        item.operator,
+        item.materialName,
+        item.type,
+        item.quantity,
+        item.reason,
+        item.relatedSalesRecord,
+        item.note
+      ]);
+
+      // CSV文字列生成
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      // BOM付きUTF-8（Excel対応）
+      const bom = '\uFEFF';
+      const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+      // ダウンロード
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `入出庫履歴_${timestamp}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // エラー表示
+    function showError(message) {
+      const tbody = document.getElementById('historyTableBody');
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">❌ ${escapeHtml(message)}</td></tr>`;
+    }
+  </script>
+</body>
+</html>

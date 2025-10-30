@@ -424,6 +424,7 @@
 
     // グローバル変数
     let currentPage = 1;
+    const CACHE_DURATION_MS = 60000; // キャッシュ有効期限: 60秒
     let currentFilters = {};
     let currentSort = { sortBy: 'registeredAt', sortOrder: 'desc' };
     let currentProduct = null; // 現在表示中の商品データ
@@ -431,7 +432,7 @@
     // 初期化
     document.addEventListener('DOMContentLoaded', function() {
       console.log('🔍 [DEBUG] DOMContentLoaded - 初期化開始');
-      loadDashboard();  // 初期表示は統計のみ
+      loadDashboard();  // UX改善: 初期表示は統計のみ、検索ボタンで商品表示
 
       // イベントリスナー
       document.getElementById('btnSearch').addEventListener('click', () => {
@@ -465,6 +466,15 @@
       console.log('📊 [DEBUG] ダッシュボード統計のみ読み込み開始');
       showLoading();
 
+      // 商品一覧をクリア（UX改善: 検索前は何も表示しない）
+      const productList = document.getElementById('productList');
+      const resultCount = document.getElementById('resultCount');
+      const paginationArea = document.getElementById('paginationArea');
+
+      if (productList) productList.innerHTML = '';
+      if (resultCount) resultCount.textContent = '0';
+      if (paginationArea) paginationArea.innerHTML = '';
+
       google.script.run
         .withSuccessHandler(function(result) {
           hideLoading();
@@ -480,7 +490,7 @@
             document.getElementById('statTotalProfit').textContent = formatCurrency(stats.totalProfit);
             document.getElementById('statAvgDays').textContent = stats.averageInventoryDays + '日';
 
-            console.log('✅ [DEBUG] ダッシュボード統計読み込み完了');
+            console.log('✅ [DEBUG] ダッシュボード統計読み込み完了（商品一覧は検索ボタンで表示）');
           } else {
             console.error('❌ API内部エラー:', result.error);
             showError('読み込みエラー: ' + (result.error || '不明なエラー'));
@@ -1107,7 +1117,9 @@
     // =============================================================================
 
     let shippingMethodMaster = []; // 発送方法マスタデータ
-    let packagingMaterialsMaster = []; // 備品在庫リストデータ
+    let packagingMaterialsMaster = []; // 備品在庫リストデータ（全データ）
+    let packagingMaterialsByCategory = {}; // カテゴリ別の梱包資材データ { "カテゴリ1": [...], "カテゴリ2": [...] }
+    let packagingMaterialCategories = []; // カテゴリ一覧
     let currentSalesProduct = null; // 販売記録対象の商品データ
     let packagingMaterialCount = 3; // 梱包資材選択欄の数（初期値3）
 
@@ -1183,13 +1195,14 @@
     }
 
     /**
-     * 備品在庫リスト読み込み
+     * 備品在庫リスト読み込み（カテゴリ別）
      */
     function loadPackagingMaterialsMaster() {
       google.script.run
         .withSuccessHandler(function(result) {
           if (result && result.success) {
-            packagingMaterialsMaster = result.data || [];
+            packagingMaterialsByCategory = result.data || {}; // カテゴリ別データ
+            packagingMaterialCategories = result.categories || []; // カテゴリ一覧
             // データ読み込み完了後に梱包資材選択欄を描画
             renderPackagingMaterials();
           } else {
@@ -1199,7 +1212,7 @@
         .withFailureHandler(function(error) {
           showError('備品在庫リストの読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
         })
-        .getPackagingMaterialsMasterAPI();
+        .getPackagingMaterialsByCategoryAPI(); // 新APIに変更
     }
 
     /**
@@ -1261,7 +1274,7 @@
     }
 
     /**
-     * 梱包資材選択欄の動的生成
+     * 梱包資材選択欄の動的生成（2段式プルダウン）
      */
     function renderPackagingMaterials() {
       const container = document.getElementById('packagingMaterialsContainer');
@@ -1269,55 +1282,109 @@
 
       for (let i = 1; i <= packagingMaterialCount; i++) {
         const div = document.createElement('div');
-        div.className = 'row g-2 mb-2 align-items-center';
+        div.className = 'mb-3 p-2 border rounded';
         div.innerHTML = `
-          <div class="col-md-8">
-            <label class="form-label small">梱包資材${i}</label>
-            <select class="form-select form-select-sm packaging-material-select" id="packagingMaterial${i}">
-              <option value="">選択してください</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small">単価</label>
-            <input type="text" class="form-control form-control-sm bg-light" id="packagingCost${i}" readonly>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label small">カテゴリ</label>
+              <select class="form-select form-select-sm" id="packagingCategory${i}">
+                <option value="">選択してください</option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label small">梱包資材${i}</label>
+              <select class="form-select form-select-sm" id="packagingMaterial${i}" disabled>
+                <option value="">カテゴリを選択してください</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">単価</label>
+              <input type="text" class="form-control form-control-sm bg-light" id="packagingCost${i}" readonly>
+            </div>
           </div>
         `;
         container.appendChild(div);
 
-        // 備品在庫リストからプルダウンを生成
-        populatePackagingMaterialSelect(i);
+        // カテゴリプルダウンを生成
+        populatePackagingCategory(i);
       }
     }
 
     /**
-     * 梱包資材プルダウンを生成
+     * 梱包資材カテゴリプルダウンを生成
      */
-    function populatePackagingMaterialSelect(index) {
-      const select = document.getElementById(`packagingMaterial${index}`);
+    function populatePackagingCategory(index) {
+      const select = document.getElementById(`packagingCategory${index}`);
 
-      packagingMaterialsMaster.forEach(item => {
+      select.innerHTML = '<option value="">選択してください</option>';
+      packagingMaterialCategories.forEach(category => {
         const option = document.createElement('option');
-        option.value = item.abbreviation;
-        option.dataset.cost = item.unitCost;
-        // 金額表示なし（略称のみ）
-        option.textContent = item.abbreviation;
+        option.value = category;
+        option.textContent = category;
         select.appendChild(option);
       });
 
-      // 変更イベントリスナー
+      // カテゴリ変更イベントリスナー
       select.addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        const costInput = document.getElementById(`packagingCost${index}`);
+        onPackagingCategoryChange(index);
+      });
+    }
 
-        if (selectedOption && selectedOption.dataset.cost) {
-          costInput.value = `¥${selectedOption.dataset.cost}`;
-        } else {
-          costInput.value = '';
-        }
+    /**
+     * 梱包資材カテゴリ変更時の処理
+     */
+    function onPackagingCategoryChange(index) {
+      const categorySelect = document.getElementById(`packagingCategory${index}`);
+      const materialSelect = document.getElementById(`packagingMaterial${index}`);
+      const category = categorySelect.value;
 
+      if (!category) {
+        materialSelect.disabled = true;
+        materialSelect.innerHTML = '<option value="">カテゴリを選択してください</option>';
+        document.getElementById(`packagingCost${index}`).value = '';
         updatePackagingCostTotal();
         updateProfitCalculation();
+        return;
+      }
+
+      // 選択されたカテゴリの梱包資材を取得
+      const materials = packagingMaterialsByCategory[category] || [];
+
+      materialSelect.disabled = false;
+      materialSelect.innerHTML = '<option value="">選択してください</option>';
+      materials.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.productName;
+        option.dataset.cost = item.unitCost;
+        option.textContent = item.productName;
+        materialSelect.appendChild(option);
       });
+
+      // 材質選択イベントリスナー（一度だけ設定）
+      if (!materialSelect.dataset.listenerSet) {
+        materialSelect.addEventListener('change', function() {
+          onPackagingMaterialChange(index);
+        });
+        materialSelect.dataset.listenerSet = 'true';
+      }
+    }
+
+    /**
+     * 梱包資材変更時の処理
+     */
+    function onPackagingMaterialChange(index) {
+      const materialSelect = document.getElementById(`packagingMaterial${index}`);
+      const selectedOption = materialSelect.options[materialSelect.selectedIndex];
+      const costInput = document.getElementById(`packagingCost${index}`);
+
+      if (selectedOption && selectedOption.dataset.cost) {
+        costInput.value = `¥${selectedOption.dataset.cost}`;
+      } else {
+        costInput.value = '';
+      }
+
+      updatePackagingCostTotal();
+      updateProfitCalculation();
     }
 
     /**
@@ -1460,7 +1527,7 @@
         if (select.value) {
           const selectedOption = select.options[select.selectedIndex];
           packagingMaterials.push({
-            abbreviation: select.value,
+            productName: select.value,
             unitCost: parseFloat(selectedOption.dataset.cost)
           });
         }
