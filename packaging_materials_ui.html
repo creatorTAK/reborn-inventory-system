@@ -845,9 +845,15 @@
       <div class="modal-body">
         <div class="form-group">
           <label>梱包資材<span class="required">*</span></label>
-          <select id="inboundMaterialSelect">
+          <select id="inboundMaterialSelect" onchange="updateInboundStock()">
             <option value="">選択してください</option>
           </select>
+        </div>
+        <div class="form-group" id="currentStockDisplay" style="display: none;">
+          <label>現在の在庫数</label>
+          <div style="padding: 12px; background: #f3f4f6; border-radius: 8px; font-size: 16px; font-weight: 600; color: #1f2937;">
+            <span id="currentStockValue">-</span> 個
+          </div>
         </div>
         <div class="form-group">
           <label>入庫数<span class="required">*</span></label>
@@ -870,6 +876,7 @@
           <label>備考</label>
           <div class="input-wrapper">
             <textarea id="inboundNoteInput" placeholder="備考を入力（任意）"></textarea>
+            <button type="button" class="input-clear-btn" onclick="clearInput('inboundNoteInput')">×</button>
           </div>
         </div>
         <div class="form-group">
@@ -2029,13 +2036,13 @@
       const materialSelect = document.getElementById('inboundMaterialSelect');
       materialSelect.innerHTML = '<option value="">選択してください</option>';
 
-      // 全資材を五十音順で追加
+      // 全資材を五十音順で追加（在庫数は別表示）
       packagingMaterials
         .sort((a, b) => a.productName.localeCompare(b.productName, 'ja'))
         .forEach(material => {
           const option = document.createElement('option');
           option.value = material.productName;
-          option.textContent = `${material.productName}（在庫: ${material.inventory}）`;
+          option.textContent = material.productName; // 在庫数なし
           materialSelect.appendChild(option);
         });
 
@@ -2045,6 +2052,10 @@
       document.getElementById('inboundReasonSelect').value = '新規購入';
       document.getElementById('inboundNoteInput').value = '';
       document.getElementById('inboundRelatedRecordInput').value = '';
+
+      // 在庫数表示を非表示
+      document.getElementById('currentStockDisplay').style.display = 'none';
+      document.getElementById('currentStockValue').textContent = '-';
 
       // モーダルを表示
       const modal = document.getElementById('inboundModal');
@@ -2077,6 +2088,31 @@
 
       modal.classList.remove('active');
       resetInboundSaveButton();
+    }
+
+    /**
+     * 選択された資材の在庫数を表示
+     */
+    function updateInboundStock() {
+      const materialName = document.getElementById('inboundMaterialSelect').value;
+      const stockDisplay = document.getElementById('currentStockDisplay');
+      const stockValue = document.getElementById('currentStockValue');
+
+      if (!materialName) {
+        stockDisplay.style.display = 'none';
+        stockValue.textContent = '-';
+        return;
+      }
+
+      // 選択された資材を検索
+      const material = packagingMaterials.find(m => m.productName === materialName);
+      if (material) {
+        stockValue.textContent = material.inventory || 0;
+        stockDisplay.style.display = 'block';
+      } else {
+        stockDisplay.style.display = 'none';
+        stockValue.textContent = '-';
+      }
     }
 
     /**
