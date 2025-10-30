@@ -60,22 +60,39 @@
     }
 
     .actions-bar {
-      display: flex;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 8px;
       margin-bottom: 16px;
     }
 
+    @media (min-width: 768px) {
+      .actions-bar {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
     .btn {
-      padding: 10px 16px;
+      padding: 12px 16px;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 500;
       transition: all 0.2s;
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
+      min-height: 44px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 767px) {
+      .btn {
+        font-size: 13px;
+        padding: 10px 12px;
+      }
     }
 
     .btn-primary {
@@ -694,6 +711,9 @@
     <button class="btn btn-secondary" onclick="sortByCategory()">
       📊 カテゴリでソート
     </button>
+    <button class="btn" style="background: #10b981; color: white;" onclick="openInboundModal()">
+      📥 入庫登録
+    </button>
   </div>
 
   <!-- データテーブル -->
@@ -812,6 +832,57 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">キャンセル</button>
         <button class="btn btn-primary" onclick="saveData()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 入庫登録モーダル -->
+  <div id="inboundModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>📥 入庫登録</h3>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>梱包資材<span class="required">*</span></label>
+          <select id="inboundMaterialSelect">
+            <option value="">選択してください</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>入庫数<span class="required">*</span></label>
+          <div class="input-wrapper">
+            <input type="number" id="inboundQuantityInput" placeholder="例: 100" min="1" step="1" value="1">
+            <button type="button" class="input-clear-btn" onclick="clearInput('inboundQuantityInput')">×</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>理由</label>
+          <select id="inboundReasonSelect">
+            <option value="新規購入">新規購入</option>
+            <option value="在庫補充">在庫補充</option>
+            <option value="初期在庫">初期在庫</option>
+            <option value="返品">返品</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>備考</label>
+          <div class="input-wrapper">
+            <textarea id="inboundNoteInput" placeholder="備考を入力（任意）"></textarea>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>関連販売記録番号</label>
+          <div class="input-wrapper">
+            <input type="text" id="inboundRelatedRecordInput" placeholder="例: AA-1001（任意）">
+            <button type="button" class="input-clear-btn" onclick="clearInput('inboundRelatedRecordInput')">×</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeInboundModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="saveInboundRecord()">登録</button>
       </div>
     </div>
   </div>
@@ -1944,6 +2015,137 @@
         .replace(/"/g, '\\"')
         .replace(/\n/g, '\\n')
         .replace(/\r/g, '\\r');
+    }
+
+    // =============================================================================
+    // 入庫登録モーダル関連
+    // =============================================================================
+
+    /**
+     * 入庫登録モーダルを開く
+     */
+    function openInboundModal() {
+      // 資材プルダウンを更新
+      const materialSelect = document.getElementById('inboundMaterialSelect');
+      materialSelect.innerHTML = '<option value="">選択してください</option>';
+
+      // 全資材を五十音順で追加
+      packagingMaterials
+        .sort((a, b) => a.productName.localeCompare(b.productName, 'ja'))
+        .forEach(material => {
+          const option = document.createElement('option');
+          option.value = material.productName;
+          option.textContent = `${material.productName}（在庫: ${material.inventory}）`;
+          materialSelect.appendChild(option);
+        });
+
+      // フォームをリセット
+      materialSelect.value = '';
+      document.getElementById('inboundQuantityInput').value = '1';
+      document.getElementById('inboundReasonSelect').value = '新規購入';
+      document.getElementById('inboundNoteInput').value = '';
+      document.getElementById('inboundRelatedRecordInput').value = '';
+
+      // モーダルを表示
+      const modal = document.getElementById('inboundModal');
+      const modalContent = modal.querySelector('.modal-content');
+      const modalBody = modal.querySelector('.modal-body');
+
+      // スクロール位置をリセット
+      if (modalBody) modalBody.scrollTop = 0;
+      if (modal) modal.scrollTop = 0;
+
+      modal.classList.add('active');
+
+      // 表示後もスクロール位置を確実にリセット
+      requestAnimationFrame(() => {
+        if (modalBody) modalBody.scrollTop = 0;
+        if (modal) modal.scrollTop = 0;
+      });
+    }
+
+    /**
+     * 入庫登録モーダルを閉じる
+     */
+    function closeInboundModal() {
+      const modal = document.getElementById('inboundModal');
+      const modalBody = modal.querySelector('.modal-body');
+
+      // スクロール位置をリセット
+      if (modalBody) modalBody.scrollTop = 0;
+      if (modal) modal.scrollTop = 0;
+
+      modal.classList.remove('active');
+      resetInboundSaveButton();
+    }
+
+    /**
+     * 入庫登録保存ボタンをリセット
+     */
+    function resetInboundSaveButton() {
+      const saveButton = document.querySelector('#inboundModal .modal-footer .btn-primary');
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.innerHTML = '登録';
+        saveButton.style.cursor = 'pointer';
+      }
+    }
+
+    /**
+     * 入庫記録を保存
+     */
+    function saveInboundRecord() {
+      const materialName = document.getElementById('inboundMaterialSelect').value.trim();
+      const quantity = parseInt(document.getElementById('inboundQuantityInput').value);
+      const reason = document.getElementById('inboundReasonSelect').value;
+      const note = document.getElementById('inboundNoteInput').value.trim();
+      const relatedRecord = document.getElementById('inboundRelatedRecordInput').value.trim();
+
+      // バリデーション
+      if (!materialName) {
+        showMessage('error', '梱包資材を選択してください');
+        return;
+      }
+
+      if (isNaN(quantity) || quantity <= 0) {
+        showMessage('error', '入庫数は1以上の数値で入力してください');
+        return;
+      }
+
+      // 保存処理開始
+      const saveButton = document.querySelector('#inboundModal .modal-footer .btn-primary');
+      if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.innerHTML = '<span class="spinner-small"></span> 登録中...';
+        saveButton.style.cursor = 'not-allowed';
+      }
+
+      showMessage('info', '登録中...');
+
+      // 入庫登録APIを呼び出し（履歴記録 + 在庫更新）
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            closeInboundModal();
+            showMessage('success', result.message || '入庫記録を登録しました');
+            loadData(); // データ再読み込み
+          } else {
+            resetInboundSaveButton();
+            showMessage('error', result.message || '入庫記録の登録に失敗しました');
+          }
+        })
+        .withFailureHandler(function(error) {
+          resetInboundSaveButton();
+          showMessage('error', '入庫記録の登録に失敗しました: ' + (error.message || error));
+        })
+        .registerInboundAPI({
+          materialName: materialName,
+          quantity: quantity,
+          reason: reason,
+          relatedSalesRecord: relatedRecord,
+          note: note,
+          operator: 'ユーザー'
+        });
     }
 
     /**
