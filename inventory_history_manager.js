@@ -137,6 +137,11 @@ function addInventoryHistoryAPI(params) {
     const timestamp = new Date();
     const operator = params.operator || Session.getActiveUser().getEmail() || 'システム';
 
+    // 入庫時のみ価格情報を保存
+    const purchasePrice = params.type === '入庫' ? (params.purchasePrice || '') : '';
+    const packageQuantity = params.type === '入庫' ? (params.packageQuantity || '') : '';
+    const unitCost = params.type === '入庫' ? (params.unitCost || '') : '';
+
     const newRow = [
       timestamp,
       operator,
@@ -145,17 +150,23 @@ function addInventoryHistoryAPI(params) {
       params.quantity,
       params.reason,
       params.relatedSalesRecord || '',
-      params.note || ''
+      params.note || '',
+      purchasePrice,
+      packageQuantity,
+      unitCost
     ];
 
-    sheet.getRange(lastRow + 1, 1, 1, 8).setValues([newRow]);
+    sheet.getRange(lastRow + 1, 1, 1, 11).setValues([newRow]);
 
     // フォーマット適用
     sheet.getRange(lastRow + 1, 1).setNumberFormat('yyyy-mm-dd hh:mm:ss'); // 日時
     sheet.getRange(lastRow + 1, 5).setNumberFormat('#,##0'); // 数量
+    sheet.getRange(lastRow + 1, 9).setNumberFormat('#,##0'); // 購入価格
+    sheet.getRange(lastRow + 1, 10).setNumberFormat('#,##0'); // 購入個数
+    sheet.getRange(lastRow + 1, 11).setNumberFormat('#,##0.00'); // 単価
 
     // 罫線適用
-    const dataRange = sheet.getRange(1, 1, lastRow + 1, 8);
+    const dataRange = sheet.getRange(1, 1, lastRow + 1, 11);
     dataRange.setBorder(true, true, true, true, true, true);
 
     Logger.log(`入出庫履歴追加: ${params.materialName} ${params.type} ${params.quantity}個`);
@@ -253,7 +264,10 @@ function registerInboundAPI(params) {
       reason: params.reason,
       relatedSalesRecord: params.relatedSalesRecord || '',
       note: params.note || '',
-      operator: params.operator || 'ユーザー'
+      operator: params.operator || 'ユーザー',
+      purchasePrice: params.purchasePrice,
+      packageQuantity: params.packageQuantity,
+      unitCost: params.unitCost
     });
 
     if (!historyResult.success) {
@@ -422,8 +436,8 @@ function getInventoryHistoryAPI(params) {
       };
     }
 
-    // 全データを取得
-    const values = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+    // 全データを取得（11列）
+    const values = sheet.getRange(2, 1, lastRow - 1, 11).getValues();
 
     let data = values.map((row, index) => ({
       rowIndex: index + 2,
@@ -434,7 +448,10 @@ function getInventoryHistoryAPI(params) {
       quantity: Number(row[4]) || 0,
       reason: row[5] || '',
       relatedSalesRecord: row[6] || '',
-      note: row[7] || ''
+      note: row[7] || '',
+      purchasePrice: row[8] ? Number(row[8]) : null,
+      packageQuantity: row[9] ? Number(row[9]) : null,
+      unitCost: row[10] ? Number(row[10]) : null
     })).filter(item => item.materialName); // 資材名が空の行を除外
 
     // フィルタリング

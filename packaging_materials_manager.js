@@ -626,3 +626,59 @@ function sortPackagingMaterialsByCategoryAPI(categoryOrder, materialOrderByCateg
     };
   }
 }
+
+// =============================================================================
+// 担当者名管理（PropertiesService）
+// =============================================================================
+
+/**
+ * 担当者名を保存
+ * @param {string} name - 担当者名
+ * @returns {Object} { success: boolean, message: string }
+ */
+function setOperatorNameAPI(name) {
+  try {
+    if (!name || name.trim() === '') {
+      return {
+        success: false,
+        message: '担当者名を入力してください'
+      };
+    }
+
+    const userProperties = PropertiesService.getUserProperties();
+    userProperties.setProperty('OPERATOR_NAME', name.trim());
+
+    return {
+      success: true,
+      message: '担当者名を保存しました'
+    };
+  } catch (error) {
+    console.error('担当者名保存エラー:', error);
+    return {
+      success: false,
+      message: `保存エラー: ${error.message}`
+    };
+  }
+}
+
+/**
+ * 担当者名を取得
+ * @returns {Object} { success: boolean, name: string }
+ */
+function getOperatorNameAPI() {
+  try {
+    const userProperties = PropertiesService.getUserProperties();
+    const name = userProperties.getProperty('OPERATOR_NAME');
+
+    return {
+      success: true,
+      name: name || ''
+    };
+  } catch (error) {
+    console.error('担当者名取得エラー:', error);
+    return {
+      success: false,
+      name: ''
+    };
+  }
+}

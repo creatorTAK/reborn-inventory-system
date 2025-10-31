@@ -114,11 +114,30 @@ function doGet(e) {
           .setMimeType(ContentService.MimeType.JSON);
       }
 
+      if (action === 'setOperatorName') {
+        // 担当者名を保存（GET経由、PWA初回設定用）
+        const name = e.parameter.name;
+
+        if (!name) {
+          const errorResponse = {
+            success: false,
+            message: '担当者名が指定されていません'
+          };
+          return ContentService.createTextOutput(JSON.stringify(errorResponse))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+
+        const result = setOperatorNameAPI(name);
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
       if (action === 'subscribeFCM') {
-        // FCMトークンを保存（GETメソッド、チーム利用対応）
+        // FCMトークンを保存（GETメソッド、チーム利用対応 + ユーザー名対応）
         const token = e.parameter.token;
         const deviceInfoParam = e.parameter.deviceInfo;
         const userIdParam = e.parameter.userId;
+        const userNameParam = e.parameter.userName;
 
         // デバッグログをスプレッドシートに書き込む
         try {
@@ -126,18 +145,21 @@ function doGet(e) {
           let debugSheet = ss.getSheetByName('FCM登録デバッグ');
           if (!debugSheet) {
             debugSheet = ss.insertSheet('FCM登録デバッグ');
-            debugSheet.appendRow(['タイムスタンプ', 'トークン（先頭20文字）', 'deviceInfoParam', 'userIdParam', 'userId (decoded)']);
+            debugSheet.appendRow(['タイムスタンプ', 'トークン（先頭20文字）', 'deviceInfoParam', 'userIdParam', 'userId (decoded)', 'userNameParam', 'userName (decoded)']);
           }
 
           const deviceInfo = deviceInfoParam ? JSON.parse(decodeURIComponent(deviceInfoParam)) : null;
           const userId = userIdParam ? decodeURIComponent(userIdParam) : null;
+          const userName = userNameParam ? decodeURIComponent(userNameParam) : null;
 
           debugSheet.appendRow([
             Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss'),
             token ? token.substring(0, 20) + '...' : 'null',
             deviceInfoParam ? 'あり（' + deviceInfoParam.substring(0, 30) + '...）' : 'null',
             userIdParam || 'null',
-            userId || 'null'
+            userId || 'null',
+            userNameParam || 'null',
+            userName || 'null'
           ]);
         } catch (debugError) {
           Logger.log('Debug sheet error: ' + debugError);
@@ -145,8 +167,9 @@ function doGet(e) {
 
         const deviceInfo = deviceInfoParam ? JSON.parse(decodeURIComponent(deviceInfoParam)) : null;
         const userId = userIdParam ? decodeURIComponent(userIdParam) : null;
+        const userName = userNameParam ? decodeURIComponent(userNameParam) : null;
 
-        const result = saveFCMToken(token, deviceInfo, userId);
+        const result = saveFCMToken(token, deviceInfo, userId, userName);
         return ContentService.createTextOutput(JSON.stringify(result))
           .setMimeType(ContentService.MimeType.JSON);
       }

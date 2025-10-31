@@ -2233,31 +2233,35 @@ function saveSalesRecordAPI(salesData) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheetName = '在庫/売上管理表';
     const sheet = ss.getSheetByName(sheetName);
-    
+
     if (!sheet) {
       return { success: false, message: `シート「${sheetName}」が見つかりません` };
     }
-    
+
+    // 操作者名を取得（PropertiesService）
+    const userProperties = PropertiesService.getUserProperties();
+    const operatorName = userProperties.getProperty('OPERATOR_NAME') || 'システム';
+
     // ヘッダー取得
     const { map } = getHeaderMapCommon();
-    
+
     // 管理番号で行を検索
     const dataRange = sheet.getDataRange();
     const data = dataRange.getValues();
     let targetRow = -1;
-    
+
     const managementCol = map['管理番号'];
     if (!managementCol) {
       return { success: false, message: '管理番号列が見つかりません' };
     }
-    
+
     for (let i = 1; i < data.length; i++) {
       if (data[i][managementCol - 1] === salesData.managementNumber) {
         targetRow = i + 1; // スプレッドシートの行番号（1-indexed）
         break;
       }
     }
-    
+
     if (targetRow === -1) {
       return { success: false, message: '商品が見つかりません' };
     }
@@ -2318,10 +2322,10 @@ function saveSalesRecordAPI(salesData) {
         Logger.log(`[警告] 列「${costColName}」が見つかりません`);
       }
     }
-    
+
     // ユーザー活動記録
-    recordUserUpdate(sheet, targetRow, map, 'システム');
-    
+    recordUserUpdate(sheet, targetRow, map, operatorName);
+
     // 備品在庫リストの出庫処理
     const inventoryResult = updatePackagingInventory(salesData.packagingMaterials, salesData.managementNumber);
     if (!inventoryResult.success) {
@@ -2338,7 +2342,7 @@ function saveSalesRecordAPI(salesData) {
           reason: '販売記録',
           relatedSalesRecord: salesData.managementNumber,
           note: `自動記録（販売記録保存時）`,
-          operator: 'システム'
+          operator: operatorName
         }));
         
         const historyResult = addBatchInventoryHistoryAPI(historyArray);
