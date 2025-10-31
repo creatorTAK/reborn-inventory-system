@@ -523,15 +523,23 @@
       <div class="setup-title">🔔 通知設定</div>
       <div class="setup-subtitle">初回のみ - 商品登録の通知を受け取るための設定です</div>
 
-      <!-- ⓪ ユーザーID入力 -->
+      <!-- ⓪ ユーザー情報入力 -->
       <div class="step-section">
         <div>
           <span class="step-number">⓪</span>
-          <span class="step-title">ユーザーID（メールアドレス）</span>
+          <span class="step-title">ユーザー情報登録</span>
         </div>
-        <input type="email" id="user-email-input" placeholder="your-email@example.com"
-               style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px; margin-top: 8px;">
-        <button class="step-button" onclick="saveUserEmail()" style="margin-top: 8px;">保存</button>
+        <div style="margin-top: 8px;">
+          <label style="display: block; font-size: 13px; color: #6b7280; margin-bottom: 4px;">ユーザー名（担当者名）</label>
+          <input type="text" id="user-name-input" placeholder="例: 山田太郎"
+                 style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px;">
+        </div>
+        <div style="margin-top: 12px;">
+          <label style="display: block; font-size: 13px; color: #6b7280; margin-bottom: 4px;">メールアドレス</label>
+          <input type="email" id="user-email-input" placeholder="your-email@example.com"
+                 style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px;">
+        </div>
+        <button class="step-button" onclick="saveUserInfo()" style="margin-top: 12px;">保存</button>
         <div id="step0-result" class="step-result"></div>
       </div>
 
@@ -758,13 +766,22 @@
       }
     });
 
-    // ⓪ ユーザーIDを保存
-    function saveUserEmail() {
+    // ⓪ ユーザー情報を保存
+    function saveUserInfo() {
+      const nameInput = document.getElementById('user-name-input');
       const emailInput = document.getElementById('user-email-input');
       const resultDiv = document.getElementById('step0-result');
-      const step1Button = document.querySelector('button[onclick="requestNotificationPermission()"]');
 
+      const userName = nameInput.value.trim();
       const email = emailInput.value.trim();
+
+      // バリデーション
+      if (!userName) {
+        resultDiv.textContent = '❌ ユーザー名を入力してください';
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+        return;
+      }
 
       if (!email) {
         resultDiv.textContent = '❌ メールアドレスを入力してください';
@@ -782,16 +799,38 @@
         return;
       }
 
+      // 保存中の表示
+      resultDiv.textContent = '⏳ 保存中...';
+      resultDiv.className = 'step-result';
+      resultDiv.style.display = 'block';
+
       // LocalStorageに保存
       try {
+        localStorage.setItem('reborn_user_name', userName);
         localStorage.setItem('reborn_user_email', email);
-        console.log('✅ ユーザーID保存:', email);
+        console.log('✅ ユーザー情報保存:', { name: userName, email: email });
 
-        resultDiv.textContent = '✅ ユーザーIDを保存しました！\n次に「① 通知を許可」ボタンを押してください。';
+        // GAS側のPropertiesServiceにも保存
+        const baseUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
+        fetch(baseUrl + '?action=setOperatorName&name=' + encodeURIComponent(userName))
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              console.log('✅ 担当者名をGASに保存成功');
+            } else {
+              console.warn('⚠️ 担当者名のGAS保存失敗:', data.message);
+            }
+          })
+          .catch(error => {
+            console.warn('⚠️ 担当者名のGAS保存エラー:', error);
+          });
+
+        resultDiv.textContent = '✅ ユーザー情報を保存しました！\n次に「① 通知を許可」ボタンを押してください。';
         resultDiv.className = 'step-result success';
         resultDiv.style.display = 'block';
 
         // 入力フィールドを無効化
+        nameInput.disabled = true;
         emailInput.disabled = true;
       } catch (error) {
         console.error('❌ LocalStorage保存エラー:', error);
