@@ -512,11 +512,13 @@
     }
 
     // ダッシュボードと商品一覧を一度に読み込み（検索実行時）
-    function loadDashboardAndSearch() {
+    function loadDashboardAndSearch(showLoadingIndicator = true) {
       const startTime = performance.now();
       console.log('🔍 [PERF] 読み込み開始');
 
-      showLoading();
+      if (showLoadingIndicator) {
+        showLoading();
+      }
 
       // フィルタ収集
       const statusCheckboxes = document.querySelectorAll('input[type="checkbox"][id^="status"]:checked');
@@ -553,7 +555,9 @@
           const apiResponseTime = performance.now();
           console.log('🔍 [PERF] API応答受信:', (apiResponseTime - apiCallTime).toFixed(0) + 'ms');
 
-          hideLoading();
+          if (showLoadingIndicator) {
+            hideLoading();
+          }
 
           if (result && result.success && result.data) {
             const data = result.data;
@@ -590,7 +594,9 @@
           console.error('❌ [ERROR] error:', error);
           console.error('❌ [ERROR] error.message:', error ? error.message : 'N/A');
           console.error('❌ [PERF] API失敗:', (errorTime - apiCallTime).toFixed(0) + 'ms');
-          hideLoading();
+          if (showLoadingIndicator) {
+            hideLoading();
+          }
           showError('読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
         })
         .getInventoryDashboardAPI(params);  // 🎯 本番APIに戻す
@@ -1584,18 +1590,20 @@
         .withSuccessHandler(function(result) {
           hideLoading();
           if (result && result.success) {
+            // 【PERF-001 UX改善】alertの後はローディング表示なしで静かに更新
             alert('✅ 販売記録を保存しました');
-            loadDashboardAndSearch(); // 再読み込み
+            // alertが閉じられた後、ローディング表示なしで更新
+            loadDashboardAndSearch(false);
           } else {
             // エラー時はモーダルを再表示しない（ユーザーに通知のみ）
             alert('❌ 保存に失敗しました: ' + (result.message || result.error || '不明なエラー') + '\n\n再度販売記録を登録してください。');
-            loadDashboardAndSearch(); // 再読み込み（状態を最新化）
+            loadDashboardAndSearch(false);
           }
         })
         .withFailureHandler(function(error) {
           hideLoading();
           alert('❌ 保存エラー: ' + (error ? (error.message || error) : 'Unknown error') + '\n\n再度販売記録を登録してください。');
-          loadDashboardAndSearch(); // 再読み込み（状態を最新化）
+          loadDashboardAndSearch(false);
         })
         .saveSalesRecordAPI(salesData);
     }
