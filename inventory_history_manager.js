@@ -32,7 +32,7 @@ function createInventoryHistorySheet() {
     // ヘッダー行を設定
     const headers = [
       '日時',
-      '操作者',
+      'ユーザー名',
       '資材名',
       '種別',
       '数量',
@@ -52,7 +52,7 @@ function createInventoryHistorySheet() {
 
     // 列幅設定
     sheet.setColumnWidth(1, 150); // 日時
-    sheet.setColumnWidth(2, 200); // 操作者
+    sheet.setColumnWidth(2, 200); // ユーザー名
     sheet.setColumnWidth(3, 200); // 資材名
     sheet.setColumnWidth(4, 80);  // 種別
     sheet.setColumnWidth(5, 80);  // 数量

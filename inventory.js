@@ -2299,7 +2299,7 @@ function saveSalesRecordAPI(salesData) {
       return { success: false, message: `シート「${sheetName}」が見つかりません` };
     }
 
-    // 操作者名を取得（PropertiesService）
+    // ユーザー名を取得（PropertiesService）
     const userProperties = PropertiesService.getUserProperties();
     const operatorName = userProperties.getProperty('OPERATOR_NAME') || 'システム';
 
