@@ -808,13 +808,16 @@ function onOpen() {
     .addItem('✖️ フィルタ解除', 'clearFilter')
     .addToUi();
 
-  // マスタ・設定メニュー
-  ui.createMenu('🗂️ マスタ・設定')
+  // マスタ管理メニュー
+  ui.createMenu('🗂️ マスタ管理')
     .addItem('🗂️ マスタデータ管理', 'showMasterDataManager')
-    .addItem('⚙️ 設定管理', 'showConfigManager')
-    .addSeparator()
     .addItem('🚚 発送方法マスタ管理', 'showShippingMethodMasterManager')
     .addItem('📦 梱包資材マスタ管理', 'showPackagingMaterialsManager')
+    .addToUi();
+
+  // 設定管理メニュー
+  ui.createMenu('⚙️ 設定管理')
+    .addItem('⚙️ 設定管理', 'showConfigManager')
     .addToUi();
 }
 
