@@ -1572,23 +1572,30 @@
         return;
       }
 
+      // 【PERF-001 楽観的UI】モーダルを即座に閉じる
+      const modal = bootstrap.Modal.getInstance(document.getElementById('salesRecordModal'));
+      modal.hide();
+
+      // ローディング表示（バックグラウンド処理中）
       showLoading();
 
+      // バックグラウンドで保存処理を実行
       google.script.run
         .withSuccessHandler(function(result) {
           hideLoading();
           if (result && result.success) {
-            alert('販売記録を保存しました');
-            const modal = bootstrap.Modal.getInstance(document.getElementById('salesRecordModal'));
-            modal.hide();
+            alert('✅ 販売記録を保存しました');
             loadDashboardAndSearch(); // 再読み込み
           } else {
-            showError('保存に失敗しました: ' + (result.message || result.error || '不明なエラー'));
+            // エラー時はモーダルを再表示しない（ユーザーに通知のみ）
+            alert('❌ 保存に失敗しました: ' + (result.message || result.error || '不明なエラー') + '\n\n再度販売記録を登録してください。');
+            loadDashboardAndSearch(); // 再読み込み（状態を最新化）
           }
         })
         .withFailureHandler(function(error) {
           hideLoading();
-          showError('保存エラー: ' + (error ? (error.message || error) : 'Unknown error'));
+          alert('❌ 保存エラー: ' + (error ? (error.message || error) : 'Unknown error') + '\n\n再度販売記録を登録してください。');
+          loadDashboardAndSearch(); // 再読み込み（状態を最新化）
         })
         .saveSalesRecordAPI(salesData);
     }

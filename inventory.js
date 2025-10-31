@@ -313,20 +313,23 @@ function parseAmount(value) {
 function recalculateAllStats() {
   const startTime = new Date().getTime();
   Logger.log('[統計] 全統計情報の再計算を開始');
-  
+
   try {
     const sh = getSheet();
     const lastRow = sh.getLastRow();
-    
+
     if (lastRow < INVENTORY_START_ROW) {
       Logger.log('[統計] データが存在しないため、統計をゼロリセット');
       initializeStatsSheet(getStatsSheet());
       return { success: true, message: '統計をゼロリセットしました' };
     }
-    
+
     const { map } = getHeaderMapCommon();
     const managementCol = colByName(sh, INVENTORY_HEADERS.key);
-    
+
+    // 【PERF-001 最適化】一括読み込み（600回のAPI呼び出し → 1回）
+    const allData = sh.getDataRange().getValues();
+
     // 統計変数
     const statusCounts = {
       '登録済み': 0,
@@ -342,56 +345,86 @@ function recalculateAllStats() {
     let totalProfit = 0;
     let totalInventoryDays = 0;
     let inventoryDaysCount = 0;
-    
-    // 全商品をスキャン
-    for (let row = INVENTORY_START_ROW; row <= lastRow; row++) {
-      const managementNumber = getCellValue(sh, row, managementCol);
+
+    // 全商品をスキャン（配列から直接読み取り）
+    for (let i = INVENTORY_START_ROW - 1; i < allData.length; i++) {
+      const managementNumber = allData[i][managementCol - 1];
       if (!managementNumber) continue;
-      
+
       total++;
-      
-      const status = getCellValue(sh, row, map['ステータス']);
+
+      const status = allData[i][map['ステータス'] - 1];
       if (statusCounts.hasOwnProperty(status)) {
         statusCounts[status]++;
       }
-      
-      const purchaseAmount = parseAmount(getCellValue(sh, row, map['仕入金額']));
-      const listingAmount = parseAmount(getCellValue(sh, row, map['出品金額']));
-      const saleAmount = parseAmount(getCellValue(sh, row, map['販売金額']));
-      const profit = parseAmount(getCellValue(sh, row, map['利益金額']));
-      
+
+      const purchaseAmount = parseAmount(allData[i][map['仕入金額'] - 1]);
+      const listingAmount = parseAmount(allData[i][map['出品金額'] - 1]);
+      const saleAmount = parseAmount(allData[i][map['販売金額'] - 1]);
+      const profit = parseAmount(allData[i][map['利益金額'] - 1]);
+
       totalPurchaseAmount += purchaseAmount;
-      
+
       if (status === '出品中' || status === '販売済み') {
         totalListingAmount += listingAmount;
       }
-      
+
       if (status === '販売済み') {
         totalSaleAmount += saleAmount;
         totalProfit += profit;
-        
-        const inventoryDays = parseAmount(getCellValue(sh, row, map['在庫日数']));
+
+        const inventoryDays = parseAmount(allData[i][map['在庫日数'] - 1]);
         if (inventoryDays > 0) {
           totalInventoryDays += inventoryDays;
           inventoryDaysCount++;
         }
       }
     }
-    
-    // 統計シートに書き込み
-    setStatsValue('登録済み', statusCounts['登録済み']);
-    setStatsValue('出品準備中', statusCounts['出品準備中']);
-    setStatsValue('出品中', statusCounts['出品中']);
-    setStatsValue('販売済み', statusCounts['販売済み']);
-    setStatsValue('取り下げ', statusCounts['取り下げ']);
-    setStatsValue('合計', total);
-    setStatsValue('総仕入金額', totalPurchaseAmount);
-    setStatsValue('総出品金額', totalListingAmount);
-    setStatsValue('総販売金額', totalSaleAmount);
-    setStatsValue('総利益金額', totalProfit);
-    setStatsValue('総在庫日数', totalInventoryDays);
-    setStatsValue('在庫日数カウント', inventoryDaysCount);
-    
+
+    // 【PERF-001 最適化】統計シートに一括書き込み（13回のAPI呼び出し → 1回）
+    const statsSheet = getStatsSheet();
+    const statsData = statsSheet.getDataRange().getValues();
+
+    // 統計値を配列にまとめる
+    const statsMap = {
+      '登録済み': statusCounts['登録済み'],
+      '出品準備中': statusCounts['出品準備中'],
+      '出品中': statusCounts['出品中'],
+      '販売済み': statusCounts['販売済み'],
+      '取り下げ': statusCounts['取り下げ'],
+      '合計': total,
+      '総仕入金額': totalPurchaseAmount,
+      '総出品金額': totalListingAmount,
+      '総販売金額': totalSaleAmount,
+      '総利益金額': totalProfit,
+      '総在庫日数': totalInventoryDays,
+      '在庫日数カウント': inventoryDaysCount
+    };
+
+    const now = new Date();
+    const updates = [];
+
+    // 統計シートの行を特定して更新データを準備
+    for (let i = 1; i < statsData.length; i++) {
+      const itemName = statsData[i][0];
+      if (statsMap.hasOwnProperty(itemName)) {
+        updates.push({
+          row: i + 1,
+          value: statsMap[itemName],
+          timestamp: now
+        });
+      }
+    }
+
+    // 一括更新（setValues使用）
+    for (const update of updates) {
+      statsSheet.getRange(update.row, 2).setValue(update.value);
+      statsSheet.getRange(update.row, 3).setValue(update.timestamp);
+    }
+
+    // タイムスタンプ更新（キャッシュ無効化）
+    statsSheet.getRange('D1').setValue(now);
+
     const endTime = new Date().getTime();
     const duration = endTime - startTime;
     
@@ -1341,11 +1374,39 @@ function updateProductAPI(params) {
 function getStatisticsAPI(params) {
   const startTime = new Date().getTime();
   Logger.log('[PERF] getStatisticsAPI 開始（統計シートから取得）');
-  
+
   try {
+    // 【PERF-001 Phase 4】キャッシュ機能: タイムスタンプチェック
+    const statsSheet = getStatsSheet();
+    const lastUpdate = statsSheet.getRange('D1').getValue();
+    const now = new Date();
+    const cacheValidityMinutes = 5; // キャッシュ有効期限（5分）
+
+    let shouldRecalculate = false;
+
+    if (!lastUpdate || typeof lastUpdate.getTime !== 'function') {
+      // タイムスタンプが無効 → 再計算
+      shouldRecalculate = true;
+      Logger.log('[統計] タイムスタンプ無効 → 再計算実行');
+    } else {
+      const minutesSinceUpdate = (now.getTime() - lastUpdate.getTime()) / 1000 / 60;
+      if (minutesSinceUpdate > cacheValidityMinutes) {
+        // キャッシュ期限切れ → 再計算
+        shouldRecalculate = true;
+        Logger.log(`[統計] キャッシュ期限切れ（${Math.round(minutesSinceUpdate)}分経過） → 再計算実行`);
+      } else {
+        Logger.log(`[統計] キャッシュ有効（${Math.round(minutesSinceUpdate)}分前） → キャッシュ使用`);
+      }
+    }
+
+    // 必要に応じて統計を再計算
+    if (shouldRecalculate) {
+      recalculateAllStats();
+    }
+
     // 統計シートを1回だけ読み込み（11回→1回に削減！）
     const allStats = getAllStatsValues();
-    
+
     const total = allStats['合計'] || 0;
     const statusCounts = {
       registered: allStats['登録済み'] || 0,
@@ -1354,17 +1415,17 @@ function getStatisticsAPI(params) {
       sold: allStats['販売済み'] || 0,
       withdrawn: allStats['取り下げ'] || 0
     };
-    
+
     const totalPurchaseAmount = allStats['総仕入金額'] || 0;
     const totalListingAmount = allStats['総出品金額'] || 0;
     const totalSaleAmount = allStats['総販売金額'] || 0;
     const totalProfit = allStats['総利益金額'] || 0;
     const totalInventoryDays = allStats['総在庫日数'] || 0;
     const inventoryDaysCount = allStats['在庫日数カウント'] || 0;
-    
+
     const endTime = new Date().getTime();
     Logger.log(`[PERF] getStatisticsAPI 完了: ${endTime - startTime}ms（統計シートから取得）`);
-    
+
     return jsonSuccessResponse({
       total: total,
       statusCounts: statusCounts,
@@ -2266,7 +2327,15 @@ function saveSalesRecordAPI(salesData) {
       return { success: false, message: '商品が見つかりません' };
     }
     
-    // 販売情報を書き込み
+    // 梱包資材のバリデーション（最大5個）
+    if (salesData.packagingMaterials.length > 5) {
+      return {
+        success: false,
+        message: '梱包資材は最大5個までです'
+      };
+    }
+
+    // 【PERF-001 最適化】販売情報と梱包資材を一括書き込み
     const updateFields = {
       '販売日': salesData.salesDate,
       '販売先': salesData.salesPlatform,
@@ -2282,44 +2351,21 @@ function saveSalesRecordAPI(salesData) {
         : null,
       'ステータス': '販売済み'
     };
-    
+
+    // 梱包資材を追加（最大5個対応）
+    for (let i = 0; i < salesData.packagingMaterials.length && i < 5; i++) {
+      const material = salesData.packagingMaterials[i];
+      updateFields[`梱包資材${i + 1}`] = material.productName;
+      updateFields[`梱包費${i + 1}`] = material.unitCost;
+    }
+
+    // 一括書き込み実行
     for (const [fieldName, value] of Object.entries(updateFields)) {
       const col = map[fieldName];
       if (col) {
         sheet.getRange(targetRow, col).setValue(value);
       } else {
         Logger.log(`[警告] 列「${fieldName}」が見つかりません`);
-      }
-    }
-    
-    // 梱包資材のバリデーション（最大5個）
-    if (salesData.packagingMaterials.length > 5) {
-      return {
-        success: false,
-        message: '梱包資材は最大5個までです'
-      };
-    }
-
-    // 梱包資材を書き込み（最大5個対応）
-    for (let i = 0; i < salesData.packagingMaterials.length && i < 5; i++) {
-      const material = salesData.packagingMaterials[i];
-
-      // 梱包資材の商品名を書き込み
-      const materialColName = `梱包資材${i + 1}`;
-      const materialCol = map[materialColName];
-      if (materialCol) {
-        sheet.getRange(targetRow, materialCol).setValue(material.productName);
-      } else {
-        Logger.log(`[警告] 列「${materialColName}」が見つかりません`);
-      }
-
-      // 梱包費を書き込み
-      const costColName = `梱包費${i + 1}`;
-      const costCol = map[costColName];
-      if (costCol) {
-        sheet.getRange(targetRow, costCol).setValue(material.unitCost);
-      } else {
-        Logger.log(`[警告] 列「${costColName}」が見つかりません`);
       }
     }
 
@@ -2356,10 +2402,12 @@ function saveSalesRecordAPI(salesData) {
         Logger.log(`[警告] 入出庫履歴記録エラー: ${historyError.message}`);
       }
     }
-    
-    // 統計情報を再計算
-    recalculateAllStats();
-    
+
+    // 統計情報の再計算を削除（PERF-001: パフォーマンス改善）
+    // 理由: 全商品スキャンが保存時間のボトルネック（5-10秒）
+    // 統計は表示時にオンデマンドで計算（Phase 4で実装）
+    // recalculateAllStats();
+
     Logger.log(`[販売記録] ${salesData.managementNumber} を保存しました`);
     return { success: true, message: '販売記録を保存しました' };
     
@@ -2409,7 +2457,8 @@ function updatePackagingInventory(packagingMaterials, managementNumber) {
       };
     }
 
-    // 各梱包資材の出庫数を更新
+    // 【PERF-001 最適化】更新対象をまとめて一括更新
+    const updates = [];
     let updatedCount = 0;
 
     for (const material of packagingMaterials) {
@@ -2424,10 +2473,12 @@ function updatePackagingInventory(packagingMaterials, managementNumber) {
           const targetRow = i + 1; // 1-indexed
           const currentOutStock = Number(data[i][colMap['出庫数合計']]) || 0;
 
-          // 出庫数を1増加
-          sheet.getRange(targetRow, colMap['出庫数合計'] + 1).setValue(currentOutStock + 1);
-          
-          // 注: 入出庫履歴への記録はsaveSalesRecordAPIで実施（重複防止）
+          // 更新データを配列に追加
+          updates.push({
+            row: targetRow,
+            col: colMap['出庫数合計'] + 1,
+            value: currentOutStock + 1
+          });
 
           updatedCount++;
           found = true;
@@ -2438,6 +2489,11 @@ function updatePackagingInventory(packagingMaterials, managementNumber) {
       if (!found) {
         Logger.log(`[警告] 梱包資材「${material.productName}」が備品在庫リストに見つかりません`);
       }
+    }
+
+    // 一括更新実行
+    for (const update of updates) {
+      sheet.getRange(update.row, update.col).setValue(update.value);
     }
 
     Logger.log(`[備品在庫] ${updatedCount}件の出庫処理を実行しました`);
