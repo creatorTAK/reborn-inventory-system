@@ -777,6 +777,9 @@
       // バッジを初期化
       initBadge();
 
+      // GASからユーザー基本設定を取得（アイコン同期用）
+      await syncUserSettingsFromGAS();
+
       // ユーザーアイコンを読み込み
       loadUserIcon();
 
@@ -1271,6 +1274,43 @@
         localStorage.removeItem('reborn_user_icon');
       }
       loadUserIcon();
+    }
+
+    // GASからユーザー基本設定を取得してlocalStorageに同期
+    async function syncUserSettingsFromGAS() {
+      try {
+        const fcmToken = localStorage.getItem('reborn_fcm_token') || '';
+        if (!fcmToken) {
+          console.log('⏭️ FCMトークンなし - ユーザー設定同期スキップ');
+          return;
+        }
+
+        console.log('🔄 GASからユーザー基本設定を取得中...');
+        const response = await fetch(window.REBORN_CONFIG.GAS_BASE_URL + '?action=getUserBasicSettings&fcmToken=' + encodeURIComponent(fcmToken));
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          console.log('✅ ユーザー基本設定取得成功:', result.data.userName || 'ユーザー名なし');
+          
+          // アイコンURLをlocalStorageに保存
+          if (result.data.userIconUrl) {
+            localStorage.setItem('reborn_user_icon', result.data.userIconUrl);
+            console.log('👤 アイコンURL同期完了');
+          }
+          
+          // その他の設定も保存（将来的に利用）
+          if (result.data.userName) {
+            localStorage.setItem('reborn_user_name', result.data.userName);
+          }
+          if (result.data.email) {
+            localStorage.setItem('reborn_user_email', result.data.email);
+          }
+        } else {
+          console.warn('⚠️ ユーザー基本設定の取得に失敗:', result);
+        }
+      } catch (error) {
+        console.error('❌ ユーザー基本設定の同期エラー:', error);
+      }
     }
 
     // 通知ページを開く
