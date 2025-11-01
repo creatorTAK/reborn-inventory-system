@@ -587,6 +587,10 @@ function doGet(e) {
     // GAS自身のURL（Web App /exec）をテンプレート変数として渡す（クロスオリジン対策）
     template.GAS_BASE_URL = ScriptApp.getService().getUrl();
 
+    // FCMトークンをテンプレート変数として渡す（マルチユーザー対応）
+    template.fcmToken = e.parameter.fcmToken || '';
+    Logger.log('FCMトークンをテンプレートに渡します: ' + (template.fcmToken ? template.fcmToken.substring(0, 20) + '...' : 'なし'));
+
     // Web Appとして開く場合はwidthを指定しない（画面幅いっぱいに表示）
     return template.evaluate()
       .setTitle(title)
