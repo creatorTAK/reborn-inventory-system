@@ -731,7 +731,7 @@ function getOperatorNameByTokenAPI(fcmToken) {
       };
     }
 
-    const dataRange = sheet.getRange(2, 1, lastRow - 1, 7); // 列1〜7
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, 11); // 列1〜11（アイコンURL含む）
     const data = dataRange.getValues();
 
     console.log('FCM通知登録シートのデータ件数:', data.length);
@@ -741,10 +741,12 @@ function getOperatorNameByTokenAPI(fcmToken) {
       const rowToken = data[i][3]; // 列4: FCMトークン
       if (rowToken === fcmToken) {
         const userName = data[i][1]; // 列2: ユーザー名
+        const iconUrl = data[i][8] || ''; // 列9: アイコンURL
         console.log('✅ FCMトークンに一致するユーザー名を発見:', userName);
         return {
           success: true,
           name: userName || '',
+          iconUrl: iconUrl,
           source: 'fcm_sheet'
         };
       }

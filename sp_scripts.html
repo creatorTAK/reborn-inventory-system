@@ -284,8 +284,8 @@
   // 担当者名を読み込む（FCMトークンから）
   function loadOperatorName() {
     if (google && google.script && google.script.run) {
-      // GASテンプレート変数からFCMトークンを取得
-      const fcmToken = '<?= fcmToken ?>';
+      // グローバル変数からFCMトークンを取得（sidebar_product.html で定義）
+      const fcmToken = (typeof GLOBAL_FCM_TOKEN !== 'undefined' ? GLOBAL_FCM_TOKEN : '');
       console.log('📱 FCMトークン取得 (GASテンプレート):', fcmToken ? fcmToken.substring(0, 20) + '...' : 'なし');
 
       google.script.run
@@ -298,6 +298,18 @@
             }
           } else {
             console.log('ℹ️ 担当者名が設定されていません');
+          }
+
+          // アイコンURLをPWAに送信（あれば）
+          if (result.iconUrl) {
+            // window.topに送信（最上位ウィンドウ = PWA）
+            if (window.top && window.top !== window.self) {
+              window.top.postMessage({
+                type: 'UPDATE_USER_ICON',
+                iconUrl: result.iconUrl
+              }, '*');
+              console.log('📤 PWAにアイコンURLを送信');
+            }
           }
         })
         .withFailureHandler(function(error) {

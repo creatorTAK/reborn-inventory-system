@@ -709,59 +709,11 @@
       border-color: #d1d5db;
     }
 
-    /* 担当者名表示エリア */
-    .operator-info {
-      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-      color: white;
-      padding: 12px 16px;
-      margin: 12px 12px 16px 12px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 13px;
-    }
-
-    .operator-info .operator-name {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 500;
-    }
-
-    .operator-info .operator-icon {
-      font-size: 16px;
-    }
-
-    .operator-info .btn-operator-setting {
-      background: rgba(255, 255, 255, 0.2);
-      color: white;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      padding: 6px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
-      transition: all 0.2s;
-    }
-
-    .operator-info .btn-operator-setting:hover {
-      background: rgba(255, 255, 255, 0.3);
-      border-color: rgba(255, 255, 255, 0.5);
-    }
   </style>
 </head>
 <body>
   <div class="container">
   <h4 class="page-title">📦 梱包資材マスタ管理</h4>
-
-  <!-- 担当者名表示 -->
-  <div class="operator-info">
-    <div class="operator-name">
-      <span class="operator-icon">👤</span>
-      <span>担当者: <strong id="operatorNameDisplay">未設定</strong></span>
-    </div>
-    <button class="btn-operator-setting" onclick="openOperatorSettingModal()">⚙️ 設定</button>
   </div>
 
   <!-- メッセージ表示 -->
@@ -906,28 +858,6 @@
     </div>
   </div>
 
-  <!-- 担当者名設定モーダル -->
-  <div id="operatorSettingModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>👤 担当者名設定</h3>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label>担当者名<span class="required">*</span></label>
-          <input type="text" id="operatorNameInput" placeholder="例: 山田太郎" maxlength="50">
-          <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
-            入庫登録時に記録されます
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeOperatorSettingModal()">キャンセル</button>
-        <button class="btn btn-primary" onclick="saveOperatorName()">保存</button>
-      </div>
-    </div>
-  </div>
-
   <!-- 入庫登録モーダル -->
   <div id="inboundModal" class="modal">
     <div class="modal-content">
@@ -1031,7 +961,6 @@
     // ページ読み込み時にデータを取得
     window.addEventListener('DOMContentLoaded', function() {
       loadData();
-      loadOperatorName(); // 担当者名を取得
     });
 
     // 価格と個数の変更を監視して、1個あたりを計算
@@ -2558,89 +2487,6 @@
         customInput.style.display = 'none';
         customInput.value = '';
       }
-    }
-
-    // =============================================================================
-    // 担当者名管理
-    // =============================================================================
-
-    /**
-     * 担当者名を取得して表示
-     */
-    function loadOperatorName() {
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success && result.name) {
-            // 担当者名が設定されている
-            document.getElementById('operatorNameDisplay').textContent = result.name;
-          } else {
-            // 担当者名が未設定（PWA初回設定で登録してください）
-            document.getElementById('operatorNameDisplay').textContent = '未設定';
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('担当者名取得エラー:', error);
-          showMessage('error', '担当者名の取得に失敗しました');
-        })
-        .getOperatorNameAPI();
-    }
-
-    /**
-     * 担当者名設定モーダルを開く
-     */
-    function openOperatorSettingModal() {
-      // 現在の担当者名を取得してセット
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success && result.name) {
-            document.getElementById('operatorNameInput').value = result.name;
-          } else {
-            document.getElementById('operatorNameInput').value = '';
-          }
-          document.getElementById('operatorSettingModal').classList.add('active');
-        })
-        .withFailureHandler(function(error) {
-          console.error('担当者名取得エラー:', error);
-          document.getElementById('operatorNameInput').value = '';
-          document.getElementById('operatorSettingModal').classList.add('active');
-        })
-        .getOperatorNameAPI();
-    }
-
-    /**
-     * 担当者名設定モーダルを閉じる
-     */
-    function closeOperatorSettingModal() {
-      document.getElementById('operatorSettingModal').classList.remove('active');
-      document.getElementById('operatorNameInput').value = '';
-    }
-
-    /**
-     * 担当者名を保存
-     */
-    function saveOperatorName() {
-      const name = document.getElementById('operatorNameInput').value.trim();
-
-      if (!name) {
-        showMessage('error', '担当者名を入力してください');
-        return;
-      }
-
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success) {
-            showMessage('success', result.message);
-            closeOperatorSettingModal();
-            // 表示を更新
-            document.getElementById('operatorNameDisplay').textContent = name;
-          } else {
-            showMessage('error', result.message);
-          }
-        })
-        .withFailureHandler(function(error) {
-          showMessage('error', '担当者名の保存に失敗しました: ' + error.message);
-        })
-        .setOperatorNameAPI(name);
     }
 
   </script>

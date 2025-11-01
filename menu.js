@@ -605,7 +605,7 @@ function doGet(e) {
     template.GAS_BASE_URL = ScriptApp.getService().getUrl();
 
     // FCMトークンをテンプレート変数として渡す（マルチユーザー対応）
-    template.fcmToken = e.parameter.fcmToken || '';
+    template.fcmToken = (e && e.parameter && e.parameter.fcmToken) || '';
     Logger.log('FCMトークンをテンプレートに渡します: ' + (template.fcmToken ? template.fcmToken.substring(0, 20) + '...' : 'なし'));
 
     // Web Appとして開く場合はwidthを指定しない（画面幅いっぱいに表示）
@@ -756,12 +756,15 @@ function testInventoryAPI() {
 function showProductSidebar() {
   const t = HtmlService.createTemplateFromFile('sidebar_product');
   t.isSidebar = true;  // スプレッドシートのサイドバーフラグ
+  t.fcmToken = '';  // スプレッドシートから開く場合はFCMトークンなし
   const html = t.evaluate().setTitle('商品登録').setWidth(360);
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
 function showInventorySidebar() {
-  const html = HtmlService.createHtmlOutputFromFile('sidebar_inventory')
+  const t = HtmlService.createTemplateFromFile('sidebar_inventory');
+  t.fcmToken = '';  // スプレッドシートから開く場合はFCMトークンなし
+  const html = t.evaluate()
     .setTitle('📦 在庫管理')
     .setWidth(400);
   SpreadsheetApp.getUi().showSidebar(html);
@@ -788,6 +791,7 @@ function showSalesAnalysis() {
 function showConfigManager() {
   const t = HtmlService.createTemplateFromFile('sidebar_config');
   t.isSidebar = true;  // スプレッドシートのサイドバーフラグ
+  t.fcmToken = '';  // スプレッドシートから開く場合はFCMトークンなし
   const html = t.evaluate().setTitle('設定管理').setWidth(400);
   SpreadsheetApp.getUi().showSidebar(html);
 }
