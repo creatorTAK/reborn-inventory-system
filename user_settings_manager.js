@@ -110,15 +110,14 @@ function uploadUserIconAPI(base64Data) {
       };
     }
 
-    // Base64データサイズチェック（2MB制限）
-    const sizeInBytes = (base64Data.length * 3) / 4;
-    const sizeInMB = sizeInBytes / (1024 * 1024);
-    console.log('画像サイズ:', sizeInMB.toFixed(2), 'MB');
+    // Base64データサイズチェック（スプレッドシート制限: 50000文字）
+    const base64Length = base64Data.length;
+    console.log('Base64データサイズ:', base64Length, '文字');
 
-    if (sizeInMB > 2) {
+    if (base64Length > 45000) {
       return {
         success: false,
-        message: 'ファイルサイズは2MB以下にしてください'
+        message: 'アイコンのアップロードに失敗しました: 入力内容が 1つのセルに最大 50000 文字の制限を超えています。'
       };
     }
 
@@ -301,13 +300,12 @@ function uploadUserIconByTokenAPI(fcmToken, base64Data) {
       return { success: false, message: '画像データが空です' };
     }
 
-    // Base64データサイズチェック（2MB制限）
-    const sizeInBytes = (base64Data.length * 3) / 4;
-    const sizeInMB = sizeInBytes / (1024 * 1024);
-    console.log('画像サイズ:', sizeInMB.toFixed(2), 'MB');
+    // Base64データサイズチェック（スプレッドシート制限: 50000文字）
+    const base64Length = base64Data.length;
+    console.log('Base64データサイズ:', base64Length, '文字');
 
-    if (sizeInMB > 2) {
-      return { success: false, message: 'ファイルサイズは2MB以下にしてください' };
+    if (base64Length > 45000) {
+      return { success: false, message: 'アイコンのアップロードに失敗しました: 入力内容が 1つのセルに最大 50000 文字の制限を超えています。' };
     }
 
     if (!fcmToken) {

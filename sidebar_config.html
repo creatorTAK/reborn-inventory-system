@@ -5135,7 +5135,7 @@ ${prompt || '（未設定）'}
       input.focus();
     }
 
-    // アイコンファイル選択時のプレビュー
+    // アイコンファイル選択時のプレビュー（自動リサイズ対応）
     document.getElementById('basicUserIconInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (file) {
@@ -5146,13 +5146,52 @@ ${prompt || '（未設定）'}
 
         const reader = new FileReader();
         reader.onload = function(event) {
-          // プレビュー表示
-          document.getElementById('basicUserIconPreview').innerHTML =
-            '<img src="' + event.target.result + '" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">';
+          const img = new Image();
+          img.onload = function() {
+            // 画像を200x200pxにリサイズ（スプレッドシート50000文字制限対策）
+            const canvas = document.createElement('canvas');
+            const maxSize = 200;
+            let width = img.width;
+            let height = img.height;
 
-          // Base64データを一時保存
-          pendingUserIconData = event.target.result;
-          console.log('アイコン画像を選択しました（保存ボタンを押すとアップロードされます）');
+            // アスペクト比を保ちながら最大サイズに収める
+            if (width > height) {
+              if (width > maxSize) {
+                height = Math.round((height * maxSize) / width);
+                width = maxSize;
+              }
+            } else {
+              if (height > maxSize) {
+                width = Math.round((width * maxSize) / height);
+                height = maxSize;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // JPEGで品質0.8で圧縮（Base64サイズを削減）
+            const resizedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+
+            // Base64サイズチェック（スプレッドシート制限: 50000文字）
+            if (resizedBase64.length > 45000) {
+              alert('画像が大きすぎます。より小さい画像を選択してください。');
+              return;
+            }
+
+            console.log('画像リサイズ完了:', width + 'x' + height, 'Base64サイズ:', resizedBase64.length, '文字');
+
+            // プレビュー表示
+            document.getElementById('basicUserIconPreview').innerHTML =
+              '<img src="' + resizedBase64 + '" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">';
+
+            // リサイズ後のBase64データを一時保存
+            pendingUserIconData = resizedBase64;
+            console.log('アイコン画像を選択しました（保存ボタンを押すとアップロードされます）');
+          };
+          img.src = event.target.result;
         };
         reader.readAsDataURL(file);
       }
