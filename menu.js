@@ -577,6 +577,8 @@ function doGet(e) {
     if (menuType === 'config') {
       template = HtmlService.createTemplateFromFile('sidebar_config');
       title = 'REBORN';
+      // activeTabパラメータを取得（PWAからのリンク用）
+      template.activeTab = (e && e.parameter && e.parameter.activeTab) || 'basic';
     } else if (menuType === 'product') {
       template = HtmlService.createTemplateFromFile('sidebar_product');
       title = 'REBORN';
@@ -792,7 +794,63 @@ function showConfigManager() {
   const t = HtmlService.createTemplateFromFile('sidebar_config');
   t.isSidebar = true;  // スプレッドシートのサイドバーフラグ
   t.fcmToken = '';  // スプレッドシートから開く場合はFCMトークンなし
+  t.activeTab = 'basic';  // デフォルトタブ
   const html = t.evaluate().setTitle('設定管理').setWidth(400);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+// 設定管理サブメニュー用関数
+function showConfigManagerBasic() {
+  const t = HtmlService.createTemplateFromFile('sidebar_config');
+  t.isSidebar = true;
+  t.fcmToken = '';
+  t.activeTab = 'basic';
+  const html = t.evaluate().setTitle('基本設定').setWidth(400);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+function showConfigManagerManagement() {
+  const t = HtmlService.createTemplateFromFile('sidebar_config');
+  t.isSidebar = true;
+  t.fcmToken = '';
+  t.activeTab = 'management';
+  const html = t.evaluate().setTitle('管理番号設定').setWidth(400);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+function showConfigManagerProduct() {
+  const t = HtmlService.createTemplateFromFile('sidebar_config');
+  t.isSidebar = true;
+  t.fcmToken = '';
+  t.activeTab = 'product';
+  const html = t.evaluate().setTitle('商品登録設定').setWidth(400);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+function showConfigManagerShipping() {
+  const t = HtmlService.createTemplateFromFile('sidebar_config');
+  t.isSidebar = true;
+  t.fcmToken = '';
+  t.activeTab = 'shipping';
+  const html = t.evaluate().setTitle('配送設定').setWidth(400);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+function showConfigManagerProcure() {
+  const t = HtmlService.createTemplateFromFile('sidebar_config');
+  t.isSidebar = true;
+  t.fcmToken = '';
+  t.activeTab = 'procure-listing';
+  const html = t.evaluate().setTitle('仕入・出品設定').setWidth(400);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+function showConfigManagerAI() {
+  const t = HtmlService.createTemplateFromFile('sidebar_config');
+  t.isSidebar = true;
+  t.fcmToken = '';
+  t.activeTab = 'ai';
+  const html = t.evaluate().setTitle('AI生成設定').setWidth(400);
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
@@ -842,7 +900,12 @@ function onOpen() {
 
   // 設定管理メニュー
   ui.createMenu('⚙️ 設定管理')
-    .addItem('⚙️ 設定管理', 'showConfigManager')
+    .addItem('👤 基本設定', 'showConfigManagerBasic')
+    .addItem('🔢 管理番号設定', 'showConfigManagerManagement')
+    .addItem('📝 商品登録設定', 'showConfigManagerProduct')
+    .addItem('📦 配送設定', 'showConfigManagerShipping')
+    .addItem('💼 仕入・出品設定', 'showConfigManagerProcure')
+    .addItem('✨ AI生成設定', 'showConfigManagerAI')
     .addToUi();
 }
 
