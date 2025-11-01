@@ -21,10 +21,15 @@ function doPost(e) {
     }
 
     if (action === 'subscribeFCM') {
-      // FCMトークンを保存（チーム利用対応: デバイス情報も保存）
+      // FCMトークンを保存（チーム利用対応: デバイス情報、メールアドレス、通知設定も保存）
       const token = requestBody.token;
       const deviceInfo = requestBody.deviceInfo || null;
-      const result = saveFCMToken(token, deviceInfo);
+      const userId = requestBody.userId || null;
+      const userName = requestBody.userName || null;
+      const email = requestBody.email || null;
+      const notificationEnabled = requestBody.notificationEnabled !== undefined ? requestBody.notificationEnabled : true;
+      const notificationSound = requestBody.notificationSound !== undefined ? requestBody.notificationSound : true;
+      const result = saveFCMToken(token, deviceInfo, userId, userName, email, notificationEnabled, notificationSound);
       return ContentService.createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
     }
@@ -133,11 +138,14 @@ function doGet(e) {
       }
 
       if (action === 'subscribeFCM') {
-        // FCMトークンを保存（GETメソッド、チーム利用対応 + ユーザー名対応）
+        // FCMトークンを保存（GETメソッド、チーム利用対応 + ユーザー名対応 + メールアドレス + 通知設定）
         const token = e.parameter.token;
         const deviceInfoParam = e.parameter.deviceInfo;
         const userIdParam = e.parameter.userId;
         const userNameParam = e.parameter.userName;
+        const emailParam = e.parameter.email;
+        const notificationEnabledParam = e.parameter.notificationEnabled;
+        const notificationSoundParam = e.parameter.notificationSound;
 
         // デバッグログをスプレッドシートに書き込む
         try {
@@ -145,12 +153,15 @@ function doGet(e) {
           let debugSheet = ss.getSheetByName('FCM登録デバッグ');
           if (!debugSheet) {
             debugSheet = ss.insertSheet('FCM登録デバッグ');
-            debugSheet.appendRow(['タイムスタンプ', 'トークン（先頭20文字）', 'deviceInfoParam', 'userIdParam', 'userId (decoded)', 'userNameParam', 'userName (decoded)']);
+            debugSheet.appendRow(['タイムスタンプ', 'トークン（先頭20文字）', 'deviceInfoParam', 'userIdParam', 'userId (decoded)', 'userNameParam', 'userName (decoded)', 'email', 'notificationEnabled', 'notificationSound']);
           }
 
           const deviceInfo = deviceInfoParam ? JSON.parse(decodeURIComponent(deviceInfoParam)) : null;
           const userId = userIdParam ? decodeURIComponent(userIdParam) : null;
           const userName = userNameParam ? decodeURIComponent(userNameParam) : null;
+          const email = emailParam ? decodeURIComponent(emailParam) : null;
+          const notificationEnabled = notificationEnabledParam === 'true' || notificationEnabledParam === true;
+          const notificationSound = notificationSoundParam === 'true' || notificationSoundParam === true;
 
           debugSheet.appendRow([
             Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss'),
@@ -159,7 +170,10 @@ function doGet(e) {
             userIdParam || 'null',
             userId || 'null',
             userNameParam || 'null',
-            userName || 'null'
+            userName || 'null',
+            email || 'null',
+            notificationEnabled,
+            notificationSound
           ]);
         } catch (debugError) {
           Logger.log('Debug sheet error: ' + debugError);
@@ -168,8 +182,11 @@ function doGet(e) {
         const deviceInfo = deviceInfoParam ? JSON.parse(decodeURIComponent(deviceInfoParam)) : null;
         const userId = userIdParam ? decodeURIComponent(userIdParam) : null;
         const userName = userNameParam ? decodeURIComponent(userNameParam) : null;
+        const email = emailParam ? decodeURIComponent(emailParam) : null;
+        const notificationEnabled = notificationEnabledParam === 'true' || notificationEnabledParam === true;
+        const notificationSound = notificationSoundParam === 'true' || notificationSoundParam === true;
 
-        const result = saveFCMToken(token, deviceInfo, userId, userName);
+        const result = saveFCMToken(token, deviceInfo, userId, userName, email, notificationEnabled, notificationSound);
         return ContentService.createTextOutput(JSON.stringify(result))
           .setMimeType(ContentService.MimeType.JSON);
       }
