@@ -1639,19 +1639,50 @@
 
   // 管理番号セグメントUIを初期化
   function initManagementNumberUI() {
+    // LocalStorageからキャッシュを取得
+    const cachedSegments = localStorage.getItem('reborn_mgmt_segments');
+
+    if (cachedSegments) {
+      try {
+        const segments = JSON.parse(cachedSegments);
+        console.log('📦 管理番号設定をキャッシュから読み込み');
+        // キャッシュから即座にUIを生成（ちらつき防止）
+        renderManagementSegmentUI(segments);
+      } catch (e) {
+        console.error('❌ キャッシュのパースに失敗:', e);
+      }
+    }
+
+    // バックグラウンドで最新設定を取得
     google.script.run
       .withSuccessHandler(function(segments) {
         if (!segments || segments.length === 0) {
           // セグメント設定がない場合は旧UIを使用
-          initLegacyManagementUI();
+          localStorage.removeItem('reborn_mgmt_segments');
+          if (!cachedSegments) {
+            initLegacyManagementUI();
+          }
           return;
         }
 
-        renderManagementSegmentUI(segments);
+        // 設定が変更されている場合のみUIを更新
+        const currentCache = localStorage.getItem('reborn_mgmt_segments');
+        const newCache = JSON.stringify(segments);
+
+        if (currentCache !== newCache) {
+          console.log('🔄 管理番号設定が更新されました');
+          localStorage.setItem('reborn_mgmt_segments', newCache);
+          renderManagementSegmentUI(segments);
+        } else {
+          console.log('✅ 管理番号設定は最新です');
+        }
       })
       .withFailureHandler(function(e) {
         console.error('セグメント設定の読み込みに失敗:', e);
-        initLegacyManagementUI();
+        // キャッシュがなければ旧UIを使用
+        if (!cachedSegments) {
+          initLegacyManagementUI();
+        }
       })
       .getManagementNumberSegments();
   }
