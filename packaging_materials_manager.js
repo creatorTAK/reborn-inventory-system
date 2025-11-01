@@ -682,3 +682,101 @@ function getOperatorNameAPI() {
     };
   }
 }
+
+/**
+ * FCMトークンから担当者名を取得
+ * @param {string} fcmToken - FCMトークン
+ * @return {Object} 取得結果
+ */
+function getOperatorNameByTokenAPI(fcmToken) {
+  try {
+    console.log('=== getOperatorNameByTokenAPI 開始 ===');
+    console.log('FCMトークン:', fcmToken ? fcmToken.substring(0, 20) + '...' : 'なし');
+
+    if (!fcmToken) {
+      console.error('FCMトークンが指定されていません');
+      // フォールバック: PropertiesServiceから取得
+      const userProperties = PropertiesService.getUserProperties();
+      const name = userProperties.getProperty('OPERATOR_NAME');
+      return {
+        success: true,
+        name: name || '',
+        source: 'properties'
+      };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('FCM通知登録');
+
+    if (!sheet) {
+      console.error('FCM通知登録シートが見つかりません');
+      // フォールバック: PropertiesServiceから取得
+      const userProperties = PropertiesService.getUserProperties();
+      const name = userProperties.getProperty('OPERATOR_NAME');
+      return {
+        success: true,
+        name: name || '',
+        source: 'properties'
+      };
+    }
+
+    // データ範囲を取得（ヘッダー行を除く）
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      console.log('FCM通知登録シートにデータがありません');
+      return {
+        success: true,
+        name: '',
+        source: 'none'
+      };
+    }
+
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, 7); // 列1〜7
+    const data = dataRange.getValues();
+
+    console.log('FCM通知登録シートのデータ件数:', data.length);
+
+    // FCMトークンで検索（列4）
+    for (let i = 0; i < data.length; i++) {
+      const rowToken = data[i][3]; // 列4: FCMトークン
+      if (rowToken === fcmToken) {
+        const userName = data[i][1]; // 列2: ユーザー名
+        console.log('✅ FCMトークンに一致するユーザー名を発見:', userName);
+        return {
+          success: true,
+          name: userName || '',
+          source: 'fcm_sheet'
+        };
+      }
+    }
+
+    console.log('⚠️ FCMトークンに一致するデータが見つかりませんでした');
+    // フォールバック: PropertiesServiceから取得
+    const userProperties = PropertiesService.getUserProperties();
+    const name = userProperties.getProperty('OPERATOR_NAME');
+    return {
+      success: true,
+      name: name || '',
+      source: 'properties_fallback'
+    };
+
+  } catch (error) {
+    console.error('❌ FCMトークンから担当者名取得エラー:', error);
+    // エラー時もフォールバック
+    try {
+      const userProperties = PropertiesService.getUserProperties();
+      const name = userProperties.getProperty('OPERATOR_NAME');
+      return {
+        success: true,
+        name: name || '',
+        source: 'properties_error'
+      };
+    } catch (fallbackError) {
+      return {
+        success: false,
+        name: '',
+        error: error.message
+      };
+    }
+  }
+}

@@ -2299,9 +2299,18 @@ function saveSalesRecordAPI(salesData) {
       return { success: false, message: `シート「${sheetName}」が見つかりません` };
     }
 
-    // ユーザー名を取得（PropertiesService）
-    const userProperties = PropertiesService.getUserProperties();
-    const operatorName = userProperties.getProperty('OPERATOR_NAME') || 'システム';
+    // ユーザー名を取得（FCMトークンから）
+    let operatorName = 'システム';
+    if (salesData.fcmToken) {
+      const operatorResult = getOperatorNameByFCMToken(salesData.fcmToken);
+      if (operatorResult.success && operatorResult.name) {
+        operatorName = operatorResult.name;
+      }
+    } else {
+      // フォールバック: PropertiesService
+      const userProperties = PropertiesService.getUserProperties();
+      operatorName = userProperties.getProperty('OPERATOR_NAME') || 'システム';
+    }
 
     // ヘッダー取得
     const { map } = getHeaderMapCommon();
@@ -2534,3 +2543,101 @@ function bulkUpdateAPI(params) {
   // - 価格一括調整
 }
 */
+
+/**
+ * FCMトークンから担当者名を取得
+ * @param {string} fcmToken - FCMトークン
+ * @return {Object} 取得結果
+ */
+function getOperatorNameByFCMToken(fcmToken) {
+  try {
+    Logger.log('=== getOperatorNameByFCMToken 開始 ===');
+    Logger.log('FCMトークン: ' + (fcmToken ? fcmToken.substring(0, 20) + '...' : 'なし'));
+
+    if (!fcmToken) {
+      Logger.log('FCMトークンが指定されていません');
+      // フォールバック: PropertiesServiceから取得
+      const userProperties = PropertiesService.getUserProperties();
+      const name = userProperties.getProperty('OPERATOR_NAME');
+      return {
+        success: true,
+        name: name || '',
+        source: 'properties'
+      };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('FCM通知登録');
+
+    if (!sheet) {
+      Logger.log('FCM通知登録シートが見つかりません');
+      // フォールバック: PropertiesServiceから取得
+      const userProperties = PropertiesService.getUserProperties();
+      const name = userProperties.getProperty('OPERATOR_NAME');
+      return {
+        success: true,
+        name: name || '',
+        source: 'properties'
+      };
+    }
+
+    // データ範囲を取得（ヘッダー行を除く）
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      Logger.log('FCM通知登録シートにデータがありません');
+      return {
+        success: true,
+        name: '',
+        source: 'none'
+      };
+    }
+
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, 7); // 列1〜7
+    const data = dataRange.getValues();
+
+    Logger.log('FCM通知登録シートのデータ件数: ' + data.length);
+
+    // FCMトークンで検索（列4）
+    for (let i = 0; i < data.length; i++) {
+      const rowToken = data[i][3]; // 列4: FCMトークン
+      if (rowToken === fcmToken) {
+        const userName = data[i][1]; // 列2: ユーザー名
+        Logger.log('✅ FCMトークンに一致するユーザー名を発見: ' + userName);
+        return {
+          success: true,
+          name: userName || '',
+          source: 'fcm_sheet'
+        };
+      }
+    }
+
+    Logger.log('⚠️ FCMトークンに一致するデータが見つかりませんでした');
+    // フォールバック: PropertiesServiceから取得
+    const userProperties = PropertiesService.getUserProperties();
+    const name = userProperties.getProperty('OPERATOR_NAME');
+    return {
+      success: true,
+      name: name || '',
+      source: 'properties_fallback'
+    };
+
+  } catch (error) {
+    Logger.log('❌ FCMトークンから担当者名取得エラー: ' + error.message);
+    // エラー時もフォールバック
+    try {
+      const userProperties = PropertiesService.getUserProperties();
+      const name = userProperties.getProperty('OPERATOR_NAME');
+      return {
+        success: true,
+        name: name || '',
+        source: 'properties_error'
+      };
+    } catch (fallbackError) {
+      return {
+        success: false,
+        name: '',
+        error: error.message
+      };
+    }
+  }
+}
