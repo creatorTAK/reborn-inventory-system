@@ -15,6 +15,51 @@
 
 ## 📚 完了Issue一覧
 
+## INV-008 | 機能追加: 梱包資材プリセット機能 ✅ DONE (完了日: 2025-11-02)
+
+### 📌 基本情報
+- カテゴリ: 機能追加
+- 優先度: 中
+- 影響範囲: 販売記録UI
+- 要望日: 2025-10-31
+- 完了日: 2025-11-02
+- デプロイ: @558
+
+### 💡 要望内容
+梱包資材の組み合わせパターンがある程度固定されているため、毎回入力するのが手間。よく使うパターンをプリセットとして登録し、ワンクリックで選択できるようにしたい。
+
+### ✅ 期待動作
+1. プリセット管理UI（新規作成・編集・削除）
+2. プリセット名と梱包資材リストを登録
+3. 販売記録モーダルでプリセット選択
+4. 選択すると梱包資材フィールドが自動入力される
+
+### 📍 関連ファイル
+- スプレッドシート: `梱包資材プリセット`シート（新規作成）
+- `packaging_materials_manager.js` - プリセット管理API
+- `packaging_materials_ui.html` - プリセット管理UI
+- `sidebar_inventory.html` - 販売記録モーダル（プリセット選択UI追加）
+
+### ✏️ 実装内容
+- [x] Phase 1: データ構造設計
+- [x] Phase 2: プリセット管理API
+- [x] Phase 3: プリセット管理UI
+- [x] Phase 4: 販売記録モーダルへの組み込み
+- [x] Phase 5: デプロイ
+
+### 📝 実装詳細
+- **データ構造**: `梱包資材プリセット`シート（ID, 名前, 資材リストJSON）
+- **API実装**: packaging_materials_manager.js
+  - setupPackagingPresetsSheet()
+  - getPackagingPresetsAPI()
+  - savePackagingPresetAPI()
+  - deletePackagingPresetAPI()
+- **UI実装**: packaging_materials_ui.html（プリセット管理）
+- **適用機能**: sidebar_inventory.html（販売記録モーダル）
+- **数量フィールド**: 削除（資材は1個ずつ選択する運用のため）
+
+---
+
 ## UI-014 | UI改善: 商品名の【】括弧前後の半角スペース削除 ✅ DONE (完了日: 2025-11-02)
 
 ### 📌 基本情報
