@@ -1770,17 +1770,26 @@ function getInventoryDashboardAPI(params) {
       // JSON_データ列から商品画像URL配列を取得
       let productImages = [];
       const jsonDataRaw = item.jsonData;
+      Logger.log(`[DEBUG] Processing images for ${item.managementNumber}`);
+      Logger.log(`[DEBUG] jsonDataRaw: ${jsonDataRaw}`);
       if (jsonDataRaw && String(jsonDataRaw).trim()) {
         try {
           const parsedData = JSON.parse(String(jsonDataRaw));
+          Logger.log(`[DEBUG] Parsed data: ${JSON.stringify(parsedData)}`);
           if (Array.isArray(parsedData)) {
-            productImages = parsedData
-              .filter(img => !img.forAI && img.url)
-              .map(img => img.url);
+            Logger.log(`[DEBUG] Is array, length: ${parsedData.length}`);
+            const filtered = parsedData.filter(img => !img.forAI && img.url);
+            Logger.log(`[DEBUG] After filter (!forAI && has url): ${filtered.length} images`);
+            productImages = filtered.map(img => img.url);
+            Logger.log(`[DEBUG] Product images URLs: ${JSON.stringify(productImages)}`);
+          } else {
+            Logger.log(`[DEBUG] Parsed data is not an array`);
           }
         } catch (parseError) {
-          Logger.log(`JSON_データ列のパースエラー（管理番号: ${item.managementNumber}）: ${parseError.message}`);
+          Logger.log(`[ERROR] JSON_データ列のパースエラー（管理番号: ${item.managementNumber}）: ${parseError.message}`);
         }
+      } else {
+        Logger.log(`[DEBUG] No jsonDataRaw for ${item.managementNumber}`);
       }
 
       products.push({
