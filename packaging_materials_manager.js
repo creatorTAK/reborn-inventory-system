@@ -919,8 +919,11 @@ function getPackagingPresetsAPI() {
  */
 function savePackagingPresetAPI(params) {
   try {
+    Logger.log('[DEBUG] savePackagingPresetAPI called with params: ' + JSON.stringify(params));
+    
     // バリデーション
     if (!params.presetName || params.presetName.trim() === '') {
+      Logger.log('[DEBUG] Validation failed: presetName is empty');
       return {
         success: false,
         message: 'プリセット名は必須です'
@@ -928,31 +931,41 @@ function savePackagingPresetAPI(params) {
     }
 
     if (!Array.isArray(params.materialsList) || params.materialsList.length === 0) {
+      Logger.log('[DEBUG] Validation failed: materialsList is empty or not array');
       return {
         success: false,
         message: '梱包資材を1つ以上選択してください'
       };
     }
 
+    Logger.log('[DEBUG] Validation passed, getting spreadsheet...');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName('梱包資材プリセット');
+    Logger.log('[DEBUG] Sheet found: ' + (sheet ? 'yes' : 'no'));
 
     // シートがなければ作成
     if (!sheet) {
+      Logger.log('[DEBUG] Sheet not found, creating...');
       const setupResult = setupPackagingPresetsSheet();
       if (!setupResult.success) {
+        Logger.log('[DEBUG] Sheet creation failed: ' + setupResult.message);
         return setupResult;
       }
       sheet = ss.getSheetByName('梱包資材プリセット');
+      Logger.log('[DEBUG] Sheet created successfully');
     }
 
     const presetName = params.presetName.trim();
     const materialsJson = JSON.stringify(params.materialsList);
+    Logger.log('[DEBUG] presetName: ' + presetName);
+    Logger.log('[DEBUG] materialsJson: ' + materialsJson);
 
     // 新規作成 or 更新判定
     if (params.presetId) {
+      Logger.log('[DEBUG] Update mode, presetId: ' + params.presetId);
       // 更新: 既存のpresetIdを検索
       const lastRow = sheet.getLastRow();
+      Logger.log('[DEBUG] lastRow: ' + lastRow);
       if (lastRow >= 2) {
         const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
         for (let i = 0; i < ids.length; i++) {
@@ -970,8 +983,9 @@ function savePackagingPresetAPI(params) {
             }
 
             // 更新
+            Logger.log('[DEBUG] Updating row ' + rowIndex);
             sheet.getRange(rowIndex, 2, 1, 2).setValues([[presetName, materialsJson]]);
-            Logger.log(`プリセット更新: ${params.presetId} - ${presetName}`);
+            Logger.log(`[DEBUG] Update successful: ${params.presetId} - ${presetName}`);
 
             return {
               success: true,
@@ -989,8 +1003,10 @@ function savePackagingPresetAPI(params) {
 
     } else {
       // 新規作成
+      Logger.log('[DEBUG] Create mode (no presetId)');
 
       // 重複チェック
+      Logger.log('[DEBUG] Checking for duplicates...');
       const existingPresets = getPackagingPresetsAPI();
       if (existingPresets.success) {
         const duplicate = existingPresets.data.find(preset =>
@@ -998,6 +1014,7 @@ function savePackagingPresetAPI(params) {
         );
 
         if (duplicate) {
+          Logger.log('[DEBUG] Duplicate found: ' + presetName);
           return {
             success: false,
             message: `同じプリセット名が既に登録されています（${presetName}）`
@@ -1005,20 +1022,26 @@ function savePackagingPresetAPI(params) {
         }
       }
 
+      Logger.log('[DEBUG] No duplicates, proceeding with creation...');
       // 新しいIDを生成（PRESET001, PRESET002, ...）
       const lastRow = sheet.getLastRow();
       const nextNumber = lastRow >= 2 ? lastRow - 1 + 1 : 1;
       const newPresetId = 'PRESET' + String(nextNumber).padStart(3, '0');
+      Logger.log('[DEBUG] Generated presetId: ' + newPresetId + ', lastRow: ' + lastRow);
 
       // 新規行を追加
       const newRow = [newPresetId, presetName, materialsJson];
+      Logger.log('[DEBUG] Inserting row at position: ' + (lastRow + 1));
+      Logger.log('[DEBUG] Row data: ' + JSON.stringify(newRow));
       sheet.getRange(lastRow + 1, 1, 1, 3).setValues([newRow]);
+      Logger.log('[DEBUG] Row inserted successfully');
 
       // 罫線適用
+      Logger.log('[DEBUG] Applying borders...');
       const dataRange = sheet.getRange(1, 1, lastRow + 1, 3);
       dataRange.setBorder(true, true, true, true, true, true);
 
-      Logger.log(`プリセット新規作成: ${newPresetId} - ${presetName}`);
+      Logger.log(`[DEBUG] Preset created successfully: ${newPresetId} - ${presetName}`);
 
       return {
         success: true,
@@ -1027,6 +1050,8 @@ function savePackagingPresetAPI(params) {
     }
 
   } catch (error) {
+    Logger.log('[DEBUG] Error in savePackagingPresetAPI: ' + error.message);
+    Logger.log('[DEBUG] Error stack: ' + error.stack);
     console.error('プリセット保存エラー:', error);
     return {
       success: false,
