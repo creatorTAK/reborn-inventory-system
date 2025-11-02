@@ -152,6 +152,8 @@ function recordUserActivity(sheet, targetRow, isNew = true) {
 // メイン保存関数
 // =============================================================================
 function saveProduct(form) {
+  Logger.log('[DEBUG] saveProduct() called');
+  Logger.log('[DEBUG] Form data: ' + JSON.stringify(form));
   const perfStart = new Date().getTime();
   try {
     // ★★★ フォームIDとスプレッドシート列名のマッピング ★★★
@@ -294,9 +296,11 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
     }
 
     // === 一括書き込み実行 ===
+    Logger.log('[DEBUG] Writing data to sheet, targetRow: ' + targetRow);
     const writeStart = new Date().getTime();
     sh.getRange(targetRow, 1, 1, lastCol).setValues([rowData]);
     const writeEnd = new Date().getTime();
+    Logger.log('[DEBUG] Sheet write completed successfully');
     console.log(`[PERF] 一括書き込み完了: ${writeEnd - writeStart}ms`);
 
     // === 統計情報を更新 ===
@@ -310,6 +314,7 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
     console.log(`[PERF] saveProduct完了（通知送信前）: ${perfEnd - perfStart}ms`);
 
     let message = '登録完了しました';
+    Logger.log('[DEBUG] About to send notification for: ' + mgmtKey);
 
     // 🔔 商品登録完了の通知を送信
     try {
@@ -322,9 +327,13 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
       // 通知エラーは商品登録の成功には影響させない
     }
 
+    Logger.log('[DEBUG] saveProduct completed successfully, returning message: ' + message);
     return message;
       
   } catch (e) {
+    Logger.log('[DEBUG] saveProduct error occurred');
+    Logger.log('[DEBUG] Error: ' + e.message);
+    Logger.log('[DEBUG] Stack: ' + e.stack);
     console.error('saveProduct エラー:', e);
     const msg = (e && e.message) ? e.message : String(e);
     return msg.startsWith('NG(') ? msg : `NG(UNKNOWN): ${msg}`;

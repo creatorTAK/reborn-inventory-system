@@ -4547,10 +4547,13 @@
   }
 
   function onSave() {
+    console.log('[DEBUG] onSave() called');
     updateNamePreview();
     updateDesc();
     const d = collect();
+    console.log('[DEBUG] Collected data:', d);
     const ng = frontValidate(d);
+    console.log('[DEBUG] Validation result:', ng);
     if (ng) {
       return show(ng);
     }
@@ -4585,9 +4588,11 @@
     requestAnimationFrame(animateProgress);
 
     // バックグラウンドで実際の保存処理
+    console.log('[DEBUG] Checking productImages:', productImages ? productImages.length : 0);
     if (productImages && productImages.length > 0) {
       // 商品IDを取得（管理番号を使用）
       const productId = d['管理番号'] || 'unknown_' + new Date().getTime();
+      console.log('[DEBUG] Product has images, uploading first. ProductId:', productId);
 
       // アップロード用データを準備
       const imagesToUpload = productImages.map(img => ({
@@ -4610,6 +4615,7 @@
 
       uploadFunction
         .withSuccessHandler(function(uploadResult) {
+          console.log('[DEBUG] Upload result:', uploadResult);
           if (uploadResult.success) {
             debug.log(`✅ 商品画像アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
             debug.log(`📂 ストレージ: ${IMAGE_STORAGE_PROVIDER}`);
@@ -4619,17 +4625,21 @@
             d['JSON_データ'] = imageUrlsJson;
 
             // スプレッドシートに保存
+            console.log('[DEBUG] Calling saveProductToSheet after image upload');
             saveProductToSheet(d);
           } else {
+            console.log('[DEBUG] Image upload failed:', uploadResult.error);
             show(`NG(IMAGE_UPLOAD): ${uploadResult.error}`);
           }
         })
         .withFailureHandler(function(error) {
+          console.log('[DEBUG] Image upload API call failed:', error);
           show(`NG(IMAGE_UPLOAD): ${error && error.message ? error.message : error}`);
         })
         (uploadParams);
     } else {
       // 商品画像がない場合は直接保存
+      console.log('[DEBUG] No product images, calling saveProductToSheet directly');
       saveProductToSheet(d);
     }
   }
@@ -4639,8 +4649,10 @@
    * @param {Object} d - 商品データ
    */
   function saveProductToSheet(d) {
+    console.log('[DEBUG] saveProductToSheet() called with data:', d);
     google.script.run
       .withSuccessHandler(function(result) {
+        console.log('[DEBUG] saveProduct API response:', result);
         // 楽観的UI: ローディングは既にアニメーションで閉じている
         // 保存完了後の処理のみ実行
 
@@ -4694,6 +4706,7 @@
         // 通知はsaveProduct関数内で送信される
       })
       .withFailureHandler(function(error) {
+        console.log('[DEBUG] saveProduct API call failed:', error);
         hideLoadingOverlay();
         show(`NG(UNKNOWN): ${error && error.message ? error.message : error}`);
       })
