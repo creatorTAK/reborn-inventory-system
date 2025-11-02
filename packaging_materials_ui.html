@@ -962,7 +962,7 @@
       <div class="modal-body">
         <!-- プリセット一覧 -->
         <div id="presetsList" style="margin-bottom: 20px;">
-          <div style="text-align: center; padding: 40px; color: #9ca3af;">
+          <div style="text-align: center; padding: 40px; color: #111827; font-size: 16px; font-weight: 600; background: #fef3c7; border-radius: 8px;">
             ⏳ 読み込み中...
           </div>
         </div>
@@ -2568,8 +2568,18 @@
      * プリセット管理モーダルを開く
      */
     function openPresetsModal() {
+      console.log('[DEBUG] openPresetsModal() called');
+      const modal = document.getElementById('presetsModal');
+      console.log('[DEBUG] modal element:', modal);
+
+      if (!modal) {
+        alert('エラー: プリセット管理モーダルが見つかりません');
+        return;
+      }
+
+      modal.style.display = 'flex';
+      console.log('[DEBUG] modal displayed, calling loadPresets()');
       loadPresets();
-      document.getElementById('presetsModal').style.display = 'flex';
     }
 
     /**
@@ -2583,21 +2593,34 @@
      * プリセット一覧を読み込み
      */
     function loadPresets() {
+      console.log('[DEBUG] loadPresets() called');
+      const listContainer = document.getElementById('presetsList');
+      console.log('[DEBUG] presetsList element:', listContainer);
+
+      if (!listContainer) {
+        alert('エラー: プリセットリストコンテナが見つかりません');
+        return;
+      }
+
       // ローディング表示
-      document.getElementById('presetsList').innerHTML = '<div style="text-align: center; padding: 40px; color: #9ca3af;">⏳ 読み込み中...</div>';
+      listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #111827; font-size: 16px; font-weight: 600; background: #fef3c7; border-radius: 8px;">⏳ 読み込み中...</div>';
+      console.log('[DEBUG] Loading indicator set, calling API...');
 
       google.script.run
         .withSuccessHandler(function(result) {
+          console.log('[DEBUG] API Success:', result);
           if (result.success) {
             packagingPresets = result.data;
+            console.log('[DEBUG] Presets data:', packagingPresets);
             renderPresetsList();
           } else {
-            document.getElementById('presetsList').innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444;">❌ エラー: ' + result.message + '</div>';
+            listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626; font-size: 16px; font-weight: 600; background: #fee2e2; border-radius: 8px;">❌ エラー: ' + result.message + '</div>';
             showMessage(result.message, 'error');
           }
         })
         .withFailureHandler(function(error) {
-          document.getElementById('presetsList').innerHTML = '<div style="text-align: center; padding: 40px; color: #ef4444;">❌ 読み込みエラー: ' + error.message + '</div>';
+          console.log('[DEBUG] API Failure:', error);
+          listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626; font-size: 16px; font-weight: 600; background: #fee2e2; border-radius: 8px;">❌ 読み込みエラー: ' + error.message + '</div>';
           showMessage('プリセット読み込みエラー: ' + error.message, 'error');
         })
         .getPackagingPresetsAPI();
@@ -2607,10 +2630,11 @@
      * プリセット一覧を表示
      */
     function renderPresetsList() {
+      console.log('[DEBUG] renderPresetsList() called, presets count:', packagingPresets.length);
       const container = document.getElementById('presetsList');
 
       if (packagingPresets.length === 0) {
-        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #9ca3af;">プリセットがまだ登録されていません</div>';
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #111827; font-size: 16px; font-weight: 600; background: #f3f4f6; border-radius: 8px;">📋 プリセットがまだ登録されていません</div>';
         return;
       }
 
