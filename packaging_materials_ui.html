@@ -962,7 +962,7 @@
       <div class="modal-body">
         <!-- プリセット一覧 -->
         <div id="presetsList" style="margin-bottom: 20px;">
-          <div style="text-align: center; padding: 40px; color: #000000; font-size: 18px; font-weight: bold; background: #fbbf24; border: 3px solid #d97706; border-radius: 8px;">
+          <div style="text-align: center; padding: 40px; color: #6b7280; font-size: 14px;">
             ⏳ 読み込み中...
           </div>
         </div>
@@ -2606,7 +2606,7 @@
       }
 
       // ローディング表示
-      listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #000000; font-size: 18px; font-weight: bold; background: #fbbf24; border: 3px solid #d97706; border-radius: 8px;">⏳ 読み込み中...</div>';
+      listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #6b7280; font-size: 14px;">⏳ 読み込み中...</div>';
       console.log('[DEBUG] Loading indicator set, calling API...');
 
       google.script.run
@@ -2617,13 +2617,13 @@
             console.log('[DEBUG] Presets data:', packagingPresets);
             renderPresetsList();
           } else {
-            listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #ffffff; font-size: 18px; font-weight: bold; background: #dc2626; border: 3px solid #991b1b; border-radius: 8px;">❌ エラー: ' + result.message + '</div>';
+            listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626; font-size: 14px;">❌ エラー: ' + result.message + '</div>';
             showMessage(result.message, 'error');
           }
         })
         .withFailureHandler(function(error) {
           console.log('[DEBUG] API Failure:', error);
-          listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #ffffff; font-size: 18px; font-weight: bold; background: #dc2626; border: 3px solid #991b1b; border-radius: 8px;">❌ 読み込みエラー: ' + error.message + '</div>';
+          listContainer.innerHTML = '<div style="text-align: center; padding: 40px; color: #dc2626; font-size: 14px;">❌ 読み込みエラー: ' + error.message + '</div>';
           showMessage('プリセット読み込みエラー: ' + error.message, 'error');
         })
         .getPackagingPresetsAPI();
@@ -2637,7 +2637,7 @@
       const container = document.getElementById('presetsList');
 
       if (packagingPresets.length === 0) {
-        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #ffffff; font-size: 18px; font-weight: bold; background: #1f2937; border: 3px solid #10b981; border-radius: 8px;">📋 プリセットがまだ登録されていません<br><br><small style="color: #d1d5db;">新規プリセット作成ボタンをクリックしてプリセットを追加してください</small></div>';
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #6b7280; font-size: 14px;">プリセットがまだ登録されていません</div>';
         return;
       }
 
@@ -2750,12 +2750,29 @@
       const container = document.getElementById('presetMaterialsList');
       const rowId = `presetMaterialRow_${Date.now()}`;
 
+      // 選択された資材のカテゴリを検索
+      let selectedCategory = '';
+      if (productName) {
+        for (const cat in packagingMaterialsByCategory) {
+          const found = packagingMaterialsByCategory[cat].find(m => m.productName === productName);
+          if (found) {
+            selectedCategory = cat;
+            break;
+          }
+        }
+      }
+
       const rowHtml = `
-        <div id="${rowId}" style="display: flex; gap: 8px; align-items: center; background: white; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px;">
-          <select class="preset-material-select" style="flex: 1; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-            <option value="">選択してください</option>
-            ${packagingMaterials.map(m => `<option value="${m.productName}" ${m.productName === productName ? 'selected' : ''}>${m.productName}</option>`).join('')}
-          </select>
+        <div id="${rowId}" style="display: flex; gap: 8px; align-items: start; background: white; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+            <select class="preset-category-select" data-row-id="${rowId}" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+              <option value="">カテゴリを選択</option>
+              ${categoryList.map(cat => `<option value="${cat}" ${cat === selectedCategory ? 'selected' : ''}>${cat}</option>`).join('')}
+            </select>
+            <select class="preset-material-select" data-row-id="${rowId}" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;" ${!selectedCategory ? 'disabled' : ''}>
+              <option value="">資材を選択</option>
+            </select>
+          </div>
           <button type="button" class="btn" style="background: #ef4444; color: white; padding: 8px 12px; font-size: 12px;" onclick="removePresetMaterialRow('${rowId}')">
             削除
           </button>
@@ -2763,6 +2780,31 @@
       `;
 
       container.insertAdjacentHTML('beforeend', rowHtml);
+
+      // カテゴリ変更イベントリスナー
+      const categorySelect = document.querySelector(`.preset-category-select[data-row-id="${rowId}"]`);
+      const materialSelect = document.querySelector(`.preset-material-select[data-row-id="${rowId}"]`);
+
+      categorySelect.addEventListener('change', function() {
+        const category = this.value;
+        if (!category) {
+          materialSelect.disabled = true;
+          materialSelect.innerHTML = '<option value="">カテゴリを選択してください</option>';
+          return;
+        }
+
+        const materials = packagingMaterialsByCategory[category] || [];
+        materialSelect.disabled = false;
+        materialSelect.innerHTML = '<option value="">資材を選択</option>' +
+          materials.map(m => `<option value="${m.productName}">${m.productName}</option>`).join('');
+      });
+
+      // 初期値がある場合は資材プルダウンを設定
+      if (selectedCategory) {
+        const materials = packagingMaterialsByCategory[selectedCategory] || [];
+        materialSelect.innerHTML = '<option value="">資材を選択</option>' +
+          materials.map(m => `<option value="${m.productName}" ${m.productName === productName ? 'selected' : ''}>${m.productName}</option>`).join('');
+      }
     }
 
     /**
