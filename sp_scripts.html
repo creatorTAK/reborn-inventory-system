@@ -4608,35 +4608,58 @@
 
       debug.log(`📤 画像アップロード開始: プロバイダー=${IMAGE_STORAGE_PROVIDER}`);
 
-      // プロバイダーに応じて関数を選択
-      const uploadFunction = IMAGE_STORAGE_PROVIDER === 'gdrive'
-        ? google.script.run.uploadImagesToGoogleDrive
-        : google.script.run.uploadImagesToR2;
+      // プロバイダーに応じて関数を呼び出し
+      if (IMAGE_STORAGE_PROVIDER === 'gdrive') {
+        google.script.run
+          .withSuccessHandler(function(uploadResult) {
+            console.log('[DEBUG] Upload result:', uploadResult);
+            if (uploadResult.success) {
+              debug.log(`✅ 商品画像アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
+              debug.log(`📂 ストレージ: ${IMAGE_STORAGE_PROVIDER}`);
 
-      uploadFunction
-        .withSuccessHandler(function(uploadResult) {
-          console.log('[DEBUG] Upload result:', uploadResult);
-          if (uploadResult.success) {
-            debug.log(`✅ 商品画像アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
-            debug.log(`📂 ストレージ: ${IMAGE_STORAGE_PROVIDER}`);
+              // JSON形式でURLを保存
+              const imageUrlsJson = JSON.stringify(uploadResult.urls);
+              d['JSON_データ'] = imageUrlsJson;
 
-            // JSON形式でURLを保存
-            const imageUrlsJson = JSON.stringify(uploadResult.urls);
-            d['JSON_データ'] = imageUrlsJson;
+              // スプレッドシートに保存
+              console.log('[DEBUG] Calling saveProductToSheet after image upload');
+              saveProductToSheet(d);
+            } else {
+              console.log('[DEBUG] Image upload failed:', uploadResult.error);
+              show(`NG(IMAGE_UPLOAD): ${uploadResult.error}`);
+            }
+          })
+          .withFailureHandler(function(error) {
+            console.log('[DEBUG] Image upload API call failed:', error);
+            show(`NG(IMAGE_UPLOAD): ${error && error.message ? error.message : error}`);
+          })
+          .uploadImagesToGoogleDrive(uploadParams);
+      } else {
+        google.script.run
+          .withSuccessHandler(function(uploadResult) {
+            console.log('[DEBUG] Upload result:', uploadResult);
+            if (uploadResult.success) {
+              debug.log(`✅ 商品画像アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
+              debug.log(`📂 ストレージ: ${IMAGE_STORAGE_PROVIDER}`);
 
-            // スプレッドシートに保存
-            console.log('[DEBUG] Calling saveProductToSheet after image upload');
-            saveProductToSheet(d);
-          } else {
-            console.log('[DEBUG] Image upload failed:', uploadResult.error);
-            show(`NG(IMAGE_UPLOAD): ${uploadResult.error}`);
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.log('[DEBUG] Image upload API call failed:', error);
-          show(`NG(IMAGE_UPLOAD): ${error && error.message ? error.message : error}`);
-        })
-        (uploadParams);
+              // JSON形式でURLを保存
+              const imageUrlsJson = JSON.stringify(uploadResult.urls);
+              d['JSON_データ'] = imageUrlsJson;
+
+              // スプレッドシートに保存
+              console.log('[DEBUG] Calling saveProductToSheet after image upload');
+              saveProductToSheet(d);
+            } else {
+              console.log('[DEBUG] Image upload failed:', uploadResult.error);
+              show(`NG(IMAGE_UPLOAD): ${uploadResult.error}`);
+            }
+          })
+          .withFailureHandler(function(error) {
+            console.log('[DEBUG] Image upload API call failed:', error);
+            show(`NG(IMAGE_UPLOAD): ${error && error.message ? error.message : error}`);
+          })
+          .uploadImagesToR2(uploadParams);
+      }
     } else {
       // 商品画像がない場合は直接保存
       console.log('[DEBUG] No product images, calling saveProductToSheet directly');
