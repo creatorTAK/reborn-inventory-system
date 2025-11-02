@@ -2710,20 +2710,12 @@
       if (config.titlePosition !== undefined) {
         placementConfig.titlePosition = config.titlePosition;
       }
-      if (config.descFormat !== undefined) {
-        placementConfig.descFormat = config.descFormat;
-      }
-      if (config.descPosition !== undefined) {
-        placementConfig.descPosition = config.descPosition;
-      }
 
       // 管理番号の配置設定を表示
       const showInTitleCheckbox = document.getElementById('商品名に管理番号配置');
       const showInDescriptionCheckbox = document.getElementById('説明文に管理番号配置');
       const formatSelect = document.getElementById('管理番号形式');
       const positionSelect = document.getElementById('管理番号配置位置');
-      const descFormatSelect = document.getElementById('説明文管理番号形式');
-      const descPositionSelect = document.getElementById('説明文管理番号配置位置');
 
       console.log('📋 管理番号配置設定を読み込み:', placementConfig);
 
@@ -2743,23 +2735,94 @@
         positionSelect.value = placementConfig.titlePosition || 'end';
         console.log('✅ 配置位置選択設定:', positionSelect.value);
       }
-      if (descFormatSelect) {
-        descFormatSelect.value = placementConfig.descFormat || '【】';
-        console.log('✅ 説明文形式選択設定:', descFormatSelect.value);
-      }
-      if (descPositionSelect) {
-        descPositionSelect.value = placementConfig.descPosition || 'bottom';
-        console.log('✅ 説明文配置位置選択設定:', descPositionSelect.value);
-      }
 
       // 形式選択の表示/非表示を更新
       toggleManagementNumberFormat();
-      // 説明文の形式選択の表示/非表示も更新
-      if (typeof toggleManagementNumberDescriptionFormat === 'function') {
-        toggleManagementNumberDescriptionFormat();
-      }
     }
 
+    /**
+     * 管理番号プレビューの設定
+     */
+    function setupManagementNumberPreview() {
+      document.getElementById('管理番号_棚番号使用').addEventListener('change', () => {
+        toggleShelfNumberSection();
+        updateManagementNumberPreview();
+      });
+      document.getElementById('管理番号_棚番号形式').addEventListener('change', () => {
+        toggleShelfCustomSection();
+        updateManagementNumberPreview();
+      });
+      document.getElementById('管理番号_棚番号サンプル').addEventListener('input', updateManagementNumberPreview);
+      document.getElementById('管理番号_区切り文字').addEventListener('input', updateManagementNumberPreview);
+      document.getElementById('管理番号_商品番号桁数').addEventListener('change', updateManagementNumberPreview);
+      document.getElementById('管理番号_商品番号開始値').addEventListener('input', updateManagementNumberPreview);
+    }
+
+    /**
+     * 棚番号セクションの表示切替
+     */
+    function toggleShelfNumberSection() {
+      const useShelf = document.getElementById('管理番号_棚番号使用').checked;
+      document.getElementById('shelfNumberSection').style.display = useShelf ? 'block' : 'none';
+    }
+
+    /**
+     * 棚番号カスタム入力の表示切替
+     */
+    function toggleShelfCustomSection() {
+      const format = document.getElementById('管理番号_棚番号形式').value;
+      document.getElementById('shelfCustomSection').style.display = format === 'custom' ? 'block' : 'none';
+    }
+
+    /**
+     * 管理番号プレビューを更新
+     */
+    function updateManagementNumberPreview() {
+      const useShelf = document.getElementById('管理番号_棚番号使用').checked;
+      const format = document.getElementById('管理番号_棚番号形式').value;
+      const customSample = document.getElementById('管理番号_棚番号サンプル').value;
+      const separator = document.getElementById('管理番号_区切り文字').value;
+      const width = parseInt(document.getElementById('管理番号_商品番号桁数').value) || 4;
+      const startNum = parseInt(document.getElementById('管理番号_商品番号開始値').value) || 1;
+
+      let shelfPart = '';
+      if (useShelf) {
+        // 棚番号のサンプル値を決定
+        switch (format) {
+          case 'AA':
+            shelfPart = 'AA';
+            break;
+          case 'A':
+            shelfPart = 'A';
+            break;
+          case '01':
+            shelfPart = '01';
+            break;
+          case '001':
+            shelfPart = '001';
+            break;
+          case 'custom':
+            shelfPart = customSample || 'RACK-A';
+            break;
+          default:
+            shelfPart = 'AA';
+        }
+      }
+
+      // 商品番号部分
+      const itemPart = String(startNum).padStart(width, '0');
+
+      // 管理番号を生成
+      let preview = '';
+      if (useShelf && shelfPart) {
+        // 区切り文字が空の場合はそのまま連結
+        preview = separator ? `${shelfPart}${separator}${itemPart}` : `${shelfPart}${itemPart}`;
+      } else {
+        preview = itemPart;
+      }
+
+      document.getElementById('管理番号プレビュー').value = preview;
+    }
 
     /**
      * デザインテーマを画面に反映
@@ -2881,50 +2944,6 @@
       } catch (e) {
         console.warn('postMessage送信エラー（無視しても問題ありません）:', e);
       }
-    }
-
-    /**
-     * PropertiesServiceへの保存をリトライ機能付きで実行
-     */
-    function saveConfigMasterWithRetry(config, retryCount, maxRetries, localStorageSaved) {
-      retryCount = retryCount || 0;
-      maxRetries = maxRetries || 3;
-
-      const delay = Math.pow(2, retryCount) * 1000; // 1秒、2秒、4秒
-
-      console.log(`🔄 PropertiesService保存試行 (${retryCount + 1}/${maxRetries + 1})`);
-
-      google.script.run
-        .withSuccessHandler(function(result) {
-          console.log('✅ PropertiesService保存成功:', result);
-          if (result.success) {
-            alert('✅ 設定完了しました');
-            // キャッシュをクリア
-            google.script.run.clearConfigCache();
-          } else {
-            alert('サーバーへの保存に失敗しましたが、\nローカル設定は保存されています\n\nエラー: ' + result.error);
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error(`❌ PropertiesService保存失敗 (試行${retryCount + 1}):`, error);
-
-          if (retryCount < maxRetries) {
-            // リトライ
-            console.log(`⏳ ${delay}ms 後にリトライします...`);
-            setTimeout(function() {
-              saveConfigMasterWithRetry(config, retryCount + 1, maxRetries, localStorageSaved);
-            }, delay);
-          } else {
-            // 最大リトライ回数に達した
-            console.error('❌ 最大リトライ回数に達しました');
-            if (localStorageSaved) {
-              alert('⚠️ サーバーへの保存に失敗しましたが、\nローカル設定は保存されています\n\nエラー: ' + error + '\n\n（' + (maxRetries + 1) + '回試行しました）');
-            } else {
-              alert('❌ 設定の保存に失敗しました\n\nエラー: ' + error);
-            }
-          }
-        })
-        .saveConfigMaster(config);
     }
 
     /**
@@ -3063,10 +3082,24 @@
         notifyConfigChange();
 
         // 3. PropertiesServiceに保存（バックアップ・他端末同期用）
-        console.log('Step 12: PropertiesServiceに保存中（リトライ機能付き）...');
+        console.log('Step 12: PropertiesServiceに保存中...');
         if (google && google.script && google.script.run) {
-          // リトライ機能付きで保存
-          saveConfigMasterWithRetry(newConfig, 0, 3, localStorageSaved);
+          google.script.run
+            .withSuccessHandler(function(result) {
+              console.log('Step 13: PropertiesService保存結果:', result);
+              if (result.success) {
+                alert('✅ 設定完了しました');
+                // キャッシュをクリア
+                google.script.run.clearConfigCache();
+              } else {
+                alert('サーバーへの保存に失敗しましたが、\nローカル設定は保存されています\n\nエラー: ' + result.error);
+              }
+            })
+            .withFailureHandler(function(error) {
+              console.error('Step 13 エラー: PropertiesService保存失敗:', error);
+              alert('サーバーへの保存に失敗しましたが、\nローカル設定は保存されています\n\nエラー: ' + error);
+            })
+            .saveConfigMaster(newConfig);
         } else {
           console.log('Step 13: google.script.run が利用不可');
           if (localStorageSaved) {
@@ -3302,8 +3335,6 @@
           const showInDescription = document.getElementById('説明文に管理番号配置');
           const format = document.getElementById('管理番号形式');
           const position = document.getElementById('管理番号配置位置');
-          const descFormat = document.getElementById('説明文管理番号形式');
-          const descPosition = document.getElementById('説明文管理番号配置位置');
 
           console.log('📝 管理番号配置設定を収集（保存前）:', {
             showInTitleElement: showInTitle,
@@ -3313,27 +3344,19 @@
             formatElement: format,
             formatValue: format ? format.value : null,
             positionElement: position,
-            positionValue: position ? position.value : null,
-            descFormatElement: descFormat,
-            descFormatValue: descFormat ? descFormat.value : null,
-            descPositionElement: descPosition,
-            descPositionValue: descPosition ? descPosition.value : null
+            positionValue: position ? position.value : null
           });
 
           data.showInTitle = showInTitle ? showInTitle.checked : false;
           data.showInDescription = showInDescription ? showInDescription.checked : false;
           data.titleFormat = format ? format.value : '【】';
           data.titlePosition = position ? position.value : 'end';
-          data.descFormat = descFormat ? descFormat.value : '【】';
-          data.descPosition = descPosition ? descPosition.value : 'bottom';
 
           console.log('💾 管理番号の配置設定（保存データ）:', {
             showInTitle: data.showInTitle,
             showInDescription: data.showInDescription,
             titleFormat: data.titleFormat,
-            titlePosition: data.titlePosition,
-            descFormat: data.descFormat,
-            descPosition: data.descPosition
+            titlePosition: data.titlePosition
           });
 
           // 商品登録画面用のlocalStorageにも保存（互換性のため）
@@ -3342,9 +3365,7 @@
               inTitle: data.showInTitle,
               inDesc: data.showInDescription,
               format: data.titleFormat,
-              position: data.titlePosition,
-              descFormat: data.descFormat,
-              descPosition: data.descPosition
+              position: data.titlePosition
             };
             localStorage.setItem('managementNumberPlacement', JSON.stringify(placementSettings));
             console.log('✅ managementNumberPlacementにも保存:', placementSettings);

@@ -732,6 +732,9 @@
     <button class="btn" style="background: #10b981; color: white;" onclick="openInboundModal()">
       📥 入庫登録
     </button>
+    <button class="btn" style="background: #8b5cf6; color: white;" onclick="openPresetsModal()">
+      📋 プリセット管理
+    </button>
     <button class="btn btn-info" onclick="loadData()">
       🔄 更新
     </button>
@@ -950,6 +953,68 @@
     </div>
   </div>
 
+  <!-- プリセット管理モーダル -->
+  <div id="presetsModal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3>📋 梱包資材プリセット管理</h3>
+      </div>
+      <div class="modal-body">
+        <!-- プリセット一覧 -->
+        <div id="presetsList" style="margin-bottom: 20px;">
+          <!-- プリセットカードがここに動的に追加されます -->
+        </div>
+
+        <!-- 新規作成ボタン -->
+        <button class="btn btn-primary" style="width: 100%;" onclick="openPresetEditModal()">
+          ➕ 新規プリセット作成
+        </button>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closePresetsModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- プリセット編集モーダル -->
+  <div id="presetEditModal" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="presetEditModalTitle">新規プリセット作成</h3>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>プリセット名<span class="required">*</span></label>
+          <div class="input-wrapper">
+            <input type="text" id="presetNameInput" placeholder="例: 小型軽量セット">
+            <button type="button" class="input-clear-btn" onclick="clearInput('presetNameInput')">×</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>梱包資材<span class="required">*</span></label>
+          <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">
+            プリセットに含める梱包資材を選択してください
+          </div>
+
+          <!-- 資材追加ボタン -->
+          <button type="button" class="btn" style="background: #3b82f6; color: white; width: 100%; margin-bottom: 12px;" onclick="addPresetMaterialRow()">
+            ➕ 資材を追加
+          </button>
+
+          <!-- 資材リスト -->
+          <div id="presetMaterialsList" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- 資材行がここに動的に追加されます -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closePresetEditModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="savePreset()">保存</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let packagingMaterials = [];
     let packagingMaterialsByCategory = {}; // カテゴリ別データ
@@ -957,6 +1022,10 @@
     let editingRowIndex = null;
     let selectedImageData = null; // Base64画像データ
     let editingCategory = null; // 編集中のカテゴリ（リロード後に開くため）
+
+    // プリセット関連
+    let packagingPresets = []; // プリセット一覧
+    let editingPresetId = null; // 編集中のプリセットID
 
     // ページ読み込み時にデータを取得
     window.addEventListener('DOMContentLoaded', function() {
@@ -2487,6 +2556,232 @@
         customInput.style.display = 'none';
         customInput.value = '';
       }
+    }
+
+    // ============================================================================
+    // プリセット管理機能
+    // ============================================================================
+
+    /**
+     * プリセット管理モーダルを開く
+     */
+    function openPresetsModal() {
+      loadPresets();
+      document.getElementById('presetsModal').style.display = 'flex';
+    }
+
+    /**
+     * プリセット管理モーダルを閉じる
+     */
+    function closePresetsModal() {
+      document.getElementById('presetsModal').style.display = 'none';
+    }
+
+    /**
+     * プリセット一覧を読み込み
+     */
+    function loadPresets() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            packagingPresets = result.data;
+            renderPresetsList();
+          } else {
+            showMessage(result.message, 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showMessage('プリセット読み込みエラー: ' + error.message, 'error');
+        })
+        .getPackagingPresetsAPI();
+    }
+
+    /**
+     * プリセット一覧を表示
+     */
+    function renderPresetsList() {
+      const container = document.getElementById('presetsList');
+
+      if (packagingPresets.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #9ca3af;">プリセットがまだ登録されていません</div>';
+        return;
+      }
+
+      let html = '';
+      packagingPresets.forEach(preset => {
+        const materialsText = preset.materialsList.map(m => m.productName).join(', ');
+
+        html += `
+          <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+              <div style="font-weight: 600; font-size: 14px; color: #111827;">${preset.presetName}</div>
+              <div style="display: flex; gap: 4px;">
+                <button class="btn" style="background: #3b82f6; color: white; padding: 6px 12px; font-size: 12px;" onclick="editPreset('${preset.presetId}')">
+                  ✏️ 編集
+                </button>
+                <button class="btn" style="background: #ef4444; color: white; padding: 6px 12px; font-size: 12px;" onclick="deletePreset('${preset.presetId}', '${preset.presetName}')">
+                  🗑️ 削除
+                </button>
+              </div>
+            </div>
+            <div style="font-size: 12px; color: #6b7280;">
+              ${materialsText}
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    /**
+     * プリセット編集モーダルを開く（新規作成）
+     */
+    function openPresetEditModal() {
+      editingPresetId = null;
+      document.getElementById('presetEditModalTitle').textContent = '新規プリセット作成';
+      document.getElementById('presetNameInput').value = '';
+      document.getElementById('presetMaterialsList').innerHTML = '';
+
+      // 1行目を追加
+      addPresetMaterialRow();
+
+      document.getElementById('presetEditModal').style.display = 'flex';
+    }
+
+    /**
+     * プリセット編集モーダルを閉じる
+     */
+    function closePresetEditModal() {
+      document.getElementById('presetEditModal').style.display = 'none';
+    }
+
+    /**
+     * プリセットを編集
+     */
+    function editPreset(presetId) {
+      const preset = packagingPresets.find(p => p.presetId === presetId);
+      if (!preset) {
+        showMessage('プリセットが見つかりません', 'error');
+        return;
+      }
+
+      editingPresetId = presetId;
+      document.getElementById('presetEditModalTitle').textContent = 'プリセット編集';
+      document.getElementById('presetNameInput').value = preset.presetName;
+
+      // 資材リストをクリアして再構築
+      document.getElementById('presetMaterialsList').innerHTML = '';
+
+      preset.materialsList.forEach(material => {
+        addPresetMaterialRow(material.productName);
+      });
+
+      document.getElementById('presetEditModal').style.display = 'flex';
+    }
+
+    /**
+     * プリセットを削除
+     */
+    function deletePreset(presetId, presetName) {
+      if (!confirm(`プリセット「${presetName}」を削除しますか？`)) {
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            showMessage(result.message, 'success');
+            loadPresets(); // 再読み込み
+          } else {
+            showMessage(result.message, 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showMessage('削除エラー: ' + error.message, 'error');
+        })
+        .deletePackagingPresetAPI(presetId);
+    }
+
+    /**
+     * プリセット資材行を追加
+     */
+    function addPresetMaterialRow(productName = '') {
+      const container = document.getElementById('presetMaterialsList');
+      const rowId = `presetMaterialRow_${Date.now()}`;
+
+      const rowHtml = `
+        <div id="${rowId}" style="display: flex; gap: 8px; align-items: center; background: white; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px;">
+          <select class="preset-material-select" style="flex: 1; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+            <option value="">選択してください</option>
+            ${packagingMaterials.map(m => `<option value="${m.productName}" ${m.productName === productName ? 'selected' : ''}>${m.productName}</option>`).join('')}
+          </select>
+          <button type="button" class="btn" style="background: #ef4444; color: white; padding: 8px 12px; font-size: 12px;" onclick="removePresetMaterialRow('${rowId}')">
+            削除
+          </button>
+        </div>
+      `;
+
+      container.insertAdjacentHTML('beforeend', rowHtml);
+    }
+
+    /**
+     * プリセット資材行を削除
+     */
+    function removePresetMaterialRow(rowId) {
+      document.getElementById(rowId).remove();
+    }
+
+    /**
+     * プリセットを保存
+     */
+    function savePreset() {
+      const presetName = document.getElementById('presetNameInput').value.trim();
+
+      if (!presetName) {
+        showMessage('プリセット名を入力してください', 'error');
+        return;
+      }
+
+      // 資材リストを取得
+      const materialSelects = document.querySelectorAll('.preset-material-select');
+
+      const materialsList = [];
+      for (let i = 0; i < materialSelects.length; i++) {
+        const productName = materialSelects[i].value;
+
+        if (productName) {
+          materialsList.push({
+            productName: productName
+          });
+        }
+      }
+
+      if (materialsList.length === 0) {
+        showMessage('梱包資材を1つ以上選択してください', 'error');
+        return;
+      }
+
+      const params = {
+        presetId: editingPresetId,
+        presetName: presetName,
+        materialsList: materialsList
+      };
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            showMessage(result.message, 'success');
+            closePresetEditModal();
+            loadPresets(); // 再読み込み
+          } else {
+            showMessage(result.message, 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showMessage('保存エラー: ' + error.message, 'error');
+        })
+        .savePackagingPresetAPI(params);
     }
 
   </script>

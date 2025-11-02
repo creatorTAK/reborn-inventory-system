@@ -782,3 +782,320 @@ function getOperatorNameByTokenAPI(fcmToken) {
     }
   }
 }
+
+// =============================================================================
+// 梱包資材プリセット管理
+// =============================================================================
+
+/**
+ * 梱包資材プリセットシートを作成（初回のみ実行）
+ * @returns {Object} { success: boolean, message: string }
+ */
+function setupPackagingPresetsSheet() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName('梱包資材プリセット');
+
+    if (sheet) {
+      return {
+        success: true,
+        message: 'シート「梱包資材プリセット」は既に存在します'
+      };
+    }
+
+    // 新規シートを作成
+    sheet = ss.insertSheet('梱包資材プリセット');
+
+    // ヘッダー行を設定
+    const headers = ['プリセットID', 'プリセット名', '資材リスト（JSON）'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+
+    // ヘッダー行のフォーマット
+    sheet.getRange(1, 1, 1, headers.length)
+      .setBackground('#667eea')
+      .setFontColor('#ffffff')
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center');
+
+    // 列幅を調整
+    sheet.setColumnWidth(1, 120); // プリセットID
+    sheet.setColumnWidth(2, 200); // プリセット名
+    sheet.setColumnWidth(3, 400); // 資材リスト
+
+    // シートを保護（ヘッダー行のみ）
+    const protection = sheet.protect();
+    protection.setDescription('梱包資材プリセットシート（ヘッダー行保護）');
+    const unprotectedRange = sheet.getRange(2, 1, sheet.getMaxRows() - 1, headers.length);
+    protection.setUnprotectedRanges([unprotectedRange]);
+
+    Logger.log('梱包資材プリセットシートを作成しました');
+
+    return {
+      success: true,
+      message: '✅ シート「梱包資材プリセット」を作成しました'
+    };
+
+  } catch (error) {
+    console.error('プリセットシート作成エラー:', error);
+    return {
+      success: false,
+      message: `シート作成エラー: ${error.message}`
+    };
+  }
+}
+
+/**
+ * 梱包資材プリセット一覧を取得
+ * @returns {Object} { success: boolean, data: Array, message: string }
+ */
+function getPackagingPresetsAPI() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName('梱包資材プリセット');
+
+    // シートがなければ作成
+    if (!sheet) {
+      const setupResult = setupPackagingPresetsSheet();
+      if (!setupResult.success) {
+        return {
+          success: false,
+          message: setupResult.message,
+          data: []
+        };
+      }
+      sheet = ss.getSheetByName('梱包資材プリセット');
+    }
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return {
+        success: true,
+        data: [],
+        message: 'プリセットがありません'
+      };
+    }
+
+    // ヘッダー行を除く全データを取得
+    const values = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+
+    const data = values.map((row, index) => {
+      let materialsList = [];
+      try {
+        if (row[2]) {
+          materialsList = JSON.parse(row[2]);
+        }
+      } catch (e) {
+        console.error(`プリセットID ${row[0]} の資材リストJSON解析エラー:`, e);
+      }
+
+      return {
+        rowIndex: index + 2,
+        presetId: row[0] || '',
+        presetName: row[1] || '',
+        materialsList: materialsList // [{ productName: "OPP袋S" }, ...]
+      };
+    }).filter(item => item.presetName); // プリセット名が空の行を除外
+
+    return {
+      success: true,
+      data: data,
+      message: `${data.length}件のプリセットを取得しました`
+    };
+
+  } catch (error) {
+    console.error('プリセット一覧取得エラー:', error);
+    return {
+      success: false,
+      message: `プリセット取得エラー: ${error.message}`,
+      data: []
+    };
+  }
+}
+
+/**
+ * 梱包資材プリセットを保存（新規・更新）
+ * @param {Object} params - { presetId, presetName, materialsList }
+ * @returns {Object} { success: boolean, message: string }
+ */
+function savePackagingPresetAPI(params) {
+  try {
+    // バリデーション
+    if (!params.presetName || params.presetName.trim() === '') {
+      return {
+        success: false,
+        message: 'プリセット名は必須です'
+      };
+    }
+
+    if (!Array.isArray(params.materialsList) || params.materialsList.length === 0) {
+      return {
+        success: false,
+        message: '梱包資材を1つ以上選択してください'
+      };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName('梱包資材プリセット');
+
+    // シートがなければ作成
+    if (!sheet) {
+      const setupResult = setupPackagingPresetsSheet();
+      if (!setupResult.success) {
+        return setupResult;
+      }
+      sheet = ss.getSheetByName('梱包資材プリセット');
+    }
+
+    const presetName = params.presetName.trim();
+    const materialsJson = JSON.stringify(params.materialsList);
+
+    // 新規作成 or 更新判定
+    if (params.presetId) {
+      // 更新: 既存のpresetIdを検索
+      const lastRow = sheet.getLastRow();
+      if (lastRow >= 2) {
+        const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        for (let i = 0; i < ids.length; i++) {
+          if (ids[i][0] === params.presetId) {
+            const rowIndex = i + 2;
+            // 同じプリセット名が他に存在しないかチェック（自分自身を除く）
+            const names = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+            for (let j = 0; j < names.length; j++) {
+              if (j !== i && names[j][0] === presetName) {
+                return {
+                  success: false,
+                  message: `同じプリセット名が既に登録されています（${presetName}）`
+                };
+              }
+            }
+
+            // 更新
+            sheet.getRange(rowIndex, 2, 1, 2).setValues([[presetName, materialsJson]]);
+            Logger.log(`プリセット更新: ${params.presetId} - ${presetName}`);
+
+            return {
+              success: true,
+              message: 'プリセットを更新しました'
+            };
+          }
+        }
+      }
+
+      // presetIdが指定されているのに見つからない場合はエラー
+      return {
+        success: false,
+        message: '指定されたプリセットIDが見つかりません'
+      };
+
+    } else {
+      // 新規作成
+
+      // 重複チェック
+      const existingPresets = getPackagingPresetsAPI();
+      if (existingPresets.success) {
+        const duplicate = existingPresets.data.find(preset =>
+          preset.presetName === presetName
+        );
+
+        if (duplicate) {
+          return {
+            success: false,
+            message: `同じプリセット名が既に登録されています（${presetName}）`
+          };
+        }
+      }
+
+      // 新しいIDを生成（PRESET001, PRESET002, ...）
+      const lastRow = sheet.getLastRow();
+      const nextNumber = lastRow >= 2 ? lastRow - 1 + 1 : 1;
+      const newPresetId = 'PRESET' + String(nextNumber).padStart(3, '0');
+
+      // 新規行を追加
+      const newRow = [newPresetId, presetName, materialsJson];
+      sheet.getRange(lastRow + 1, 1, 1, 3).setValues([newRow]);
+
+      // 罫線適用
+      const dataRange = sheet.getRange(1, 1, lastRow + 1, 3);
+      dataRange.setBorder(true, true, true, true, true, true);
+
+      Logger.log(`プリセット新規作成: ${newPresetId} - ${presetName}`);
+
+      return {
+        success: true,
+        message: 'プリセットを作成しました'
+      };
+    }
+
+  } catch (error) {
+    console.error('プリセット保存エラー:', error);
+    return {
+      success: false,
+      message: `保存エラー: ${error.message}`
+    };
+  }
+}
+
+/**
+ * 梱包資材プリセットを削除
+ * @param {string} presetId - 削除するプリセットID
+ * @returns {Object} { success: boolean, message: string }
+ */
+function deletePackagingPresetAPI(presetId) {
+  try {
+    if (!presetId) {
+      return {
+        success: false,
+        message: 'プリセットIDが指定されていません'
+      };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('梱包資材プリセット');
+
+    if (!sheet) {
+      return {
+        success: false,
+        message: 'シート「梱包資材プリセット」が見つかりません'
+      };
+    }
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return {
+        success: false,
+        message: '削除するプリセットがありません'
+      };
+    }
+
+    // プリセットIDで行を検索
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (ids[i][0] === presetId) {
+        const rowIndex = i + 2;
+        const deletedName = sheet.getRange(rowIndex, 2).getValue();
+
+        // 行を削除
+        sheet.deleteRow(rowIndex);
+
+        Logger.log(`プリセット削除: ${presetId} - ${deletedName}`);
+
+        return {
+          success: true,
+          message: 'プリセットを削除しました'
+        };
+      }
+    }
+
+    return {
+      success: false,
+      message: '指定されたプリセットIDが見つかりません'
+    };
+
+  } catch (error) {
+    console.error('プリセット削除エラー:', error);
+    return {
+      success: false,
+      message: `削除エラー: ${error.message}`
+    };
+  }
+}

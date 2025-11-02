@@ -7,6 +7,11 @@ let CONFIG_CACHE = null;
 let CONFIG_CACHE_TIMESTAMP = null;
 const CONFIG_CACHE_DURATION = 5 * 60 * 1000; // 5分
 
+// 画像ストレージプロバイダー設定
+// 'gdrive': Googleドライブ（推奨: 個人・チーム利用）
+// 'r2': Cloudflare R2（将来: SaaS化時）
+const IMAGE_STORAGE_PROVIDER = 'gdrive';
+
 /**
  * 設定マスタシート全体を読み込む
  */
@@ -106,8 +111,17 @@ function loadConfigMaster() {
           break;
 
         case '管理番号設定':
-          // segmentsはJSON文字列なのでパース
-          if (item1 === 'segments') {
+          // 新形式: JSON文字列全体をパース（segments、showInTitle、showInDescription、titleFormatを含む）
+          if (item1 === 'config') {
+            try {
+              config.管理番号設定 = JSON.parse(value);
+              console.log('管理番号設定を読み込みました（配置設定を含む）:', config.管理番号設定);
+            } catch (e) {
+              console.error('管理番号設定のJSON解析エラー:', e);
+              config.管理番号設定 = { segments: [] };
+            }
+          } else if (item1 === 'segments') {
+            // 旧形式との互換性: segmentsのみ
             try {
               config.管理番号設定.segments = JSON.parse(value);
             } catch (e) {
@@ -115,6 +129,7 @@ function loadConfigMaster() {
               config.管理番号設定.segments = [];
             }
           } else {
+            // 旧形式との互換性: その他のフィールド
             config.管理番号設定[item1] = value;
           }
           break;
@@ -614,17 +629,10 @@ function saveConfigMaster(newConfig) {
 
     // 管理番号設定（セグメント方式）
     if (newConfig.管理番号設定 && typeof newConfig.管理番号設定 === 'object') {
-      if (newConfig.管理番号設定.segments && Array.isArray(newConfig.管理番号設定.segments)) {
-        // 新方式: セグメント配列をJSON文字列として保存
-        rows.push(['管理番号設定', 'segments', '', '', JSON.stringify(newConfig.管理番号設定.segments)]);
-      } else {
-        // 旧方式との互換性維持
-        Object.entries(newConfig.管理番号設定).forEach(([key, value]) => {
-          if (key !== 'segments') {
-            rows.push(['管理番号設定', key, '', '', value]);
-          }
-        });
-      }
+      // 管理番号設定オブジェクト全体をJSON文字列として保存
+      // segments、showInTitle、showInDescription、titleFormatすべてを含む
+      rows.push(['管理番号設定', 'config', '', '', JSON.stringify(newConfig.管理番号設定)]);
+      console.log('管理番号設定を保存（配置設定を含む）:', newConfig.管理番号設定);
     }
 
     // よく使うセールスワード

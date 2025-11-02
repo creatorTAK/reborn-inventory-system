@@ -398,13 +398,6 @@
     🗑️ すべてクリア
   </button>
 
-  <!-- プレビュー -->
-  <div class="mnb-preview">
-    <div class="mnb-preview-label">プレビュー:</div>
-    <div id="mnbPreviewValue" class="mnb-preview-value">-</div>
-    <div id="mnbPreviewParts" class="mnb-preview-parts"></div>
-  </div>
-
   <!-- 管理番号の配置設定 -->
   <div style="margin-top: 24px; padding: 16px; background: white; border: 1px solid #e5e7eb; border-radius: 8px;">
     <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px;">
@@ -417,11 +410,11 @@
     <!-- 配置チェックボックス -->
     <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
       <div style="display: flex; align-items: center; gap: 6px;">
-        <input type="checkbox" id="商品名に管理番号配置" style="width: 16px; height: 16px; cursor: pointer;" onchange="toggleManagementNumberFormat()">
+        <input type="checkbox" id="商品名に管理番号配置" style="width: 16px; height: 16px; cursor: pointer;" onchange="toggleManagementNumberFormat(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
         <label for="商品名に管理番号配置" style="font-size: 13px; cursor: pointer; margin: 0;">商品名に表示</label>
       </div>
       <div style="display: flex; align-items: center; gap: 6px;">
-        <input type="checkbox" id="説明文に管理番号配置" style="width: 16px; height: 16px; cursor: pointer;">
+        <input type="checkbox" id="説明文に管理番号配置" style="width: 16px; height: 16px; cursor: pointer;" onchange="toggleManagementNumberDescriptionFormat(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
         <label for="説明文に管理番号配置" style="font-size: 13px; cursor: pointer; margin: 0;">説明文に表示</label>
       </div>
     </div>
@@ -429,13 +422,83 @@
     <!-- 形式選択（商品名用） -->
     <div id="管理番号形式選択" style="display: none;">
       <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">商品名での表示形式</label>
-      <select id="管理番号形式" style="width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white;">
+      <select id="管理番号形式" style="width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white; margin-bottom: 8px;" onchange="updateManagementNumberPreview(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
         <option value="【】">【AA-1001】</option>
-        <option value="()">（AA-1001）</option>
+        <option value="（）">（AA-1001）</option>
+        <option value="『』">『AA-1001』</option>
+        <option value="「」">「AA-1001」</option>
+        <option value="｜｜">｜AA-1001｜</option>
         <option value="｜">｜AA-1001</option>
         <option value="-">- AA-1001</option>
         <option value="none">AA-1001</option>
       </select>
+
+      <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">配置位置</label>
+      <select id="管理番号配置位置" style="width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white;" onchange="updateManagementNumberPreview(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
+        <option value="end">後ろ（NIKE【AA-1001】）</option>
+        <option value="start">先頭（【AA-1001】NIKE）</option>
+      </select>
+    </div>
+
+    <!-- 形式選択（説明文用） -->
+    <div id="説明文管理番号形式選択" style="display: none; margin-top: 12px;">
+      <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">説明文での表示形式</label>
+      <select id="説明文管理番号形式" style="width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white; margin-bottom: 8px;" onchange="updateManagementNumberPreview(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
+        <option value="【】">管理番号：【AA-1001】</option>
+        <option value="（）">管理番号：（AA-1001）</option>
+        <option value="『』">管理番号：『AA-1001』</option>
+        <option value="「」">管理番号：「AA-1001」</option>
+        <option value="｜｜">管理番号：｜AA-1001｜</option>
+        <option value="｜">管理番号：｜AA-1001</option>
+        <option value="-">管理番号：- AA-1001</option>
+        <option value="none">管理番号：AA-1001</option>
+      </select>
+
+      <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">配置位置</label>
+      <select id="説明文管理番号配置位置" style="width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white;" onchange="updateManagementNumberPreview(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
+        <option value="top">先頭（ブランド名の上）</option>
+        <option value="middle">中（商品情報の下）</option>
+        <option value="bottom">末尾（ハッシュタグの下）</option>
+      </select>
+    </div>
+
+    <!-- プレビューコンテナ（タブ切り替え式） -->
+    <div id="プレビューコンテナ" style="margin-top: 16px; display: none;">
+      <!-- タブボタン -->
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <button id="タブ_商品名" onclick="switchPreviewTab('商品名')" style="flex: 1; padding: 10px; border: 2px solid #667eea; background: #667eea; color: white; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+          📝 商品名プレビュー
+        </button>
+        <button id="タブ_説明文" onclick="switchPreviewTab('説明文')" style="flex: 1; padding: 10px; border: 2px solid #d1d5db; background: white; color: #6b7280; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+          📄 説明文プレビュー
+        </button>
+      </div>
+
+      <!-- 商品名プレビュー -->
+      <div id="商品名プレビュー_セクション" style="padding: 12px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; display: block;">
+        <div id="商品名プレビュー_管理番号" style="font-size: 14px; color: #111827; line-height: 1.6; min-height: 24px; word-break: break-all;">
+          NIKE エアマックス
+        </div>
+        <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">
+          ※ 実際の商品名でのイメージです
+        </div>
+      </div>
+
+      <!-- 説明文プレビュー -->
+      <div id="説明文プレビュー_セクション" style="padding: 12px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; display: none;">
+        <div id="説明文プレビュー_管理番号" style="font-size: 13px; color: #111827; line-height: 1.8; min-height: 60px; word-break: break-all; white-space: pre-line;">
+【商品情報】
+ブランド：NIKE
+アイテム：エアマックス
+カラー：ブラック
+サイズ：27.0cm
+
+🔢 管理番号：AA-1001
+        </div>
+        <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">
+          ※ 説明文での管理番号表示イメージです
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -868,17 +931,13 @@
       });
     },
 
-    // プレビューを更新
-    updatePreview() {
+    // 管理番号を生成（プレビュー用）
+    generatePreview() {
       if (this.segments.length === 0) {
-        document.getElementById('mnbPreviewValue').textContent = '-';
-        document.getElementById('mnbPreviewParts').innerHTML = '';
-        return;
+        return '';
       }
 
       let preview = '';
-      const parts = [];
-
       this.segments.forEach((segment, index) => {
         const type = this.segmentTypes[segment.type];
         const value = type.preview(segment.config);
@@ -887,12 +946,17 @@
         if (index < this.segments.length - 1 && segment.separator) {
           preview += segment.separator;
         }
-
-        parts.push(`<div class="mnb-preview-part">${type.icon} ${value}</div>`);
       });
 
-      document.getElementById('mnbPreviewValue').textContent = preview;
-      document.getElementById('mnbPreviewParts').innerHTML = parts.join('');
+      return preview;
+    },
+
+    // プレビューを更新
+    updatePreview() {
+      // 商品名プレビューを更新
+      if (typeof updateManagementNumberPreview === 'function') {
+        updateManagementNumberPreview();
+      }
     },
 
     // セグメントを編集
@@ -1022,8 +1086,367 @@
 
     if (checkbox && formatSection) {
       formatSection.style.display = checkbox.checked ? 'block' : 'none';
+      // プレビューを更新
+      updateManagementNumberPreview();
     }
   }
+
+  /**
+   * 説明文管理番号形式選択の表示/非表示を切り替え
+   */
+  function toggleManagementNumberDescriptionFormat() {
+    const checkbox = document.getElementById('説明文に管理番号配置');
+    const formatSection = document.getElementById('説明文管理番号形式選択');
+
+    if (checkbox && formatSection) {
+      formatSection.style.display = checkbox.checked ? 'block' : 'none';
+      // プレビューを更新
+      updateManagementNumberPreview();
+    }
+  }
+
+  /**
+   * プレビュータブを切り替え
+   */
+  function switchPreviewTab(tabName) {
+    const titleTab = document.getElementById('タブ_商品名');
+    const descTab = document.getElementById('タブ_説明文');
+    const titleSection = document.getElementById('商品名プレビュー_セクション');
+    const descSection = document.getElementById('説明文プレビュー_セクション');
+
+    if (tabName === '商品名') {
+      // 商品名タブをアクティブに
+      titleTab.style.background = '#667eea';
+      titleTab.style.color = 'white';
+      titleTab.style.borderColor = '#667eea';
+
+      descTab.style.background = 'white';
+      descTab.style.color = '#6b7280';
+      descTab.style.borderColor = '#d1d5db';
+
+      titleSection.style.display = 'block';
+      descSection.style.display = 'none';
+    } else if (tabName === '説明文') {
+      // 説明文タブをアクティブに
+      descTab.style.background = '#667eea';
+      descTab.style.color = 'white';
+      descTab.style.borderColor = '#667eea';
+
+      titleTab.style.background = 'white';
+      titleTab.style.color = '#6b7280';
+      titleTab.style.borderColor = '#d1d5db';
+
+      titleSection.style.display = 'none';
+      descSection.style.display = 'block';
+    }
+  }
+
+  /**
+   * 管理番号プレビューを更新（商品名での表示イメージ）
+   */
+  function updateManagementNumberPreview() {
+    console.log('📝 updateManagementNumberPreview 呼び出し');
+
+    const titleCheckbox = document.getElementById('商品名に管理番号配置');
+    const descCheckbox = document.getElementById('説明文に管理番号配置');
+    const formatSelect = document.getElementById('管理番号形式');
+    const positionSelect = document.getElementById('管理番号配置位置');
+    const titlePreviewElement = document.getElementById('商品名プレビュー_管理番号');
+    const descPreviewElement = document.getElementById('説明文プレビュー_管理番号');
+    const previewContainer = document.getElementById('プレビューコンテナ');
+    const titleTab = document.getElementById('タブ_商品名');
+    const descTab = document.getElementById('タブ_説明文');
+
+    console.log('要素確認:', {
+      titleCheckbox: titleCheckbox ? 'OK' : 'NG',
+      descCheckbox: descCheckbox ? 'OK' : 'NG',
+      formatSelect: formatSelect ? 'OK' : 'NG',
+      positionSelect: positionSelect ? 'OK' : 'NG',
+      titlePreviewElement: titlePreviewElement ? 'OK' : 'NG',
+      descPreviewElement: descPreviewElement ? 'OK' : 'NG'
+    });
+
+    if (!titlePreviewElement || !descPreviewElement) {
+      console.warn('⚠️ プレビュー要素が見つかりません');
+      return;
+    }
+
+    // サンプルテキスト
+    const sampleText = 'NIKE エアマックス';
+
+    console.log('チェックボックス状態:', {
+      title: titleCheckbox ? titleCheckbox.checked : 'null',
+      desc: descCheckbox ? descCheckbox.checked : 'null'
+    });
+
+    const titleChecked = titleCheckbox && titleCheckbox.checked;
+    const descChecked = descCheckbox && descCheckbox.checked;
+
+    // プレビューコンテナの表示/非表示を制御
+    if (previewContainer) {
+      if (!titleChecked && !descChecked) {
+        // 両方OFFの場合は全体を非表示
+        previewContainer.style.display = 'none';
+        console.log('✅ 両方OFF - プレビュー非表示');
+        if (typeof saveManagementNumberPlacementSettings === 'function') {
+          saveManagementNumberPlacementSettings();
+        }
+        return;
+      } else {
+        // どちらかONの場合は表示
+        previewContainer.style.display = 'block';
+      }
+    }
+
+    // タブの表示/非表示を制御
+    if (titleTab && descTab) {
+      if (titleChecked && descChecked) {
+        // 両方ONの場合はタブを表示
+        titleTab.style.display = 'block';
+        descTab.style.display = 'block';
+        // デフォルトで商品名タブをアクティブに
+        switchPreviewTab('商品名');
+      } else if (titleChecked) {
+        // 商品名のみONの場合はタブを非表示、商品名プレビューのみ表示
+        titleTab.style.display = 'none';
+        descTab.style.display = 'none';
+        document.getElementById('商品名プレビュー_セクション').style.display = 'block';
+        document.getElementById('説明文プレビュー_セクション').style.display = 'none';
+      } else if (descChecked) {
+        // 説明文のみONの場合はタブを非表示、説明文プレビューのみ表示
+        titleTab.style.display = 'none';
+        descTab.style.display = 'none';
+        document.getElementById('商品名プレビュー_セクション').style.display = 'none';
+        document.getElementById('説明文プレビュー_セクション').style.display = 'block';
+      }
+    }
+
+    // セグメント設定から管理番号を生成
+    const generatedNumber = ManagementNumberBuilder.generatePreview();
+    const sampleNumber = generatedNumber || 'AA-1001';
+
+    console.log('生成された管理番号:', sampleNumber);
+
+    // 形式と配置位置を取得
+    const format = formatSelect ? formatSelect.value : '【】';
+    const position = positionSelect ? positionSelect.value : 'end';
+
+    console.log('選択値:', { format, position });
+
+    // 管理番号をフォーマット
+    let formattedNumber = '';
+    switch (format) {
+      case '【】':
+        formattedNumber = `【${sampleNumber}】`;
+        break;
+      case '（）':
+        formattedNumber = `（${sampleNumber}）`;
+        break;
+      case '『』':
+        formattedNumber = `『${sampleNumber}』`;
+        break;
+      case '「」':
+        formattedNumber = `「${sampleNumber}」`;
+        break;
+      case '｜｜':
+        formattedNumber = `｜${sampleNumber}｜`;
+        break;
+      case '｜':
+        formattedNumber = `｜${sampleNumber}`;
+        break;
+      case '-':
+        formattedNumber = `- ${sampleNumber}`;
+        break;
+      case 'none':
+        formattedNumber = sampleNumber;
+        break;
+      default:
+        formattedNumber = `【${sampleNumber}】`;
+    }
+
+    // 両端閉じている場合はスペースなし、それ以外はスペースあり
+    const pairs = [
+      { start: '【', end: '】' },
+      { start: '『', end: '』' },
+      { start: '「', end: '」' },
+      { start: '（', end: '）' },
+      { start: '｜', end: '｜' }
+    ];
+    const needsSpace = !pairs.some(pair => 
+      formattedNumber.startsWith(pair.start) && formattedNumber.endsWith(pair.end)
+    );
+
+    // 配置位置に応じて結合
+    let result;
+    if (position === 'start') {
+      result = needsSpace ? `${formattedNumber} ${sampleText}` : `${formattedNumber}${sampleText}`;
+    } else {
+      result = needsSpace ? `${sampleText} ${formattedNumber}` : `${sampleText}${formattedNumber}`;
+    }
+
+    console.log('✅ プレビュー更新:', result);
+
+    // 商品名プレビューを更新
+    if (titleCheckbox && titleCheckbox.checked) {
+      titlePreviewElement.textContent = result;
+    }
+
+    // 説明文プレビューを更新
+    if (descCheckbox && descCheckbox.checked) {
+      const descFormatSelect = document.getElementById('説明文管理番号形式');
+      const descPositionSelect = document.getElementById('説明文管理番号配置位置');
+      
+      const descFormat = descFormatSelect ? descFormatSelect.value : '【】';
+      const descPosition = descPositionSelect ? descPositionSelect.value : 'bottom';
+
+      // 説明文用の管理番号をフォーマット（絵文字なし）
+      let descFormattedNumber = '';
+      switch (descFormat) {
+        case '【】':
+          descFormattedNumber = `管理番号：【${sampleNumber}】`;
+          break;
+        case '（）':
+          descFormattedNumber = `管理番号：（${sampleNumber}）`;
+          break;
+        case '『』':
+          descFormattedNumber = `管理番号：『${sampleNumber}』`;
+          break;
+        case '「」':
+          descFormattedNumber = `管理番号：「${sampleNumber}」`;
+          break;
+        case '｜｜':
+          descFormattedNumber = `管理番号：｜${sampleNumber}｜`;
+          break;
+        case '｜':
+          descFormattedNumber = `管理番号：｜${sampleNumber}`;
+          break;
+        case '-':
+          descFormattedNumber = `管理番号：- ${sampleNumber}`;
+          break;
+        case 'none':
+          descFormattedNumber = `管理番号：${sampleNumber}`;
+          break;
+        default:
+          descFormattedNumber = `管理番号：【${sampleNumber}】`;
+      }
+
+      // 配置位置に応じてプレビューを生成（実際の商品説明に近い形式）
+      let descPreview = '';
+
+      // ブランド名・基本情報（先頭部分）
+      const brandInfo = `ブランド名：UNIQLO（ユニクロ）
+
+カラー（詳細）：ブラック
+
+サイズ（表記）：M`;
+
+      // 商品情報（中央部分）
+      const detailInfo = `【サイズ(実寸)】
+肩幅：47cm
+身幅：55cm
+袖丈：62cm
+着丈：68cm
+
+【素材】
+表地：ナイロン 100%
+中綿：ダウン 90%、フェザー 10%
+
+商品状態（詳細）：
+目立った傷や汚れなし。`;
+
+      // 商品説明・その他（下部）
+      const descriptionPart = `【UNIQLO ウルトラライトダウンジャケット】
+
+UNIQLO（ユニクロ）の定番人気アイテム、ウルトラライトダウンジャケットです。軽量で持ち運びもしやすく、秋冬のアウターとして大活躍します。
+
+【おすすめシーン】
+普段使いはもちろん、旅行や通勤・通学にも便利。コンパクトに収納できるので、バッグに入れておくと安心です。`;
+
+      // ハッシュタグ（最下部）- ユーザー設定から生成
+      let hashtags = '';
+      try {
+        const hashtagConfig = localStorage.getItem('rebornConfig_hashtag');
+        if (hashtagConfig) {
+          const config = JSON.parse(hashtagConfig);
+          const commonPrefix = config.commonPrefix || '#REBORN_';
+
+          // 設定されたハッシュタグを生成（プレビュー用に簡略化）
+          const previewTags = [];
+
+          if (config.hashtags && Array.isArray(config.hashtags)) {
+            config.hashtags.forEach(tag => {
+              if (tag.title === '全商品') {
+                previewTags.push(`${commonPrefix}${tag.suffix || '全商品'}`);
+              } else if (tag.title === 'ブランド') {
+                previewTags.push(`${commonPrefix}UNIQLO${tag.suffix || 'アイテム一覧'}`);
+              } else if (tag.title === 'カテゴリ') {
+                previewTags.push(`${commonPrefix}メンズ・レディース${tag.suffix || '一覧'}`);
+              }
+            });
+          }
+
+          // タグが生成されていればそれを使用
+          if (previewTags.length > 0) {
+            hashtags = previewTags.join('\n');
+          } else {
+            // 旧形式または設定なしの場合
+            hashtags = `${commonPrefix}全商品\n${commonPrefix}UNIQLOアイテム一覧\n${commonPrefix}メンズ・レディース一覧`;
+          }
+        } else {
+          // 設定がない場合のデフォルト
+          hashtags = `#REBORN_全商品\n#REBORN_UNIQLOアイテム一覧\n#REBORN_メンズ・レディース一覧`;
+        }
+      } catch (e) {
+        console.error('ハッシュタグ設定の読み込みエラー:', e);
+        // エラー時のデフォルト
+        hashtags = `#REBORN_全商品\n#REBORN_UNIQLOアイテム一覧\n#REBORN_メンズ・レディース一覧`;
+      }
+
+      if (descPosition === 'top') {
+        // 先頭（ブランド名の上）
+        descPreview = `${descFormattedNumber}
+
+${brandInfo}
+
+${detailInfo}
+
+${descriptionPart}
+
+${hashtags}`;
+      } else if (descPosition === 'middle') {
+        // 中（商品情報の下）
+        descPreview = `${brandInfo}
+
+${detailInfo}
+
+${descFormattedNumber}
+
+${descriptionPart}
+
+${hashtags}`;
+      } else {
+        // 末尾（ハッシュタグの下、一番目立たない位置）
+        descPreview = `${brandInfo}
+
+${detailInfo}
+
+${descriptionPart}
+
+${hashtags}
+
+${descFormattedNumber}`;
+      }
+
+      descPreviewElement.textContent = descPreview;
+    }
+
+    // 設定を保存
+    if (typeof saveManagementNumberPlacementSettings === 'function') {
+      saveManagementNumberPlacementSettings();
+    }
+  }
+
+
 
   /**
    * ヒントの開閉を切り替え

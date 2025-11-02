@@ -169,6 +169,13 @@
             </div>
           </div>
 
+          <!-- 梱包資材プリセット選択 -->
+          <div class="mb-3 text-center">
+            <button type="button" class="btn btn-outline-primary" onclick="showPresetSelector()">
+              📋 プリセットから選択
+            </button>
+          </div>
+
           <!-- 梱包資材 -->
           <div class="mb-4 p-3 bg-light rounded border border-2 shadow-sm">
             <h6 class="border-bottom border-2 border-primary pb-2 mb-3 fw-bold">梱包資材</h6>
@@ -224,6 +231,26 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
           <button type="button" class="btn btn-primary" id="saveSalesRecord">販売記録を保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- プリセット選択モーダル -->
+  <div class="modal fade" id="presetSelectorModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">📋 プリセット選択</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="presetSelectorList">
+            <!-- プリセット一覧がここに表示されます -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
         </div>
       </div>
     </div>
@@ -1496,6 +1523,132 @@
 
       // 販売記録保存ボタン
       document.getElementById('saveSalesRecord').addEventListener('click', saveSalesRecord);
+    }
+
+    /**
+     * プリセット選択モーダルを表示
+     */
+    function showPresetSelector() {
+      // プリセット一覧を取得
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            renderPresetSelector(result.data);
+            const modal = new bootstrap.Modal(document.getElementById('presetSelectorModal'));
+            modal.show();
+          } else {
+            alert('プリセット読み込みエラー: ' + result.message);
+          }
+        })
+        .withFailureHandler(function(error) {
+          alert('プリセット読み込みエラー: ' + error.message);
+        })
+        .getPackagingPresetsAPI();
+    }
+
+    /**
+     * プリセット選択肢を表示
+     */
+    function renderPresetSelector(presets) {
+      const container = document.getElementById('presetSelectorList');
+
+      if (presets.length === 0) {
+        container.innerHTML = '<p class="text-center text-muted">プリセットがまだ登録されていません</p>';
+        return;
+      }
+
+      let html = '<div class="list-group">';
+      presets.forEach(preset => {
+        const materialsText = preset.materialsList.map(m => m.productName).join(', ');
+
+        html += `
+          <button type="button" class="list-group-item list-group-item-action" onclick="applyPreset('${preset.presetId}')">
+            <div class="d-flex w-100 justify-content-between">
+              <h6 class="mb-1">${preset.presetName}</h6>
+            </div>
+            <p class="mb-1 small text-muted">${materialsText}</p>
+          </button>
+        `;
+      });
+      html += '</div>';
+
+      container.innerHTML = html;
+    }
+
+    /**
+     * プリセットを適用
+     */
+    function applyPreset(presetId) {
+      // プリセット一覧を取得（再度API呼び出し）
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            const preset = result.data.find(p => p.presetId === presetId);
+            if (preset) {
+              // 既存の梱包資材をクリア
+              packagingMaterialCount = 0;
+
+              // プリセットの資材を追加
+              preset.materialsList.forEach(material => {
+                packagingMaterialCount++;
+              });
+
+              // レンダリング
+              renderPackagingMaterials();
+
+              // 各資材を設定（2段式プルダウン: カテゴリ→資材）
+              preset.materialsList.forEach((material, index) => {
+                const productName = material.productName;
+
+                // 資材マスタから該当資材のカテゴリを検索
+                let category = null;
+                for (const cat in packagingMaterialsByCategory) {
+                  const found = packagingMaterialsByCategory[cat].find(m => m.productName === productName);
+                  if (found) {
+                    category = cat;
+                    break;
+                  }
+                }
+
+                if (category) {
+                  // カテゴリを設定
+                  const categorySelect = document.getElementById(`packagingCategory${index + 1}`);
+                  if (categorySelect) {
+                    categorySelect.value = category;
+                    // カテゴリ変更イベントを発火（資材プルダウンが有効化される）
+                    onPackagingCategoryChange(index + 1);
+
+                    // 資材を設定（カテゴリ変更後に少し待つ）
+                    setTimeout(() => {
+                      const materialSelect = document.getElementById(`packagingMaterial${index + 1}`);
+                      if (materialSelect) {
+                        materialSelect.value = productName;
+                        // 資材変更イベントを発火（単価が設定される）
+                        onPackagingMaterialChange(index + 1);
+                      }
+                    }, 100);
+                  }
+                }
+              });
+
+              // 合計を更新（少し遅延させる）
+              setTimeout(() => {
+                updatePackagingCostTotal();
+                updateProfitCalculation();
+              }, 200);
+
+              // モーダルを閉じる
+              const modal = bootstrap.Modal.getInstance(document.getElementById('presetSelectorModal'));
+              modal.hide();
+
+              alert('✅ プリセット「' + preset.presetName + '」を適用しました');
+            }
+          }
+        })
+        .withFailureHandler(function(error) {
+          alert('プリセット適用エラー: ' + error.message);
+        })
+        .getPackagingPresetsAPI();
     }
 
     /**

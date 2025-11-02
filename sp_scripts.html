@@ -17,6 +17,11 @@
   const DESC_LIMIT = 1000;
   const DESC_LIMIT_MODE = 'warn';
 
+  // 画像ストレージプロバイダー設定
+  // 'gdrive': Googleドライブ（推奨: 個人・チーム利用）
+  // 'r2': Cloudflare R2（将来: SaaS化時）
+  const IMAGE_STORAGE_PROVIDER = 'gdrive';
+
   // AI生成文を保存するグローバル変数
   let AI_GENERATED_TEXT = '';
 
@@ -2325,6 +2330,52 @@
   }
 
   /**
+   * 両端が閉じた括弧で括られているかチェック
+   * @param {string} text - チェックするテキスト
+   * @returns {boolean} 両端が閉じた括弧で括られている場合true
+   */
+  function isBracketEnclosed(text) {
+    if (!text || typeof text !== 'string') return false;
+
+    // 両端が閉じている括弧のペアをチェック
+    const pairs = [
+      { start: '【', end: '】' },
+      { start: '『', end: '』' },
+      { start: '「', end: '」' },
+      { start: '（', end: '）' },
+      { start: '｜', end: '｜' }  // 縦棒は両端同じ
+    ];
+
+    return pairs.some(pair => text.startsWith(pair.start) && text.endsWith(pair.end));
+  }
+
+  /**
+   * 商品名パーツをスマートに結合
+   * 両端が閉じた括弧（【】『』「」（）｜｜）で括られている場合は前後のスペースを削除
+   * @param {Array<string>} parts - 結合するパーツ配列
+   * @returns {string} 結合された文字列
+   */
+  function smartJoinParts(parts) {
+    if (!parts || parts.length === 0) return '';
+    if (parts.length === 1) return parts[0];
+
+    let result = parts[0];
+    for (let i = 1; i < parts.length; i++) {
+      const prevPart = parts[i - 1];
+      const currentPart = parts[i];
+
+      // 前のパーツが両端閉じている、または現在のパーツが両端閉じている場合はスペースなし
+      if (isBracketEnclosed(prevPart) || isBracketEnclosed(currentPart)) {
+        result += currentPart;
+      } else {
+        result += ' ' + currentPart;
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * 商品名プレビューを更新
    * セールスワード、ブランド名、アイテム名、商品属性、管理番号を組み立てる
    * TITLE_BLOCK_ORDERの順序に従って表示
@@ -2376,39 +2427,86 @@
       }
     });
 
-    let text = parts.join(' ');
+    let text = smartJoinParts(parts);
 
-    // 管理番号を商品名に追加（チェックボックスがONの場合）
-    const mgmtNumberCheckbox = document.getElementById('商品名に管理番号配置');
-    if (mgmtNumberCheckbox && mgmtNumberCheckbox.checked) {
-      const mgmtNumber = _val('管理番号');
-      if (mgmtNumber) {
-        const format = _val('管理番号形式') || '【】';
-        let formattedMgmtNumber = '';
+    // 管理番号を商品名に追加（localStorageの設定に基づく）
+    try {
+      const saved = localStorage.getItem('managementNumberPlacement');
+      console.log('🔍 商品名生成: localStorage取得結果:', saved);
 
-        switch (format) {
-          case '【】':
-            formattedMgmtNumber = `【${mgmtNumber}】`;
-            break;
-          case '()':
-            formattedMgmtNumber = `（${mgmtNumber}）`;
-            break;
-          case '｜':
-            formattedMgmtNumber = `｜${mgmtNumber}`;
-            break;
-          case '-':
-            formattedMgmtNumber = `- ${mgmtNumber}`;
-            break;
-          case 'none':
-            formattedMgmtNumber = mgmtNumber;
-            break;
-          default:
-            formattedMgmtNumber = `【${mgmtNumber}】`;
+      if (saved) {
+        const settings = JSON.parse(saved);
+        console.log('📋 商品名生成: 管理番号配置設定:', settings);
+
+        if (settings.inTitle) {
+          const mgmtNumber = _val('管理番号');
+          console.log('🔢 商品名生成: 管理番号フィールド値:', mgmtNumber);
+
+          if (mgmtNumber) {
+            const format = settings.format || '【】';
+            let formattedMgmtNumber = '';
+
+            switch (format) {
+              case '【】':
+                formattedMgmtNumber = `【${mgmtNumber}】`;
+                break;
+              case '（）':
+              case '()':  // 旧形式との互換性
+                formattedMgmtNumber = `（${mgmtNumber}）`;
+                break;
+              case '『』':
+                formattedMgmtNumber = `『${mgmtNumber}』`;
+                break;
+              case '「」':
+                formattedMgmtNumber = `「${mgmtNumber}」`;
+                break;
+              case '｜｜':
+                formattedMgmtNumber = `｜${mgmtNumber}｜`;
+                break;
+              case '｜':
+                formattedMgmtNumber = `｜${mgmtNumber}`;
+                break;
+              case '-':
+                formattedMgmtNumber = `- ${mgmtNumber}`;
+                break;
+              case 'none':
+                formattedMgmtNumber = mgmtNumber;
+                break;
+              default:
+                formattedMgmtNumber = `【${mgmtNumber}】`;
+            }
+
+            console.log('✅ 商品名に管理番号を追加:', formattedMgmtNumber);
+
+            // 配置位置に応じて管理番号を追加
+            const position = settings.position || 'end';
+            console.log('📍 管理番号配置位置:', position);
+
+            if (text) {
+              // 両端閉じている場合はスペースなし、それ以外はスペースあり
+              const needsSpace = !isBracketEnclosed(formattedMgmtNumber);
+
+              if (position === 'start') {
+                // 先頭に配置
+                text = needsSpace ? `${formattedMgmtNumber} ${text}` : `${formattedMgmtNumber}${text}`;
+              } else {
+                // 後ろに配置（デフォルト）
+                text = needsSpace ? `${text} ${formattedMgmtNumber}` : `${text}${formattedMgmtNumber}`;
+              }
+            } else {
+              text = formattedMgmtNumber;
+            }
+          } else {
+            console.log('⚠️ 管理番号フィールドが空です');
+          }
+        } else {
+          console.log('⏭️ 商品名への管理番号配置がOFFです');
         }
-
-        // 商品名の最後に管理番号を追加（スペース区切り）
-        text = text ? `${text} ${formattedMgmtNumber}` : formattedMgmtNumber;
+      } else {
+        console.log('⚠️ localStorageに管理番号配置設定がありません');
       }
+    } catch (e) {
+      console.error('❌ 管理番号配置設定の読み込みエラー:', e);
     }
 
     const count = Array.from(text).length;
@@ -2443,35 +2541,201 @@
     const titleCheckbox = document.getElementById('商品名に管理番号配置');
     const descCheckbox = document.getElementById('説明文に管理番号配置');
     const formatSelect = document.getElementById('管理番号形式');
+    const positionSelect = document.getElementById('管理番号配置位置');
+    const descFormatSelect = document.getElementById('説明文管理番号形式');
+    const descPositionSelect = document.getElementById('説明文管理番号配置位置');
+
+    // チェックボックスが存在しない場合は保存しない（設定画面専用の要素のため）
+    if (!titleCheckbox && !descCheckbox && !formatSelect && !positionSelect && !descFormatSelect && !descPositionSelect) {
+      console.log('⏭️ 管理番号配置チェックボックスが存在しないため、設定を保存しません');
+      return;
+    }
 
     const settings = {
       inTitle: titleCheckbox ? titleCheckbox.checked : false,
       inDesc: descCheckbox ? descCheckbox.checked : false,
-      format: formatSelect ? formatSelect.value : '【】'
+      format: formatSelect ? formatSelect.value : '【】',
+      position: positionSelect ? positionSelect.value : 'end',
+      descFormat: descFormatSelect ? descFormatSelect.value : '【】',
+      descPosition: descPositionSelect ? descPositionSelect.value : 'bottom'
     };
 
     try {
       localStorage.setItem('managementNumberPlacement', JSON.stringify(settings));
+      console.log('💾 管理番号配置設定を保存:', settings);
     } catch (e) {
       console.warn('LocalStorage保存エラー:', e);
     }
   }
 
-  // 管理番号配置設定を復元
+  /**
+   * 管理番号設定変更時のハンドラー
+   * 設定を保存してメインの商品名プレビューを更新
+   */
+  function onManagementNumberSettingChange() {
+    // 設定を保存
+    saveManagementNumberPlacementSettings();
+    // メインプレビューを更新
+    updateNamePreview();
+  }
+
+  // 管理番号フィールドの変更を監視して説明文を更新
+  function setupManagementNumberObserver() {
+    const mgmtNumberField = document.getElementById('管理番号');
+    
+    if (!mgmtNumberField) {
+      console.log('⚠️ 管理番号フィールドが見つかりません');
+      return;
+    }
+
+    console.log('👁️ 管理番号フィールドの監視を開始');
+
+    // 値の変更を検出するためのMutationObserver
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
+          const newValue = mgmtNumberField.value;
+          console.log('🔔 管理番号フィールドの値が変更されました:', newValue);
+          
+          // 説明文を更新
+          if (typeof updateDescriptionFromDetail === 'function') {
+            console.log('📝 説明文を再生成します');
+            updateDescriptionFromDetail();
+          }
+          
+          // 商品名も更新
+          if (typeof updateNamePreview === 'function') {
+            updateNamePreview();
+          }
+        }
+      });
+    });
+
+    // value属性の変更を監視
+    observer.observe(mgmtNumberField, {
+      attributes: true,
+      attributeFilter: ['value']
+    });
+
+    // input/changeイベントでも監視（手動入力の場合）
+    mgmtNumberField.addEventListener('input', () => {
+      const newValue = mgmtNumberField.value;
+      console.log('⌨️ 管理番号フィールドが入力されました:', newValue);
+      
+      if (typeof updateDescriptionFromDetail === 'function') {
+        console.log('📝 説明文を再生成します（input）');
+        updateDescriptionFromDetail();
+      }
+      
+      if (typeof updateNamePreview === 'function') {
+        updateNamePreview();
+      }
+    });
+
+    // より確実に検出するため、定期的にチェック
+    let lastValue = mgmtNumberField.value;
+    setInterval(() => {
+      const currentValue = mgmtNumberField.value;
+      if (currentValue !== lastValue) {
+        console.log('🔄 管理番号フィールドの値が変更されました（ポーリング）:', currentValue);
+        lastValue = currentValue;
+        
+        if (typeof updateDescriptionFromDetail === 'function') {
+          console.log('📝 説明文を再生成します（ポーリング）');
+          updateDescriptionFromDetail();
+        }
+        
+        if (typeof updateNamePreview === 'function') {
+          updateNamePreview();
+        }
+      }
+    }, 500); // 500msごとにチェック
+  }
+
+  // PropertiesServiceから管理番号配置設定をlocalStorageに読み込む
+  function loadManagementNumberPlacementFromServer() {
+    console.log('🔄 PropertiesServiceから管理番号配置設定を読み込み中...');
+    console.log('google:', typeof google);
+    console.log('google.script:', typeof google?.script);
+    console.log('google.script.run:', typeof google?.script?.run);
+
+    if (google && google.script && google.script.run) {
+      console.log('✅ google.script.run利用可能、loadConfigMaster呼び出し開始');
+      google.script.run
+        .withSuccessHandler(function(config) {
+          console.log('📦 loadConfigMaster成功、config:', config);
+          if (config && config.管理番号設定) {
+            const mgmtConfig = config.管理番号設定;
+            console.log('📋 管理番号設定取得:', mgmtConfig);
+
+            // PropertiesServiceに配置設定が保存されているか確認
+            const hasPlacementSettings =
+              mgmtConfig.showInTitle !== undefined ||
+              mgmtConfig.showInDescription !== undefined ||
+              mgmtConfig.titleFormat !== undefined;
+
+            if (hasPlacementSettings) {
+              // PropertiesServiceに配置設定がある場合のみ上書き
+              const settings = {
+                inTitle: mgmtConfig.showInTitle || false,
+                inDesc: mgmtConfig.showInDescription || false,
+                format: mgmtConfig.titleFormat || '【】'
+              };
+
+              try {
+                localStorage.setItem('managementNumberPlacement', JSON.stringify(settings));
+                console.log('✅ PropertiesServiceから管理番号配置設定を取得し、localStorageに保存:', settings);
+
+                // 設定をチェックボックスに反映（存在する場合のみ）
+                restoreManagementNumberPlacementSettings();
+
+                // 商品名と説明文を更新
+                updateNamePreview();
+                if (typeof updateDescriptionFromDetail === 'function') {
+                  updateDescriptionFromDetail();
+                }
+              } catch (e) {
+                console.error('❌ localStorage保存エラー:', e);
+              }
+            } else {
+              console.log('⚠️ PropertiesServiceに管理番号配置設定が保存されていません。localStorageの設定を維持します。');
+              console.log('現在のlocalStorage設定:', localStorage.getItem('managementNumberPlacement'));
+            }
+          } else {
+            console.log('⚠️ PropertiesServiceに管理番号配置設定が存在しません。config:', config);
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('❌ PropertiesServiceからの読み込みエラー:', error);
+        })
+        .loadConfigMaster();
+    } else {
+      console.warn('⚠️ google.script.runが利用できません');
+    }
+  }
+
+  // 管理番号配置設定を復元（localStorageからチェックボックスに反映）
   function restoreManagementNumberPlacementSettings() {
     try {
       const saved = localStorage.getItem('managementNumberPlacement');
-      if (!saved) return;
+      if (!saved) {
+        console.log('⏭️ localStorageに管理番号配置設定がありません');
+        return;
+      }
 
       const settings = JSON.parse(saved);
+      console.log('📋 localStorageから管理番号配置設定を復元:', settings);
+
       const titleCheckbox = document.getElementById('商品名に管理番号配置');
       const descCheckbox = document.getElementById('説明文に管理番号配置');
       const formatSelect = document.getElementById('管理番号形式');
+      const positionSelect = document.getElementById('管理番号配置位置');
       const formatSelector = document.getElementById('管理番号形式選択');
 
       if (titleCheckbox) titleCheckbox.checked = settings.inTitle || false;
       if (descCheckbox) descCheckbox.checked = settings.inDesc || false;
       if (formatSelect) formatSelect.value = settings.format || '【】';
+      if (positionSelect) positionSelect.value = settings.position || 'end';
 
       // 形式選択の表示/非表示を更新
       if (formatSelector && titleCheckbox) {
@@ -2775,46 +3039,71 @@
    * @param {Object} elements - 各要素のテキスト（brand, color, size, material, condition, ai, management, discount, hashtag）
    * @param {HTMLTextAreaElement} descTextarea - 説明文を表示するテキストエリア
    */
-  function buildDescriptionByOrder(elements, descTextarea) {
+  function buildDescriptionByOrder(elements, descTextarea, managementNumberPosition) {
     console.log('buildDescriptionByOrder 関数が呼び出されました');
 
-    // 1. HTML要素の実際の順序を取得（最優先）
-    const actualBlocksOrder = getDescriptionBlocksOrder();
-    console.log('実際のブロック順序:', actualBlocksOrder);
+    // 管理番号は位置ベースで配置するため、通常の順序からは除外
+    const managementContent = elements.management;
+    const elementsWithoutManagement = Object.assign({}, elements);
+    delete elementsWithoutManagement.management;
 
-    // 2. ブロックタイプとelements[id]のマッピング
-    const blockTypeToElementId = {
-      'brandName': 'brand',
-      'size': 'size',
-      'color': 'color',
-      'condition': 'condition',
-      'material': 'material',
-      'aiGeneration': 'aiGeneration',
-      'discount': 'discount',
-      'hashtag': 'hashtag'
-    };
-
-    // 3. 実際の順序に基づいて配置順序を構築
+    // 1. AI生成設定から配置順序を取得（設定画面で管理可能）
     let order = [];
-    if (actualBlocksOrder.length > 0) {
-      order = actualBlocksOrder.map(blockType => ({
-        id: blockTypeToElementId[blockType] || blockType,
-        enabled: true
-      }));
-      console.log('実際のブロック順序から配置順序を生成:', order);
-    } else {
-      // フォールバック: デフォルト順序
-      order = [
-        { id: 'brand', enabled: true },
-        { id: 'size', enabled: true },
-        { id: 'color', enabled: true },
-        { id: 'condition', enabled: true },
-        { id: 'material', enabled: true },
-        { id: 'ai', enabled: true },
-        { id: 'discount', enabled: true },
-        { id: 'hashtag', enabled: true }
-      ];
-      console.log('デフォルト順序を使用');
+    try {
+      const aiSettings = localStorage.getItem('rebornConfig_aiSettings');
+      if (aiSettings) {
+        const settings = JSON.parse(aiSettings);
+        if (settings.descriptionOrder && Array.isArray(settings.descriptionOrder)) {
+          // 設定画面で保存された配置順序を使用（管理番号を除外）
+          order = settings.descriptionOrder
+            .filter(item => item.id !== 'management')  // 管理番号を除外
+            .map(item => ({
+              id: item.id === 'ai' ? 'aiGeneration' : item.id,
+              enabled: item.enabled !== false
+            }));
+          console.log('AI生成設定から配置順序を取得（管理番号除外）:', order);
+        }
+      }
+    } catch (e) {
+      console.error('配置順序の読み込みエラー:', e);
+    }
+
+    // 2. 配置順序が取得できない場合は、HTML要素の実際の順序を使用
+    if (order.length === 0) {
+      const actualBlocksOrder = getDescriptionBlocksOrder();
+      console.log('実際のブロック順序:', actualBlocksOrder);
+
+      const blockTypeToElementId = {
+        'brandName': 'brand',
+        'size': 'size',
+        'color': 'color',
+        'condition': 'condition',
+        'material': 'material',
+        'aiGeneration': 'aiGeneration',
+        'discount': 'discount',
+        'hashtag': 'hashtag'
+      };
+
+      if (actualBlocksOrder.length > 0) {
+        order = actualBlocksOrder.map(blockType => ({
+          id: blockTypeToElementId[blockType] || blockType,
+          enabled: true
+        }));
+        console.log('実際のブロック順序から配置順序を生成:', order);
+      } else {
+        // フォールバック: デフォルト順序（管理番号なし）
+        order = [
+          { id: 'brand', enabled: true },
+          { id: 'size', enabled: true },
+          { id: 'color', enabled: true },
+          { id: 'condition', enabled: true },
+          { id: 'material', enabled: true },
+          { id: 'aiGeneration', enabled: true },
+          { id: 'discount', enabled: true },
+          { id: 'hashtag', enabled: true }
+        ];
+        console.log('デフォルト順序を使用');
+      }
     }
 
     // 3. 配置順序に従って説明文を組み立て
@@ -2828,7 +3117,7 @@
       }
 
       // 要素の内容を取得
-      const content = elements[item.id];
+      const content = elementsWithoutManagement[item.id];
       if (content && content.trim()) {
         parts.push(content.trim());
         console.log(`要素 ${item.id} を追加`);
@@ -2837,13 +3126,60 @@
       }
     }
 
-    // 4. 全要素を結合（2行の空行で区切る）
+    // 4. 管理番号を指定位置に挿入
+    if (managementContent && managementContent.trim()) {
+      const position = managementNumberPosition || 'middle';
+
+      if (position === 'top') {
+        // 先頭（ブランド名の上、最初の位置）
+        parts.unshift(managementContent.trim());
+        console.log('✅ 管理番号を先頭（ブランド名の上）に配置');
+      } else if (position === 'bottom') {
+        // 末尾（ハッシュタグの下、最後の位置）
+        parts.push(managementContent.trim());
+        console.log('✅ 管理番号を末尾（ハッシュタグの下）に配置');
+      } else {
+        // 中（商品情報の下）
+        // brand, size, color, condition, material の後に挿入
+        const productInfoIds = ['brand', 'size', 'color', 'condition', 'material'];
+        let insertIndex = 0;
+
+        // parts配列の中で最後の商品情報要素の位置を見つける
+        for (let i = parts.length - 1; i >= 0; i--) {
+          // この部分の元IDを特定するために、order配列を参照
+          let elementId = null;
+          let partIndex = 0;
+          for (const item of order) {
+            if (item.enabled !== false) {
+              const content = elementsWithoutManagement[item.id];
+              if (content && content.trim()) {
+                if (partIndex === i) {
+                  elementId = item.id;
+                  break;
+                }
+                partIndex++;
+              }
+            }
+          }
+
+          if (elementId && productInfoIds.includes(elementId)) {
+            insertIndex = i + 1;
+            break;
+          }
+        }
+
+        parts.splice(insertIndex, 0, managementContent.trim());
+        console.log(`✅ 管理番号を中（商品情報の下、インデックス ${insertIndex}）に配置`);
+      }
+    }
+
+    // 5. 全要素を結合（2行の空行で区切る）
     const finalText = parts.join('\n\n');
     descTextarea.value = finalText;
 
     console.log('商品説明を配置順序に従って生成しました:', finalText.length, '文字');
 
-    // 5. UIを更新
+    // 6. UIを更新
     if (typeof updateDesc === 'function') {
       updateDesc();
     }
@@ -3522,30 +3858,86 @@
           const hashtags = generateHashtags();
           const hashtagText = hashtags.join('\n');
 
-          // 管理番号セクション（説明文に配置がONの場合）
+          // 管理番号セクション（localStorageの設定に基づく）
           let managementNumberSection = '';
-          const mgmtDescCheckbox = document.getElementById('説明文に管理番号配置');
-          if (mgmtDescCheckbox && mgmtDescCheckbox.checked) {
-            const mgmtNumber = _val('管理番号');
-            if (mgmtNumber) {
-              managementNumberSection = `管理番号：${mgmtNumber}\n\n`;
+          let managementNumberPosition = 'middle'; // デフォルトは中
+          try {
+            const saved = localStorage.getItem('managementNumberPlacement');
+            console.log('🔍 説明文生成: localStorage取得結果:', saved);
+
+            if (saved) {
+              const settings = JSON.parse(saved);
+              console.log('📋 説明文生成: 管理番号配置設定:', settings);
+
+              if (settings.inDesc) {
+                const mgmtNumber = _val('管理番号');
+                console.log('🔢 説明文生成: 管理番号フィールド値:', mgmtNumber);
+
+                if (mgmtNumber) {
+                  // 形式を適用（絵文字なし）
+                  const descFormat = settings.descFormat || '【】';
+                  let formattedNumber = '';
+
+                  switch (descFormat) {
+                    case '【】':
+                      formattedNumber = `管理番号：【${mgmtNumber}】`;
+                      break;
+                    case '（）':
+                      formattedNumber = `管理番号：（${mgmtNumber}）`;
+                      break;
+                    case '『』':
+                      formattedNumber = `管理番号：『${mgmtNumber}』`;
+                      break;
+                    case '「」':
+                      formattedNumber = `管理番号：「${mgmtNumber}」`;
+                      break;
+                    case '｜｜':
+                      formattedNumber = `管理番号：｜${mgmtNumber}｜`;
+                      break;
+                    case '｜':
+                      formattedNumber = `管理番号：｜${mgmtNumber}`;
+                      break;
+                    case '-':
+                      formattedNumber = `管理番号：- ${mgmtNumber}`;
+                      break;
+                    case 'none':
+                      formattedNumber = `管理番号：${mgmtNumber}`;
+                      break;
+                    default:
+                      formattedNumber = `管理番号：【${mgmtNumber}】`;
+                  }
+
+                  managementNumberSection = `${formattedNumber}\n\n`;
+                  managementNumberPosition = settings.descPosition || 'middle';
+                  console.log('✅ 説明文に管理番号を追加:', formattedNumber, '配置:', managementNumberPosition);
+                } else {
+                  console.log('⚠️ 管理番号フィールドが空です');
+                }
+              } else {
+                console.log('⏭️ 説明文への管理番号配置がOFFです');
+              }
+            } else {
+              console.log('⚠️ localStorageに管理番号配置設定がありません');
             }
+          } catch (e) {
+            console.error('❌ 管理番号配置設定の読み込みエラー（説明文）:', e);
           }
 
           // 割引案内テキスト（設定シート対応版）
           const discountInfo = generateDiscountInfo();
 
-          // 配置順序を取得して説明文を組み立て
+          // 配置順序を取得して説明文を組み立て（管理番号の位置を指定）
           buildDescriptionByOrder({
             brand: brandText,
             size: sizeText,
             color: colorText,
             condition: detailSection,
             material: materialText,
+            management: managementNumberSection,
             aiGeneration: aiGenerationSection,
             discount: discountInfo,
             hashtag: hashtagText
-          }, descTextarea);
+          }, descTextarea, managementNumberPosition);
     } catch (error) {
       console.error('商品の説明更新エラー:', error);
       debug.error('updateDescriptionFromDetail エラー:', error);
@@ -4203,11 +4595,24 @@
         name: img.name
       }));
 
-      // Google Driveにアップロード
-      google.script.run
+      // 画像をストレージにアップロード（プロバイダーに応じて切り替え）
+      const uploadParams = {
+        images: imagesToUpload,
+        productId: productId
+      };
+
+      debug.log(`📤 画像アップロード開始: プロバイダー=${IMAGE_STORAGE_PROVIDER}`);
+
+      // プロバイダーに応じて関数を選択
+      const uploadFunction = IMAGE_STORAGE_PROVIDER === 'gdrive'
+        ? google.script.run.uploadImagesToGoogleDrive
+        : google.script.run.uploadImagesToR2;
+
+      uploadFunction
         .withSuccessHandler(function(uploadResult) {
           if (uploadResult.success) {
-            debug.log(`商品画像アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
+            debug.log(`✅ 商品画像アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
+            debug.log(`📂 ストレージ: ${IMAGE_STORAGE_PROVIDER}`);
 
             // JSON形式でURLを保存
             const imageUrlsJson = JSON.stringify(uploadResult.urls);
@@ -4222,10 +4627,7 @@
         .withFailureHandler(function(error) {
           show(`NG(IMAGE_UPLOAD): ${error && error.message ? error.message : error}`);
         })
-        .uploadImagesToR2({
-          images: imagesToUpload,
-          productId: productId
-        });
+        (uploadParams);
     } else {
       // 商品画像がない場合は直接保存
       saveProductToSheet(d);
@@ -6370,16 +6772,34 @@ if (staffSelect) {
 
   // ページ読み込み時にイベントリスナーを設定
   setTimeout(() => {
+    console.log('🚀 ページ初期化開始');
     setupHashtagPreviewListeners();
     setupSizeHyokiListeners();
     setupRaglanListener();
     initTitleBlockDragDrop();
     applyTitleBlockOrder();
-    restoreManagementNumberPlacementSettings();
+
+    // PropertiesServiceから管理番号配置設定を読み込み（タスクキル後の復元）
+    console.log('📞 loadManagementNumberPlacementFromServer() を呼び出し');
+    try {
+      loadManagementNumberPlacementFromServer();
+    } catch (e) {
+      console.error('❌ loadManagementNumberPlacementFromServer() エラー:', e);
+    }
+
+    // 管理番号フィールドの変更監視を開始
+    console.log('📞 setupManagementNumberObserver() を呼び出し');
+    try {
+      setupManagementNumberObserver();
+    } catch (e) {
+      console.error('❌ setupManagementNumberObserver() エラー:', e);
+    }
+
     initDescriptionBlocksDragDrop();
     loadDescriptionBlocksOrder();
     loadDescriptionBlocksCollapseState();
     loadTitleBlocksCollapseState();
+    console.log('✅ ページ初期化完了');
   }, 1000);
 
 </script>
