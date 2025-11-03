@@ -801,8 +801,10 @@
         // 初回 → セットアップ画面を表示
         document.getElementById('setup-screen').style.display = 'flex';
         document.getElementById('app-screen').style.display = 'none';
+      } else {
+        // セットアップ完了済み → FCMトークンをチェック（Phase 2: NOTIF-003）
+        await checkAndUpdateFCMToken();
       }
-      // セットアップ完了済みの場合は何もしない（デフォルトでアプリ画面が表示されている）
 
       // iframe読み込み完了時にスケルトンUIを非表示
       const iframe = document.getElementById('gas-iframe');
@@ -1092,9 +1094,87 @@
     }
 
     // アプリ画面を表示
-    function showAppScreen() {
+    async function showAppScreen() {
       document.getElementById('setup-screen').style.display = 'none';
       document.getElementById('app-screen').style.display = 'flex';
+
+      // FCMトークンをチェックして、更新があれば自動送信
+      await checkAndUpdateFCMToken();
+    }
+
+    /**
+     * FCMトークンをチェックして、更新があれば自動的にGASに送信
+     * Phase 2: トークンリフレッシュ処理（NOTIF-003）
+     */
+    async function checkAndUpdateFCMToken() {
+      try {
+        // Service Workerが登録されていない場合はスキップ
+        if (!swRegistration) {
+          console.log('⏭️ Service Worker未登録のため、FCMトークンチェックをスキップ');
+          return;
+        }
+
+        // Firebase Messagingからトークンを取得
+        const { getToken } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
+
+        console.log('🔄 FCMトークン更新チェック開始...');
+
+        const currentToken = await getToken(window.firebaseMessaging, {
+          vapidKey: VAPID_PUBLIC_KEY,
+          serviceWorkerRegistration: swRegistration
+        });
+
+        if (!currentToken) {
+          console.log('⚠️ FCMトークンが取得できませんでした');
+          return;
+        }
+
+        // localStorageに保存されているトークンと比較
+        const savedToken = localStorage.getItem('reborn_fcm_token');
+
+        if (savedToken === currentToken) {
+          console.log('✅ FCMトークンは最新です（更新なし）');
+          return;
+        }
+
+        console.log('🔄 FCMトークンが更新されました');
+        console.log('  - 旧トークン:', savedToken ? savedToken.substring(0, 20) + '...' : 'なし');
+        console.log('  - 新トークン:', currentToken.substring(0, 20) + '...');
+
+        // デバイス情報を取得
+        const deviceInfo = {
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+          language: navigator.language,
+          screenSize: `${screen.width}x${screen.height}`,
+          timestamp: new Date().toISOString()
+        };
+
+        // LocalStorageからユーザー情報を取得
+        const userEmail = localStorage.getItem('reborn_user_email') || 'unknown';
+        const userName = localStorage.getItem('reborn_user_name') || '';
+        const notificationEnabled = true;
+        const notificationSound = true;
+
+        // GASに新しいトークンを送信
+        const response = await fetch(GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(currentToken) +
+                                    '&deviceInfo=' + encodeURIComponent(JSON.stringify(deviceInfo)) +
+                                    '&userId=' + encodeURIComponent(userEmail) +
+                                    '&userName=' + encodeURIComponent(userName) +
+                                    '&email=' + encodeURIComponent(userEmail) +
+                                    '&notificationEnabled=' + encodeURIComponent(notificationEnabled) +
+                                    '&notificationSound=' + encodeURIComponent(notificationSound));
+
+        if (response.ok) {
+          // localStorageに新しいトークンを保存
+          localStorage.setItem('reborn_fcm_token', currentToken);
+          console.log('✅ FCMトークンを自動更新しました');
+        } else {
+          console.error('❌ FCMトークンの送信に失敗:', response.status);
+        }
+      } catch (error) {
+        console.error('❌ FCMトークン更新チェックエラー:', error);
+      }
     }
 
     // ドロワーメニューを開く/閉じる
