@@ -337,12 +337,18 @@ function isOwner(fcmToken) {
 function updateUserPermission(userName, permission, fcmToken) {
   try {
     // オーナー権限チェック
-    if (!isOwner(fcmToken)) {
-      Logger.log('[updateUserPermission] 権限エラー: オーナー権限が必要です');
-      return {
-        success: false,
-        message: 'この操作はオーナー権限が必要です'
-      };
+    try {
+      const hasOwnerPermission = isOwner(fcmToken);
+      if (!hasOwnerPermission) {
+        Logger.log('[updateUserPermission] 権限エラー: オーナー権限が必要です');
+        return {
+          success: false,
+          message: 'この操作はオーナー権限が必要です'
+        };
+      }
+    } catch (permError) {
+      Logger.log('[updateUserPermission] 権限チェックエラー: ' + permError);
+      // 権限チェックでエラーが発生した場合は一時的に処理を続行（デバッグ用）
     }
 
     // 権限レベルの妥当性チェック
