@@ -95,6 +95,7 @@ function getUserListForUI() {
     }
 
     const uniqueUsers = new Map();
+    const rowsToUpdate = []; // 権限が空欄の行を記録
 
     for (let i = 1; i < data.length; i++) {
       const userName = data[i][userNameCol];
@@ -114,6 +115,13 @@ function getUserListForUI() {
           Logger.log('[getUserListForUI] 行' + i + ': ' + userName + ' は既存データの方が新しいのでスキップ');
           continue;
         }
+      }
+
+      // 権限が空欄の場合、デフォルト値をシートに書き込む準備
+      const currentPermission = permissionCol !== -1 ? data[i][permissionCol] : '';
+      if (permissionCol !== -1 && (!currentPermission || currentPermission === '')) {
+        Logger.log('[getUserListForUI] 行' + (i+1) + ': 権限が空欄なので「スタッフ」を設定します');
+        rowsToUpdate.push({ row: i + 1, permission: 'スタッフ' }); // 1-indexed
       }
 
       // registeredAt を文字列形式に変換（google.script.run のシリアライゼーション対策）
@@ -137,6 +145,15 @@ function getUserListForUI() {
 
       Logger.log('[getUserListForUI] 行' + i + ': ユーザー追加 - ' + JSON.stringify(user));
       uniqueUsers.set(userName, user);
+    }
+
+    // 権限が空欄の行にデフォルト値を書き込む
+    if (rowsToUpdate.length > 0 && permissionCol !== -1) {
+      Logger.log('[getUserListForUI] 権限が空欄の行数: ' + rowsToUpdate.length);
+      rowsToUpdate.forEach(function(update) {
+        sheet.getRange(update.row, permissionCol + 1).setValue(update.permission);
+        Logger.log('[getUserListForUI] 行' + update.row + 'に権限「' + update.permission + '」を書き込みました');
+      });
     }
 
     const users = Array.from(uniqueUsers.values());
