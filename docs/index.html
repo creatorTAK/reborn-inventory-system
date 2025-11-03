@@ -728,40 +728,46 @@
       measurementId: "G-SX48K45X75"
     };
 
-    // Firebase 初期化
-    const app = initializeApp(firebaseConfig);
-    const messaging = getMessaging(app);
+    // Firebase 初期化（非サポートブラウザ対応）
+    try {
+      const app = initializeApp(firebaseConfig);
+      const messaging = getMessaging(app);
 
-    // グローバル変数として公開
-    window.firebaseMessaging = messaging;
+      // グローバル変数として公開
+      window.firebaseMessaging = messaging;
 
-    // ★ フォアグラウンド通知対応 ★
-    // アプリを開いている状態で通知を受信した時の処理
-    onMessage(messaging, (payload) => {
-      console.log('📨 フォアグラウンドメッセージ受信:', payload);
+      // ★ フォアグラウンド通知対応 ★
+      // アプリを開いている状態で通知を受信した時の処理
+      onMessage(messaging, (payload) => {
+        console.log('📨 フォアグラウンドメッセージ受信:', payload);
 
-      // 通知データを取得
-      const notificationTitle = payload.data?.title || payload.notification?.title || 'REBORN';
-      const notificationBody = payload.data?.body || payload.notification?.body || '新しい通知があります';
+        // 通知データを取得
+        const notificationTitle = payload.data?.title || payload.notification?.title || 'REBORN';
+        const notificationBody = payload.data?.body || payload.notification?.body || '新しい通知があります';
 
-      // バッジを更新（グローバル関数を呼び出し）
-      if (typeof window.incrementBadge === 'function') {
-        window.incrementBadge();
-        console.log('🔔 バッジをインクリメントしました');
-      }
+        // バッジを更新（グローバル関数を呼び出し）
+        if (typeof window.incrementBadge === 'function') {
+          window.incrementBadge();
+          console.log('🔔 バッジをインクリメントしました');
+        }
 
-      // ブラウザ通知を表示（ユーザーに気づいてもらうため）
-      if (Notification.permission === 'granted') {
-        new Notification(notificationTitle, {
-          body: notificationBody,
-          icon: '/reborn-inventory-system/icon-180.png',
-          badge: '/reborn-inventory-system/icon-192.png',
-          tag: 'reborn-notification',
-          requireInteraction: false  // 自動で消える
-        });
-        console.log('🔔 ブラウザ通知を表示しました');
-      }
-    });
+        // ブラウザ通知を表示（ユーザーに気づいてもらうため）
+        if (Notification.permission === 'granted') {
+          new Notification(notificationTitle, {
+            body: notificationBody,
+            icon: '/reborn-inventory-system/icon-180.png',
+            badge: '/reborn-inventory-system/icon-192.png',
+            tag: 'reborn-notification',
+            requireInteraction: false  // 自動で消える
+          });
+          console.log('🔔 ブラウザ通知を表示しました');
+        }
+      });
+    } catch (error) {
+      // Safari等の非サポートブラウザでは静かにスキップ
+      console.log('ℹ️ Firebase Messaging初期化スキップ（非サポートブラウザ）');
+      window.firebaseMessaging = null;
+    }
   </script>
 
   <script>
@@ -949,6 +955,17 @@
       const step3Button = document.getElementById('step3-button');
       const openAppButton = document.getElementById('open-app-button');
 
+      // FCM非サポートブラウザ（Safari等）の場合
+      if (!window.firebaseMessaging) {
+        resultDiv.textContent = 'ℹ️ このブラウザはプッシュ通知をサポートしていません（Safari等）\n\nスマホでは通知を受け取れます。\n\n下の「アプリを開く」ボタンを押してください。';
+        resultDiv.className = 'step-result';
+        resultDiv.style.display = 'block';
+
+        // 「アプリを開く」ボタンを表示
+        openAppButton.style.display = 'block';
+        return;
+      }
+
       if (Notification.permission !== 'granted') {
         resultDiv.textContent = '❌ 通知が許可されていません\n「① 通知を許可」ボタンを押してください。';
         resultDiv.className = 'step-result error';
@@ -1111,6 +1128,13 @@
         // Service Workerが登録されていない場合はスキップ
         if (!swRegistration) {
           console.log('⏭️ Service Worker未登録のため、FCMトークンチェックをスキップ');
+          return;
+        }
+
+        // FCM非サポートブラウザ（Safari等）をチェック
+        if (!window.firebaseMessaging) {
+          console.log('ℹ️ このブラウザはプッシュ通知をサポートしていません（Safari等）');
+          console.log('   スマホアプリでは通知を受け取れます');
           return;
         }
 
