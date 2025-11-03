@@ -50,7 +50,7 @@ function uploadImagesToGoogleDrive(params) {
 
     // 商品画像フォルダを取得（または作成）
     console.log('📁 [Googleドライブ] フォルダ作成/取得中...');
-    const rootFolder = getOrCreateFolder('商品画像');
+    const rootFolder = getOrCreateFolder('REBORN商品画像');
     const productFolder = getOrCreateFolder(productId, rootFolder);
     console.log(`✅ [Googleドライブ] フォルダ準備完了: 商品画像/${productId}`);
 
@@ -95,22 +95,32 @@ function uploadImagesToGoogleDrive(params) {
         console.log(`✅ [Googleドライブ] ファイル作成完了: ${fileName}`);
 
         // 公開URL生成（共有リンク設定）
+        // より確実な共有設定方法を使用
+        // 共有設定: リンクを知っている全員が閲覧可能
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        console.log(`🔓 [Googleドライブ] 共有設定完了`);
+        
         const fileId = file.getId();
+        console.log(`[DEBUG] file.getId() returned: ${fileId}`);
+        console.log(`[DEBUG] fileId length: ${fileId.length}`);
+        console.log(`[DEBUG] fileId type: ${typeof fileId}`);
 
-        // 直接画像表示可能なURL形式
-        const publicUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+        // 新しいGoogle Drive画像URL形式（2024年Googleの仕様変更対応）
+        // 参考: https://note.com/mir4545/n/n5b29726e8574
+        const publicUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
 
         console.log(`🔗 [Googleドライブ] 公開URL生成: ${publicUrl}`);
 
         // URL情報を保存（R2版と同じ形式）
-        uploadedUrls.push({
+        const urlInfo = {
           url: publicUrl,
           fileId: fileId,
           fileName: fileName,
           name: img.name || fileName,
           forAI: img.forAI || false
-        });
+        };
+        console.log(`[DEBUG] URL info to push: ${JSON.stringify(urlInfo)}`);
+        uploadedUrls.push(urlInfo);
 
       } catch (err) {
         console.error(`❌ [Googleドライブ] 画像${index + 1}のアップロードエラー:`, err.message);

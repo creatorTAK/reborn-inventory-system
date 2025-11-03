@@ -3,6 +3,226 @@ function include(filename) {
 }
 
 /**
+ * ダイアログとサーバー間の疎通確認用関数
+ * @param {Object} payload - 任意のコンテキスト情報
+ * @return {Object} 疎通確認結果
+ */
+function ping(payload) {
+  try {
+    const info = {
+      ok: true,
+      ts: new Date(),
+      who: (Session.getActiveUser() && Session.getActiveUser().getEmail()) || '',
+      context: payload || null
+    };
+    Logger.log('[ping] ' + JSON.stringify(info));
+    return info;
+  } catch (err) {
+    Logger.log('[ping] error: ' + err);
+    return { ok: false, error: String(err) };
+  }
+}
+
+/**
+ * テスト用：単純な配列を返す関数
+ */
+function testGetUserList() {
+  Logger.log('[testGetUserList] ===== 実行開始 =====');
+  const testData = [
+    { userName: 'テストユーザー1', email: 'test1@example.com', permission: 'オーナー', status: 'アクティブ', registeredAt: '2025-11-03' },
+    { userName: 'テストユーザー2', email: 'test2@example.com', permission: 'スタッフ', status: 'アクティブ', registeredAt: '2025-11-03' }
+  ];
+  Logger.log('[testGetUserList] テストデータを返します: ' + testData.length + '件');
+  Logger.log('[testGetUserList] ===== 実行完了 =====');
+  return testData;
+}
+
+/**
+ * ユーザー一覧を取得（ユーザー権限管理UI用）
+ * 注: user_permission_manager.jsのgetUserList()と区別するため別名を使用
+ * @return {Array} ユーザー情報の配列
+ */
+function getUserListForUI() {
+  Logger.log('[getUserListForUI] ===== 開始 =====');
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    Logger.log('[getUserListForUI] Spreadsheet取得: ' + (ss ? 'OK' : 'NG'));
+
+    if (!ss) {
+      Logger.log('[getUserListForUI] ERROR: getActiveSpreadsheet() が null を返しました');
+      return [];
+    }
+
+    // 全シート名をログ出力
+    const sheets = ss.getSheets();
+    Logger.log('[getUserListForUI] 全シート数: ' + sheets.length);
+    sheets.forEach(function(s, i) {
+      Logger.log('[getUserListForUI] シート[' + i + ']: "' + s.getName() + '"');
+    });
+
+    const sheet = ss.getSheetByName('FCM通知登録');
+    Logger.log('[getUserListForUI] FCM通知登録シート取得: ' + (sheet ? 'OK' : 'NG'));
+
+    if (!sheet) {
+      Logger.log('[getUserListForUI] ERROR: FCM通知登録シートが見つかりません');
+      Logger.log('[getUserListForUI] ===== 終了（空配列） =====');
+      return [];
+    }
+
+    const data = sheet.getDataRange().getValues();
+    Logger.log('[getUserListForUI] データ行数: ' + data.length);
+
+    if (data.length === 0) {
+      Logger.log('[getUserListForUI] ERROR: シートが空です');
+      return [];
+    }
+
+    const headers = data[0];
+    Logger.log('[getUserListForUI] ヘッダー行: ' + JSON.stringify(headers));
+
+    const userNameCol = headers.indexOf('ユーザー名');
+    const emailCol = headers.indexOf('メールアドレス');
+    const permissionCol = headers.indexOf('権限');
+    const statusCol = headers.indexOf('ステータス');
+    const registeredAtCol = headers.indexOf('登録日時');
+
+    Logger.log('[getUserListForUI] カラムインデックス - ユーザー名:' + userNameCol + ' メール:' + emailCol + ' 権限:' + permissionCol + ' ステータス:' + statusCol + ' 登録日時:' + registeredAtCol);
+
+    if (userNameCol === -1) {
+      Logger.log('[getUserListForUI] ERROR: ユーザー名列が見つかりません');
+      return [];
+    }
+
+    const uniqueUsers = new Map();
+
+    for (let i = 1; i < data.length; i++) {
+      const userName = data[i][userNameCol];
+      Logger.log('[getUserListForUI] 行' + i + ': ユーザー名=' + userName);
+
+      if (!userName || userName === '') {
+        Logger.log('[getUserListForUI] 行' + i + ': ユーザー名が空なのでスキップ');
+        continue;
+      }
+
+      const existingUser = uniqueUsers.get(userName);
+      const currentDate = new Date(data[i][registeredAtCol]);
+
+      if (existingUser) {
+        const existingDate = new Date(existingUser.registeredAt);
+        if (currentDate <= existingDate) {
+          Logger.log('[getUserListForUI] 行' + i + ': ' + userName + ' は既存データの方が新しいのでスキップ');
+          continue;
+        }
+      }
+
+      // registeredAt を文字列形式に変換（google.script.run のシリアライゼーション対策）
+      let registeredAtStr = '';
+      if (data[i][registeredAtCol]) {
+        try {
+          const date = new Date(data[i][registeredAtCol]);
+          registeredAtStr = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+        } catch (e) {
+          registeredAtStr = String(data[i][registeredAtCol]);
+        }
+      }
+
+      const user = {
+        userName: userName,
+        email: emailCol !== -1 ? String(data[i][emailCol] || '') : '',
+        permission: permissionCol !== -1 ? String(data[i][permissionCol] || 'スタッフ') : 'スタッフ',
+        status: statusCol !== -1 ? String(data[i][statusCol] || 'アクティブ') : 'アクティブ',
+        registeredAt: registeredAtStr
+      };
+
+      Logger.log('[getUserListForUI] 行' + i + ': ユーザー追加 - ' + JSON.stringify(user));
+      uniqueUsers.set(userName, user);
+    }
+
+    const users = Array.from(uniqueUsers.values());
+    Logger.log('[getUserListForUI] 重複除外後のユーザー数: ' + users.length);
+    Logger.log('[getUserListForUI] 最終結果: ' + JSON.stringify(users));
+    Logger.log('[getUserListForUI] ===== 終了（成功） =====');
+    return users;
+  } catch (error) {
+    Logger.log('[getUserListForUI] ERROR: ' + error);
+    Logger.log('[getUserListForUI] ERROR stack: ' + error.stack);
+    Logger.log('[getUserListForUI] ===== 終了（エラー） =====');
+    return [];
+  }
+}
+
+/**
+ * ユーザー権限を更新（ユーザー権限管理UI用）
+ * @param {String} userName - ユーザー名
+ * @param {String} permission - 権限レベル (オーナー/スタッフ/外注)
+ * @return {Object} 更新結果
+ */
+function updateUserPermission(userName, permission) {
+  try {
+    const validPermissions = ['オーナー', 'スタッフ', '外注'];
+    if (!validPermissions.includes(permission)) {
+      return {
+        success: false,
+        message: `無効な権限レベルです: ${permission}`
+      };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('FCM通知登録');
+
+    if (!sheet) {
+      return {
+        success: false,
+        message: 'FCM通知登録シートが見つかりません'
+      };
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    const userNameCol = headers.indexOf('ユーザー名');
+    const permissionCol = headers.indexOf('権限');
+
+    if (userNameCol === -1 || permissionCol === -1) {
+      return {
+        success: false,
+        message: '必要なカラムが見つかりません'
+      };
+    }
+
+    let updatedCount = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][userNameCol] === userName) {
+        sheet.getRange(i + 1, permissionCol + 1).setValue(permission);
+        Logger.log(`[updateUserPermission] 行${i + 1}: ${userName} → ${permission}`);
+        updatedCount++;
+      }
+    }
+
+    if (updatedCount === 0) {
+      return {
+        success: false,
+        message: `ユーザー ${userName} が見つかりません`
+      };
+    }
+
+    return {
+      success: true,
+      message: `${userName} の権限を ${permission} に更新しました（${updatedCount}件）`,
+      updatedCount: updatedCount
+    };
+  } catch (error) {
+    Logger.log('[updateUserPermission] error: ' + error);
+    return {
+      success: false,
+      message: error.toString()
+    };
+  }
+}
+
+/**
  * POSTリクエストのエントリーポイント
  * Push通知関連のAPIエンドポイント
  */
@@ -101,6 +321,34 @@ function doGet(e) {
     // JSON APIエンドポイント（GitHub Pages用）
     if (e && e.parameter && e.parameter.action) {
       const action = e.parameter.action;
+
+      // 画像プロキシ機能（3rd-party cookie問題の回避）
+      if (action === 'getImage') {
+        const fileId = e.parameter.id;
+
+        if (!fileId) {
+          return ContentService.createTextOutput('Missing file ID')
+            .setMimeType(ContentService.MimeType.TEXT);
+        }
+
+        try {
+          // Google Driveからファイルを取得
+          const file = DriveApp.getFileById(fileId);
+          const blob = file.getBlob();
+
+          // ContentServiceで生のバイナリデータを返す
+          // これによりWeb AppのURLが直接画像のソースとして機能する
+          return ContentService.createOutput(blob).setMimeType(blob.getContentType());
+
+        } catch (error) {
+          Logger.log('getImage error for fileId ' + fileId + ': ' + error.message);
+          Logger.log('Error stack: ' + error.stack);
+
+          // デバッグ用：エラーメッセージをテキストで返す
+          return ContentService.createTextOutput('Error: ' + error.message + ' | File ID: ' + fileId)
+            .setMimeType(ContentService.MimeType.TEXT);
+        }
+      }
 
       if (action === 'test') {
         // テストAPI
@@ -336,6 +584,129 @@ function doGet(e) {
           timestamp: new Date().toISOString(),
           message: 'echo OK'
         });
+      }
+
+      // INV-006: 在庫アラート設定取得
+      if (action === 'getInventoryAlertSettings') {
+        const result = getInventoryAlertSettingsAPI();
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // INV-006: 在庫アラート設定更新
+      if (action === 'updateInventoryAlertSetting') {
+        const materialName = e.parameter.materialName;
+        const threshold = e.parameter.threshold ? parseInt(e.parameter.threshold) : undefined;
+        const notificationEnabled = e.parameter.notificationEnabled === 'true';
+
+        const result = updateInventoryAlertSettingAPI(materialName, threshold, notificationEnabled);
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // INV-006: 在庫アラート手動実行
+      if (action === 'runInventoryAlertCheck') {
+        const result = runInventoryAlertCheckAPI();
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // INV-006: 在庫アラート設定初期化
+      if (action === 'initializeInventoryAlertSettings') {
+        const result = initializeInventoryAlertSettings();
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // INV-006 Phase 5: 定期実行トリガー設定
+      if (action === 'setupDailyInventoryAlertTrigger') {
+        const hour = e.parameter.hour ? parseInt(e.parameter.hour) : 9;
+        const result = setupDailyInventoryAlertTriggerAPI(hour);
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // INV-006 Phase 5: トリガー削除
+      if (action === 'removeDailyInventoryAlertTrigger') {
+        const result = removeDailyInventoryAlertTriggerAPI();
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // INV-006 Phase 5: トリガー一覧取得
+      if (action === 'getInventoryAlertTriggers') {
+        const result = getInventoryAlertTriggersAPI();
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // ユーザー権限管理: Phase 1マイグレーション実行
+      if (action === 'executePhase1Migration') {
+        const result = executePhase1Migration();
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // ユーザー権限管理: ユーザー一覧取得
+      if (action === 'getUserList') {
+        const result = getUserList();
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          users: result
+        }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // ユーザー権限管理: ユーザー権限更新
+      if (action === 'updateUserPermission') {
+        const userName = e.parameter.userName;
+        const permission = e.parameter.permission;
+        if (!userName || !permission) {
+          return ContentService.createTextOutput(JSON.stringify({
+            success: false,
+            message: 'ユーザー名と権限を指定してください'
+          }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+        const result = updateUserPermission(userName, permission);
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // ユーザー権限管理: ユーザー権限取得
+      if (action === 'getUserPermission') {
+        const userName = e.parameter.userName;
+        if (!userName) {
+          return ContentService.createTextOutput(JSON.stringify({
+            success: false,
+            message: 'ユーザー名を指定してください'
+          }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+        const permission = getUserPermission(userName);
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          userName: userName,
+          permission: permission
+        }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // INV-006 Phase 4: 備品在庫リストに担当者カラム追加
+      if (action === 'migrateAddManagerColumn') {
+        const result = migrateAddManagerColumnToInventory();
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // INV-006 Phase 4: 担当者カラム存在チェック
+      if (action === 'checkManagerColumn') {
+        const exists = checkManagerColumnExists();
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          exists: exists
+        }))
+          .setMimeType(ContentService.MimeType.JSON);
       }
 
       // 不明なアクション
@@ -594,6 +965,15 @@ function doGet(e) {
     } else if (menuType === 'inventory_history') {
       template = HtmlService.createTemplateFromFile('inventory_history_viewer');
       title = 'REBORN - 入出庫履歴';
+    } else if (menuType === 'inventory_alert_settings') {
+      template = HtmlService.createTemplateFromFile('inventory_alert_settings_ui');
+      title = 'REBORN - 在庫アラート設定';
+    } else if (menuType === 'user_migration_test') {
+      template = HtmlService.createTemplateFromFile('test_user_migration');
+      title = 'REBORN - ユーザー権限管理 Phase 1';
+    } else if (menuType === 'user_management') {
+      template = HtmlService.createTemplateFromFile('user_management_ui');
+      title = 'REBORN - ユーザー権限管理';
     } else {
       // 不明なメニューの場合はデフォルトで商品登録
       template = HtmlService.createTemplateFromFile('sidebar_product');
@@ -855,6 +1235,21 @@ function showConfigManagerAI() {
 }
 
 /**
+ * ユーザー権限管理画面を表示（サイドバー）
+ */
+function showUserManagement() {
+  const t = HtmlService.createTemplateFromFile('user_management_ui');
+  t.showBackButton = false; // スプレッドシートから開く場合は戻るボタン不要
+  t.GAS_BASE_URL = ScriptApp.getService().getUrl() || '';
+  t.fcmToken = '';
+  t.isSidebar = true; // サイドバーフラグ
+  const html = t.evaluate()
+    .setTitle('ユーザー権限管理')
+    .setWidth(600); // テーブル5カラム表示のため幅を拡大
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+/**
  * 入出庫履歴シート作成（メニューから実行）
  */
 function createInventoryHistorySheetMenu() {
@@ -901,6 +1296,7 @@ function onOpen() {
   // 設定管理メニュー
   ui.createMenu('⚙️ 設定管理')
     .addItem('👤 基本設定', 'showConfigManagerBasic')
+    .addItem('🔐 ユーザー権限管理', 'showUserManagement')
     .addItem('🔢 管理番号設定', 'showConfigManagerManagement')
     .addItem('📝 商品登録設定', 'showConfigManagerProduct')
     .addItem('📦 配送設定', 'showConfigManagerShipping')

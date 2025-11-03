@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ユーザー権限管理 - Phase 1 マイグレーション</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    body {
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .log-output {
+      background-color: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+    .log-success { color: #4ec9b0; }
+    .log-error { color: #f48771; }
+    .log-info { color: #9cdcfe; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🔐 ユーザー権限管理システム</h2>
+    <p class="text-muted">Phase 1: FCM通知登録シートに権限カラムを追加し、初期権限を設定</p>
+
+    <hr>
+
+    <div class="mb-4">
+      <h5>Phase 1 マイグレーション</h5>
+      <p class="small text-muted">
+        1. 権限カラム（L列）を追加<br>
+        2. 備考カラム（M列）を追加<br>
+        3. ドロップダウンリスト（オーナー/スタッフ/外注）を設定<br>
+        4. 安廣拓志をオーナーに設定<br>
+        5. その他のユーザーをスタッフに設定
+      </p>
+      <button id="btnMigrate" class="btn btn-primary">Phase 1 マイグレーション実行</button>
+    </div>
+
+    <hr>
+
+    <div class="mb-4">
+      <h5>ユーザー一覧確認</h5>
+      <button id="btnGetUsers" class="btn btn-secondary">ユーザー一覧取得</button>
+      <div id="userListOutput" class="mt-3"></div>
+    </div>
+
+    <hr>
+
+    <div class="mb-4">
+      <h5>Phase 4: 備品在庫リストに担当者カラム追加</h5>
+      <p class="small text-muted">
+        備品在庫リスト（M列）に担当者カラムを追加し、登録ユーザー名のドロップダウンを設定します。
+      </p>
+      <button id="btnPhase4" class="btn btn-success">Phase 4 マイグレーション実行</button>
+    </div>
+
+    <div class="log-output" id="logOutput"></div>
+  </div>
+
+  <script>
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
+
+    // ログ出力関数
+    function log(message, type = 'info') {
+      const output = document.getElementById('logOutput');
+      const timestamp = new Date().toLocaleTimeString('ja-JP');
+      const className = type === 'success' ? 'log-success' : type === 'error' ? 'log-error' : 'log-info';
+      output.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    // Phase 1 マイグレーション実行
+    document.getElementById('btnMigrate').addEventListener('click', async function() {
+      const btn = this;
+      btn.disabled = true;
+      btn.textContent = '実行中...';
+
+      log('=== Phase 1 マイグレーション開始 ===', 'info');
+
+      try {
+        const url = `${GAS_API_URL}?action=executePhase1Migration`;
+        log(`リクエスト送信: ${url}`, 'info');
+
+        const response = await fetch(url);
+        const result = await response.json();
+
+        log(`レスポンス受信: ${JSON.stringify(result)}`, 'info');
+
+        if (result.success) {
+          log('✅ ' + result.message, 'success');
+
+          if (result.migration) {
+            log(`カラム追加: ${result.migration.message}`, 'success');
+          }
+
+          if (result.permissions) {
+            log(`権限設定: ${result.permissions.message}`, 'success');
+          }
+
+          log(`登録ユーザー数: ${result.userCount}人`, 'info');
+          log('=== Phase 1 マイグレーション完了 ===', 'success');
+
+          // 自動的にユーザー一覧を取得
+          setTimeout(() => {
+            document.getElementById('btnGetUsers').click();
+          }, 500);
+        } else {
+          log('❌ ' + result.message, 'error');
+        }
+      } catch (error) {
+        log('❌ エラー: ' + error.message, 'error');
+        console.error(error);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Phase 1 マイグレーション実行';
+      }
+    });
+
+    // ユーザー一覧取得
+    document.getElementById('btnGetUsers').addEventListener('click', async function() {
+      const btn = this;
+      btn.disabled = true;
+      btn.textContent = '取得中...';
+
+      log('ユーザー一覧を取得中...', 'info');
+
+      try {
+        const url = `${GAS_API_URL}?action=getUserList`;
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (result.success && result.users) {
+          log(`✅ ${result.users.length}人のユーザーを取得しました`, 'success');
+
+          // テーブル表示
+          let tableHTML = `
+            <table class="table table-striped table-sm">
+              <thead>
+                <tr>
+                  <th>ユーザー名</th>
+                  <th>権限</th>
+                  <th>メール</th>
+                  <th>ステータス</th>
+                  <th>登録日時</th>
+                </tr>
+              </thead>
+              <tbody>
+          `;
+
+          result.users.forEach(user => {
+            const permissionBadge =
+              user.permission === 'オーナー' ? 'badge bg-danger' :
+              user.permission === 'スタッフ' ? 'badge bg-primary' :
+              user.permission === '外注' ? 'badge bg-secondary' : 'badge bg-light';
+
+            tableHTML += `
+              <tr>
+                <td><strong>${user.userName || ''}</strong></td>
+                <td><span class="${permissionBadge}">${user.permission || '未設定'}</span></td>
+                <td class="small text-muted">${user.email || ''}</td>
+                <td class="small">${user.status || ''}</td>
+                <td class="small text-muted">${user.registeredAt || ''}</td>
+              </tr>
+            `;
+
+            log(`  - ${user.userName}: ${user.permission || '未設定'} (${user.email})`, 'info');
+          });
+
+          tableHTML += '</tbody></table>';
+          document.getElementById('userListOutput').innerHTML = tableHTML;
+        } else {
+          log('❌ ユーザー一覧の取得に失敗しました', 'error');
+        }
+      } catch (error) {
+        log('❌ エラー: ' + error.message, 'error');
+        console.error(error);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'ユーザー一覧取得';
+      }
+    });
+
+    // Phase 4 マイグレーション実行
+    document.getElementById('btnPhase4').addEventListener('click', async function() {
+      const btn = this;
+      btn.disabled = true;
+      btn.textContent = '実行中...';
+
+      log('=== Phase 4 マイグレーション開始 ===', 'info');
+
+      try {
+        const url = `${GAS_API_URL}?action=migrateAddManagerColumn`;
+        log(`リクエスト送信: ${url}`, 'info');
+
+        const response = await fetch(url);
+        const result = await response.json();
+
+        log(`レスポンス受信: ${JSON.stringify(result)}`, 'info');
+
+        if (result.success) {
+          if (result.alreadyExists) {
+            log('✅ ' + result.message + '（既に追加済み）', 'info');
+          } else {
+            log('✅ ' + result.message, 'success');
+            log('備品在庫リストのM列に「担当者」カラムを追加しました', 'success');
+            log('ユーザー名のドロップダウンリストを設定しました', 'success');
+          }
+          log('=== Phase 4 マイグレーション完了 ===', 'success');
+        } else {
+          log('❌ ' + result.message, 'error');
+        }
+      } catch (error) {
+        log('❌ エラー: ' + error.message, 'error');
+        console.error(error);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Phase 4 マイグレーション実行';
+      }
+    });
+
+    // 初回ロード時にログを表示
+    log('ユーザー権限管理システムを起動しました', 'success');
+    log('Phase 1 マイグレーションの準備ができました', 'info');
+    log('Phase 4 マイグレーションの準備ができました', 'info');
+  </script>
+</body>
+</html>

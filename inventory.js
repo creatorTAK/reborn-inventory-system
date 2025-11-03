@@ -1825,6 +1825,7 @@ function getInventoryDashboardAPI(params) {
     Logger.log('[PERF] products生成完了: ' + (new Date().getTime() - productsStart) + 'ms (' + products.length + '件)');
 
     // Date型を文字列に変換
+    Logger.log('[DEBUG] Before serialization, first product images:', products[0] ? products[0].images : 'N/A');
     const serializedProducts = products.map(function(product) {
       const serialized = {};
       for (var key in product) {
@@ -1841,7 +1842,9 @@ function getInventoryDashboardAPI(params) {
       }
       return serialized;
     });
-
+    
+    Logger.log('[DEBUG] After serialization, first product images:', serializedProducts[0] ? serializedProducts[0].images : 'N/A');
+    
     const endTime = new Date().getTime();
     Logger.log('[PERF] getInventoryDashboardAPI 完了: 合計' + (endTime - startTime) + 'ms（Phase 5: 全列インデックス方式）');
 
@@ -2427,6 +2430,17 @@ function saveSalesRecordAPI(salesData) {
     // recalculateAllStats();
 
     Logger.log(`[販売記録] ${salesData.managementNumber} を保存しました`);
+
+    // INV-006: 在庫アラートチェック（販売記録後）
+    try {
+      const alertResult = runInventoryAlertCheck();
+      if (alertResult.success && alertResult.alertCount > 0) {
+        Logger.log(`[在庫アラート] ${alertResult.alertCount}件のアラート通知を送信しました`);
+      }
+    } catch (alertError) {
+      Logger.log(`[警告] 在庫アラートチェックエラー: ${alertError.message}`);
+    }
+
     return { success: true, message: '販売記録を保存しました' };
     
   } catch (error) {

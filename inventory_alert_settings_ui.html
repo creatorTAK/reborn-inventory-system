@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>在庫アラート設定</title>
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f8f9fa;
+      padding: 16px;
+      font-size: 16px; /* iOS自動ズーム防止 */
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header p {
+      margin: 8px 0 0 0;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .alert-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+      transition: all 0.3s ease;
+    }
+
+    .alert-card:hover {
+      box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+      transform: translateY(-2px);
+    }
+
+    .material-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 4px;
+    }
+
+    .material-category {
+      font-size: 13px;
+      color: #718096;
+      margin-bottom: 12px;
+    }
+
+    .threshold-input {
+      width: 100px;
+      font-size: 16px !important; /* iOS自動ズーム防止 */
+    }
+
+    .btn-save {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      color: white;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .btn-save:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .notification-toggle {
+      transform: scale(1.2);
+    }
+
+    .stats-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+
+    .stats-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .stats-item:last-child {
+      border-bottom: none;
+    }
+
+    .stats-label {
+      font-size: 14px;
+      color: #718096;
+    }
+
+    .stats-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #2d3748;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.9);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    .search-box {
+      margin-bottom: 16px;
+    }
+
+    .search-box input {
+      font-size: 16px !important; /* iOS自動ズーム防止 */
+    }
+
+    .category-filter {
+      margin-bottom: 16px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .category-badge {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 2px solid #e2e8f0;
+      background: white;
+    }
+
+    .category-badge.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-color: #667eea;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .btn-action {
+      flex: 1;
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      border: none;
+      transition: all 0.3s ease;
+    }
+
+    .btn-initialize {
+      background: #48bb78;
+      color: white;
+    }
+
+    .btn-initialize:hover {
+      background: #38a169;
+      transform: translateY(-1px);
+    }
+
+    .btn-check-now {
+      background: #ed8936;
+      color: white;
+    }
+
+    .btn-check-now:hover {
+      background: #dd6b20;
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+  <!-- ローディングオーバーレイ -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">読み込み中...</span>
+    </div>
+  </div>
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <h1>
+      <i class="bi bi-bell-fill"></i>
+      在庫アラート設定
+    </h1>
+    <p>梱包資材の在庫が不足した際に通知を受け取る設定を管理します</p>
+  </div>
+
+  <!-- アクションボタン -->
+  <div class="action-buttons">
+    <button class="btn btn-action btn-initialize" onclick="initializeSettings()">
+      <i class="bi bi-arrow-clockwise"></i> 初期化
+    </button>
+    <button class="btn btn-action btn-check-now" onclick="checkNow()">
+      <i class="bi bi-lightning-fill"></i> 今すぐチェック
+    </button>
+  </div>
+
+  <!-- トリガー設定カード -->
+  <div class="stats-card">
+    <h5 style="font-size: 16px; font-weight: 700; margin-bottom: 12px;">
+      <i class="bi bi-clock-fill"></i> 定期実行設定
+    </h5>
+    <p style="font-size: 13px; color: #718096; margin-bottom: 12px;">
+      毎日指定した時刻に自動的に在庫をチェックして通知を送信します
+    </p>
+    <div class="row align-items-center">
+      <div class="col-auto">
+        <label class="form-label mb-0 small">実行時刻</label>
+        <select id="triggerHour" class="form-select" style="font-size: 16px; width: 100px;">
+          <option value="0">0:00</option>
+          <option value="1">1:00</option>
+          <option value="2">2:00</option>
+          <option value="3">3:00</option>
+          <option value="4">4:00</option>
+          <option value="5">5:00</option>
+          <option value="6">6:00</option>
+          <option value="7">7:00</option>
+          <option value="8">8:00</option>
+          <option value="9" selected>9:00</option>
+          <option value="10">10:00</option>
+          <option value="11">11:00</option>
+          <option value="12">12:00</option>
+          <option value="13">13:00</option>
+          <option value="14">14:00</option>
+          <option value="15">15:00</option>
+          <option value="16">16:00</option>
+          <option value="17">17:00</option>
+          <option value="18">18:00</option>
+          <option value="19">19:00</option>
+          <option value="20">20:00</option>
+          <option value="21">21:00</option>
+          <option value="22">22:00</option>
+          <option value="23">23:00</option>
+        </select>
+      </div>
+      <div class="col">
+        <button class="btn btn-sm btn-save" onclick="setupTrigger()">
+          <i class="bi bi-calendar-check"></i> トリガー設定
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="removeTrigger()">
+          <i class="bi bi-trash"></i> 削除
+        </button>
+      </div>
+    </div>
+    <div id="triggerStatus" style="margin-top: 12px; font-size: 13px;"></div>
+  </div>
+
+  <!-- 統計カード -->
+  <div class="stats-card">
+    <div class="stats-item">
+      <span class="stats-label">登録資材数</span>
+      <span class="stats-value" id="totalMaterials">0</span>
+    </div>
+    <div class="stats-item">
+      <span class="stats-label">通知有効</span>
+      <span class="stats-value" id="enabledCount">0</span>
+    </div>
+    <div class="stats-item">
+      <span class="stats-label">通知無効</span>
+      <span class="stats-value" id="disabledCount">0</span>
+    </div>
+  </div>
+
+  <!-- 検索ボックス -->
+  <div class="search-box">
+    <input
+      type="text"
+      class="form-control"
+      id="searchInput"
+      placeholder="🔍 資材名で検索..."
+      oninput="filterMaterials()">
+  </div>
+
+  <!-- カテゴリフィルター -->
+  <div class="category-filter" id="categoryFilter"></div>
+
+  <!-- アラート設定リスト -->
+  <div id="alertsList"></div>
+
+  <!-- GAS API URL -->
+  <script>
+    const GAS_API_URL = '<?= GAS_BASE_URL ?>';
+    let allSettings = [];
+    let allCategories = [];
+    let selectedCategory = 'すべて';
+
+    // ページ読み込み時に設定を取得
+    window.addEventListener('DOMContentLoaded', () => {
+      loadSettings();
+      loadTriggerStatus();
+    });
+
+    // 設定を読み込み
+    async function loadSettings() {
+      try {
+        showLoading(true);
+
+        const response = await fetch(GAS_API_URL + '?action=getInventoryAlertSettings');
+        const result = await response.json();
+
+        if (result.success) {
+          allSettings = result.data;
+          renderCategories();
+          renderSettings();
+          updateStats();
+        } else {
+          showError('設定の読み込みに失敗しました: ' + result.message);
+        }
+      } catch (error) {
+        showError('エラーが発生しました: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // カテゴリフィルターを表示
+    function renderCategories() {
+      const categories = new Set(['すべて']);
+      allSettings.forEach(setting => {
+        if (setting.category) {
+          categories.add(setting.category);
+        }
+      });
+
+      allCategories = Array.from(categories);
+
+      const categoryFilter = document.getElementById('categoryFilter');
+      categoryFilter.innerHTML = '';
+
+      allCategories.forEach(category => {
+        const badge = document.createElement('span');
+        badge.className = 'category-badge' + (category === selectedCategory ? ' active' : '');
+        badge.textContent = category;
+        badge.onclick = () => selectCategory(category);
+        categoryFilter.appendChild(badge);
+      });
+    }
+
+    // カテゴリを選択
+    function selectCategory(category) {
+      selectedCategory = category;
+      renderCategories();
+      filterMaterials();
+    }
+
+    // 設定を表示
+    function renderSettings(filteredSettings = null) {
+      const settings = filteredSettings || allSettings;
+      const alertsList = document.getElementById('alertsList');
+      alertsList.innerHTML = '';
+
+      if (settings.length === 0) {
+        alertsList.innerHTML = `
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> 該当する資材がありません
+          </div>
+        `;
+        return;
+      }
+
+      settings.forEach(setting => {
+        const card = document.createElement('div');
+        card.className = 'alert-card';
+        card.innerHTML = `
+          <div class="material-name">${setting.materialName}</div>
+          <div class="material-category">
+            <i class="bi bi-tag-fill"></i> ${setting.category || 'カテゴリなし'}
+          </div>
+          <div class="row align-items-center">
+            <div class="col-auto">
+              <label class="form-label mb-0 small">閾値（個）</label>
+              <input
+                type="number"
+                class="form-control threshold-input"
+                value="${setting.threshold}"
+                min="0"
+                data-material="${setting.materialName}"
+                onchange="updateThreshold(this)">
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0 small">通知</label>
+              <div class="form-check form-switch">
+                <input
+                  class="form-check-input notification-toggle"
+                  type="checkbox"
+                  ${setting.notificationEnabled ? 'checked' : ''}
+                  data-material="${setting.materialName}"
+                  onchange="updateNotification(this)">
+              </div>
+            </div>
+            <div class="col text-end">
+              <button
+                class="btn btn-sm btn-save"
+                onclick="saveSetting('${setting.materialName}')">
+                <i class="bi bi-check-lg"></i> 保存
+              </button>
+            </div>
+          </div>
+        `;
+        alertsList.appendChild(card);
+      });
+    }
+
+    // 資材をフィルター
+    function filterMaterials() {
+      const searchText = document.getElementById('searchInput').value.toLowerCase();
+
+      const filtered = allSettings.filter(setting => {
+        const matchesSearch = setting.materialName.toLowerCase().includes(searchText);
+        const matchesCategory = selectedCategory === 'すべて' || setting.category === selectedCategory;
+        return matchesSearch && matchesCategory;
+      });
+
+      renderSettings(filtered);
+    }
+
+    // 閾値を更新（UI上のみ）
+    function updateThreshold(input) {
+      // 保存ボタンを押すまで実際には保存しない
+    }
+
+    // 通知有効/無効を更新（UI上のみ）
+    function updateNotification(checkbox) {
+      // 保存ボタンを押すまで実際には保存しない
+    }
+
+    // 設定を保存
+    async function saveSetting(materialName) {
+      try {
+        const thresholdInput = document.querySelector(`input.threshold-input[data-material="${materialName}"]`);
+        const notificationCheckbox = document.querySelector(`input.notification-toggle[data-material="${materialName}"]`);
+
+        const threshold = parseInt(thresholdInput.value);
+        const notificationEnabled = notificationCheckbox.checked;
+
+        showLoading(true);
+
+        const url = `${GAS_API_URL}?action=updateInventoryAlertSetting&materialName=${encodeURIComponent(materialName)}&threshold=${threshold}&notificationEnabled=${notificationEnabled}`;
+
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (result.success) {
+          showSuccess('保存しました');
+          // 設定を再読み込み
+          await loadSettings();
+        } else {
+          showError('保存に失敗しました: ' + result.message);
+        }
+      } catch (error) {
+        showError('エラーが発生しました: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // 初期化
+    async function initializeSettings() {
+      if (!confirm('備品在庫リストから全資材を読み込み、設定を初期化しますか？\n（既存の設定は保持されます）')) {
+        return;
+      }
+
+      try {
+        showLoading(true);
+
+        const response = await fetch(GAS_API_URL + '?action=initializeInventoryAlertSettings');
+        const result = await response.json();
+
+        if (result.success) {
+          showSuccess(result.message);
+          await loadSettings();
+        } else {
+          showError('初期化に失敗しました: ' + result.message);
+        }
+      } catch (error) {
+        showError('エラーが発生しました: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // 今すぐチェック
+    async function checkNow() {
+      if (!confirm('在庫をチェックして、必要に応じて通知を送信しますか？')) {
+        return;
+      }
+
+      try {
+        showLoading(true);
+
+        const response = await fetch(GAS_API_URL + '?action=runInventoryAlertCheck');
+        const result = await response.json();
+
+        if (result.success) {
+          if (result.alertCount > 0) {
+            showSuccess(`${result.alertCount}件のアラート通知を送信しました`);
+          } else {
+            showSuccess('アラート対象はありませんでした');
+          }
+        } else {
+          showError('チェックに失敗しました: ' + result.message);
+        }
+      } catch (error) {
+        showError('エラーが発生しました: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // 統計を更新
+    function updateStats() {
+      const total = allSettings.length;
+      const enabled = allSettings.filter(s => s.notificationEnabled).length;
+      const disabled = total - enabled;
+
+      document.getElementById('totalMaterials').textContent = total;
+      document.getElementById('enabledCount').textContent = enabled;
+      document.getElementById('disabledCount').textContent = disabled;
+    }
+
+    // ローディング表示
+    function showLoading(show) {
+      document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+    }
+
+    // 成功メッセージ
+    function showSuccess(message) {
+      alert('✅ ' + message);
+    }
+
+    // エラーメッセージ
+    function showError(message) {
+      alert('❌ ' + message);
+    }
+
+    // トリガー状態を読み込み
+    async function loadTriggerStatus() {
+      try {
+        const response = await fetch(GAS_API_URL + '?action=getInventoryAlertTriggers');
+        const result = await response.json();
+
+        const statusDiv = document.getElementById('triggerStatus');
+
+        if (result.success && result.triggers && result.triggers.length > 0) {
+          statusDiv.innerHTML = `
+            <div class="alert alert-success" style="padding: 8px 12px; margin-bottom: 0;">
+              <i class="bi bi-check-circle-fill"></i> トリガー設定済み（${result.triggers.length}件）
+            </div>
+          `;
+        } else {
+          statusDiv.innerHTML = `
+            <div class="alert alert-secondary" style="padding: 8px 12px; margin-bottom: 0;">
+              <i class="bi bi-info-circle"></i> トリガー未設定
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error('トリガー状態取得エラー:', error);
+      }
+    }
+
+    // トリガーを設定
+    async function setupTrigger() {
+      const hour = document.getElementById('triggerHour').value;
+
+      if (!confirm(`毎日 ${hour}:00 に在庫アラートを実行するトリガーを設定しますか？`)) {
+        return;
+      }
+
+      try {
+        showLoading(true);
+
+        const url = `${GAS_API_URL}?action=setupDailyInventoryAlertTrigger&hour=${hour}`;
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (result.success) {
+          showSuccess(result.message);
+          await loadTriggerStatus();
+        } else {
+          showError('トリガー設定に失敗しました: ' + result.message);
+        }
+      } catch (error) {
+        showError('エラーが発生しました: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // トリガーを削除
+    async function removeTrigger() {
+      if (!confirm('定期実行トリガーを削除しますか？')) {
+        return;
+      }
+
+      try {
+        showLoading(true);
+
+        const response = await fetch(GAS_API_URL + '?action=removeDailyInventoryAlertTrigger');
+        const result = await response.json();
+
+        if (result.success) {
+          showSuccess(result.message);
+          await loadTriggerStatus();
+        } else {
+          showError('トリガー削除に失敗しました: ' + result.message);
+        }
+      } catch (error) {
+        showError('エラーが発生しました: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+  </script>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

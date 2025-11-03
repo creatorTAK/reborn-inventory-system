@@ -65,7 +65,9 @@ function getOrCreateProductFolder_(productId) {
  *   @property {Array<Object>} urls - アップロードされた画像のURL配列
  *   @property {string} error - エラーメッセージ（失敗時）
  */
-function uploadImagesToGoogleDrive(params) {
+// ⚠️ 廃止: この関数は image_upload_gdrive.js の uploadImagesToGoogleDrive に置き換えられました
+// この関数は間違ったURL形式（file.getUrl()）を使用していました
+function uploadImagesToGoogleDrive_OLD(params) {
   try {
     // パラメータ検証
     if (!params || !params.images || !Array.isArray(params.images)) {

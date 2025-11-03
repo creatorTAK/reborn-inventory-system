@@ -694,14 +694,80 @@ function getOperatorNameByTokenAPI(fcmToken) {
     console.log('FCMトークン:', fcmToken ? fcmToken.substring(0, 20) + '...' : 'なし');
 
     if (!fcmToken) {
-      console.error('FCMトークンが指定されていません');
+      console.log('FCMトークンが指定されていません → Googleアカウントのメールアドレスで検索します');
+
+      // Googleアカウントのメールアドレスを取得
+      const userEmail = Session.getActiveUser().getEmail();
+      console.log('Googleアカウント:', userEmail);
+
+      if (!userEmail) {
+        console.error('Googleアカウントのメールアドレスが取得できません');
+        // フォールバック: PropertiesServiceから取得
+        const userProperties = PropertiesService.getUserProperties();
+        const name = userProperties.getProperty('OPERATOR_NAME');
+        return {
+          success: true,
+          name: name || '',
+          source: 'properties'
+        };
+      }
+
+      // FCM通知登録シートでメールアドレスを検索
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheet = ss.getSheetByName('FCM通知登録');
+
+      if (!sheet) {
+        console.error('FCM通知登録シートが見つかりません');
+        // フォールバック: PropertiesServiceから取得
+        const userProperties = PropertiesService.getUserProperties();
+        const name = userProperties.getProperty('OPERATOR_NAME');
+        return {
+          success: true,
+          name: name || '',
+          source: 'properties'
+        };
+      }
+
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) {
+        console.log('FCM通知登録シートにデータがありません');
+        // フォールバック: PropertiesServiceから取得
+        const userProperties = PropertiesService.getUserProperties();
+        const name = userProperties.getProperty('OPERATOR_NAME');
+        return {
+          success: true,
+          name: name || '',
+          source: 'properties'
+        };
+      }
+
+      const dataRange = sheet.getRange(2, 1, lastRow - 1, 11);
+      const data = dataRange.getValues();
+
+      // メールアドレスで検索（列8）
+      for (let i = 0; i < data.length; i++) {
+        const rowEmail = data[i][7]; // 列8: メールアドレス
+        if (rowEmail === userEmail) {
+          const userName = data[i][1]; // 列2: ユーザー名
+          const iconUrl = data[i][8] || ''; // 列9: アイコンURL
+          console.log('✅ メールアドレスに一致するユーザー名を発見:', userName);
+          return {
+            success: true,
+            name: userName || '',
+            iconUrl: iconUrl,
+            source: 'fcm_sheet_by_email'
+          };
+        }
+      }
+
+      console.log('⚠️ メールアドレスに一致するデータが見つかりませんでした');
       // フォールバック: PropertiesServiceから取得
       const userProperties = PropertiesService.getUserProperties();
       const name = userProperties.getProperty('OPERATOR_NAME');
       return {
         success: true,
         name: name || '',
-        source: 'properties'
+        source: 'properties_fallback'
       };
     }
 
@@ -1122,5 +1188,106 @@ function deletePackagingPresetAPI(presetId) {
       success: false,
       message: `削除エラー: ${error.message}`
     };
+  }
+}
+
+// =============================================================================
+// INV-006 Phase 4: 備品在庫リストに担当者カラム追加
+// =============================================================================
+
+/**
+ * 備品在庫リストに担当者カラム（M列）を追加するマイグレーション
+ * @return {Object} マイグレーション結果
+ */
+function migrateAddManagerColumnToInventory() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('備品在庫リスト');
+
+    if (!sheet) {
+      Logger.log('ERROR: 備品在庫リストシートが見つかりません');
+      return {
+        success: false,
+        message: '備品在庫リストシートが見つかりません'
+      };
+    }
+
+    // 現在のヘッダー行を取得
+    const lastColumn = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+
+    Logger.log('現在のカラム数: ' + lastColumn);
+    Logger.log('現在のヘッダー: ' + headers.join(', '));
+
+    // 担当者カラム（M列 = 13列目）の確認
+    if (lastColumn >= 13 && headers[12] === '担当者') {
+      Logger.log('担当者カラムは既に存在します');
+      return {
+        success: true,
+        message: '担当者カラムは既に存在します',
+        alreadyExists: true
+      };
+    }
+
+    // 担当者カラムを追加（M列 = 13列目）
+    Logger.log('担当者カラムを追加します（M列）');
+    sheet.getRange(1, 13).setValue('担当者');
+
+    // データ検証を追加（登録ユーザー一覧をドロップダウンに設定）
+    const userList = getUserList();
+    if (userList && userList.length > 0) {
+      const userNames = userList.map(user => user.userName).filter(name => name && name.trim() !== '');
+
+      if (userNames.length > 0) {
+        // M2セル以降にデータ検証を設定
+        const dataRange = sheet.getRange(2, 13, sheet.getMaxRows() - 1, 1);
+        const rule = SpreadsheetApp.newDataValidation()
+          .requireValueInList(userNames, true)
+          .setAllowInvalid(true) // 空白も許可
+          .build();
+        dataRange.setDataValidation(rule);
+        Logger.log(`担当者カラムにドロップダウンを設定しました（${userNames.length}人）: ${userNames.join(', ')}`);
+      }
+    }
+
+    Logger.log('担当者カラムの追加完了');
+
+    return {
+      success: true,
+      message: '担当者カラム（M列）を追加しました',
+      columnAdded: true
+    };
+  } catch (error) {
+    Logger.log('migrateAddManagerColumnToInventory error: ' + error);
+    return {
+      success: false,
+      message: error.toString()
+    };
+  }
+}
+
+/**
+ * 担当者カラム追加済みかどうかをチェック
+ * @return {Boolean} 追加済みならtrue
+ */
+function checkManagerColumnExists() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('備品在庫リスト');
+
+    if (!sheet) {
+      return false;
+    }
+
+    const lastColumn = sheet.getLastColumn();
+    if (lastColumn < 13) {
+      return false;
+    }
+
+    const header = sheet.getRange(1, 13).getValue();
+    return header === '担当者';
+  } catch (error) {
+    Logger.log('checkManagerColumnExists error: ' + error);
+    return false;
   }
 }
