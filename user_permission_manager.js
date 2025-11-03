@@ -233,13 +233,118 @@ function getUserPermission(userName) {
 }
 
 /**
+ * メールアドレスからユーザー名を取得
+ * @param {String} email - メールアドレス
+ * @return {String|null} ユーザー名 または null
+ */
+function getUserNameByEmail(email) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(FCM_SHEET_NAME);
+
+    if (!sheet) {
+      Logger.log('ERROR: FCM通知登録シートが見つかりません');
+      return null;
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+
+    const userNameCol = headers.indexOf('ユーザー名');
+    const emailCol = headers.indexOf('メールアドレス');
+
+    if (userNameCol === -1 || emailCol === -1) {
+      Logger.log('ERROR: 必要なカラムが見つかりません');
+      return null;
+    }
+
+    // メールアドレスで検索（最新のレコードを優先）
+    for (let i = data.length - 1; i >= 1; i--) {
+      if (data[i][emailCol] === email) {
+        return data[i][userNameCol] || null;
+      }
+    }
+
+    Logger.log(`メールアドレス ${email} に対応するユーザーが見つかりません`);
+    return null;
+  } catch (error) {
+    Logger.log('getUserNameByEmail error: ' + error);
+    return null;
+  }
+}
+
+/**
+ * 現在のユーザーがオーナー権限を持っているかチェック
+ * @param {String} fcmToken - PWAからのアクセス時のFCMトークン（オプション）
+ * @return {Boolean} オーナーの場合 true
+ */
+function isOwner(fcmToken) {
+  try {
+    let userName = null;
+
+    // PWAからのアクセスの場合、fcmTokenからユーザー名を取得
+    if (fcmToken) {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheet = ss.getSheetByName(FCM_SHEET_NAME);
+
+      if (sheet) {
+        const data = sheet.getDataRange().getValues();
+        const headers = data[0];
+        const userNameCol = headers.indexOf('ユーザー名');
+        const tokenCol = headers.indexOf('FCMトークン');
+
+        if (userNameCol !== -1 && tokenCol !== -1) {
+          for (let i = data.length - 1; i >= 1; i--) {
+            if (data[i][tokenCol] === fcmToken) {
+              userName = data[i][userNameCol];
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // GASからのアクセスの場合、メールアドレスからユーザー名を取得
+    if (!userName) {
+      const email = Session.getActiveUser().getEmail();
+      Logger.log('[isOwner] 現在のユーザーメール: ' + email);
+      userName = getUserNameByEmail(email);
+    }
+
+    if (!userName) {
+      Logger.log('[isOwner] ユーザー名を特定できませんでした');
+      return false;
+    }
+
+    Logger.log('[isOwner] ユーザー名: ' + userName);
+    const permission = getUserPermission(userName);
+    Logger.log('[isOwner] 権限: ' + permission);
+
+    return permission === PERMISSION_LEVELS.OWNER;
+  } catch (error) {
+    Logger.log('[isOwner] error: ' + error);
+    return false;
+  }
+}
+
+/**
  * ユーザー権限を更新
  * @param {String} userName - ユーザー名
  * @param {String} permission - 権限レベル (オーナー/スタッフ/外注)
+ * @param {String} fcmToken - PWAからのアクセス時のFCMトークン（オプション）
  * @return {Object} 更新結果
  */
-function updateUserPermission(userName, permission) {
+function updateUserPermission(userName, permission, fcmToken) {
   try {
+    // オーナー権限チェック
+    if (!isOwner(fcmToken)) {
+      Logger.log('[updateUserPermission] 権限エラー: オーナー権限が必要です');
+      return {
+        success: false,
+        message: 'この操作はオーナー権限が必要です'
+      };
+    }
+
     // 権限レベルの妥当性チェック
     const validPermissions = Object.values(PERMISSION_LEVELS);
     if (!validPermissions.includes(permission)) {
@@ -452,4 +557,7 @@ function executePhase1Migration() {
 // === 念のため"グローバル露出"を強制（V8での露出不具合/ネームスペース化対策） ===
 globalThis.getUserList = getUserList;
 globalThis.updateUserPermission = updateUserPermission;
+globalThis.getUserPermission = getUserPermission;
+globalThis.getUserNameByEmail = getUserNameByEmail;
+globalThis.isOwner = isOwner;
 globalThis.ping = ping;

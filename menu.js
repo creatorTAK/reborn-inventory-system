@@ -989,6 +989,10 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('test_user_migration');
       title = 'REBORN - ユーザー権限管理 Phase 1';
     } else if (menuType === 'user_management') {
+      // オーナー権限チェック（PWA対応）
+      if (!isOwner(fcmToken)) {
+        return HtmlService.createHtmlOutput('<h2>権限エラー</h2><p>ユーザー権限管理はオーナーのみがアクセスできます。</p>');
+      }
       template = HtmlService.createTemplateFromFile('user_management_ui');
       title = 'REBORN - ユーザー権限管理';
     } else {
@@ -1255,6 +1259,17 @@ function showConfigManagerAI() {
  * ユーザー権限管理画面を表示（サイドバー）
  */
 function showUserManagement() {
+  // オーナー権限チェック
+  if (!isOwner()) {
+    const ui = SpreadsheetApp.getUi();
+    ui.alert(
+      '権限エラー',
+      'ユーザー権限管理はオーナーのみがアクセスできます。',
+      ui.ButtonSet.OK
+    );
+    return;
+  }
+
   const t = HtmlService.createTemplateFromFile('user_management_ui');
   t.showBackButton = false; // スプレッドシートから開く場合は戻るボタン不要
   t.GAS_BASE_URL = ScriptApp.getService().getUrl() || '';
