@@ -1001,6 +1001,10 @@ function doGet(e) {
       }
       template = HtmlService.createTemplateFromFile('user_management_ui');
       title = 'REBORN - ユーザー権限管理';
+    } else if (menuType === 'chat') {
+      // チャット画面
+      template = HtmlService.createTemplateFromFile('chat_ui');
+      title = 'REBORN - チーム チャット';
     } else {
       // 不明なメニューの場合はデフォルトで商品登録
       template = HtmlService.createTemplateFromFile('sidebar_product');
@@ -1294,6 +1298,30 @@ function showUserManagement() {
 }
 
 /**
+ * チャット画面を表示（サイドバー）
+ */
+function showChatSidebar() {
+  const html = HtmlService.createHtmlOutputFromFile('chat_ui')
+    .setTitle('💬 チーム チャット')
+    .setWidth(400);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+/**
+ * チャットメッセージシート作成（メニューから実行）
+ */
+function createChatMessagesSheetMenu() {
+  const result = setupChatMessagesSheet();
+  const ui = SpreadsheetApp.getUi();
+
+  if (result.success) {
+    ui.alert('✅ 成功', result.message, ui.ButtonSet.OK);
+  } else {
+    ui.alert('❌ エラー', result.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
  * 入出庫履歴シート作成（メニューから実行）
  */
 function createInventoryHistorySheetMenu() {
@@ -1315,6 +1343,13 @@ function onOpen() {
     .addItem('📝 商品登録', 'showProductSidebar')
     .addItem('📦 在庫管理', 'showInventorySidebar')
     .addItem('📊 入出庫履歴', 'showInventoryHistoryViewer')
+    .addToUi();
+
+  // チーム コミュニケーションメニュー
+  ui.createMenu('💬 チーム')
+    .addItem('💬 チーム チャット', 'showChatSidebar')
+    .addSeparator()
+    .addItem('⚙️ チャットシート作成', 'createChatMessagesSheetMenu')
     .addToUi();
 
   // フィルタ・検索メニュー
