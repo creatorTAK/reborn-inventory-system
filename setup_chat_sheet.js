@@ -5,8 +5,8 @@
 
 /** @OnlyCurrentDoc */
 
-// シート名定義
-const CHAT_SHEET_NAME = 'チャットメッセージ';
+// シート名定義（chat_manager.jsで定義済み）
+// const CHAT_SHEET_NAME = 'チャットメッセージ';
 
 /**
  * チャットメッセージシートを作成

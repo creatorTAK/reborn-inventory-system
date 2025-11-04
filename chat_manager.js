@@ -311,10 +311,10 @@ function sendChatNotification(senderName, message, excludeUser) {
 
     Logger.log('[sendChatNotification] 送信対象: ' + tokens.length + '件');
 
-    if (typeof sendFcmNotification === 'function') {
-      sendFcmNotification(tokens, title, body, { type: 'chat', sender: senderName });
+    if (typeof sendFCMNotification === 'function') {
+      sendFCMNotification(title, body);
     } else {
-      Logger.log('[sendChatNotification] sendFcmNotification関数が見つかりません');
+      Logger.log('[sendChatNotification] sendFCMNotification関数が見つかりません');
     }
   } catch (error) {
     Logger.log('[sendChatNotification] ERROR: ' + error);

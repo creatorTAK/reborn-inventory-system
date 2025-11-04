@@ -258,15 +258,16 @@ function doPost(e) {
     }
 
     if (action === 'subscribeFCM') {
-      // FCMトークンを保存（チーム利用対応: デバイス情報、メールアドレス、通知設定も保存）
+      // FCMトークンを保存（チーム利用対応: デバイス情報、メールアドレス、権限、通知設定も保存）
       const token = requestBody.token;
       const deviceInfo = requestBody.deviceInfo || null;
       const userId = requestBody.userId || null;
       const userName = requestBody.userName || null;
       const email = requestBody.email || null;
+      const permission = requestBody.permission || 'スタッフ';
       const notificationEnabled = requestBody.notificationEnabled !== undefined ? requestBody.notificationEnabled : true;
       const notificationSound = requestBody.notificationSound !== undefined ? requestBody.notificationSound : true;
-      const result = saveFCMToken(token, deviceInfo, userId, userName, email, notificationEnabled, notificationSound);
+      const result = saveFCMToken(token, deviceInfo, userId, userName, email, permission, notificationEnabled, notificationSound);
       return ContentService.createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
     }
@@ -403,12 +404,13 @@ function doGet(e) {
       }
 
       if (action === 'subscribeFCM') {
-        // FCMトークンを保存（GETメソッド、チーム利用対応 + ユーザー名対応 + メールアドレス + 通知設定）
+        // FCMトークンを保存（GETメソッド、チーム利用対応 + ユーザー名対応 + メールアドレス + 権限 + 通知設定）
         const token = e.parameter.token;
         const deviceInfoParam = e.parameter.deviceInfo;
         const userIdParam = e.parameter.userId;
         const userNameParam = e.parameter.userName;
         const emailParam = e.parameter.email;
+        const permissionParam = e.parameter.permission;
         const notificationEnabledParam = e.parameter.notificationEnabled;
         const notificationSoundParam = e.parameter.notificationSound;
 
@@ -418,13 +420,14 @@ function doGet(e) {
           let debugSheet = ss.getSheetByName('FCM登録デバッグ');
           if (!debugSheet) {
             debugSheet = ss.insertSheet('FCM登録デバッグ');
-            debugSheet.appendRow(['タイムスタンプ', 'トークン（先頭20文字）', 'deviceInfoParam', 'userIdParam', 'userId (decoded)', 'userNameParam', 'userName (decoded)', 'email', 'notificationEnabled', 'notificationSound']);
+            debugSheet.appendRow(['タイムスタンプ', 'トークン（先頭20文字）', 'deviceInfoParam', 'userIdParam', 'userId (decoded)', 'userNameParam', 'userName (decoded)', 'email', 'permission', 'notificationEnabled', 'notificationSound']);
           }
 
           const deviceInfo = deviceInfoParam ? JSON.parse(decodeURIComponent(deviceInfoParam)) : null;
           const userId = userIdParam ? decodeURIComponent(userIdParam) : null;
           const userName = userNameParam ? decodeURIComponent(userNameParam) : null;
           const email = emailParam ? decodeURIComponent(emailParam) : null;
+          const permission = permissionParam ? decodeURIComponent(permissionParam) : 'スタッフ';
           const notificationEnabled = notificationEnabledParam === 'true' || notificationEnabledParam === true;
           const notificationSound = notificationSoundParam === 'true' || notificationSoundParam === true;
 
@@ -437,6 +440,7 @@ function doGet(e) {
             userNameParam || 'null',
             userName || 'null',
             email || 'null',
+            permission || 'null',
             notificationEnabled,
             notificationSound
           ]);
@@ -448,10 +452,11 @@ function doGet(e) {
         const userId = userIdParam ? decodeURIComponent(userIdParam) : null;
         const userName = userNameParam ? decodeURIComponent(userNameParam) : null;
         const email = emailParam ? decodeURIComponent(emailParam) : null;
+        const permission = permissionParam ? decodeURIComponent(permissionParam) : 'スタッフ';
         const notificationEnabled = notificationEnabledParam === 'true' || notificationEnabledParam === true;
         const notificationSound = notificationSoundParam === 'true' || notificationSoundParam === true;
 
-        const result = saveFCMToken(token, deviceInfo, userId, userName, email, notificationEnabled, notificationSound);
+        const result = saveFCMToken(token, deviceInfo, userId, userName, email, permission, notificationEnabled, notificationSound);
         return ContentService.createTextOutput(JSON.stringify(result))
           .setMimeType(ContentService.MimeType.JSON);
       }
@@ -1343,12 +1348,8 @@ function onOpen() {
     .addItem('📝 商品登録', 'showProductSidebar')
     .addItem('📦 在庫管理', 'showInventorySidebar')
     .addItem('📊 入出庫履歴', 'showInventoryHistoryViewer')
-    .addToUi();
-
-  // チーム コミュニケーションメニュー
-  ui.createMenu('💬 チーム')
-    .addItem('💬 チーム チャット', 'showChatSidebar')
     .addSeparator()
+    .addItem('💬 チーム チャット', 'showChatSidebar')
     .addItem('⚙️ チャットシート作成', 'createChatMessagesSheetMenu')
     .addToUi();
 
