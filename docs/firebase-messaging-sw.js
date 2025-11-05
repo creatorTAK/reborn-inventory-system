@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v15';
+const CACHE_VERSION = 'v16';
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -291,7 +291,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// fetchイベント: Cache First戦略（2回目以降の起動を高速化）
+// fetchイベント: HTMLはNetwork First、その他はCache First
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -306,7 +306,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // それ以外: Cache First戦略
+  // HTMLファイル: Network First戦略（常に最新版を取得、開発効率向上）
+  if (url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          // 成功した場合はキャッシュに保存して返す
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME)
+              .then((cache) => {
+                cache.put(event.request, responseToCache);
+              });
+          }
+          return networkResponse;
+        })
+        .catch((error) => {
+          // ネットワークエラー時はキャッシュから返す（オフライン対応）
+          console.log('[Service Worker] Network failed, trying cache:', url.pathname);
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // その他のリソース（JS/CSS/画像など）: Cache First戦略（高速化）
   event.respondWith(
     caches.match(event.request)
       .then((cachedResponse) => {
