@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v10';
+const CACHE_VERSION = 'v11';
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ
@@ -49,22 +49,27 @@ messaging.onBackgroundMessage((payload) => {
   const notificationBadge = payload.data?.badge || '/reborn-inventory-system/icon-180.png';
   const notificationLink = payload.data?.click_action || payload.data?.link || '/reborn-inventory-system/';
   const messageId = payload.data?.messageId || '';
-  const cacheKey = `${notificationTitle}|${notificationBody}`.substring(0, 100);
+
+  // messageIdを使った重複チェック（より確実）
+  const cacheKey = messageId || `${notificationTitle}|${notificationBody}|${Date.now()}`.substring(0, 100);
 
   console.log('[firebase-messaging-sw.js] messageId:', messageId);
+  console.log('[firebase-messaging-sw.js] cacheKey:', cacheKey);
 
-  // 同じ通知が2秒以内に来た場合はスキップ（念のため）
-  if (notificationCache.has(cacheKey)) {
+  // messageIdがある場合のみ重複チェック（テストメッセージは毎回表示）
+  if (messageId && notificationCache.has(cacheKey)) {
     console.log('[firebase-messaging-sw.js] 重複通知をスキップしました:', cacheKey);
     return;
   }
 
   // キャッシュに追加（2秒後に削除）
-  notificationCache.add(cacheKey);
-  setTimeout(() => {
-    notificationCache.delete(cacheKey);
-    console.log('[firebase-messaging-sw.js] キャッシュから削除:', cacheKey);
-  }, 2000);
+  if (messageId) {
+    notificationCache.add(cacheKey);
+    setTimeout(() => {
+      notificationCache.delete(cacheKey);
+      console.log('[firebase-messaging-sw.js] キャッシュから削除:', cacheKey);
+    }, 2000);
+  }
 
   // 1. バッジカウントを増やす（Badge API）
   incrementBadgeCount();
@@ -115,23 +120,77 @@ function sendAck(messageId) {
   });
 }
 
+// IndexedDB: バッジカウント永続化
+function getBadgeCount() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('RebornBadgeDB', 1);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction(['badge'], 'readonly');
+      const store = transaction.objectStore('badge');
+      const getRequest = store.get('count');
+
+      getRequest.onsuccess = () => resolve(getRequest.result || 0);
+      getRequest.onerror = () => resolve(0);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('badge')) {
+        db.createObjectStore('badge');
+      }
+    };
+  });
+}
+
+function setBadgeCount(count) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('RebornBadgeDB', 1);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction(['badge'], 'readwrite');
+      const store = transaction.objectStore('badge');
+      store.put(count, 'count');
+
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('badge')) {
+        db.createObjectStore('badge');
+      }
+    };
+  });
+}
+
 // バッジカウントを増やす（Service Worker内）
 function incrementBadgeCount() {
-  // localStorageから現在のカウントを取得
-  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async clients => {
     // 開いているクライアントがある場合はメッセージを送信
     if (clients.length > 0) {
       clients[0].postMessage({
         type: 'INCREMENT_BADGE'
       });
     } else {
-      // クライアントがない場合、直接Badge APIを更新
+      // クライアントがない場合、IndexedDBから現在のカウントを取得して+1
       if ('setAppBadge' in self.navigator) {
-        // localStorageは使えないため、IndexedDBまたは直接+1
-        // ここではシンプルに現在の値を取得せず+1だけする
-        self.navigator.setAppBadge(1).catch(err => {
-          console.error('Badge API エラー:', err);
-        });
+        try {
+          const currentCount = await getBadgeCount();
+          const newCount = currentCount + 1;
+
+          await setBadgeCount(newCount);
+          await self.navigator.setAppBadge(newCount);
+
+          console.log('[Badge] カウント更新:', currentCount, '→', newCount);
+        } catch (err) {
+          console.error('[Badge] エラー:', err);
+        }
       }
     }
   });
