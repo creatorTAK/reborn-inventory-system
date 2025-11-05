@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ
@@ -42,14 +42,16 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
-  // 🔧 データメッセージから値を取得
-  // notification ではなく data から取得（ブラウザの自動表示を防ぐため）
-  const notificationTitle = payload.data?.title || 'REBORN';
-  const notificationBody = payload.data?.body || 'テスト通知です';
+  // 🔧 notification + data から値を取得
+  const notificationTitle = payload.notification?.title || payload.data?.title || 'REBORN';
+  const notificationBody = payload.notification?.body || payload.data?.body || 'テスト通知です';
   const notificationIcon = payload.data?.icon || '/reborn-inventory-system/icon-180.png';
   const notificationBadge = payload.data?.badge || '/reborn-inventory-system/icon-180.png';
-  const notificationLink = payload.data?.link || '/reborn-inventory-system/';
+  const notificationLink = payload.data?.click_action || payload.data?.link || '/reborn-inventory-system/';
+  const messageId = payload.data?.messageId || '';
   const cacheKey = `${notificationTitle}|${notificationBody}`.substring(0, 100);
+
+  console.log('[firebase-messaging-sw.js] messageId:', messageId);
 
   // 同じ通知が2秒以内に来た場合はスキップ（念のため）
   if (notificationCache.has(cacheKey)) {
@@ -79,7 +81,39 @@ messaging.onBackgroundMessage((payload) => {
 
   console.log('[firebase-messaging-sw.js] 通知を表示します:', notificationTitle);
   self.registration.showNotification(notificationTitle, notificationOptions);
+
+  // ACK送信（受信確認）- messageIdがある場合のみ
+  if (messageId) {
+    sendAck(messageId);
+  }
 });
+
+// ACK（受信確認）をGASに送信
+function sendAck(messageId) {
+  const ackUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
+  const timestamp = new Date().getTime();
+
+  console.log('[ACK] 送信開始:', messageId);
+
+  fetch(ackUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      action: 'receiveAck',
+      messageId: messageId,
+      timestamp: timestamp
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log('[ACK] 送信成功:', data);
+  })
+  .catch(error => {
+    console.error('[ACK] 送信エラー:', error);
+  });
+}
 
 // バッジカウントを増やす（Service Worker内）
 function incrementBadgeCount() {
