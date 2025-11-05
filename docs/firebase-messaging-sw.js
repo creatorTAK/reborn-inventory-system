@@ -2,11 +2,11 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v12';
+const CACHE_VERSION = 'v13';
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
-// 通知の重複を防ぐためのキャッシュ
-const notificationCache = new Set();
+// 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
+const notificationCache = new Map();
 
 // 事前キャッシュするリソース（初回インストール時）
 const PRECACHE_RESOURCES = [
@@ -50,11 +50,21 @@ messaging.onBackgroundMessage((payload) => {
   const notificationLink = payload.data?.click_action || payload.data?.link || '/reborn-inventory-system/';
   const messageId = payload.data?.messageId || '';
 
-  // messageIdを使った重複チェック（より確実）
-  const cacheKey = messageId || `${notificationTitle}|${notificationBody}|${Date.now()}`.substring(0, 100);
+  // キャッシュクリーンアップ: 2秒以上前のエントリを削除
+  const now = Date.now();
+  for (const [key, timestamp] of notificationCache.entries()) {
+    if (now - timestamp > 2000) {
+      notificationCache.delete(key);
+      console.log('[firebase-messaging-sw.js] 古いキャッシュを削除:', key);
+    }
+  }
+
+  // messageIdを使った重複チェック
+  const cacheKey = messageId || `${notificationTitle}|${notificationBody}|${now}`.substring(0, 100);
 
   console.log('[firebase-messaging-sw.js] messageId:', messageId);
   console.log('[firebase-messaging-sw.js] cacheKey:', cacheKey);
+  console.log('[firebase-messaging-sw.js] キャッシュサイズ:', notificationCache.size);
 
   // messageIdがある場合のみ重複チェック（テストメッセージは毎回表示）
   if (messageId && notificationCache.has(cacheKey)) {
@@ -62,13 +72,10 @@ messaging.onBackgroundMessage((payload) => {
     return;
   }
 
-  // キャッシュに追加（2秒後に削除）
+  // キャッシュに追加（タイムスタンプ付き、setTimeoutは使わない）
   if (messageId) {
-    notificationCache.add(cacheKey);
-    setTimeout(() => {
-      notificationCache.delete(cacheKey);
-      console.log('[firebase-messaging-sw.js] キャッシュから削除:', cacheKey);
-    }, 2000);
+    notificationCache.set(cacheKey, now);
+    console.log('[firebase-messaging-sw.js] キャッシュに追加:', cacheKey);
   }
 
   // 1. バッジカウントを増やす（Badge API）
