@@ -15,6 +15,109 @@
 
 ## 📚 完了Issue一覧
 
+## PWA-001 | PWA: manifest.jsonパス設定エラー（アイコンが黒くなる） ✅ DONE (完了日: 2025-11-05)
+
+### 📌 基本情報
+- カテゴリ: バグ修正
+- 優先度: 中
+- 影響範囲: PWAアイコン表示
+- 発見日: 2025-11-05
+- 完了日: 2025-11-05
+- デプロイ: Cloudflare Pages
+
+### 🐛 問題内容
+古い機種のAndroidでPWAをホーム画面に登録すると、アイコンが白ではなく**真っ黒**になる問題。
+
+**原因:**
+- `manifest.json`の`start_url`, `scope`, `icons`のパスがルート（`/`）を参照
+- 実際のデプロイ先はサブディレクトリ（`/reborn-inventory-system/`）
+- パス不一致によりアイコン画像が読み込めず、黒く表示される
+
+### ✅ 期待動作
+- PWAアイコンが正しく白いREBORNロゴで表示される
+- すべての端末で一貫したアイコン表示
+
+### 📍 関連ファイル
+- `docs/manifest.json` - PWAマニフェストファイル
+
+### ✏️ 修正内容
+- [x] `start_url`: `/` → `/reborn-inventory-system/`
+- [x] `scope`: `/` → `/reborn-inventory-system/`
+- [x] アイコンパス: 相対パス → 絶対パス
+  - `icon-180.png` → `/reborn-inventory-system/icon-180.png`
+  - `icon-192.png` → `/reborn-inventory-system/icon-192.png`
+  - `icon-512.png` → `/reborn-inventory-system/icon-512.png`
+
+### 📝 テスト結果
+- [x] Cloudflare Pagesデプロイ完了
+- [ ] 古い機種Androidで再インストール後確認（ユーザーテスト待ち）
+
+---
+
+## SEC-001 | セキュリティ: シート保護機能（権限列の不正変更防止） ✅ DONE (完了日: 2025-11-05)
+
+### 📌 基本情報
+- カテゴリ: セキュリティ強化
+- 優先度: 高
+- 影響範囲: FCM通知登録シート、ユーザー権限管理シート
+- 発見日: 2025-11-04
+- 完了日: 2025-11-05
+- デプロイ: @627
+
+### 🐛 問題内容
+現在、スタッフや外注がスプレッドシートの「FCM通知登録」シートにアクセスし、
+L列（権限）を直接編集することで、自分の権限を昇格できるセキュリティホールが存在する。
+
+**具体例:**
+- スタッフが自分の権限を「オーナー」に変更できる
+- 外注が自分の権限を「スタッフ」に変更できる
+
+### ✅ 期待動作
+1. 「FCM通知登録」シート全体をオーナーのみ編集可能に保護
+2. 「ユーザー権限管理」シート全体をオーナーのみ編集可能に保護
+3. スタッフ・外注は閲覧のみ可能
+4. オーナーのみが権限を変更可能
+
+### 📍 関連ファイル
+- `sheet_protection.js` - シート保護設定（新規作成）
+- `menu.js` - メニューに「シート保護設定」追加
+- `FCM通知登録`シート - 保護対象
+- `ユーザー権限管理`シート - 保護対象
+
+### ✏️ 実装内容
+- [x] Phase 1: sheet_protection.js 作成
+- [x] Phase 2: 保護設定関数実装（setupSheetProtection）
+- [x] Phase 3: メニュー統合
+- [x] Phase 4: テスト実施（TC-SEC-001, 002, 003 全てPASS）
+- [x] Phase 5: デプロイ（@627）
+
+### 🔧 技術仕様
+```javascript
+// Googleスプレッドシート Protection API使用
+const protection = sheet.protect();
+protection.setDescription('オーナー専用');
+protection.setWarningOnly(false); // 警告のみではなく編集禁止
+
+// ドメイン全体の編集を禁止
+protection.setDomainEdit(false);
+
+// オーナーのみ編集可能
+protection.addEditor('owner@example.com');
+protection.removeEditors(protection.getEditors());
+```
+
+### 📝 テスト結果
+- ✅ TC-SEC-001: オーナー権限での編集 - PASS
+- ✅ TC-SEC-002: スタッフ権限での編集試行 - PASS（編集不可）
+- ✅ TC-SEC-003: 外注権限での編集試行 - PASS（編集不可）
+
+### 💡 成果
+- ✅ セキュリティホール完全修正
+- ✅ 権限昇格の不正操作を防止
+- ✅ オーナーのみが権限管理可能
+
+---
+
 ## INV-006 | 機能追加: 在庫アラートのプッシュ通知 + ユーザー権限管理 ✅ DONE (完了日: 2025-11-03)
 
 ### 📌 基本情報

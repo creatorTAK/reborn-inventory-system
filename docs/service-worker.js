@@ -3,11 +3,11 @@
 
 const CACHE_NAME = 'reborn-v3'; // クロスオリジン対応版
 const urlsToCache = [
-  '/reborn-inventory-system/',
-  '/reborn-inventory-system/index.html',
-  '/reborn-inventory-system/notifications.html',
-  '/reborn-inventory-system/manifest.json',
-  '/reborn-inventory-system/icon-180.png'
+  '/',
+  '/index.html',
+  '/notifications.html',
+  '/manifest.json',
+  '/icon-180.png'
 ];
 
 // Service Workerのインストール
@@ -69,10 +69,10 @@ self.addEventListener('push', (event) => {
   let notificationData = {
     title: 'REBORN',
     body: 'テスト通知です',
-    icon: '/reborn-inventory-system/icon-180.png',
-    badge: '/reborn-inventory-system/icon-180.png',
+    icon: '/icon-180.png',
+    badge: '/icon-180.png',
     data: {
-      url: '/reborn-inventory-system/'
+      url: '/'
     }
   };
 
@@ -83,9 +83,9 @@ self.addEventListener('push', (event) => {
       notificationData = {
         title: data.title || 'REBORN',
         body: data.body || 'テスト通知です',
-        icon: data.icon || '/reborn-inventory-system/icon-180.png',
-        badge: data.badge || '/reborn-inventory-system/icon-180.png',
-        data: data.data || { url: '/reborn-inventory-system/' }
+        icon: data.icon || '/icon-180.png',
+        badge: data.badge || '/icon-180.png',
+        data: data.data || { url: '/' }
       };
     } catch (e) {
       console.error('[Service Worker] Push data parse error:', e);
@@ -110,7 +110,7 @@ self.addEventListener('notificationclick', (event) => {
 
   event.notification.close();
 
-  const urlToOpen = event.notification.data?.url || '/reborn-inventory-system/';
+  const urlToOpen = event.notification.data?.url || '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })

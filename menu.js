@@ -314,6 +314,35 @@ function doPost(e) {
       }
     }
 
+    if (action === 'receiveAck') {
+      // ACK（受信確認）を記録
+      try {
+        const messageId = requestBody.messageId;
+        const timestamp = requestBody.timestamp;
+
+        Logger.log('[ACK受信] messageId: ' + messageId + ', timestamp: ' + timestamp);
+
+        // ACK記録シートに保存
+        if (typeof recordAck === 'function') {
+          recordAck(messageId, timestamp);
+        }
+
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          message: 'ACK received',
+          messageId: messageId
+        }))
+          .setMimeType(ContentService.MimeType.JSON);
+      } catch (error) {
+        Logger.log('[ACK受信] ERROR: ' + error);
+        return ContentService.createTextOutput(JSON.stringify({
+          success: false,
+          error: error.toString()
+        }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: '不明なアクション: ' + action
@@ -401,6 +430,61 @@ function doGet(e) {
         const result = setOperatorNameAPI(name);
         return ContentService.createTextOutput(JSON.stringify(result))
           .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      if (action === 'getExistingUserCount') {
+        // 既存ユーザー数を取得（初回登録判定用）
+        try {
+          const count = getExistingUserCount();
+          const response = {
+            success: true,
+            count: count
+          };
+          return ContentService.createTextOutput(JSON.stringify(response))
+            .setMimeType(ContentService.MimeType.JSON);
+        } catch (error) {
+          Logger.log('[doGet] getExistingUserCount ERROR: ' + error);
+          const errorResponse = {
+            success: false,
+            count: 0,
+            error: error.toString()
+          };
+          return ContentService.createTextOutput(JSON.stringify(errorResponse))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
+      if (action === 'getNewMessages') {
+        // 新着メッセージを取得（Polling用）
+        try {
+          const lastCheckTime = e.parameter.lastCheckTime ? parseInt(e.parameter.lastCheckTime) : 0;
+          const userName = e.parameter.userName ? decodeURIComponent(e.parameter.userName) : '';
+          const channelId = e.parameter.channelId ? decodeURIComponent(e.parameter.channelId) : '全体';
+
+          Logger.log('[doGet] getNewMessages - userName: ' + userName + ', lastCheckTime: ' + lastCheckTime);
+
+          const newMessages = getNewMessages(lastCheckTime, userName, channelId);
+
+          const response = {
+            success: true,
+            count: newMessages.length,
+            messages: newMessages,
+            serverTime: new Date().getTime()
+          };
+
+          return ContentService.createTextOutput(JSON.stringify(response))
+            .setMimeType(ContentService.MimeType.JSON);
+        } catch (error) {
+          Logger.log('[doGet] getNewMessages ERROR: ' + error);
+          const errorResponse = {
+            success: false,
+            count: 0,
+            messages: [],
+            error: error.toString()
+          };
+          return ContentService.createTextOutput(JSON.stringify(errorResponse))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
       }
 
       if (action === 'subscribeFCM') {
@@ -1340,6 +1424,85 @@ function createInventoryHistorySheetMenu() {
   }
 }
 
+/**
+ * シート保護設定（メニューから実行）
+ * SEC-001: 権限列の不正変更防止
+ */
+function setupSheetProtectionMenu() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // 確認ダイアログ
+  const response = ui.alert(
+    '🔒 シート保護設定',
+    '以下のシートをオーナーのみ編集可能に保護します：\n\n' +
+    '・FCM通知登録\n・ユーザー権限管理\n\n' +
+    'スタッフ・外注は閲覧のみ可能になります。\n\n実行しますか？',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (response !== ui.Button.YES) {
+    return;
+  }
+  
+  const result = setupSheetProtection();
+  
+  if (result.success) {
+    ui.alert('✅ 成功', result.message, ui.ButtonSet.OK);
+  } else {
+    ui.alert('❌ エラー', result.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * シート保護解除（デバッグ用、メニューから実行）
+ * WARNING: 本番環境では使用しないこと
+ */
+function removeSheetProtectionMenu() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // 確認ダイアログ
+  const response = ui.alert(
+    '⚠️ シート保護解除（デバッグ用）',
+    'すべてのシート保護を解除します。\n\n' +
+    'この操作は開発・デバッグ時のみ使用してください。\n' +
+    '本番環境では使用しないでください。\n\n' +
+    '実行しますか？',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (response !== ui.Button.YES) {
+    return;
+  }
+  
+  const result = removeSheetProtection();
+  
+  if (result.success) {
+    ui.alert('✅ 成功', result.message, ui.ButtonSet.OK);
+  } else {
+    ui.alert('❌ エラー', result.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * シート保護状態確認（メニューから実行）
+ */
+function checkSheetProtectionMenu() {
+  const ui = SpreadsheetApp.getUi();
+  const result = checkSheetProtection();
+  
+  if (result.success) {
+    let message = '現在の保護状態：\n\n';
+    
+    for (const sheetName in result.status) {
+      message += '【' + sheetName + '】\n' + result.status[sheetName] + '\n\n';
+    }
+    
+    ui.alert('🔍 シート保護状態', message, ui.ButtonSet.OK);
+  } else {
+    ui.alert('❌ エラー', result.message, ui.ButtonSet.OK);
+  }
+}
+
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
 
@@ -1377,6 +1540,11 @@ function onOpen() {
   ui.createMenu('⚙️ 設定管理')
     .addItem('👤 基本設定', 'showConfigManagerBasic')
     .addItem('🔐 ユーザー権限管理', 'showUserManagement')
+    .addSeparator()
+    .addItem('🔒 シート保護設定', 'setupSheetProtectionMenu')
+    .addItem('🔓 シート保護解除（デバッグ用）', 'removeSheetProtectionMenu')
+    .addItem('🔍 シート保護状態確認', 'checkSheetProtectionMenu')
+    .addSeparator()
     .addItem('🔢 管理番号設定', 'showConfigManagerManagement')
     .addItem('📝 商品登録設定', 'showConfigManagerProduct')
     .addItem('📦 配送設定', 'showConfigManagerShipping')

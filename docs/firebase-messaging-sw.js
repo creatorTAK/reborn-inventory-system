@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v16';
+const CACHE_VERSION = 'v17';
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -10,12 +10,12 @@ const notificationCache = new Map();
 
 // 事前キャッシュするリソース（初回インストール時）
 const PRECACHE_RESOURCES = [
-  '/reborn-inventory-system/',
-  '/reborn-inventory-system/index.html',
-  '/reborn-inventory-system/manifest.json',
-  '/reborn-inventory-system/icon-180.png',
-  '/reborn-inventory-system/icon-192.png',
-  '/reborn-inventory-system/icon-512.png'
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon-180.png',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
@@ -45,9 +45,9 @@ messaging.onBackgroundMessage(async (payload) => {
   // 🔧 notification + data から値を取得
   const notificationTitle = payload.notification?.title || payload.data?.title || 'REBORN';
   const notificationBody = payload.notification?.body || payload.data?.body || 'テスト通知です';
-  const notificationIcon = payload.data?.icon || '/reborn-inventory-system/icon-180.png';
-  const notificationBadge = payload.data?.badge || '/reborn-inventory-system/icon-180.png';
-  const notificationLink = payload.data?.click_action || payload.data?.link || '/reborn-inventory-system/';
+  const notificationIcon = payload.data?.icon || '/icon-180.png';
+  const notificationBadge = payload.data?.badge || '/icon-180.png';
+  const notificationLink = payload.data?.click_action || payload.data?.link || '/';
   const messageId = payload.data?.messageId || '';
 
   // キャッシュクリーンアップ: 2秒以上前のエントリを削除
@@ -230,7 +230,7 @@ self.addEventListener('notificationclick', (event) => {
 
   event.notification.close();
 
-  const urlToOpen = event.notification.data?.url || '/reborn-inventory-system/';
+  const urlToOpen = event.notification.data?.url || '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
