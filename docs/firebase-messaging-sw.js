@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v13';
+const CACHE_VERSION = 'v14';
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -38,8 +38,8 @@ firebase.initializeApp(firebaseConfig);
 // Firebase Messaging取得
 const messaging = firebase.messaging();
 
-// バックグラウンドメッセージ受信
-messaging.onBackgroundMessage((payload) => {
+// バックグラウンドメッセージ受信（asyncで非同期処理を待機）
+messaging.onBackgroundMessage(async (payload) => {
   console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
   // 🔧 notification + data から値を取得
@@ -78,21 +78,39 @@ messaging.onBackgroundMessage((payload) => {
     console.log('[firebase-messaging-sw.js] キャッシュに追加:', cacheKey);
   }
 
-  // 1. バッジカウントを増やす（Badge API）
-  incrementBadgeCount();
+  // 🧹 表示中通知を最大3件に制限（古い通知を自動削除）
+  try {
+    const existingNotifications = await self.registration.getNotifications();
+    console.log('[firebase-messaging-sw.js] 現在の通知数:', existingNotifications.length);
 
-  // 2. 通知を表示（1回だけ）
+    if (existingNotifications.length >= 3) {
+      // 古い順に閉じる（最新3件のみ残す）
+      const toClose = existingNotifications.slice(0, existingNotifications.length - 2);
+      toClose.forEach(n => {
+        n.close();
+        console.log('[firebase-messaging-sw.js] 古い通知を閉じました:', n.tag);
+      });
+    }
+  } catch (err) {
+    console.error('[firebase-messaging-sw.js] 通知取得エラー:', err);
+  }
+
+  // 1. バッジカウントを増やす（awaitで待機）
+  await incrementBadgeCount();
+
+  // 2. 通知を表示（messageIdをtagに使用）
   const notificationOptions = {
     body: notificationBody,
     icon: notificationIcon,
     badge: notificationBadge,
     vibrate: [200, 100, 200],
-    data: { url: notificationLink },
-    tag: cacheKey // 同じtagの通知は上書きされる（重複防止）
+    data: { url: notificationLink, messageId: messageId },
+    tag: messageId || cacheKey, // messageIdをtagに（一意性確保）
+    renotify: true // 再通知を有効化
   };
 
   console.log('[firebase-messaging-sw.js] 通知を表示します:', notificationTitle);
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  await self.registration.showNotification(notificationTitle, notificationOptions);
 
   // ACK送信（受信確認）- messageIdがある場合のみ
   if (messageId) {
@@ -177,30 +195,33 @@ function setBadgeCount(count) {
 }
 
 // バッジカウントを増やす（Service Worker内）
-function incrementBadgeCount() {
-  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async clients => {
+async function incrementBadgeCount() {
+  try {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
     // 開いているクライアントがある場合はメッセージを送信
     if (clients.length > 0) {
       clients[0].postMessage({
         type: 'INCREMENT_BADGE'
       });
+      console.log('[Badge] PWA側にメッセージ送信');
     } else {
       // クライアントがない場合、IndexedDBから現在のカウントを取得して+1
-      if ('setAppBadge' in self.navigator) {
-        try {
-          const currentCount = await getBadgeCount();
-          const newCount = currentCount + 1;
+      if ('setAppBadge' in self.registration) {
+        const currentCount = await getBadgeCount();
+        const newCount = currentCount + 1;
 
-          await setBadgeCount(newCount);
-          await self.navigator.setAppBadge(newCount);
+        await setBadgeCount(newCount);
+        await self.registration.setAppBadge(newCount);
 
-          console.log('[Badge] カウント更新:', currentCount, '→', newCount);
-        } catch (err) {
-          console.error('[Badge] エラー:', err);
-        }
+        console.log('[Badge] カウント更新:', currentCount, '→', newCount);
+      } else {
+        console.warn('[Badge] setAppBadge API not supported');
       }
     }
-  });
+  } catch (err) {
+    console.error('[Badge] エラー:', err);
+  }
 }
 
 // 通知クリック時の処理
