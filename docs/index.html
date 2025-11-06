@@ -1413,16 +1413,20 @@
 
     // postMessage受信処理（iframe内からのナビゲーション要求 + バッジ更新）
     window.addEventListener('message', function(event) {
-      // セキュリティ: GASのサンドボックスiframe（googleusercontent.com）からのメッセージを許可
+      // セキュリティ: GASのサンドボックスiframe（googleusercontent.com）からのメッセージのみ許可
+      // iframe内からのpostMessageを確認
+      const iframe = document.getElementById('gas-iframe');
+      const isFromIframe = iframe && event.source === iframe.contentWindow;
+
       const isValidOrigin = event.origin === 'https://script.google.com' ||
                            event.origin.includes('googleusercontent.com');
 
-      if (!isValidOrigin) {
-        console.warn('⚠️ 不正なオリジンからのメッセージを拒否:', event.origin);
+      if (!isValidOrigin && !isFromIframe) {
+        console.warn('⚠️ 不正なオリジンからのメッセージを拒否:', event.origin, 'isFromIframe:', isFromIframe);
         return;
       }
 
-      console.log('📨 受信メッセージ (from ' + event.origin + '):', event.data);
+      console.log('📨 受信メッセージ (from ' + event.origin + ', isFromIframe: ' + isFromIframe + '):', event.data);
 
       // ナビゲーション要求の処理
       if (event.data.type === 'navigate') {
