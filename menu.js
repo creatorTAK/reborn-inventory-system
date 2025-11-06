@@ -1128,9 +1128,11 @@ function doGet(e) {
     // FCMトークンをテンプレート変数として渡す（マルチユーザー対応）
     template.fcmToken = (e && e.parameter && e.parameter.fcmToken) || '';
 
-    // PWA版：ユーザー名とroomIdをテンプレート変数として渡す
+    // PWA版：ユーザー名、roomId、parentOrigin、pmTokenをテンプレート変数として渡す
     template.pwaUserName = (e && e.parameter && e.parameter.userName) || '';
     template.pwaRoomId = (e && e.parameter && e.parameter.roomId) || '';
+    template.pwaParentOrigin = (e && e.parameter && e.parameter.parentOrigin) || '';
+    template.pwaPmToken = (e && e.parameter && e.parameter.pmToken) || '';
 
     // GAS版：ユーザー名を取得（メールアドレスから）
     if (!template.isPWA) {
