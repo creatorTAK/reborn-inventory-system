@@ -1791,7 +1791,7 @@
 
         // Firebase SDKを動的インポート
         const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
-        const { getFirestore, collectionGroup, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { getFirestore, collection, doc, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
         // Firebase設定
         const firebaseConfig = {
@@ -1807,27 +1807,54 @@
         const app = initializeApp(firebaseConfig, 'chat-fab-app');
         const db = getFirestore(app);
         console.log('[Chat FAB] Firebase初期化完了');
-        if (debugStatus) debugStatus.textContent = 'Firestore接続完了 - リスニング中...';
+        if (debugStatus) debugStatus.textContent = 'ルームリスト取得中...';
 
-        // 自分の全ルームの未読カウントをリスニング（collectionGroupクエリ）
-        const q = query(
-          collectionGroup(db, 'unreadCounts'),
-          where('userId', '==', userName)
+        // 自分が参加しているルームを取得
+        const roomsQuery = query(
+          collection(db, 'rooms'),
+          where('members', 'array-contains', userName)
         );
 
-        onSnapshot(q, (snapshot) => {
+        // ルームリストをリスニング
+        onSnapshot(roomsQuery, (roomsSnapshot) => {
+          if (debugStatus) debugStatus.textContent = 'ルーム ' + roomsSnapshot.size + '件検出 - 未読取得中...';
+
           let totalUnread = 0;
+          let processedCount = 0;
 
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            totalUnread += data.unreadCount || 0;
+          if (roomsSnapshot.empty) {
+            if (debugStatus) debugStatus.textContent = '参加ルームなし';
+            updateChatBadge(0);
+            return;
+          }
+
+          // 各ルームの未読カウントを取得
+          roomsSnapshot.forEach((roomDoc) => {
+            const roomId = roomDoc.id;
+            const unreadDocRef = doc(db, `rooms/${roomId}/unreadCounts/${userName}`);
+
+            // 各ルームの未読をリスニング
+            onSnapshot(unreadDocRef, (unreadDoc) => {
+              const unreadData = unreadDoc.data();
+              const unreadCount = unreadData?.unreadCount || 0;
+
+              // このルームの未読カウントを記録
+              if (!window.chatUnreadByRoom) window.chatUnreadByRoom = {};
+              window.chatUnreadByRoom[roomId] = unreadCount;
+
+              // 全ルームの未読を合計
+              totalUnread = Object.values(window.chatUnreadByRoom).reduce((sum, count) => sum + count, 0);
+
+              processedCount++;
+              console.log('[Chat FAB] 未読カウント合計:', totalUnread, '(処理済み:', processedCount, '/', roomsSnapshot.size, ')');
+              if (debugStatus) debugStatus.textContent = 'リスニング成功 (' + roomsSnapshot.size + '件)';
+              updateChatBadge(totalUnread);
+            }, (error) => {
+              console.error('[Chat FAB] ルーム', roomId, 'の未読取得エラー:', error);
+            });
           });
-
-          console.log('[Chat FAB] 未読カウント合計:', totalUnread);
-          if (debugStatus) debugStatus.textContent = 'リスニング成功 (' + snapshot.size + '件のドキュメント)';
-          updateChatBadge(totalUnread);
         }, (error) => {
-          console.error('[Chat FAB] リスニングエラー:', error);
+          console.error('[Chat FAB] ルームリスト取得エラー:', error);
           if (debugStatus) debugStatus.textContent = 'エラー: ' + error.message;
         });
 
