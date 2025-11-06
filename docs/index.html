@@ -547,6 +547,73 @@
         background-position: -200% 0;
       }
     }
+
+    /* チャットFAB（右下固定） */
+    #chat-fab {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 9998;
+      transition: all 0.3s ease;
+      border: none;
+    }
+
+    #chat-fab:hover {
+      transform: scale(1.1);
+      box-shadow: 0 12px 32px rgba(102, 126, 234, 0.5);
+    }
+
+    #chat-fab:active {
+      transform: scale(0.95);
+    }
+
+    #chat-fab-icon {
+      font-size: 32px;
+      line-height: 1;
+    }
+
+    /* 未読バッジ */
+    #chat-fab-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 24px;
+      height: 24px;
+      border-radius: 12px;
+      background: #ef4444;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px;
+      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+      border: 2px solid white;
+    }
+
+    #chat-fab-badge.active {
+      display: flex;
+      animation: badge-bounce 0.5s ease;
+    }
+
+    @keyframes badge-bounce {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.2);
+      }
+    }
   </style>
 </head>
 <body>
@@ -673,9 +740,6 @@
       </a>
       <a href="#" onclick="navigateToPage('inventory_history'); return false;" class="drawer-item" id="drawer-inventory-history">
         📊 入出庫履歴
-      </a>
-      <a href="#" onclick="navigateToPage('chat'); return false;" class="drawer-item" id="drawer-chat">
-        💬 チーム チャット
       </a>
       <a href="#" class="drawer-item disabled">
         📈 売上
@@ -1612,6 +1676,125 @@
         }
       });
     }
+
+    // ========================================
+    // チャットFAB機能
+    // ========================================
+
+    // チャット一覧を開く
+    function openChatRooms() {
+      console.log('[Chat FAB] チャット一覧を開く');
+
+      const userName = localStorage.getItem('reborn_user_name') || '';
+      const fcmToken = localStorage.getItem('fcm_token') || '';
+
+      // pmToken生成
+      const pmToken = generatePmToken();
+      localStorage.setItem('pm_token', pmToken);
+
+      const params = new URLSearchParams({
+        menu: 'chat_rooms',
+        app: 'pwa',
+        userName: userName,
+        fcmToken: fcmToken,
+        parentOrigin: window.location.origin,
+        pmToken: pmToken
+      });
+
+      const iframe = document.getElementById('app-iframe');
+      iframe.src = `${window.REBORN_CONFIG.GAS_BASE_URL}?${params.toString()}`;
+    }
+
+    // FABクリックイベント
+    document.addEventListener('DOMContentLoaded', function() {
+      const chatFab = document.getElementById('chat-fab');
+      if (chatFab) {
+        chatFab.addEventListener('click', openChatRooms);
+        console.log('[Chat FAB] クリックイベント登録完了');
+      }
+    });
+
+    // 未読カウント更新（Firebase経由でリアルタイム更新）
+    let chatUnreadCount = 0;
+
+    function updateChatBadge(count) {
+      console.log('[Chat FAB] バッジ更新:', count);
+      chatUnreadCount = count;
+
+      const badge = document.getElementById('chat-fab-badge');
+      if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : count.toString();
+        badge.classList.add('active');
+      } else {
+        badge.classList.remove('active');
+      }
+    }
+
+    // Firestore未読カウントリスニング
+    async function startChatUnreadListener() {
+      console.log('[Chat FAB] 未読カウントリスニング開始');
+
+      try {
+        const userName = localStorage.getItem('reborn_user_name');
+        if (!userName) {
+          console.log('[Chat FAB] ユーザー名未設定のためリスニング中断');
+          return;
+        }
+
+        // Firebase SDKを動的インポート
+        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+        const { getFirestore, collectionGroup, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        // Firebase設定
+        const firebaseConfig = {
+          apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjwwtCorUZQ",
+          authDomain: "reborn-chat.firebaseapp.com",
+          projectId: "reborn-chat",
+          storageBucket: "reborn-chat.firebasestorage.app",
+          messagingSenderId: "345706548795",
+          appId: "1:345706548795:web:058a553da6b4b74db5161e"
+        };
+
+        // Firebase初期化
+        const app = initializeApp(firebaseConfig, 'chat-fab-app');
+        const db = getFirestore(app);
+        console.log('[Chat FAB] Firebase初期化完了');
+
+        // 自分の全ルームの未読カウントをリスニング（collectionGroupクエリ）
+        const q = query(
+          collectionGroup(db, 'unreadCounts'),
+          where('userId', '==', userName)
+        );
+
+        onSnapshot(q, (snapshot) => {
+          let totalUnread = 0;
+
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            totalUnread += data.unreadCount || 0;
+          });
+
+          console.log('[Chat FAB] 未読カウント合計:', totalUnread);
+          updateChatBadge(totalUnread);
+        }, (error) => {
+          console.error('[Chat FAB] リスニングエラー:', error);
+        });
+
+      } catch (error) {
+        console.error('[Chat FAB] 初期化エラー:', error);
+      }
+    }
+
+    // 初期化
+    document.addEventListener('DOMContentLoaded', function() {
+      startChatUnreadListener();
+    });
   </script>
+
+  <!-- チャットFAB（右下固定） -->
+  <button id="chat-fab" aria-label="チャットを開く">
+    <span id="chat-fab-icon">💬</span>
+    <span id="chat-fab-badge">0</span>
+  </button>
 </body>
 </html>
