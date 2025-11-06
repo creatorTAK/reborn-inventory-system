@@ -1425,10 +1425,37 @@
       console.log('📨 受信メッセージ (from ' + event.origin + '):', event.data);
 
       // ナビゲーション要求の処理
-      if (event.data.type === 'navigate' && event.data.url) {
+      if (event.data.type === 'navigate') {
         const iframe = document.getElementById('gas-iframe');
-        console.log('🚀 ナビゲーション:', event.data.url);
-        iframe.src = event.data.url;
+
+        // URLが直接指定されている場合（従来の方法）
+        if (event.data.url) {
+          console.log('🚀 ナビゲーション:', event.data.url);
+          iframe.src = event.data.url;
+        }
+        // page指定の場合（トークルーム等）
+        else if (event.data.page) {
+          const page = event.data.page;
+          const roomId = event.data.roomId || '';
+          const userName = event.data.userName || localStorage.getItem('reborn_user_name') || '';
+          const fcmToken = localStorage.getItem('fcm_token') || '';
+
+          console.log('🚀 ページ遷移:', page, 'roomId:', roomId);
+
+          // チャット画面への遷移
+          if (page === 'chat') {
+            const params = new URLSearchParams({
+              page: 'chat',
+              app: 'pwa',
+              userName: userName,
+              fcmToken: fcmToken,
+              roomId: roomId
+            });
+            const url = `${window.REBORN_CONFIG.GAS_BASE_URL}?${params.toString()}`;
+            console.log('🚀 チャット画面URL:', url);
+            iframe.src = url;
+          }
+        }
       }
 
       // バッジ更新要求の処理
