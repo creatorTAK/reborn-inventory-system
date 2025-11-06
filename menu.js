@@ -1110,13 +1110,17 @@ function doGet(e) {
     template.GAS_BASE_URL = gasBaseUrl;
     Logger.log('[doGet] GAS_BASE_URL設定: ' + gasBaseUrl);
 
+    // PWA版判定フラグ（app=pwaパラメータで明示的に判定）
+    template.isPWA = e && e.parameter && e.parameter.app === 'pwa';
+
     // FCMトークンをテンプレート変数として渡す（マルチユーザー対応）
     template.fcmToken = (e && e.parameter && e.parameter.fcmToken) || '';
-    Logger.log('[doGet] FCMトークンをテンプレートに渡します: ' + (template.fcmToken ? template.fcmToken.substring(0, 20) + '...' : 'なし'));
 
     // PWA版：ユーザー名をテンプレート変数として渡す
     template.pwaUserName = (e && e.parameter && e.parameter.userName) || '';
-    Logger.log('[doGet] PWAユーザー名をテンプレートに渡します: ' + template.pwaUserName);
+
+    Logger.log('[doGet] app=%s userName=%s fcmToken=%s', e?.parameter?.app, e?.parameter?.userName, e?.parameter?.fcmToken ? e.parameter.fcmToken.substring(0, 20) + '...' : 'なし');
+    Logger.log('[doGet] テンプレート変数: isPWA=%s pwaUserName=%s', template.isPWA, template.pwaUserName);
 
     // Web Appとして開く場合はwidthを指定しない（画面幅いっぱいに表示）
     return template.evaluate()

@@ -201,17 +201,33 @@
     const db = getFirestore(app);
     console.log('[Firestore] 初期化完了');
 
-    // グローバル変数
+    // グローバル変数（JSON.stringifyで安全に受け取る）
     let currentUserName = '';
-    let fcmToken = '<?= fcmToken ?>';
-    let pwaUserName = '<?= pwaUserName ?>';
-    // fcmTokenの有無で判定（PWA版からはfcmTokenが渡される）
-    let isGAS = !fcmToken;
+    const isPWAFlag   = <?= JSON.stringify(!!isPWA) ?>;
+    const pwaUserName = <?= JSON.stringify(pwaUserName || "") ?>;
+    const fcmToken    = <?= JSON.stringify(fcmToken || "") ?>;
+
+    // 判定ロジック：明示フラグ優先、補助として iframe 内かつ userName/fcmToken のどちらかが非空
+    const isEmbedded = (window.top !== window); // iframe内ならtrue
+    const looksLikePWA = isEmbedded && (pwaUserName !== "" || fcmToken !== "");
+    const isPWA = isPWAFlag || looksLikePWA;
+    const isGAS = !isPWA;
 
     // 初期化
     document.addEventListener('DOMContentLoaded', function() {
       console.log('[Chat UI] 初期化開始');
-      console.log('[Chat UI] Mode:', isGAS ? 'GAS' : 'PWA');
+
+      // デバッグ情報を出力
+      console.table({
+        'isPWAFlag': isPWAFlag,
+        'pwaUserName': pwaUserName,
+        'fcmToken': fcmToken ? fcmToken.substring(0, 20) + '...' : '(empty)',
+        'isEmbedded': isEmbedded,
+        'looksLikePWA': looksLikePWA,
+        'isPWA': isPWA,
+        'isGAS': isGAS,
+        'Mode': isGAS ? 'GAS' : 'PWA'
+      });
 
       // ユーザー名設定
       if (isGAS) {
