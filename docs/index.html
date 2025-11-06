@@ -1338,6 +1338,11 @@
       accordion.classList.toggle('open');
     }
 
+    // pmToken生成用のヘルパー関数
+    function generatePmToken() {
+      return crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+    }
+
     // ページ遷移（ドロワーメニューから）
     function navigateToPage(page) {
       const iframe = document.getElementById('gas-iframe');
@@ -1386,10 +1391,17 @@
       } else if (page === 'chat') {
         // PWA版：app=pwaフラグを常に付ける（判定を確実にする）
         const userName = localStorage.getItem('reborn_user_name') || '';
+
+        // pmTokenを生成してlocalStorageに保存
+        const pmToken = generatePmToken();
+        localStorage.setItem('pm_token', pmToken);
+
         const params = new URLSearchParams({
           menu: 'chat',
           app: 'pwa',                 // ★明示フラグ（必須）
-          userName: userName || ''    // 空でも可（PWAフォームで入力させる）
+          userName: userName || '',   // 空でも可（PWAフォームで入力させる）
+          parentOrigin: window.location.origin,
+          pmToken: pmToken
         });
         // fcmTokenがあれば付与
         if (fcmToken) params.set('fcmToken', fcmToken);
@@ -1413,47 +1425,68 @@
 
     // postMessage受信処理（iframe内からのナビゲーション要求 + バッジ更新）
     window.addEventListener('message', function(event) {
-      // セキュリティ: GASのサンドボックスiframe（googleusercontent.com）からのメッセージのみ許可
-      // iframe内からのpostMessageを確認
-      const iframe = document.getElementById('gas-iframe');
-      const isFromIframe = iframe && event.source === iframe.contentWindow;
+      // セキュリティ検証: Origin検証（Google関連のみ許可）
+      const isFromGoogle = (() => {
+        try {
+          const url = new URL(event.origin);
+          return url.hostname === 'script.google.com' ||
+                 url.hostname.endsWith('.googleusercontent.com');
+        } catch {
+          return false;
+        }
+      })();
 
-      const isValidOrigin = event.origin === 'https://script.google.com' ||
-                           event.origin.includes('googleusercontent.com');
-
-      if (!isValidOrigin && !isFromIframe) {
-        console.warn('⚠️ 不正なオリジンからのメッセージを拒否:', event.origin, 'isFromIframe:', isFromIframe);
+      if (!isFromGoogle) {
+        console.warn('⚠️ 不正なオリジンからのメッセージを拒否:', event.origin);
         return;
       }
 
-      console.log('📨 受信メッセージ (from ' + event.origin + ', isFromIframe: ' + isFromIframe + '):', event.data);
+      const data = event.data || {};
+
+      // ネームスペースマーカーチェック（__rebornがある場合のみ検証）
+      if (data.__reborn) {
+        // pmToken検証
+        const expectedToken = localStorage.getItem('pm_token') || '';
+        if (!expectedToken || data.pmToken !== expectedToken) {
+          console.warn('⚠️ pmToken不一致: expected', expectedToken, 'got', data.pmToken);
+          return;
+        }
+      }
+
+      console.log('📨 受信メッセージ (from', event.origin + '):', data);
 
       // ナビゲーション要求の処理
-      if (event.data.type === 'navigate') {
+      if (data.type === 'navigate') {
         const iframe = document.getElementById('gas-iframe');
 
         // URLが直接指定されている場合（従来の方法）
-        if (event.data.url) {
-          console.log('🚀 ナビゲーション:', event.data.url);
-          iframe.src = event.data.url;
+        if (data.url) {
+          console.log('🚀 ナビゲーション:', data.url);
+          iframe.src = data.url;
         }
         // page指定の場合（トークルーム等）
-        else if (event.data.page) {
-          const page = event.data.page;
-          const roomId = event.data.roomId || '';
-          const userName = event.data.userName || localStorage.getItem('reborn_user_name') || '';
+        else if (data.page) {
+          const page = data.page;
+          const roomId = data.roomId || '';
+          const userName = data.userName || localStorage.getItem('reborn_user_name') || '';
           const fcmToken = localStorage.getItem('fcm_token') || '';
 
           console.log('🚀 ページ遷移:', page, 'roomId:', roomId);
 
           // チャット画面への遷移
           if (page === 'chat') {
+            // 新しいpmTokenを生成
+            const pmToken = generatePmToken();
+            localStorage.setItem('pm_token', pmToken);
+
             const params = new URLSearchParams({
               page: 'chat',
               app: 'pwa',
               userName: userName,
               fcmToken: fcmToken,
-              roomId: roomId
+              roomId: roomId,
+              parentOrigin: window.location.origin,
+              pmToken: pmToken
             });
             const url = `${window.REBORN_CONFIG.GAS_BASE_URL}?${params.toString()}`;
             console.log('🚀 チャット画面URL:', url);

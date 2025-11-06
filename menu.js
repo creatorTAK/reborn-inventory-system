@@ -1091,11 +1091,23 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('user_management_ui');
       title = 'REBORN - ユーザー権限管理';
     } else if (menuType === 'chat') {
-      // チャット画面（Firestore版）
-      Logger.log('[doGet] チャット画面を読み込みます（Firestore版）');
-      template = HtmlService.createTemplateFromFile('chat_ui_firestore');
-      title = 'REBORN - チーム チャット';
-      Logger.log('[doGet] chat_ui_firestoreテンプレート作成完了');
+      // roomIdパラメータがある場合はチャット画面、ない場合はルーム一覧
+      const roomId = e.parameter.roomId || '';
+
+      if (roomId) {
+        // チャット画面を開く
+        Logger.log('[doGet] チャット画面を読み込みます (roomId: ' + roomId + ')');
+        template = HtmlService.createTemplateFromFile('chat_ui_firestore');
+        template.gasRoomId = roomId;
+        title = 'REBORN - チーム チャット';
+        Logger.log('[doGet] chat_ui_firestoreテンプレート作成完了');
+      } else {
+        // トークルーム一覧を表示
+        Logger.log('[doGet] トークルーム一覧を読み込みます');
+        template = HtmlService.createTemplateFromFile('chat_rooms_list');
+        title = 'REBORN - チーム チャット';
+        Logger.log('[doGet] chat_rooms_listテンプレート作成完了');
+      }
     } else {
       // 不明なメニューの場合はデフォルトで商品登録
       template = HtmlService.createTemplateFromFile('sidebar_product');
@@ -1116,11 +1128,41 @@ function doGet(e) {
     // FCMトークンをテンプレート変数として渡す（マルチユーザー対応）
     template.fcmToken = (e && e.parameter && e.parameter.fcmToken) || '';
 
-    // PWA版：ユーザー名をテンプレート変数として渡す
+    // PWA版：ユーザー名とroomIdをテンプレート変数として渡す
     template.pwaUserName = (e && e.parameter && e.parameter.userName) || '';
+    template.pwaRoomId = (e && e.parameter && e.parameter.roomId) || '';
 
-    Logger.log('[doGet] app=%s userName=%s fcmToken=%s', e?.parameter?.app, e?.parameter?.userName, e?.parameter?.fcmToken ? e.parameter.fcmToken.substring(0, 20) + '...' : 'なし');
-    Logger.log('[doGet] テンプレート変数: isPWA=%s pwaUserName=%s', template.isPWA, template.pwaUserName);
+    // GAS版：ユーザー名を取得（メールアドレスから）
+    if (!template.isPWA) {
+      try {
+        let userEmail = '';
+        try {
+          userEmail = Session.getEffectiveUser().getEmail();
+        } catch (emailError) {
+          try {
+            userEmail = Session.getActiveUser().getEmail();
+          } catch (emailError2) {
+            Logger.log('[doGet] メールアドレス取得失敗');
+          }
+        }
+
+        if (userEmail) {
+          const userName = getUserNameByEmail(userEmail);
+          template.gasUserName = userName || '';
+          Logger.log('[doGet] GAS版ユーザー名設定: ' + userName);
+        } else {
+          template.gasUserName = '';
+        }
+      } catch (error) {
+        Logger.log('[doGet] ユーザー名取得エラー: ' + error);
+        template.gasUserName = '';
+      }
+    } else {
+      template.gasUserName = '';
+    }
+
+    Logger.log('[doGet] app=%s userName=%s roomId=%s fcmToken=%s', e?.parameter?.app, e?.parameter?.userName, e?.parameter?.roomId, e?.parameter?.fcmToken ? e.parameter.fcmToken.substring(0, 20) + '...' : 'なし');
+    Logger.log('[doGet] テンプレート変数: isPWA=%s pwaUserName=%s pwaRoomId=%s gasUserName=%s', template.isPWA, template.pwaUserName, template.pwaRoomId, template.gasUserName);
 
     // Web Appとして開く場合はwidthを指定しない（画面幅いっぱいに表示）
     return template.evaluate()
@@ -1401,6 +1443,52 @@ function showUserManagement() {
 /**
  * チャット画面を表示（サイドバー）
  */
+/**
+ * メールアドレスからユーザー名を取得
+ */
+function getUserNameByEmail(email) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('FCM通知登録');
+
+    if (!sheet) {
+      Logger.log('[getUserNameByEmail] FCM通知登録シートが見つかりません');
+      return '';
+    }
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length <= 1) {
+      Logger.log('[getUserNameByEmail] FCM通知登録シートにデータがありません');
+      return '';
+    }
+
+    const headers = data[0];
+    const userNameCol = headers.indexOf('ユーザー名');
+    const emailCol = headers.indexOf('メールアドレス');
+
+    if (userNameCol === -1 || emailCol === -1) {
+      Logger.log('[getUserNameByEmail] 必要な列が見つかりません');
+      return '';
+    }
+
+    // メールアドレスで検索
+    for (let i = 1; i < data.length; i++) {
+      const rowEmail = data[i][emailCol];
+      if (rowEmail && rowEmail.toString().toLowerCase() === email.toLowerCase()) {
+        const userName = data[i][userNameCol];
+        Logger.log('[getUserNameByEmail] 該当ユーザー発見: ' + userName);
+        return userName || '';
+      }
+    }
+
+    Logger.log('[getUserNameByEmail] 該当ユーザーが見つかりません: ' + email);
+    return '';
+  } catch (error) {
+    Logger.log('[getUserNameByEmail] エラー: ' + error);
+    return '';
+  }
+}
+
 function showChatSidebar() {
   try {
     let userEmail = '';
@@ -1421,11 +1509,16 @@ function showChatSidebar() {
 
     Logger.log('[showChatSidebar] ユーザー: ' + userEmail);
 
-    // GASからのアクセスの場合、fcmTokenは空文字列（Session.getActiveUser()で識別）
-    const template = HtmlService.createTemplateFromFile('chat_ui_firestore');
-    template.fcmToken = '';
-    template.GAS_BASE_URL = ScriptApp.getService().getUrl(); // PWA版API呼び出し用
-    Logger.log('[showChatSidebar] GAS_BASE_URL設定: ' + template.GAS_BASE_URL);
+    // メールアドレスからユーザー名を取得
+    const userName = getUserNameByEmail(userEmail);
+    Logger.log('[showChatSidebar] ユーザー名: ' + userName);
+
+    // トークルーム一覧を表示
+    const template = HtmlService.createTemplateFromFile('chat_rooms_list');
+    template.isPWA = false;  // GAS版なので常にfalse
+    template.pwaUserName = '';  // GAS版では使わない
+    template.gasUserName = userName || '';  // GAS版用のユーザー名
+    Logger.log('[showChatSidebar] ユーザー名設定: ' + userName);
 
     const html = template.evaluate()
       .setTitle('💬 チーム チャット')
@@ -1553,9 +1646,6 @@ function onOpen() {
     .addItem('📝 商品登録', 'showProductSidebar')
     .addItem('📦 在庫管理', 'showInventorySidebar')
     .addItem('📊 入出庫履歴', 'showInventoryHistoryViewer')
-    .addSeparator()
-    .addItem('💬 チーム チャット', 'showChatSidebar')
-    .addItem('⚙️ チャットシート作成', 'createChatMessagesSheetMenu')
     .addToUi();
 
   // フィルタ・検索メニュー

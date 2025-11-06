@@ -26,14 +26,14 @@ npx @google/clasp deploy --deploymentId AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3
 ```
 
 **重要ポイント:**
-- 同じデプロイIDを使い続ける（@345固定）
+- 同じデプロイIDを使い続ける（@679固定）
 - `--deploymentId` オプションで既存IDを更新
 - `--description` オプションで変更内容を記録
 - **index.html の更新不要**（デプロイIDが変わらないため）
 
 **成功例:**
 ```
-Updated deployment AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA @345
+Deployed AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA @679
 ```
 
 ### Step 3: Cloudflare Pagesデプロイ（コード変更時のみ）
@@ -51,7 +51,7 @@ git push origin main
 
 コード修正後、以下を必ず実行：
 
-### GASファイル修正時（inventory.js, config.js, web_push.js等）
+### GASファイル修正時（inventory.js, config.js, web_push.js, chat_ui_firestore.html等）
 - [ ] `npx @google/clasp push`
 - [ ] `npx @google/clasp deploy --deploymentId AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA --description "変更内容"`
 - [ ] ✅ 完了（index.html更新不要、git push不要）
@@ -78,9 +78,10 @@ git push origin main
 AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA
 ```
 
-**バージョン番号:** @345
+**現在のバージョン番号:** @679
 
 **初回設定日:** 2025-10-28
+**最終更新:** 2025-11-06
 
 **重要:** このIDは変更しないこと。同じIDを使い続けることで：
 - デプロイ上限（20件）を気にしなくて良い
@@ -124,6 +125,9 @@ npx @google/clasp undeploy [デプロイID]
 
 # 例3: 通知修正
 --description "fix(NOTIF-003): FCMトークン自動更新対応"
+
+# 例4: チャット修正
+--description "fix(CHAT): app=pwaフラグで判定ロジック修正"
 ```
 
 ---
@@ -138,5 +142,5 @@ npx @google/clasp undeploy [デプロイID]
 
 ---
 
-**最終更新: 2025-10-28**
-**ルール改訂理由: デプロイ効率化（既存ID更新方式に変更）**
+**最終更新: 2025-11-06**
+**ルール改訂理由: バージョン番号を@679に更新**

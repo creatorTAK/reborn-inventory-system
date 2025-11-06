@@ -47,11 +47,48 @@
     .message-item {
       margin-bottom: 16px;
       animation: fadeIn 0.3s ease-in;
+      display: flex;
+      flex-direction: column;
+      /* iOSのテキスト選択・コールアウトを無効化 */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
+    /* 自分のメッセージ（右寄せ・青） */
+    .message-item-mine {
+      align-items: flex-end;
+    }
+    .message-item-mine .message-text {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 18px 18px 4px 18px;
+      max-width: 70%;
+    }
+    .message-item-mine .message-header {
+      flex-direction: row-reverse;
+    }
+    .message-item-mine .message-sender {
+      margin-left: 8px;
+      margin-right: 0;
+      color: #667eea;
+    }
+
+    /* 他人のメッセージ（左寄せ・グレー） */
+    .message-item-other {
+      align-items: flex-start;
+    }
+    .message-item-other .message-text {
+      background-color: white;
+      color: #2d3748;
+      border-radius: 18px 18px 18px 4px;
+      max-width: 70%;
+    }
+
     .message-header {
       display: flex;
       align-items: center;
@@ -67,12 +104,28 @@
       color: #718096;
     }
     .message-text {
-      background-color: white;
-      padding: 12px;
-      border-radius: 12px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      padding: 12px 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       white-space: pre-wrap;
       word-wrap: break-word;
+      /* テキスト選択を完全に無効化 */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .delete-button {
+      background: none;
+      border: none;
+      color: #ef4444;
+      cursor: pointer;
+      font-size: 0.875rem;
+      padding: 4px 8px;
+      margin-left: 8px;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    .delete-button:hover {
+      opacity: 1;
     }
 
     /* 入力エリア */
@@ -139,13 +192,133 @@
     #userSelectContainer {
       margin-bottom: 8px;
     }
+
+    /* 選択削除モード */
+    .selection-mode-bar {
+      display: none;
+      background-color: #fff3cd;
+      padding: 12px 16px;
+      border-bottom: 1px solid #ffeaa7;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .selection-mode-bar.active {
+      display: flex;
+    }
+    .selection-mode-info {
+      font-size: 0.875rem;
+      color: #856404;
+    }
+    .selection-mode-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    .selection-mode-buttons button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: transform 0.1s;
+    }
+    .selection-mode-buttons button:hover {
+      transform: scale(1.05);
+    }
+    .btn-delete-selected {
+      background-color: #ef4444;
+      color: white;
+    }
+    .btn-cancel-selection {
+      background-color: #6c757d;
+      color: white;
+    }
+    .message-checkbox {
+      display: none;
+      margin-right: 8px;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .selection-mode .message-checkbox {
+      display: inline-block;
+    }
+    .toggle-selection-btn {
+      background-color: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.4);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      margin-left: 12px;
+    }
+    .toggle-selection-btn:hover {
+      background-color: rgba(255,255,255,0.3);
+    }
+
+    /* 長押しメニュー（LINEライクなポップアップ） */
+    #contextMenu {
+      position: absolute;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      z-index: 3000;
+      display: none;
+      opacity: 0;
+      transform: scale(0.9);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    #contextMenu.active {
+      display: block;
+      opacity: 1;
+      transform: scale(1);
+    }
+    .context-menu-items {
+      display: flex;
+      gap: 0;
+      padding: 8px;
+    }
+    .context-menu-item {
+      display: flex;
+      padding: 10px 16px;
+      background: white;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: none;
+      font-family: inherit;
+      font-size: 14px;
+      color: #374151;
+      border-right: 1px solid #e5e7eb;
+      white-space: nowrap;
+    }
+    .context-menu-item:last-child {
+      border-right: none;
+    }
+    .context-menu-item:active {
+      background: #f3f4f6;
+    }
+    #contextMenuOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      z-index: 2999;
+      display: none;
+    }
+    #contextMenuOverlay.active {
+      display: block;
+    }
   </style>
 </head>
 <body>
   <div class="chat-header">
-    <h1>💬 チーム チャット</h1>
+    <h1>💬 チーム チャット
+      <button class="toggle-selection-btn" onclick="toggleSelectionMode()">🗑️ 選択削除</button>
+    </h1>
     <div class="channel-info">
-      <span id="channelName">#全体</span>
+      <span id="channelName">読み込み中...</span>
       <span id="userInfo" style="margin-left: 12px;"></span>
     </div>
 
@@ -165,6 +338,17 @@
     </div>
   </div>
 
+  <!-- 選択削除モードバー -->
+  <div class="selection-mode-bar" id="selectionModeBar">
+    <div class="selection-mode-info">
+      <span id="selectedCount">0</span> 件選択中
+    </div>
+    <div class="selection-mode-buttons">
+      <button class="btn-delete-selected" onclick="deleteSelectedMessages()">削除</button>
+      <button class="btn-cancel-selection" onclick="toggleSelectionMode()">キャンセル</button>
+    </div>
+  </div>
+
   <div class="messages-container" id="messagesContainer"></div>
 
   <div class="input-container">
@@ -181,10 +365,20 @@
     <div class="char-counter" id="charCounter">0 / 1000</div>
   </div>
 
+  <!-- 長押しメニュー（LINEライクなポップアップ） -->
+  <div id="contextMenuOverlay" onclick="closeContextMenu()"></div>
+  <div id="contextMenu">
+    <div class="context-menu-items">
+      <button class="context-menu-item" onclick="copyMessage()">コピー</button>
+      <button class="context-menu-item" onclick="replyMessage()">リプライ</button>
+      <button class="context-menu-item" onclick="deleteMessageFromMenu()">削除</button>
+    </div>
+  </div>
+
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, addDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase設定
     const firebaseConfig = {
@@ -203,25 +397,35 @@
 
     // グローバル変数（JSON.stringifyで安全に受け取る）
     let currentUserName = '';
-    const isPWAFlag   = <?= JSON.stringify(!!isPWA) ?>;
-    const pwaUserName = <?= JSON.stringify(pwaUserName || "") ?>;
-    const fcmToken    = <?= JSON.stringify(fcmToken || "") ?>;
+    let currentRoomId = '';
+    let currentRoomName = '';
+
+    // GASテンプレート変数をJavaScript変数に変換（変数名の衝突を避ける）
+    const isPWAFlag        = <?= JSON.stringify(!!isPWA) ?>;
+    const pwaUserNameParam = <?= JSON.stringify(typeof pwaUserName !== 'undefined' ? pwaUserName : "") ?>;
+    const pwaRoomIdParam   = <?= JSON.stringify(typeof pwaRoomId !== 'undefined' ? pwaRoomId : "") ?>;
+    const gasUserNameParam = <?= JSON.stringify(typeof gasUserName !== 'undefined' ? gasUserName : "") ?>;
+    const gasRoomIdParam   = <?= JSON.stringify(typeof gasRoomId !== 'undefined' ? gasRoomId : "") ?>;
+    const fcmTokenParam    = <?= JSON.stringify(typeof fcmToken !== 'undefined' ? fcmToken : "") ?>;
 
     // 判定ロジック：明示フラグ優先、補助として iframe 内かつ userName/fcmToken のどちらかが非空
     const isEmbedded = (window.top !== window); // iframe内ならtrue
-    const looksLikePWA = isEmbedded && (pwaUserName !== "" || fcmToken !== "");
+    const looksLikePWA = isEmbedded && (pwaUserNameParam !== "" || fcmTokenParam !== "");
     const isPWA = isPWAFlag || looksLikePWA;
     const isGAS = !isPWA;
 
     // 初期化
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', async function() {
       console.log('[Chat UI] 初期化開始');
 
       // デバッグ情報を出力
       console.table({
         'isPWAFlag': isPWAFlag,
-        'pwaUserName': pwaUserName,
-        'fcmToken': fcmToken ? fcmToken.substring(0, 20) + '...' : '(empty)',
+        'pwaUserNameParam': pwaUserNameParam,
+        'pwaRoomIdParam': pwaRoomIdParam,
+        'gasUserNameParam': gasUserNameParam,
+        'gasRoomIdParam': gasRoomIdParam,
+        'fcmTokenParam': fcmTokenParam ? fcmTokenParam.substring(0, 20) + '...' : '(empty)',
         'isEmbedded': isEmbedded,
         'looksLikePWA': looksLikePWA,
         'isPWA': isPWA,
@@ -229,21 +433,80 @@
         'Mode': isGAS ? 'GAS' : 'PWA'
       });
 
+      // roomId設定
+      if (isGAS) {
+        currentRoomId = gasRoomIdParam || 'room_all';
+      } else {
+        currentRoomId = pwaRoomIdParam || 'room_all';
+      }
+      console.log('[Room] roomId設定:', currentRoomId);
+
+      // ルーム情報を取得してヘッダーに表示
+      try {
+        const roomRef = doc(db, 'rooms', currentRoomId);
+        const roomDoc = await getDoc(roomRef);
+
+        if (roomDoc.exists()) {
+          const roomData = roomDoc.data();
+          currentRoomName = roomData.name || '不明なルーム';
+          const roomIcon = roomData.icon || '💬';
+          document.getElementById('channelName').textContent = `${roomIcon} ${currentRoomName}`;
+          console.log('[Room] ルーム名表示完了:', currentRoomName);
+        } else {
+          console.error('[Room] ルームが見つかりません:', currentRoomId);
+          document.getElementById('channelName').textContent = '⚠️ ルームが見つかりません';
+        }
+      } catch (error) {
+        console.error('[Room] ルーム情報取得エラー:', error);
+        document.getElementById('channelName').textContent = '⚠️ エラー';
+      }
+
       // ユーザー名設定
       if (isGAS) {
-        // GAS版：ドロップダウン表示
-        showUserSelect();
+        // GAS版：FCM通知登録シートから自動取得
+        if (gasUserNameParam && gasUserNameParam.trim() !== '') {
+          // JSON.parse()でダブルクォーテーションを削除
+          try {
+            currentUserName = JSON.parse(gasUserNameParam);
+          } catch (e) {
+            // パースできない場合はそのまま使用
+            currentUserName = gasUserNameParam;
+          }
+          document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
+          console.log('[GAS] ユーザー名自動設定:', currentUserName);
+          console.log('[GAS] currentUserName length:', currentUserName.length);
+        } else {
+          // ユーザー名が取得できなかった場合、ドロップダウン表示
+          console.log('[GAS] ユーザー名が取得できませんでした。ドロップダウンを表示');
+          showUserSelect();
+        }
       } else {
         // PWA版：URLパラメータから取得（親ページのlocalStorageから渡される）
-        currentUserName = pwaUserName;
+        // JSON.parse()でダブルクォーテーションを削除
+        try {
+          currentUserName = JSON.parse(pwaUserNameParam);
+        } catch (e) {
+          // パースできない場合はそのまま使用
+          currentUserName = pwaUserNameParam;
+        }
 
-        if (currentUserName) {
+        console.log('[PWA] pwaUserNameParam受信:', pwaUserNameParam);
+        console.log('[PWA] currentUserName設定:', currentUserName);
+        console.log('[PWA] currentUserName length:', currentUserName.length);
+
+        if (currentUserName && currentUserName.trim() !== '') {
           document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
-          console.log('[PWA] ユーザー名取得（URLパラメータ）:', currentUserName);
+          console.log('[PWA] ユーザー名表示完了:', currentUserName);
         } else {
           // ユーザー名が未設定の場合、入力UIを表示
           console.log('[PWA] ユーザー名未設定 - 入力UIを表示');
-          showUserNameInput();
+          const container = document.getElementById('userNameInputContainer');
+          if (container) {
+            container.style.display = 'block';
+            console.log('[PWA] ユーザー名入力UI表示完了');
+          } else {
+            console.error('[PWA] userNameInputContainer が見つかりません');
+          }
         }
       }
 
@@ -355,6 +618,7 @@
     function startListening() {
       const q = query(
         collection(db, 'messages'),
+        where('roomId', '==', currentRoomId),
         orderBy('timestamp', 'desc'),
         limit(50)
       );
@@ -388,14 +652,60 @@
       const container = document.getElementById('messagesContainer');
 
       const item = document.createElement('div');
-      item.className = 'message-item';
+
+      // msg.userNameもJSON.parseして正規化（古いメッセージ対応）
+      let messageUserName = msg.userName;
+      try {
+        // ダブルクォートで囲まれている場合はパース
+        if (typeof messageUserName === 'string' && messageUserName.startsWith('"') && messageUserName.endsWith('"')) {
+          messageUserName = JSON.parse(messageUserName);
+        }
+      } catch (e) {
+        // パースできない場合はそのまま使用
+      }
+
+      // 自分が削除したメッセージはスキップ（正規化したcurrentUserNameで判定）
+      if (msg.deletedBy) {
+        // deletedBy配列の各要素も正規化して比較
+        const normalizedDeletedBy = msg.deletedBy.map(name => {
+          try {
+            if (typeof name === 'string' && name.startsWith('"') && name.endsWith('"')) {
+              return JSON.parse(name);
+            }
+            return name;
+          } catch (e) {
+            return name;
+          }
+        });
+
+        if (normalizedDeletedBy.includes(currentUserName)) {
+          return;
+        }
+      }
+
+      // 自分のメッセージか他人のメッセージかで分岐
+      const isMine = messageUserName === currentUserName;
+
+      // デバッグログ
+      console.log('[AppendMessage] msg.userName:', msg.userName, 'normalized:', messageUserName, 'currentUserName:', currentUserName, 'isMine:', isMine);
+
+      item.className = isMine ? 'message-item message-item-mine' : 'message-item message-item-other';
+      item.dataset.messageId = msg.id;
 
       const header = document.createElement('div');
       header.className = 'message-header';
 
+      // チェックボックス（選択削除モード用）
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'message-checkbox';
+      checkbox.dataset.messageId = msg.id;
+      checkbox.onchange = updateSelectionCount;
+      header.appendChild(checkbox);
+
       const sender = document.createElement('span');
       sender.className = 'message-sender';
-      sender.textContent = msg.userName || '匿名';
+      sender.textContent = messageUserName || '匿名';
 
       const time = document.createElement('span');
       time.className = 'message-time';
@@ -408,12 +718,25 @@
       header.appendChild(sender);
       header.appendChild(time);
 
+      // 自分のメッセージの場合、削除ボタンを追加
+      if (isMine) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-button';
+        deleteBtn.textContent = '🗑️';
+        deleteBtn.onclick = () => deleteMessage(msg.id);
+        header.appendChild(deleteBtn);
+      }
+
       const text = document.createElement('div');
       text.className = 'message-text';
       text.textContent = msg.text || '';
 
       item.appendChild(header);
       item.appendChild(text);
+
+      // 長押しイベントリスナーを追加
+      console.log('[Message] Adding long press listener for message:', msg.id);
+      addLongPressListener(item, msg.id, msg.text || '');
 
       container.appendChild(item);
     }
@@ -433,17 +756,35 @@
         return;
       }
 
+      // roomIdチェック
+      if (!currentRoomId) {
+        alert('ルームIDが設定されていません');
+        return;
+      }
+
       try {
         console.log('[Firestore] メッセージ送信中...');
 
+        // メッセージを送信
         await addDoc(collection(db, 'messages'), {
+          roomId: currentRoomId,
           text: message,
           userName: currentUserName,
-          channel: '全体',
-          timestamp: serverTimestamp()
+          timestamp: serverTimestamp(),
+          deletedBy: []
         });
 
         console.log('[Firestore] メッセージ送信完了');
+
+        // roomsコレクションのlastMessageを更新
+        const roomRef = doc(db, 'rooms', currentRoomId);
+        await updateDoc(roomRef, {
+          lastMessage: message,
+          lastMessageAt: serverTimestamp(),
+          lastMessageBy: currentUserName
+        });
+
+        console.log('[Firestore] ルーム情報更新完了');
 
         // 入力欄クリア
         input.value = '';
@@ -455,6 +796,55 @@
         alert('メッセージの送信に失敗しました: ' + error.message);
       }
     };
+
+    // メッセージ削除（論理削除 - 自分の画面からのみ削除）
+    async function deleteMessage(messageId) {
+      // ユーザー名チェック
+      if (!currentUserName) {
+        alert('ユーザー名を選択してください');
+        return;
+      }
+
+      if (!confirm('このメッセージを削除しますか？')) {
+        return;
+      }
+
+      try {
+        console.log('[Firestore] メッセージ削除中...', messageId);
+        console.log('[Firestore] 削除ユーザー:', currentUserName);
+
+        const messageRef = doc(db, 'messages', messageId);
+        const messageDoc = await getDoc(messageRef);
+
+        if (!messageDoc.exists()) {
+          console.error('[Firestore] メッセージが存在しません');
+          return;
+        }
+
+        const messageData = messageDoc.data();
+        // deletedBy が配列でない場合も考慮して、確実に配列化
+        let deletedByArray = messageData.deletedBy;
+        if (!Array.isArray(deletedByArray)) {
+          deletedByArray = [];
+        }
+
+        // 自分のユーザー名を deletedBy 配列に追加
+        if (!deletedByArray.includes(currentUserName)) {
+          deletedByArray.push(currentUserName);
+        }
+
+        await updateDoc(messageRef, {
+          deletedBy: deletedByArray,
+          lastDeletedAt: serverTimestamp()
+        });
+
+        console.log('[Firestore] メッセージ削除完了（自分の画面からのみ）');
+
+      } catch (error) {
+        console.error('[Firestore] 削除エラー:', error);
+        alert('メッセージの削除に失敗しました: ' + error.message);
+      }
+    }
 
     // 文字数カウンター更新
     function updateCharCounter() {
@@ -473,6 +863,280 @@
       } else {
         counter.classList.remove('warning', 'error');
       }
+    }
+
+    // 選択削除モードの切り替え
+    window.toggleSelectionMode = function() {
+      const container = document.getElementById('messagesContainer');
+      const bar = document.getElementById('selectionModeBar');
+
+      if (container.classList.contains('selection-mode')) {
+        // 選択モード終了
+        container.classList.remove('selection-mode');
+        bar.classList.remove('active');
+
+        // すべてのチェックボックスをクリア
+        const checkboxes = document.querySelectorAll('.message-checkbox');
+        checkboxes.forEach(cb => cb.checked = false);
+        updateSelectionCount();
+      } else {
+        // 選択モード開始
+        container.classList.add('selection-mode');
+        bar.classList.add('active');
+      }
+    };
+
+    // 選択カウント更新
+    function updateSelectionCount() {
+      const checkboxes = document.querySelectorAll('.message-checkbox:checked');
+      const count = checkboxes.length;
+      document.getElementById('selectedCount').textContent = count;
+    }
+
+    // 選択したメッセージを一括削除（自分の画面からのみ削除）
+    window.deleteSelectedMessages = async function() {
+      const checkboxes = document.querySelectorAll('.message-checkbox:checked');
+
+      if (checkboxes.length === 0) {
+        alert('削除するメッセージを選択してください');
+        return;
+      }
+
+      if (!confirm(`${checkboxes.length}件のメッセージを削除しますか？`)) {
+        return;
+      }
+
+      try {
+        console.log('[Firestore] 一括削除開始:', checkboxes.length + '件');
+
+        // 並列で削除処理
+        const deletePromises = Array.from(checkboxes).map(async (checkbox) => {
+          const messageId = checkbox.dataset.messageId;
+          const messageRef = doc(db, 'messages', messageId);
+          const messageDoc = await getDoc(messageRef);
+
+          if (messageDoc.exists()) {
+            const messageData = messageDoc.data();
+            // deletedBy が配列でない場合も考慮して、確実に配列化
+            let deletedByArray = messageData.deletedBy;
+            if (!Array.isArray(deletedByArray)) {
+              deletedByArray = [];
+            }
+
+            // 自分のユーザー名を deletedBy 配列に追加
+            if (!deletedByArray.includes(currentUserName)) {
+              deletedByArray.push(currentUserName);
+            }
+
+            await updateDoc(messageRef, {
+              deletedBy: deletedByArray,
+              lastDeletedAt: serverTimestamp()
+            });
+          }
+        });
+
+        await Promise.all(deletePromises);
+
+        console.log('[Firestore] 一括削除完了（自分の画面からのみ）');
+
+        // 選択モード終了
+        toggleSelectionMode();
+
+      } catch (error) {
+        console.error('[Firestore] 一括削除エラー:', error);
+        alert('メッセージの削除に失敗しました: ' + error.message);
+      }
+    };
+
+    // 長押しメニュー関連
+    let contextMenuData = {
+      messageId: null,
+      messageText: null
+    };
+    let longPressTimer = null;
+    const LONG_PRESS_DURATION = 500; // 500ms
+
+    // 長押しメニューを開く（メッセージの近くに表示）
+    function openContextMenu(messageId, messageText, targetElement) {
+      console.log('[ContextMenu] Opening menu for message:', messageId);
+      contextMenuData.messageId = messageId;
+      contextMenuData.messageText = messageText;
+
+      const menu = document.getElementById('contextMenu');
+      const overlay = document.getElementById('contextMenuOverlay');
+
+      console.log('[ContextMenu] Menu element:', menu);
+      console.log('[ContextMenu] Overlay element:', overlay);
+
+      // メニュー表示（位置計算のため一時的に表示）
+      menu.style.display = 'block';
+      menu.style.opacity = '0';
+
+      // メッセージ要素の位置を取得
+      const rect = targetElement.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+
+      console.log('[ContextMenu] Target rect:', rect);
+      console.log('[ContextMenu] Menu rect:', menuRect);
+
+      // メニューをメッセージの上部中央に配置
+      let top = rect.top - menuRect.height - 10; // メッセージの上に10px隙間
+      let left = rect.left + (rect.width / 2) - (menuRect.width / 2); // 中央揃え
+
+      // 画面上部にはみ出す場合はメッセージの下に表示
+      if (top < 10) {
+        top = rect.bottom + 10;
+      }
+
+      // 画面左右にはみ出さないように調整
+      if (left < 10) {
+        left = 10;
+      } else if (left + menuRect.width > window.innerWidth - 10) {
+        left = window.innerWidth - menuRect.width - 10;
+      }
+
+      // 位置を設定
+      menu.style.top = top + 'px';
+      menu.style.left = left + 'px';
+
+      console.log('[ContextMenu] Final position - top:', top, 'left:', left);
+
+      // メニュー表示（アニメーション付き）
+      overlay.classList.add('active');
+      menu.classList.add('active');
+
+      // CSSのtransitionを有効にするため、次のフレームでopacityをリセット
+      setTimeout(() => {
+        menu.style.opacity = '1';
+      }, 10);
+
+      console.log('[ContextMenu] Menu classes:', menu.className);
+      console.log('[ContextMenu] Overlay classes:', overlay.className);
+    }
+
+    // 長押しメニューを閉じる
+    window.closeContextMenu = function() {
+      const menu = document.getElementById('contextMenu');
+      const overlay = document.getElementById('contextMenuOverlay');
+
+      overlay.classList.remove('active');
+      menu.classList.remove('active');
+
+      // 次回のために opacity を 0 に戻す
+      setTimeout(() => {
+        menu.style.opacity = '0';
+      }, 200); // transitionの時間（0.2s）後に実行
+
+      contextMenuData = { messageId: null, messageText: null };
+    };
+
+    // コピー機能
+    window.copyMessage = function() {
+      if (!contextMenuData.messageText) return;
+
+      // クリップボードにコピー
+      navigator.clipboard.writeText(contextMenuData.messageText)
+        .then(() => {
+          console.log('[Copy] メッセージをコピーしました');
+          closeContextMenu();
+        })
+        .catch(err => {
+          console.error('[Copy] コピーエラー:', err);
+          // フォールバック: textareaを使った古い方法
+          const textarea = document.createElement('textarea');
+          textarea.value = contextMenuData.messageText;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          closeContextMenu();
+        });
+    };
+
+    // リプライ機能
+    window.replyMessage = function() {
+      if (!contextMenuData.messageText) return;
+
+      const messageInput = document.getElementById('messageInput');
+      const replyText = `> ${contextMenuData.messageText}\n\n`;
+      messageInput.value = replyText;
+      messageInput.focus();
+
+      // 自動リサイズ
+      messageInput.style.height = 'auto';
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+
+      closeContextMenu();
+    };
+
+    // 削除機能（メニューから）
+    window.deleteMessageFromMenu = function() {
+      if (!contextMenuData.messageId) return;
+
+      // closeContextMenu()でcontextMenuDataがリセットされる前にIDを保存
+      const messageId = contextMenuData.messageId;
+
+      closeContextMenu();
+      deleteMessage(messageId);
+    };
+
+    // メッセージアイテムに長押しイベントを追加
+    function addLongPressListener(item, messageId, messageText) {
+      let touchStartTime = 0;
+      let touchMoved = false;
+
+      // タッチ開始
+      item.addEventListener('touchstart', (e) => {
+        console.log('[LongPress] touchstart');
+        touchStartTime = Date.now();
+        touchMoved = false;
+
+        longPressTimer = setTimeout(() => {
+          console.log('[LongPress] Timer fired, touchMoved:', touchMoved);
+          if (!touchMoved) {
+            console.log('[LongPress] Opening context menu');
+            openContextMenu(messageId, messageText, item);
+            // 振動フィードバック（対応ブラウザのみ）
+            if ('vibrate' in navigator) {
+              navigator.vibrate(50);
+            }
+          }
+        }, LONG_PRESS_DURATION);
+      });
+
+      // タッチ移動（スクロール検出）
+      item.addEventListener('touchmove', () => {
+        console.log('[LongPress] touchmove - canceling');
+        touchMoved = true;
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      // タッチ終了
+      item.addEventListener('touchend', () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      // タッチキャンセル
+      item.addEventListener('touchcancel', () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      // PC用: 右クリック
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openContextMenu(messageId, messageText, item);
+      });
     }
   </script>
 </body>
