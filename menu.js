@@ -1091,9 +1091,11 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('user_management_ui');
       title = 'REBORN - ユーザー権限管理';
     } else if (menuType === 'chat') {
-      // チャット画面
-      template = HtmlService.createTemplateFromFile('chat_ui');
+      // チャット画面（Firestore版）
+      Logger.log('[doGet] チャット画面を読み込みます（Firestore版）');
+      template = HtmlService.createTemplateFromFile('chat_ui_firestore');
       title = 'REBORN - チーム チャット';
+      Logger.log('[doGet] chat_ui_firestoreテンプレート作成完了');
     } else {
       // 不明なメニューの場合はデフォルトで商品登録
       template = HtmlService.createTemplateFromFile('sidebar_product');
@@ -1104,11 +1106,17 @@ function doGet(e) {
     template.showBackButton = true;
 
     // GAS自身のURL（Web App /exec）をテンプレート変数として渡す（クロスオリジン対策）
-    template.GAS_BASE_URL = ScriptApp.getService().getUrl();
+    const gasBaseUrl = ScriptApp.getService().getUrl();
+    template.GAS_BASE_URL = gasBaseUrl;
+    Logger.log('[doGet] GAS_BASE_URL設定: ' + gasBaseUrl);
 
     // FCMトークンをテンプレート変数として渡す（マルチユーザー対応）
     template.fcmToken = (e && e.parameter && e.parameter.fcmToken) || '';
-    Logger.log('FCMトークンをテンプレートに渡します: ' + (template.fcmToken ? template.fcmToken.substring(0, 20) + '...' : 'なし'));
+    Logger.log('[doGet] FCMトークンをテンプレートに渡します: ' + (template.fcmToken ? template.fcmToken.substring(0, 20) + '...' : 'なし'));
+
+    // PWA版：ユーザー名をテンプレート変数として渡す
+    template.pwaUserName = (e && e.parameter && e.parameter.userName) || '';
+    Logger.log('[doGet] PWAユーザー名をテンプレートに渡します: ' + template.pwaUserName);
 
     // Web Appとして開く場合はwidthを指定しない（画面幅いっぱいに表示）
     return template.evaluate()
@@ -1390,10 +1398,40 @@ function showUserManagement() {
  * チャット画面を表示（サイドバー）
  */
 function showChatSidebar() {
-  const html = HtmlService.createHtmlOutputFromFile('chat_ui')
-    .setTitle('💬 チーム チャット')
-    .setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
+  try {
+    let userEmail = '';
+
+    try {
+      // 共有スプレッドシートでも正確に取得できるSession.getEffectiveUser()を優先
+      userEmail = Session.getEffectiveUser().getEmail();
+      Logger.log('[showChatSidebar] Session.getEffectiveUser(): ' + userEmail);
+    } catch (e) {
+      Logger.log('[showChatSidebar] Session.getEffectiveUser()失敗、Session.getActiveUser()を試行');
+      try {
+        userEmail = Session.getActiveUser().getEmail();
+        Logger.log('[showChatSidebar] Session.getActiveUser(): ' + userEmail);
+      } catch (e2) {
+        Logger.log('[showChatSidebar] Session.getActiveUser()も失敗: ' + e2);
+      }
+    }
+
+    Logger.log('[showChatSidebar] ユーザー: ' + userEmail);
+
+    // GASからのアクセスの場合、fcmTokenは空文字列（Session.getActiveUser()で識別）
+    const template = HtmlService.createTemplateFromFile('chat_ui_firestore');
+    template.fcmToken = '';
+    template.GAS_BASE_URL = ScriptApp.getService().getUrl(); // PWA版API呼び出し用
+    Logger.log('[showChatSidebar] GAS_BASE_URL設定: ' + template.GAS_BASE_URL);
+
+    const html = template.evaluate()
+      .setTitle('💬 チーム チャット')
+      .setWidth(400);
+
+    SpreadsheetApp.getUi().showSidebar(html);
+  } catch (error) {
+    Logger.log('[showChatSidebar] エラー: ' + error);
+    SpreadsheetApp.getUi().alert('チャット画面を開けませんでした: ' + error.message);
+  }
 }
 
 /**

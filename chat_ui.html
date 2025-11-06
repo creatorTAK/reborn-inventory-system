@@ -260,7 +260,17 @@
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <div>
         <h1 style="margin: 0;">💬 チーム チャット</h1>
-        <div class="channel-info">📢 全体チャンネル <span id="debugInfo" style="font-size: 10px; opacity: 0.7; margin-left: 8px;"></span></div>
+        <div class="channel-info">
+          📢 全体チャンネル
+          <span id="debugInfo" style="font-size: 10px; opacity: 0.7; margin-left: 8px;"></span>
+        </div>
+        <!-- GAS版のみ：送信者名選択 -->
+        <div id="userSelectContainer" style="display: none; margin-top: 8px;">
+          <label style="font-size: 12px; opacity: 0.9; margin-right: 4px;">送信者:</label>
+          <select id="userSelect" style="background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.5); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+            <option value="">選択してください</option>
+          </select>
+        </div>
       </div>
       <button id="refreshButton" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;">
         <span id="refreshIcon">🔄</span> <span id="refreshText">更新</span>
@@ -303,15 +313,103 @@
     let pollingInterval = null;
     let lastMessageId = null;
     let fcmToken = '<?= fcmToken ?>'; // GASテンプレート変数から取得
+    let userName = null; // GAS版で選択されたユーザー名
+    const BASE_URL = '<?= GAS_BASE_URL ?>'; // PWA版API呼び出し用のGAS Web App URL
+
+    // デバッグ用：BASE_URLの値を確認
+    console.log('[Chat UI] BASE_URL:', BASE_URL);
+    console.log('[Chat UI] BASE_URL type:', typeof BASE_URL);
+    console.log('[Chat UI] BASE_URL length:', BASE_URL ? BASE_URL.length : 0);
+
+    // BASE_URLが未定義または空の場合はエラー
+    if (!BASE_URL || BASE_URL === '' || BASE_URL === 'undefined') {
+      const errorMsg = 'チャット画面を開けませんでした: GAS_BASE_URL is not defined';
+      console.error('[Chat UI] ' + errorMsg);
+      alert(errorMsg);
+      throw new Error(errorMsg);
+    }
 
     // Pull-to-Refresh用
     let touchStartY = 0;
     let isPulling = false;
 
+    // ユーザー名選択ダイアログを表示（GAS版のみ）
+    // GAS版：ユーザーリストを読み込んでドロップダウンに表示
+    function loadUserList() {
+      console.log('[loadUserList] ユーザーリスト読み込み開始');
+
+      // ドロップダウンを表示
+      const userSelectContainer = document.getElementById('userSelectContainer');
+      const userSelect = document.getElementById('userSelect');
+
+      if (userSelectContainer) {
+        userSelectContainer.style.display = 'block';
+      }
+
+      // localStorageから前回選択したユーザー名を取得
+      const savedUserName = localStorage.getItem('reborn_chat_user_name');
+
+      // FCM通知登録シートからユーザーリストを取得
+      google.script.run
+        .withSuccessHandler(function(users) {
+          console.log('[loadUserList] ユーザー取得成功:', users);
+
+          if (!users || users.length === 0) {
+            console.error('[loadUserList] ユーザーが見つかりません');
+            return;
+          }
+
+          // ドロップダウンに追加
+          userSelect.innerHTML = '<option value="">選択してください</option>';
+          users.forEach(function(user) {
+            const option = document.createElement('option');
+            option.value = user.userName;
+            option.textContent = user.userName + ' (' + user.permission + ')';
+
+            // 前回選択したユーザーを自動選択
+            if (savedUserName && user.userName === savedUserName) {
+              option.selected = true;
+              userName = user.userName;
+              console.log('[loadUserList] 前回選択したユーザーを自動選択:', userName);
+            }
+
+            userSelect.appendChild(option);
+          });
+
+          // 選択変更時のイベントリスナー
+          userSelect.addEventListener('change', function() {
+            userName = this.value;
+            localStorage.setItem('reborn_chat_user_name', userName);
+            console.log('[loadUserList] ユーザー名を選択:', userName);
+          });
+        })
+        .withFailureHandler(function(error) {
+          console.error('[loadUserList] エラー:', error);
+        })
+        .getActiveUsers();
+    }
+
     // 初期化
     document.addEventListener('DOMContentLoaded', function() {
       console.log('[Chat UI] 初期化開始');
       console.log('[Chat UI] FCMトークン:', fcmToken ? fcmToken.substring(0, 20) + '...' : 'なし');
+
+      // GAS版の場合、ユーザー名選択ドロップダウンを表示
+      if (!fcmToken) {
+        console.log('[Chat UI] GAS版として初期化 - ユーザー名選択ドロップダウン表示');
+        loadUserList();
+        initializeChat();
+        return;
+      }
+
+      // PWA版の場合、そのまま初期化
+      console.log('[Chat UI] PWA版として初期化');
+      initializeChat();
+    });
+
+    // チャット初期化処理
+    function initializeChat() {
+      console.log('[Chat UI] チャット初期化開始');
 
       // 更新ボタンのイベントリスナー登録
       const refreshButton = document.getElementById('refreshButton');
@@ -354,7 +452,7 @@
       console.log('[Chat UI] ポーリング有効化（10秒ごと自動更新、タイムアウト7秒）');
 
       console.log('[Chat UI] 初期化完了');
-    });
+    }
 
     // 文字数カウンター更新
     function updateCharCounter() {
@@ -389,7 +487,14 @@
         return;
       }
 
+      // GAS版：ユーザー名が選択されているか確認
+      if (!fcmToken && !userName) {
+        showError('送信者を選択してください');
+        return;
+      }
+
       console.log('[sendMessage] メッセージ送信: ' + message);
+      console.log('[sendMessage] 送信者: ' + userName);
       showLoading(true);
       disableSendButton(true);
 
@@ -417,7 +522,7 @@
           disableSendButton(false);
           showError('エラー: ' + error.message);
         })
-        .sendMessage(message, currentChannel, fcmToken);
+        .sendMessage(message, currentChannel, fcmToken, userName);
     }
 
     // メッセージ読み込み
@@ -641,31 +746,8 @@
       container.scrollTop = container.scrollHeight;
     }
 
-    // ポーリング開始
-    function startPolling() {
-      console.log('[Polling] 開始 - 10秒ごとに自動更新します（タイムアウト7秒）');
-      let pollingCount = 0;
-      pollingInterval = setInterval(function() {
-        pollingCount++;
-        console.log('[Polling] ===== 定期実行 #' + pollingCount + ': ' + new Date().toLocaleTimeString() + ' =====');
-        loadMessages(true); // silent=true（エラー表示しない）
-      }, 10000); // 10秒ごと
-      console.log('[Polling] setInterval ID:', pollingInterval);
-    }
-
-    // ポーリング停止
-    function stopPolling() {
-      if (pollingInterval) {
-        console.log('[Polling] 停止');
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-      }
-    }
-
-    // ページを離れる時にポーリング停止
-    window.addEventListener('beforeunload', function() {
-      stopPolling();
-    });
+    // ポーリング開始・停止は後方で定義（getNewMessages API使用版）
+    // beforeunloadイベントリスナーも後方で定義
 
     // ページがアクティブになった時にメッセージ再読込（PWA対応）
     window.addEventListener('focus', function() {
@@ -833,7 +915,6 @@
 
     // 📡 Polling: 新着メッセージ取得（FCMフォールバック）
     let lastPollingCheck = Date.now();
-    let pollingInterval = null;
 
     function startPolling() {
       console.log('[Polling] 開始: 30秒間隔で新着確認');
@@ -844,56 +925,66 @@
       }
 
       // 30秒ごとに新着チェック
-      pollingInterval = setInterval(async () => {
-        try {
-          const userName = localStorage.getItem('reborn_user_name');
-          if (!userName) {
-            console.log('[Polling] ユーザー名未設定、スキップ');
-            return;
-          }
-
-          const url = BASE_URL + '?action=getNewMessages' +
-            '&lastCheckTime=' + lastPollingCheck +
-            '&userName=' + encodeURIComponent(userName) +
-            '&channelId=' + encodeURIComponent(currentChannel);
-
-          console.log('[Polling] 新着確認中... lastCheckTime:', new Date(lastPollingCheck).toLocaleString('ja-JP'));
-
-          const response = await fetch(url);
-          const data = await response.json();
-
-          if (data.success && data.count > 0) {
-            console.log('[Polling] ✅ 新着メッセージ: ' + data.count + '件');
-
-            // 新着メッセージをUIに追加
-            data.messages.forEach(msg => {
-              appendMessage(msg, false); // 自動スクロールなし（Polling時）
-            });
-
-            // バッジ更新（新着件数分）
-            if (typeof updateBadge === 'function') {
-              updateBadge(data.count);
-            }
-
-            // 最新のタイムスタンプを更新
-            if (data.messages.length > 0) {
-              const latestMsg = data.messages[data.messages.length - 1];
-              if (latestMsg.timestampMs) {
-                lastPollingCheck = latestMsg.timestampMs + 1; // 次回は この後から取得
-              }
-            }
-          } else {
-            console.log('[Polling] 新着なし');
-          }
-
-          // サーバー時刻で最終確認時刻を更新
-          if (data.serverTime) {
-            lastPollingCheck = data.serverTime;
-          }
-
-        } catch (error) {
-          console.error('[Polling] エラー:', error);
+      pollingInterval = setInterval(() => {
+        // GAS版では全メッセージ再読み込み（シンプルな方式）
+        if (!fcmToken) {
+          console.log('[Polling] GAS版 - メッセージ再読み込み');
+          loadMessages(true); // silent=true（エラー表示しない）
+          return;
         }
+
+        // PWA版では新着メッセージのみ取得（効率的な方式）
+        (async () => {
+          try {
+            const userName = localStorage.getItem('reborn_user_name');
+            if (!userName) {
+              console.log('[Polling] PWA版 - ユーザー名未設定、スキップ');
+              return;
+            }
+
+            const url = BASE_URL + '?action=getNewMessages' +
+              '&lastCheckTime=' + lastPollingCheck +
+              '&userName=' + encodeURIComponent(userName) +
+              '&channelId=' + encodeURIComponent(currentChannel);
+
+            console.log('[Polling] PWA版 - 新着確認中... lastCheckTime:', new Date(lastPollingCheck).toLocaleString('ja-JP'));
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success && data.count > 0) {
+              console.log('[Polling] ✅ 新着メッセージ: ' + data.count + '件');
+
+              // 新着メッセージをUIに追加
+              data.messages.forEach(msg => {
+                appendMessage(msg, false); // 自動スクロールなし（Polling時）
+              });
+
+              // バッジ更新（新着件数分）
+              if (typeof updateBadge === 'function') {
+                updateBadge(data.count);
+              }
+
+              // 最新のタイムスタンプを更新
+              if (data.messages.length > 0) {
+                const latestMsg = data.messages[data.messages.length - 1];
+                if (latestMsg.timestampMs) {
+                  lastPollingCheck = latestMsg.timestampMs + 1; // 次回は この後から取得
+                }
+              }
+            } else {
+              console.log('[Polling] 新着なし');
+            }
+
+            // サーバー時刻で最終確認時刻を更新
+            if (data.serverTime) {
+              lastPollingCheck = data.serverTime;
+            }
+
+          } catch (error) {
+            console.error('[Polling] PWA版エラー:', error);
+          }
+        })();
       }, 30000); // 30秒
     }
 
@@ -904,11 +995,6 @@
         console.log('[Polling] 停止');
       }
     }
-
-    // ページ読み込み時にPolling開始
-    window.addEventListener('load', () => {
-      startPolling();
-    });
 
     // ページを離れる時にPolling停止
     window.addEventListener('beforeunload', () => {

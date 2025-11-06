@@ -27,20 +27,23 @@ Serena Memory: DEPLOYMENT_RULES
 - デプロイフロー確認（2ステップ）
 - デプロイチェックリスト確認
 
-### 4. **🆕 PWA版デプロイID確認（必須）**
+### 4. **🆕 Cloudflare Pages デプロイ構造を読む（必須）**
+```
+Serena Memory: CLOUDFLARE_PAGES_DEPLOYMENT_STRUCTURE
+```
+- **パス構造の正しい理解**（`/` vs `/reborn-inventory-system/`）
+- **絶対パスルール**（相対パス禁止）
+- **デプロイ後の検証チェックリスト**
+
+### 5. **PWA版デプロイID確認（必須）**
 ```
 Grep: "AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA" in docs/index.html
 ```
-- **docs/index.html の4箇所にデプロイIDが正しく設定されているか確認**
+- **docs/index.html の6箇所にデプロイIDが正しく設定されているか確認**
 - 正しいデプロイID: `AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA`
 - 古いデプロイIDが残っていないか確認
-- **確認箇所:**
-  1. window.REBORN_CONFIG.GAS_BASE_URL（22行目付近）
-  2. iframe src（552行目付近）
-  3. const GAS_API_URL（610行目付近）
-  4. const baseUrl in navigateToPage（880行目付近）
 
-### 5. ユーザーに報告
+### 6. ユーザーに報告
 読んだ内容を簡潔に報告：
 - 未完了Issue数と優先度別内訳
 - 今回の作業に関連するIssue有無
@@ -81,6 +84,14 @@ Grep: "AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHM
   3. `git push origin main`
   ✅ 完了（Cloudflare Pages自動デプロイ）
 
+- **🆕 PWA内リンク・パス指定（絶対ルール）**
+  - **常に絶対パス**（`/` から始まる）を使用
+  - **相対パスは禁止**（`./` や `../` は使わない）
+  - **サブディレクトリパスは禁止**（`/reborn-inventory-system/` は使わない）
+  - 例: `window.location.href = '/notifications.html'` ✅
+  - 例: `window.location.href = './notifications.html'` ❌
+  - 例: `window.location.href = '/reborn-inventory-system/notifications.html'` ❌
+
 **⚠️ デプロイID固定方式のメリット:**
 - index.html の更新が不要（**初回設定後は**手間削減、ミス防止）
 - デプロイ上限を気にしなくて良い
@@ -91,7 +102,9 @@ Grep: "AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHM
 - PWA用固定デプロイID `AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA` を削除
 - **セッション開始時のデプロイID確認をスキップ**
 - **完了Issueをissues.mdに放置**（肥大化の原因）
-- **issues-summary.mdとissues.mdの不整合を放置**（新ルール）
+- **issues-summary.mdとissues.mdの不整合を放置**
+- **PWA内リンクで相対パスを使用**（予測不可能な挙動）
+- **PWA内リンクでサブディレクトリパスを使用**（404エラー）
 
 ---
 
@@ -104,8 +117,9 @@ Grep: "AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHM
 - **古いデプロイIDが残っていてPWA版が動かない（2回発生済み）**
 - **issues.mdが肥大化してセッション開始時に読み込めなくなる（1回発生済み → サマリー方式で解決）**
 - **issues-summary.mdとissues.mdが不整合になり、誤った情報で開発を進める**
+- **🆕 PWAのパス構造を誤解して404エラー（1回発生済み → 2025-11-06解決）**
 
 ---
 
-**最終更新: 2025-11-01**
-**更新内容: サマリーファイル方式導入（トークン消費90%削減）**
+**最終更新: 2025-11-06**
+**更新内容: Cloudflare Pagesデプロイ構造チェックを追加**

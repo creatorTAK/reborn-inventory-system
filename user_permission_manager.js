@@ -306,9 +306,26 @@ function isOwner(fcmToken) {
 
     // GASからのアクセスの場合、メールアドレスからユーザー名を取得
     if (!userName) {
-      const email = Session.getActiveUser().getEmail();
+      let email = '';
+
+      try {
+        // 共有スプレッドシートでも正確に取得できるSession.getEffectiveUser()を優先
+        email = Session.getEffectiveUser().getEmail();
+        Logger.log('[isOwner] Session.getEffectiveUser(): ' + email);
+      } catch (e) {
+        Logger.log('[isOwner] Session.getEffectiveUser()失敗、Session.getActiveUser()を試行');
+        try {
+          email = Session.getActiveUser().getEmail();
+          Logger.log('[isOwner] Session.getActiveUser(): ' + email);
+        } catch (e2) {
+          Logger.log('[isOwner] Session.getActiveUser()も失敗: ' + e2);
+        }
+      }
+
       Logger.log('[isOwner] 現在のユーザーメール: ' + email);
-      userName = getUserNameByEmail(email);
+      if (email) {
+        userName = getUserNameByEmail(email);
+      }
     }
 
     if (!userName) {
@@ -560,6 +577,40 @@ function executePhase1Migration() {
   };
 }
 
+/**
+ * アクティブなユーザーリストを取得（チャット用）
+ * @return {Array} アクティブユーザーの配列 [{userName, permission}, ...]
+ */
+function getActiveUsers() {
+  try {
+    Logger.log('[getActiveUsers] アクティブユーザー取得開始');
+
+    const allUsers = getUserList();
+    Logger.log('[getActiveUsers] 全ユーザー数: ' + allUsers.length);
+
+    // アクティブなユーザーのみフィルタリング
+    const activeUsers = allUsers.filter(function(user) {
+      return user.status === 'アクティブ';
+    });
+
+    Logger.log('[getActiveUsers] アクティブユーザー数: ' + activeUsers.length);
+
+    // チャットUIで使いやすい形式に変換
+    const result = activeUsers.map(function(user) {
+      return {
+        userName: user.userName,
+        permission: user.permission || 'スタッフ'
+      };
+    });
+
+    Logger.log('[getActiveUsers] 結果: ' + JSON.stringify(result));
+    return result;
+  } catch (error) {
+    Logger.log('[getActiveUsers] ERROR: ' + error);
+    return [];
+  }
+}
+
 // === 念のため"グローバル露出"を強制（V8での露出不具合/ネームスペース化対策） ===
 globalThis.getUserList = getUserList;
 globalThis.updateUserPermission = updateUserPermission;
@@ -567,3 +618,4 @@ globalThis.getUserPermission = getUserPermission;
 globalThis.getUserNameByEmail = getUserNameByEmail;
 globalThis.isOwner = isOwner;
 globalThis.ping = ping;
+globalThis.getActiveUsers = getActiveUsers;

@@ -13,14 +13,16 @@ const CHAT_SHEET_NAME = 'チャットメッセージ';
  * @param {String} message - メッセージ本文
  * @param {String} channelId - チャンネルID（Phase 1は'全体'固定）
  * @param {String} fcmToken - PWAからのアクセス時のFCMトークン（オプション）
+ * @param {String} userName - GASからのアクセス時に明示的に指定するユーザー名（オプション）
  * @return {Object} 送信結果
  */
-function sendMessage(message, channelId, fcmToken) {
+function sendMessage(message, channelId, fcmToken, userName) {
   try {
     Logger.log('[sendMessage] メッセージ送信開始');
     Logger.log('[sendMessage] message: ' + message);
     Logger.log('[sendMessage] channelId: ' + (channelId || '全体'));
     Logger.log('[sendMessage] fcmToken: ' + (fcmToken ? 'あり' : 'なし'));
+    Logger.log('[sendMessage] userName: ' + (userName || 'なし'));
 
     // メッセージの妥当性チェック
     if (!message || message.trim() === '') {
@@ -41,8 +43,17 @@ function sendMessage(message, channelId, fcmToken) {
     let senderName = null;
     let senderPermission = null;
 
-    // PWAからのアクセスの場合、fcmTokenからユーザー名を取得
-    if (fcmToken) {
+    // 優先順位1: GASから明示的に指定されたユーザー名
+    if (userName) {
+      senderName = userName;
+      if (typeof getUserPermission === 'function') {
+        senderPermission = getUserPermission(userName);
+      }
+      Logger.log('[sendMessage] ユーザー名が明示的に指定されました: ' + senderName);
+    }
+
+    // 優先順位2: PWAからのアクセスの場合、fcmTokenからユーザー名を取得
+    if (!senderName && fcmToken) {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
       const fcmSheet = ss.getSheetByName('FCM通知登録');
 
@@ -58,6 +69,7 @@ function sendMessage(message, channelId, fcmToken) {
             if (data[i][tokenCol] === fcmToken) {
               senderName = data[i][userNameCol];
               senderPermission = permissionCol !== -1 ? data[i][permissionCol] : '不明';
+              Logger.log('[sendMessage] FCMトークンからユーザー名を取得: ' + senderName);
               break;
             }
           }
@@ -65,12 +77,27 @@ function sendMessage(message, channelId, fcmToken) {
       }
     }
 
-    // GASからのアクセスの場合、メールアドレスからユーザー名を取得
+    // 優先順位3: GASからのアクセスの場合、メールアドレスからユーザー名を取得（フォールバック）
     if (!senderName) {
-      const email = Session.getActiveUser().getEmail();
+      let email = '';
+
+      try {
+        // 共有スプレッドシートでも正確に取得できるSession.getEffectiveUser()を優先
+        email = Session.getEffectiveUser().getEmail();
+        Logger.log('[sendMessage] Session.getEffectiveUser(): ' + email);
+      } catch (e) {
+        Logger.log('[sendMessage] Session.getEffectiveUser()失敗、Session.getActiveUser()を試行');
+        try {
+          email = Session.getActiveUser().getEmail();
+          Logger.log('[sendMessage] Session.getActiveUser(): ' + email);
+        } catch (e2) {
+          Logger.log('[sendMessage] Session.getActiveUser()も失敗: ' + e2);
+        }
+      }
+
       Logger.log('[sendMessage] 現在のユーザーメール: ' + email);
 
-      if (typeof getUserNameByEmail === 'function') {
+      if (email && typeof getUserNameByEmail === 'function') {
         senderName = getUserNameByEmail(email);
       }
 
