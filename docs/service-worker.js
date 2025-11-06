@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v6'; // collectionGroup廃止・個別ルームクエリ方式
+const CACHE_NAME = 'reborn-v7'; // デバッグ表示削除・本番リリース版
 const urlsToCache = [
   '/',
   '/index.html',
