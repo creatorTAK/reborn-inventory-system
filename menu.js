@@ -1090,7 +1090,7 @@ function doGet(e) {
       }
       template = HtmlService.createTemplateFromFile('user_management_ui');
       title = 'REBORN - ユーザー権限管理';
-    } else if (menuType === 'chat') {
+    } else if (menuType === 'chat' || menuType === 'chat_rooms') {
       // roomIdパラメータがある場合はチャット画面、ない場合はルーム一覧
       const roomId = e.parameter.roomId || '';
 

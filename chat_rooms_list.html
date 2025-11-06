@@ -99,13 +99,20 @@
     .room-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       margin-bottom: 4px;
     }
     .room-name {
       font-size: 16px;
       font-weight: 600;
       color: #2d3748;
+      flex: 1;
+    }
+    .room-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
     }
     .room-time {
       font-size: 12px;
@@ -129,11 +136,11 @@
       color: white;
       border-radius: 12px;
       padding: 2px 8px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       min-width: 20px;
       text-align: center;
-      margin-left: 8px;
+      display: inline-block;
     }
     .empty-state {
       text-align: center;
@@ -153,6 +160,96 @@
       padding: 40px;
       color: #718096;
     }
+    /* モーダル */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+    .modal-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #4a5568;
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s ease;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    .form-select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 16px;
+      background: white;
+      cursor: pointer;
+    }
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .modal-button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .modal-button.primary {
+      background: #667eea;
+      color: white;
+    }
+    .modal-button.primary:hover {
+      background: #5568d3;
+    }
+    .modal-button.secondary {
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+    .modal-button.secondary:hover {
+      background: #cbd5e0;
+    }
   </style>
 </head>
 <body>
@@ -169,10 +266,53 @@
     <div class="loading">トークルームを読み込んでいます...</div>
   </div>
 
+  <!-- ルーム作成モーダル -->
+  <div class="modal-overlay" id="createRoomModal">
+    <div class="modal-content">
+      <div class="modal-title">➕ 新しいルーム作成</div>
+      <form id="createRoomForm" onsubmit="return false;">
+        <div class="form-group">
+          <label class="form-label" for="roomNameInput">ルーム名 *</label>
+          <input
+            type="text"
+            class="form-input"
+            id="roomNameInput"
+            placeholder="例: 商品企画ミーティング"
+            maxlength="50"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="roomIconSelect">アイコン</label>
+          <select class="form-select" id="roomIconSelect">
+            <option value="💬">💬 チャット</option>
+            <option value="📢">📢 お知らせ</option>
+            <option value="💡">💡 アイデア</option>
+            <option value="📊">📊 会議</option>
+            <option value="🎯">🎯 プロジェクト</option>
+            <option value="📦">📦 在庫</option>
+            <option value="🚀">🚀 リリース</option>
+            <option value="🔧">🔧 メンテナンス</option>
+            <option value="🎉">🎉 イベント</option>
+            <option value="⭐">⭐ 重要</option>
+          </select>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="modal-button secondary" onclick="closeCreateRoomModal()">
+            キャンセル
+          </button>
+          <button type="submit" class="modal-button primary" onclick="submitCreateRoom()">
+            作成
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, query, orderBy, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase設定
     const firebaseConfig = {
@@ -316,13 +456,17 @@
       const content = document.createElement('div');
       content.className = 'room-content';
 
-      // ヘッダー（ルーム名 + 時刻）
+      // ヘッダー（ルーム名 + 右側メタ情報）
       const header = document.createElement('div');
       header.className = 'room-header';
 
       const name = document.createElement('div');
       name.className = 'room-name';
       name.textContent = room.name || '無題のルーム';
+
+      // 右側メタ情報（時間 + 未読バッジ）
+      const meta = document.createElement('div');
+      meta.className = 'room-meta';
 
       const time = document.createElement('div');
       time.className = 'room-time';
@@ -347,8 +491,17 @@
         }
       }
 
+      meta.appendChild(time);
+
+      // 未読バッジ（時間の下に配置）
+      const badge = document.createElement('div');
+      badge.className = 'unread-badge';
+      badge.id = `unread-badge-${room.id}`;
+      badge.style.display = 'none'; // 初期非表示
+      meta.appendChild(badge);
+
       header.appendChild(name);
-      header.appendChild(time);
+      header.appendChild(meta);
 
       // プレビュー（最新メッセージ + 未読バッジ）
       const preview = document.createElement('div');
@@ -365,16 +518,6 @@
 
       preview.appendChild(lastMessage);
 
-      // 未読バッジ（仮実装、後で実装）
-      // TODO: unreadCounts サブコレクションから取得
-      const unreadCount = 0; // 仮
-      if (unreadCount > 0) {
-        const badge = document.createElement('div');
-        badge.className = 'unread-badge';
-        badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
-        preview.appendChild(badge);
-      }
-
       content.appendChild(header);
       content.appendChild(preview);
 
@@ -382,6 +525,27 @@
       item.appendChild(content);
 
       container.appendChild(item);
+
+      // 未読カウントをリアルタイムで取得・更新
+      if (currentUserName) {
+        const unreadRef = doc(db, `rooms/${room.id}/unreadCounts/${currentUserName}`);
+        onSnapshot(unreadRef, (unreadDoc) => {
+          const badgeEl = document.getElementById(`unread-badge-${room.id}`);
+          if (badgeEl) {
+            const unreadData = unreadDoc.data();
+            const unreadCount = unreadData?.unreadCount || 0;
+
+            if (unreadCount > 0) {
+              badgeEl.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
+              badgeEl.style.display = 'inline-block';
+            } else {
+              badgeEl.style.display = 'none';
+            }
+          }
+        }, (error) => {
+          console.error('[Rooms List] 未読カウント取得エラー:', room.id, error);
+        });
+      }
     }
 
     // トークルームを開く
@@ -422,10 +586,74 @@
       }
     };
 
-    // トークルーム作成
+    // トークルーム作成モーダルを開く
     window.createRoom = function() {
-      // TODO: ルーム作成モーダルを実装
-      alert('トークルーム作成機能は次のステップで実装します');
+      console.log('[Rooms List] ルーム作成モーダルを開く');
+      document.getElementById('createRoomModal').classList.add('active');
+      document.getElementById('roomNameInput').focus();
+    };
+
+    // トークルーム作成モーダルを閉じる
+    window.closeCreateRoomModal = function() {
+      console.log('[Rooms List] ルーム作成モーダルを閉じる');
+      document.getElementById('createRoomModal').classList.remove('active');
+      document.getElementById('createRoomForm').reset();
+    };
+
+    // トークルーム作成実行
+    window.submitCreateRoom = async function() {
+      console.log('[Rooms List] ルーム作成処理開始');
+
+      const roomName = document.getElementById('roomNameInput').value.trim();
+      const roomIcon = document.getElementById('roomIconSelect').value;
+
+      // バリデーション: ルーム名必須
+      if (!roomName) {
+        alert('ルーム名を入力してください');
+        return;
+      }
+
+      // バリデーション: ルーム名重複チェック
+      try {
+        const q = query(
+          collection(db, 'rooms'),
+          where('name', '==', roomName)
+        );
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+          alert('同じ名前のルームがすでに存在します。\n別の名前を入力してください。');
+          return;
+        }
+
+        // Firestoreにルーム作成
+        console.log('[Rooms List] Firestoreにルーム作成:', { roomName, roomIcon });
+
+        const newRoom = await addDoc(collection(db, 'rooms'), {
+          name: roomName,
+          icon: roomIcon,
+          createdBy: currentUserName || '不明',
+          createdAt: serverTimestamp(),
+          lastMessageAt: serverTimestamp(),
+          lastMessageText: '',
+          lastMessageSender: '',
+          members: [currentUserName || '不明']
+        });
+
+        console.log('[Rooms List] ルーム作成成功:', newRoom.id);
+
+        // モーダルを閉じる
+        closeCreateRoomModal();
+
+        // 作成したルームを開く
+        setTimeout(() => {
+          openRoom(newRoom.id);
+        }, 500);
+
+      } catch (error) {
+        console.error('[Rooms List] ルーム作成エラー:', error);
+        alert('ルーム作成に失敗しました: ' + error.message);
+      }
     };
   </script>
 </body>

@@ -378,7 +378,7 @@
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, addDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, addDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc, getDoc, setDoc, increment, getDocs, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase設定
     const firebaseConfig = {
@@ -526,6 +526,36 @@
           sendMessage();
         }
       });
+
+      // 未読カウントリセット（このルームを開いたので既読にする）
+      try {
+        if (currentRoomId && currentUserName) {
+          const unreadRef = doc(db, `rooms/${currentRoomId}/unreadCounts/${currentUserName}`);
+          await setDoc(unreadRef, {
+            userId: currentUserName,
+            unreadCount: 0,
+            lastReadAt: serverTimestamp()
+          }, { merge: true });
+
+          console.log('[Firestore] 未読カウントリセット完了:', currentUserName);
+        }
+      } catch (error) {
+        console.error('[Firestore] 未読カウントリセットエラー:', error);
+      }
+
+      // ルームのmembersに自分を追加（未追加の場合）
+      try {
+        if (currentRoomId && currentUserName) {
+          const roomRef = doc(db, 'rooms', currentRoomId);
+          await updateDoc(roomRef, {
+            members: arrayUnion(currentUserName)
+          });
+
+          console.log('[Firestore] ルームメンバーに追加:', currentUserName);
+        }
+      } catch (error) {
+        console.error('[Firestore] メンバー追加エラー:', error);
+      }
 
       // メッセージのリアルタイムリスニング開始
       startListening();
@@ -786,6 +816,56 @@
         });
 
         console.log('[Firestore] ルーム情報更新完了');
+
+        // 未読カウント更新（送信者以外の全メンバー）
+        try {
+          // ルーム情報を取得してメンバーリストを確認
+          const roomSnap = await getDoc(roomRef);
+          if (roomSnap.exists()) {
+            const roomData = roomSnap.data();
+            const members = roomData.members || [];
+
+            console.log('[Firestore] 未読カウント更新開始:', {
+              members: members,
+              currentUser: currentUserName
+            });
+
+            // 送信者以外の全メンバーの未読カウントを+1
+            for (const member of members) {
+              if (member !== currentUserName) {
+                const unreadRef = doc(db, `rooms/${currentRoomId}/unreadCounts/${member}`);
+
+                await setDoc(unreadRef, {
+                  userId: member,
+                  unreadCount: increment(1),
+                  lastUpdatedAt: serverTimestamp()
+                }, { merge: true });
+
+                console.log('[Firestore] 未読カウント更新:', member);
+
+                // FCM通知送信（GAS版のみ）
+                if (isGAS && typeof google !== 'undefined' && google.script && google.script.run) {
+                  const notificationTitle = `💬 ${currentRoomName}`;
+                  const notificationBody = `${currentUserName}: ${message}`;
+
+                  google.script.run
+                    .withSuccessHandler(function(result) {
+                      console.log('[FCM通知] 送信成功:', member, result);
+                    })
+                    .withFailureHandler(function(error) {
+                      console.error('[FCM通知] 送信エラー:', member, error);
+                    })
+                    .sendFCMNotificationToUser(notificationTitle, notificationBody, member);
+
+                  console.log('[FCM通知] 送信リクエスト:', member);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('[Firestore] 未読カウント更新エラー:', error);
+          // エラーがあってもメッセージ送信は成功しているので続行
+        }
 
         // 入力欄クリア
         input.value = '';
