@@ -1760,18 +1760,34 @@
       } else {
         badge.classList.remove('active');
       }
+
+      // デバッグ表示更新
+      const debugUnread = document.getElementById('debug-unread');
+      if (debugUnread) {
+        debugUnread.textContent = '未読: ' + count;
+        debugUnread.style.color = count > 0 ? '#ff0' : '#0f0';
+      }
     }
 
     // Firestore未読カウントリスニング
     async function startChatUnreadListener() {
       console.log('[Chat FAB] 未読カウントリスニング開始');
 
+      // デバッグ表示
+      const debugDiv = document.getElementById('chat-debug');
+      const debugStatus = document.getElementById('debug-status');
+      if (debugDiv) debugDiv.style.display = 'block';
+      if (debugStatus) debugStatus.textContent = 'リスナー起動中...';
+
       try {
         const userName = localStorage.getItem('reborn_user_name');
         if (!userName) {
           console.log('[Chat FAB] ユーザー名未設定のためリスニング中断');
+          if (debugStatus) debugStatus.textContent = 'エラー: ユーザー名未設定';
           return;
         }
+
+        if (debugStatus) debugStatus.textContent = 'Firebase接続中... (ユーザー: ' + userName + ')';
 
         // Firebase SDKを動的インポート
         const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
@@ -1791,6 +1807,7 @@
         const app = initializeApp(firebaseConfig, 'chat-fab-app');
         const db = getFirestore(app);
         console.log('[Chat FAB] Firebase初期化完了');
+        if (debugStatus) debugStatus.textContent = 'Firestore接続完了 - リスニング中...';
 
         // 自分の全ルームの未読カウントをリスニング（collectionGroupクエリ）
         const q = query(
@@ -1807,13 +1824,16 @@
           });
 
           console.log('[Chat FAB] 未読カウント合計:', totalUnread);
+          if (debugStatus) debugStatus.textContent = 'リスニング成功 (' + snapshot.size + '件のドキュメント)';
           updateChatBadge(totalUnread);
         }, (error) => {
           console.error('[Chat FAB] リスニングエラー:', error);
+          if (debugStatus) debugStatus.textContent = 'エラー: ' + error.message;
         });
 
       } catch (error) {
         console.error('[Chat FAB] 初期化エラー:', error);
+        if (debugStatus) debugStatus.textContent = '初期化エラー: ' + error.message;
       }
     }
 
@@ -1840,6 +1860,13 @@
     <span id="chat-fab-icon">💬</span>
     <span id="chat-fab-badge">0</span>
   </button>
+
+  <!-- デバッグ表示（右上固定） -->
+  <div id="chat-debug" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: #0f0; padding: 10px; font-size: 11px; font-family: monospace; z-index: 99999; max-width: 300px; border-radius: 4px; display: none;">
+    <div id="debug-status">初期化中...</div>
+    <div id="debug-unread" style="margin-top: 5px; color: #ff0;">未読: ?</div>
+    <button onclick="document.getElementById('chat-debug').style.display='none'" style="margin-top: 5px; font-size: 10px;">閉じる</button>
+  </div>
 
   <!-- チャットFABリスナー（独立scriptブロック） -->
   <script>
