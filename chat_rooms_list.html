@@ -205,12 +205,22 @@
     const isPWAFlag        = <?= JSON.stringify(!!isPWA) ?>;
     const pwaUserNameParam = <?= JSON.stringify(typeof pwaUserName !== 'undefined' ? pwaUserName : "") ?>;
     const gasUserNameParam = <?= JSON.stringify(typeof gasUserName !== 'undefined' ? gasUserName : "") ?>;
-    const pwaParentOriginParam = <?= JSON.stringify(typeof pwaParentOrigin !== 'undefined' ? pwaParentOrigin : "") ?>;
-    const pwaPmTokenParam = <?= JSON.stringify(typeof pwaPmToken !== 'undefined' ? pwaPmToken : "") ?>;
+    // parentOrigin と pmToken はシングルクォートで直接展開（JSON.stringify不要）
+    const pwaParentOriginParam = '<?= typeof pwaParentOrigin !== "undefined" ? pwaParentOrigin : "" ?>';
+    const pwaPmTokenParam = '<?= typeof pwaPmToken !== "undefined" ? pwaPmToken : "" ?>';
 
     // parentOrigin と pmToken を設定（URLパラメータ → テンプレート変数 → デフォルト値の優先順）
     const parentOrigin = getQueryParam('parentOrigin') || pwaParentOriginParam || 'https://www.reborn-inventory.com';
     const pmToken = getQueryParam('pmToken') || pwaPmTokenParam || '';
+
+    // デバッグログ
+    console.log('[Rooms List] デバッグ情報:');
+    console.log('  - URLパラメータ parentOrigin:', getQueryParam('parentOrigin'));
+    console.log('  - テンプレート pwaParentOriginParam:', pwaParentOriginParam);
+    console.log('  - 最終 parentOrigin:', parentOrigin);
+    console.log('  - URLパラメータ pmToken:', getQueryParam('pmToken'));
+    console.log('  - テンプレート pwaPmTokenParam:', pwaPmTokenParam);
+    console.log('  - 最終 pmToken:', pmToken);
 
     // 判定ロジック
     const isEmbedded = (window.top !== window);
@@ -384,22 +394,31 @@
         window.location.href = `<?= ScriptApp.getService().getUrl() ?>?page=chat&roomId=${roomId}`;
       } else {
         // PWA版: window.top.postMessageで親ウィンドウに送信
+        // targetOriginが空文字列の場合はデフォルト値を使用（SyntaxError対策）
+        const targetOrigin = parentOrigin || 'https://www.reborn-inventory.com';
+
         console.log('[Rooms List] postMessage送信:', {
           page: 'chat',
           roomId: roomId,
           userName: currentUserName,
-          parentOrigin: parentOrigin,
+          targetOrigin: targetOrigin,
           pmToken: pmToken
         });
 
-        window.top.postMessage({
-          __reborn: true,
-          type: 'navigate',
-          page: 'chat',
-          roomId: roomId,
-          userName: currentUserName || '',
-          pmToken: pmToken
-        }, parentOrigin);
+        try {
+          window.top.postMessage({
+            __reborn: true,
+            type: 'navigate',
+            page: 'chat',
+            roomId: roomId,
+            userName: currentUserName || '',
+            pmToken: pmToken
+          }, targetOrigin);
+          console.log('[Rooms List] postMessage送信成功');
+        } catch (error) {
+          console.error('[Rooms List] postMessage送信エラー:', error);
+          alert('画面遷移エラー: ' + error.message);
+        }
       }
     };
 
