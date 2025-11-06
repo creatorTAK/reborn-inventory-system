@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v3'; // クロスオリジン対応版
+const CACHE_NAME = 'reborn-v4'; // FABリスナー修正版
 const urlsToCache = [
   '/',
   '/index.html',
