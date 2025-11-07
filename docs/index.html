@@ -968,51 +968,52 @@
     });
 
     // 権限選択肢の表示制御（初回登録判定）
-    async function checkPermissionOptions() {
+    function checkPermissionOptions() {
       const ownerOption = document.getElementById('owner-option');
       const staffOption = document.getElementById('staff-option');
       const outsourceOption = document.getElementById('outsource-option');
       const permissionInfo = document.getElementById('permission-info');
 
-      console.log('[checkPermissionOptions] 既存ユーザー数を確認中（Firestore）...');
+      console.log('[checkPermissionOptions] 既存ユーザー数を確認中...');
 
-      try {
-        // Firestoreから直接ユーザー数を取得（GAS経由せず、CORS問題回避）
-        const snapshot = await db.collection('fcmTokens').get();
-        const userCount = snapshot.size;
-        
-        console.log('[checkPermissionOptions] 既存ユーザー数:', userCount);
+      // GASから既存ユーザー数を取得（inventory.js doGetにgetExistingUserCountケース追加済み@732）
+      const baseUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
+      fetch(baseUrl + '?action=getExistingUserCount')
+        .then(response => response.json())
+        .then(data => {
+          console.log('[checkPermissionOptions] 既存ユーザー数:', data.count);
 
-        if (userCount === 0) {
-          // 初回登録者 → オーナーのみ表示
-          ownerOption.style.display = 'flex';
-          ownerOption.querySelector('input').checked = true;
-          staffOption.style.display = 'none';
-          outsourceOption.style.display = 'none';
-          permissionInfo.textContent = '✨ 初回登録者のため、オーナー権限で登録されます';
-          permissionInfo.style.background = '#fef3c7';
-          permissionInfo.style.color = '#92400e';
-          console.log('[checkPermissionOptions] 初回登録者モード: オーナーのみ表示');
-        } else {
-          // 2人目以降 → スタッフ・外注のみ表示
+          if (data.count === 0) {
+            // 初回登録者 → オーナーのみ表示
+            ownerOption.style.display = 'flex';
+            ownerOption.querySelector('input').checked = true;
+            staffOption.style.display = 'none';
+            outsourceOption.style.display = 'none';
+            permissionInfo.textContent = '✨ 初回登録者のため、オーナー権限で登録されます';
+            permissionInfo.style.background = '#fef3c7';
+            permissionInfo.style.color = '#92400e';
+            console.log('[checkPermissionOptions] 初回登録者モード: オーナーのみ表示');
+          } else {
+            // 2人目以降 → スタッフ・外注のみ表示
+            ownerOption.style.display = 'none';
+            staffOption.style.display = 'flex';
+            outsourceOption.style.display = 'flex';
+            staffOption.querySelector('input').checked = true;
+            permissionInfo.textContent = '💡 オーナー権限は管理者が「ユーザー権限管理」から設定します';
+            console.log('[checkPermissionOptions] 通常モード: スタッフ・外注のみ表示');
+          }
+        })
+        .catch(error => {
+          console.error('[checkPermissionOptions] エラー:', error);
+          // エラー時は安全側に倒す（スタッフ・外注のみ）
           ownerOption.style.display = 'none';
           staffOption.style.display = 'flex';
           outsourceOption.style.display = 'flex';
           staffOption.querySelector('input').checked = true;
-          permissionInfo.textContent = '💡 オーナー権限は管理者が「ユーザー権限管理」から設定します';
-          console.log('[checkPermissionOptions] 通常モード: スタッフ・外注のみ表示');
-        }
-      } catch (error) {
-        console.error('[checkPermissionOptions] Firestoreエラー:', error);
-        // エラー時は安全側に倒す（スタッフ・外注のみ）
-        ownerOption.style.display = 'none';
-        staffOption.style.display = 'flex';
-        outsourceOption.style.display = 'flex';
-        staffOption.querySelector('input').checked = true;
-        permissionInfo.textContent = '⚠️ 権限確認エラー（スタッフ・外注のみ選択可能）';
-        permissionInfo.style.background = '#fef2f2';
-        permissionInfo.style.color = '#991b1b';
-      }
+          permissionInfo.textContent = '⚠️ 権限確認エラー（スタッフ・外注のみ選択可能）';
+          permissionInfo.style.background = '#fef2f2';
+          permissionInfo.style.color = '#991b1b';
+        });
     }
 
     // ⓪ ユーザー情報を保存
