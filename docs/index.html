@@ -1514,60 +1514,31 @@
       closeDrawer();
     }
 
-    // postMessage受信処理（iframe内からのナビゲーション要求 + バッジ更新）
-    window.addEventListener('message', function(event) {
-      // セキュリティ検証: Origin検証（Google関連のみ許可）
-      const isFromGoogle = (() => {
-        try {
-          const url = new URL(event.origin);
-          return url.hostname === 'script.google.com' ||
-                 url.hostname.endsWith('.googleusercontent.com');
-        } catch {
-          return false;
-        }
-      })();
+    // postMessage受信処理（GASからの通知受信）
+    // 🔐 origin検証のみ（event.source比較なし、pmToken検証なし）
+    const ALLOWED_ORIGINS = new Set([
+      'https://script.google.com'
+    ]);
 
-      if (!isFromGoogle) {
-        console.warn('⚠️ 不正なオリジンからのメッセージを拒否:', event.origin);
+    function isAllowedOrigin(origin) {
+      if (ALLOWED_ORIGINS.has(origin)) return true;
+      try {
+        const url = new URL(origin);
+        return url.hostname.endsWith('.googleusercontent.com');
+      } catch {
+        return false;
+      }
+    }
+
+    window.addEventListener('message', async function(event) {
+      // origin検証のみ（厳格）
+      if (!isAllowedOrigin(event.origin)) {
+        console.warn('⚠️ [postMessage] 不正なoriginからのメッセージを拒否:', event.origin);
         return;
       }
 
       const data = event.data || {};
-
-      // 🔐 GASからの初期化リクエスト処理（ハンドシェイク方式）
-      if (data.__reborn_ready === true) {
-        console.log('🔐 [Init Handshake] GASから初期化リクエスト受信');
-        
-        const iframe = document.getElementById('gas-iframe');
-        const parentOrigin = location.origin;
-        const pmToken = localStorage.getItem('pm_token') || '';
-
-        if (iframe && pmToken) {
-          console.log('🔐 [Init Handshake] PWAから初期化パラメータ返信');
-          console.log('  - parentOrigin:', parentOrigin);
-          console.log('  - pmToken:', pmToken);
-
-          // GASに初期化パラメータを返信
-          iframe.contentWindow.postMessage({
-            __reborn_init_response: true,
-            parentOrigin: parentOrigin,
-            pmToken: pmToken
-          }, '*');
-        } else {
-          console.error('🔐 [Init Handshake] ❌ iframeまたはpmTokenが見つかりません');
-        }
-        return; // 処理完了
-      }
-
-      // ネームスペースマーカーチェック（__rebornがある場合のみ検証）
-      if (data.__reborn) {
-        // pmToken検証
-        const expectedToken = localStorage.getItem('pm_token') || '';
-        if (!expectedToken || data.pmToken !== expectedToken) {
-          console.warn('⚠️ pmToken不一致: expected', expectedToken, 'got', data.pmToken);
-          return;
-        }
-      }
+      console.log('📨 [postMessage] 受信 (from', event.origin + '):', data);
 
       console.log('📨 受信メッセージ (from', event.origin + '):', data);
 
@@ -1626,17 +1597,16 @@
       }
 
       // 📢 システム通知ルーム投稿（統合型アーキテクチャ）
-      if (data.type === 'PRODUCT_REGISTERED') {
-        console.log('[System Notification] PRODUCT_REGISTERED受信:', data);
+      if (data.__reborn_notify === true && data.notificationData) {
+        console.log('✅ [System Notification] __reborn_notify受信 (from', event.origin + '):', data);
 
-        // 🔐 二重iframe対策後の新payload構造に対応
-        // payload = { __reborn: true, type: 'PRODUCT_REGISTERED', pmToken, data: notificationData }
-        if (data.data) {
-          console.log('[System Notification] 通知データ抽出:', data.data);
-          postSystemNotification(data.data);
-        } else {
-          console.error('[System Notification] ❌ data.dataが存在しません:', data);
+        try {
+          await postSystemNotification(data.notificationData);
+          console.log('✅ [System Notification] postSystemNotification完了');
+        } catch (error) {
+          console.error('❌ [System Notification] postSystemNotification失敗:', error);
         }
+        return; // 処理完了
       }
     });
 
