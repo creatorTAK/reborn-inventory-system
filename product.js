@@ -320,7 +320,7 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
     let notificationData = null;
     try {
       Logger.log('[saveProduct] 通知送信開始: ' + mgmtKey);
-      const notificationResult = sendProductRegistrationNotification(form, mgmtKey);
+      const notificationResult = sendProductRegistrationWebhook(form, mgmtKey);
       if (notificationResult && notificationResult.notificationData) {
         notificationData = notificationResult.notificationData;
       }
@@ -356,7 +356,7 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
  * @param {Object} form - 商品フォームデータ
  * @param {String} managementNumber - 管理番号
  */
-function sendProductRegistrationNotification(form, managementNumber) {
+function sendProductRegistrationWebhook(form, managementNumber) {
   const debugLogs = [];
 
   function debugLog(message) {
@@ -364,125 +364,101 @@ function sendProductRegistrationNotification(form, managementNumber) {
     debugLogs.push(new Date().toLocaleTimeString('ja-JP') + ' - ' + message);
   }
 
-  debugLog('[sendProductRegistrationNotification] 開始: ' + managementNumber);
+  debugLog('[sendProductRegistrationWebhook] 開始: ' + managementNumber);
 
   try {
     // 現在のユーザー名を取得
     let userName = '不明';
     try {
       const email = Session.getEffectiveUser().getEmail();
-      debugLog('[sendProductRegistrationNotification] ユーザーメール: ' + email);
+      debugLog('[sendProductRegistrationWebhook] ユーザーメール: ' + email);
 
       // user_permission_manager.jsのgetUserNameByEmail()を使用
       if (typeof getUserNameByEmail === 'function') {
         userName = getUserNameByEmail(email) || '不明';
-        debugLog('[sendProductRegistrationNotification] ユーザー名: ' + userName);
+        debugLog('[sendProductRegistrationWebhook] ユーザー名: ' + userName);
       }
     } catch (userError) {
-      debugLog('[sendProductRegistrationNotification] ユーザー名取得エラー: ' + userError);
+      debugLog('[sendProductRegistrationWebhook] ユーザー名取得エラー: ' + userError);
     }
 
-    // 通知内容を作成
+    // 通知データを作成
     const brandName = form['ブランド(英語)'] || form['ブランド(カナ)'] || '';
     const itemName = form['アイテム名'] || '';
     const category = form['大分類(カテゴリ)'] || form['大分類'] || '';
     const listingDestination = form['出品先'] || '';
     const listingAmount = form['出品金額'] || '';
 
-    debugLog('[sendProductRegistrationNotification] データ取得完了');
+    debugLog('[sendProductRegistrationWebhook] データ取得完了');
 
-    // 通知タイトル
-    const title = '✅ 商品登録完了';
-
-    // 通知本文
-    let body = managementNumber ? `管理番号: ${managementNumber}` : '商品を登録しました';
-
-    // ブランド名 + アイテム名
-    if (brandName) {
-      body += `\n${brandName}`;
-    }
-
-    if (itemName) {
-      body += ` ${itemName}`;
-    } else if (category) {
-      body += ` ${category}`;
-    }
-
-    // 出品先
-    if (listingDestination) {
-      body += `\n出品先: ${listingDestination}`;
-    }
-
-    // 出品金額
-    if (listingAmount) {
-      const amount = Number(listingAmount);
-      if (!isNaN(amount)) {
-        body += `\n出品金額: ${amount.toLocaleString()}円`;
-      }
-    }
-
-    debugLog('[sendProductRegistrationNotification] 通知本文作成完了');
-
-    // 🔕 ベルマーク通知（旧システム）を無効化
-    // 統合型アーキテクチャでは、システム通知ルーム経由で全ユーザーに通知
-    // FCM通知もシステム通知ルームから送信される
-    /*
-    // FCM通知を送信（web_push.jsの関数を呼び出す）
-    // 非同期で送信（商品登録処理をブロックしない）
-    try {
-      debugLog('[sendProductRegistrationNotification] sendFCMNotification確認中...');
-
-      // グローバルスコープから関数を取得（ファイル読み込み順序の問題を回避）
-      const sendFunc = this['sendFCMNotification'] || globalThis['sendFCMNotification'];
-
-      debugLog('[sendProductRegistrationNotification] typeof sendFCMNotification = ' + typeof sendFCMNotification);
-      debugLog('[sendProductRegistrationNotification] typeof sendFunc = ' + typeof sendFunc);
-
-      // sendFCMNotificationはweb_push.jsで定義されている
-      if (typeof sendFunc === 'function') {
-        debugLog('[sendProductRegistrationNotification] sendFCMNotification呼び出し開始');
-        sendFunc(title, body);
-        debugLog('[sendProductRegistrationNotification] sendFCMNotification呼び出し完了');
-      } else {
-        debugLog('[sendProductRegistrationNotification] ERROR: sendFCMNotification関数が見つかりません');
-        debugLog('[sendProductRegistrationNotification] グローバルオブジェクトのキー: ' + Object.keys(this).join(', ').substring(0, 200));
-      }
-    } catch (fcmError) {
-      debugLog('[sendProductRegistrationNotification] FCM通知送信エラー: ' + fcmError);
-      // エラーをスローしない（商品登録の成功には影響させない）
-    }
-    */
-
-    debugLog('[sendProductRegistrationNotification] 完了');
-
-    // システム通知ルーム投稿用のデータを返す（HTML側でpostMessageを送る）
-    return {
-      notificationData: {
-        type: 'PRODUCT_REGISTERED',
-        userName: userName, // GAS側で取得したユーザー名
-        managementNumber: managementNumber,
-        productName: (brandName ? brandName + ' ' : '') + (itemName || category || ''),
-        listingDestination: listingDestination,
-        listingAmount: listingAmount,
-        timestamp: new Date().toISOString()
-      }
+    const notificationData = {
+      type: 'PRODUCT_REGISTERED',
+      userName: userName,
+      managementNumber: managementNumber,
+      productName: (brandName ? brandName + ' ' : '') + (itemName || category || ''),
+      listingDestination: listingDestination,
+      listingAmount: listingAmount,
+      timestamp: new Date().toISOString(),
+      // システム通知ルーム投稿用（PWA側のフォーマットに合わせる）
+      content: `✅ 商品登録完了\n${userName}さんが商品を登録しました\n\n管理番号: ${managementNumber}\n${(brandName ? brandName + ' ' : '') + (itemName || category || '')}\n${listingDestination ? '出品先: ' + listingDestination : ''}\n${listingAmount ? '出品金額: ' + Number(listingAmount).toLocaleString() + '円' : ''}`,
+      sender: userName,
+      title: '✅ 商品登録完了'
     };
 
-    // デバッグログをスプレッドシートに出力
+    debugLog('[sendProductRegistrationWebhook] 通知データ作成完了');
+
+    // 🌐 Webhook送信
     try {
-      const ss = SpreadsheetApp.getActiveSpreadsheet();
-      let debugSheet = ss.getSheetByName('デバッグログ');
-      if (!debugSheet) {
-        debugSheet = ss.insertSheet('デバッグログ');
-        debugSheet.appendRow(['日時', '管理番号', 'ログ']);
+      debugLog('[sendProductRegistrationWebhook] Webhook送信開始');
+      const webhookResult = sendWebhookNotification(notificationData);
+      debugLog('[sendProductRegistrationWebhook] Webhook送信完了: ' + JSON.stringify(webhookResult));
+      
+      // デバッグログをスプレッドシートに出力
+      try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        let debugSheet = ss.getSheetByName('デバッグログ');
+        if (!debugSheet) {
+          debugSheet = ss.insertSheet('デバッグログ');
+          debugSheet.appendRow(['日時', '管理番号', 'ログ']);
+        }
+        debugSheet.appendRow([new Date(), managementNumber, debugLogs.join('\n')]);
+      } catch (sheetError) {
+        Logger.log('デバッグログシート書き込みエラー: ' + sheetError);
       }
-      debugSheet.appendRow([new Date(), managementNumber, debugLogs.join('\n')]);
-    } catch (sheetError) {
-      Logger.log('デバッグログシート書き込みエラー: ' + sheetError);
+
+      return {
+        success: true,
+        webhookResult: webhookResult,
+        notificationData: notificationData
+      };
+
+    } catch (webhookError) {
+      debugLog('[sendProductRegistrationWebhook] Webhook送信エラー: ' + webhookError);
+      
+      // デバッグログをスプレッドシートに出力（エラー時も）
+      try {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        let debugSheet = ss.getSheetByName('デバッグログ');
+        if (!debugSheet) {
+          debugSheet = ss.insertSheet('デバッグログ');
+          debugSheet.appendRow(['日時', '管理番号', 'ログ']);
+        }
+        debugSheet.appendRow([new Date(), managementNumber, debugLogs.join('\n') + '\nERROR: ' + webhookError]);
+      } catch (sheetError) {
+        Logger.log('デバッグログシート書き込みエラー: ' + sheetError);
+      }
+
+      // Webhookエラーは商品登録の成功に影響させない
+      return {
+        success: false,
+        error: webhookError.toString(),
+        notificationData: notificationData
+      };
     }
 
   } catch (error) {
-    debugLog('[sendProductRegistrationNotification] 外側エラー: ' + error);
+    debugLog('[sendProductRegistrationWebhook] 外側エラー: ' + error);
+    
     // デバッグログをスプレッドシートに出力（エラー時も）
     try {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -495,7 +471,12 @@ function sendProductRegistrationNotification(form, managementNumber) {
     } catch (sheetError) {
       Logger.log('デバッグログシート書き込みエラー: ' + sheetError);
     }
+
     // エラーをスローしない
+    return {
+      success: false,
+      error: error.toString()
+    };
   }
 }
 
@@ -878,4 +859,87 @@ function testSaveProductWithNotification() {
     Logger.log('スタックトレース:', error.stack);
     return 'エラー: ' + error.message;
   }
+}
+
+
+/**
+ * 🌐 Webhook送信関数
+ * Cloudflare WorkerにHTTP POSTリクエストを送信
+ * HMAC-SHA256署名を使ってリクエストを認証
+ */
+function sendWebhookNotification(notificationData) {
+  try {
+    // Script Propertiesから設定を取得
+    const props = PropertiesService.getScriptProperties();
+    const WEBHOOK_URL = props.getProperty('WEBHOOK_URL');
+    const WEBHOOK_SECRET = props.getProperty('WEBHOOK_SECRET');
+
+    if (!WEBHOOK_URL) {
+      throw new Error('WEBHOOK_URLが設定されていません。Script Propertiesに設定してください。');
+    }
+
+    if (!WEBHOOK_SECRET) {
+      throw new Error('WEBHOOK_SECRETが設定されていません。Script Propertiesに設定してください。');
+    }
+
+    // リクエストボディを作成
+    const payload = {
+      notificationData: notificationData
+    };
+
+    const body = JSON.stringify(payload);
+
+    // タイムスタンプ生成
+    const timestamp = Date.now().toString();
+
+    // HMAC署名生成
+    const signature = generateHmacSignature(body, timestamp, WEBHOOK_SECRET);
+
+    Logger.log('[sendWebhookNotification] Webhook送信: ' + WEBHOOK_URL);
+    Logger.log('[sendWebhookNotification] Payload: ' + body);
+    Logger.log('[sendWebhookNotification] Signature: ' + signature);
+
+    // HTTP POSTリクエスト送信
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      payload: body,
+      headers: {
+        'X-Signature': signature,
+        'X-Timestamp': timestamp
+      },
+      muteHttpExceptions: true // エラーレスポンスも取得
+    };
+
+    const response = UrlFetchApp.fetch(WEBHOOK_URL, options);
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    Logger.log('[sendWebhookNotification] Response code: ' + responseCode);
+    Logger.log('[sendWebhookNotification] Response: ' + responseText);
+
+    if (responseCode !== 200) {
+      throw new Error('Webhook送信失敗: ' + responseCode + ' - ' + responseText);
+    }
+
+    return JSON.parse(responseText);
+
+  } catch (error) {
+    Logger.log('[sendWebhookNotification] エラー: ' + error);
+    throw error;
+  }
+}
+
+/**
+ * 🔐 HMAC-SHA256署名生成
+ */
+function generateHmacSignature(body, timestamp, secret) {
+  const message = timestamp + '.' + body;
+  const signature = Utilities.computeHmacSha256Signature(message, secret);
+  
+  // バイナリをHEX文字列に変換
+  return signature.map(function(byte) {
+    const v = (byte < 0) ? 256 + byte : byte;
+    return ('0' + v.toString(16)).slice(-2);
+  }).join('');
 }
