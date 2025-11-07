@@ -1069,6 +1069,31 @@ function doGet(e) {
       case 'get_statistics':
         return getStatisticsAPI(e.parameter);
 
+      case 'getExistingUserCount':
+        // 初回登録判定用（FCM通知登録シートのユーザー数取得）
+        try {
+          const count = getExistingUserCount();
+          return ContentService.createTextOutput(JSON.stringify({
+            success: true,
+            count: count
+          }))
+            .setMimeType(ContentService.MimeType.JSON)
+            .setHeader('Access-Control-Allow-Origin', '*')
+            .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        } catch (error) {
+          Logger.log('[doGet] getExistingUserCount ERROR: ' + error);
+          return ContentService.createTextOutput(JSON.stringify({
+            success: false,
+            count: 0,
+            error: error.toString()
+          }))
+            .setMimeType(ContentService.MimeType.JSON)
+            .setHeader('Access-Control-Allow-Origin', '*')
+            .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        }
+
       default:
         return jsonErrorResponse(`未対応のアクション: ${action}`);
     }

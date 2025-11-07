@@ -269,7 +269,10 @@ function doPost(e) {
       const notificationSound = requestBody.notificationSound !== undefined ? requestBody.notificationSound : true;
       const result = saveFCMToken(token, deviceInfo, userId, userName, email, permission, notificationEnabled, notificationSound);
       return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeader('Access-Control-Allow-Origin', '*')
+        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
     }
 
     if (action === 'sendFCM') {
@@ -304,13 +307,19 @@ function doPost(e) {
         ]);
 
         return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
+          .setMimeType(ContentService.MimeType.JSON)
+          .setHeader('Access-Control-Allow-Origin', '*')
+          .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+          .setHeader('Access-Control-Allow-Headers', 'Content-Type');
       } catch (error) {
         return ContentService.createTextOutput(JSON.stringify({
           status: 'error',
           message: 'エラー: ' + error.toString()
         }))
-          .setMimeType(ContentService.MimeType.JSON);
+          .setMimeType(ContentService.MimeType.JSON)
+          .setHeader('Access-Control-Allow-Origin', '*')
+          .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+          .setHeader('Access-Control-Allow-Headers', 'Content-Type');
       }
     }
 
@@ -355,14 +364,20 @@ function doPost(e) {
       const result = sendFCMNotificationToUser(title, body, targetUserName, badgeCount);
 
       return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeader('Access-Control-Allow-Origin', '*')
+        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
     }
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: '不明なアクション: ' + action
     }))
-      .setMimeType(ContentService.MimeType.JSON);
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+      .setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   } catch (error) {
     Logger.log('doPost error: ' + error);
@@ -370,7 +385,10 @@ function doPost(e) {
       status: 'error',
       message: error.toString()
     }))
-      .setMimeType(ContentService.MimeType.JSON);
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+      .setHeader('Access-Control-Allow-Headers', 'Content-Type');
   }
 }
 
@@ -456,7 +474,10 @@ function doGet(e) {
             count: count
           };
           return ContentService.createTextOutput(JSON.stringify(response))
-            .setMimeType(ContentService.MimeType.JSON);
+            .setMimeType(ContentService.MimeType.JSON)
+            .setHeader('Access-Control-Allow-Origin', '*')
+            .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            .setHeader('Access-Control-Allow-Headers', 'Content-Type');
         } catch (error) {
           Logger.log('[doGet] getExistingUserCount ERROR: ' + error);
           const errorResponse = {
@@ -465,7 +486,10 @@ function doGet(e) {
             error: error.toString()
           };
           return ContentService.createTextOutput(JSON.stringify(errorResponse))
-            .setMimeType(ContentService.MimeType.JSON);
+            .setMimeType(ContentService.MimeType.JSON)
+            .setHeader('Access-Control-Allow-Origin', '*')
+            .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            .setHeader('Access-Control-Allow-Headers', 'Content-Type');
         }
       }
 
