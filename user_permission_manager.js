@@ -530,6 +530,20 @@ function getContractorUsers() {
 }
 
 /**
+ * 全ユーザー名の配列を取得（システム通知用）
+ * @return {Array<String>} ユーザー名の配列
+ */
+function getAllUserNames() {
+  try {
+    const allUsers = getUserList();
+    return allUsers.map(user => user.userName).filter(name => name && name !== '');
+  } catch (error) {
+    Logger.log('getAllUserNames error: ' + error);
+    return [];
+  }
+}
+
+/**
  * Phase 1マイグレーション実行（フル実行）
  * 1. 権限カラムと備考カラムを追加
  * 2. 安廣拓志をオーナーに設定

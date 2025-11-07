@@ -317,9 +317,13 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
     Logger.log('[DEBUG] About to send notification for: ' + mgmtKey);
 
     // 🔔 商品登録完了の通知を送信
+    let notificationData = null;
     try {
       Logger.log('[saveProduct] 通知送信開始: ' + mgmtKey);
-      sendProductRegistrationNotification(form, mgmtKey);
+      const notificationResult = sendProductRegistrationNotification(form, mgmtKey);
+      if (notificationResult && notificationResult.notificationData) {
+        notificationData = notificationResult.notificationData;
+      }
       Logger.log('[saveProduct] 通知送信完了: ' + mgmtKey);
     } catch (notificationError) {
       Logger.log('[saveProduct] 通知送信エラー: ' + notificationError);
@@ -328,7 +332,14 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
     }
 
     Logger.log('[DEBUG] saveProduct completed successfully, returning message: ' + message);
-    return message;
+
+    // システム通知ルーム投稿用のデータを含めて返す
+    return {
+      success: true,
+      message: message,
+      managementNumber: mgmtKey,
+      notificationData: notificationData
+    };
       
   } catch (e) {
     Logger.log('[DEBUG] saveProduct error occurred');
@@ -397,6 +408,10 @@ function sendProductRegistrationNotification(form, managementNumber) {
 
     debugLog('[sendProductRegistrationNotification] 通知本文作成完了');
 
+    // 🔕 ベルマーク通知（旧システム）を無効化
+    // 統合型アーキテクチャでは、システム通知ルーム経由で全ユーザーに通知
+    // FCM通知もシステム通知ルームから送信される
+    /*
     // FCM通知を送信（web_push.jsの関数を呼び出す）
     // 非同期で送信（商品登録処理をブロックしない）
     try {
@@ -421,35 +436,21 @@ function sendProductRegistrationNotification(form, managementNumber) {
       debugLog('[sendProductRegistrationNotification] FCM通知送信エラー: ' + fcmError);
       // エラーをスローしない（商品登録の成功には影響させない）
     }
+    */
 
-    // PWA側（親ウィンドウ）にpostMessageでシステム通知ルームへの投稿を依頼
-    try {
-      debugLog('[sendProductRegistrationNotification] PWA側に通知投稿リクエスト送信開始');
+    debugLog('[sendProductRegistrationNotification] 完了');
 
-      // 現在のユーザー名を取得
-      const userName = Session.getActiveUser().getEmail().split('@')[0] || '不明';
-
-      const notificationMessage = {
+    // システム通知ルーム投稿用のデータを返す（HTML側でpostMessageを送る）
+    return {
+      notificationData: {
         type: 'PRODUCT_REGISTERED',
-        userName: userName,
         managementNumber: managementNumber,
         productName: (brandName ? brandName + ' ' : '') + (itemName || category || ''),
         listingDestination: listingDestination,
         listingAmount: listingAmount,
         timestamp: new Date().toISOString()
-      };
-
-      // 親ウィンドウ（PWA）に送信
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage(notificationMessage, '*');
-        debugLog('[sendProductRegistrationNotification] PWA側に通知投稿リクエスト送信完了');
       }
-    } catch (postMessageError) {
-      debugLog('[sendProductRegistrationNotification] postMessage送信エラー: ' + postMessageError);
-      // エラーをスローしない
-    }
-
-    debugLog('[sendProductRegistrationNotification] 完了');
+    };
 
     // デバッグログをスプレッドシートに出力
     try {
