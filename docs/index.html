@@ -947,10 +947,17 @@
         setTimeout(() => {
           const iframeSrc = iframe.getAttribute('data-src');
           if (iframeSrc) {
+            // 🔐 postMessage用のparentOriginとpmTokenを生成（二重iframe対策）
+            const parentOrigin = location.origin;
+            const pmToken = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+            localStorage.setItem('pm_token', pmToken);
+            console.log('🔐 [postMessage Security] 初期読み込み - parentOrigin:', parentOrigin, 'pmToken:', pmToken);
+
             // FCMトークンをlocalStorageから取得してURLに追加
             const fcmToken = localStorage.getItem('reborn_fcm_token') || '';
             const fcmParam = fcmToken ? '&fcmToken=' + encodeURIComponent(fcmToken) : '';
-            const finalSrc = iframeSrc + fcmParam;
+            const securityParams = '&parentOrigin=' + encodeURIComponent(parentOrigin) + '&pmToken=' + encodeURIComponent(pmToken);
+            const finalSrc = iframeSrc + fcmParam + securityParams;
 
             console.log('🚀 iframe読み込み開始:', finalSrc.substring(0, 120) + '...');
             console.log('🔑 FCMトークンをiframeに渡します:', fcmToken ? fcmToken.substring(0, 20) + '...' : 'なし');
@@ -1416,10 +1423,19 @@
       const iframe = document.getElementById('gas-iframe');
       const baseUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
 
+      // 🔐 postMessage用のparentOriginとpmTokenを生成（二重iframe対策）
+      const parentOrigin = location.origin; // https://reborn-inventory-system.pages.dev
+      const pmToken = crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+      localStorage.setItem('pm_token', pmToken);
+      console.log('🔐 [postMessage Security] parentOrigin:', parentOrigin, 'pmToken:', pmToken);
+
       // FCMトークンをlocalStorageから取得
       const fcmToken = localStorage.getItem('reborn_fcm_token') || '';
       const fcmParam = fcmToken ? '&fcmToken=' + encodeURIComponent(fcmToken) : '';
       console.log('🔑 FCMトークンをiframeに渡します:', fcmToken ? fcmToken.substring(0, 20) + '...' : 'なし');
+
+      // postMessage用パラメータ
+      const securityParams = '&parentOrigin=' + encodeURIComponent(parentOrigin) + '&pmToken=' + encodeURIComponent(pmToken);
 
       // アクティブ状態を更新
       document.querySelectorAll('.drawer-item').forEach(item => {
@@ -1427,34 +1443,34 @@
       });
 
       if (page === 'product') {
-        iframe.src = baseUrl + '?menu=product' + fcmParam;
+        iframe.src = baseUrl + '?menu=product' + fcmParam + securityParams;
         document.getElementById('drawer-product').classList.add('active');
       } else if (page === 'config-basic') {
-        iframe.src = baseUrl + '?menu=config&activeTab=basic' + fcmParam;
+        iframe.src = baseUrl + '?menu=config&activeTab=basic' + fcmParam + securityParams;
         document.getElementById('drawer-config-basic').classList.add('active');
       } else if (page === 'config-management') {
-        iframe.src = baseUrl + '?menu=config&activeTab=management' + fcmParam;
+        iframe.src = baseUrl + '?menu=config&activeTab=management' + fcmParam + securityParams;
         document.getElementById('drawer-config-management').classList.add('active');
       } else if (page === 'config-product') {
-        iframe.src = baseUrl + '?menu=config&activeTab=product' + fcmParam;
+        iframe.src = baseUrl + '?menu=config&activeTab=product' + fcmParam + securityParams;
         document.getElementById('drawer-config-product').classList.add('active');
       } else if (page === 'config-shipping') {
-        iframe.src = baseUrl + '?menu=config&activeTab=shipping' + fcmParam;
+        iframe.src = baseUrl + '?menu=config&activeTab=shipping' + fcmParam + securityParams;
         document.getElementById('drawer-config-shipping').classList.add('active');
       } else if (page === 'config-procure') {
-        iframe.src = baseUrl + '?menu=config&activeTab=procure-listing' + fcmParam;
+        iframe.src = baseUrl + '?menu=config&activeTab=procure-listing' + fcmParam + securityParams;
         document.getElementById('drawer-config-procure').classList.add('active');
       } else if (page === 'config-ai') {
-        iframe.src = baseUrl + '?menu=config&activeTab=ai' + fcmParam;
+        iframe.src = baseUrl + '?menu=config&activeTab=ai' + fcmParam + securityParams;
         document.getElementById('drawer-config-ai').classList.add('active');
       } else if (page === 'config') {
         // Legacy support - default to basic
-        iframe.src = baseUrl + '?menu=config&activeTab=basic' + fcmParam;
+        iframe.src = baseUrl + '?menu=config&activeTab=basic' + fcmParam + securityParams;
       } else if (page === 'inventory') {
-        iframe.src = baseUrl + '?menu=inventory' + fcmParam;
+        iframe.src = baseUrl + '?menu=inventory' + fcmParam + securityParams;
         document.getElementById('drawer-inventory').classList.add('active');
       } else if (page === 'inventory_history') {
-        iframe.src = baseUrl + '?menu=inventory_history' + fcmParam;
+        iframe.src = baseUrl + '?menu=inventory_history' + fcmParam + securityParams;
         document.getElementById('drawer-inventory-history').classList.add('active');
       } else if (page === 'chat') {
         // PWA版：app=pwaフラグを常に付ける（判定を確実にする）
@@ -1477,13 +1493,13 @@
         iframe.src = `${baseUrl}?${params.toString()}`;
         document.getElementById('drawer-chat').classList.add('active');
       } else if (page === 'shipping-master') {
-        iframe.src = baseUrl + '?menu=shipping-master' + fcmParam;
+        iframe.src = baseUrl + '?menu=shipping-master' + fcmParam + securityParams;
         document.getElementById('drawer-shipping-master').classList.add('active');
       } else if (page === 'packaging-master') {
-        iframe.src = baseUrl + '?menu=packaging-master' + fcmParam;
+        iframe.src = baseUrl + '?menu=packaging-master' + fcmParam + securityParams;
         document.getElementById('drawer-packaging-master').classList.add('active');
       } else if (page === 'config-user') {
-        iframe.src = baseUrl + '?menu=user_management' + fcmParam;
+        iframe.src = baseUrl + '?menu=user_management' + fcmParam + securityParams;
         document.getElementById('drawer-config-user').classList.add('active');
       }
 
@@ -1585,9 +1601,17 @@
       }
 
       // 📢 システム通知ルーム投稿（統合型アーキテクチャ）
-      if (event.data.type === 'PRODUCT_REGISTERED') {
-        console.log('[System Notification] PRODUCT_REGISTERED受信:', event.data);
-        postSystemNotification(event.data);
+      if (data.type === 'PRODUCT_REGISTERED') {
+        console.log('[System Notification] PRODUCT_REGISTERED受信:', data);
+
+        // 🔐 二重iframe対策後の新payload構造に対応
+        // payload = { __reborn: true, type: 'PRODUCT_REGISTERED', pmToken, data: notificationData }
+        if (data.data) {
+          console.log('[System Notification] 通知データ抽出:', data.data);
+          postSystemNotification(data.data);
+        } else {
+          console.error('[System Notification] ❌ data.dataが存在しません:', data);
+        }
       }
     });
 

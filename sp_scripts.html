@@ -56,6 +56,27 @@
     }
   })();
 
+  // 🔐 postMessage用のparentOriginとpmTokenをURLから取得（二重iframe対策）
+  let PARENT_ORIGIN = '';
+  let PM_TOKEN = '';
+  (function() {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      PARENT_ORIGIN = urlParams.get('parentOrigin') || '';
+      PM_TOKEN = urlParams.get('pmToken') || '';
+
+      if (PARENT_ORIGIN && PM_TOKEN) {
+        console.log('🔐 [postMessage Security] URLパラメータ取得成功');
+        console.log('  - parentOrigin:', PARENT_ORIGIN);
+        console.log('  - pmToken:', PM_TOKEN);
+      } else {
+        console.warn('⚠️ [postMessage Security] parentOrigin/pmTokenがURLパラメータに含まれていません');
+      }
+    } catch (e) {
+      console.error('❌ [postMessage Security] URLパラメータ取得エラー:', e);
+    }
+  })();
+
   // テーマをLocalStorageに保存
   function saveThemeToLocalStorage(theme) {
     try {
@@ -4686,13 +4707,29 @@
           const isPWA = window.self !== window.top;
 
           if (isPWA) {
-            console.log('[System Notification] PWA版検出 - postMessage送信');
-            try {
-              // GAS側で既にuserNameが含まれているので、そのまま送信
-              window.parent.postMessage(result.notificationData, '*');
-              console.log('[System Notification] postMessage送信完了');
-            } catch (e) {
-              console.error('[System Notification] postMessage送信エラー:', e);
+            console.log('[System Notification] PWA版検出 - postMessage送信準備');
+
+            // 🔐 二重iframe対策：window.top.postMessage()を使用
+            if (PARENT_ORIGIN && PM_TOKEN) {
+              try {
+                const payload = {
+                  __reborn: true,                    // REBORNシステムのメッセージであることを示すマーカー
+                  type: 'PRODUCT_REGISTERED',        // メッセージタイプ
+                  pmToken: PM_TOKEN,                 // セキュリティトークン
+                  data: result.notificationData      // 通知データ本体
+                };
+
+                console.log('[System Notification] postMessage発火 → parentOrigin:', PARENT_ORIGIN);
+                console.log('[System Notification] payload:', payload);
+
+                // window.top.postMessage()で最上位ウィンドウ（PWA）に送信
+                window.top.postMessage(payload, PARENT_ORIGIN);
+                console.log('[System Notification] ✅ postMessage送信完了（window.top）');
+              } catch (e) {
+                console.error('[System Notification] ❌ postMessage送信エラー:', e);
+              }
+            } else {
+              console.error('[System Notification] ❌ PARENT_ORIGIN または PM_TOKEN が未設定のため送信スキップ');
             }
           } else {
             console.log('[System Notification] GAS版検出 - postMessageスキップ（統合型アーキテクチャではPWA版のみ通知）');
