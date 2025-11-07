@@ -2023,6 +2023,31 @@
 
               await Promise.all(updatePromises);
               console.log('[System Notification] 全ユーザーの未読カウント更新完了');
+
+              // 📢 FCMプッシュ通知を送信（統合型アーキテクチャ）
+              console.log('[System Notification] FCMプッシュ通知送信開始');
+
+              // FCM通知のタイトルと本文を作成
+              const fcmTitle = '🎉 商品登録完了';
+              const fcmBody = messageText.replace(/\n/g, '\n'); // 実際の改行に変換
+
+              // 登録者以外のユーザーにFCM送信
+              const targetUsers = userNames.filter(userName => 
+                userName && userName !== data.userName && userName !== 'システム'
+              );
+
+              if (targetUsers.length > 0) {
+                google.script.run
+                  .withSuccessHandler(function(result) {
+                    console.log('[System Notification] ✅ FCMプッシュ通知送信完了:', result);
+                  })
+                  .withFailureHandler(function(error) {
+                    console.error('[System Notification] ❌ FCMプッシュ通知送信エラー:', error);
+                  })
+                  .sendFCMNotificationToUsers(fcmTitle, fcmBody, targetUsers);
+              } else {
+                console.log('[System Notification] FCM送信対象ユーザーなし（全員が登録者）');
+              }
             })
             .withFailureHandler(function(error) {
               console.error('[System Notification] ユーザー一覧取得エラー:', error);
