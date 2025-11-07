@@ -367,6 +367,21 @@ function sendProductRegistrationNotification(form, managementNumber) {
   debugLog('[sendProductRegistrationNotification] 開始: ' + managementNumber);
 
   try {
+    // 現在のユーザー名を取得
+    let userName = '不明';
+    try {
+      const email = Session.getEffectiveUser().getEmail();
+      debugLog('[sendProductRegistrationNotification] ユーザーメール: ' + email);
+
+      // user_permission_manager.jsのgetUserNameByEmail()を使用
+      if (typeof getUserNameByEmail === 'function') {
+        userName = getUserNameByEmail(email) || '不明';
+        debugLog('[sendProductRegistrationNotification] ユーザー名: ' + userName);
+      }
+    } catch (userError) {
+      debugLog('[sendProductRegistrationNotification] ユーザー名取得エラー: ' + userError);
+    }
+
     // 通知内容を作成
     const brandName = form['ブランド(英語)'] || form['ブランド(カナ)'] || '';
     const itemName = form['アイテム名'] || '';
@@ -444,6 +459,7 @@ function sendProductRegistrationNotification(form, managementNumber) {
     return {
       notificationData: {
         type: 'PRODUCT_REGISTERED',
+        userName: userName, // GAS側で取得したユーザー名
         managementNumber: managementNumber,
         productName: (brandName ? brandName + ' ' : '') + (itemName || category || ''),
         listingDestination: listingDestination,

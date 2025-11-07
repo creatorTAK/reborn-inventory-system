@@ -1970,12 +1970,13 @@
           console.log('[System Notification] 全ユーザーの未読カウント更新開始');
 
           google.script.run
-            .withSuccessHandler(function(userNames) {
+            .withSuccessHandler(async function(userNames) {
               console.log('[System Notification] ユーザー一覧取得:', userNames);
 
-              // 各ユーザーの未読カウントを+1
-              userNames.forEach(async (userName) => {
-                if (userName && userName !== data.userName && userName !== 'システム') {
+              // 各ユーザーの未読カウントを+1（Promise.allで並列実行）
+              const updatePromises = userNames
+                .filter(userName => userName && userName !== data.userName && userName !== 'システム')
+                .map(async (userName) => {
                   try {
                     const unreadRef = doc(db, `rooms/${systemRoomId}/unreadCounts/${userName}`);
                     await setDoc(unreadRef, {
@@ -1988,8 +1989,10 @@
                   } catch (err) {
                     console.error(`[System Notification] ${userName} の未読カウント更新エラー:`, err);
                   }
-                }
-              });
+                });
+
+              await Promise.all(updatePromises);
+              console.log('[System Notification] 全ユーザーの未読カウント更新完了');
             })
             .withFailureHandler(function(error) {
               console.error('[System Notification] ユーザー一覧取得エラー:', error);
