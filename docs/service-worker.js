@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v8'; // アプリアイコンバッジ（商品通知+チャット未読合計）
+const CACHE_NAME = 'reborn-v9'; // FCM通知+アプリバッジ実装（Service Worker対応）
 const urlsToCache = [
   '/',
   '/index.html',
@@ -89,6 +89,17 @@ self.addEventListener('push', (event) => {
       };
     } catch (e) {
       console.error('[Service Worker] Push data parse error:', e);
+    }
+  }
+
+  // アプリバッジを更新（通知データにバッジカウントが含まれている場合）
+  if ('setAppBadge' in self.navigator) {
+    const badgeCount = notificationData.data?.badgeCount;
+    if (badgeCount !== undefined) {
+      self.navigator.setAppBadge(badgeCount).catch(err => {
+        console.error('[Service Worker] Badge API エラー:', err);
+      });
+      console.log('[Service Worker] アプリバッジ更新:', badgeCount);
     }
   }
 

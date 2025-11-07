@@ -343,6 +343,21 @@ function doPost(e) {
       }
     }
 
+    if (action === 'sendChatNotification') {
+      // チャット通知を個別ユーザーに送信
+      const title = requestBody.title;
+      const body = requestBody.body;
+      const targetUserName = requestBody.targetUserName;
+      const badgeCount = requestBody.badgeCount;
+
+      Logger.log('[チャット通知] ' + targetUserName + 'に送信: ' + title + ', バッジ: ' + badgeCount);
+
+      const result = sendFCMNotificationToUser(title, body, targetUserName, badgeCount);
+
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: '不明なアクション: ' + action
