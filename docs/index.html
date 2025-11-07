@@ -1045,7 +1045,7 @@
     }
 
     // ⓪ ユーザー情報を保存
-    function saveUserInfo() {
+    async function saveUserInfo() {
       const nameInput = document.getElementById('user-name-input');
       const emailInput = document.getElementById('user-email-input');
       const resultDiv = document.getElementById('step0-result');
@@ -1085,6 +1085,32 @@
       resultDiv.textContent = '⏳ 保存中...';
       resultDiv.className = 'step-result';
       resultDiv.style.display = 'block';
+
+      // ✅ オーナー権限の場合、サーバー側でオーナー重複チェック
+      if (permission === 'オーナー') {
+        try {
+          const baseUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
+          const response = await fetch(baseUrl + '?action=getExistingUserCount');
+          const data = await response.json();
+
+          if (data.success && data.count > 0) {
+            // 既にユーザーが存在する場合、オーナー登録を拒否
+            resultDiv.textContent = '❌ 既にユーザーが登録されています。スタッフまたは外注で登録してください。';
+            resultDiv.className = 'step-result error';
+            resultDiv.style.display = 'block';
+            console.log('[saveUserInfo] ❌ オーナー重複登録を拒否（既存ユーザー数: ' + data.count + '）');
+            return;
+          }
+
+          console.log('[saveUserInfo] ✅ 初回登録者のためオーナー権限を許可');
+        } catch (error) {
+          console.error('❌ オーナー重複チェックエラー:', error);
+          resultDiv.textContent = '❌ サーバーとの通信に失敗しました。もう一度お試しください。';
+          resultDiv.className = 'step-result error';
+          resultDiv.style.display = 'block';
+          return;
+        }
+      }
 
       // LocalStorageに保存
       try {
