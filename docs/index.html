@@ -1583,6 +1583,12 @@
         console.log('👤 ユーザーアイコン更新:', event.data.iconUrl ? '画像あり' : '画像なし');
         updateUserIcon(event.data.iconUrl);
       }
+
+      // 📢 システム通知ルーム投稿（統合型アーキテクチャ）
+      if (event.data.type === 'PRODUCT_REGISTERED') {
+        console.log('[System Notification] PRODUCT_REGISTERED受信:', event.data);
+        postSystemNotification(event.data);
+      }
     });
 
     // 🔕 旧ベルマーク通知バッジ機能（無効化 - 統合型アーキテクチャ）
@@ -2007,28 +2013,11 @@
       }
     }
 
-    // 初期化（postMessageリスナーをできるだけ早く登録）
+    // 初期化
     document.addEventListener('DOMContentLoaded', function() {
       console.log('[Chat FAB] DOMContentLoaded - リスナー開始');
 
-      // postMessageイベントリスナー（最優先で登録）
-      window.addEventListener('message', function(event) {
-        console.log('[postMessage] 受信:', event.data, 'origin:', event.origin);
-
-        // GAS originからのメッセージのみ受け入れる
-        if (event.origin === 'https://script.google.com' ||
-            event.origin === 'https://n-script.googleusercontent.com') {
-
-          if (event.data && event.data.type === 'PRODUCT_REGISTERED') {
-            console.log('[postMessage] PRODUCT_REGISTERED検出 - postSystemNotification呼び出し');
-            postSystemNotification(event.data);
-          }
-        } else {
-          console.log('[postMessage] 無視（origin不一致）:', event.origin);
-        }
-      });
-
-      console.log('[postMessage] リスナー登録完了');
+      // postMessageリスナーは既に行1502で登録済み（PRODUCT_REGISTERED処理を追加済み）
 
       initializeSystemNotificationRoom(); // システム通知ルーム作成
       startChatUnreadListener();
