@@ -4678,15 +4678,24 @@
       .withSuccessHandler(function(result) {
         console.log('[DEBUG] saveProduct API response:', result);
 
-        // 📢 システム通知ルームへのpostMessage送信
+        // 📢 システム通知ルームへのpostMessage送信（PWA版のみ）
         if (result && result.notificationData) {
-          console.log('[System Notification] PWAにpostMessage送信:', result.notificationData);
-          try {
-            // GAS側で既にuserNameが含まれているので、そのまま送信
-            window.parent.postMessage(result.notificationData, '*');
-            console.log('[System Notification] postMessage送信完了');
-          } catch (e) {
-            console.error('[System Notification] postMessage送信エラー:', e);
+          console.log('[System Notification] 通知データ取得:', result.notificationData);
+
+          // PWA版（iframe内）かどうか判定
+          const isPWA = window.self !== window.top;
+
+          if (isPWA) {
+            console.log('[System Notification] PWA版検出 - postMessage送信');
+            try {
+              // GAS側で既にuserNameが含まれているので、そのまま送信
+              window.parent.postMessage(result.notificationData, '*');
+              console.log('[System Notification] postMessage送信完了');
+            } catch (e) {
+              console.error('[System Notification] postMessage送信エラー:', e);
+            }
+          } else {
+            console.log('[System Notification] GAS版検出 - postMessageスキップ（統合型アーキテクチャではPWA版のみ通知）');
           }
         }
 

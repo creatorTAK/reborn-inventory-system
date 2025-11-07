@@ -2007,19 +2007,29 @@
       }
     }
 
-    // postMessageイベントリスナー
-    window.addEventListener('message', function(event) {
-      console.log('[postMessage] 受信:', event.data);
-
-      // セキュリティチェック（必要に応じてoriginを確認）
-      if (event.data && event.data.type === 'PRODUCT_REGISTERED') {
-        postSystemNotification(event.data);
-      }
-    });
-
-    // 初期化
+    // 初期化（postMessageリスナーをできるだけ早く登録）
     document.addEventListener('DOMContentLoaded', function() {
       console.log('[Chat FAB] DOMContentLoaded - リスナー開始');
+
+      // postMessageイベントリスナー（最優先で登録）
+      window.addEventListener('message', function(event) {
+        console.log('[postMessage] 受信:', event.data, 'origin:', event.origin);
+
+        // GAS originからのメッセージのみ受け入れる
+        if (event.origin === 'https://script.google.com' ||
+            event.origin === 'https://n-script.googleusercontent.com') {
+
+          if (event.data && event.data.type === 'PRODUCT_REGISTERED') {
+            console.log('[postMessage] PRODUCT_REGISTERED検出 - postSystemNotification呼び出し');
+            postSystemNotification(event.data);
+          }
+        } else {
+          console.log('[postMessage] 無視（origin不一致）:', event.origin);
+        }
+      });
+
+      console.log('[postMessage] リスナー登録完了');
+
       initializeSystemNotificationRoom(); // システム通知ルーム作成
       startChatUnreadListener();
     });
