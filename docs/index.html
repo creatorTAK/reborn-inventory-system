@@ -939,23 +939,6 @@
           setTimeout(() => {
             skeleton.style.display = 'none';
           }, 300);
-
-          // 🔐 iframe読み込み完了後、初期化postMessageを送信（二重iframe対策）
-          const parentOrigin = location.origin;
-          const pmToken = localStorage.getItem('pm_token') || '';
-          
-          if (pmToken) {
-            console.log('🔐 [Init postMessage] iframe読み込み完了 - 初期化メッセージ送信');
-            console.log('  - parentOrigin:', parentOrigin);
-            console.log('  - pmToken:', pmToken);
-
-            // iframe内に初期化パラメータを送信
-            iframe.contentWindow.postMessage({
-              __reborn_init: true,
-              parentOrigin: parentOrigin,
-              pmToken: pmToken
-            }, '*'); // GAS側のoriginが動的なので'*'を使用
-          }
         });
 
         // 🚀 iframe遅延ロード: 初期表示を高速化
@@ -1550,6 +1533,31 @@
       }
 
       const data = event.data || {};
+
+      // 🔐 GASからの初期化リクエスト処理（ハンドシェイク方式）
+      if (data.__reborn_ready === true) {
+        console.log('🔐 [Init Handshake] GASから初期化リクエスト受信');
+        
+        const iframe = document.getElementById('gas-iframe');
+        const parentOrigin = location.origin;
+        const pmToken = localStorage.getItem('pm_token') || '';
+
+        if (iframe && pmToken) {
+          console.log('🔐 [Init Handshake] PWAから初期化パラメータ返信');
+          console.log('  - parentOrigin:', parentOrigin);
+          console.log('  - pmToken:', pmToken);
+
+          // GASに初期化パラメータを返信
+          iframe.contentWindow.postMessage({
+            __reborn_init_response: true,
+            parentOrigin: parentOrigin,
+            pmToken: pmToken
+          }, '*');
+        } else {
+          console.error('🔐 [Init Handshake] ❌ iframeまたはpmTokenが見つかりません');
+        }
+        return; // 処理完了
+      }
 
       // ネームスペースマーカーチェック（__rebornがある場合のみ検証）
       if (data.__reborn) {

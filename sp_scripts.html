@@ -56,25 +56,38 @@
     }
   })();
 
-  // 🔐 postMessage用のparentOriginとpmTokenを初期化postMessageから取得（二重iframe対策）
+  // 🔐 postMessage用のparentOriginとpmTokenをハンドシェイクで取得（二重iframe対策）
   let PARENT_ORIGIN = '';
   let PM_TOKEN = '';
+  let INIT_HANDSHAKE_COMPLETE = false;
 
-  // 初期化postMessageを受信
+  // 初期化postMessageを受信（PWAからの返信）
   window.addEventListener('message', function(event) {
-    // 初期化メッセージの処理（__reborn_initマーカー）
-    if (event.data && event.data.__reborn_init === true) {
+    // 初期化メッセージの処理（__reborn_init_responseマーカー）
+    if (event.data && event.data.__reborn_init_response === true) {
       PARENT_ORIGIN = event.data.parentOrigin || '';
       PM_TOKEN = event.data.pmToken || '';
+      INIT_HANDSHAKE_COMPLETE = true;
 
       if (PARENT_ORIGIN && PM_TOKEN) {
-        console.log('🔐 [Init postMessage] 初期化メッセージ受信成功');
+        console.log('🔐 [Init Handshake] ✅ 初期化パラメータ受信成功');
         console.log('  - parentOrigin:', PARENT_ORIGIN);
         console.log('  - pmToken:', PM_TOKEN);
       } else {
-        console.warn('⚠️ [Init postMessage] parentOrigin/pmTokenが含まれていません');
+        console.warn('⚠️ [Init Handshake] parentOrigin/pmTokenが含まれていません');
       }
     }
+  });
+
+  // GAS側準備完了後、PWAに初期化パラメータをリクエスト
+  window.addEventListener('DOMContentLoaded', function() {
+    console.log('🔐 [Init Handshake] GAS側準備完了 - PWAに初期化リクエスト送信');
+    
+    // PWAに「準備完了、初期化パラメータください」を送信
+    window.top.postMessage({
+      __reborn_ready: true,
+      message: 'GAS準備完了 - 初期化パラメータリクエスト'
+    }, '*');
   });
 
   // テーマをLocalStorageに保存
