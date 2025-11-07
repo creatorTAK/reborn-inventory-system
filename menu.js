@@ -1787,3 +1787,48 @@ function logDebug_Reach(action, params, startTime) {
     Logger.log('logDebug_Reach error: ' + e);
   }
 }
+
+/**
+ * 全ユーザー名を取得（チャット未読カウント更新用）
+ * @return {Array} ユーザー名の配列
+ */
+function getAllUserNames() {
+  try {
+    Logger.log('[getAllUserNames] 全ユーザー名取得開始');
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const fcmSheet = ss.getSheetByName('FCM通知登録');
+
+    if (!fcmSheet) {
+      Logger.log('[getAllUserNames] FCM通知登録シートが見つかりません');
+      return [];
+    }
+
+    const data = fcmSheet.getDataRange().getValues();
+    const headers = data[0];
+    const userNameCol = headers.indexOf('ユーザー名');
+
+    if (userNameCol === -1) {
+      Logger.log('[getAllUserNames] ユーザー名列が見つかりません');
+      return [];
+    }
+
+    // ユーザー名を収集（重複除去）
+    const userNames = [];
+    const seenNames = new Set();
+
+    for (let i = 1; i < data.length; i++) {
+      const userName = data[i][userNameCol];
+      if (userName && !seenNames.has(userName)) {
+        userNames.push(userName);
+        seenNames.add(userName);
+      }
+    }
+
+    Logger.log('[getAllUserNames] 取得ユーザー数:', userNames.length);
+    return userNames;
+  } catch (error) {
+    Logger.log('[getAllUserNames] エラー:', error);
+    return [];
+  }
+}

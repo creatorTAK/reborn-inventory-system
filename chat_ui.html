@@ -474,6 +474,100 @@
     }
 
     // メッセージ送信
+    // 🔥 Firestoreにメッセージを保存する関数
+    async function saveMessageToFirestore(messageText, channelId, senderName) {
+      console.log('[Firestore] メッセージ保存開始:', messageText);
+
+      try {
+        // Firebase SDKを動的インポート
+        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+        const { getFirestore, collection, addDoc, doc, updateDoc, setDoc, serverTimestamp, increment } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        // Firebase設定
+        const firebaseConfig = {
+          apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjwwtCorUZQ",
+          authDomain: "reborn-chat.firebaseapp.com",
+          projectId: "reborn-chat",
+          storageBucket: "reborn-chat.firebasestorage.app",
+          messagingSenderId: "345706548795",
+          appId: "1:345706548795:web:058a553da6b4b74db5161e"
+        };
+
+        // Firebase初期化
+        const app = initializeApp(firebaseConfig, 'chat-message-sender-' + Date.now());
+        const db = getFirestore(app);
+
+        // ルームIDを決定
+        let roomId;
+        if (channelId === '全体' || !channelId) {
+          roomId = 'room_default_all';
+        } else if (channelId === 'システム通知') {
+          roomId = 'room_system_notifications';
+        } else {
+          roomId = channelId; // カスタムルームID
+        }
+
+        // 1. messagesコレクションにメッセージを追加
+        await addDoc(collection(db, 'messages'), {
+          roomId: roomId,
+          text: messageText,
+          userName: senderName,
+          timestamp: serverTimestamp(),
+          deletedBy: []
+        });
+
+        console.log('[Firestore] messagesコレクションに保存完了');
+
+        // 2. roomsコレクションのlastMessageを更新
+        const roomRef = doc(db, 'rooms', roomId);
+        await updateDoc(roomRef, {
+          lastMessage: messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText,
+          lastMessageAt: serverTimestamp(),
+          lastMessageBy: senderName
+        });
+
+        console.log('[Firestore] rooms lastMessage更新完了');
+
+        // 3. 全ユーザーの未読カウントを更新（送信者以外）
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(async function(userNames) {
+              console.log('[Firestore] ユーザー一覧取得:', userNames);
+
+              // 送信者以外のユーザーの未読カウントを+1
+              const updatePromises = userNames
+                .filter(name => name && name !== senderName && name !== 'システム')
+                .map(async (name) => {
+                  try {
+                    const unreadRef = doc(db, `rooms/${roomId}/unreadCounts/${name}`);
+                    await setDoc(unreadRef, {
+                      userId: name,
+                      unreadCount: increment(1),
+                      lastUpdated: serverTimestamp()
+                    }, { merge: true });
+
+                    console.log(`[Firestore] ${name} の未読カウント+1完了`);
+                  } catch (err) {
+                    console.error(`[Firestore] ${name} の未読カウント更新エラー:`, err);
+                  }
+                });
+
+              await Promise.all(updatePromises);
+              console.log('[Firestore] 全ユーザーの未読カウント更新完了');
+            })
+            .withFailureHandler(function(error) {
+              console.error('[Firestore] ユーザー一覧取得エラー:', error);
+            })
+            .getAllUserNames();
+        }
+
+        console.log('[Firestore] メッセージ保存完了');
+      } catch (error) {
+        console.error('[Firestore] メッセージ保存エラー:', error);
+        throw error;
+      }
+    }
+
     function sendMessage() {
       const messageInput = document.getElementById('messageInput');
       const message = messageInput.value.trim();
@@ -499,12 +593,18 @@
       disableSendButton(true);
 
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(async function(result) {
           console.log('[sendMessage] 送信成功:', result);
-          showLoading(false);
-          disableSendButton(false);
 
           if (result.success) {
+            // 🔥 Firestoreにも保存（PWA版の未読カウント・通知対応）
+            try {
+              await saveMessageToFirestore(message, currentChannel, userName);
+            } catch (firestoreError) {
+              console.error('[sendMessage] Firestore保存エラー:', firestoreError);
+              // Firestoreエラーでも処理は継続（GAS版には保存済み）
+            }
+
             // 入力欄をクリア
             messageInput.value = '';
             messageInput.style.height = 'auto';
@@ -515,6 +615,9 @@
           } else {
             showError(result.message || 'メッセージ送信に失敗しました');
           }
+
+          showLoading(false);
+          disableSendButton(false);
         })
         .withFailureHandler(function(error) {
           console.error('[sendMessage] エラー:', error);
