@@ -851,12 +851,11 @@
 
                 console.log('[Firestore] 未読カウント更新:', member, newUnreadCount);
 
-                // FCM通知送信
+                // FCM通知送信（GAS/PWA共通: google.script.runを使用）
                 const notificationTitle = `💬 ${currentRoomName}`;
                 const notificationBody = `${currentUserName}: ${message}`;
 
-                if (isGAS && typeof google !== 'undefined' && google.script && google.script.run) {
-                  // GAS版: google.script.run（未対応：badgeCountは送れない）
+                if (typeof google !== 'undefined' && google.script && google.script.run) {
                   google.script.run
                     .withSuccessHandler(function(result) {
                       console.log('[FCM通知] 送信成功:', member, result);
@@ -864,32 +863,11 @@
                     .withFailureHandler(function(error) {
                       console.error('[FCM通知] 送信エラー:', member, error);
                     })
-                    .sendFCMNotificationToUser(notificationTitle, notificationBody, member);
+                    .sendFCMNotificationToUser(notificationTitle, notificationBody, member, newUnreadCount);
 
-                  console.log('[FCM通知] GAS送信リクエスト:', member);
+                  console.log('[FCM通知] 送信リクエスト:', member, 'バッジ:', newUnreadCount);
                 } else {
-                  // PWA版: HTTP POST（未読数を含める）
-                  const deploymentId = 'AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA';
-                  fetch(`https://script.google.com/macros/s/${deploymentId}/exec`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      action: 'sendChatNotification',
-                      title: notificationTitle,
-                      body: notificationBody,
-                      targetUserName: member,
-                      badgeCount: newUnreadCount
-                    })
-                  })
-                  .then(r => r.json())
-                  .then(result => {
-                    console.log('[FCM通知] HTTP送信成功:', member, result);
-                  })
-                  .catch(error => {
-                    console.error('[FCM通知] HTTP送信エラー:', member, error);
-                  });
-
-                  console.log('[FCM通知] HTTP送信リクエスト:', member, 'バッジ:', newUnreadCount);
+                  console.error('[FCM通知] google.script.run が利用できません');
                 }
               }
             }

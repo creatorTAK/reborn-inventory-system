@@ -421,6 +421,34 @@ function sendProductRegistrationNotification(form, managementNumber) {
       debugLog('[sendProductRegistrationNotification] FCM通知送信エラー: ' + fcmError);
       // エラーをスローしない（商品登録の成功には影響させない）
     }
+
+    // PWA側（親ウィンドウ）にpostMessageでシステム通知ルームへの投稿を依頼
+    try {
+      debugLog('[sendProductRegistrationNotification] PWA側に通知投稿リクエスト送信開始');
+
+      // 現在のユーザー名を取得
+      const userName = Session.getActiveUser().getEmail().split('@')[0] || '不明';
+
+      const notificationMessage = {
+        type: 'PRODUCT_REGISTERED',
+        userName: userName,
+        managementNumber: managementNumber,
+        productName: (brandName ? brandName + ' ' : '') + (itemName || category || ''),
+        listingDestination: listingDestination,
+        listingAmount: listingAmount,
+        timestamp: new Date().toISOString()
+      };
+
+      // 親ウィンドウ（PWA）に送信
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(notificationMessage, '*');
+        debugLog('[sendProductRegistrationNotification] PWA側に通知投稿リクエスト送信完了');
+      }
+    } catch (postMessageError) {
+      debugLog('[sendProductRegistrationNotification] postMessage送信エラー: ' + postMessageError);
+      // エラーをスローしない
+    }
+
     debugLog('[sendProductRegistrationNotification] 完了');
 
     // デバッグログをスプレッドシートに出力
