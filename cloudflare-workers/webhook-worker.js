@@ -169,6 +169,32 @@ async function postToFirestore(notificationData, env) {
     throw new Error(`Firestore error: ${error}`)
   }
 
+  // roomsコレクションのlastMessageを更新（PWA側と同じ処理）
+  const roomDocUrl = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${SYSTEM_NOTIFICATION_ROOM_ID}`
+  const firstLine = notificationData.content.split('\n')[0]
+
+  const roomUpdate = {
+    fields: {
+      lastMessage: { stringValue: firstLine },
+      lastMessageAt: { timestampValue: new Date().toISOString() },
+      lastMessageBy: { stringValue: notificationData.sender }
+    }
+  }
+
+  const roomResponse = await fetch(roomDocUrl, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(roomUpdate)
+  })
+
+  if (!roomResponse.ok) {
+    console.error('Failed to update room lastMessage:', await roomResponse.text())
+    // roomsコレクション更新失敗は致命的ではないのでエラーにしない
+  }
+
   return response.json()
 }
 

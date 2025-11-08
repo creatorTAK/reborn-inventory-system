@@ -42,15 +42,37 @@
 - `web_push.js` (saveFCMToken, subscribeTokenToTopic)
 
 ### 🔍 原因分析
-- FCMトピックサブスクリプションは実装済み（web_push.js:254-261）
-- しかし、PWA側で何らかの条件が必要な可能性
-- チャットルームを開くことで初めて何かが登録される？
+
+**🚨 根本原因判明（2025-11-08 21:30）：FirebaseプロジェクトID不一致**
+
+診断の結果、**異なるFirebaseプロジェクト**を使用していることが判明：
+
+1. **GAS (`web_push.js`)**:
+   - プロジェクトID: `reborn-pwa`
+   - トピック登録: `reborn-pwa` の `all_users`
+
+2. **PWA Service Worker (`firebase-messaging-sw.js`)**:
+   - プロジェクトID: `reborn-pwa`
+
+3. **Cloudflare Workers (環境変数)**:
+   - プロジェクトID: `reborn-chat` ← **これが問題！**
+   - FCM送信先: `projects/reborn-chat/messages/...`
+
+**結果**: GASは `reborn-pwa` の `all_users` にトークンを登録するが、Cloudflare Workersは `reborn-chat` の `all_users` にメッセージを送信するため、通知が届かない。
+
+**✅ 診断結果（2025-11-08 20:40）：**
+- GAS → Cloudflare Workers通信: ✅ 正常
+- Cloudflare Workers → Firestore投稿: ✅ 成功（ドキュメントID確認）
+- Cloudflare Workers → FCM送信: ✅ 成功（メッセージID: `5770969305665075006`）
+- **但し**: 送信先が `reborn-chat` プロジェクトのため、PWA側（`reborn-pwa`）に届かない
 
 ### ✏️ 修正内容
-- [ ] PWA初回起動時のFCMトークン登録フロー確認
-- [ ] チャットルーム開封時の処理確認
-- [ ] 修正実装
-- [ ] テスト実行（新規端末で確認）
+- [x] サーバー側診断機能追加（GAS @758, Workers 763a1619）
+- [x] FCM送信成功を確認（メッセージID取得）
+- [x] 根本原因特定：FirebaseプロジェクトID不一致
+- [x] Cloudflare Workers環境変数 `FIREBASE_PROJECT_ID` を `reborn-chat` → `reborn-pwa` に変更
+- [x] Worker再デプロイ（Version ID: 124af8e1）
+- [ ] 変更後の動作テスト（商品登録AA-1024で確認）
 
 ### 📝 テスト結果
 - [ ] TC-CHAT-002-001: 新規端末でPWA初回起動後、チャット未開封状態で通知受信 → PASS / FAIL

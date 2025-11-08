@@ -208,6 +208,26 @@ function updateUserPermission(userName, permission) {
       };
     }
 
+    // ✅ オーナー権限に変更する場合、既存のオーナーをチェック
+    if (permission === 'オーナー') {
+      let currentOwnerName = null;
+      
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][permissionCol] === 'オーナー') {
+          currentOwnerName = data[i][userNameCol];
+          break;
+        }
+      }
+
+      // 既に別のユーザーがオーナーの場合、エラー
+      if (currentOwnerName && currentOwnerName !== userName) {
+        return {
+          success: false,
+          message: `既に ${currentOwnerName} がオーナーです。オーナーは1人のみ設定可能です。`
+        };
+      }
+    }
+
     let updatedCount = 0;
 
     for (let i = 1; i < data.length; i++) {
@@ -269,10 +289,7 @@ function doPost(e) {
       const notificationSound = requestBody.notificationSound !== undefined ? requestBody.notificationSound : true;
       const result = saveFCMToken(token, deviceInfo, userId, userName, email, permission, notificationEnabled, notificationSound);
       return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON)
-        .setHeader('Access-Control-Allow-Origin', '*')
-        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     if (action === 'sendFCM') {
@@ -307,19 +324,13 @@ function doPost(e) {
         ]);
 
         return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON)
-          .setHeader('Access-Control-Allow-Origin', '*')
-          .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-          .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+          .setMimeType(ContentService.MimeType.JSON);
       } catch (error) {
         return ContentService.createTextOutput(JSON.stringify({
           status: 'error',
           message: 'エラー: ' + error.toString()
         }))
-          .setMimeType(ContentService.MimeType.JSON)
-          .setHeader('Access-Control-Allow-Origin', '*')
-          .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-          .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+          .setMimeType(ContentService.MimeType.JSON);
       }
     }
 
@@ -364,20 +375,14 @@ function doPost(e) {
       const result = sendFCMNotificationToUser(title, body, targetUserName, badgeCount);
 
       return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON)
-        .setHeader('Access-Control-Allow-Origin', '*')
-        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: '不明なアクション: ' + action
     }))
-      .setMimeType(ContentService.MimeType.JSON)
-      .setHeader('Access-Control-Allow-Origin', '*')
-      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-      .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      .setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
     Logger.log('doPost error: ' + error);
@@ -385,10 +390,7 @@ function doPost(e) {
       status: 'error',
       message: error.toString()
     }))
-      .setMimeType(ContentService.MimeType.JSON)
-      .setHeader('Access-Control-Allow-Origin', '*')
-      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-      .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
@@ -474,10 +476,7 @@ function doGet(e) {
             count: count
           };
           return ContentService.createTextOutput(JSON.stringify(response))
-            .setMimeType(ContentService.MimeType.JSON)
-            .setHeader('Access-Control-Allow-Origin', '*')
-            .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-            .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+            .setMimeType(ContentService.MimeType.JSON);
         } catch (error) {
           Logger.log('[doGet] getExistingUserCount ERROR: ' + error);
           const errorResponse = {
@@ -486,10 +485,7 @@ function doGet(e) {
             error: error.toString()
           };
           return ContentService.createTextOutput(JSON.stringify(errorResponse))
-            .setMimeType(ContentService.MimeType.JSON)
-            .setHeader('Access-Control-Allow-Origin', '*')
-            .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-            .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+            .setMimeType(ContentService.MimeType.JSON);
         }
       }
 
@@ -1219,10 +1215,7 @@ function doGet(e) {
         message: error.message,
         stack: error.stack
       }))
-        .setMimeType(ContentService.MimeType.JSON)
-        .setHeader('Access-Control-Allow-Origin', '*')
-        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     // 通常のエラー時の表示
@@ -1724,6 +1717,48 @@ function onOpen() {
     .addItem('💼 仕入・出品設定', 'showConfigManagerProcure')
     .addItem('✨ AI生成設定', 'showConfigManagerAI')
     .addToUi();
+
+  // 🧪 Webhookテストメニュー（開発・デバッグ用）
+  ui.createMenu('🧪 Webhookテスト')
+    .addItem('1️⃣ Script Properties確認', 'testWebhookSettings')
+    .addItem('2️⃣ Webhook送信テスト', 'testWebhookSend')
+    .addItem('3️⃣ HMAC署名テスト', 'testHmacSignature')
+    .addItem('🔍 署名デバッグ送信', 'testWebhookSendDebug')
+    .addItem('🔬 署名検証デバッグ（詳細）', 'debugSignatureWithCloudflare')
+    .addSeparator()
+    .addItem('🔐 シークレットキー確認', 'debugSecretKey')
+    .addItem('🧪 固定ケース署名比較', 'testSignatureComparison')
+    .addSeparator()
+    .addItem('📋 テスト結果シートを開く', 'openWebhookTestSheet')
+    .addToUi();
+}
+
+/**
+ * 🧪 Webhookテスト結果シートを開く
+ */
+function openWebhookTestSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let testSheet = ss.getSheetByName('Webhookテスト');
+  
+  if (!testSheet) {
+    testSheet = ss.insertSheet('Webhookテスト');
+    testSheet.appendRow(['タイムスタンプ', 'テスト項目', 'ステータス', '詳細']);
+    
+    // 列幅を調整
+    testSheet.setColumnWidth(1, 150); // タイムスタンプ
+    testSheet.setColumnWidth(2, 200); // テスト項目
+    testSheet.setColumnWidth(3, 120); // ステータス
+    testSheet.setColumnWidth(4, 400); // 詳細
+    
+    // ヘッダーをフォーマット
+    const headerRange = testSheet.getRange(1, 1, 1, 4);
+    headerRange.setBackground('#4285f4');
+    headerRange.setFontColor('#ffffff');
+    headerRange.setFontWeight('bold');
+  }
+  
+  ss.setActiveSheet(testSheet);
+  SpreadsheetApp.getUi().alert('✅ Webhookテストシートを開きました');
 }
 
 // ========================================
@@ -1735,10 +1770,7 @@ function onOpen() {
  */
 function toContentService_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader('Access-Control-Allow-Origin', '*')
-    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
@@ -1747,10 +1779,7 @@ function toContentService_(obj) {
  */
 function jsonOk_(obj) {
   return ContentService.createTextOutput(JSON.stringify({ ok: true, data: obj }))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader('Access-Control-Allow-Origin', '*')
-    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
@@ -1758,10 +1787,7 @@ function jsonOk_(obj) {
  */
 function jsonError_(message) {
   return ContentService.createTextOutput(JSON.stringify({ ok: false, error: message }))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader('Access-Control-Allow-Origin', '*')
-    .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**

@@ -889,31 +889,31 @@ function sendWebhookNotification(notificationData) {
 
     const body = JSON.stringify(payload);
 
-    // タイムスタンプ生成
-    const timestamp = Date.now().toString();
-
-    // HMAC署名生成
-    const signature = generateHmacSignature(body, timestamp, WEBHOOK_SECRET);
-
     Logger.log('[sendWebhookNotification] Webhook送信: ' + WEBHOOK_URL);
     Logger.log('[sendWebhookNotification] Payload: ' + body);
-    Logger.log('[sendWebhookNotification] Signature: ' + signature);
 
-    // HTTP POSTリクエスト送信
+    // 🔐 Bearer Token認証（HMACから切り替え）
     const options = {
       method: 'post',
       contentType: 'application/json',
       payload: body,
       headers: {
-        'X-Signature': signature,
-        'X-Timestamp': timestamp
+        'Authorization': 'Bearer ' + WEBHOOK_SECRET
       },
+      followRedirects: false,  // ★★ リダイレクト追従しない（診断用）
       muteHttpExceptions: true // エラーレスポンスも取得
     };
 
     const response = UrlFetchApp.fetch(WEBHOOK_URL, options);
     const responseCode = response.getResponseCode();
     const responseText = response.getContentText();
+    const allHeaders = response.getAllHeaders();
+
+    // ★★ 詳細ログ（診断用）
+    Logger.log('[WEBHOOK] url = ' + WEBHOOK_URL);
+    Logger.log('[WEBHOOK] code = ' + responseCode);
+    Logger.log('[WEBHOOK] headers = ' + JSON.stringify(allHeaders));
+    Logger.log('[WEBHOOK] body = ' + responseText.substring(0, 500));
 
     Logger.log('[sendWebhookNotification] Response code: ' + responseCode);
     Logger.log('[sendWebhookNotification] Response: ' + responseText);
@@ -931,15 +931,444 @@ function sendWebhookNotification(notificationData) {
 }
 
 /**
- * 🔐 HMAC-SHA256署名生成
+ * 🧪 Webhook設定テスト関数
+ * Script Propertiesの設定状況を確認
  */
-function generateHmacSignature(body, timestamp, secret) {
-  const message = timestamp + '.' + body;
-  const signature = Utilities.computeHmacSha256Signature(message, secret);
+function testWebhookSettings() {
+  const props = PropertiesService.getScriptProperties();
+  const WEBHOOK_URL = props.getProperty('WEBHOOK_URL');
+  const WEBHOOK_SECRET = props.getProperty('WEBHOOK_SECRET');
   
-  // バイナリをHEX文字列に変換
-  return signature.map(function(byte) {
-    const v = (byte < 0) ? 256 + byte : byte;
-    return ('0' + v.toString(16)).slice(-2);
-  }).join('');
+  const result = {
+    timestamp: new Date().toLocaleString('ja-JP'),
+    webhookUrlExists: !!WEBHOOK_URL,
+    webhookSecretExists: !!WEBHOOK_SECRET,
+    webhookUrl: WEBHOOK_URL ? maskUrl(WEBHOOK_URL) : '未設定',
+    webhookSecret: WEBHOOK_SECRET ? maskSecret(WEBHOOK_SECRET) : '未設定',
+    status: (WEBHOOK_URL && WEBHOOK_SECRET) ? '✅ 設定完了' : '❌ 設定不足'
+  };
+  
+  Logger.log('[testWebhookSettings] ' + JSON.stringify(result, null, 2));
+  
+  // スプレッドシートに結果を出力
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let testSheet = ss.getSheetByName('Webhookテスト');
+    if (!testSheet) {
+      testSheet = ss.insertSheet('Webhookテスト');
+      testSheet.appendRow(['タイムスタンプ', 'テスト項目', 'ステータス', '詳細']);
+    }
+    
+    testSheet.appendRow([
+      result.timestamp,
+      'Script Properties設定確認',
+      result.status,
+      'WEBHOOK_URL: ' + result.webhookUrl + '\nWEBHOOK_SECRET: ' + result.webhookSecret
+    ]);
+  } catch (error) {
+    Logger.log('[testWebhookSettings] シート書き込みエラー: ' + error);
+  }
+  
+  return result;
 }
+
+/**
+ * URLをマスク表示
+ */
+function maskUrl(url) {
+  if (!url) return '';
+  if (url.length <= 20) return url.substring(0, 5) + '***';
+  return url.substring(0, 20) + '...' + url.substring(url.length - 10);
+}
+
+/**
+ * シークレットをマスク表示
+ */
+function maskSecret(secret) {
+  if (!secret) return '';
+  if (secret.length <= 8) return '***';
+  return secret.substring(0, 4) + '***' + secret.substring(secret.length - 4);
+}
+
+/**
+ * 🧪 Webhook送信テスト（モック商品登録）
+ */
+function testWebhookSend() {
+  Logger.log('[testWebhookSend] テスト開始');
+  
+  // テスト用の商品データ
+  const mockForm = {
+    'ブランド(英語)': 'TestBrand',
+    'アイテム名': 'テスト商品',
+    '大分類(カテゴリ)': 'テストカテゴリ',
+    '出品先': 'メルカリ',
+    '出品金額': '10000'
+  };
+  
+  const testManagementNumber = 'TEST-' + new Date().getTime();
+  
+  try {
+    const result = sendProductRegistrationWebhook(mockForm, testManagementNumber);
+    
+    Logger.log('[testWebhookSend] 成功: ' + JSON.stringify(result, null, 2));
+    
+    // スプレッドシートに結果を出力
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let testSheet = ss.getSheetByName('Webhookテスト');
+    if (!testSheet) {
+      testSheet = ss.insertSheet('Webhookテスト');
+      testSheet.appendRow(['タイムスタンプ', 'テスト項目', 'ステータス', '詳細']);
+    }
+    
+    testSheet.appendRow([
+      new Date().toLocaleString('ja-JP'),
+      'Webhook送信テスト',
+      result.success ? '✅ 成功' : '❌ 失敗',
+      '管理番号: ' + testManagementNumber + '\n' + JSON.stringify(result, null, 2)
+    ]);
+    
+    return result;
+    
+  } catch (error) {
+    Logger.log('[testWebhookSend] エラー: ' + error);
+    
+    // スプレッドシートにエラーを出力
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let testSheet = ss.getSheetByName('Webhookテスト');
+    if (!testSheet) {
+      testSheet = ss.insertSheet('Webhookテスト');
+      testSheet.appendRow(['タイムスタンプ', 'テスト項目', 'ステータス', '詳細']);
+    }
+    
+    testSheet.appendRow([
+      new Date().toLocaleString('ja-JP'),
+      'Webhook送信テスト',
+      '❌ エラー',
+      error.toString()
+    ]);
+    
+    throw error;
+  }
+}
+
+/**
+ * 🧪 HMAC署名生成テスト
+ */
+function testHmacSignature() {
+  Logger.log('[testHmacSignature] テスト開始');
+  
+  const testBody = JSON.stringify({test: 'data', value: 123});
+  const testTimestamp = Date.now().toString();
+  const testSecret = 'test-secret-key-12345';
+  
+  const signature = generateHmacSignature(testBody, testTimestamp, testSecret);
+  
+  const result = {
+    timestamp: new Date().toLocaleString('ja-JP'),
+    body: testBody,
+    timestampValue: testTimestamp,
+    secret: maskSecret(testSecret),
+    signature: signature,
+    signatureLength: signature.length,
+    status: signature.length === 64 ? '✅ 正常（64文字のHEX）' : '❌ 異常'
+  };
+  
+  Logger.log('[testHmacSignature] ' + JSON.stringify(result, null, 2));
+  
+  // スプレッドシートに結果を出力
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let testSheet = ss.getSheetByName('Webhookテスト');
+    if (!testSheet) {
+      testSheet = ss.insertSheet('Webhookテスト');
+      testSheet.appendRow(['タイムスタンプ', 'テスト項目', 'ステータス', '詳細']);
+    }
+    
+    testSheet.appendRow([
+      result.timestamp,
+      'HMAC署名生成テスト',
+      result.status,
+      'Signature: ' + signature + '\nLength: ' + signature.length
+    ]);
+  } catch (error) {
+    Logger.log('[testHmacSignature] シート書き込みエラー: ' + error);
+  }
+  
+  return result;
+}
+
+/**
+ * 🧪 Webhook送信デバッグ（署名詳細出力版）
+ */
+function testWebhookSendDebug() {
+  Logger.log('[testWebhookSendDebug] テスト開始');
+  
+  const props = PropertiesService.getScriptProperties();
+  const WEBHOOK_URL = props.getProperty('WEBHOOK_URL');
+  const WEBHOOK_SECRET = props.getProperty('WEBHOOK_SECRET');
+  
+  // テスト用の商品データ
+  const mockForm = {
+    'ブランド(英語)': 'TestBrand',
+    'アイテム名': 'テスト商品',
+    '大分類(カテゴリ)': 'テストカテゴリ',
+    '出品先': 'メルカリ',
+    '出品金額': '10000'
+  };
+  
+  const testManagementNumber = 'DEBUG-' + new Date().getTime();
+  
+  // 通知データを作成
+  const notificationData = {
+    type: 'PRODUCT_REGISTERED',
+    userName: 'デバッグテスト',
+    managementNumber: testManagementNumber,
+    productName: 'TestBrand テスト商品',
+    listingDestination: 'メルカリ',
+    listingAmount: '10000',
+    timestamp: new Date().toISOString(),
+    content: '✅ 商品登録完了\nデバッグテストさんが商品を登録しました\n\n管理番号: ' + testManagementNumber,
+    sender: 'デバッグテスト',
+    title: '✅ 商品登録完了'
+  };
+  
+  const payload = {
+    notificationData: notificationData
+  };
+  
+  const body = JSON.stringify(payload);
+  const timestamp = Date.now().toString();
+  
+  // HMAC署名生成
+  const signature = generateHmacSignature(body, timestamp, WEBHOOK_SECRET);
+  
+  // 詳細情報をログ出力
+  const debugInfo = {
+    timestamp: new Date().toLocaleString('ja-JP'),
+    testManagementNumber: testManagementNumber,
+    webhookUrl: WEBHOOK_URL,
+    bodyLength: body.length,
+    timestampValue: timestamp,
+    secretMasked: maskSecret(WEBHOOK_SECRET),
+    secretLength: WEBHOOK_SECRET ? WEBHOOK_SECRET.length : 0,
+    signatureGenerated: signature,
+    signatureLength: signature.length,
+    message: timestamp + '.' + body.substring(0, 100) + '...',
+    headers: {
+      'X-Signature': signature,
+      'X-Timestamp': timestamp
+    }
+  };
+  
+  Logger.log('[testWebhookSendDebug] 署名デバッグ情報:');
+  Logger.log(JSON.stringify(debugInfo, null, 2));
+  
+  // スプレッドシートに詳細出力
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let testSheet = ss.getSheetByName('Webhookテスト');
+    if (!testSheet) {
+      testSheet = ss.insertSheet('Webhookテスト');
+      testSheet.appendRow(['タイムスタンプ', 'テスト項目', 'ステータス', '詳細']);
+    }
+    
+    testSheet.appendRow([
+      debugInfo.timestamp,
+      'Webhook送信デバッグ（署名詳細）',
+      '🔍 送信前',
+      '管理番号: ' + testManagementNumber + '\n' +
+      'Timestamp: ' + timestamp + '\n' +
+      'Secret Length: ' + debugInfo.secretLength + '\n' +
+      'Signature: ' + signature + '\n' +
+      'Body (最初100文字): ' + body.substring(0, 100)
+    ]);
+    
+    // 実際に送信
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      payload: body,
+      headers: {
+        'X-Signature': signature,
+        'X-Timestamp': timestamp
+      },
+      muteHttpExceptions: true
+    };
+    
+    Logger.log('[testWebhookSendDebug] Webhook送信実行中...');
+    const response = UrlFetchApp.fetch(WEBHOOK_URL, options);
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+    
+    Logger.log('[testWebhookSendDebug] Response code: ' + responseCode);
+    Logger.log('[testWebhookSendDebug] Response: ' + responseText);
+    
+    // 結果を記録
+    testSheet.appendRow([
+      new Date().toLocaleString('ja-JP'),
+      'Webhook送信デバッグ（送信結果）',
+      responseCode === 200 ? '✅ 成功' : '❌ 失敗 (' + responseCode + ')',
+      'Response: ' + responseText
+    ]);
+    
+    return {
+      success: responseCode === 200,
+      responseCode: responseCode,
+      responseText: responseText,
+      debugInfo: debugInfo
+    };
+    
+  } catch (error) {
+    Logger.log('[testWebhookSendDebug] エラー: ' + error);
+    throw error;
+  }
+}
+
+/**
+ * 🧪 署名比較テスト（固定テストケース）
+ * Cloudflare Workers側と同じテストケースで署名を生成
+ */
+function testSignatureComparison() {
+  Logger.log('[testSignatureComparison] テスト開始');
+  
+  const props = PropertiesService.getScriptProperties();
+  const WEBHOOK_SECRET = props.getProperty('WEBHOOK_SECRET');
+  
+  // 固定テストケース（Cloudflare Workers側でも同じものを使用）
+  const testBody = '{"test":"data","value":123}';
+  const testTimestamp = '1700000000000'; // 固定タイムスタンプ
+  
+  // GAS側で署名生成
+  const signature = generateHmacSignature(testBody, testTimestamp, WEBHOOK_SECRET);
+  
+  const result = {
+    timestamp: new Date().toLocaleString('ja-JP'),
+    testBody: testBody,
+    testTimestamp: testTimestamp,
+    secretLength: WEBHOOK_SECRET ? WEBHOOK_SECRET.length : 0,
+    secretMasked: maskSecret(WEBHOOK_SECRET),
+    message: testTimestamp + '.' + testBody,
+    signatureGAS: signature,
+    signatureLength: signature.length,
+    instructions: 'このsignatureをCloudflare Workers側で検証してください'
+  };
+  
+  Logger.log('[testSignatureComparison] 結果:');
+  Logger.log(JSON.stringify(result, null, 2));
+  
+  // スプレッドシートに結果を出力
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let testSheet = ss.getSheetByName('Webhookテスト');
+    if (!testSheet) {
+      testSheet = ss.insertSheet('Webhookテスト');
+      testSheet.appendRow(['タイムスタンプ', 'テスト項目', 'ステータス', '詳細']);
+    }
+    
+    testSheet.appendRow([
+      result.timestamp,
+      '署名比較テスト（固定ケース）',
+      '🔍 GAS側署名生成',
+      '【固定テストケース】\n' +
+      'Body: ' + testBody + '\n' +
+      'Timestamp: ' + testTimestamp + '\n' +
+      'Secret Length: ' + result.secretLength + '\n' +
+      'Message: ' + result.message + '\n\n' +
+      '【GAS側生成署名】\n' +
+      signature + '\n\n' +
+      '【検証方法】\n' +
+      'Cloudflare Workers側で同じBody、Timestamp、Secretを使って署名を生成し、\n' +
+      '上記のGAS側署名と一致するか確認してください。'
+    ]);
+  } catch (error) {
+    Logger.log('[testSignatureComparison] シート書き込みエラー: ' + error);
+  }
+  
+  return result;
+}
+
+/**
+ * 🧪 署名検証デバッグ：Cloudflare Workers側のログと比較
+ */
+function debugSignatureWithCloudflare() {
+  Logger.log('[debugSignatureWithCloudflare] テスト開始');
+  
+  const props = PropertiesService.getScriptProperties();
+  const WEBHOOK_URL = props.getProperty('WEBHOOK_URL');
+  const WEBHOOK_SECRET = props.getProperty('WEBHOOK_SECRET');
+  
+  // 実際のリクエストと同じ形式でテストデータを作成
+  const testNotificationData = {
+    type: 'PRODUCT_REGISTERED',
+    userName: 'デバッグテスト',
+    managementNumber: 'DEBUG-TEST-123',
+    productName: 'TestBrand テスト商品',
+    listingDestination: 'メルカリ',
+    listingAmount: '10000',
+    timestamp: new Date().toISOString(),
+    content: 'テスト通知',
+    sender: 'デバッグテスト',
+    title: 'テスト'
+  };
+  
+  const payload = {
+    notificationData: testNotificationData
+  };
+  
+  const body = JSON.stringify(payload);
+  
+  Logger.log('=== GAS側 Bearer Token認証 ===');
+  Logger.log('Body: ' + body);
+  Logger.log('Token length: ' + WEBHOOK_SECRET.length);
+  
+  // 🔐 Bearer Token方式（HMACから切り替え）
+  try {
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      payload: body,
+      headers: {
+        'Authorization': 'Bearer ' + WEBHOOK_SECRET
+      },
+      muteHttpExceptions: true
+    };
+    
+    Logger.log('=== Webhook送信 ===');
+    Logger.log('URL: ' + WEBHOOK_URL);
+    
+    const response = UrlFetchApp.fetch(WEBHOOK_URL, options);
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+    
+    Logger.log('Response code: ' + responseCode);
+    Logger.log('Response: ' + responseText);
+    
+    // スプレッドシートに結果を記録
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let testSheet = ss.getSheetByName('Webhookテスト');
+    if (!testSheet) {
+      testSheet = ss.insertSheet('Webhookテスト');
+      testSheet.appendRow(['タイムスタンプ', 'テスト項目', 'ステータス', '詳細']);
+    }
+    
+    testSheet.appendRow([
+      new Date().toLocaleString('ja-JP'),
+      'Bearer Token認証テスト',
+      responseCode === 200 ? '✅ 成功' : '❌ 失敗 (' + responseCode + ')',
+      'Token length: ' + WEBHOOK_SECRET.length + '\n' +
+      'Body length: ' + body.length + '\n' +
+      'Response: ' + responseText
+    ]);
+    
+    return {
+      success: responseCode === 200,
+      responseCode: responseCode,
+      responseText: responseText
+    };
+    
+  } catch (error) {
+    Logger.log('Error: ' + error);
+    throw error;
+  }
+}
+
