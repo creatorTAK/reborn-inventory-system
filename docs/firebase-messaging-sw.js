@@ -23,7 +23,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-comp
 
 // Firebase設定（reborn-chat に統一）
 const firebaseConfig = {
-  apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjwwtCorUZQ",
+  apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
   authDomain: "reborn-chat.firebaseapp.com",
   projectId: "reborn-chat",
   storageBucket: "reborn-chat.firebasestorage.app",
