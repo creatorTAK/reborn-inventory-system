@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v17';
+const CACHE_VERSION = 'v18';  // Firebase reborn-chat統合対応
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -21,15 +21,14 @@ const PRECACHE_RESOURCES = [
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
-// Firebase設定
+// Firebase設定（reborn-chat に統一）
 const firebaseConfig = {
-  apiKey: "AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A",
-  authDomain: "reborn-pwa.firebaseapp.com",
-  projectId: "reborn-pwa",
-  storageBucket: "reborn-pwa.firebasestorage.app",
-  messagingSenderId: "345653439471",
-  appId: "1:345653439471:web:7620819ce3f022d9cd241a",
-  measurementId: "G-SX48K45X75"
+  apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjwwtCorUZQ",
+  authDomain: "reborn-chat.firebaseapp.com",
+  projectId: "reborn-chat",
+  storageBucket: "reborn-chat.firebasestorage.app",
+  messagingSenderId: "345706548795",
+  appId: "1:345706548795:web:058a553da6b4b74db5161e"
 };
 
 // Firebase初期化
