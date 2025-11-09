@@ -199,6 +199,66 @@ async function postToFirestore(notificationData, env) {
     // roomsコレクション更新失敗は致命的ではないのでエラーにしない
   }
 
+  // 🆕 @776-B: 各対象ユーザーのunreadCountsを更新
+  if (notificationData.targetUsers && Array.isArray(notificationData.targetUsers)) {
+    console.log(`[postToFirestore] Updating unreadCounts for ${notificationData.targetUsers.length} users`)
+
+    for (const userName of notificationData.targetUsers) {
+      try {
+        const unreadDocUrl = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${SYSTEM_NOTIFICATION_ROOM_ID}/unreadCounts/${userName}`
+
+        // GET current value
+        const getResponse = await fetch(unreadDocUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        })
+
+        let currentCount = 0
+        let newCount = 1
+
+        if (getResponse.ok) {
+          const currentDoc = await getResponse.json()
+          currentCount = parseInt(currentDoc.fields?.unreadCount?.integerValue || '0')
+          newCount = currentCount + 1
+          console.log(`[postToFirestore] ${userName}: ${currentCount} → ${newCount}`)
+        } else if (getResponse.status === 404) {
+          console.log(`[postToFirestore] ${userName}: creating new unreadCount doc`)
+        }
+
+        // PATCH with new value
+        const updateResponse = await fetch(unreadDocUrl, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            fields: {
+              unreadCount: {
+                integerValue: newCount.toString()
+              }
+            }
+          })
+        })
+
+        if (!updateResponse.ok) {
+          const error = await updateResponse.text()
+          console.error(`[postToFirestore] Failed to update unreadCount for ${userName}: ${error}`)
+        } else {
+          console.log(`[postToFirestore] ✅ ${userName} unreadCount updated`)
+        }
+      } catch (err) {
+        console.error(`[postToFirestore] Error updating unreadCount for ${userName}:`, err)
+        // Continue with other users even if one fails
+      }
+    }
+  } else {
+    console.log('[postToFirestore] No targetUsers provided, skipping unreadCounts update')
+  }
+
   return response.json()
 }
 
