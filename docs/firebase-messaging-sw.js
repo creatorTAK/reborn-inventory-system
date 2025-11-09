@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v24';  // CHAT-003: デバッグログ追加（notificationType判定確認）
+const CACHE_VERSION = 'v25';  // CHAT-003: badge/badgeCount不一致修正 + 詳細デバッグログ追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -46,7 +46,12 @@ messaging.onBackgroundMessage(async (payload) => {
   const notificationTitle = payload.notification?.title || payload.data?.title || 'REBORN';
   const notificationBody = payload.notification?.body || payload.data?.body || 'テスト通知です';
   const notificationIcon = payload.data?.icon || '/icon-180.png';
-  const notificationBadge = payload.data?.badge || '/icon-180.png';
+
+  // 🔧 badge/badgeCount 両方に対応（フィールド名不一致対策）
+  const rawBadge = payload.data?.badge || payload.data?.badgeCount || payload.notification?.badge;
+  console.log('[DEBUG] rawBadge from payload:', rawBadge, '(badge:', payload.data?.badge, ', badgeCount:', payload.data?.badgeCount, ')');
+  const notificationBadge = rawBadge || '/icon-180.png';
+
   const notificationLink = payload.data?.click_action || payload.data?.link || '/';
   const messageId = payload.data?.messageId || '';
 
@@ -223,30 +228,39 @@ async function updateFirestoreUnreadCount() {
 
     // クライアントがない場合、Cloudflare Workerに依頼
     const userName = await getUserNameFromIndexedDB();
+    console.log('[DEBUG] updateFirestoreUnreadCount - userName:', userName);
     if (!userName) {
-      console.error('[sw] userName not found in IndexedDB');
+      console.error('[sw] userName not found in IndexedDB - システム通知バッジ更新スキップ');
       return;
     }
 
     try {
       const roomId = 'room_system_notifications';
+      const requestBody = { roomId, userName, delta: 1 };
+      console.log('[DEBUG] Cloudflare Worker リクエスト:', requestBody);
+
       const res = await fetch('https://reborn-webhook.tak45.workers.dev/api/unread/increment', {
         method: 'POST',
         headers: {
           'content-type': 'application/json'
         },
-        body: JSON.stringify({ roomId, userName, delta: 1 })
+        body: JSON.stringify(requestBody)
       });
+
+      console.log('[DEBUG] Cloudflare Worker レスポンスステータス:', res.status);
 
       if (!res.ok) {
         const errorText = await res.text();
+        console.error('[DEBUG] Cloudflare Worker エラーレスポンス:', errorText);
         throw new Error(`Worker returned ${res.status}: ${errorText}`);
       }
 
       const result = await res.json();
+      console.log('[DEBUG] Cloudflare Worker 成功レスポンス:', result);
       console.log('[sw] server-side unread increment OK:', result);
     } catch (e) {
       console.error('[sw] server-side unread increment failed:', e);
+      console.error('[DEBUG] エラー詳細:', e.message, e.stack);
     }
   } catch (err) {
     console.error('[Firestore] エラー:', err);
@@ -277,7 +291,9 @@ function getUserNameFromIndexedDB() {
       const getRequest = store.get('userName');
 
       getRequest.onsuccess = () => {
-        resolve(getRequest.result || null);
+        const userName = getRequest.result || null;
+        console.log('[DEBUG] IndexedDB userName取得:', userName);
+        resolve(userName);
       };
 
       getRequest.onerror = () => {
