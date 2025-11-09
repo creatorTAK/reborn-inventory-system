@@ -1,3 +1,39 @@
+@776 - fix(CHAT-003-A): GAS側でuserNameをFCMペイロードに含める（IndexedDB依存回避）
+
+**根本原因:**
+- Service WorkerがIndexedDBからuserNameを取得できない場合、Cloudflare Worker APIを呼べない
+- FCMペイロードにuserNameが含まれていないため、SW側でフォールバックできない
+
+**修正内容:**
+1. **web_push.js:**
+   - `sendFCMToTokenV1()`にuserNameパラメータ追加
+   - `payload.data.userName`に対象ユーザー名を含める
+   - `badgeCount`デフォルトを'0'→'1'に変更（iOS/Safari PWAでの0回避）
+
+2. **product.js:**
+   - sendFCMToTokenV1()呼び出し時にtargetUserNameを渡す
+   - badgeCount=1を明示指定
+
+**修正後の動作:**
+```
+FCMペイロード:
+{
+  data: {
+    type: 'system',
+    userName: 'targetUserName',  // ← 追加（SW/Worker側で使用可能）
+    badgeCount: '1',             // ← '0'から'1'に変更
+    ...
+  }
+}
+```
+
+**期待される効果:**
+- Service WorkerがIndexedDBに依存せずuserNameを取得可能
+- Cloudflare Worker APIへの呼び出し成功率向上
+- 次のステップ（B: Worker側unreadCounts更新、C: SWフォールバック）の基盤完成
+
+---
+
 @775 - fix(CHAT-003最終修正): システム通知でFirestore unreadCount更新追加（全3バッジポイント対応）
 
 **根本原因:**

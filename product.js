@@ -450,8 +450,8 @@ function sendProductRegistrationWebhook(form, managementNumber) {
                   if (tokens && tokens.length > 0) {
                     tokens.forEach(function(token) {
                       try {
-                        // @773 完全分離: type='system'を明示的に指定
-                        const result = sendFCMToTokenV1(accessToken, token, notificationData.title, notificationData.content, messageId, undefined, 'system');
+                        // @776 修正: badgeCount=1、userName追加（IndexedDB依存回避）
+                        const result = sendFCMToTokenV1(accessToken, token, notificationData.title, notificationData.content, messageId, 1, 'system', targetUserName);
                         if (result.success) {
                           successCount++;
                           debugLog('[sendProductRegistrationWebhook] ✅ 成功: ' + targetUserName);
