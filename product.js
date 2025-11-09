@@ -391,6 +391,12 @@ function sendProductRegistrationWebhook(form, managementNumber) {
 
     debugLog('[sendProductRegistrationWebhook] データ取得完了');
 
+    // @776-B 対象ユーザーリストを事前取得（Cloudflare Worker用）
+    const allUsers = getAllUserNames();
+    const targetUsers = allUsers.filter(function(user) {
+      return user && user !== userName && user !== 'システム';
+    });
+
     const notificationData = {
       type: 'PRODUCT_REGISTERED',
       userName: userName,
@@ -402,7 +408,8 @@ function sendProductRegistrationWebhook(form, managementNumber) {
       // システム通知ルーム投稿用（PWA側のフォーマットに合わせる）
       content: `✅ 商品登録完了\n${userName}さんが商品を登録しました\n\n管理番号: ${managementNumber}\n${(brandName ? brandName + ' ' : '') + (itemName || category || '')}\n${listingDestination ? '出品先: ' + listingDestination : ''}\n${listingAmount ? '出品金額: ' + Number(listingAmount).toLocaleString() + '円' : ''}`,
       sender: userName,
-      title: '✅ 商品登録完了'
+      title: '✅ 商品登録完了',
+      targetUsers: targetUsers  // Cloudflare Workerでunreadカウント更新に使用
     };
 
     debugLog('[sendProductRegistrationWebhook] 通知データ作成完了');
@@ -416,14 +423,6 @@ function sendProductRegistrationWebhook(form, managementNumber) {
       // 🔔 FCM プッシュ通知を送信（チャット通知と同じロジックに統一 @772）
       try {
         debugLog('[sendProductRegistrationWebhook] FCM送信開始');
-
-        // 全ユーザー名を取得
-        const allUsers = getAllUserNames();
-        // 登録者自身を除外
-        const targetUsers = allUsers.filter(function(user) {
-          return user && user !== userName && user !== 'システム';
-        });
-
         debugLog('[sendProductRegistrationWebhook] FCM送信対象ユーザー: ' + targetUsers.length + '人');
 
         if (targetUsers.length === 0) {

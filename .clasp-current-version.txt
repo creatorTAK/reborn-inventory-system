@@ -1,4 +1,6 @@
-@776 - fix(CHAT-003-A): GAS側でuserNameをFCMペイロードに含める（IndexedDB依存回避）
+@776 - fix(CHAT-003-A+B): userName+targetUsers追加、Webhook時点でunreadCounts更新
+
+**修正A: GAS側でuserNameをFCMペイロードに含める（IndexedDB依存回避）**
 
 **根本原因:**
 - Service WorkerがIndexedDBからuserNameを取得できない場合、Cloudflare Worker APIを呼べない
@@ -14,23 +16,34 @@
    - sendFCMToTokenV1()呼び出し時にtargetUserNameを渡す
    - badgeCount=1を明示指定
 
+**修正B: Cloudflare Workerでunreadcounts更新（Webhook時点で確実更新）**
+
+**根本原因:**
+- Service Worker経由のunreadCounts更新は、PWA状態やIndexedDB依存で不安定
+- Webhook時点でunreadCountsを更新すれば、SW/PWAに依存せず確実
+
+**修正内容:**
+1. **product.js:**
+   - notificationData.targetUsersに対象ユーザーリストを追加
+   - Webhook送信時に受信者情報を含める
+
+2. **cloudflare-workers/webhook-worker.js:**
+   - postToFirestore()にunreadCounts更新処理を追加
+   - targetUsers配列をループして各ユーザーのunreadCountをGET→+1→PATCH
+
 **修正後の動作:**
 ```
-FCMペイロード:
-{
-  data: {
-    type: 'system',
-    userName: 'targetUserName',  // ← 追加（SW/Worker側で使用可能）
-    badgeCount: '1',             // ← '0'から'1'に変更
-    ...
-  }
-}
+GAS → Webhook → Cloudflare Worker:
+1. Firestoreにメッセージ投稿
+2. roomsのlastMessage更新
+3. ✨ 各ユーザーのunreadCounts更新（NEW）
+   rooms/room_system_notifications/unreadCounts/{userName}
 ```
 
 **期待される効果:**
-- Service WorkerがIndexedDBに依存せずuserNameを取得可能
-- Cloudflare Worker APIへの呼び出し成功率向上
-- 次のステップ（B: Worker側unreadCounts更新、C: SWフォールバック）の基盤完成
+- Webhook時点でFirestore unreadCountsが確実に更新
+- ヘッダーバッジ・ルームバッジが即座に反映（Firestore onSnapshot経由）
+- Service Worker/PWA状態に依存しない堅牢な実装
 
 ---
 
