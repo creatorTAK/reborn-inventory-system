@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v20';  // システム通知ルーム名フィールド追加対応（2025-11-09）
+const CACHE_VERSION = 'v21';  // CHAT-003: アプリバッジ修正（Firestore unreadCount連携）（2025-11-09）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -20,6 +20,7 @@ const PRECACHE_RESOURCES = [
 
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js');
 
 // Firebase設定（reborn-chat に統一）
 const firebaseConfig = {
@@ -94,10 +95,13 @@ messaging.onBackgroundMessage(async (payload) => {
     console.error('[firebase-messaging-sw.js] 通知取得エラー:', err);
   }
 
-  // 1. バッジカウントを増やす（awaitで待機）
+  // 1. Firestore unreadCountsを更新（システム通知ルーム）
+  await updateFirestoreUnreadCount();
+
+  // 2. バッジカウントを増やす（awaitで待機）
   await incrementBadgeCount();
 
-  // 2. 通知を表示（messageIdをtagに使用）
+  // 3. 通知を表示（messageIdをtagに使用）
   const notificationOptions = {
     body: notificationBody,
     icon: notificationIcon,
@@ -191,6 +195,27 @@ function setBadgeCount(count) {
       }
     };
   });
+}
+
+// Firestore unreadCountを更新（PWAクライアント経由）
+async function updateFirestoreUnreadCount() {
+  try {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+    // 開いているクライアントがある場合はメッセージを送信
+    if (clients.length > 0) {
+      clients[0].postMessage({
+        type: 'INCREMENT_BADGE'
+      });
+      console.log('[Firestore] PWA側にFirestore更新メッセージ送信');
+    } else {
+      // クライアントがない場合、Firestore更新はスキップ
+      // （Service Workerから直接Firestoreを更新できないため）
+      console.log('[Firestore] クライアントなし、Firestore更新スキップ');
+    }
+  } catch (err) {
+    console.error('[Firestore] エラー:', err);
+  }
 }
 
 // バッジカウントを増やす（Service Worker内）
