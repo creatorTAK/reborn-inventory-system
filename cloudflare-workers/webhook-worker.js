@@ -349,68 +349,34 @@ async function handleUnreadIncrement(request, env) {
     // Firestore unreadCount を increment
     const unreadDocUrl = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${roomId}/unreadCounts/${userName}`
 
-    const updatePayload = {
-      fields: {
-        unreadCount: {
-          integerValue: delta.toString()
-        }
-      }
-    }
-
-    // PATCH with transform (increment)
-    const response = await fetch(unreadDocUrl, {
-      method: 'PATCH',
+    // 🔧 修正: まず現在値をGETで取得（PATCHでリセットしない）
+    const getResponse = await fetch(unreadDocUrl, {
+      method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        fields: {
-          unreadCount: {
-            integerValue: '0' // ダミー値（transform で上書き）
-          }
-        },
-        updateMask: { fieldPaths: ['unreadCount'] }
-      })
+      }
     })
 
-    // ドキュメントが存在しない場合は作成
-    if (response.status === 404) {
-      const createResponse = await fetch(unreadDocUrl, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          fields: {
-            unreadCount: {
-              integerValue: delta.toString()
-            }
-          }
-        })
-      })
+    let currentCount = 0
+    let newCount = delta
 
-      if (!createResponse.ok) {
-        const error = await createResponse.text()
-        throw new Error(`Firestore create failed: ${error}`)
-      }
-
-      console.log(`[UnreadIncrement] Created unreadCount doc for ${userName}`)
-      return jsonResponse({ success: true, message: 'UnreadCount initialized' })
+    if (getResponse.ok) {
+      // ドキュメントが存在する場合、現在値を取得
+      const currentDoc = await getResponse.json()
+      currentCount = parseInt(currentDoc.fields?.unreadCount?.integerValue || '0')
+      newCount = currentCount + delta
+      console.log(`[UnreadIncrement] 現在値: ${currentCount}, 加算: ${delta}, 新規値: ${newCount}`)
+    } else if (getResponse.status === 404) {
+      // ドキュメントが存在しない場合、deltaをそのまま新規値とする
+      console.log(`[UnreadIncrement] ドキュメント未存在、新規作成: ${newCount}`)
+    } else {
+      const error = await getResponse.text()
+      throw new Error(`Firestore GET failed: ${error}`)
     }
 
-    if (!response.ok) {
-      const error = await response.text()
-      throw new Error(`Firestore update failed: ${error}`)
-    }
-
-    // 既存ドキュメントの場合、incrementを実行
-    const currentDoc = await response.json()
-    const currentCount = parseInt(currentDoc.fields?.unreadCount?.integerValue || '0')
-    const newCount = currentCount + delta
-
-    const incrementResponse = await fetch(unreadDocUrl, {
+    // 新しい値でPATCH（作成または更新）
+    const updateResponse = await fetch(unreadDocUrl, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -425,12 +391,12 @@ async function handleUnreadIncrement(request, env) {
       })
     })
 
-    if (!incrementResponse.ok) {
-      const error = await incrementResponse.text()
-      throw new Error(`Firestore increment failed: ${error}`)
+    if (!updateResponse.ok) {
+      const error = await updateResponse.text()
+      throw new Error(`Firestore PATCH failed: ${error}`)
     }
 
-    console.log(`[UnreadIncrement] Updated ${currentCount} → ${newCount}`)
+    console.log(`[UnreadIncrement] 更新成功: ${currentCount} → ${newCount}`)
 
     return jsonResponse({
       success: true,

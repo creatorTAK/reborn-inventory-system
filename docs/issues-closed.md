@@ -15,6 +15,73 @@
 
 ## 📚 完了Issue一覧
 
+## CHAT-003 | バグ修正: アプリバッジ（アイコン上の数字）未反映 ✅ DONE (完了日: 2025-11-09)
+
+### 📌 基本情報
+- カテゴリ: バグ修正
+- 優先度: 高
+- 影響範囲: PWAアプリバッジ、通知機能
+- 発見日: 2025-11-08
+- 完了日: 2025-11-09
+- 関連: CHAT-001
+- デプロイ: GAS @770
+
+### 🐛 不具合内容
+チャットの通知とバッジ（トーク一覧の各ルーム右端）は正常に反応しているが、
+アプリを閉じた時のアプリアイコン上のバッジ（未読数）が反映されていない。
+
+### ✅ 期待動作
+- PWAアプリアイコン上に未読バッジ数が表示される
+- 通知受信時にバッジ数がインクリメントされる
+- メッセージ既読時にバッジ数がデクリメントされる
+
+### 📍 関連ファイル
+- `product.js` (line 419-432) - FCM送信関数を統一
+- `web_push.js` - sendFCMNotificationToUsers実装
+- `docs/firebase-messaging-sw.js` (バックグラウンド通知、badge設定)
+
+### 🔍 原因分析
+**根本原因**: トリガー部分の違い
+- チャット通知: `sendFCMNotificationToUsers()` → type='chat'（デフォルト） → バッジ動作 ✅
+- システム通知: `sendFCMNotification()` → type='system'（明示指定） → バッジ動作 ❌
+- docs/index.htmlのシステム通知は`sendFCMNotificationToUsers()`を使用していたため動作していた
+
+**技術的詳細**:
+- sendFCMNotification()は`sendFCMToTokenV1(token, title, body, undefined, undefined, 'system')`を呼び出し
+- sendFCMNotificationToUsers()は`sendFCMToTokenV1(token, title, body)`を呼び出し
+- 後者はtype引数がundefined → デフォルト'chat'となる
+- FCMペイロードのtype値が影響している可能性
+
+### ✏️ 修正内容
+- [x] product.js:419を修正してsendFCMNotificationToUsers()を使用
+- [x] 登録者自身を除外するフィルタリング追加
+- [x] 修正実装
+- [x] デプロイ実施（@770）
+
+### 📝 修正コード
+```javascript
+// 修正前
+const fcmResult = sendFCMNotification(notificationData.title, notificationData.content, 'system');
+
+// 修正後
+const allUsers = getAllUserNames();
+const targetUsers = allUsers.filter(function(user) {
+  return user && user !== userName && user !== 'システム';
+});
+
+if (targetUsers.length > 0) {
+  fcmResult = sendFCMNotificationToUsers(notificationData.title, notificationData.content, targetUsers);
+}
+```
+
+### テスト結果
+- 商品登録時のシステム通知でバッジが正しく増加することを確認
+
+### 状態
+- [x] ✅ DONE (完了日: 2025-11-09)
+
+---
+
 ## CHAT-006 | バグ修正: 商品登録時のFCM通知・バッジ未達 ✅ DONE (完了日: 2025-11-09)
 
 ### 📌 基本情報

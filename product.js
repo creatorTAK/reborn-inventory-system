@@ -413,16 +413,75 @@ function sendProductRegistrationWebhook(form, managementNumber) {
       const webhookResult = sendWebhookNotification(notificationData);
       debugLog('[sendProductRegistrationWebhook] Webhook送信完了: ' + JSON.stringify(webhookResult));
 
-      // 🔔 FCM プッシュ通知を送信（全ユーザー）
+      // 🔔 FCM プッシュ通知を送信（チャット通知と同じロジックに統一 @772）
       try {
         debugLog('[sendProductRegistrationWebhook] FCM送信開始');
-        const fcmResult = sendFCMNotification(notificationData.title, notificationData.content, 'system'); // システム通知として送信
-        debugLog('[sendProductRegistrationWebhook] FCM送信完了: ' + JSON.stringify(fcmResult));
+
+        // 全ユーザー名を取得
+        const allUsers = getAllUserNames();
+        // 登録者自身を除外
+        const targetUsers = allUsers.filter(function(user) {
+          return user && user !== userName && user !== 'システム';
+        });
+
+        debugLog('[sendProductRegistrationWebhook] FCM送信対象ユーザー: ' + targetUsers.length + '人');
+
+        if (targetUsers.length === 0) {
+          debugLog('[sendProductRegistrationWebhook] FCM送信対象ユーザーなし');
+        } else {
+          // 一意のメッセージIDを生成（チャット通知と同じ）
+          const messageId = new Date().getTime() + '_' + Math.random().toString(36).substring(2, 15);
+          debugLog('[sendProductRegistrationWebhook] メッセージID: ' + messageId);
+
+          // アクセストークン取得
+          if (typeof getAccessToken === 'function') {
+            const accessToken = getAccessToken();
+            if (!accessToken) {
+              debugLog('[sendProductRegistrationWebhook] アクセストークン取得失敗');
+            } else {
+              let successCount = 0;
+              let failCount = 0;
+
+              // 各ユーザーのトークンを取得して送信（チャット通知と同じロジック）
+              targetUsers.forEach(function(targetUserName) {
+                if (typeof getUserFCMTokens === 'function') {
+                  const tokens = getUserFCMTokens(targetUserName);
+
+                  if (tokens && tokens.length > 0) {
+                    tokens.forEach(function(token) {
+                      try {
+                        // @773 完全分離: type='system'を明示的に指定
+                        const result = sendFCMToTokenV1(accessToken, token, notificationData.title, notificationData.content, messageId, undefined, 'system');
+                        if (result.success) {
+                          successCount++;
+                          debugLog('[sendProductRegistrationWebhook] ✅ 成功: ' + targetUserName);
+                          if (typeof updateLastSentTime === 'function') {
+                            updateLastSentTime(token);
+                          }
+                        } else {
+                          failCount++;
+                          debugLog('[sendProductRegistrationWebhook] ❌ 失敗: ' + targetUserName + ' - ' + (result.error || '不明なエラー'));
+                        }
+                      } catch (error) {
+                        failCount++;
+                        debugLog('[sendProductRegistrationWebhook] 💥 例外: ' + targetUserName + ' - ' + error);
+                      }
+                    });
+                  } else {
+                    debugLog('[sendProductRegistrationWebhook] トークンなし: ' + targetUserName);
+                  }
+                }
+              });
+
+              debugLog('[sendProductRegistrationWebhook] FCM送信完了: 成功=' + successCount + ', 失敗=' + failCount);
+            }
+          }
+        }
       } catch (fcmError) {
         debugLog('[sendProductRegistrationWebhook] FCM送信エラー: ' + fcmError);
         // FCMエラーは致命的ではないので継続
       }
-
+      
       // デバッグログをスプレッドシートに出力
       try {
         const ss = SpreadsheetApp.getActiveSpreadsheet();

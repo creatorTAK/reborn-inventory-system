@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v26';  // CHAT-003: システム通知バッジ処理をチャット通知と統一（シンプル化）
+const CACHE_VERSION = 'v27';  // @773 完全分離: チャットとシステムで独立したIndexedDB
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -100,13 +100,19 @@ messaging.onBackgroundMessage(async (payload) => {
     console.error('[firebase-messaging-sw.js] 通知取得エラー:', err);
   }
 
-  // 🔧 システム通知もチャット通知も同じ方法でバッジを増やす（シンプル化）
+  // 🔧 @773 完全分離: typeに応じて別のバッジシステムを使用
   const notificationType = payload.data?.type || 'chat';
   console.log('[DEBUG] payload.data:', payload.data);
   console.log('[DEBUG] notificationType:', notificationType);
-  
-  // バッジカウントを増やす（チャット・システム共通処理）
-  await incrementBadgeCount();
+
+  // type分岐: チャットとシステムで完全に独立したバッジシステム
+  if (notificationType === 'system') {
+    console.log('[Badge] システム通知: SystemNotificationDB使用');
+    await incrementSystemBadgeCount(); // システム通知専用（SystemNotificationDB）
+  } else {
+    console.log('[Badge] チャット通知: RebornBadgeDB使用');
+    await incrementBadgeCount(); // チャット通知（RebornBadgeDB）
+  }
 
   // 3. 通知を表示（messageIdをtagに使用）
   const notificationOptions = {
@@ -202,6 +208,89 @@ function setBadgeCount(count) {
       }
     };
   });
+}
+
+// 🔧 @773 完全分離: システム通知専用IndexedDB（RebornBadgeDBと完全独立）
+function getSystemBadgeCount() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('SystemNotificationDB', 1);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction(['badge'], 'readonly');
+      const store = transaction.objectStore('badge');
+      const getRequest = store.get('count');
+
+      getRequest.onsuccess = () => resolve(getRequest.result || 0);
+      getRequest.onerror = () => resolve(0);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('badge')) {
+        db.createObjectStore('badge');
+      }
+    };
+  });
+}
+
+function setSystemBadgeCount(count) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('SystemNotificationDB', 1);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction(['badge'], 'readwrite');
+      const store = transaction.objectStore('badge');
+      store.put(count, 'count');
+
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('badge')) {
+        db.createObjectStore('badge');
+      }
+    };
+  });
+}
+
+// システム通知専用バッジカウント増加
+async function incrementSystemBadgeCount() {
+  try {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+    // 開いているクライアントがある場合はメッセージを送信
+    if (clients.length > 0) {
+      clients[0].postMessage({
+        type: 'INCREMENT_SYSTEM_BADGE'
+      });
+      console.log('[SystemBadge] PWA側にメッセージ送信');
+    } else {
+      // クライアントがない場合、IndexedDBから現在のカウントを取得して+1
+      if ('setAppBadge' in self.registration) {
+        const chatCount = await getBadgeCount(); // チャット通知のカウント
+        const systemCount = await getSystemBadgeCount(); // システム通知のカウント
+        const newSystemCount = systemCount + 1;
+
+        await setSystemBadgeCount(newSystemCount);
+        
+        // 両方の合計をアプリバッジに表示
+        const totalCount = chatCount + newSystemCount;
+        await self.registration.setAppBadge(totalCount);
+
+        console.log('[SystemBadge] カウント更新: chat=' + chatCount + ', system=' + systemCount + '→' + newSystemCount + ', total=' + totalCount);
+      } else {
+        console.warn('[SystemBadge] setAppBadge API not supported');
+      }
+    }
+  } catch (err) {
+    console.error('[SystemBadge] エラー:', err);
+  }
 }
 
 // Firestore unreadCountを更新（システム通知ルーム専用）
