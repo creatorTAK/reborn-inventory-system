@@ -15,6 +15,40 @@
 
 ## 📚 完了Issue一覧
 
+## CHAT-002 | バグ修正: 初回チャットルーム未開封端末で通知・バッジ未達 ✅ DONE (完了日: 2025-11-09)
+
+### 📌 基本情報
+- カテゴリ: バグ修正
+- 優先度: 高
+- 影響範囲: チャット機能、FCM通知
+- 発見日: 2025-11-08
+- 完了日: 2025-11-09
+- 関連: CHAT-001
+- デプロイ: Git commit 93f4a5f, Cloudflare Pages
+
+### 🐛 不具合内容
+新しい端末（3台目）で、全体チャットルームを一度も開いたことがない状態では、通知もバッジも入らない。
+1回チャットルームを開いた後は正常に届く。
+
+### 🎯 最終解決（2025-11-09）
+**根本原因**: reborn-chatプロジェクトへの統合時、Web Push証明書（VAPID）が未生成だった
+
+**解決手順**:
+1. Firebase ConsoleでVAPID鍵ペア生成
+2. index.htmlに新しいVAPIDキー反映
+3. APIキー制限を適切に設定（Firebase Cloud Messaging API、FCM Registration API、Firebase Installations API）
+4. Service Workerバージョンv19に更新
+5. 動作テスト完了
+
+### 📍 関連ファイル
+- `docs/index.html` (line 878: VAPID_PUBLIC_KEY)
+- `docs/firebase-messaging-sw.js` (line 5: CACHE_VERSION v19)
+
+### 📝 テスト結果
+- TC-CHAT-002-001: 新規端末でPWA初回起動後、FCM登録成功 → **PASS**
+
+---
+
 ## PWA-001 | PWA: manifest.jsonパス設定エラー（アイコンが黒くなる） ✅ DONE (完了日: 2025-11-05)
 
 ### 📌 基本情報
