@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v19';  // VAPID再生成対応（2025-11-09）
+const CACHE_VERSION = 'v20';  // システム通知ルーム名フィールド追加対応（2025-11-09）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
