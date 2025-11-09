@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v22';  // CHAT-003: システム通知のみFirestore更新、通常チャット通知修正（2025-11-09）
+const CACHE_VERSION = 'v23';  // CHAT-003: Cloudflare Worker経由でFirestore更新、userName不一致修正（2025-11-09）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -208,30 +208,38 @@ async function updateFirestoreUnreadCount() {
     // 開いているクライアントがある場合はメッセージを送信
     if (clients.length > 0) {
       clients[0].postMessage({
-        type: 'INCREMENT_BADGE'
+        type: 'INCREMENT_SYSTEM_UNREAD'
       });
-      console.log('[Firestore] PWA側にFirestore更新メッセージ送信');
-    } else {
-      // クライアントがない場合、Service Workerから直接Firestore更新
-      console.log('[Firestore] クライアントなし、Service Workerから直接更新開始');
+      console.log('[sw] asked client to increment system unread');
+      return;
+    }
 
-      // IndexedDBからuserNameを取得
-      const userName = await getUserNameFromIndexedDB();
-      if (!userName) {
-        console.error('[Firestore] ユーザー名が取得できません');
-        return;
+    // クライアントがない場合、Cloudflare Workerに依頼
+    const userName = await getUserNameFromIndexedDB();
+    if (!userName) {
+      console.error('[sw] userName not found in IndexedDB');
+      return;
+    }
+
+    try {
+      const roomId = 'room_system_notifications';
+      const res = await fetch('https://reborn-webhook.tak45.workers.dev/api/unread/increment', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ roomId, userName, delta: 1 })
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Worker returned ${res.status}: ${errorText}`);
       }
 
-      // Firestore compat APIで更新
-      const db = firebase.firestore();
-      const systemRoomId = 'room_system_notifications';
-      const unreadDocRef = db.collection('rooms').doc(systemRoomId).collection('unreadCounts').doc(userName);
-
-      await unreadDocRef.set({
-        unreadCount: firebase.firestore.FieldValue.increment(1)
-      }, { merge: true });
-
-      console.log('[Firestore] Service Workerから直接更新完了');
+      const result = await res.json();
+      console.log('[sw] server-side unread increment OK:', result);
+    } catch (e) {
+      console.error('[sw] server-side unread increment failed:', e);
     }
   } catch (err) {
     console.error('[Firestore] エラー:', err);

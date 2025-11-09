@@ -55,12 +55,17 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key'
         }
       })
     }
 
-    // POSTのみ受理
+    // 🆕 ルーティング: /api/unread/increment (Service Worker用)
+    if (url.pathname === '/api/unread/increment') {
+      return handleUnreadIncrement(request, env)
+    }
+
+    // POSTのみ受理（既存Webhook）
     if (request.method !== 'POST') {
       return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
     }
@@ -72,19 +77,19 @@ export default {
 
       // 🔐 Bearer Token認証
       const authHeader = request.headers.get('Authorization')
-      
+
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         console.log('❌ Missing or invalid Authorization header')
         return jsonResponse({ success: false, error: 'Unauthorized' }, 401)
       }
 
       const token = authHeader.substring(7) // "Bearer " を除去
-      
+
       if (token !== env.WEBHOOK_SECRET) {
         console.log('❌ Invalid token')
         return jsonResponse({ success: false, error: 'Unauthorized' }, 401)
       }
-      
+
       console.log('✅ Bearer Token verification PASSED')
 
       // 📢 通知データ検証
@@ -308,6 +313,139 @@ function pemToBinary(pem) {
 
 function generateDocumentId() {
   return 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15)
+}
+
+/**
+ * 🆕 /api/unread/increment エンドポイント
+ * Service Workerからの unreadCount +1 リクエストを処理
+ */
+async function handleUnreadIncrement(request, env) {
+  try {
+    // POSTのみ受理
+    if (request.method !== 'POST') {
+      return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
+    }
+
+    // リクエストボディ取得
+    const body = await request.json()
+    const { roomId, userName, delta } = body
+
+    // パラメータ検証
+    if (!roomId || !userName || !delta) {
+      return jsonResponse({
+        success: false,
+        error: 'Missing required parameters: roomId, userName, delta'
+      }, 400)
+    }
+
+    console.log(`[UnreadIncrement] roomId=${roomId}, userName=${userName}, delta=${delta}`)
+
+    // Service Account取得
+    const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT)
+
+    // Access Token取得
+    const accessToken = await getFirebaseAccessToken(serviceAccount)
+
+    // Firestore unreadCount を increment
+    const unreadDocUrl = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${roomId}/unreadCounts/${userName}`
+
+    const updatePayload = {
+      fields: {
+        unreadCount: {
+          integerValue: delta.toString()
+        }
+      }
+    }
+
+    // PATCH with transform (increment)
+    const response = await fetch(unreadDocUrl, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        fields: {
+          unreadCount: {
+            integerValue: '0' // ダミー値（transform で上書き）
+          }
+        },
+        updateMask: { fieldPaths: ['unreadCount'] }
+      })
+    })
+
+    // ドキュメントが存在しない場合は作成
+    if (response.status === 404) {
+      const createResponse = await fetch(unreadDocUrl, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fields: {
+            unreadCount: {
+              integerValue: delta.toString()
+            }
+          }
+        })
+      })
+
+      if (!createResponse.ok) {
+        const error = await createResponse.text()
+        throw new Error(`Firestore create failed: ${error}`)
+      }
+
+      console.log(`[UnreadIncrement] Created unreadCount doc for ${userName}`)
+      return jsonResponse({ success: true, message: 'UnreadCount initialized' })
+    }
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`Firestore update failed: ${error}`)
+    }
+
+    // 既存ドキュメントの場合、incrementを実行
+    const currentDoc = await response.json()
+    const currentCount = parseInt(currentDoc.fields?.unreadCount?.integerValue || '0')
+    const newCount = currentCount + delta
+
+    const incrementResponse = await fetch(unreadDocUrl, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        fields: {
+          unreadCount: {
+            integerValue: newCount.toString()
+          }
+        }
+      })
+    })
+
+    if (!incrementResponse.ok) {
+      const error = await incrementResponse.text()
+      throw new Error(`Firestore increment failed: ${error}`)
+    }
+
+    console.log(`[UnreadIncrement] Updated ${currentCount} → ${newCount}`)
+
+    return jsonResponse({
+      success: true,
+      message: 'UnreadCount incremented',
+      previous: currentCount,
+      current: newCount
+    })
+
+  } catch (error) {
+    console.error('[UnreadIncrement] Error:', error)
+    return jsonResponse({
+      success: false,
+      error: error.message
+    }, 500)
+  }
 }
 
 
