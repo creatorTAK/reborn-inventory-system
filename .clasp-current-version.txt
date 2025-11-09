@@ -1,3 +1,32 @@
+@774 - fix(CHAT-003根本解決): PWA状態に関係なくService Worker内で直接バッジ更新
+
+**根本原因:**
+- Service Worker v27では、PWAが開いている場合にpostMessageでPWA側にバッジ更新を委譲
+- しかし、PWA側（docs/index.html）のメッセージハンドラーがコメントアウトされていた
+- 結果：PWAが開いている状態ではバッジが増加しない（チャット・システム両方）
+
+**修正内容:**
+1. **Service Worker v28 (firebase-messaging-sw.js):**
+   - incrementBadgeCount(): PWA状態チェックを削除、常にsetAppBadge()を直接呼び出し
+   - incrementSystemBadgeCount(): PWA状態チェックを削除、常にsetAppBadge()を直接呼び出し
+   - postMessage方式を完全廃止
+
+**修正後の動作:**
+```
+チャット通知:
+  PWA開いている → Service Worker内でsetAppBadge() ✅
+  PWA閉じている → Service Worker内でsetAppBadge() ✅
+
+システム通知:
+  PWA開いている → Service Worker内でsetAppBadge() ✅
+  PWA閉じている → Service Worker内でsetAppBadge() ✅
+```
+
+**期待される動作:**
+商品登録時のシステム通知で、PWAの状態に関係なくバッジが正常に増加する。
+
+---
+
 @773 - fix(完全分離): チャットとシステムで独立したバッジシステム実装
 
 **実装内容:**

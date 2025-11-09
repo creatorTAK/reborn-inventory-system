@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v27';  // @773 完全分離: チャットとシステムで独立したIndexedDB
+const CACHE_VERSION = 'v28';  // @774 修正: PWA状態に関係なくService Worker内で直接バッジ更新
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -262,31 +262,21 @@ function setSystemBadgeCount(count) {
 // システム通知専用バッジカウント増加
 async function incrementSystemBadgeCount() {
   try {
-    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // 🔧 @774 修正: PWAの状態に関係なく、Service Worker内で直接バッジ更新
+    if ('setAppBadge' in self.registration) {
+      const chatCount = await getBadgeCount(); // チャット通知のカウント
+      const systemCount = await getSystemBadgeCount(); // システム通知のカウント
+      const newSystemCount = systemCount + 1;
 
-    // 開いているクライアントがある場合はメッセージを送信
-    if (clients.length > 0) {
-      clients[0].postMessage({
-        type: 'INCREMENT_SYSTEM_BADGE'
-      });
-      console.log('[SystemBadge] PWA側にメッセージ送信');
+      await setSystemBadgeCount(newSystemCount);
+
+      // 両方の合計をアプリバッジに表示
+      const totalCount = chatCount + newSystemCount;
+      await self.registration.setAppBadge(totalCount);
+
+      console.log('[SystemBadge] カウント更新: chat=' + chatCount + ', system=' + systemCount + '→' + newSystemCount + ', total=' + totalCount);
     } else {
-      // クライアントがない場合、IndexedDBから現在のカウントを取得して+1
-      if ('setAppBadge' in self.registration) {
-        const chatCount = await getBadgeCount(); // チャット通知のカウント
-        const systemCount = await getSystemBadgeCount(); // システム通知のカウント
-        const newSystemCount = systemCount + 1;
-
-        await setSystemBadgeCount(newSystemCount);
-        
-        // 両方の合計をアプリバッジに表示
-        const totalCount = chatCount + newSystemCount;
-        await self.registration.setAppBadge(totalCount);
-
-        console.log('[SystemBadge] カウント更新: chat=' + chatCount + ', system=' + systemCount + '→' + newSystemCount + ', total=' + totalCount);
-      } else {
-        console.warn('[SystemBadge] setAppBadge API not supported');
-      }
+      console.warn('[SystemBadge] setAppBadge API not supported');
     }
   } catch (err) {
     console.error('[SystemBadge] エラー:', err);
@@ -395,27 +385,17 @@ function getUserNameFromIndexedDB() {
 // バッジカウントを増やす（Service Worker内）
 async function incrementBadgeCount() {
   try {
-    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    // 🔧 @774 修正: PWAの状態に関係なく、Service Worker内で直接バッジ更新
+    if ('setAppBadge' in self.registration) {
+      const currentCount = await getBadgeCount();
+      const newCount = currentCount + 1;
 
-    // 開いているクライアントがある場合はメッセージを送信
-    if (clients.length > 0) {
-      clients[0].postMessage({
-        type: 'INCREMENT_BADGE'
-      });
-      console.log('[Badge] PWA側にメッセージ送信');
+      await setBadgeCount(newCount);
+      await self.registration.setAppBadge(newCount);
+
+      console.log('[Badge] カウント更新:', currentCount, '→', newCount);
     } else {
-      // クライアントがない場合、IndexedDBから現在のカウントを取得して+1
-      if ('setAppBadge' in self.registration) {
-        const currentCount = await getBadgeCount();
-        const newCount = currentCount + 1;
-
-        await setBadgeCount(newCount);
-        await self.registration.setAppBadge(newCount);
-
-        console.log('[Badge] カウント更新:', currentCount, '→', newCount);
-      } else {
-        console.warn('[Badge] setAppBadge API not supported');
-      }
+      console.warn('[Badge] setAppBadge API not supported');
     }
   } catch (err) {
     console.error('[Badge] エラー:', err);
