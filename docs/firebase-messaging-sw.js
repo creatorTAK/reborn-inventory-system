@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v23';  // CHAT-003: Cloudflare Worker経由でFirestore更新、userName不一致修正（2025-11-09）
+const CACHE_VERSION = 'v24';  // CHAT-003: デバッグログ追加（notificationType判定確認）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -97,8 +97,15 @@ messaging.onBackgroundMessage(async (payload) => {
 
   // 1. システム通知の場合のみFirestore unreadCountsを更新
   const notificationType = payload.data?.type || 'chat';
+  console.log('[DEBUG] payload.data:', payload.data);
+  console.log('[DEBUG] notificationType:', notificationType);
+  console.log('[DEBUG] notificationType === "system":', notificationType === 'system');
+
   if (notificationType === 'system') {
+    console.log('[DEBUG] システム通知と判定 → updateFirestoreUnreadCount()を呼び出します');
     await updateFirestoreUnreadCount();
+  } else {
+    console.log('[DEBUG] チャット通知と判定 → updateFirestoreUnreadCount()をスキップ');
   }
 
   // 2. バッジカウントを増やす（awaitで待機）
