@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v28';  // @774 修正: PWA状態に関係なくService Worker内で直接バッジ更新
+const CACHE_VERSION = 'v29';  // @775 修正: システム通知でFirestore unreadCount更新追加（全3バッジポイント対応）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -107,8 +107,9 @@ messaging.onBackgroundMessage(async (payload) => {
 
   // type分岐: チャットとシステムで完全に独立したバッジシステム
   if (notificationType === 'system') {
-    console.log('[Badge] システム通知: SystemNotificationDB使用');
-    await incrementSystemBadgeCount(); // システム通知専用（SystemNotificationDB）
+    console.log('[Badge] システム通知: SystemNotificationDB + Firestore unreadCount更新');
+    await incrementSystemBadgeCount(); // システム通知専用（SystemNotificationDB） → アプリアイコンバッジ
+    await updateFirestoreUnreadCount(); // Firestore unreadCount更新 → ヘッダーバッジ & ルームバッジ
   } else {
     console.log('[Badge] チャット通知: RebornBadgeDB使用');
     await incrementBadgeCount(); // チャット通知（RebornBadgeDB）

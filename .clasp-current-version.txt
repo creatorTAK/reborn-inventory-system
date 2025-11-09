@@ -1,3 +1,38 @@
+@775 - fix(CHAT-003最終修正): システム通知でFirestore unreadCount更新追加（全3バッジポイント対応）
+
+**根本原因:**
+- Service Worker v28では、システム通知でincrementSystemBadgeCount()のみを呼び出し
+- これによりIndexedDB（SystemNotificationDB）→ アプリアイコンバッジは更新される
+- しかし、Firestore unreadCountが更新されないため、ヘッダーバッジとルームバッジが機能しない
+
+**3つのバッジ表示ポイント:**
+1. ホーム画面アプリアイコンバッジ → IndexedDB（setAppBadge）
+2. アプリ内ヘッダー💬アイコンバッジ → Firestore unreadCount集計
+3. チャットルーム右端バッジ → Firestore unreadCount個別表示
+
+**修正内容:**
+1. **Service Worker v29 (firebase-messaging-sw.js):**
+   - システム通知処理にupdateFirestoreUnreadCount()呼び出しを追加
+   ```javascript
+   if (notificationType === 'system') {
+     await incrementSystemBadgeCount();      // IndexedDB → アプリアイコンバッジ
+     await updateFirestoreUnreadCount();     // Firestore → ヘッダー & ルームバッジ
+   }
+   ```
+
+**修正後の動作:**
+```
+システム通知:
+  ホーム画面アプリアイコンバッジ → incrementSystemBadgeCount() ✅
+  ヘッダー💬アイコンバッジ → updateFirestoreUnreadCount() ✅
+  チャットルーム右端バッジ → updateFirestoreUnreadCount() ✅
+```
+
+**期待される動作:**
+商品登録時のシステム通知で、全3箇所のバッジが正常に増加する。
+
+---
+
 @774 - fix(CHAT-003根本解決): PWA状態に関係なくService Worker内で直接バッジ更新
 
 **根本原因:**
