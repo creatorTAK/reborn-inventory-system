@@ -171,6 +171,9 @@ async function postToFirestore(notificationData, env) {
 
   const roomUpdate = {
     fields: {
+      name: { stringValue: '📢 システム通知' },  // ルーム名を保持
+      type: { stringValue: 'system' },  // ルームタイプを保持
+      icon: { stringValue: '📢' },  // アイコンを保持
       lastMessage: { stringValue: firstLine },
       lastMessageAt: { timestampValue: new Date().toISOString() },
       lastMessageBy: { stringValue: notificationData.sender }

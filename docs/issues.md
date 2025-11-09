@@ -15,7 +15,100 @@
 
 ## 🐛 バグ修正（Bug Fixes）
 
-**現在のバグ: 2件**
+**現在のバグ: 4件**
+
+---
+
+## CHAT-006 | バグ修正: 商品登録時のFCM通知・バッジ未達
+
+### 📌 基本情報
+- カテゴリ: バグ修正
+- 優先度: 高
+- 影響範囲: FCM通知、商品登録
+- 発見日: 2025-11-09
+- 関連: CHAT-002
+
+### 🐛 不具合内容
+商品登録を実行しても、プッシュ通知とバッジが届かない。
+- チャット一覧にメッセージは表示される（Firestore投稿は成功）
+- プッシュ通知が来ない
+- バッジが更新されない
+
+### ✅ 期待動作
+- 商品登録後、全ユーザーにプッシュ通知が届く
+- チャットアイコンにバッジが表示される
+- 通知をタップするとPWAが開く
+
+### 📍 関連ファイル
+- `product.js` (line 416-424) - sendFCMNotification呼び出し
+- `web_push.js` (line 587-677) - FCM送信処理
+- `cloudflare-workers/webhook-worker.js` - Firestore投稿
+
+### 🔍 原因分析
+- [ ] GASデプロイログ確認（@765がデプロイされているか）
+- [ ] GASログ確認（sendFCMNotificationが実行されているか）
+- [ ] FCMトークン確認（スプレッドシートに登録されているか）
+- [ ] FCM送信ログ確認（エラーが出ているか）
+
+### ✏️ 修正内容
+- [ ] 原因特定
+- [ ] 修正実装
+- [ ] テスト実行
+
+### 📝 テスト結果
+- [ ] TC-CHAT-006-001: 商品登録→通知受信テスト
+
+### 状態
+- [ ] ✅ DONE (完了日: )
+
+---
+
+## CHAT-005 | バグ修正: システム通知ルーム名が商品登録後に消える
+
+### 📌 基本情報
+- カテゴリ: バグ修正
+- 優先度: 高
+- 影響範囲: チャット機能、Cloudflare Worker
+- 発見日: 2025-11-09
+- 関連: CHAT-002
+
+### 🐛 不具合内容
+PWAリロード直後は「📢 システム通知」と表示されるが、商品登録後に「無題のルーム」に戻る。
+- PWA側のinitializeSystemNotificationRoom()で`name`フィールドを設定
+- しかし商品登録後にCloudflare Workerがrooms更新で`name`を含めていない
+- Firestore PATCH時に`name`フィールドが消える
+
+### ✅ 期待動作
+- 常に「📢 システム通知」と表示される
+- 商品登録後もルーム名が保持される
+
+### 📍 関連ファイル
+- `cloudflare-workers/webhook-worker.js` (line 172-177) - rooms更新処理
+- `docs/index.html` (line 1999-2010) - name フィールド追加処理
+
+### 🔍 原因分析
+Cloudflare Workerのrooms更新で`name`フィールドを含んでいない：
+```javascript
+const roomUpdate = {
+  fields: {
+    lastMessage: { stringValue: firstLine },
+    lastMessageAt: { timestampValue: new Date().toISOString() },
+    lastMessageBy: { stringValue: notificationData.sender }
+    // ❌ name フィールドが無い
+  }
+}
+```
+
+### ✏️ 修正内容
+- [x] 原因特定完了
+- [ ] Cloudflare Workerのrooms更新に`name`, `type`, `icon`を追加
+- [ ] デプロイ・テスト
+
+### 📝 テスト結果
+- [ ] TC-CHAT-005-001: 商品登録後もルーム名保持テスト
+
+### 状態
+- [ ] ✅ DONE (完了日: )
 
 ---
 
