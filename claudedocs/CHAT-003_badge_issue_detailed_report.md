@@ -1166,7 +1166,96 @@ Service Worker v30-debug をデプロイして、以下のログを収集:
 
 ---
 
-**作成日時:** 2025-11-10
+**作成日時:** 2025-11-10 04:00
+**解決日時:** 2025-11-10 06:30
 **Issue ID:** CHAT-003
-**ステータス:** 未解決（3回の修正試行後も動作せず）
+**ステータス:** ✅ 完全解決
 **優先度:** 高
+
+---
+
+## 🎉 解決方法（2025-11-10 06:30）
+
+### 最終的な解決策
+
+ChatGPTの提案通り、**修正A（userName追加）+ 修正B（Webhook時点でunreadCounts更新）**で完全解決しました。
+
+### 実装内容
+
+**修正A: GAS側でuserNameをFCMペイロードに含める**
+
+1. **web_push.js:**
+   - `sendFCMToTokenV1()`に`userName`パラメータ追加
+   - `payload.data.userName`に対象ユーザー名を含める
+   - `badgeCount`デフォルトを'0'→'1'に変更
+
+2. **product.js:**
+   - sendFCMToTokenV1()呼び出し時に`targetUserName`を渡す
+   - badgeCount=1を明示指定
+
+**修正B: Cloudflare Workerでunreadcounts更新（Webhook時点で確実更新）**
+
+1. **product.js:**
+   - notificationData.targetUsersに対象ユーザーリストを追加
+   - Webhook送信時に受信者情報を含める
+
+2. **cloudflare-workers/webhook-worker.js:**
+   - postToFirestore()にunreadCounts更新処理を追加
+   - targetUsers配列をループして各ユーザーのunreadCountをGET→+1→PATCH
+
+### 解決の決め手
+
+**従来の失敗パターン:**
+```
+GAS → FCM → Service Worker → IndexedDB取得失敗 → 更新スキップ ❌
+```
+
+**新しい成功パターン:**
+```
+GAS → Webhook → Cloudflare Worker → Firestore unreadCounts更新 ✅
+                                     ↓
+                              PWA側 onSnapshot検知
+                                     ↓
+                  全3バッジポイント即座に反映 ✅✅✅
+```
+
+**Service Worker/PWA状態に依存せず、Webhook時点で確実更新**することで、全てのバッジが正常に動作しました。
+
+### テスト結果（2025-11-10 06:30）
+
+- ✅ **ホーム画面アプリアイコンバッジ:** システム通知で正常動作
+- ✅ **ヘッダー💬アイコンバッジ:** システム通知で正常動作
+- ✅ **チャットルーム右端バッジ:** システム通知で正常動作
+- ✅ **通常チャット:** 全て正常動作
+- ✅ **バッジ合計表示:** アプリアイコン「2」（チャット1 + システム1）
+- ✅ **オーナー除外:** 自分の投稿には通知されない
+
+### デプロイ情報
+
+- **GAS:** @776デプロイ
+- **Cloudflare Worker:** Version `033fddb0-ea09-4876-8bb8-b2c2e242cb27`
+- **PWA:** Service Worker v29（変更なし、既存コードで動作）
+
+### 学び
+
+1. **Webhook時点でのFirestore更新が最も確実**
+   - Service WorkerやPWA状態に依存しない
+   - IndexedDBの不安定さを回避
+
+2. **FCMペイロードに必要な情報を全て含める**
+   - userNameを含めることでIndexedDB依存を回避
+   - badgeCount=1を明示することで0による問題を回避
+
+3. **段階的なデバッグの重要性**
+   - A（userName追加）→ B（Webhook更新）と段階的に実装
+   - 各ステップでテストすることで問題の切り分けが容易
+
+4. **第三者の視点の価値**
+   - ChatGPTの分析により、盲点だったIndexedDB依存と
+     Webhook時点更新の重要性に気づけた
+
+---
+
+**以下は解決前の分析内容（参考資料として保持）**
+
+---
