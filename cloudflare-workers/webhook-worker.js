@@ -97,20 +97,16 @@ export default {
       // 🔥 Firestore投稿
       const firestoreResult = await postToFirestore(notificationData, env)
 
-      // 📲 FCM送信
-      const fcmResult = await sendFCM(notificationData, env)
+      // 📲 FCM送信はGAS側で実施（トークンベース送信）
+      // Cloudflare Workerはメッセージ保存とrooms更新のみ担当
 
       return jsonResponse({
         success: true,
-        message: 'Notification posted and sent successfully',
+        message: 'Notification posted successfully',
         debug: {
           firestore: {
             status: 'success',
             result: JSON.stringify(firestoreResult).substring(0, 200)
-          },
-          fcm: {
-            status: 'success',
-            result: JSON.stringify(fcmResult).substring(0, 200)
           }
         }
       })
@@ -196,62 +192,6 @@ async function postToFirestore(notificationData, env) {
   }
 
   return response.json()
-}
-
-/**
- * 📲 FCM送信（V1 API）
- */
-async function sendFCM(notificationData, env) {
-  // Firebase Service Account認証（Firestoreと共通）
-  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT)
-  const accessToken = await getFirebaseAccessToken(serviceAccount)
-
-  // FCM V1 API URL
-  const fcmUrl = `https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`
-
-  const fcmPayload = {
-    message: {
-      topic: 'all_users',  // 全ユーザー向けトピック
-      notification: {
-        title: notificationData.title || 'REBORN通知',
-        body: notificationData.content
-      },
-      data: {
-        type: 'system_notification',
-        timestamp: new Date().toISOString()
-      },
-      webpush: {
-        notification: {
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-192x192.png',
-          tag: 'reborn-notification',
-          requireInteraction: true
-        }
-      }
-    }
-  }
-
-  console.log('📲 FCM送信開始:', fcmUrl)
-
-  const response = await fetch(fcmUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(fcmPayload)
-  })
-
-  const responseCode = response.status
-  const responseText = await response.text()
-
-  console.log('📲 FCM Response:', responseCode, responseText.substring(0, 500))
-
-  if (!response.ok) {
-    throw new Error(`FCM error (${responseCode}): ${responseText}`)
-  }
-
-  return JSON.parse(responseText)
 }
 
 /**

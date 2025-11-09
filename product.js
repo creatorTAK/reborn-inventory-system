@@ -412,7 +412,17 @@ function sendProductRegistrationWebhook(form, managementNumber) {
       debugLog('[sendProductRegistrationWebhook] Webhook送信開始');
       const webhookResult = sendWebhookNotification(notificationData);
       debugLog('[sendProductRegistrationWebhook] Webhook送信完了: ' + JSON.stringify(webhookResult));
-      
+
+      // 🔔 FCM プッシュ通知を送信（全ユーザー）
+      try {
+        debugLog('[sendProductRegistrationWebhook] FCM送信開始');
+        const fcmResult = sendFCMNotification(notificationData.title, notificationData.content);
+        debugLog('[sendProductRegistrationWebhook] FCM送信完了: ' + JSON.stringify(fcmResult));
+      } catch (fcmError) {
+        debugLog('[sendProductRegistrationWebhook] FCM送信エラー: ' + fcmError);
+        // FCMエラーは致命的ではないので継続
+      }
+
       // デバッグログをスプレッドシートに出力
       try {
         const ss = SpreadsheetApp.getActiveSpreadsheet();
