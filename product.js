@@ -416,7 +416,7 @@ function sendProductRegistrationWebhook(form, managementNumber) {
       // 🔔 FCM プッシュ通知を送信（全ユーザー）
       try {
         debugLog('[sendProductRegistrationWebhook] FCM送信開始');
-        const fcmResult = sendFCMNotification(notificationData.title, notificationData.content);
+        const fcmResult = sendFCMNotification(notificationData.title, notificationData.content, 'system'); // システム通知として送信
         debugLog('[sendProductRegistrationWebhook] FCM送信完了: ' + JSON.stringify(fcmResult));
       } catch (fcmError) {
         debugLog('[sendProductRegistrationWebhook] FCM送信エラー: ' + fcmError);

@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v21';  // CHAT-003: アプリバッジ修正（Firestore unreadCount連携）（2025-11-09）
+const CACHE_VERSION = 'v22';  // CHAT-003: システム通知のみFirestore更新、通常チャット通知修正（2025-11-09）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -95,8 +95,11 @@ messaging.onBackgroundMessage(async (payload) => {
     console.error('[firebase-messaging-sw.js] 通知取得エラー:', err);
   }
 
-  // 1. Firestore unreadCountsを更新（システム通知ルーム）
-  await updateFirestoreUnreadCount();
+  // 1. システム通知の場合のみFirestore unreadCountsを更新
+  const notificationType = payload.data?.type || 'chat';
+  if (notificationType === 'system') {
+    await updateFirestoreUnreadCount();
+  }
 
   // 2. バッジカウントを増やす（awaitで待機）
   await incrementBadgeCount();
@@ -197,7 +200,7 @@ function setBadgeCount(count) {
   });
 }
 
-// Firestore unreadCountを更新（PWAクライアント経由）
+// Firestore unreadCountを更新（システム通知ルーム専用）
 async function updateFirestoreUnreadCount() {
   try {
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
@@ -209,13 +212,72 @@ async function updateFirestoreUnreadCount() {
       });
       console.log('[Firestore] PWA側にFirestore更新メッセージ送信');
     } else {
-      // クライアントがない場合、Firestore更新はスキップ
-      // （Service Workerから直接Firestoreを更新できないため）
-      console.log('[Firestore] クライアントなし、Firestore更新スキップ');
+      // クライアントがない場合、Service Workerから直接Firestore更新
+      console.log('[Firestore] クライアントなし、Service Workerから直接更新開始');
+
+      // IndexedDBからuserNameを取得
+      const userName = await getUserNameFromIndexedDB();
+      if (!userName) {
+        console.error('[Firestore] ユーザー名が取得できません');
+        return;
+      }
+
+      // Firestore compat APIで更新
+      const db = firebase.firestore();
+      const systemRoomId = 'room_system_notifications';
+      const unreadDocRef = db.collection('rooms').doc(systemRoomId).collection('unreadCounts').doc(userName);
+
+      await unreadDocRef.set({
+        unreadCount: firebase.firestore.FieldValue.increment(1)
+      }, { merge: true });
+
+      console.log('[Firestore] Service Workerから直接更新完了');
     }
   } catch (err) {
     console.error('[Firestore] エラー:', err);
   }
+}
+
+// IndexedDBからuserNameを取得
+function getUserNameFromIndexedDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('RebornUserDB', 1);
+
+    request.onerror = () => {
+      console.error('[IndexedDB] 開けませんでした');
+      resolve(null);
+    };
+
+    request.onsuccess = () => {
+      const db = request.result;
+
+      if (!db.objectStoreNames.contains('user')) {
+        console.error('[IndexedDB] userストアが存在しません');
+        resolve(null);
+        return;
+      }
+
+      const transaction = db.transaction(['user'], 'readonly');
+      const store = transaction.objectStore('user');
+      const getRequest = store.get('userName');
+
+      getRequest.onsuccess = () => {
+        resolve(getRequest.result || null);
+      };
+
+      getRequest.onerror = () => {
+        console.error('[IndexedDB] userName取得エラー');
+        resolve(null);
+      };
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('user')) {
+        db.createObjectStore('user');
+      }
+    };
+  });
 }
 
 // バッジカウントを増やす（Service Worker内）

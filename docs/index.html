@@ -1115,6 +1115,25 @@
         localStorage.setItem('reborn_user_permission', permission);
         console.log('✅ ユーザー情報保存:', { name: userName, email: email, permission: permission });
 
+        // IndexedDBにも保存（Service Workerからアクセス可能にするため）
+        const request = indexedDB.open('RebornUserDB', 1);
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains('user')) {
+            db.createObjectStore('user');
+          }
+        };
+        request.onsuccess = () => {
+          const db = request.result;
+          const transaction = db.transaction(['user'], 'readwrite');
+          const store = transaction.objectStore('user');
+          store.put(userName, 'userName');
+          console.log('✅ ユーザー名をIndexedDBに保存:', userName);
+        };
+        request.onerror = () => {
+          console.error('❌ IndexedDB保存エラー');
+        };
+
         // GAS側のPropertiesServiceにも保存
         const baseUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
         fetch(baseUrl + '?action=setOperatorName&name=' + encodeURIComponent(userName))
