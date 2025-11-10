@@ -445,6 +445,7 @@
     const gasUserNameParam = <?= JSON.stringify(typeof gasUserName !== 'undefined' ? gasUserName : "") ?>;
     const gasRoomIdParam   = '<?= typeof gasRoomId !== "undefined" ? gasRoomId : "" ?>';
     const fcmTokenParam    = <?= JSON.stringify(typeof fcmToken !== 'undefined' ? fcmToken : "") ?>;
+    const gasBaseUrlParam  = '<?= typeof gasBaseUrl !== "undefined" ? gasBaseUrl : "" ?>';  // ✅ API呼び出し用URL
 
     // 判定ロジック：明示フラグ優先、補助として iframe 内かつ userName/fcmToken のどちらかが非空
     const isEmbedded = (window.top !== window); // iframe内ならtrue
@@ -550,23 +551,46 @@
 
       // ユーザー一覧を取得してキャッシュ（アイコン表示用）
       if (isPWA) {
-        // PWA版：親ページのGAS_BASE_URLを使ってAPI呼び出し
-        const gasBaseUrl = window.parent?.REBORN_CONFIG?.GAS_BASE_URL;
+        // PWA版：URLパラメータから取得したGAS_BASE_URLを使用
+        const gasBaseUrl = gasBaseUrlParam;
+        console.log('[User Cache] GAS_BASE_URL:', gasBaseUrl);
+
         if (gasBaseUrl) {
+          console.log('[User Cache] ユーザー一覧取得開始:', gasBaseUrl + '?action=getUserListForUI');
           fetch(gasBaseUrl + '?action=getUserListForUI')
-            .then(response => response.json())
+            .then(response => {
+              console.log('[User Cache] Response status:', response.status);
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              return response.json();
+            })
             .then(users => {
+              console.log('[User Cache] ユーザーデータ受信:', users);
               if (users && users.length > 0) {
                 usersCache = users;
                 console.log('[User Cache] PWA版 ユーザー一覧キャッシュ完了:', usersCache.length + '件');
                 console.log('[User Cache] キャッシュ内容:', usersCache);
+
+                // メッセージを再描画してアイコンを反映
+                console.log('[User Cache] メッセージ再描画開始');
+                const container = document.getElementById('messagesContainer');
+                if (container && container.children.length > 0) {
+                  // 既存メッセージがある場合は再描画
+                  startListening();
+                }
               } else {
                 console.warn('[User Cache] ユーザー一覧が空です');
               }
             })
             .catch(error => {
               console.error('[User Cache] PWA版 ユーザー一覧取得エラー:', error);
+              console.error('[User Cache] エラー詳細:', error.message, error.stack);
             });
+        } else {
+          console.error('[User Cache] GAS_BASE_URL が取得できません');
+          console.log('[User Cache] window.parent:', window.parent);
+          console.log('[User Cache] window.parent.REBORN_CONFIG:', window.parent?.REBORN_CONFIG);
         }
       } else if (typeof google !== 'undefined' && google.script && google.script.run) {
         // GAS版：google.script.runで呼び出し

@@ -1146,18 +1146,21 @@ function doGet(e) {
     } else if (menuType === 'chat' || menuType === 'chat_rooms') {
       // roomIdパラメータがある場合はチャット画面、ない場合はルーム一覧
       const roomId = e.parameter.roomId || '';
+      const gasBaseUrl = e.parameter.gasBaseUrl || '';  // ✅ API呼び出し用URL
 
       if (roomId) {
         // チャット画面を開く
         Logger.log('[doGet] チャット画面を読み込みます (roomId: ' + roomId + ')');
         template = HtmlService.createTemplateFromFile('chat_ui_firestore');
         template.gasRoomId = roomId;
+        template.gasBaseUrl = gasBaseUrl;  // ✅ テンプレート変数に設定
         title = 'REBORN - チーム チャット';
         Logger.log('[doGet] chat_ui_firestoreテンプレート作成完了');
       } else {
         // トークルーム一覧を表示
         Logger.log('[doGet] トークルーム一覧を読み込みます');
         template = HtmlService.createTemplateFromFile('chat_rooms_list');
+        template.gasBaseUrl = gasBaseUrl;  // ✅ テンプレート変数に設定
         title = 'REBORN - チーム チャット';
         Logger.log('[doGet] chat_rooms_listテンプレート作成完了');
       }
