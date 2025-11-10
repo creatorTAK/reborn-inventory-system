@@ -24,16 +24,45 @@
       padding: 16px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       flex-shrink: 0;
+      position: relative;
     }
     .chat-header h1 {
       margin: 0;
       font-size: 1.25rem;
       font-weight: 600;
+      padding-left: 40px; /* 戻るボタンのスペースを確保 */
     }
     .chat-header .channel-info {
       font-size: 0.875rem;
       opacity: 0.9;
       margin-top: 4px;
+      padding-left: 40px; /* 戻るボタンのスペースを確保 */
+    }
+    /* 戻るボタン（LINE風） */
+    .back-btn {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: white;
+      font-size: 32px;
+      padding: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      transition: opacity 0.2s;
+      font-weight: 300;
+    }
+    .back-btn:hover {
+      opacity: 0.8;
+    }
+    .back-btn:active {
+      opacity: 0.6;
     }
 
     /* メッセージリスト */
@@ -48,7 +77,6 @@
       margin-bottom: 16px;
       animation: fadeIn 0.3s ease-in;
       display: flex;
-      flex-direction: column;
       /* iOSのテキスト選択・コールアウトを無効化 */
       -webkit-user-select: none;
       user-select: none;
@@ -59,59 +87,65 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
+    /* メッセージコンテント（アイコン + バブル + 時間） */
+    .message-content {
+      display: flex;
+      align-items: flex-start;
+      max-width: 80%;
+      gap: 8px;
+    }
+
     /* 自分のメッセージ（右寄せ・青） */
     .message-item-mine {
-      align-items: flex-end;
+      justify-content: flex-end;
     }
-    .message-item-mine .message-text {
+    .message-item-mine .message-content {
+      flex-direction: row;
+    }
+    .message-item-mine .message-bubble {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
-      border-radius: 18px 18px 4px 18px;
-      max-width: 70%;
-    }
-    .message-item-mine .message-header {
-      flex-direction: row-reverse;
-    }
-    .message-item-mine .message-sender {
-      margin-left: 8px;
-      margin-right: 0;
-      color: #667eea;
+      padding: 10px 14px;
+      border-radius: 18px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
 
     /* 他人のメッセージ（左寄せ・グレー） */
     .message-item-other {
-      align-items: flex-start;
+      justify-content: flex-start;
     }
-    .message-item-other .message-text {
+    .message-item-other .message-content {
+      flex-direction: row;
+    }
+    .message-item-other .message-bubble {
       background-color: white;
       color: #2d3748;
-      border-radius: 18px 18px 18px 4px;
-      max-width: 70%;
+      padding: 10px 14px;
+      border-radius: 18px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    /* メッセージバブル */
+    .message-bubble {
+      max-width: 100%;
     }
 
     .message-header {
-      display: flex;
-      align-items: center;
-      margin-bottom: 4px;
+      display: none; /* ヘッダーは非表示 */
     }
 
     /* ユーザーアイコン（LINE風） */
     .user-icon {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       object-fit: cover;
-      margin-right: 8px;
       border: 2px solid #e2e8f0;
       flex-shrink: 0;
     }
-    .message-item-mine .user-icon {
-      margin-right: 0;
-      margin-left: 8px;
-    }
     .user-icon-placeholder {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       display: flex;
@@ -119,31 +153,36 @@
       justify-content: center;
       color: white;
       font-weight: 600;
-      font-size: 14px;
-      margin-right: 8px;
+      font-size: 16px;
       border: 2px solid #e2e8f0;
       flex-shrink: 0;
     }
-    .message-item-mine .user-icon-placeholder {
-      margin-right: 0;
-      margin-left: 8px;
-    }
 
     .message-sender {
-      font-weight: 600;
-      margin-right: 8px;
-      color: #2d3748;
       display: none; /* LINE風：名前を非表示 */
     }
+
+    /* メッセージラッパー（バブル + 時間） */
+    .message-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+    .message-item-mine .message-wrapper {
+      align-items: flex-end;
+    }
+
     .message-time {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: #718096;
+      opacity: 0.8;
+      padding: 0 4px;
     }
     .message-text {
-      padding: 12px 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       white-space: pre-wrap;
       word-wrap: break-word;
+      line-height: 1.5;
       /* テキスト選択を完全に無効化 */
       -webkit-user-select: none;
       user-select: none;
@@ -350,6 +389,7 @@
 </head>
 <body>
   <div class="chat-header">
+    <button class="back-btn" onclick="goBackToList()" title="チャット一覧に戻る">‹</button>
     <h1>💬 チーム チャット
       <button class="toggle-selection-btn" onclick="toggleSelectionMode()">🗑️ 選択削除</button>
     </h1>
@@ -849,16 +889,9 @@
       item.className = isMine ? 'message-item message-item-mine' : 'message-item message-item-other';
       item.dataset.messageId = msg.id;
 
-      const header = document.createElement('div');
-      header.className = 'message-header';
-
-      // チェックボックス（選択削除モード用）
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'message-checkbox';
-      checkbox.dataset.messageId = msg.id;
-      checkbox.onchange = updateSelectionCount;
-      header.appendChild(checkbox);
+      // メッセージコンテント（アイコン + ラッパー）
+      const content = document.createElement('div');
+      content.className = 'message-content';
 
       // ユーザーアイコン（LINE風）- 相手のメッセージのみ表示
       if (!isMine) {
@@ -876,20 +909,31 @@
             placeholder.textContent = (messageUserName || '匿').charAt(0);
             this.replaceWith(placeholder);
           };
-          header.appendChild(icon);
+          content.appendChild(icon);
         } else {
           // アイコン画像がない場合はプレースホルダー
           const placeholder = document.createElement('div');
           placeholder.className = 'user-icon-placeholder';
           placeholder.textContent = (messageUserName || '匿').charAt(0);
-          header.appendChild(placeholder);
+          content.appendChild(placeholder);
         }
       }
 
-      const sender = document.createElement('span');
-      sender.className = 'message-sender';
-      sender.textContent = messageUserName || '匿名';
+      // メッセージラッパー（バブル + 時間）
+      const wrapper = document.createElement('div');
+      wrapper.className = 'message-wrapper';
 
+      // メッセージバブル
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+
+      // メッセージ本文
+      const text = document.createElement('div');
+      text.className = 'message-text';
+      text.textContent = msg.text || '';
+      bubble.appendChild(text);
+
+      // 時間
       const time = document.createElement('span');
       time.className = 'message-time';
       if (msg.timestamp && msg.timestamp.toDate) {
@@ -909,15 +953,10 @@
         time.textContent = `${month}/${day} ${hours}:${minutes}`;
       }
 
-      header.appendChild(sender);
-      header.appendChild(time);
-
-      const text = document.createElement('div');
-      text.className = 'message-text';
-      text.textContent = msg.text || '';
-
-      item.appendChild(header);
-      item.appendChild(text);
+      wrapper.appendChild(bubble);
+      wrapper.appendChild(time);
+      content.appendChild(wrapper);
+      item.appendChild(content);
 
       // 長押しイベントリスナーを追加
       console.log('[Message] Adding long press listener for message:', msg.id);
@@ -1039,6 +1078,42 @@
       } catch (error) {
         console.error('[Firestore] 送信エラー:', error);
         alert('メッセージの送信に失敗しました: ' + error.message);
+      }
+    };
+
+    // チャット一覧に戻る（LINE風）
+    window.goBackToList = function() {
+      console.log('========================================');
+      console.log('[Navigation] 🔙 チャット一覧に戻る - 関数実行開始');
+      console.log('[Navigation] isPWA:', isPWA);
+      console.log('[Navigation] window.parent:', window.parent);
+      console.log('[Navigation] window.parent === window:', window.parent === window);
+      console.log('========================================');
+
+      if (isPWA) {
+        // PWA版: 親ウィンドウにメッセージを送信
+        try {
+          console.log('[Navigation] 📨 PWA版: 親ウィンドウにpostMessage送信');
+          const message = {
+            type: 'showChatRoomsList'
+          };
+          console.log('[Navigation] メッセージ内容:', message);
+          window.parent.postMessage(message, '*');
+          console.log('[Navigation] ✅ postMessage送信完了');
+        } catch (error) {
+          console.error('[Navigation] ❌ postMessage エラー:', error);
+          // フォールバック: history.back()
+          console.log('[Navigation] フォールバック: history.back()');
+          window.history.back();
+        }
+      } else {
+        // GAS版: メニュー画面に戻る
+        console.log('[Navigation] GAS版: google.script.run 呼び出し');
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.showChatRoomsList();
+        } else {
+          console.error('[Navigation] google.script.run が利用できません');
+        }
       }
     };
 
