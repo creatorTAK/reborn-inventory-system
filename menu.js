@@ -437,6 +437,19 @@ function doGet(e) {
         }
       }
 
+      // ユーザー一覧取得API（PWA版チャットアイコン表示用）
+      if (action === 'getUserListForUI') {
+        try {
+          const users = getUserListForUI();
+          return ContentService.createTextOutput(JSON.stringify(users))
+            .setMimeType(ContentService.MimeType.JSON);
+        } catch (error) {
+          Logger.log('getUserListForUI API error: ' + error.message);
+          return ContentService.createTextOutput(JSON.stringify([]))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
       if (action === 'test') {
         // テストAPI
         const response = {
