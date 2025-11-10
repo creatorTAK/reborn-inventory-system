@@ -507,10 +507,31 @@
           return;
         }
 
+        let visibleRoomCount = 0;
         snapshot.forEach((doc) => {
           const room = { id: doc.id, ...doc.data() };
-          appendRoom(room);
+
+          // フィルタリング: 自分が参加しているルームのみ表示
+          // - type='system'のルームは全員に表示
+          // - それ以外は members配列に自分のユーザー名が含まれる場合のみ表示
+          if (room.type === 'system' || (room.members && room.members.includes(currentUserName))) {
+            appendRoom(room);
+            visibleRoomCount++;
+          } else {
+            console.log('[Filter] ルームをスキップ（参加していない）:', room.id, 'members:', room.members);
+          }
         });
+
+        // フィルタリング後に表示するルームがない場合
+        if (visibleRoomCount === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">💬</div>
+              <div class="empty-state-text">参加中のトークルームがありません</div>
+              <div style="font-size: 14px; color: #a0aec0;">「新しいルーム作成」または「個別チャット作成」から始めましょう</div>
+            </div>
+          `;
+        }
       }, (error) => {
         console.error('[Firestore] リスニングエラー:', error);
         const container = document.getElementById('roomsContainer');
