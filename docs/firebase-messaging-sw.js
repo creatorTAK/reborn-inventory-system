@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v32';
+const CACHE_VERSION = 'v33';  // Firebase Messaging SDK削除（2重通知防止）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -23,25 +23,10 @@ const PRECACHE_RESOURCES = [
   '/icon-512.png'
 ];
 
-// Firebase SDK読み込み
-importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
+// Firebase Messaging SDKは使用しない（2重通知を防ぐため）
+// pushイベントを手動でハンドリングする
 
-// Firebase設定
-const firebaseConfig = {
-  apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
-  authDomain: "reborn-chat.firebaseapp.com",
-  projectId: "reborn-chat",
-  storageBucket: "reborn-chat.firebasestorage.app",
-  messagingSenderId: "345706548795",
-  appId: "1:345706548795:web:058a553da6b4b74db5161e"
-};
-
-// Firebase初期化
-firebase.initializeApp(firebaseConfig);
-const messaging = firebase.messaging();
-
-console.log('[SW v32] Service Worker initialized with event.waitUntil() architecture');
+console.log('[SW v33] Service Worker initialized - manual push handling only');
 
 // ================================================================================
 // キャッシュクリーンアップ（軽量化）
@@ -172,14 +157,14 @@ function updateFirestoreUnreadCount(userName) {
 // 🎯 CORE: push イベントハンドラ（event.waitUntil()使用）
 // ================================================================================
 self.addEventListener('push', (event) => {
-  console.log('[SW v32] Push event received');
+  console.log('[SW v33] Push event received');
 
   // ペイロード解析
   let payload = {};
   try {
     payload = event.data ? event.data.json() : {};
   } catch (e) {
-    console.error('[SW v32] Failed to parse payload:', e);
+    console.error('[SW v33] Failed to parse payload:', e);
     payload = {
       data: {
         title: 'New message',
@@ -211,7 +196,7 @@ self.addEventListener('push', (event) => {
       // 1. キャッシュクリーンアップ + 重複チェック
       pruneCache();
       if (notificationCache.has(cacheKey)) {
-        console.log('[SW v32] Duplicate notification, skipping:', cacheKey);
+        console.log('[SW v33] Duplicate notification, skipping:', cacheKey);
         return;
       }
       notificationCache.set(cacheKey, Date.now());
@@ -257,13 +242,13 @@ self.addEventListener('push', (event) => {
         renotify: true
       };
 
-      console.log('[SW v32] Showing notification:', title);
+      console.log('[SW v33] Showing notification:', title);
       await self.registration.showNotification(title, notificationOptions);
 
-      console.log('[SW v32] Push event handled successfully');
+      console.log('[SW v33] Push event handled successfully');
 
     } catch (error) {
-      console.error('[SW v32] Error in push handler:', error);
+      console.error('[SW v33] Error in push handler:', error);
       // エラーでも通知は試みる
       try {
         await self.registration.showNotification('REBORN', {
@@ -271,7 +256,7 @@ self.addEventListener('push', (event) => {
           icon: '/icon-180.png'
         });
       } catch (e) {
-        console.error('[SW v32] Failed to show error notification:', e);
+        console.error('[SW v33] Failed to show error notification:', e);
       }
     }
   })();
@@ -284,7 +269,7 @@ self.addEventListener('push', (event) => {
 // 通知クリックイベント
 // ================================================================================
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW v32] Notification clicked');
+  console.log('[SW v33] Notification clicked');
 
   event.notification.close();
 
@@ -311,20 +296,20 @@ self.addEventListener('notificationclick', (event) => {
 // Service Worker インストール
 // ================================================================================
 self.addEventListener('install', (event) => {
-  console.log('[SW v32] Installing...');
+  console.log('[SW v33] Installing...');
 
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('[SW v32] Precaching resources');
+        console.log('[SW v33] Precaching resources');
         return cache.addAll(PRECACHE_RESOURCES);
       })
       .then(() => {
-        console.log('[SW v32] Precache complete');
+        console.log('[SW v33] Precache complete');
         return self.skipWaiting();
       })
       .catch((error) => {
-        console.error('[SW v32] Precache error:', error);
+        console.error('[SW v33] Precache error:', error);
         return self.skipWaiting();
       })
   );
@@ -334,7 +319,7 @@ self.addEventListener('install', (event) => {
 // Service Worker 有効化
 // ================================================================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW v32] Activating...');
+  console.log('[SW v33] Activating...');
 
   event.waitUntil(
     caches.keys()
@@ -342,14 +327,14 @@ self.addEventListener('activate', (event) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
             if (cacheName !== CACHE_NAME) {
-              console.log('[SW v32] Deleting old cache:', cacheName);
+              console.log('[SW v33] Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
           })
         );
       })
       .then(() => {
-        console.log('[SW v32] Activated, claiming clients');
+        console.log('[SW v33] Activated, claiming clients');
         return self.clients.claim();
       })
   );
@@ -359,11 +344,11 @@ self.addEventListener('activate', (event) => {
 // Service Worker エラーハンドリング
 // ================================================================================
 self.addEventListener('error', (event) => {
-  console.error('[SW v32] Global error:', event.error);
+  console.error('[SW v33] Global error:', event.error);
 });
 
 self.addEventListener('unhandledrejection', (event) => {
-  console.error('[SW v32] Unhandled rejection:', event.reason);
+  console.error('[SW v33] Unhandled rejection:', event.reason);
 });
 
-console.log('[SW v32] Service Worker loaded successfully');
+console.log('[SW v33] Service Worker loaded successfully');

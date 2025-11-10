@@ -174,8 +174,31 @@
   - `notification`ブロックなし
   - 全て`data`フィールドで送信済み
 
-- [ ] **デプロイ**: PWA v32
-- [ ] **再テスト**: TC-NOTIF-004-001/002実行（10回以上連続で通知が届くか確認）
+- [x] **デプロイ**: PWA v32
+- [x] **テスト結果**: 2重通知発生（同じ通知が2回届く）
+  - 原因: Firebase Messaging SDKと手動pushハンドラの競合
+  - Firebase SDK内部のpushハンドラ + 手動addEventListener('push')の両方が反応
+
+#### Phase 3.5: Firebase Messaging SDK削除（@796 - 2025-11-10）
+- [x] **根本原因特定**: Firebase Messaging SDKの内部pushハンドラとの競合
+  - `firebase.initializeApp()` + `messaging = firebase.messaging()` → SDK内部でpushイベント自動リッスン
+  - 手動の`self.addEventListener('push', ...)` → 2つ目のハンドラ
+  - 結果: 1つのpushイベントに2つのハンドラが反応 → 2重通知
+
+- [x] **修正実装（docs/firebase-messaging-sw.js v33）**:
+  1. Firebase Messaging SDK完全削除
+     - `importScripts('firebase-messaging-compat.js')` 削除
+     - `firebase.initializeApp()` 削除
+     - `firebase.messaging()` 削除
+
+  2. 完全に手動でpushイベントハンドリング
+     - `self.addEventListener('push', ...)` のみ
+     - `event.data.json()` でペイロードを直接取得
+     - `event.waitUntil()` で確実にSW実行完了を保証
+
+- [ ] **デプロイ**: PWA v33
+- [ ] **再テスト**: 1回の操作で1回の通知が届くか確認
+- [ ] **10回以上連続テスト**: TC-NOTIF-004-001/002実行
 
 #### Phase 4予定（Phase 3で改善しない場合）:
 - [ ] Service Worker定期再起動ロジック
