@@ -425,6 +425,7 @@
 
     // グローバル変数
     let currentUserName = '';
+    let usersCache = []; // ユーザーアイコン表示用キャッシュ
 
     // GASテンプレート変数をJavaScript変数に変換
     const isPWAFlag        = <?= JSON.stringify(!!isPWA) ?>;
@@ -476,6 +477,44 @@
         }
         document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
         console.log('[PWA] ユーザー名設定:', currentUserName);
+      }
+
+      // ユーザー一覧を取得してキャッシュ（アイコン表示用）
+      if (isPWA) {
+        // PWA版：親ページのGAS_BASE_URLを使ってAPI呼び出し
+        const gasBaseUrl = window.parent?.REBORN_CONFIG?.GAS_BASE_URL;
+        if (gasBaseUrl) {
+          fetch(gasBaseUrl + '?action=getUserListForUI')
+            .then(response => response.json())
+            .then(users => {
+              if (users && users.length > 0) {
+                usersCache = users;
+                console.log('[User Cache] PWA版 ユーザー一覧キャッシュ完了:', usersCache.length + '件');
+                console.log('[User Cache] キャッシュ内容:', usersCache);
+              } else {
+                console.warn('[User Cache] ユーザー一覧が空です');
+              }
+            })
+            .catch(error => {
+              console.error('[User Cache] PWA版 ユーザー一覧取得エラー:', error);
+            });
+        }
+      } else if (typeof google !== 'undefined' && google.script && google.script.run) {
+        // GAS版：google.script.runで呼び出し
+        google.script.run
+          .withSuccessHandler(function(users) {
+            if (users && users.length > 0) {
+              usersCache = users;
+              console.log('[User Cache] GAS版 ユーザー一覧キャッシュ完了:', usersCache.length + '件');
+              console.log('[User Cache] キャッシュ内容:', usersCache);
+            } else {
+              console.warn('[User Cache] ユーザー一覧が空です');
+            }
+          })
+          .withFailureHandler(function(error) {
+            console.error('[User Cache] GAS版 ユーザー一覧取得エラー:', error);
+          })
+          .getUserListForUI();
       }
 
       // トークルーム一覧をリアルタイムリスニング
@@ -559,6 +598,16 @@
       });
     }
 
+    // ユーザーアイコンURLを取得
+    function getUserIconUrl(userName) {
+      if (!userName || !usersCache || usersCache.length === 0) {
+        return null;
+      }
+
+      const user = usersCache.find(u => u.userName === userName);
+      return user && user.userIconUrl ? user.userIconUrl : null;
+    }
+
     // トークルームをUIに追加
     function appendRoom(room) {
       const container = document.getElementById('roomsContainer');
@@ -570,7 +619,49 @@
       // アイコン
       const icon = document.createElement('div');
       icon.className = 'room-icon';
-      icon.textContent = room.icon || '💬';
+
+      // 個別チャット（DM）の場合は相手ユーザーのアイコンを表示
+      if (room.type === 'direct' && room.members && room.members.length === 2) {
+        // 自分以外のメンバーを取得
+        const otherUser = room.members.find(m => m !== currentUserName);
+        const iconUrl = getUserIconUrl(otherUser);
+
+        console.log('[Room Icon] 個別チャット:', { roomId: room.id, otherUser, iconUrl });
+
+        if (iconUrl) {
+          // アイコン画像がある場合
+          const img = document.createElement('img');
+          img.src = iconUrl;
+          img.alt = otherUser || '匿名';
+          img.style.width = '40px';
+          img.style.height = '40px';
+          img.style.borderRadius = '50%';
+          img.style.objectFit = 'cover';
+          img.onerror = function() {
+            // 画像読み込みエラー時はプレースホルダー
+            icon.textContent = (otherUser || '匿').charAt(0);
+            icon.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            icon.style.color = 'white';
+            icon.style.display = 'flex';
+            icon.style.alignItems = 'center';
+            icon.style.justifyContent = 'center';
+            icon.style.fontWeight = '600';
+          };
+          icon.appendChild(img);
+        } else {
+          // アイコン画像がない場合はプレースホルダー
+          icon.textContent = (otherUser || '匿').charAt(0);
+          icon.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+          icon.style.color = 'white';
+          icon.style.display = 'flex';
+          icon.style.alignItems = 'center';
+          icon.style.justifyContent = 'center';
+          icon.style.fontWeight = '600';
+        }
+      } else {
+        // システムルームや全体チャットはデフォルトアイコン
+        icon.textContent = room.icon || '💬';
+      }
 
       // コンテンツ
       const content = document.createElement('div');
