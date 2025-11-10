@@ -361,7 +361,7 @@ function sendChatNotification(senderName, message, excludeUser) {
       recipients.forEach(function(recipient, index) {
         try {
           Logger.log('[sendChatNotification] [' + (index + 1) + '/' + recipients.length + '] ' + recipient.userName + ' に送信中...');
-          const result = sendFCMToTokenV1(accessToken, recipient.token, title, body, messageId);
+          const result = sendFCMToTokenV1(accessToken, recipient.token, title, body, messageId, 1, 'chat', recipient.userName);
           if (result.success) {
             successCount++;
             Logger.log('  → ✅ 成功: ' + recipient.userName);

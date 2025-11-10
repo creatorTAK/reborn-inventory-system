@@ -367,19 +367,35 @@ function sendProductRegistrationWebhook(form, managementNumber) {
   debugLog('[sendProductRegistrationWebhook] 開始: ' + managementNumber);
 
   try {
-    // 現在のユーザー名を取得
+    // 現在のユーザー名を取得（@795: ハイブリッドアプローチ Phase 1）
     let userName = '不明';
-    try {
-      const email = Session.getEffectiveUser().getEmail();
-      debugLog('[sendProductRegistrationWebhook] ユーザーメール: ' + email);
-
-      // user_permission_manager.jsのgetUserNameByEmail()を使用
-      if (typeof getUserNameByEmail === 'function') {
-        userName = getUserNameByEmail(email) || '不明';
-        debugLog('[sendProductRegistrationWebhook] ユーザー名: ' + userName);
+    
+    // 優先順位1: form['担当者']フィールドから取得（既存フィールド活用）
+    if (form['担当者']) {
+      try {
+        const tantoshaValue = form['担当者'].toString().trim();
+        // "スタッフの山田太郎" → "山田太郎"（プレフィックス除去）
+        userName = tantoshaValue.replace(/^(スタッフの|オーナーの|外注の)/, '');
+        debugLog('[sendProductRegistrationWebhook] [Phase1] 担当者フィールドから取得: ' + userName);
+      } catch (tantoshaError) {
+        debugLog('[sendProductRegistrationWebhook] [Phase1] 担当者フィールド取得エラー: ' + tantoshaError);
       }
-    } catch (userError) {
-      debugLog('[sendProductRegistrationWebhook] ユーザー名取得エラー: ' + userError);
+    }
+    
+    // 優先順位2: Session情報から取得（フォールバック）
+    if (userName === '不明') {
+      try {
+        const email = Session.getEffectiveUser().getEmail();
+        debugLog('[sendProductRegistrationWebhook] [Phase1-Fallback] ユーザーメール: ' + email);
+
+        // user_permission_manager.jsのgetUserNameByEmail()を使用
+        if (typeof getUserNameByEmail === 'function') {
+          userName = getUserNameByEmail(email) || '不明';
+          debugLog('[sendProductRegistrationWebhook] [Phase1-Fallback] ユーザー名: ' + userName);
+        }
+      } catch (userError) {
+        debugLog('[sendProductRegistrationWebhook] [Phase1-Fallback] ユーザー名取得エラー: ' + userError);
+      }
     }
 
     // 通知データを作成

@@ -1,358 +1,334 @@
-@776 - fix(CHAT-003-A+B): userName+targetUsers追加、Webhook時点でunreadCounts更新
+@798 - デプロイ完了: feat(CHAT-007): Phase 1 - 個別チャット + LINE風アイコン表示 + メニュー整理
 
-**修正A: GAS側でuserNameをFCMペイロードに含める（IndexedDB依存回避）**
+**デプロイ内容:**
+- @797: 個別チャット（ダイレクトメッセージ）機能実装
+- @798: メニュー整理（開発・デバッグ用項目削除）
+- @799: LINE風アイコン表示機能実装
 
-**根本原因:**
-- Service WorkerがIndexedDBからuserNameを取得できない場合、Cloudflare Worker APIを呼べない
-- FCMペイロードにuserNameが含まれていないため、SW側でフォールバックできない
-
-**修正内容:**
-1. **web_push.js:**
-   - `sendFCMToTokenV1()`にuserNameパラメータ追加
-   - `payload.data.userName`に対象ユーザー名を含める
-   - `badgeCount`デフォルトを'0'→'1'に変更（iOS/Safari PWAでの0回避）
-
-2. **product.js:**
-   - sendFCMToTokenV1()呼び出し時にtargetUserNameを渡す
-   - badgeCount=1を明示指定
-
-**修正B: Cloudflare Workerでunreadcounts更新（Webhook時点で確実更新）**
-
-**根本原因:**
-- Service Worker経由のunreadCounts更新は、PWA状態やIndexedDB依存で不安定
-- Webhook時点でunreadCountsを更新すれば、SW/PWAに依存せず確実
-
-**修正内容:**
-1. **product.js:**
-   - notificationData.targetUsersに対象ユーザーリストを追加
-   - Webhook送信時に受信者情報を含める
-
-2. **cloudflare-workers/webhook-worker.js:**
-   - postToFirestore()にunreadCounts更新処理を追加
-   - targetUsers配列をループして各ユーザーのunreadCountをGET→+1→PATCH
-
-**修正後の動作:**
-```
-GAS → Webhook → Cloudflare Worker:
-1. Firestoreにメッセージ投稿
-2. roomsのlastMessage更新
-3. ✨ 各ユーザーのunreadCounts更新（NEW）
-   rooms/room_system_notifications/unreadCounts/{userName}
-```
-
-**期待される効果:**
-- Webhook時点でFirestore unreadCountsが確実に更新
-- ヘッダーバッジ・ルームバッジが即座に反映（Firestore onSnapshot経由）
-- Service Worker/PWA状態に依存しない堅牢な実装
-
-**✅ テスト結果（2025-11-10）:**
-- ✅ ホーム画面アプリアイコンバッジ: 正常動作
-- ✅ ヘッダー💬アイコンバッジ: 正常動作
-- ✅ チャットルーム右端バッジ: 正常動作
-- ✅ 通常チャット: 全て正常動作
-- ✅ バッジ合計表示: アプリアイコン「2」（チャット1 + システム1）
-- ✅ オーナー除外: 自分の投稿には通知されない
-
-**🎯 解決の決め手:**
-修正A（userName追加）+ 修正B（Webhook時点でunreadCounts更新）により、Service Worker/PWA状態に依存せず、Webhook時点でFirestoreを確実に更新することで全て解決。
-
-**Issue CHAT-003: 完全解決 🎉**
+**デプロイ日時:** 2025-11-10
+**デプロイID:** AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA
 
 ---
 
-@775 - fix(CHAT-003最終修正): システム通知でFirestore unreadCount更新追加（全3バッジポイント対応）
-
-**根本原因:**
-- Service Worker v28では、システム通知でincrementSystemBadgeCount()のみを呼び出し
-- これによりIndexedDB（SystemNotificationDB）→ アプリアイコンバッジは更新される
-- しかし、Firestore unreadCountが更新されないため、ヘッダーバッジとルームバッジが機能しない
-
-**3つのバッジ表示ポイント:**
-1. ホーム画面アプリアイコンバッジ → IndexedDB（setAppBadge）
-2. アプリ内ヘッダー💬アイコンバッジ → Firestore unreadCount集計
-3. チャットルーム右端バッジ → Firestore unreadCount個別表示
-
-**修正内容:**
-1. **Service Worker v29 (firebase-messaging-sw.js):**
-   - システム通知処理にupdateFirestoreUnreadCount()呼び出しを追加
-   ```javascript
-   if (notificationType === 'system') {
-     await incrementSystemBadgeCount();      // IndexedDB → アプリアイコンバッジ
-     await updateFirestoreUnreadCount();     // Firestore → ヘッダー & ルームバッジ
-   }
-   ```
-
-**修正後の動作:**
-```
-システム通知:
-  ホーム画面アプリアイコンバッジ → incrementSystemBadgeCount() ✅
-  ヘッダー💬アイコンバッジ → updateFirestoreUnreadCount() ✅
-  チャットルーム右端バッジ → updateFirestoreUnreadCount() ✅
-```
-
-**期待される動作:**
-商品登録時のシステム通知で、全3箇所のバッジが正常に増加する。
-
----
-
-@774 - fix(CHAT-003根本解決): PWA状態に関係なくService Worker内で直接バッジ更新
-
-**根本原因:**
-- Service Worker v27では、PWAが開いている場合にpostMessageでPWA側にバッジ更新を委譲
-- しかし、PWA側（docs/index.html）のメッセージハンドラーがコメントアウトされていた
-- 結果：PWAが開いている状態ではバッジが増加しない（チャット・システム両方）
-
-**修正内容:**
-1. **Service Worker v28 (firebase-messaging-sw.js):**
-   - incrementBadgeCount(): PWA状態チェックを削除、常にsetAppBadge()を直接呼び出し
-   - incrementSystemBadgeCount(): PWA状態チェックを削除、常にsetAppBadge()を直接呼び出し
-   - postMessage方式を完全廃止
-
-**修正後の動作:**
-```
-チャット通知:
-  PWA開いている → Service Worker内でsetAppBadge() ✅
-  PWA閉じている → Service Worker内でsetAppBadge() ✅
-
-システム通知:
-  PWA開いている → Service Worker内でsetAppBadge() ✅
-  PWA閉じている → Service Worker内でsetAppBadge() ✅
-```
-
-**期待される動作:**
-商品登録時のシステム通知で、PWAの状態に関係なくバッジが正常に増加する。
-
----
-
-@773 - fix(完全分離): チャットとシステムで独立したバッジシステム実装
+@799 - feat(CHAT): LINE風アイコン表示機能実装
 
 **実装内容:**
+1. **menu.js (getUserListForUI関数)**
+   - userIconUrl取得を追加（列9 = インデックス8）
+   - FCM通知登録シートからアイコンURLを返すように修正
 
-1. **Service Worker v27 (firebase-messaging-sw.js):**
-   - SystemNotificationDB（新規IndexedDB）を作成
-   - getSystemBadgeCount() / setSystemBadgeCount() 追加
-   - incrementSystemBadgeCount() 追加（システム通知専用）
-   - type分岐: type='system' → SystemNotificationDB使用
-   - type分岐: type='chat' → RebornBadgeDB使用（従来通り）
-   - アプリバッジは両方の合計を表示
+2. **chat_ui_firestore.html (LINE風アイコン表示)**
+   - **CSS追加**:
+     - .user-icon: 円形アイコン（32px）
+     - .user-icon-placeholder: アイコンなし時のプレースホルダー
+   
+   - **JavaScript追加**:
+     - usersCache: ユーザー一覧キャッシュ（アイコン表示用）
+     - getUserIconUrl(): ユーザー名からアイコンURL取得
+     - 初期化時にgetUserListForUI()呼び出してキャッシュ
+   
+   - **メッセージ表示**:
+     - 送信者名の横にアイコン表示（LINE風）
+     - 画像読み込みエラー時はプレースホルダーに自動切り替え
+     - プレースホルダーはユーザー名の最初の1文字
 
-2. **product.js:**
-   - sendFCMToTokenV1()に`type='system'`を明示的に指定
-   - 6番目のパラメータ（badgeCount）はundefined
-   - 7番目のパラメータ（type）に'system'を指定
+3. **chat_rooms_list.html (個別チャット作成UI)**
+   - **CSS追加**:
+     - .user-icon img: 画像表示用スタイル
+     - .user-icon-placeholder: プレースホルダー用スタイル（40px）
+   
+   - **loadUserList関数修正**:
+     - userIconUrlがあれば画像表示
+     - なければプレースホルダー表示（ユーザー名の1文字目）
+     - 画像読み込みエラー時の自動フォールバック
 
-**完全分離の仕組み:**
-```
-チャット通知:
-  payload.data.type='chat' (またはundefined)
-  → incrementBadgeCount()
-  → RebornBadgeDB使用
-  → バッジ動作 ✅
-
-システム通知:
-  payload.data.type='system'
-  → incrementSystemBadgeCount()
-  → SystemNotificationDB使用（完全独立）
-  → バッジ動作 ✅（期待）
-```
-
-**干渉の完全排除:**
-- 別IndexedDB使用により、同時アクセスの衝突を完全回避
-- アプリバッジは両方の合計を表示（chatCount + systemCount）
-- チャット通知は一切変更なし（動作保証）
-
-**期待される動作:**
-商品登録時のシステム通知でバッジが正常に動作する。
-
----
-
-@772 - fix(product.js): チャット通知と同じロジックに統一（messageID追加）
-
-**根本原因の推測:**
-チャット通知は動作するが、システム通知はバッジが動かない原因は、messageIDの有無と考えられる。
-
-**チャット通知（動作 ✅）:**
-- chat_manager.js: sendFCMToTokenV1(token, title, body, messageId)
-- messageIDを生成して渡している
-
-**システム通知（不動作 ❌）:**
-- product.js: sendFCMNotificationToUsers() → sendFCMToTokenV1(token, title, body)
-- messageIDが undefined
-
-**修正内容:**
-product.js:416-483をchat_manager.jsと全く同じロジックに変更：
-1. messageIDを生成（一意性確保）
-2. getUserFCMTokens()でユーザーごとにトークン取得
-3. 各トークンに対してsendFCMToTokenV1()を直接呼び出し
-4. messageIDを明示的に渡す
-
-**期待される動作:**
-チャット通知と同じロジックになったため、システム通知でもバッジが正常に動作する。
+**動作:**
+- チャットメッセージの横にユーザーアイコンが円形で表示される（LINE風）
+- 個別チャット作成時のユーザー一覧にもアイコン表示
+- アイコン未設定ユーザーはプレースホルダー表示
+- 基本設定で設定したアイコンが自動的に反映される
 
 **次のステップ:**
-これでも解決しない場合は、完全分離案（別IndexedDB使用）を実装。
+- デプロイ後、基本設定でアイコンを設定して動作確認
 
 ---
 
-@771 - test(product.js): 切り分けテスト - product.js側FCM送信を一時無効化
+@798 - feat(MENU): メニュー整理（開発・デバッグ用項目削除）
 
-**テスト目的:**
-どちらのFCM送信パスが実際に動作しているか、そしてどちらがバッジ設定に失敗しているかを特定する。
+**削除内容:**
+- **🧪 Webhookテスト** メニュー全体（10項目削除）
+  - Script Properties確認
+  - Webhook送信テスト
+  - HMAC署名テスト
+  - 署名デバッグ送信
+  - 署名検証デバッグ（詳細）
+  - シークレットキー確認
+  - 固定ケース署名比較
+  - テスト結果シートを開く
 
-**修正内容:**
-product.js:418に`TEST_DISABLE_PRODUCT_FCM = true`を追加してproduct.js側のFCM送信を無効化。
-これにより、docs/index.html側のFCM送信のみが実行される。
+- **⚠️ 在庫アラート** メニュー全体（2項目削除）
+  - ▶️ 在庫アラート実行（手動）
+  - 🔓 在庫アラート設定の保護を解除
 
-**テスト手順:**
-1. 商品登録を実行
-2. システム通知が届くか確認
-3. バッジが増加するか確認
+- **⚙️ 設定管理** から以下を削除（1項目）
+  - 🔓 シート保護解除（デバッグ用）
 
-**期待される結果:**
-- 通知が届く → docs/index.html側の送信が動作している
-- バッジが増加する → docs/index.html側の送信でバッジが正しく設定される
-- バッジが増加しない → Service Worker側またはdocs/index.html側に問題がある
+**残ったメニュー（4つ、27項目）:**
+1. 📝 商品管理（3項目）
+2. 🔍 フィルタ・検索（8項目）
+3. 🗂️ マスタ管理（3項目）
+4. ⚙️ 設定管理（11項目）
 
-**次のステップ:**
-結果に応じて、問題箇所を特定し、適切な修正を実施。
+**注意事項:**
+- 在庫アラート設定は「⚙️ 設定管理 > ⚠️ 在庫アラート設定」から利用可能
+- シート保護設定・確認機能は残っている
+- 開発・デバッグ機能はGASエディタから直接実行可能
 
 ---
 
-@770 - fix(product.js): システム通知をチャット通知と同じFCM送信関数に統一
+@797 - feat(CHAT-007): 個別チャット（ダイレクトメッセージ）機能実装
 
-**根本原因を特定:**
-- チャット通知: sendFCMNotificationToUsers() → type='chat' (デフォルト) → バッジ動作 ✅
-- システム通知: sendFCMNotification() → type='system' (明示指定) → バッジ動作 ❌
-- docs/index.htmlのシステム通知はsendFCMNotificationToUsers()を使用しているため動作していた
+**実装内容:**
+- **chat_rooms_list.html**
+  1. **UI追加**
+     - 「個別チャット作成」ボタン追加（緑色、👤アイコン）
+     - ユーザー選択モーダル追加
+     - ユーザーリストのスタイル追加
+  
+  2. **ロジック実装**
+     - `createDirectChat()`: モーダルを開く + ユーザー一覧読み込み
+     - `closeDirectChatModal()`: モーダルを閉じる
+     - `loadUserList()`: GAS APIから全ユーザー取得、自分を除外して表示
+     - `generateDirectRoomId()`: アルファベット順のroomId生成（dm_[user1]_[user2]）
+     - `selectUserForDirectChat()`: ユーザー選択 → 既存ルームチェック → 新規作成 or 開く
+     - `createDirectChatRoom()`: FirestoreにsetDoc()でカスタムIDルーム作成
+  
+  3. **Firebase SDKインポート**
+     - `setDoc` を追加（カスタムドキュメントID作成用）
 
-**修正内容:**
-product.js:419の商品登録通知を変更:
-```javascript
-// 修正前
-const fcmResult = sendFCMNotification(title, content, 'system');
-
-// 修正後
-const allUsers = getAllUserNames();
-const targetUsers = allUsers.filter(user => user !== userName && user !== 'システム');
-const fcmResult = sendFCMNotificationToUsers(title, content, targetUsers);
-```
-
-**技術的詳細:**
-- sendFCMNotification()はsendFCMToTokenV1(token, title, body, undefined, undefined, 'system')を呼び出し
-- sendFCMNotificationToUsers()はsendFCMToTokenV1(token, title, body)を呼び出し
-- 後者はtype引数がundefined → デフォルト'chat'となる
-- Service Worker v26はtype関係なく同じ処理だが、FCMペイロードのtype値が影響している可能性
+**roomId生成ルール:**
+- 形式: `dm_[user1]_[user2]`
+- アルファベット順でソート（例: `dm_オーナー_山田太郎`）
+- 重複防止: 既存roomIdをチェック、存在すれば開くだけ
 
 **期待される動作:**
-- 商品登録時のシステム通知でもバッジが正しく増加する
+1. 「個別チャット作成」ボタンをクリック
+2. ユーザー一覧から相手を選択
+3. 既存DMルームがあれば開く、なければ新規作成
+4. チャット画面に自動遷移
+5. 通知・バッジは既存インフラで自動動作
+
+**次のステップ:**
+1. デプロイ（clasp push + deploy）
+2. 動作確認（3台の端末でテスト）
+3. Issue CHAT-007 Phase 1完了マーク
 
 ---
 
-@769 - fix(FCM): notificationフィールド削除でバックグラウンド通知対応
+@796 - fix(担当者名表示): PropertiesServiceフォールバック削除
 
-修正内容：
-- web_push.js の sendFCMToTokenV1() で notification フィールドを削除
-- title と body を data フィールドに移動
-- これにより、PWA閉じている時も onBackgroundMessage が呼ばれる
-- Service Workerで通知とバッジを完全制御可能に
+**問題の背景:**
+- オーナー端末をタスクキル/リロードすると担当者名が「田中花子」（3台目の外注端末）に変わる
+- 初期設定時に一瞬前の端末の担当者名が表示される
+- 全端末で同じGoogleアカウントを使用
 
-原因：
-- FCMの仕様上、notification フィールドがあると、バックグラウンドでブラウザが自動表示し、
-  Service Workerの onBackgroundMessage が呼ばれない
-- data のみにすることで、常に onBackgroundMessage が呼ばれるようになる
+**根本原因:**
+- PropertiesService.getUserProperties()は同じGoogleアカウントで共有される
+- getOperatorNameByTokenAPI()のフォールバックでPropertiesServiceから読み込み
+- 最後に設定した担当者名（田中花子）が全端末で取得される
 
-影響範囲：
-- チャット通知
-- システム通知（商品登録など）
+**修正内容:**
+- **packaging_materials_manager.js:703-820 (getOperatorNameByTokenAPI関数)**
+  - 全てのPropertiesServiceフォールバックを削除
+  - FCMトークンまたはメールアドレスで見つからない場合は空文字を返す
+  - success: false を返すことで、PWA側で適切に処理される
 
-期待される動作：
-- PWA開いている → 通知 ✅、バッジ ✅
-- PWA閉じている → 通知 ✅、バッジ ✅
+**期待される動作:**
+- 各端末で正しい担当者名が表示される
+- タスクキル/リロード後も担当者名が変わらない
+- 初期設定時の一瞬表示される前の名前も消える
 
----
-
-Cloudflare Worker - fix(unread): increment実装を修正してシステム通知バッジ対応
-
-修正内容：
-- webhook-worker.js の handleUnreadIncrement() を修正
-- 問題: PATCHで常に0にリセットしてから加算していた（常にバッジが1のまま）
-- 修正: GET → 現在値取得 → +delta → PATCH の正しいフローに変更
-
-修正前のフロー：
-1. PATCH で integerValue: '0' を送信（リセット）
-2. レスポンスから値を取得（常に0）
-3. 0 + delta を計算
-4. 再度 PATCH （常に delta の値のみになる）
-
-修正後のフロー：
-1. GET で現在値を取得
-2. 現在値 + delta を計算
-3. PATCH で新しい値を設定
-
-影響範囲：
-- システム通知のバッジ（商品登録など）
-
-期待される動作：
-- システム通知が来るたびにバッジカウントが正しく増加する
+**次のステップ:**
+1. 各端末で担当者名表示確認
+2. タスクキル/リロード後の安定性確認
+3. Phase 3通知テスト（10回以上連続）
 
 ---
 
-PWA Service Worker v25 - fix(CHAT-003): badge/badgeCount不一致修正 + 詳細デバッグログ追加
+@795 - fix(PROD-001): ハイブリッドアプローチ Phase 1（担当者フィールド活用）
 
-**根本原因を発見・修正：**
-- 送信側（web_push.js）: `badgeCount` フィールドを送信
-- 受信側（Service Worker）: `badge` フィールドを参照
-- **完全な不一致のためバッジ情報が取得できていなかった**
+**問題の背景:**
+- スタッフ端末での商品登録時、通知送信者名が常に「オーナー」と判定
+- Session.getEffectiveUser()はPWA実行時に常にGASオーナーを返す
+- @792, @793, @794の3回の失敗を経て、第三者意見（ChatGPT）も参考に新アプローチを採用
 
-修正内容：
-1. firebase-messaging-sw.js で badge/badgeCount 両方に対応
-   ```javascript
-   const rawBadge = payload.data?.badge || payload.data?.badgeCount || payload.notification?.badge;
-   ```
+**Phase 1実装内容（今回）:**
+- **product.js:368-403 (sendProductRegistrationWebhook関数)**
+  - 優先順位1: form['担当者']フィールドから取得（既存フィールド活用）
+    - "スタッフの山田太郎" → "山田太郎"（プレフィックス除去）
+  - 優先順位2: Session.getEffectiveUser()（フォールバック）
+  - GAS側のみの変更で、PWA側は変更なし（安全性重視）
 
-2. 詳細デバッグログ追加：
-   - rawBadge取得ログ（badge/badgeCount両方の値を表示）
-   - IndexedDB userName取得ログ
-   - Cloudflare Workerリクエスト/レスポンスの詳細ログ
-   - エラー発生時のスタックトレースログ
+**Phase 2計画（将来）:**
+- PWAのlocalStorageから`__reborn_registrant_email_v1`を送信
+- 優先順位1: localStorage → 優先順位2: 担当者フィールド → 優先順位3: Session
 
-デプロイ：
-- PWA: Cloudflare Pages (commit 9261c0a)
-- Service Worker: v25
+**期待される動作:**
+- スタッフ端末で商品登録 → 送信者名="山田太郎"
+- オーナー端末のみ通知受信（スタッフは除外される）
+- チャット機能に影響なし（GAS側のみの軽微な変更）
 
-期待される動作：
-- システム通知のバッジが正しく増加する
-- デバッグログで問題箇所を特定可能
+**次のステップ:**
+1. スタッフ端末で商品登録テスト
+2. オーナー端末の通知確認
+3. チャット機能の動作確認
 
 ---
 
-PWA Service Worker v26 - fix(CHAT-003): システム通知バッジ処理をチャット通知と統一（最終修正）
+@794 - ROLLBACK: チャット通知・バッジ不具合のため緊急ロールバック
 
-**問題の根本原因:**
-- システム通知の複雑な処理経路（Service Worker → IndexedDB → Cloudflare Worker → Firestore）が失敗
-- Firestoreの unreadCount が更新されず、バッジが増加しない
+**ロールバック理由:**
+- @794デプロイ後、チャット通知・バッジがおかしくなった
+- 商品登録通知も依然として解決せず（オーナーのまま）
+- チャット機能への影響を最小化するため緊急ロールバック
 
-**シンプルな解決策:**
-- システム通知もチャット通知と同じ方法に統一
-- 複雑なFirestore更新処理を削除
-- incrementBadgeCount()のみ使用（チャット通知で動作確認済み）
+**ロールバックした変更:**
+- sp_scripts.html: collect()関数のPWAユーザー情報追加を削除
+- product.js: 3箇所の修正を元に戻す
+  - saveProduct関数
+  - recordUserActivity関数
+  - sendProductRegistrationWebhook関数
 
-修正内容:
-```javascript
-// 修正前（複雑）
-if (notificationType === 'system') {
-  await updateFirestoreUnreadCount(); // 失敗していた
-}
-await incrementBadgeCount();
+**次のステップ:**
+1. チャット通知・バッジの動作確認
+2. PROD-001は別アプローチで再検討
 
-// 修正後（シンプル）
-await incrementBadgeCount(); // チャット・システム共通
+---
+
+@793 - fix(PROD-001): 商品登録通知のユーザー名取得を修正（第2回・失敗）
+
+**@792の問題:**
+- `form['登録者']`を参照していたが、form dataに該当フィールドが存在しない
+- '登録者'はシートにのみ保存され、form objectには含まれていない
+- 結果：@792でも依然としてSession.getEffectiveUser()にフォールバックし、常に「オーナー」と判定
+
+**修正内容（失敗）:**
+- getProductByManagementNumber()でシートから'登録者'を読み取る
+- しかし、シートに保存される時点で既にオーナーのemailになっていた
+- recordUserActivity()がSession.getEffectiveUser()を使用するため
+
+**失敗理由:**
+- シート読み取り時点で既に間違ったデータ（オーナーemail）が保存されている
+- @794で試みたPWA側からの情報送信もチャット機能に悪影響を与えた
+
+---
+
+@792 - fix(PROD-001): 商品登録通知がオーナーに届かない問題を修正（第1回・失敗）
+
+**根本原因（誤認）:**
+- PWAから商品登録時、`Session.getEffectiveUser()`は常にGASオーナーを返す
+- そのため`userName`が常に「オーナー」になり、通知対象から除外されていた
+- 結果：オーナーに通知が届かない
+
+**修正内容（失敗）:**
+- **product.js:373-391 (sendProductRegistrationWebhook関数)**
+  - userName取得ロジックを変更
+  - 優先順位1: formデータの`登録者`フィールド（PWA登録時）← **存在しないフィールド**
+  - 優先順位2: `Session.getEffectiveUser()`（GASエディタ直接実行時）
+  - 結果：formに'登録者'が存在せず、常にSession経由でオーナーと判定
+
+**失敗理由:**
+- formデータには'登録者'フィールドが含まれていない
+- '登録者'はシートにのみ保存される
+- @793で正しく修正
+
+---
+
+@791 - feat(INV-006): 24時間制限削除（即時アラート対応）
+
+**ビジネス要件:**
+- 24時間制限により資材が不足する可能性がある
+- 閾値に対して24時間後に通知が来て発注すると遅れる
+- 即時通知が適切なタイミング
+
+**修正内容:**
+- **inventory_alert_manager.js:374-378 (shouldSendAlert関数)**
+  - 24時間制限チェックを削除
+  - 常に`return true;`に変更
+  - 在庫が閾値以下の間は毎回通知を送信
+  - 在庫が回復（> 閾値）すれば自動的に通知停止
+
+**動作:**
+- 在庫 <= 閾値 → 毎回アラート送信
+- 在庫 > 閾値 → 自動的に通知停止
+- テスト時の通知停止 → 「通知有効」チェックボックスをOFFにする
+
+**次のステップ:**
+1. E2セル（最終通知日時）を削除
+2. 在庫アラート手動実行テスト
+3. 全3バッジポイント動作確認
+
+---
+
+@787 - fix(INV-006): チェックボックス判定修正（通知有効フラグ）
+
+**根本原因:**
+- getInventoryAlertSettings関数で`data[i][3] === true`の厳密比較を使用
+- Googleスプレッドシートのチェックボックスは`TRUE`（文字列）または`true`（boolean）になる
+- 文字列"TRUE"と`true`が一致せず、通知有効フラグが常に`false`と判定されていた
+- 結果：アラート対象が0件になっていた
+
+**修正内容:**
+- **inventory_alert_manager.js:316 (getInventoryAlertSettings関数)**
+  - チェックボックス判定を修正
+  - `data[i][3] === true || data[i][3] === 'TRUE' || data[i][3] === 'true'`
+  - 文字列とbooleanの両方に対応
+  - デバッグログ追加（元の値と型を出力）
+
+**修正後の動作:**
+- チェックボックスがONの場合、確実に`notificationEnabled = true`と判定
+- アラート対象が正しく検出される
+
+**次のステップ:**
+在庫アラート手動実行テスト（再実行）
+
+---
+
+@786 - feat(INV-006): 在庫アラート専用チャットルーム対応（Webhook送信追加）
+
+**実装内容:**
+在庫アラート専用ルーム「⚠️ 在庫アラート」を新規作成し、Webhook経由でFirestoreにメッセージ投稿。
+
+**修正箇所:**
+1. **setup_chat_rooms.js:75-123**
+   - 在庫アラートルーム（room_inventory_alert）の設定を追加
+   - Firestoreコンソールでの手動作成手順を記載
+
+2. **inventory_alert_manager.js:386-475 (sendInventoryAlertNotifications関数)**
+   - Webhook送信処理を追加（product.jsと同じパターン）
+   - オーナー権限のユーザーのみをtargetUsersに設定
+   - notificationDataに`roomId: 'room_inventory_alert'`を指定
+   - Webhook送信 → Firestoreの「在庫アラート」ルームにメッセージ投稿
+   - FCM通知送信（オーナーのみ）
+
+**通知フロー:**
+```
+在庫アラート検出
+  ↓
+Webhook送信 → Cloudflare Worker → Firestore「在庫アラート」ルームにメッセージ投稿
+  ↓
+FCMプッシュ通知送信（オーナーのみ）
+  ↓
+全3バッジポイント更新（アプリアイコン・ヘッダー・ルーム）
 ```
 
-デプロイ:
-- PWA: Cloudflare Pages (commit a406782)
-- Service Worker: v26
+**通知対象:**
+- オーナーのみ（Webhook、FCM両方）
+- 「在庫アラート」ルーム専用（「システム通知」とは分離）
 
-期待される動作:
-- チャット通知: 通知 ✅、バッジ ✅（既に動作確認済み）
-- システム通知: 通知 ✅、バッジ ✅（今回の修正で確実に動作）
+**次のステップ:**
+1. Firestoreに「在庫アラート」ルーム（room_inventory_alert）を手動作成
+2. 在庫アラート手動実行テスト
+3. 全3バッジポイント動作確認
+
+---

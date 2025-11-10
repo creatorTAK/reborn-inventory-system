@@ -37,6 +37,48 @@ function getInventoryAlertSheet() {
 }
 
 /**
+ * 在庫アラート設定シートの保護を解除
+ */
+function removeInventoryAlertSheetProtection() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(INVENTORY_ALERT_SHEET);
+
+    if (!sheet) {
+      return {
+        success: false,
+        message: '在庫アラート設定シートが見つかりません'
+      };
+    }
+
+    // シート全体の保護を解除
+    const sheetProtections = sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+    for (const protection of sheetProtections) {
+      protection.remove();
+      Logger.log('[在庫アラート] シート全体の保護を解除: ' + protection.getDescription());
+    }
+
+    // 範囲の保護を解除
+    const rangeProtections = sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+    for (const protection of rangeProtections) {
+      protection.remove();
+      Logger.log('[在庫アラート] 範囲の保護を解除: ' + protection.getDescription());
+    }
+
+    return {
+      success: true,
+      message: '在庫アラート設定シートの保護を解除しました（シート保護: ' + sheetProtections.length + '件、範囲保護: ' + rangeProtections.length + '件）'
+    };
+  } catch (error) {
+    Logger.log('[在庫アラート] 保護解除エラー: ' + error);
+    return {
+      success: false,
+      message: 'エラー: ' + error.toString()
+    };
+  }
+}
+
+/**
  * 在庫アラート設定シートを新規作成
  * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} ss
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
@@ -79,9 +121,7 @@ function createInventoryAlertSheet(ss) {
     .build();
   validationRange.setDataValidation(validationRule);
 
-  // シートを保護（ヘッダー行のみ）
-  const protection = sheet.protect().setDescription('在庫アラート設定シート（ヘッダー行保護）');
-  protection.setWarningOnly(true);
+  // シート保護なし（オーナーが自由に編集可能）
 
   Logger.log('[在庫アラート] 在庫アラート設定シートを作成しました');
 
@@ -217,8 +257,11 @@ function checkInventoryAlerts() {
 
       if (materialName) {
         currentInventory[materialName] = inventory;
+        Logger.log(`[備品在庫] ${materialName}: ${inventory}`);
       }
     }
+
+    Logger.log(`[備品在庫] 登録資材数: ${Object.keys(currentInventory).length}件`);
 
     // アラート対象をチェック
     const alertTargets = [];
@@ -226,17 +269,32 @@ function checkInventoryAlerts() {
     alertSettings.forEach(setting => {
       const { materialName, threshold, notificationEnabled, lastAlertTime } = setting;
 
+      Logger.log(`[在庫チェック] 資材: ${materialName}, 閾値: ${threshold}, 通知有効: ${notificationEnabled}`);
+
       // 通知が無効の場合はスキップ
-      if (!notificationEnabled) return;
+      if (!notificationEnabled) {
+        Logger.log(`[在庫チェック] ${materialName}: 通知無効のためスキップ`);
+        return;
+      }
 
       // 現在の在庫を取得
       const currentStock = currentInventory[materialName];
-      if (currentStock === undefined) return;
+      Logger.log(`[在庫チェック] ${materialName}: 現在在庫=${currentStock} (${currentStock === undefined ? 'マッチングなし' : 'OK'})`);
+      
+      if (currentStock === undefined) {
+        Logger.log(`[在庫チェック] ${materialName}: 備品在庫リストに該当する資材名が見つかりません`);
+        return;
+      }
 
       // 閾値チェック
+      Logger.log(`[在庫チェック] ${materialName}: 閾値チェック ${currentStock} <= ${threshold} = ${currentStock <= threshold}`);
+      
       if (currentStock <= threshold) {
         // 重複通知を防ぐ（24時間以内に通知済みの場合はスキップ）
-        if (shouldSendAlert(lastAlertTime)) {
+        const shouldSend = shouldSendAlert(lastAlertTime);
+        Logger.log(`[在庫チェック] ${materialName}: 24時間チェック shouldSend=${shouldSend}, lastAlertTime=${lastAlertTime}`);
+        
+        if (shouldSend) {
           alertTargets.push({
             materialName: materialName,
             category: setting.category,
@@ -264,27 +322,41 @@ function checkInventoryAlerts() {
 function getInventoryAlertSettings() {
   try {
     const sheet = getInventoryAlertSheet();
-    const data = sheet.getDataRange().getValues();
+    // 実際のデータ行数のみ取得（効率化）
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      Logger.log('[在庫アラート] 設定データがありません');
+      return [];
+    }
+    
+    const data = sheet.getRange(1, 1, lastRow, 5).getValues();
 
     const settings = [];
 
     for (let i = 1; i < data.length; i++) {
       const materialName = data[i][0];
+
+      // 資材名が空の場合はスキップ（空白行）
+      if (!materialName || materialName.toString().trim() === '') {
+        continue;
+      }
+
       const category = data[i][1];
       const threshold = Number(data[i][2]) || 0;
-      const notificationEnabled = data[i][3] === true;
+      // チェックボックスは TRUE（文字列）または true（boolean）になるため、両方対応
+      const notificationEnabled = data[i][3] === true || data[i][3] === 'TRUE' || data[i][3] === 'true';
       const lastAlertTime = data[i][4];
 
-      if (materialName) {
-        settings.push({
-          rowIndex: i + 1, // スプレッドシートの行番号
-          materialName: materialName,
-          category: category,
-          threshold: threshold,
-          notificationEnabled: notificationEnabled,
-          lastAlertTime: lastAlertTime
-        });
-      }
+      Logger.log(`[在庫アラート設定] ${materialName}: 通知=${notificationEnabled} (元の値: ${data[i][3]}, 型: ${typeof data[i][3]})`);
+
+      settings.push({
+        rowIndex: i + 1, // スプレッドシートの行番号
+        materialName: materialName,
+        category: category,
+        threshold: threshold,
+        notificationEnabled: notificationEnabled,
+        lastAlertTime: lastAlertTime
+      });
     }
 
     return settings;
@@ -301,15 +373,10 @@ function getInventoryAlertSettings() {
  * @returns {Boolean} 通知を送るべきか
  */
 function shouldSendAlert(lastAlertTime) {
-  // 最終通知日時が空の場合は送信OK
-  if (!lastAlertTime) return true;
-
-  // 最終通知日時から24時間以上経過しているか確認
-  const lastAlertDate = new Date(lastAlertTime);
-  const now = new Date();
-  const timeDiff = now.getTime() - lastAlertDate.getTime();
-
-  return timeDiff >= ALERT_MIN_INTERVAL;
+  // 24時間制限を削除：常に通知を送信
+  // 在庫が閾値以下の間は毎回通知、在庫が回復すれば自動停止
+  // 通知停止は「通知有効」チェックボックスで制御
+  return true;
 }
 
 /**
@@ -344,7 +411,7 @@ function updateLastAlertTime(materialName) {
 // =============================================================================
 
 /**
- * 在庫アラート通知を送信
+ * 在庫アラート通知を送信（Webhook + FCM）
  * @param {Array<Object>} alertTargets - アラート対象の資材リスト
  * @returns {Object} { success: boolean, message: string, sentCount: number }
  */
@@ -358,19 +425,51 @@ function sendInventoryAlertNotifications(alertTargets) {
       };
     }
 
+    // オーナー権限のユーザーのみを取得
+    const allUsers = getAllUserNames();
+    const ownerUsers = allUsers.filter(function(userName) {
+      if (!userName || userName === 'システム') return false;
+      const permission = getUserPermission(userName);
+      return permission === 'オーナー';
+    });
+
+    Logger.log(`[在庫アラート] オーナーユーザー: ${ownerUsers.length}人`);
+
     // 通知メッセージを作成
     const title = '⚠️ 在庫アラート';
     let body = '以下の梱包資材の在庫が不足しています:\n\n';
 
     alertTargets.forEach((target, index) => {
-      body += `${index + 1}. ${target.materialName}\n`;
-      body += `   現在の在庫: ${target.currentStock}個 （閾値: ${target.threshold}個）\n`;
+      body += `${index + 1}. ${target.materialName} (${target.category})\n`;
+      body += `   現在: ${target.currentStock} / 閾値: ${target.threshold}\n`;
     });
 
-    // FCM通知を送信（オーナーのみに送信）
-    const result = sendFCMNotificationByPermission(title, body, 'オーナー');
+    // Webhook送信用のnotificationDataを作成
+    const notificationData = {
+      type: 'INVENTORY_ALERT',
+      roomId: 'room_inventory_alert',  // 在庫アラート専用ルーム
+      userName: 'システム',
+      timestamp: new Date().toISOString(),
+      content: body,
+      sender: 'システム',
+      title: title,
+      targetUsers: ownerUsers  // オーナーのみ
+    };
 
-    if (result.status === 'success') {
+    // 🌐 Webhook送信（Firestoreに投稿）
+    try {
+      Logger.log('[在庫アラート] Webhook送信開始');
+      const webhookResult = sendWebhookNotification(notificationData);
+      Logger.log('[在庫アラート] Webhook送信完了: ' + JSON.stringify(webhookResult));
+    } catch (webhookError) {
+      Logger.log('[在庫アラート] Webhook送信エラー: ' + webhookError);
+      // Webhookエラーでも処理継続（FCM通知は送る）
+    }
+
+    // 🔔 FCM通知を送信（オーナーのみに送信）
+    const fcmResult = sendFCMNotificationByPermission(title, body, 'オーナー', 'system');
+
+    if (fcmResult.status === 'success') {
       // 各資材の最終通知日時を更新
       alertTargets.forEach(target => {
         updateLastAlertTime(target.materialName);
@@ -384,10 +483,10 @@ function sendInventoryAlertNotifications(alertTargets) {
         sentCount: alertTargets.length
       };
     } else {
-      Logger.log('[在庫アラート] 通知送信に失敗: ' + result.message);
+      Logger.log('[在庫アラート] FCM通知送信に失敗: ' + fcmResult.message);
       return {
         success: false,
-        message: '通知送信に失敗: ' + result.message,
+        message: 'FCM通知送信に失敗: ' + fcmResult.message,
         sentCount: 0
       };
     }

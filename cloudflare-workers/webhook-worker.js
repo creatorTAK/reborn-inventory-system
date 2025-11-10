@@ -138,8 +138,19 @@ async function postToFirestore(notificationData, env) {
   const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT)
   const accessToken = await getFirebaseAccessToken(serviceAccount)
 
-  // システム通知ルームID（PWA側と統一）
-  const SYSTEM_NOTIFICATION_ROOM_ID = 'room_system_notifications'
+  // roomId決定（notificationDataで指定されていればそれを使用、なければデフォルト）
+  const targetRoomId = notificationData.roomId || 'room_system_notifications'
+
+  // ルーム情報マッピング
+  const roomInfo = {
+    'room_system_notifications': { name: '📢 システム通知', icon: '📢', type: 'system' },
+    'room_inventory_alert': { name: '⚠️ 在庫アラート', icon: '⚠️', type: 'system' },
+    'room_all': { name: '全体', icon: '📌', type: 'all' }
+  }
+
+  const currentRoomInfo = roomInfo[targetRoomId] || roomInfo['room_system_notifications']
+
+  console.log(`[postToFirestore] Target roomId: ${targetRoomId}`)
 
   // Firestoreドキュメント作成（PWA側のフラット構造に合わせる）
   const docId = generateDocumentId()
@@ -147,7 +158,7 @@ async function postToFirestore(notificationData, env) {
 
   const firestoreDoc = {
     fields: {
-      roomId: { stringValue: SYSTEM_NOTIFICATION_ROOM_ID },
+      roomId: { stringValue: targetRoomId },
       text: { stringValue: notificationData.content },
       userName: { stringValue: notificationData.sender },  // PWA側のschemaに合わせてuserNameを使用
       timestamp: { timestampValue: new Date().toISOString() },
@@ -171,14 +182,14 @@ async function postToFirestore(notificationData, env) {
   }
 
   // roomsコレクションのlastMessageを更新（PWA側と同じ処理）
-  const roomDocUrl = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${SYSTEM_NOTIFICATION_ROOM_ID}`
+  const roomDocUrl = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${targetRoomId}`
   const firstLine = notificationData.content.split('\n')[0]
 
   const roomUpdate = {
     fields: {
-      name: { stringValue: '📢 システム通知' },  // ルーム名を保持
-      type: { stringValue: 'system' },  // ルームタイプを保持
-      icon: { stringValue: '📢' },  // アイコンを保持
+      name: { stringValue: currentRoomInfo.name },  // ルーム名を保持
+      type: { stringValue: currentRoomInfo.type },  // ルームタイプを保持
+      icon: { stringValue: currentRoomInfo.icon },  // アイコンを保持
       lastMessage: { stringValue: firstLine },
       lastMessageAt: { timestampValue: new Date().toISOString() },
       lastMessageBy: { stringValue: notificationData.sender }
@@ -201,11 +212,11 @@ async function postToFirestore(notificationData, env) {
 
   // 🆕 @776-B: 各対象ユーザーのunreadCountsを更新
   if (notificationData.targetUsers && Array.isArray(notificationData.targetUsers)) {
-    console.log(`[postToFirestore] Updating unreadCounts for ${notificationData.targetUsers.length} users`)
+    console.log(`[postToFirestore] Updating unreadCounts for ${notificationData.targetUsers.length} users in room: ${targetRoomId}`)
 
     for (const userName of notificationData.targetUsers) {
       try {
-        const unreadDocUrl = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${SYSTEM_NOTIFICATION_ROOM_ID}/unreadCounts/${userName}`
+        const unreadDocUrl = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${targetRoomId}/unreadCounts/${userName}`
 
         // GET current value
         const getResponse = await fetch(unreadDocUrl, {

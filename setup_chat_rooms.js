@@ -71,3 +71,53 @@ const initialRoomData = {
  */
 
 console.log('初期データ:', JSON.stringify(initialRoomData, null, 2));
+
+/**
+ * 初期データ: 在庫アラートルーム
+ *
+ * Firestore コンソールで以下を作成：
+ *
+ * コレクション: rooms
+ * ドキュメントID: room_inventory_alert
+ * フィールド:
+ */
+
+const inventoryAlertRoomData = {
+  roomId: 'room_inventory_alert',
+  name: '在庫アラート',
+  type: 'system',
+  icon: '⚠️',
+  members: [],  // オーナーのみ（または全員参加なので空配列）
+  createdBy: 'システム',
+  createdAt: new Date(),
+  lastMessage: '在庫アラートルームが作成されました',
+  lastMessageAt: new Date(),
+  lastMessageBy: 'システム'
+};
+
+/**
+ * Firestoreコンソールでの手動作成手順：
+ *
+ * 1. Firebaseコンソール → Firestore Database
+ * 2. roomsコレクションを選択
+ * 3. 「ドキュメントを追加」
+ * 4. ドキュメントID: room_inventory_alert
+ * 5. 以下のフィールドを追加：
+ *
+ * | フィールド名    | タイプ     | 値                                |
+ * |----------------|-----------|-----------------------------------|
+ * | roomId         | string    | room_inventory_alert             |
+ * | name           | string    | 在庫アラート                      |
+ * | type           | string    | system                           |
+ * | icon           | string    | ⚠️                               |
+ * | members        | array     | []                               |
+ * | createdBy      | string    | システム                          |
+ * | createdAt      | timestamp | （現在時刻）                      |
+ * | lastMessage    | string    | 在庫アラートルームが作成されました |
+ * | lastMessageAt  | timestamp | （現在時刻）                      |
+ * | lastMessageBy  | string    | システム                          |
+ *
+ * 6. 「保存」をクリック
+ */
+
+console.log('在庫アラートルームデータ:', JSON.stringify(inventoryAlertRoomData, null, 2));

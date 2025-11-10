@@ -86,8 +86,9 @@ function getUserListForUI() {
     const permissionCol = headers.indexOf('権限');
     const statusCol = headers.indexOf('ステータス');
     const registeredAtCol = headers.indexOf('登録日時');
+    const iconCol = 8; // 列9（アイコンURL）※0始まりなので8
 
-    Logger.log('[getUserListForUI] カラムインデックス - ユーザー名:' + userNameCol + ' メール:' + emailCol + ' 権限:' + permissionCol + ' ステータス:' + statusCol + ' 登録日時:' + registeredAtCol);
+    Logger.log('[getUserListForUI] カラムインデックス - ユーザー名:' + userNameCol + ' メール:' + emailCol + ' 権限:' + permissionCol + ' ステータス:' + statusCol + ' 登録日時:' + registeredAtCol + ' アイコン:' + iconCol);
 
     if (userNameCol === -1) {
       Logger.log('[getUserListForUI] ERROR: ユーザー名列が見つかりません');
@@ -135,12 +136,16 @@ function getUserListForUI() {
         }
       }
 
+      // userIconUrlを取得（列9 = インデックス8）
+      const userIconUrl = data[i][iconCol] || '';
+
       const user = {
         userName: userName,
         email: emailCol !== -1 ? String(data[i][emailCol] || '') : '',
         permission: permissionCol !== -1 ? String(data[i][permissionCol] || 'スタッフ') : 'スタッフ',
         status: statusCol !== -1 ? String(data[i][statusCol] || 'アクティブ') : 'アクティブ',
-        registeredAt: registeredAtStr
+        registeredAt: registeredAtStr,
+        userIconUrl: userIconUrl
       };
 
       Logger.log('[getUserListForUI] 行' + i + ': ユーザー追加 - ' + JSON.stringify(user));
@@ -1475,6 +1480,19 @@ function showUserManagement() {
 }
 
 /**
+ * 在庫アラート設定画面を表示（サイドバー）
+ */
+function showInventoryAlertSettings() {
+  const t = HtmlService.createTemplateFromFile('inventory_alert_settings_ui');
+  t.GAS_BASE_URL = ScriptApp.getService().getUrl() || '';
+  t.isSidebar = true; // サイドバーフラグ
+  const html = t.evaluate()
+    .setTitle('⚠️ 在庫アラート設定')
+    .setWidth(600);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+/**
  * チャット画面を表示（サイドバー）
  */
 /**
@@ -1706,9 +1724,9 @@ function onOpen() {
   ui.createMenu('⚙️ 設定管理')
     .addItem('👤 基本設定', 'showConfigManagerBasic')
     .addItem('🔐 ユーザー権限管理', 'showUserManagement')
+    .addItem('⚠️ 在庫アラート設定', 'showInventoryAlertSettings')
     .addSeparator()
     .addItem('🔒 シート保護設定', 'setupSheetProtectionMenu')
-    .addItem('🔓 シート保護解除（デバッグ用）', 'removeSheetProtectionMenu')
     .addItem('🔍 シート保護状態確認', 'checkSheetProtectionMenu')
     .addSeparator()
     .addItem('🔢 管理番号設定', 'showConfigManagerManagement')
@@ -1718,19 +1736,70 @@ function onOpen() {
     .addItem('✨ AI生成設定', 'showConfigManagerAI')
     .addToUi();
 
-  // 🧪 Webhookテストメニュー（開発・デバッグ用）
-  ui.createMenu('🧪 Webhookテスト')
-    .addItem('1️⃣ Script Properties確認', 'testWebhookSettings')
-    .addItem('2️⃣ Webhook送信テスト', 'testWebhookSend')
-    .addItem('3️⃣ HMAC署名テスト', 'testHmacSignature')
-    .addItem('🔍 署名デバッグ送信', 'testWebhookSendDebug')
-    .addItem('🔬 署名検証デバッグ（詳細）', 'debugSignatureWithCloudflare')
-    .addSeparator()
-    .addItem('🔐 シークレットキー確認', 'debugSecretKey')
-    .addItem('🧪 固定ケース署名比較', 'testSignatureComparison')
-    .addSeparator()
-    .addItem('📋 テスト結果シートを開く', 'openWebhookTestSheet')
-    .addToUi();
+}
+
+/**
+ * ⚠️ 在庫アラートを手動実行（メニューから）
+ */
+function runInventoryAlertManual() {
+  try {
+    const result = runInventoryAlertCheckAPI();
+
+    const ui = SpreadsheetApp.getUi();
+    if (result.success) {
+      ui.alert(
+        '在庫アラート実行完了',
+        `${result.message}\n\nアラート件数: ${result.alertCount}件`,
+        ui.ButtonSet.OK
+      );
+    } else {
+      ui.alert(
+        '在庫アラート実行エラー',
+        result.message,
+        ui.ButtonSet.OK
+      );
+    }
+  } catch (error) {
+    const ui = SpreadsheetApp.getUi();
+    ui.alert(
+      'エラー',
+      'エラーが発生しました: ' + error.toString(),
+      ui.ButtonSet.OK
+    );
+    Logger.log('[runInventoryAlertManual] エラー: ' + error);
+  }
+}
+
+/**
+ * 🔓 在庫アラート設定シートの保護を解除（メニューから）
+ */
+function removeInventoryAlertProtectionFromMenu() {
+  try {
+    const result = removeInventoryAlertSheetProtection();
+
+    const ui = SpreadsheetApp.getUi();
+    if (result.success) {
+      ui.alert(
+        '在庫アラート設定の保護解除完了',
+        result.message,
+        ui.ButtonSet.OK
+      );
+    } else {
+      ui.alert(
+        '在庫アラート設定の保護解除エラー',
+        result.message,
+        ui.ButtonSet.OK
+      );
+    }
+  } catch (error) {
+    const ui = SpreadsheetApp.getUi();
+    ui.alert(
+      'エラー',
+      'エラーが発生しました: ' + error.toString(),
+      ui.ButtonSet.OK
+    );
+    Logger.log('[removeInventoryAlertProtectionFromMenu] エラー: ' + error);
+  }
 }
 
 /**

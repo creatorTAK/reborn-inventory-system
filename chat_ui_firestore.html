@@ -94,6 +94,41 @@
       align-items: center;
       margin-bottom: 4px;
     }
+
+    /* ユーザーアイコン（LINE風） */
+    .user-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin-right: 8px;
+      border: 2px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+    .message-item-mine .user-icon {
+      margin-right: 0;
+      margin-left: 8px;
+    }
+    .user-icon-placeholder {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      margin-right: 8px;
+      border: 2px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+    .message-item-mine .user-icon-placeholder {
+      margin-right: 0;
+      margin-left: 8px;
+    }
+
     .message-sender {
       font-weight: 600;
       margin-right: 8px;
@@ -399,6 +434,7 @@
     let currentUserName = '';
     let currentRoomId = '';
     let currentRoomName = '';
+    let usersCache = []; // ユーザー一覧キャッシュ（アイコン表示用）
 
     // GASテンプレート変数をJavaScript変数に変換（変数名の衝突を避ける）
     const isPWAFlag        = <?= JSON.stringify(!!isPWA) ?>;
@@ -511,6 +547,21 @@
         }
       }
 
+      // ユーザー一覧を取得してキャッシュ（アイコン表示用）
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(users) {
+            if (users && users.length > 0) {
+              usersCache = users;
+              console.log('[User Cache] ユーザー一覧キャッシュ完了:', usersCache.length + '件');
+            }
+          })
+          .withFailureHandler(function(error) {
+            console.error('[User Cache] ユーザー一覧取得エラー:', error);
+          })
+          .getUserListForUI();
+      }
+
       // メッセージ入力の自動リサイズ
       const messageInput = document.getElementById('messageInput');
       messageInput.addEventListener('input', function() {
@@ -578,6 +629,10 @@
             return;
           }
 
+          // ユーザー一覧をキャッシュ（アイコン表示用）
+          usersCache = users;
+          console.log('[User Cache] ユーザー一覧キャッシュ完了:', usersCache.length + '件');
+
           // 前回選択したユーザー名を取得
           const savedUserName = localStorage.getItem('reborn_chat_user_name');
 
@@ -643,6 +698,16 @@
 
         console.log('[PWA] ユーザー名保存:', userName);
       });
+    }
+
+    // ユーザーアイコンURLを取得
+    function getUserIconUrl(userName) {
+      if (!userName || !usersCache || usersCache.length === 0) {
+        return null;
+      }
+
+      const user = usersCache.find(u => u.userName === userName);
+      return user && user.userIconUrl ? user.userIconUrl : null;
     }
 
     // Firestoreメッセージをリアルタイムリスニング
@@ -733,6 +798,30 @@
       checkbox.dataset.messageId = msg.id;
       checkbox.onchange = updateSelectionCount;
       header.appendChild(checkbox);
+
+      // ユーザーアイコン（LINE風）
+      const iconUrl = getUserIconUrl(messageUserName);
+      if (iconUrl) {
+        // アイコン画像がある場合
+        const icon = document.createElement('img');
+        icon.className = 'user-icon';
+        icon.src = iconUrl;
+        icon.alt = messageUserName || '匿名';
+        icon.onerror = function() {
+          // 画像読み込みエラー時はプレースホルダーに切り替え
+          const placeholder = document.createElement('div');
+          placeholder.className = 'user-icon-placeholder';
+          placeholder.textContent = (messageUserName || '匿').charAt(0);
+          this.replaceWith(placeholder);
+        };
+        header.appendChild(icon);
+      } else {
+        // アイコン画像がない場合はプレースホルダー
+        const placeholder = document.createElement('div');
+        placeholder.className = 'user-icon-placeholder';
+        placeholder.textContent = (messageUserName || '匿').charAt(0);
+        header.appendChild(placeholder);
+      }
 
       const sender = document.createElement('span');
       sender.className = 'message-sender';

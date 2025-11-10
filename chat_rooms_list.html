@@ -250,6 +250,66 @@
     .modal-button.secondary:hover {
       background: #cbd5e0;
     }
+    .user-list-item {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .user-list-item:hover {
+      border-color: #48bb78;
+      background: #f0fff4;
+    }
+    .user-list-item:active {
+      transform: scale(0.98);
+    }
+    .user-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .user-icon img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #e2e8f0;
+    }
+    .user-icon-placeholder {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 600;
+      flex-shrink: 0;
+      border: 2px solid #e2e8f0;
+    }
+    .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .user-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 4px;
+    }
+    .user-permission {
+      font-size: 12px;
+      color: #718096;
+    }
   </style>
 </head>
 <body>
@@ -260,6 +320,10 @@
 
   <button class="create-room-button" id="createRoomButton" onclick="createRoom()">
     ➕ 新しいルーム作成
+  </button>
+
+  <button class="create-room-button" id="createDirectChatButton" onclick="createDirectChat()" style="background: #48bb78; box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);">
+    👤 個別チャット作成
   </button>
 
   <div class="rooms-container" id="roomsContainer">
@@ -309,10 +373,31 @@
     </div>
   </div>
 
+  <!-- 個別チャット作成モーダル -->
+  <div class="modal-overlay" id="directChatModal">
+    <div class="modal-content">
+      <div class="modal-title">👤 個別チャット作成</div>
+      <div style="margin-bottom: 16px; font-size: 14px; color: #718096;">
+        チャットしたいユーザーを選択してください
+      </div>
+      
+      <!-- ユーザー一覧 -->
+      <div id="userListContainer" style="max-height: 400px; overflow-y: auto; margin-bottom: 16px;">
+        <div class="loading">ユーザー一覧を読み込んでいます...</div>
+      </div>
+
+      <div class="modal-buttons">
+        <button type="button" class="modal-button secondary" onclick="closeDirectChatModal()">
+          キャンセル
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, where } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, where, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase設定
     const firebaseConfig = {
@@ -655,6 +740,209 @@
         alert('ルーム作成に失敗しました: ' + error.message);
       }
     };
+
+    // ========================================
+    // 個別チャット機能
+    // ========================================
+
+    // 個別チャット作成モーダルを開く
+    window.createDirectChat = async function() {
+      console.log('[Direct Chat] 個別チャット作成モーダルを開く');
+      document.getElementById('directChatModal').classList.add('active');
+
+      // ユーザー一覧を読み込む
+      await loadUserList();
+    };
+
+    // 個別チャット作成モーダルを閉じる
+    window.closeDirectChatModal = function() {
+      console.log('[Direct Chat] 個別チャット作成モーダルを閉じる');
+      document.getElementById('directChatModal').classList.remove('active');
+    };
+
+    // ユーザー一覧を読み込む
+    async function loadUserList() {
+      console.log('[Direct Chat] ユーザー一覧を読み込み中...');
+      const container = document.getElementById('userListContainer');
+      container.innerHTML = '<div class="loading">ユーザー一覧を読み込んでいます...</div>';
+
+      try {
+        // GAS APIからユーザー一覧取得
+        const users = await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)
+            .getUserListForUI();
+        });
+
+        console.log('[Direct Chat] ユーザー一覧取得成功:', users.length + '件');
+
+        if (!users || users.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">👥</div>
+              <div class="empty-state-text">ユーザーが見つかりません</div>
+            </div>
+          `;
+          return;
+        }
+
+        // 自分自身を除外
+        const filteredUsers = users.filter(u => u.userName !== currentUserName);
+
+        if (filteredUsers.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">👥</div>
+              <div class="empty-state-text">他のユーザーが見つかりません</div>
+            </div>
+          `;
+          return;
+        }
+
+        // ユーザー一覧を表示
+        container.innerHTML = '';
+        filteredUsers.forEach(user => {
+          const item = document.createElement('div');
+          item.className = 'user-list-item';
+          item.onclick = () => selectUserForDirectChat(user.userName);
+
+          // ユーザーアイコン表示
+          let iconElement;
+          if (user.userIconUrl) {
+            // アイコン画像がある場合
+            iconElement = document.createElement('div');
+            iconElement.className = 'user-icon';
+            
+            const img = document.createElement('img');
+            img.src = user.userIconUrl;
+            img.alt = user.userName;
+            img.onerror = function() {
+              // 画像読み込みエラー時はプレースホルダーに切り替え
+              const placeholder = document.createElement('div');
+              placeholder.className = 'user-icon-placeholder';
+              placeholder.textContent = user.userName.charAt(0);
+              this.parentElement.replaceWith(placeholder);
+            };
+            
+            iconElement.appendChild(img);
+          } else {
+            // アイコン画像がない場合はプレースホルダー
+            iconElement = document.createElement('div');
+            iconElement.className = 'user-icon-placeholder';
+            iconElement.textContent = user.userName.charAt(0);
+          }
+
+          const info = document.createElement('div');
+          info.className = 'user-info';
+
+          const name = document.createElement('div');
+          name.className = 'user-name';
+          name.textContent = user.userName;
+
+          const permission = document.createElement('div');
+          permission.className = 'user-permission';
+          permission.textContent = user.permission || 'スタッフ';
+
+          info.appendChild(name);
+          info.appendChild(permission);
+
+          item.appendChild(iconElement);
+          item.appendChild(info);
+
+          container.appendChild(item);
+        });
+
+      } catch (error) {
+        console.error('[Direct Chat] ユーザー一覧取得エラー:', error);
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⚠️</div>
+            <div class="empty-state-text">ユーザー一覧の読み込みに失敗しました</div>
+            <div style="font-size: 14px; color: #a0aec0;">${error.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    // roomId生成（dm_[user1]_[user2]、アルファベット順）
+    function generateDirectRoomId(user1, user2) {
+      const users = [user1, user2].sort();
+      return `dm_${users[0]}_${users[1]}`;
+    }
+
+    // ユーザー選択時の処理
+    async function selectUserForDirectChat(targetUserName) {
+      console.log('[Direct Chat] ユーザー選択:', targetUserName);
+
+      if (!currentUserName) {
+        alert('ユーザー情報が取得できません');
+        return;
+      }
+
+      try {
+        // roomId生成
+        const roomId = generateDirectRoomId(currentUserName, targetUserName);
+        console.log('[Direct Chat] 生成されたroomId:', roomId);
+
+        // 既存のDMルームをチェック
+        const q = query(
+          collection(db, 'rooms'),
+          where('__name__', '==', roomId)
+        );
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+          // 既存ルームが存在 → 開くだけ
+          console.log('[Direct Chat] 既存のDMルームを開く:', roomId);
+          closeDirectChatModal();
+          setTimeout(() => {
+            openRoom(roomId);
+          }, 300);
+          return;
+        }
+
+        // 新規DMルーム作成
+        console.log('[Direct Chat] 新規DMルーム作成:', roomId);
+        await createDirectChatRoom(roomId, targetUserName);
+
+      } catch (error) {
+        console.error('[Direct Chat] DMルーム作成エラー:', error);
+        alert('個別チャットの作成に失敗しました: ' + error.message);
+      }
+    }
+
+    // Firestore roomsに個別チャットルーム作成
+    async function createDirectChatRoom(roomId, targetUserName) {
+      try {
+        // カスタムドキュメントIDでルーム作成
+        await setDoc(doc(db, 'rooms', roomId), {
+          name: targetUserName,  // 相手の名前を表示
+          type: 'direct',
+          icon: '👤',
+          members: [currentUserName, targetUserName],
+          createdBy: currentUserName,
+          createdAt: serverTimestamp(),
+          lastMessageAt: serverTimestamp(),
+          lastMessage: '',
+          lastMessageBy: ''
+        });
+
+        console.log('[Direct Chat] DMルーム作成成功:', roomId);
+
+        // モーダルを閉じる
+        closeDirectChatModal();
+
+        // 作成したルームを開く
+        setTimeout(() => {
+          openRoom(roomId);
+        }, 500);
+
+      } catch (error) {
+        console.error('[Direct Chat] Firestore書き込みエラー:', error);
+        throw error;
+      }
+    }
   </script>
 </body>
 </html>

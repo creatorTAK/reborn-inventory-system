@@ -702,13 +702,10 @@ function getOperatorNameByTokenAPI(fcmToken) {
 
       if (!userEmail) {
         console.error('Googleアカウントのメールアドレスが取得できません');
-        // フォールバック: PropertiesServiceから取得
-        const userProperties = PropertiesService.getUserProperties();
-        const name = userProperties.getProperty('OPERATOR_NAME');
         return {
-          success: true,
-          name: name || '',
-          source: 'properties'
+          success: false,
+          name: '',
+          source: 'no_email'
         };
       }
 
@@ -718,26 +715,20 @@ function getOperatorNameByTokenAPI(fcmToken) {
 
       if (!sheet) {
         console.error('FCM通知登録シートが見つかりません');
-        // フォールバック: PropertiesServiceから取得
-        const userProperties = PropertiesService.getUserProperties();
-        const name = userProperties.getProperty('OPERATOR_NAME');
         return {
-          success: true,
-          name: name || '',
-          source: 'properties'
+          success: false,
+          name: '',
+          source: 'no_sheet'
         };
       }
 
       const lastRow = sheet.getLastRow();
       if (lastRow < 2) {
         console.log('FCM通知登録シートにデータがありません');
-        // フォールバック: PropertiesServiceから取得
-        const userProperties = PropertiesService.getUserProperties();
-        const name = userProperties.getProperty('OPERATOR_NAME');
         return {
-          success: true,
-          name: name || '',
-          source: 'properties'
+          success: false,
+          name: '',
+          source: 'no_data'
         };
       }
 
@@ -761,13 +752,10 @@ function getOperatorNameByTokenAPI(fcmToken) {
       }
 
       console.log('⚠️ メールアドレスに一致するデータが見つかりませんでした');
-      // フォールバック: PropertiesServiceから取得
-      const userProperties = PropertiesService.getUserProperties();
-      const name = userProperties.getProperty('OPERATOR_NAME');
       return {
-        success: true,
-        name: name || '',
-        source: 'properties_fallback'
+        success: false,
+        name: '',
+        source: 'not_found_by_email'
       };
     }
 
@@ -776,13 +764,10 @@ function getOperatorNameByTokenAPI(fcmToken) {
 
     if (!sheet) {
       console.error('FCM通知登録シートが見つかりません');
-      // フォールバック: PropertiesServiceから取得
-      const userProperties = PropertiesService.getUserProperties();
-      const name = userProperties.getProperty('OPERATOR_NAME');
       return {
-        success: true,
-        name: name || '',
-        source: 'properties'
+        success: false,
+        name: '',
+        source: 'no_sheet'
       };
     }
 
@@ -819,33 +804,19 @@ function getOperatorNameByTokenAPI(fcmToken) {
     }
 
     console.log('⚠️ FCMトークンに一致するデータが見つかりませんでした');
-    // フォールバック: PropertiesServiceから取得
-    const userProperties = PropertiesService.getUserProperties();
-    const name = userProperties.getProperty('OPERATOR_NAME');
     return {
-      success: true,
-      name: name || '',
-      source: 'properties_fallback'
+      success: false,
+      name: '',
+      source: 'not_found_by_token'
     };
 
   } catch (error) {
     console.error('❌ FCMトークンから担当者名取得エラー:', error);
-    // エラー時もフォールバック
-    try {
-      const userProperties = PropertiesService.getUserProperties();
-      const name = userProperties.getProperty('OPERATOR_NAME');
-      return {
-        success: true,
-        name: name || '',
-        source: 'properties_error'
-      };
-    } catch (fallbackError) {
-      return {
-        success: false,
-        name: '',
-        error: error.message
-      };
-    }
+    return {
+      success: false,
+      name: '',
+      error: error.message
+    };
   }
 }
 
