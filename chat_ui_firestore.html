@@ -572,25 +572,25 @@
                 console.log('[User Cache] PWA版 ユーザー一覧キャッシュ完了:', usersCache.length + '件');
                 console.log('[User Cache] キャッシュ内容:', usersCache);
 
-                // メッセージを再描画してアイコンを反映
-                console.log('[User Cache] メッセージ再描画開始');
-                const container = document.getElementById('messagesContainer');
-                if (container && container.children.length > 0) {
-                  // 既存メッセージがある場合は再描画
-                  startListening();
-                }
+                // メッセージを表示
+                console.log('[User Cache] キャッシュ取得完了、メッセージリスニング開始');
+                startListening();
               } else {
                 console.warn('[User Cache] ユーザー一覧が空です');
+                // 空の場合でもメッセージは表示する
+                startListening();
               }
             })
             .catch(error => {
               console.error('[User Cache] PWA版 ユーザー一覧取得エラー:', error);
               console.error('[User Cache] エラー詳細:', error.message, error.stack);
+              // エラーの場合でもメッセージは表示する
+              startListening();
             });
         } else {
-          console.error('[User Cache] GAS_BASE_URL が取得できません');
-          console.log('[User Cache] window.parent:', window.parent);
-          console.log('[User Cache] window.parent.REBORN_CONFIG:', window.parent?.REBORN_CONFIG);
+          console.error('[User Cache] GAS_BASE_URL が空です');
+          // GAS_BASE_URLがない場合でもメッセージは表示する
+          startListening();
         }
       } else if (typeof google !== 'undefined' && google.script && google.script.run) {
         // GAS版：google.script.runで呼び出し
@@ -653,8 +653,13 @@
         console.error('[Firestore] メンバー追加エラー:', error);
       }
 
-      // メッセージのリアルタイムリスニング開始
-      startListening();
+      // メッセージのリアルタイムリスニングは、ユーザーキャッシュ取得後に開始
+      // ユーザーキャッシュが取得できない場合は3秒後に開始
+      if (!isPWA) {
+        // GAS版は即座にstartListening
+        startListening();
+      }
+      // PWA版はfetch完了後またはタイムアウト後にstartListeningを呼び出す
     });
 
     // GAS版：ユーザー選択ドロップダウン表示
@@ -855,28 +860,30 @@
       checkbox.onchange = updateSelectionCount;
       header.appendChild(checkbox);
 
-      // ユーザーアイコン（LINE風）
-      const iconUrl = getUserIconUrl(messageUserName);
-      if (iconUrl) {
-        // アイコン画像がある場合
-        const icon = document.createElement('img');
-        icon.className = 'user-icon';
-        icon.src = iconUrl;
-        icon.alt = messageUserName || '匿名';
-        icon.onerror = function() {
-          // 画像読み込みエラー時はプレースホルダーに切り替え
+      // ユーザーアイコン（LINE風）- 相手のメッセージのみ表示
+      if (!isMine) {
+        const iconUrl = getUserIconUrl(messageUserName);
+        if (iconUrl) {
+          // アイコン画像がある場合
+          const icon = document.createElement('img');
+          icon.className = 'user-icon';
+          icon.src = iconUrl;
+          icon.alt = messageUserName || '匿名';
+          icon.onerror = function() {
+            // 画像読み込みエラー時はプレースホルダーに切り替え
+            const placeholder = document.createElement('div');
+            placeholder.className = 'user-icon-placeholder';
+            placeholder.textContent = (messageUserName || '匿').charAt(0);
+            this.replaceWith(placeholder);
+          };
+          header.appendChild(icon);
+        } else {
+          // アイコン画像がない場合はプレースホルダー
           const placeholder = document.createElement('div');
           placeholder.className = 'user-icon-placeholder';
           placeholder.textContent = (messageUserName || '匿').charAt(0);
-          this.replaceWith(placeholder);
-        };
-        header.appendChild(icon);
-      } else {
-        // アイコン画像がない場合はプレースホルダー
-        const placeholder = document.createElement('div');
-        placeholder.className = 'user-icon-placeholder';
-        placeholder.textContent = (messageUserName || '匿').charAt(0);
-        header.appendChild(placeholder);
+          header.appendChild(placeholder);
+        }
       }
 
       const sender = document.createElement('span');
@@ -886,22 +893,24 @@
       const time = document.createElement('span');
       time.className = 'message-time';
       if (msg.timestamp && msg.timestamp.toDate) {
-        time.textContent = msg.timestamp.toDate().toLocaleString('ja-JP');
+        const date = msg.timestamp.toDate();
+        // 日付と時間のみ表示（月/日 時:分）
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        time.textContent = `${month}/${day} ${hours}:${minutes}`;
       } else {
-        time.textContent = new Date().toLocaleString('ja-JP');
+        const date = new Date();
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        time.textContent = `${month}/${day} ${hours}:${minutes}`;
       }
 
       header.appendChild(sender);
       header.appendChild(time);
-
-      // 自分のメッセージの場合、削除ボタンを追加
-      if (isMine) {
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'delete-button';
-        deleteBtn.textContent = '🗑️';
-        deleteBtn.onclick = () => deleteMessage(msg.id);
-        header.appendChild(deleteBtn);
-      }
 
       const text = document.createElement('div');
       text.className = 'message-text';

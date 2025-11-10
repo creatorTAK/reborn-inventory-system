@@ -493,13 +493,25 @@
                 usersCache = users;
                 console.log('[User Cache] PWA版 ユーザー一覧キャッシュ完了:', usersCache.length + '件');
                 console.log('[User Cache] キャッシュ内容:', usersCache);
+
+                // キャッシュ取得完了後、ルーム一覧を表示
+                console.log('[Rooms List] キャッシュ取得完了、リスニング開始');
+                startListening();
               } else {
                 console.warn('[User Cache] ユーザー一覧が空です');
+                // 空の場合でもルーム一覧は表示する
+                startListening();
               }
             })
             .catch(error => {
               console.error('[User Cache] PWA版 ユーザー一覧取得エラー:', error);
+              // エラーの場合でもルーム一覧は表示する
+              startListening();
             });
+        } else {
+          console.error('[User Cache] GAS_BASE_URL が空です');
+          // GAS_BASE_URLがない場合でもルーム一覧は表示する
+          startListening();
         }
       } else if (typeof google !== 'undefined' && google.script && google.script.run) {
         // GAS版：google.script.runで呼び出し
@@ -512,15 +524,20 @@
             } else {
               console.warn('[User Cache] ユーザー一覧が空です');
             }
+            // GAS版は即座にstartListening
+            startListening();
           })
           .withFailureHandler(function(error) {
             console.error('[User Cache] GAS版 ユーザー一覧取得エラー:', error);
+            // エラーの場合でもstartListening
+            startListening();
           })
           .getUserListForUI();
+      } else {
+        // どちらでもない場合
+        console.warn('[User Cache] ユーザーキャッシュ取得をスキップ');
+        startListening();
       }
-
-      // トークルーム一覧をリアルタイムリスニング
-      startListening();
     });
 
     // トークルーム一覧をリアルタイムリスニング
@@ -602,12 +619,23 @@
 
     // ユーザーアイコンURLを取得
     function getUserIconUrl(userName) {
+      console.log('[Room Icon] getUserIconUrl:', { userName, cacheSize: usersCache?.length || 0 });
+
       if (!userName || !usersCache || usersCache.length === 0) {
+        console.warn('[Room Icon] キャッシュが空またはユーザー名なし');
         return null;
       }
 
       const user = usersCache.find(u => u.userName === userName);
-      return user && user.userIconUrl ? user.userIconUrl : null;
+      console.log('[Room Icon] 検索結果:', user);
+
+      if (user && user.userIconUrl) {
+        console.log('[Room Icon] アイコンURL返却:', user.userIconUrl);
+        return user.userIconUrl;
+      } else {
+        console.warn('[Room Icon] アイコンURLなし:', userName);
+        return null;
+      }
     }
 
     // トークルームをUIに追加
