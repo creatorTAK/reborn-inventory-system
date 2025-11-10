@@ -140,13 +140,47 @@
   3. 新しい通知を表示する余裕を確保
   4. エラーハンドリング追加（クリア失敗でも通知表示は続行）
 
-- [ ] **デプロイ**: PWA v31
+- [x] **デプロイ**: PWA v31
+- [x] **テスト結果**: FAIL（依然として3-4回で停止）
+
+#### Phase 3: event.waitUntil()ベースに全面改修（@796 - 2025-11-10）
+- [x] **ChatGPT分析による根本原因特定**: `event.waitUntil()`の不足
+  - `messaging.onBackgroundMessage()`内の非同期処理がブラウザにSW実行完了を保証していない
+  - ブラウザが数回のpushイベント後にSWを停止してしまう（Safari等で典型的）
+  - 参考: MDN ExtendableEvent.waitUntil(), DEV Community報告事例
+
+- [x] **修正実装（docs/firebase-messaging-sw.js v32）**:
+  1. **低レベルpushイベントハンドラに変更**
+     - `messaging.onBackgroundMessage()` → `self.addEventListener('push', ...)`
+     - 全ての非同期処理を`event.waitUntil(promiseChain)`でラップ
+
+  2. **IndexedDB操作の最小化**
+     - 重い操作を軽量なヘルパー関数に置換
+     - 1回の書き込みで完結（RebornBadgeDB or SystemNotificationDB）
+
+  3. **タイムアウト制御の改善**
+     - ACK送信: 4秒タイムアウト
+     - Firestore更新: 4秒タイムアウト
+     - 並列実行可能な処理は並列化（ACK sendは await不要）
+
+  4. **エラーハンドリング強化**
+     - グローバルエラーハンドラ追加
+     - 処理失敗時も通知表示を試みる
+
+  5. **通知クリーンアップ改善**
+     - 5件以上で全削除（Phase 2の2件から調整）
+
+- [x] **GAS側確認**: 既にdata-onlyペイロード（修正不要）
+  - `notification`ブロックなし
+  - 全て`data`フィールドで送信済み
+
+- [ ] **デプロイ**: PWA v32
 - [ ] **再テスト**: TC-NOTIF-004-001/002実行（10回以上連続で通知が届くか確認）
 
-#### Phase 3予定（Phase 2で改善しない場合）:
-- [ ] IndexedDB操作の最適化（メモリキャッシュ + バッチ同期）
+#### Phase 4予定（Phase 3で改善しない場合）:
 - [ ] Service Worker定期再起動ロジック
-- [ ] 詳細デバッグログ追加
+- [ ] より詳細なデバッグログ追加
+- [ ] ブラウザ別の細かい挙動調査
 
 ### 📝 テスト結果
 - [ ] TC-NOTIF-004-001: PASS / FAIL
