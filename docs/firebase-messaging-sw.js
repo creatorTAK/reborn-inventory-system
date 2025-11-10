@@ -2,7 +2,7 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v30';  // @796 修正: NOTIF-004対応 - キャッシュ制限 + ネットワークタイムアウト
+const CACHE_VERSION = 'v31';  // @796 Phase 2: NOTIF-004対応 - 通知自動クリーンアップ
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
@@ -137,6 +137,25 @@ messaging.onBackgroundMessage(async (payload) => {
     tag: messageId || cacheKey, // messageIdをtagに（一意性確保）
     renotify: true // 再通知を有効化
   };
+
+  // @796 Phase 2: 古い通知をクリアしてブラウザの表示数制限を回避
+  try {
+    const existingNotifications = await self.registration.getNotifications();
+    console.log('[Notification] 既存通知数:', existingNotifications.length);
+
+    // 通知が2件以上ある場合、古いものから順にクリア（最新1件のみ残す）
+    if (existingNotifications.length >= 2) {
+      // 古い通知を全てクリア（新しい通知を表示する余裕を作る）
+      for (const notification of existingNotifications) {
+        notification.close();
+        console.log('[Notification] 古い通知をクリア:', notification.tag);
+      }
+      console.log('[Notification] 全ての古い通知をクリア完了');
+    }
+  } catch (err) {
+    console.warn('[Notification] 既存通知のクリアに失敗:', err);
+    // エラーが出ても通知表示は続行
+  }
 
   console.log('[firebase-messaging-sw.js] 通知を表示します:', notificationTitle);
   await self.registration.showNotification(notificationTitle, notificationOptions);
