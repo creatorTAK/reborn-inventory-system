@@ -2,11 +2,13 @@
 // バックグラウンドでのプッシュ通知を処理
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v29';  // @775 修正: システム通知でFirestore unreadCount更新追加（全3バッジポイント対応）
+const CACHE_VERSION = 'v30';  // @796 修正: NOTIF-004対応 - キャッシュ制限 + ネットワークタイムアウト
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（タイムスタンプ付き）
 const notificationCache = new Map();
+const MAX_CACHE_SIZE = 100;  // @796: キャッシュ最大サイズ（メモリリーク防止）
+const NETWORK_TIMEOUT = 5000;  // @796: ネットワークリクエストタイムアウト（5秒）
 
 // 事前キャッシュするリソース（初回インストール時）
 const PRECACHE_RESOURCES = [
@@ -55,13 +57,23 @@ messaging.onBackgroundMessage(async (payload) => {
   const notificationLink = payload.data?.click_action || payload.data?.link || '/';
   const messageId = payload.data?.messageId || '';
 
-  // キャッシュクリーンアップ: 2秒以上前のエントリを削除
+  // @796: キャッシュクリーンアップ改善（メモリリーク防止）
   const now = Date.now();
+
+  // 1. 2秒以上前のエントリを削除
   for (const [key, timestamp] of notificationCache.entries()) {
     if (now - timestamp > 2000) {
       notificationCache.delete(key);
       console.log('[firebase-messaging-sw.js] 古いキャッシュを削除:', key);
     }
+  }
+
+  // 2. サイズ制限チェック（最大100件）
+  if (notificationCache.size >= MAX_CACHE_SIZE) {
+    // 最も古いエントリを削除（先頭から削除）
+    const oldestKey = notificationCache.keys().next().value;
+    notificationCache.delete(oldestKey);
+    console.log('[firebase-messaging-sw.js] サイズ制限によりキャッシュ削除:', oldestKey, 'サイズ:', notificationCache.size);
   }
 
   // messageIdを使った重複チェック
@@ -135,12 +147,19 @@ messaging.onBackgroundMessage(async (payload) => {
   }
 });
 
-// ACK（受信確認）をGASに送信
+// @796: ACK（受信確認）をGASに送信（タイムアウト対応）
 function sendAck(messageId) {
   const ackUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
   const timestamp = new Date().getTime();
 
   console.log('[ACK] 送信開始:', messageId);
+
+  // タイムアウト制御
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+    console.warn('[ACK] タイムアウト:', messageId);
+  }, NETWORK_TIMEOUT);
 
   fetch(ackUrl, {
     method: 'POST',
@@ -151,14 +170,22 @@ function sendAck(messageId) {
       action: 'receiveAck',
       messageId: messageId,
       timestamp: timestamp
-    })
+    }),
+    signal: controller.signal
   })
   .then(response => response.json())
   .then(data => {
     console.log('[ACK] 送信成功:', data);
   })
   .catch(error => {
-    console.error('[ACK] 送信エラー:', error);
+    if (error.name === 'AbortError') {
+      console.warn('[ACK] タイムアウトによる中断:', messageId);
+    } else {
+      console.error('[ACK] 送信エラー:', error);
+    }
+  })
+  .finally(() => {
+    clearTimeout(timeoutId);
   });
 }
 
@@ -311,28 +338,44 @@ async function updateFirestoreUnreadCount() {
       const requestBody = { roomId, userName, delta: 1 };
       console.log('[DEBUG] Cloudflare Worker リクエスト:', requestBody);
 
-      const res = await fetch('https://reborn-webhook.tak45.workers.dev/api/unread/increment', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      });
+      // @796: タイムアウト制御
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.warn('[sw] Cloudflare Worker タイムアウト');
+      }, NETWORK_TIMEOUT);
 
-      console.log('[DEBUG] Cloudflare Worker レスポンスステータス:', res.status);
+      try {
+        const res = await fetch('https://reborn-webhook.tak45.workers.dev/api/unread/increment', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json'
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('[DEBUG] Cloudflare Worker エラーレスポンス:', errorText);
-        throw new Error(`Worker returned ${res.status}: ${errorText}`);
+        console.log('[DEBUG] Cloudflare Worker レスポンスステータス:', res.status);
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error('[DEBUG] Cloudflare Worker エラーレスポンス:', errorText);
+          throw new Error(`Worker returned ${res.status}: ${errorText}`);
+        }
+
+        const result = await res.json();
+        console.log('[DEBUG] Cloudflare Worker 成功レスポンス:', result);
+        console.log('[sw] server-side unread increment OK:', result);
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      const result = await res.json();
-      console.log('[DEBUG] Cloudflare Worker 成功レスポンス:', result);
-      console.log('[sw] server-side unread increment OK:', result);
     } catch (e) {
-      console.error('[sw] server-side unread increment failed:', e);
-      console.error('[DEBUG] エラー詳細:', e.message, e.stack);
+      if (e.name === 'AbortError') {
+        console.warn('[sw] Cloudflare Worker タイムアウトによる中断');
+      } else {
+        console.error('[sw] server-side unread increment failed:', e);
+        console.error('[DEBUG] エラー詳細:', e.message, e.stack);
+      }
     }
   } catch (err) {
     console.error('[Firestore] エラー:', err);
