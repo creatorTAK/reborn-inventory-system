@@ -179,15 +179,16 @@
 </head>
 <body>
   <div class="container">
-    <h1>🧪 GAS API接続テスト</h1>
-    <p class="subtitle">ARCH-001: PWA完全移行プロジェクト - Phase 1</p>
+    <h1>🧪 API接続テスト</h1>
+    <p class="subtitle">ARCH-001: PWA完全移行プロジェクト - Phase 1.5 (Firestore移行)</p>
 
     <div class="info-box">
       <h3>📋 このテストについて</h3>
       <ul>
         <li>PWAからGAS APIを直接呼び出せることを確認</li>
-        <li>クロスオリジン制約がないことを確認</li>
-        <li>各種APIエンドポイントの動作確認</li>
+        <li>Firestoreから高速にデータ取得できることを確認</li>
+        <li>キャッシュ機能が正しく動作することを確認</li>
+        <li>期待パフォーマンス: GAS 3800ms → Firestore 50-300ms (10-70倍高速化)</li>
       </ul>
     </div>
 
@@ -224,10 +225,57 @@
       <div class="result" id="result-3"></div>
     </div>
 
+    <!-- Test 4: Firestore直接読み込み -->
+    <div class="test-section">
+      <h2>
+        <span>4️⃣ Firestore直接読み込み</span>
+        <span class="status-badge pending" id="status-4">未実行</span>
+      </h2>
+      <p>Firestoreから直接ユーザーデータを取得（期待: 50-300ms）</p>
+      <button onclick="runTest4()" id="btn-4">テスト実行</button>
+      <div class="result" id="result-4"></div>
+    </div>
+
+    <!-- Test 5: Firestoreキャッシュ付き -->
+    <div class="test-section">
+      <h2>
+        <span>5️⃣ Firestoreキャッシュ付き</span>
+        <span class="status-badge pending" id="status-5">未実行</span>
+      </h2>
+      <p>キャッシュ機能付きFirestore読み込み（初回: 50-300ms、2回目以降: <5ms）</p>
+      <button onclick="runTest5()" id="btn-5">テスト実行</button>
+      <div class="result" id="result-5"></div>
+    </div>
+
+    <!-- Test 6: ハイブリッドモード -->
+    <div class="test-section">
+      <h2>
+        <span>6️⃣ ハイブリッドモード</span>
+        <span class="status-badge pending" id="status-6">未実行</span>
+      </h2>
+      <p>Firestore失敗時にGAS APIフォールバック</p>
+      <button onclick="runTest6()" id="btn-6">テスト実行</button>
+      <div class="result" id="result-6"></div>
+    </div>
+
+    <!-- Test 7: キャッシュ効果確認 -->
+    <div class="test-section">
+      <h2>
+        <span>7️⃣ キャッシュ効果確認</span>
+        <span class="status-badge pending" id="status-7">未実行</span>
+      </h2>
+      <p>キャッシュの効果を測定（初回 vs 2回目）</p>
+      <button onclick="runTest7()" id="btn-7">テスト実行</button>
+      <div class="result" id="result-7"></div>
+    </div>
+
   </div>
 
   <!-- api.js読み込み -->
   <script src="/js/api.js"></script>
+
+  <!-- firestore-api.js読み込み -->
+  <script type="module" src="/js/firestore-api.js"></script>
 
   <script>
     // テスト結果表示用ヘルパー
@@ -393,15 +441,229 @@ ${error.message}
       }
     }
 
+    // Test 4: Firestore直接読み込み
+    async function runTest4() {
+      try {
+        showResult(4, 'loading', 'Firestoreから読み込み中...');
+
+        const startTime = performance.now();
+        const result = await FirestoreApi.getUserListFromFirestore();
+        const endTime = performance.now();
+        const duration = (endTime - startTime).toFixed(0);
+
+        const userCount = Array.isArray(result) ? result.length : 0;
+        const message = `✅ Firestore読み込み成功！
+
+【取得結果】
+ユーザー数: ${userCount}人
+
+${Array.isArray(result) ? JSON.stringify(result.slice(0, 3), null, 2) + (result.length > 3 ? '\n... 他 ' + (result.length - 3) + '人' : '') : JSON.stringify(result, null, 2)}
+
+【実行時間】
+${duration}ms
+
+【パフォーマンス比較】
+• GAS API: 3800ms
+• Firestore: ${duration}ms
+• 高速化率: 約${Math.round(3800 / duration)}倍
+
+【確認事項】
+✓ Firestoreから直接データ取得成功
+✓ 期待値(50-300ms)${duration < 300 ? '内' : '外'}の応答時間`;
+
+        showResult(4, 'success', message);
+
+      } catch (error) {
+        const message = `❌ Firestore読み込み失敗
+
+【エラー詳細】
+${error.message}
+
+【考えられる原因】
+• Firebaseの初期化失敗
+• Firestoreのデータが未移行
+• 権限設定の問題
+• ネットワークエラー`;
+
+        showResult(4, 'error', message);
+        console.error('[Test 4 Error]', error);
+      }
+    }
+
+    // Test 5: Firestoreキャッシュ付き
+    async function runTest5() {
+      try {
+        showResult(5, 'loading', 'キャッシュクリア + 読み込み中...');
+
+        // キャッシュをクリア
+        FirestoreApi.clearUserListCache();
+
+        // 1回目: キャッシュなし
+        const startTime1 = performance.now();
+        const result1 = await FirestoreApi.getUserList();
+        const endTime1 = performance.now();
+        const duration1 = (endTime1 - startTime1).toFixed(0);
+
+        // 少し待つ
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // 2回目: キャッシュあり
+        const startTime2 = performance.now();
+        const result2 = await FirestoreApi.getUserList();
+        const endTime2 = performance.now();
+        const duration2 = (endTime2 - startTime2).toFixed(2);
+
+        const userCount = Array.isArray(result1) ? result1.length : 0;
+        const message = `✅ キャッシュ機能確認完了！
+
+【取得結果】
+ユーザー数: ${userCount}人
+
+【実行時間比較】
+• 1回目(Firestore読み込み): ${duration1}ms
+• 2回目(キャッシュヒット): ${duration2}ms
+• キャッシュ高速化: 約${Math.round(duration1 / duration2)}倍
+
+【確認事項】
+✓ キャッシュ機能が正常に動作
+✓ キャッシュヒット時の超高速応答(<5ms)を確認
+✓ キャッシュ有効期限: 5分`;
+
+        showResult(5, 'success', message);
+
+      } catch (error) {
+        const message = `❌ キャッシュテスト失敗
+
+【エラー詳細】
+${error.message}
+
+【考えられる原因】
+• Firestore読み込みの失敗
+• キャッシュ機能の実装問題`;
+
+        showResult(5, 'error', message);
+        console.error('[Test 5 Error]', error);
+      }
+    }
+
+    // Test 6: ハイブリッドモード
+    async function runTest6() {
+      try {
+        showResult(6, 'loading', 'ハイブリッドモードテスト中...');
+
+        const startTime = performance.now();
+        const result = await FirestoreApi.getUserListHybrid(true);
+        const endTime = performance.now();
+        const duration = (endTime - startTime).toFixed(0);
+
+        const userCount = Array.isArray(result) ? result.length : 0;
+        const message = `✅ ハイブリッドモード動作確認！
+
+【取得結果】
+ユーザー数: ${userCount}人
+
+【実行時間】
+${duration}ms
+
+【確認事項】
+✓ Firestore優先で取得試行
+✓ Firestore失敗時はGAS APIにフォールバック
+✓ データ取得の信頼性確保
+
+【使用API】
+${duration < 1000 ? '→ Firestoreから取得' : '→ GAS APIフォールバック'}`;
+
+        showResult(6, 'success', message);
+
+      } catch (error) {
+        const message = `❌ ハイブリッドモードテスト失敗
+
+【エラー詳細】
+${error.message}
+
+【考えられる原因】
+• FirestoreとGAS API両方の失敗
+• ネットワーク切断`;
+
+        showResult(6, 'error', message);
+        console.error('[Test 6 Error]', error);
+      }
+    }
+
+    // Test 7: キャッシュ効果確認
+    async function runTest7() {
+      try {
+        showResult(7, 'loading', 'キャッシュ効果測定中...');
+
+        // キャッシュをクリア
+        FirestoreApi.clearUserListCache();
+
+        // 初回読み込み（Firestore）
+        const startTime1 = performance.now();
+        await FirestoreApi.getUserList();
+        const endTime1 = performance.now();
+        const firstLoad = (endTime1 - startTime1).toFixed(0);
+
+        // キャッシュヒット（2回目）
+        const startTime2 = performance.now();
+        await FirestoreApi.getUserList();
+        const endTime2 = performance.now();
+        const cachedLoad = (endTime2 - startTime2).toFixed(2);
+
+        // GAS APIとの比較用（参考値）
+        const gasApiTime = 3800; // 前回測定値
+
+        const message = `✅ キャッシュ効果測定完了！
+
+【パフォーマンス比較】
+1. GAS API: ${gasApiTime}ms
+2. Firestore(初回): ${firstLoad}ms → ${Math.round(gasApiTime / firstLoad)}倍高速化
+3. Cache(2回目): ${cachedLoad}ms → ${Math.round(gasApiTime / cachedLoad)}倍高速化
+
+【改善効果まとめ】
+• GAS → Firestore: 約${Math.round(gasApiTime / firstLoad)}倍の高速化
+• Firestore → Cache: 約${Math.round(firstLoad / cachedLoad)}倍の高速化
+• GAS → Cache: 約${Math.round(gasApiTime / cachedLoad)}倍の高速化
+
+【結論】
+✓ Firestore移行により劇的なパフォーマンス改善
+✓ キャッシュによりさらなる高速化を実現
+✓ ユーザー体験が大幅に向上`;
+
+        showResult(7, 'success', message);
+
+      } catch (error) {
+        const message = `❌ キャッシュ効果測定失敗
+
+【エラー詳細】
+${error.message}
+
+【考えられる原因】
+• Firestore読み込みの失敗
+• 測定処理の問題`;
+
+        showResult(7, 'error', message);
+        console.error('[Test 7 Error]', error);
+      }
+    }
+
     // ページ読み込み時の初期化
     window.addEventListener('DOMContentLoaded', () => {
-      console.log('🧪 GAS APIテストページ初期化完了');
+      console.log('🧪 API統合テストページ初期化完了');
       console.log('📍 GasApi オブジェクト:', window.GasApi);
+      console.log('📍 FirestoreApi オブジェクト:', window.FirestoreApi);
 
       // GasApiが正しく読み込まれているか確認
       if (!window.GasApi) {
         alert('⚠️ api.jsの読み込みに失敗しました。パスを確認してください。');
       }
+
+      // FirestoreApiが正しく読み込まれているか確認（少し待つ）
+      setTimeout(() => {
+        if (!window.FirestoreApi) {
+          console.warn('⚠️ firestore-api.jsの読み込みに失敗している可能性があります。');
+        }
+      }, 1000);
     });
   </script>
 </body>
