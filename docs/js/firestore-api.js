@@ -33,6 +33,8 @@ let firestoreDb = null;
 // キャッシュ管理
 let userListCache = null;
 let cacheTimestamp = 0;
+let productListCache = null;
+let productCacheTimestamp = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5分間
 
 // ============================================
@@ -218,6 +220,224 @@ async function getUserByName(userName) {
 }
 
 // ============================================
+// 商品関連API（ARCH-001 Phase 3）
+// ============================================
+
+/**
+ * 商品一覧をFirestoreから取得
+ *
+ * @param {Object} filters - 検索フィルタ（オプション）
+ * @param {string} filters.status - ステータス
+ * @param {string} filters.brand - ブランド
+ * @param {string} filters.category - カテゴリ
+ * @param {string} filters.person - 担当者
+ * @returns {Promise<Array>} 商品一覧
+ * @throws {Error} Firestore読み取りエラー
+ *
+ * @example
+ * const products = await getProductListFromFirestore();
+ * const inStock = await getProductListFromFirestore({ status: '在庫中' });
+ */
+async function getProductListFromFirestore(filters = {}) {
+  try {
+    const startTime = performance.now();
+
+    // Firestore初期化
+    const db = await initializeFirestore();
+
+    // Firebase SDKを動的インポート
+    const { collection, getDocs, query, where } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    // クエリ構築
+    const productsRef = collection(db, 'products');
+    let q = productsRef;
+
+    // フィルタ適用
+    const constraints = [];
+    if (filters.status) {
+      constraints.push(where('status', '==', filters.status));
+    }
+    if (filters.brand) {
+      constraints.push(where('brand', '==', filters.brand));
+    }
+    if (filters.category) {
+      constraints.push(where('category', '==', filters.category));
+    }
+    if (filters.person) {
+      constraints.push(where('person', '==', filters.person));
+    }
+
+    if (constraints.length > 0) {
+      q = query(productsRef, ...constraints);
+    }
+
+    // データ取得
+    const snapshot = await getDocs(q);
+
+    const products = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      products.push({
+        id: doc.id,
+        managementNumber: data.managementNumber || '',
+        status: data.status || '',
+        brand: data.brand || '',
+        category: data.category || '',
+        itemName: data.itemName || '',
+        person: data.person || '',
+        size: data.size || '',
+        color: data.color || '',
+        productName: data.productName || '',
+        purchaseDate: data.purchaseDate || '',
+        purchaseAmount: data.purchaseAmount || 0,
+        listingDate: data.listingDate || '',
+        listingAmount: data.listingAmount || 0,
+        saleDate: data.saleDate || '',
+        saleAmount: data.saleAmount || 0,
+        profit: data.profit || 0,
+        profitRate: data.profitRate || '',
+        inventoryDays: data.inventoryDays || 0,
+        registrant: data.registrant || '',
+        registeredAt: data.registeredAt || '',
+        lastEditor: data.lastEditor || '',
+        updatedAt: data.updatedAt || '',
+        imageUrl1: data.imageUrl1 || '',
+        searchText: data.searchText || ''
+      });
+    });
+
+    const endTime = performance.now();
+    console.log(`[Firestore API] getProductList: ${products.length}件取得 (${(endTime - startTime).toFixed(2)}ms)`);
+
+    return products;
+
+  } catch (error) {
+    console.error('[Firestore API] getProductList エラー:', error);
+    return [];
+  }
+}
+
+/**
+ * キャッシング付き商品一覧取得
+ *
+ * @param {Object} filters - 検索フィルタ
+ * @param {boolean} forceRefresh - キャッシュ強制更新
+ * @returns {Promise<Array>} 商品一覧
+ */
+async function getProductList(filters = {}, forceRefresh = false) {
+  const now = Date.now();
+
+  // フィルタなし かつ キャッシュ有効 かつ 強制更新なし → キャッシュ返却
+  const hasFilters = Object.keys(filters).length > 0;
+  if (!hasFilters && !forceRefresh && productListCache && (now - productCacheTimestamp) < CACHE_DURATION) {
+    console.log('[Firestore API] getProductList: キャッシュから返却');
+    return productListCache;
+  }
+
+  // Firestoreから取得
+  console.log('[Firestore API] getProductList: Firestoreから取得');
+  const products = await getProductListFromFirestore(filters);
+
+  // フィルタなしの場合のみキャッシュ
+  if (!hasFilters) {
+    productListCache = products;
+    productCacheTimestamp = now;
+  }
+
+  return products;
+}
+
+/**
+ * 特定の商品情報を管理番号で取得
+ *
+ * @param {string} managementNumber - 管理番号
+ * @returns {Promise<Object|null>} 商品情報（見つからない場合はnull）
+ *
+ * @example
+ * const product = await getProductByManagementNumber('A-001');
+ */
+async function getProductByManagementNumber(managementNumber) {
+  try {
+    const db = await initializeFirestore();
+    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    // ドキュメントIDは管理番号（特殊文字置換済み）
+    const docId = managementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
+    const productRef = doc(db, 'products', docId);
+    const docSnap = await getDoc(productRef);
+
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        managementNumber: data.managementNumber || '',
+        status: data.status || '',
+        brand: data.brand || '',
+        category: data.category || '',
+        itemName: data.itemName || '',
+        person: data.person || '',
+        size: data.size || '',
+        color: data.color || '',
+        productName: data.productName || '',
+        purchaseDate: data.purchaseDate || '',
+        purchaseAmount: data.purchaseAmount || 0,
+        listingDate: data.listingDate || '',
+        listingAmount: data.listingAmount || 0,
+        saleDate: data.saleDate || '',
+        saleAmount: data.saleAmount || 0,
+        profit: data.profit || 0,
+        profitRate: data.profitRate || '',
+        inventoryDays: data.inventoryDays || 0,
+        imageUrl1: data.imageUrl1 || ''
+      };
+    }
+
+    return null;
+
+  } catch (error) {
+    console.error('[Firestore API] getProductByManagementNumber エラー:', error);
+    return null;
+  }
+}
+
+/**
+ * 商品キャッシュをクリア
+ */
+function clearProductListCache() {
+  productListCache = null;
+  productCacheTimestamp = 0;
+  console.log('[Firestore API] 商品キャッシュクリア完了');
+}
+
+/**
+ * ハイブリッド商品取得（Firestore優先、失敗時GAS API）
+ *
+ * @param {Object} filters - 検索フィルタ
+ * @param {boolean} forceRefresh - キャッシュ強制更新
+ * @returns {Promise<Array>} 商品一覧
+ */
+async function getProductListHybrid(filters = {}, forceRefresh = false) {
+  try {
+    // Firestore取得を試行
+    const products = await getProductList(filters, forceRefresh);
+
+    // データが取得できた場合はそのまま返す
+    if (products && products.length > 0) {
+      return products;
+    }
+
+    // データが空の場合、GAS APIにフォールバック
+    console.log('[Firestore API] Firestoreが空 → GAS APIフォールバック');
+    // TODO: GAS側のgetProductList APIを実装後、ここでフォールバック
+    return [];
+
+  } catch (error) {
+    console.error('[Firestore API] 商品ハイブリッド取得エラー:', error);
+    return [];
+  }
+}
+
+// ============================================
 // GAS APIフォールバック
 // ============================================
 
@@ -277,6 +497,103 @@ async function getUserListHybrid(forceRefresh = false) {
 // エクスポート
 // ============================================
 
+// ============================================
+// マスタデータ取得 (ARCH-001 Phase 3.1)
+// ============================================
+
+/**
+ * カテゴリマスタを取得
+ * @returns {Promise<Object>} { ok: boolean, rows: Array }
+ */
+async function getCategoryMaster() {
+  try {
+    const db = await initializeFirestore();
+    const docRef = doc(db, 'categories', 'master');
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      console.warn('カテゴリマスタが見つかりません');
+      return { ok: true, rows: [] };
+    }
+
+    const data = docSnap.data();
+    return {
+      ok: true,
+      rows: data.rows || [],
+      updatedAt: data.updatedAt
+    };
+  } catch (error) {
+    console.error('カテゴリマスタ取得エラー:', error);
+    return { ok: false, msg: error.message, rows: [] };
+  }
+}
+
+/**
+ * マスタオプションを取得
+ * @returns {Promise<Object>} 各フィールドの選択肢オブジェクト
+ */
+async function getMasterOptions() {
+  try {
+    const db = await initializeFirestore();
+    const docRef = doc(db, 'masterOptions', 'data');
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      console.warn('マスタオプションが見つかりません');
+      return {};
+    }
+
+    const data = docSnap.data();
+    return data.options || {};
+  } catch (error) {
+    console.error('マスタオプション取得エラー:', error);
+    return {};
+  }
+}
+
+/**
+ * 担当者名を取得（FCMトークンまたはメールアドレスから）
+ * @param {string} identifier - FCMトークンまたはメールアドレス
+ * @returns {Promise<Object>} { success: boolean, name: string, source: string }
+ */
+async function getOperatorName(identifier) {
+  if (!identifier) {
+    return { success: false, name: '', source: 'no_identifier' };
+  }
+
+  try {
+    // usersコレクションから検索
+    const users = await getUserList();
+
+    // FCMトークンで検索
+    let user = users.find(u => u.fcmToken === identifier);
+    if (user && user.name) {
+      return {
+        success: true,
+        name: user.name,
+        iconUrl: user.iconUrl || '',
+        source: 'fcm_token'
+      };
+    }
+
+    // メールアドレスで検索
+    user = users.find(u => u.email === identifier);
+    if (user && user.name) {
+      return {
+        success: true,
+        name: user.name,
+        iconUrl: user.iconUrl || '',
+        source: 'email'
+      };
+    }
+
+    return { success: false, name: '', source: 'not_found' };
+  } catch (error) {
+    console.error('担当者名取得エラー:', error);
+    return { success: false, name: '', source: 'error' };
+  }
+}
+
 // CommonJS環境（Node.js等）向けエクスポート
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -286,7 +603,15 @@ if (typeof module !== 'undefined' && module.exports) {
     getUserByName,
     clearUserListCache,
     getUserListFromGAS,
-    getUserListHybrid
+    getUserListHybrid,
+    getProductList,
+    getProductListFromFirestore,
+    getProductByManagementNumber,
+    clearProductListCache,
+    getProductListHybrid,
+    getCategoryMaster,
+    getMasterOptions,
+    getOperatorName
   };
 }
 
@@ -299,6 +624,14 @@ if (typeof window !== 'undefined') {
     getUserByName,
     clearUserListCache,
     getUserListFromGAS,
-    getUserListHybrid
+    getUserListHybrid,
+    getProductList,
+    getProductListFromFirestore,
+    getProductByManagementNumber,
+    clearProductListCache,
+    getProductListHybrid,
+    getCategoryMaster,
+    getMasterOptions,
+    getOperatorName
   };
 }
