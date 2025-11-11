@@ -38,6 +38,14 @@
       margin-top: 4px;
       padding-left: 40px; /* 戻るボタンのスペースを確保 */
     }
+    .version-badge {
+      font-size: 0.7rem;
+      opacity: 0.6;
+      margin-left: 8px;
+      padding: 2px 6px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 4px;
+    }
     /* 戻るボタン（LINE風） */
     .back-btn {
       position: absolute;
@@ -390,7 +398,7 @@
 <body>
   <div class="chat-header">
     <button class="back-btn" onclick="goBackToList()" title="チャット一覧に戻る">‹</button>
-    <h1>💬 チーム チャット
+    <h1>💬 チーム チャット<span class="version-badge">v810</span>
       <button class="toggle-selection-btn" onclick="toggleSelectionMode()">🗑️ 選択削除</button>
     </h1>
     <div class="channel-info">
@@ -1091,18 +1099,29 @@
       console.log('========================================');
 
       if (isPWA) {
-        // PWA版: 親ウィンドウにメッセージを送信
+        // PWA版: 親ウィンドウの関数を直接呼び出し（postMessageより確実）
         try {
-          console.log('[Navigation] 📨 PWA版: 親ウィンドウにpostMessage送信');
-          const message = {
-            type: 'showChatRoomsList'
-          };
-          console.log('[Navigation] メッセージ内容:', message);
-          window.parent.postMessage(message, '*');
-          console.log('[Navigation] ✅ postMessage送信完了');
+          console.log('[Navigation] 📨 PWA版: 親ウィンドウのopenChatRooms()を直接呼び出し');
+
+          // 方法1: 親ウィンドウの関数を直接呼び出し
+          if (typeof window.parent.openChatRooms === 'function') {
+            console.log('[Navigation] ✅ 親ウィンドウ関数が利用可能 - 直接呼び出し');
+            window.parent.openChatRooms();
+            console.log('[Navigation] ✅ openChatRooms() 呼び出し完了');
+          } else {
+            // 方法2: フォールバック - postMessage（targetOrigin指定）
+            console.log('[Navigation] ⚠️ 親ウィンドウ関数が利用不可 - postMessage使用');
+            const message = {
+              type: 'showChatRoomsList'
+            };
+            const targetOrigin = window.location.origin; // '*'より安全
+            console.log('[Navigation] postMessage送信:', message, 'to:', targetOrigin);
+            window.parent.postMessage(message, targetOrigin);
+            console.log('[Navigation] ✅ postMessage送信完了');
+          }
         } catch (error) {
-          console.error('[Navigation] ❌ postMessage エラー:', error);
-          // フォールバック: history.back()
+          console.error('[Navigation] ❌ エラー:', error);
+          // 最終フォールバック: history.back()
           console.log('[Navigation] フォールバック: history.back()');
           window.history.back();
         }
