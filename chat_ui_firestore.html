@@ -398,7 +398,7 @@
 <body>
   <div class="chat-header">
     <button class="back-btn" onclick="goBackToList()" title="チャット一覧に戻る">‹</button>
-    <h1>💬 チーム チャット<span class="version-badge">v812</span>
+    <h1>💬 チーム チャット<span class="version-badge">v813</span>
       <button class="toggle-selection-btn" onclick="toggleSelectionMode()">🗑️ 選択削除</button>
     </h1>
     <div class="channel-info">
@@ -1099,45 +1099,45 @@
       console.log('========================================');
 
       if (isPWA) {
-        // PWA版: postMessage方式（ChatGPT推奨 - Same-Origin Policy対応）
+        // PWA版: window.top.locationによるナビゲーション
+        // 理由: Google Apps Script内部スクリプトがpostMessageをブロック
+        // (3016996794-mae_html_user_bin_i18n_mae_html_user__ja.js)
         try {
           console.log('[iframe] ========== goBackToList開始 ==========');
-          console.log('[iframe] window.parent:', window.parent);
-          console.log('[iframe] window.location.origin:', window.location.origin);
+          console.log('[iframe] 戻る方式: window.top.locationナビゲーション');
 
-          // parentOrigin取得（URLパラメータから取得、なければ推測）
+          // parentOrigin取得（URLパラメータから取得、なければ現在のホスト名から推測）
           const urlParams = new URLSearchParams(window.location.search);
-          const parentOrigin = urlParams.get('parentOrigin') || 'https://reborn-inventory-system.pages.dev';
-          console.log('[iframe] parentOrigin:', parentOrigin);
+          let parentOrigin = urlParams.get('parentOrigin');
 
-          const message = {
-            type: 'showChatRoomsList',
-            timestamp: Date.now()
-          };
+          // parentOriginがない場合、現在のホスト名から推測
+          if (!parentOrigin) {
+            const hostname = window.location.hostname;
+            if (hostname.includes('reborn-inventory.com')) {
+              parentOrigin = 'https://www.reborn-inventory.com';
+            } else if (hostname.includes('pages.dev')) {
+              parentOrigin = 'https://reborn-inventory-system.pages.dev';
+            } else {
+              parentOrigin = window.location.origin; // フォールバック
+            }
+          }
 
-          // デバッグ用: まず '*' で送信（ChatGPT推奨）
-          console.log('[iframe] postMessage送信開始（targetOrigin: "*" - デバッグ用）');
-          console.log('[iframe] message:', message);
-          window.parent.postMessage(message, '*');
-          console.log('[iframe] ✅ postMessage送信完了');
+          // チャット一覧URLを構築
+          const chatRoomsUrl = `${parentOrigin}/?menu=chat_rooms`;
+          console.log('[iframe] 遷移先URL:', chatRoomsUrl);
 
-          // 本番用（コメントアウト）: 明示的なtargetOrigin
-          // window.parent.postMessage(message, parentOrigin);
+          // 親ウィンドウを直接ナビゲート
+          console.log('[iframe] window.top.location設定中...');
+          window.top.location.href = chatRoomsUrl;
+          console.log('[iframe] ✅ ナビゲーション完了');
 
         } catch (error) {
-          console.error('[iframe] ❌ postMessageエラー:', error);
+          console.error('[iframe] ❌ top.locationエラー:', error);
           console.error('[iframe] error.stack:', error.stack);
 
-          // 最終フォールバック: top.locationで親を再ナビゲート
-          try {
-            const fallbackUrl = 'https://reborn-inventory-system.pages.dev/?menu=chat_rooms';
-            console.warn('[iframe] 最終フォールバック: top.location =', fallbackUrl);
-            window.top.location = fallbackUrl;
-          } catch (err2) {
-            console.error('[iframe] top.locationフォールバックも失敗:', err2);
-            // 最後の手段: history.back()
-            window.history.back();
-          }
+          // 最終フォールバック: history.back()
+          console.warn('[iframe] 最終フォールバック: history.back()');
+          window.history.back();
         }
 
         console.log('[iframe] ========== goBackToList完了 ==========');
