@@ -144,6 +144,20 @@ async function testGasApi() {
 async function getUserList() {
   const startTime = performance.now();
 
+  // デバッグ表示を作成（画面右上）
+  function showDebugInfo(source, duration) {
+    let debugDiv = document.getElementById('api-debug-info');
+    if (!debugDiv) {
+      debugDiv = document.createElement('div');
+      debugDiv.id = 'api-debug-info';
+      debugDiv.style.cssText = 'position:fixed;top:10px;right:10px;background:rgba(0,0,0,0.8);color:white;padding:10px;border-radius:5px;z-index:99999;font-size:14px;font-family:monospace;';
+      document.body.appendChild(debugDiv);
+    }
+    const color = source === 'Firestore' ? '#00ff00' : '#ff9900';
+    debugDiv.innerHTML = `<div style="color:${color}">📊 ${source}: ${duration}ms</div>`;
+    setTimeout(() => debugDiv.remove(), 5000);
+  }
+
   try {
     // Firestore API優先で取得
     if (typeof window.FirestoreApi !== 'undefined' && window.FirestoreApi.getUserListHybrid) {
@@ -152,13 +166,16 @@ async function getUserList() {
       const endTime = performance.now();
       const duration = (endTime - startTime).toFixed(0);
       console.log(`[API] ✅ Firestore取得完了: ${duration}ms`);
+      showDebugInfo('Firestore', duration);
       return users;
     }
 
     // FirestoreApiが未ロードの場合
     console.warn('[API] ⚠️ FirestoreApi未ロード、GAS APIにフォールバック');
+    showDebugInfo('FirestoreApi未ロード', 0);
   } catch (error) {
     console.error('[API] ❌ Firestore取得エラー、GAS APIにフォールバック:', error);
+    showDebugInfo('Firestoreエラー', 0);
   }
 
   // フォールバック: 従来のGAS API
@@ -167,6 +184,7 @@ async function getUserList() {
   const endTime = performance.now();
   const duration = (endTime - startTime).toFixed(0);
   console.log(`[API] ✅ GAS取得完了: ${duration}ms`);
+  showDebugInfo('GAS API', duration);
   return users;
 }
 
