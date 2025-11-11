@@ -813,6 +813,77 @@
     </iframe>
   </div>
 
+  <!-- ========================================
+       最優先: iframe→親 postMessage受信ハンドラ
+       ========================================
+       DOMContentLoadedより前に登録（ChatGPT推奨）
+  -->
+  <script>
+  (function() {
+    console.log('[parent EARLY] postMessage listener 登録開始');
+
+    window.addEventListener('message', function(e) {
+      // ========== デバッグ用詳細ログ（必ず出力） ==========
+      console.log('[parent] ========== message RECEIVED ==========');
+      console.log('[parent] origin:', e.origin);
+      console.log('[parent] data:', e.data);
+      console.log('[parent] source:', e.source);
+      console.log('[parent] source === window:', e.source === window);
+
+      // iframe参照（遅延評価）
+      const iframe = document.getElementById('gas-iframe');
+      const iframeWindow = iframe ? iframe.contentWindow : null;
+      console.log('[parent] iframe.contentWindow:', iframeWindow);
+      console.log('[parent] source === iframe.contentWindow:', e.source === iframeWindow);
+
+      // ========== origin検証（デバッグ中は緩和） ==========
+      const allowedOrigins = [
+        'https://script.google.com',
+        'https://script.googleusercontent.com'
+      ];
+
+      const isAllowedOrigin = allowedOrigins.some(origin => e.origin.startsWith(origin));
+      console.log('[parent] isAllowedOrigin:', isAllowedOrigin);
+
+      // デバッグ中: originチェックを警告のみに（本番では return で遮断）
+      if (!isAllowedOrigin) {
+        console.warn('[parent] ⚠️ message from unexpected origin (allowed for debug):', e.origin);
+        // return; // デバッグ中はコメントアウト
+      }
+
+      // ========== メッセージ処理 ==========
+      const payload = e.data || {};
+      console.log('[parent] payload.type:', payload.type);
+
+      if (payload.type === 'showChatRoomsList') {
+        console.log('[parent] ✅ showChatRoomsList 要求を受信');
+        console.log('[parent] openChatRooms() 呼び出し開始');
+
+        // openChatRooms関数が定義されるまで待つ（DOMContentLoaded後に定義される）
+        if (typeof openChatRooms === 'function') {
+          openChatRooms();
+          console.log('[parent] ✅ openChatRooms() 呼び出し完了');
+        } else {
+          console.warn('[parent] ⚠️ openChatRooms() がまだ定義されていません。遅延実行します。');
+          // 100ms後に再試行
+          setTimeout(function() {
+            if (typeof openChatRooms === 'function') {
+              openChatRooms();
+              console.log('[parent] ✅ openChatRooms() 遅延呼び出し完了');
+            } else {
+              console.error('[parent] ❌ openChatRooms() が見つかりません');
+            }
+          }, 100);
+        }
+      }
+
+      console.log('[parent] ========== message処理完了 ==========');
+    }, false);
+
+    console.log('[parent EARLY] postMessage listener 登録完了');
+  })();
+  </script>
+
   <!-- Firebase SDKs (Modular format) -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';

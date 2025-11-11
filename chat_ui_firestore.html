@@ -398,7 +398,7 @@
 <body>
   <div class="chat-header">
     <button class="back-btn" onclick="goBackToList()" title="チャット一覧に戻る">‹</button>
-    <h1>💬 チーム チャット<span class="version-badge">v810</span>
+    <h1>💬 チーム チャット<span class="version-badge">v812</span>
       <button class="toggle-selection-btn" onclick="toggleSelectionMode()">🗑️ 選択削除</button>
     </h1>
     <div class="channel-info">
@@ -1099,32 +1099,48 @@
       console.log('========================================');
 
       if (isPWA) {
-        // PWA版: 親ウィンドウの関数を直接呼び出し（postMessageより確実）
+        // PWA版: postMessage方式（ChatGPT推奨 - Same-Origin Policy対応）
         try {
-          console.log('[Navigation] 📨 PWA版: 親ウィンドウのopenChatRooms()を直接呼び出し');
+          console.log('[iframe] ========== goBackToList開始 ==========');
+          console.log('[iframe] window.parent:', window.parent);
+          console.log('[iframe] window.location.origin:', window.location.origin);
 
-          // 方法1: 親ウィンドウの関数を直接呼び出し
-          if (typeof window.parent.openChatRooms === 'function') {
-            console.log('[Navigation] ✅ 親ウィンドウ関数が利用可能 - 直接呼び出し');
-            window.parent.openChatRooms();
-            console.log('[Navigation] ✅ openChatRooms() 呼び出し完了');
-          } else {
-            // 方法2: フォールバック - postMessage（targetOrigin指定）
-            console.log('[Navigation] ⚠️ 親ウィンドウ関数が利用不可 - postMessage使用');
-            const message = {
-              type: 'showChatRoomsList'
-            };
-            const targetOrigin = window.location.origin; // '*'より安全
-            console.log('[Navigation] postMessage送信:', message, 'to:', targetOrigin);
-            window.parent.postMessage(message, targetOrigin);
-            console.log('[Navigation] ✅ postMessage送信完了');
-          }
+          // parentOrigin取得（URLパラメータから取得、なければ推測）
+          const urlParams = new URLSearchParams(window.location.search);
+          const parentOrigin = urlParams.get('parentOrigin') || 'https://reborn-inventory-system.pages.dev';
+          console.log('[iframe] parentOrigin:', parentOrigin);
+
+          const message = {
+            type: 'showChatRoomsList',
+            timestamp: Date.now()
+          };
+
+          // デバッグ用: まず '*' で送信（ChatGPT推奨）
+          console.log('[iframe] postMessage送信開始（targetOrigin: "*" - デバッグ用）');
+          console.log('[iframe] message:', message);
+          window.parent.postMessage(message, '*');
+          console.log('[iframe] ✅ postMessage送信完了');
+
+          // 本番用（コメントアウト）: 明示的なtargetOrigin
+          // window.parent.postMessage(message, parentOrigin);
+
         } catch (error) {
-          console.error('[Navigation] ❌ エラー:', error);
-          // 最終フォールバック: history.back()
-          console.log('[Navigation] フォールバック: history.back()');
-          window.history.back();
+          console.error('[iframe] ❌ postMessageエラー:', error);
+          console.error('[iframe] error.stack:', error.stack);
+
+          // 最終フォールバック: top.locationで親を再ナビゲート
+          try {
+            const fallbackUrl = 'https://reborn-inventory-system.pages.dev/?menu=chat_rooms';
+            console.warn('[iframe] 最終フォールバック: top.location =', fallbackUrl);
+            window.top.location = fallbackUrl;
+          } catch (err2) {
+            console.error('[iframe] top.locationフォールバックも失敗:', err2);
+            // 最後の手段: history.back()
+            window.history.back();
+          }
         }
+
+        console.log('[iframe] ========== goBackToList完了 ==========');
       } else {
         // GAS版: メニュー画面に戻る
         console.log('[Navigation] GAS版: google.script.run 呼び出し');
