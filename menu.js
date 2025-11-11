@@ -43,7 +43,8 @@ function testGetUserList() {
  * @return {Array} ユーザー情報の配列
  */
 function getUserListForUI() {
-  // 🚀 最適化版 - ARCH-001対応（2025-11-11）
+  // 🚀 最適化版v2 - ARCH-001対応（2025-11-11）
+  // 修正: getDataRange()を1回だけ呼び出す（API呼び出し削減）
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     if (!ss) return [];
@@ -51,46 +52,48 @@ function getUserListForUI() {
     const sheet = ss.getSheetByName('FCM通知登録');
     if (!sheet) return [];
 
-    const lastRow = sheet.getLastRow();
-    if (lastRow <= 1) return []; // ヘッダーのみ
+    // 🎯 最適化1: 1回のAPI呼び出しで全データ取得
+    const data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return []; // ヘッダーのみ
 
-    // 🎯 最適化1: 必要な列のみ取得（全列取得を避ける）
-    // A列(ユーザー名), B列(メール), C列(権限), D列(ステータス), E列(登録日時), I列(アイコンURL)
-    const userNameRange = sheet.getRange(2, 1, lastRow - 1, 1).getValues();    // A列
-    const emailRange = sheet.getRange(2, 2, lastRow - 1, 1).getValues();        // B列
-    const permissionRange = sheet.getRange(2, 3, lastRow - 1, 1).getValues();   // C列
-    const statusRange = sheet.getRange(2, 4, lastRow - 1, 1).getValues();       // D列
-    const registeredRange = sheet.getRange(2, 5, lastRow - 1, 1).getValues();   // E列
-    const iconRange = sheet.getRange(2, 9, lastRow - 1, 1).getValues();         // I列(9列目)
+    const headers = data[0];
+    const userNameCol = headers.indexOf('ユーザー名');
+    const emailCol = headers.indexOf('メールアドレス');
+    const permissionCol = headers.indexOf('権限');
+    const statusCol = headers.indexOf('ステータス');
+    const registeredAtCol = headers.indexOf('登録日時');
+    const iconCol = 8; // 列9（アイコンURL）※0始まりなので8
+
+    if (userNameCol === -1) return [];
 
     const uniqueUsers = new Map();
     const permissionUpdates = []; // バッチ更新用
 
-    // 🎯 最適化2: ループを1回だけ実行
-    for (let i = 0; i < userNameRange.length; i++) {
-      const userName = userNameRange[i][0];
+    // 🎯 最適化2: Logger.log()削除（本番環境で不要）
+    for (let i = 1; i < data.length; i++) {
+      const userName = data[i][userNameCol];
       
       // 空行スキップ
       if (!userName || userName === '') continue;
 
-      const permission = permissionRange[i][0] || '';
-      const registeredAt = registeredRange[i][0];
+      const permission = permissionCol !== -1 ? data[i][permissionCol] : '';
+      const registeredAt = registeredAtCol !== -1 ? data[i][registeredAtCol] : '';
 
       // 重複チェック: より新しいデータのみ保持
       const existingUser = uniqueUsers.get(userName);
-      if (existingUser) {
+      if (existingUser && registeredAt) {
         const currentDate = new Date(registeredAt);
         const existingDate = new Date(existingUser.registeredAt);
-        if (currentDate <= existingDate) continue; // 古いデータはスキップ
+        if (currentDate <= existingDate) continue;
       }
 
       // 🎯 最適化3: 権限が空の場合、バッチ更新リストに追加
       const finalPermission = permission || 'スタッフ';
-      if (!permission || permission === '') {
-        permissionUpdates.push({ row: i + 2, value: 'スタッフ' }); // 2行目スタート
+      if (permissionCol !== -1 && (!permission || permission === '')) {
+        permissionUpdates.push({ row: i + 1, value: 'スタッフ' });
       }
 
-      // 🎯 最適化4: 日付変換を効率化
+      // 日付変換
       let registeredAtStr = '';
       if (registeredAt) {
         try {
@@ -106,18 +109,18 @@ function getUserListForUI() {
 
       uniqueUsers.set(userName, {
         userName: userName,
-        email: String(emailRange[i][0] || ''),
+        email: emailCol !== -1 ? String(data[i][emailCol] || '') : '',
         permission: finalPermission,
-        status: String(statusRange[i][0] || 'アクティブ'),
+        status: statusCol !== -1 ? String(data[i][statusCol] || 'アクティブ') : 'アクティブ',
         registeredAt: registeredAtStr,
-        userIconUrl: String(iconRange[i][0] || '')
+        userIconUrl: String(data[i][iconCol] || '')
       });
     }
 
-    // 🎯 最適化5: シート更新をバッチ処理（大幅高速化）
-    if (permissionUpdates.length > 0) {
+    // 🎯 最適化4: シート更新をバッチ処理
+    if (permissionUpdates.length > 0 && permissionCol !== -1) {
       permissionUpdates.forEach(function(update) {
-        sheet.getRange(update.row, 3).setValue(update.value); // C列(3列目)
+        sheet.getRange(update.row, permissionCol + 1).setValue(update.value);
       });
     }
 
