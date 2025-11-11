@@ -529,22 +529,50 @@ async function getCategoryMaster() {
 }
 
 /**
- * マスタオプションを取得
+ * マスタオプションを取得（フィールドごとに分割保存されたデータ）
  * @returns {Promise<Object>} 各フィールドの選択肢オブジェクト
  */
 async function getMasterOptions() {
   try {
     const db = await initializeFirestore();
-    const docRef = doc(db, 'masterOptions', 'data');
-    const docSnap = await getDoc(docRef);
 
-    if (!docSnap.exists()) {
-      console.warn('マスタオプションが見つかりません');
+    // インデックスドキュメントから全フィールド名を取得
+    const indexRef = doc(db, 'masterOptions', '_index');
+    const indexSnap = await getDoc(indexRef);
+
+    if (!indexSnap.exists()) {
+      console.warn('マスタオプションインデックスが見つかりません');
       return {};
     }
 
-    const data = docSnap.data();
-    return data.options || {};
+    const indexData = indexSnap.data();
+    const fieldNames = indexData.fieldNames || [];
+
+    // 各フィールドのデータを並列取得
+    const options = {};
+    const promises = fieldNames.map(async (fieldName) => {
+      // フィールド名をURLセーフに変換
+      const safeFieldName = fieldName
+        .replace(/\//g, '_')
+        .replace(/\(/g, '_')
+        .replace(/\)/g, '_')
+        .replace(/\s/g, '_');
+
+      const fieldRef = doc(db, 'masterOptions', safeFieldName);
+      const fieldSnap = await getDoc(fieldRef);
+
+      if (fieldSnap.exists()) {
+        const fieldData = fieldSnap.data();
+        options[fieldName] = fieldData.items || [];
+      } else {
+        console.warn(`フィールド "${fieldName}" が見つかりません`);
+        options[fieldName] = [];
+      }
+    });
+
+    await Promise.all(promises);
+
+    return options;
   } catch (error) {
     console.error('マスタオプション取得エラー:', error);
     return {};
