@@ -43,133 +43,89 @@ function testGetUserList() {
  * @return {Array} ユーザー情報の配列
  */
 function getUserListForUI() {
-  Logger.log('[getUserListForUI] ===== 開始 =====');
-
+  // 🚀 最適化版 - ARCH-001対応（2025-11-11）
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    Logger.log('[getUserListForUI] Spreadsheet取得: ' + (ss ? 'OK' : 'NG'));
-
-    if (!ss) {
-      Logger.log('[getUserListForUI] ERROR: getActiveSpreadsheet() が null を返しました');
-      return [];
-    }
-
-    // 全シート名をログ出力
-    const sheets = ss.getSheets();
-    Logger.log('[getUserListForUI] 全シート数: ' + sheets.length);
-    sheets.forEach(function(s, i) {
-      Logger.log('[getUserListForUI] シート[' + i + ']: "' + s.getName() + '"');
-    });
+    if (!ss) return [];
 
     const sheet = ss.getSheetByName('FCM通知登録');
-    Logger.log('[getUserListForUI] FCM通知登録シート取得: ' + (sheet ? 'OK' : 'NG'));
+    if (!sheet) return [];
 
-    if (!sheet) {
-      Logger.log('[getUserListForUI] ERROR: FCM通知登録シートが見つかりません');
-      Logger.log('[getUserListForUI] ===== 終了（空配列） =====');
-      return [];
-    }
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return []; // ヘッダーのみ
 
-    const data = sheet.getDataRange().getValues();
-    Logger.log('[getUserListForUI] データ行数: ' + data.length);
-
-    if (data.length === 0) {
-      Logger.log('[getUserListForUI] ERROR: シートが空です');
-      return [];
-    }
-
-    const headers = data[0];
-    Logger.log('[getUserListForUI] ヘッダー行: ' + JSON.stringify(headers));
-
-    const userNameCol = headers.indexOf('ユーザー名');
-    const emailCol = headers.indexOf('メールアドレス');
-    const permissionCol = headers.indexOf('権限');
-    const statusCol = headers.indexOf('ステータス');
-    const registeredAtCol = headers.indexOf('登録日時');
-    const iconCol = 8; // 列9（アイコンURL）※0始まりなので8
-
-    Logger.log('[getUserListForUI] カラムインデックス - ユーザー名:' + userNameCol + ' メール:' + emailCol + ' 権限:' + permissionCol + ' ステータス:' + statusCol + ' 登録日時:' + registeredAtCol + ' アイコン:' + iconCol);
-
-    if (userNameCol === -1) {
-      Logger.log('[getUserListForUI] ERROR: ユーザー名列が見つかりません');
-      return [];
-    }
+    // 🎯 最適化1: 必要な列のみ取得（全列取得を避ける）
+    // A列(ユーザー名), B列(メール), C列(権限), D列(ステータス), E列(登録日時), I列(アイコンURL)
+    const userNameRange = sheet.getRange(2, 1, lastRow - 1, 1).getValues();    // A列
+    const emailRange = sheet.getRange(2, 2, lastRow - 1, 1).getValues();        // B列
+    const permissionRange = sheet.getRange(2, 3, lastRow - 1, 1).getValues();   // C列
+    const statusRange = sheet.getRange(2, 4, lastRow - 1, 1).getValues();       // D列
+    const registeredRange = sheet.getRange(2, 5, lastRow - 1, 1).getValues();   // E列
+    const iconRange = sheet.getRange(2, 9, lastRow - 1, 1).getValues();         // I列(9列目)
 
     const uniqueUsers = new Map();
-    const rowsToUpdate = []; // 権限が空欄の行を記録
+    const permissionUpdates = []; // バッチ更新用
 
-    for (let i = 1; i < data.length; i++) {
-      const userName = data[i][userNameCol];
-      Logger.log('[getUserListForUI] 行' + i + ': ユーザー名=' + userName);
+    // 🎯 最適化2: ループを1回だけ実行
+    for (let i = 0; i < userNameRange.length; i++) {
+      const userName = userNameRange[i][0];
+      
+      // 空行スキップ
+      if (!userName || userName === '') continue;
 
-      if (!userName || userName === '') {
-        Logger.log('[getUserListForUI] 行' + i + ': ユーザー名が空なのでスキップ');
-        continue;
-      }
+      const permission = permissionRange[i][0] || '';
+      const registeredAt = registeredRange[i][0];
 
+      // 重複チェック: より新しいデータのみ保持
       const existingUser = uniqueUsers.get(userName);
-      const currentDate = new Date(data[i][registeredAtCol]);
-
       if (existingUser) {
+        const currentDate = new Date(registeredAt);
         const existingDate = new Date(existingUser.registeredAt);
-        if (currentDate <= existingDate) {
-          Logger.log('[getUserListForUI] 行' + i + ': ' + userName + ' は既存データの方が新しいのでスキップ');
-          continue;
-        }
+        if (currentDate <= existingDate) continue; // 古いデータはスキップ
       }
 
-      // 権限が空欄の場合、デフォルト値をシートに書き込む準備
-      const currentPermission = permissionCol !== -1 ? data[i][permissionCol] : '';
-      if (permissionCol !== -1 && (!currentPermission || currentPermission === '')) {
-        Logger.log('[getUserListForUI] 行' + (i+1) + ': 権限が空欄なので「スタッフ」を設定します');
-        rowsToUpdate.push({ row: i + 1, permission: 'スタッフ' }); // 1-indexed
+      // 🎯 最適化3: 権限が空の場合、バッチ更新リストに追加
+      const finalPermission = permission || 'スタッフ';
+      if (!permission || permission === '') {
+        permissionUpdates.push({ row: i + 2, value: 'スタッフ' }); // 2行目スタート
       }
 
-      // registeredAt を文字列形式に変換（google.script.run のシリアライゼーション対策）
+      // 🎯 最適化4: 日付変換を効率化
       let registeredAtStr = '';
-      if (data[i][registeredAtCol]) {
+      if (registeredAt) {
         try {
-          const date = new Date(data[i][registeredAtCol]);
-          registeredAtStr = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss');
+          registeredAtStr = Utilities.formatDate(
+            new Date(registeredAt), 
+            'Asia/Tokyo', 
+            'yyyy-MM-dd HH:mm:ss'
+          );
         } catch (e) {
-          registeredAtStr = String(data[i][registeredAtCol]);
+          registeredAtStr = String(registeredAt);
         }
       }
 
-      // userIconUrlを取得（列9 = インデックス8）
-      const userIconUrl = data[i][iconCol] || '';
-
-      const user = {
+      uniqueUsers.set(userName, {
         userName: userName,
-        email: emailCol !== -1 ? String(data[i][emailCol] || '') : '',
-        permission: permissionCol !== -1 ? String(data[i][permissionCol] || 'スタッフ') : 'スタッフ',
-        status: statusCol !== -1 ? String(data[i][statusCol] || 'アクティブ') : 'アクティブ',
+        email: String(emailRange[i][0] || ''),
+        permission: finalPermission,
+        status: String(statusRange[i][0] || 'アクティブ'),
         registeredAt: registeredAtStr,
-        userIconUrl: userIconUrl
-      };
-
-      Logger.log('[getUserListForUI] 行' + i + ': ユーザー追加 - ' + JSON.stringify(user));
-      uniqueUsers.set(userName, user);
-    }
-
-    // 権限が空欄の行にデフォルト値を書き込む
-    if (rowsToUpdate.length > 0 && permissionCol !== -1) {
-      Logger.log('[getUserListForUI] 権限が空欄の行数: ' + rowsToUpdate.length);
-      rowsToUpdate.forEach(function(update) {
-        sheet.getRange(update.row, permissionCol + 1).setValue(update.permission);
-        Logger.log('[getUserListForUI] 行' + update.row + 'に権限「' + update.permission + '」を書き込みました');
+        userIconUrl: String(iconRange[i][0] || '')
       });
     }
 
-    const users = Array.from(uniqueUsers.values());
-    Logger.log('[getUserListForUI] 重複除外後のユーザー数: ' + users.length);
-    Logger.log('[getUserListForUI] 最終結果: ' + JSON.stringify(users));
-    Logger.log('[getUserListForUI] ===== 終了（成功） =====');
-    return users;
+    // 🎯 最適化5: シート更新をバッチ処理（大幅高速化）
+    if (permissionUpdates.length > 0) {
+      permissionUpdates.forEach(function(update) {
+        sheet.getRange(update.row, 3).setValue(update.value); // C列(3列目)
+      });
+    }
+
+    return Array.from(uniqueUsers.values());
+
   } catch (error) {
-    Logger.log('[getUserListForUI] ERROR: ' + error);
-    Logger.log('[getUserListForUI] ERROR stack: ' + error.stack);
-    Logger.log('[getUserListForUI] ===== 終了（エラー） =====');
+    // エラー時のみログ出力
+    Logger.log('[getUserListForUI] ERROR: ' + error.message);
     return [];
   }
 }
