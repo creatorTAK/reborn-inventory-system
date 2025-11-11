@@ -508,6 +508,8 @@ async function getUserListHybrid(forceRefresh = false) {
 async function getCategoryMaster() {
   try {
     const db = await initializeFirestore();
+    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
     const docRef = doc(db, 'categories', 'master');
     const docSnap = await getDoc(docRef);
 
@@ -535,6 +537,7 @@ async function getCategoryMaster() {
 async function getMasterOptions() {
   try {
     const db = await initializeFirestore();
+    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
     // インデックスドキュメントから全フィールド名を取得
     const indexRef = doc(db, 'masterOptions', '_index');
@@ -622,6 +625,141 @@ async function getOperatorName(identifier) {
   }
 }
 
+// ============================================
+// ブランド検索API (ARCH-001 Phase 3.2)
+// ============================================
+
+/**
+ * ブランド検索（オートコンプリート用）
+ * @param {string} query - 検索クエリ（英語名またはカナ名）
+ * @param {number} limit - 取得件数（デフォルト50件）
+ * @returns {Promise<Array>} ブランドリスト
+ */
+async function searchBrands(query = '', limit = 50) {
+  try {
+    const db = await initializeFirestore();
+    const { collection, getDocs, query: fbQuery, where, orderBy, limit: fbLimit } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    const brandsRef = collection(db, 'brands');
+
+    // クエリが空の場合は、使用頻度の高い上位N件を返す
+    if (!query || query.trim() === '') {
+      const q = fbQuery(brandsRef, orderBy('usageCount', 'desc'), fbLimit(limit));
+      const snapshot = await getDocs(q);
+
+      const brands = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        brands.push({
+          id: doc.id,
+          nameEn: data.nameEn || '',
+          nameKana: data.nameKana || '',
+          usageCount: data.usageCount || 0
+        });
+      });
+
+      console.log(`🔍 [BRANDS] 人気上位取得: ${brands.length}件`);
+      return brands;
+    }
+
+    // 検索クエリがある場合は、全件取得してクライアント側フィルタ
+    // （Firestoreの制限により、部分一致検索は全件取得が必要）
+    const snapshot = await getDocs(brandsRef);
+    const searchLower = query.toLowerCase();
+
+    const brands = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const nameEn = (data.nameEn || '').toLowerCase();
+      const nameKana = data.nameKana || '';
+
+      // 英語名またはカナ名で前方一致
+      if (nameEn.startsWith(searchLower) || nameKana.startsWith(query)) {
+        brands.push({
+          id: doc.id,
+          nameEn: data.nameEn || '',
+          nameKana: data.nameKana || '',
+          usageCount: data.usageCount || 0
+        });
+      }
+    });
+
+    // 使用頻度でソート → 上位N件
+    brands.sort((a, b) => b.usageCount - a.usageCount);
+    const results = brands.slice(0, limit);
+
+    console.log(`🔍 [BRANDS] 検索完了: "${query}" → ${results.length}件`);
+    return results;
+
+  } catch (error) {
+    console.error('ブランド検索エラー:', error);
+    return [];
+  }
+}
+
+/**
+ * すべてのブランドを取得（初期ロード用）
+ * @param {number} limit - 取得件数制限（デフォルト500件）
+ * @returns {Promise<Array>} ブランドリスト
+ */
+async function getAllBrands(limit = 500) {
+  try {
+    const db = await initializeFirestore();
+    const { collection, getDocs, query, orderBy, limit: fbLimit } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    const brandsRef = collection(db, 'brands');
+
+    // 使用頻度の高い順に取得
+    const q = query(brandsRef, orderBy('usageCount', 'desc'), fbLimit(limit));
+    const snapshot = await getDocs(q);
+
+    const brands = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      brands.push({
+        id: doc.id,
+        nameEn: data.nameEn || '',
+        nameKana: data.nameKana || '',
+        usageCount: data.usageCount || 0
+      });
+    });
+
+    console.log(`📦 [BRANDS] 全件取得完了: ${brands.length}件`);
+    return brands;
+
+  } catch (error) {
+    console.error('ブランド全件取得エラー:', error);
+    return [];
+  }
+}
+
+/**
+ * ブランド使用カウント更新
+ * @param {string} brandId - ブランドID
+ * @returns {Promise<boolean>} 成功/失敗
+ */
+async function incrementBrandUsageCount(brandId) {
+  try {
+    const db = await initializeFirestore();
+    const { doc, updateDoc, increment, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    const brandRef = doc(db, 'brands', brandId);
+
+    // usageCountをインクリメント
+    await updateDoc(brandRef, {
+      usageCount: increment(1),
+      updatedAt: serverTimestamp()
+    });
+
+    console.log(`✅ [BRANDS] 使用カウント更新: ${brandId}`);
+    return true;
+
+  } catch (error) {
+    console.error('ブランド使用カウント更新エラー:', error);
+    return false;
+  }
+}
+
 // CommonJS環境（Node.js等）向けエクスポート
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -639,7 +777,10 @@ if (typeof module !== 'undefined' && module.exports) {
     getProductListHybrid,
     getCategoryMaster,
     getMasterOptions,
-    getOperatorName
+    getOperatorName,
+    searchBrands,
+    getAllBrands,
+    incrementBrandUsageCount
   };
 }
 
@@ -660,6 +801,9 @@ if (typeof window !== 'undefined') {
     getProductListHybrid,
     getCategoryMaster,
     getMasterOptions,
-    getOperatorName
+    getOperatorName,
+    searchBrands,
+    getAllBrands,
+    incrementBrandUsageCount
   };
 }
