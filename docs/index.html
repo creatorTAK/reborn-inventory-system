@@ -970,6 +970,15 @@
     document.addEventListener('DOMContentLoaded', async () => {
       console.log('⚡ DOMContentLoaded - 初期化開始');
 
+      // 🏠 初期表示がメニュー画面（home）の場合、ヘッダーを非表示
+      const iframe = document.getElementById('gas-iframe');
+      const header = document.getElementById('app-header');
+      const initialUrl = iframe?.getAttribute('data-src') || '';
+      if (initialUrl.includes('menu=home')) {
+        console.log('🏠 [初期表示] メニュー画面のためヘッダー非表示');
+        header.style.display = 'none';
+      }
+
       // Service Worker登録
       if ('serviceWorker' in navigator) {
         try {
@@ -1094,29 +1103,42 @@
 
         // menuControlドキュメントをリアルタイム監視（メニュー画面からの遷移用）
         let isFirstMenuSnapshot = true;
+        console.log('[Navigation] ✅ menuControlリスナー登録開始');
         onSnapshot(doc(db, 'navigation', 'menuControl'), (snapshot) => {
+          console.log('[Navigation] 🔔 Menu onSnapshot コールバック実行');
+          console.log('[Navigation] snapshot.exists():', snapshot.exists());
+
           if (snapshot.exists()) {
             const data = snapshot.data();
-            console.log('[Navigation] Menu更新検知:', data);
+            console.log('[Navigation] Menu更新検知 - 全データ:', JSON.stringify(data));
+            console.log('[Navigation] isFirstMenuSnapshot:', isFirstMenuSnapshot);
 
             // 初回読み込みは無視（古いデータによる誤作動を防ぐ）
             if (isFirstMenuSnapshot) {
-              console.log('[Navigation] Menu初回読み込みのため無視');
+              console.log('[Navigation] ⏭️ Menu初回読み込みのため無視');
               isFirstMenuSnapshot = false;
               return;
             }
 
+            console.log('[Navigation] data.action:', data.action);
+            console.log('[Navigation] data.page:', data.page);
+
             if (data.action === 'navigate' && data.page) {
-              console.log('[Navigation] navigate要求を受信 → navigateToPage()呼び出し:', data.page);
+              console.log('[Navigation] ✅ navigate要求を受信 → navigateToPage()呼び出し:', data.page);
               if (typeof navigateToPage === 'function') {
                 navigateToPage(data.page);
+                console.log('[Navigation] ✅ navigateToPage()呼び出し完了');
               } else {
-                console.error('[Navigation] navigateToPage()が未定義');
+                console.error('[Navigation] ❌ navigateToPage()が未定義');
               }
+            } else {
+              console.log('[Navigation] ⚠️ action or page が不正:', { action: data.action, page: data.page });
             }
+          } else {
+            console.log('[Navigation] ⚠️ menuControlドキュメントが存在しません');
           }
         }, (error) => {
-          console.error('[Navigation] Menuリスナーエラー:', error);
+          console.error('[Navigation] ❌ Menuリスナーエラー:', error);
         });
 
       } catch (error) {
