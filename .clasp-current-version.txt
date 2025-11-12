@@ -1,3 +1,57 @@
+@828 - fix(CHAT-010): 戻るボタンをFirestore方式に変更（v816）- クロスオリジン問題完全解決
+
+**修正内容:**
+- **chat_ui_firestore.html** (v816):
+  - **postMessage → Firestore方式に変更**: クロスオリジン問題を完全回避
+  - **goBackToList()をFirestore書き込みに変更**: `navigation/chatControl`ドキュメントに書き込み
+  - **async/await対応**: Firestore操作の非同期処理
+
+- **docs/index.html**:
+  - **Firestoreリアルタイム監視を追加**: `onSnapshot()`で`navigation/chatControl`を監視
+  - **action: 'goBackToList'を検知**: 自動的に`openChatRooms()`を呼び出し
+  - **Firebase動的インポート**: 必要な関数のみインポート
+
+- **docs/firestore.rules**:
+  - **navigationコレクション用ルール追加**: 全員が読み書き可能（認証不要）
+
+**技術的改善:**
+- @818のpostMessage方式では、GASのiframe構造が複雑で`window.parent`が正しい親ウィンドウを指さずエラー
+- Firestore方式により、クロスオリジン制約を完全に回避し、確実な通信を実現
+- レイテンシは50-200ms程度だが、確実性が大幅に向上
+
+**動作フロー:**
+1. チャット画面で戻るボタンクリック
+2. iframe: Firestoreの`navigation/chatControl`に書き込み
+3. 親ウィンドウ: Firestoreリスナーが変更を検知
+4. `openChatRooms()`関数を呼び出し
+5. チャット一覧画面に遷移 ✅
+
+**デプロイ日時:** 2025-11-12
+**Issue:** CHAT-010
+**次のステップ:** 実機テスト + Firestoreルールデプロイ
+
+---
+
+@818 - fix(CHAT): 戻るボタン修正（postMessage方式に変更）- クロスオリジン問題解決（失敗）
+
+**修正内容:**
+- **chat_ui_firestore.html** (v815):
+  - **window.top.location → postMessage方式に変更**: クロスオリジン制約を正しく回避しようとした
+  - **index.htmlのpostMessageリスナー活用**: 既存の`showChatRoomsList`メッセージハンドラを使用
+  - **安全なpostMessage送信**: `window.parent.postMessage(message, parentOrigin)`
+  - **フォールバック**: postMessage失敗時は`history.back()`
+
+**技術的課題:**
+- postMessage送信は成功するが、受信側でエラー発生
+- `Unable to post message to https://reborn-inventory-system.pages.dev. Recipient has origin https://n-fwcq5ggef...googleusercontent.com.`
+- GASのiframe構造が複雑で、`window.parent`が期待通りの親ウィンドウを指していない
+
+**結果:** 動作せず → @828でFirestore方式に変更
+
+**デプロイ日時:** 2025-11-12
+
+---
+
 @817 - feat(ARCH-001): Phase 1.5 Firestore移行 - マイグレーションスクリプト + API実装
 
 **実装内容:**

@@ -1072,7 +1072,7 @@ function doGet(e) {
       template = HtmlService.createTemplateFromFile('sidebar_product');
       title = 'REBORN';
     } else if (menuType === 'inventory') {
-      template = HtmlService.createTemplateFromFile('sidebar_inventory');
+      template = HtmlService.createTemplateFromFile('sidebar_inventory_firestore');
       title = 'REBORN - 在庫管理';
     } else if (menuType === 'shipping-master') {
       template = HtmlService.createTemplateFromFile('shipping_method_master_ui');

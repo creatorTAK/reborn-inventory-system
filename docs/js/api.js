@@ -285,13 +285,32 @@ async function getNotificationHistory(userId) {
 // ============================================
 
 /**
+ * 商品一覧を検索（フィルタ付き）
+ *
+ * @param {Object} filters - 検索フィルタ
+ * @param {string} filters.status - ステータスでフィルタ（オプション）
+ * @param {string} filters.brand - ブランドでフィルタ（オプション）
+ * @param {string} filters.category - カテゴリでフィルタ（オプション）
+ * @param {string} filters.person - 担当者でフィルタ（オプション）
+ * @returns {Promise<Array>} 商品一覧
+ *
+ * @example
+ * const products = await searchInventory({});
+ * const inStock = await searchInventory({ status: '在庫' });
+ * const nike = await searchInventory({ brand: 'NIKE' });
+ */
+async function searchInventory(filters = {}) {
+  return await callGasApi('search_inventory', filters);
+}
+
+/**
  * 在庫ダッシュボードデータを取得
- * 
+ *
  * @returns {Promise<Object>} ダッシュボードデータ
  * @returns {number} return.totalProducts - 総商品数
  * @returns {number} return.lowStockCount - 在庫少ない商品数
  * @returns {Array} return.recentActivity - 最近のアクティビティ
- * 
+ *
  * @example
  * const dashboard = await getInventoryDashboard();
  * console.log(`総商品数: ${dashboard.totalProducts}`);
@@ -485,6 +504,7 @@ if (typeof module !== 'undefined' && module.exports) {
     getNotificationHistory,
     
     // 在庫管理
+    searchInventory,
     getInventoryDashboard,
     getProductDetail,
     updateProductStatus,
@@ -524,6 +544,7 @@ if (typeof window !== 'undefined') {
     getNotificationHistory,
     
     // 在庫管理
+    searchInventory,
     getInventoryDashboard,
     getProductDetail,
     updateProductStatus,
