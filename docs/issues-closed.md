@@ -15,6 +15,78 @@
 
 ## 📚 完了Issue一覧
 
+## SEC-002 | 緊急: Firebase APIキー漏洩対応 ✅ DONE (完了日: 2025-11-12)
+
+### 📌 基本情報
+- カテゴリ: セキュリティ
+- 優先度: 🚨 緊急
+- 影響範囲: Firebase API全般
+- 発見日: 2025-11-12
+- 完了日: 2025-11-12
+
+### 🐛 問題内容
+- Firebase APIキー `AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ` がGitHubに公開
+- Google Cloudから警告メール受信
+- APIキーに制限がない状態で不正使用のリスク
+
+### ✅ 対応内容
+- [x] Firebase Console: HTTPリファラー制限追加（3ドメイン）
+- [x] Firebase Console: API制限追加（5つのAPIのみ）
+- [x] Firestore Rules: navigationコレクションにレート制限追加（5秒に1回）
+- [x] Firestore Rules: デプロイ
+
+### 📝 対応結果
+- **APIキー制限**: 完了（指定ドメインのみ、必要なAPI 5つのみ）
+- **Firestoreルール**: 完了（navigationコレクションに5秒制限）
+- **被害状況**: なし（異常なトラフィック検出されず）
+- **セキュリティ状態**: 安全（リスク大幅に低減）
+
+### 📋 今後の対応
+詳細は Serena Memory: `SEC-002_FIREBASE_API_KEY_SECURITY` を参照
+
+---
+
+## CHAT-010 | バグ修正: チャット戻るボタンがpostMessageで動作しない（Firestore方式に変更） ✅ DONE (完了日: 2025-11-12)
+
+### 📌 基本情報
+- カテゴリ: バグ修正
+- 優先度: 高
+- 影響範囲: チャット画面（戻るボタン）
+- 発見日: 2025-11-12
+- 完了日: 2025-11-12
+- 関連バージョン: @828/v816
+
+### 🐛 不具合内容
+- チャット画面の戻るボタン（‹）をクリックしても無反応
+- postMessage方式ではGASのiframe構造が複雑でクロスオリジン通信が失敗
+
+### ✅ 解決方針
+- postMessageではなく、Firestoreを介した通信に切り替え
+- クロスオリジン問題を完全回避
+
+### ✏️ 実装内容
+- [x] chat_ui_firestore.html: goBackToList()をFirestore書き込みに変更
+- [x] docs/index.html: Firestoreリアルタイム監視を追加
+- [x] docs/firestore.rules: navigationコレクション用セキュリティルール追加
+- [x] GASデプロイ（clasp push + deploy）→ @828
+- [x] PWAデプロイ（git push）→ Cloudflare Pages
+- [x] Firestoreセキュリティルールデプロイ
+- [x] 実機テスト → 動作確認完了
+
+### 📝 デプロイ情報
+- **GAS**: @828 (2025-11-12)
+- **PWA**: Cloudflare Pages
+- **バージョン**: v816
+- **Firestoreルール**: 公開完了
+
+### 📝 テスト結果
+- ✅ 戻るボタン（‹）をクリック → Firestore書き込み成功
+- ✅ 親ウィンドウがFirestore更新を検知 → openChatRooms()呼び出し
+- ✅ チャット一覧画面に正常に遷移
+- ✅ クロスオリジン問題を完全解決
+
+---
+
 ## CHAT-007 | 機能追加: 個別チャット（ダイレクトメッセージ）機能 ✅ DONE (完了日: 2025-11-10)
 
 ### 📌 基本情報

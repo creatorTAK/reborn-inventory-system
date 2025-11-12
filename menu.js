@@ -831,7 +831,7 @@ function doGet(e) {
       return jsonError_('不明なアクション: ' + action);
     }
 
-    const menuType = (e && e.parameter && e.parameter.menu) ? e.parameter.menu : 'product';
+    const menuType = (e && e.parameter && e.parameter.menu) ? e.parameter.menu : 'home';
 
     // PWAアイコン配信
     if (menuType === 'icon') {
@@ -1063,7 +1063,10 @@ function doGet(e) {
     let template;
     let title;
 
-    if (menuType === 'config') {
+    if (menuType === 'home') {
+      template = HtmlService.createTemplateFromFile('menu_home');
+      title = 'REBORN - メニュー';
+    } else if (menuType === 'config') {
       template = HtmlService.createTemplateFromFile('sidebar_config');
       title = 'REBORN';
       // activeTabパラメータを取得（PWAからのリンク用）
