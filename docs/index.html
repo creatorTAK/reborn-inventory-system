@@ -496,7 +496,7 @@
       width: 100%;
       height: 100%;
       background: #f9fafb;
-      z-index: 100;
+      z-index: 1100; /* UI-013: ドロワーメニューより上に表示 */
       display: flex;
       flex-direction: column;
       padding: 20px;
@@ -507,6 +507,25 @@
     #skeleton-loader.hidden {
       opacity: 0;
       pointer-events: none;
+    }
+
+    /* UI-013: ローディングスピナー追加（動きのある視覚フィードバック） */
+    .loading-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 50px;
+      height: 50px;
+      border: 4px solid #e0e0e0;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      animation: spinner-rotate 1s linear infinite;
+    }
+
+    @keyframes spinner-rotate {
+      0% { transform: translate(-50%, -50%) rotate(0deg); }
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
     }
 
     .skeleton-header {
@@ -815,6 +834,8 @@
         <div class="skeleton-input"></div>
         <div class="skeleton-button"></div>
       </div>
+      <!-- UI-013: ローディングスピナー（動きのある視覚フィードバック） -->
+      <div class="loading-spinner"></div>
     </div>
 
     <!-- GAS Web App を iframe で表示（遅延ロード: DOMContentLoaded後に src設定） -->
@@ -1706,6 +1727,9 @@
       const skeleton = document.getElementById('skeleton-loader');
       const baseUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
 
+      // UI-013: ドロワーを先に閉じる（スケルトンUI表示を妨げないように）
+      closeDrawer();
+
       // UI-013: ページ遷移時のローディングUX改善
       // メニュー画面（home）以外に遷移する時は、スケルトンUIを表示してヘッダーを非表示
       // iframe読み込み完了後に、スケルトンUIを非表示にしてヘッダーを表示
@@ -1715,6 +1739,7 @@
         if (skeleton) skeleton.classList.add('hidden');
       } else {
         // 通常ページ：ヘッダー非表示（読み込み完了後に表示）、スケルトンUI表示
+        console.log('🔄 [UI-013] ローディング開始 - スケルトンUI表示:', page);
         if (header) header.style.display = 'none';
         if (skeleton) skeleton.classList.remove('hidden');
       }
@@ -1818,9 +1843,6 @@
 
         iframe.addEventListener('load', handlePageLoadComplete, { once: true });
       }
-
-      // ドロワーを閉じる
-      closeDrawer();
     }
 
     // postMessage受信処理（GASからの通知受信）
