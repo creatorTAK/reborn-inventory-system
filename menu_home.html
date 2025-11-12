@@ -323,6 +323,8 @@
   </div>
 
   <script type="module">
+    console.log('[menu_home] スクリプト読み込み開始');
+
     // Firebase設定
     const firebaseConfig = {
       apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjwwtCorUZQ",
@@ -333,15 +335,37 @@
       appId: "1:345706548795:web:058a553da6b4b74db5161e"
     };
 
-    // Firebase動的インポート
-    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
-    const { getFirestore, doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+    let db = null;
+    let firestoreReady = false;
 
-    // Firebase初期化
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    // Firebase初期化（DOMContentLoaded後）
+    document.addEventListener('DOMContentLoaded', async () => {
+      console.log('[menu_home] DOMContentLoaded - Firebase初期化開始');
 
-    console.log('[menu_home] Firebase初期化完了');
+      try {
+        // Firebase動的インポート
+        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+        const { getFirestore, doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        console.log('[menu_home] Firebase SDKインポート成功');
+
+        // Firebase初期化
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        firestoreReady = true;
+
+        console.log('[menu_home] ✅ Firebase初期化完了');
+
+        // グローバルに必要な関数を登録
+        window.firestoreDoc = doc;
+        window.firestoreSetDoc = setDoc;
+        window.firestoreServerTimestamp = serverTimestamp;
+
+      } catch (error) {
+        console.error('[menu_home] ❌ Firebase初期化エラー:', error);
+        console.error('[menu_home] error.stack:', error.stack);
+      }
+    });
 
     // アコーディオンの開閉
     window.toggleAccordion = function(type) {
@@ -361,13 +385,29 @@
     window.navigateToPage = async function(page) {
       console.log('[menu_home] ========== navigateToPage開始 ==========');
       console.log('[menu_home] 遷移先:', page);
+      console.log('[menu_home] firestoreReady:', firestoreReady);
+
+      // Firestore準備待ち
+      if (!firestoreReady) {
+        console.log('[menu_home] ⏳ Firestore初期化待機中...');
+        // 最大3秒待機
+        for (let i = 0; i < 30; i++) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          if (firestoreReady) break;
+        }
+      }
+
+      if (!firestoreReady || !db) {
+        console.error('[menu_home] ❌ Firestoreが初期化されていません');
+        return;
+      }
 
       try {
         // Firestoreのnavigationコレクションに書き込み
-        await setDoc(doc(db, 'navigation', 'menuControl'), {
+        await window.firestoreSetDoc(window.firestoreDoc(db, 'navigation', 'menuControl'), {
           action: 'navigate',
           page: page,
-          timestamp: serverTimestamp(),
+          timestamp: window.firestoreServerTimestamp(),
           from: 'menu_home'
         });
 
@@ -379,6 +419,8 @@
         console.error('[menu_home] error.stack:', error.stack);
       }
     };
+
+    console.log('[menu_home] スクリプト読み込み完了');
   </script>
 </body>
 </html>
