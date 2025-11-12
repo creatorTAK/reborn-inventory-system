@@ -1733,22 +1733,14 @@
       closeDrawer();
 
       // UI-013: ページ遷移時のローディングUX改善
-      // メニュー画面（home）以外に遷移する時は、スケルトンUIを表示してヘッダーを非表示
-      // iframe読み込み完了後に、スケルトンUIを非表示にしてヘッダーを表示
-      if (page === 'home') {
-        // メニュー画面：ヘッダー非表示、スケルトンUI非表示
-        if (header) header.style.display = 'none';
-        if (skeleton) skeleton.classList.add('hidden');
-      } else {
-        // 通常ページ：ヘッダー非表示（読み込み完了後に表示）、スケルトンUI表示
-        console.log('🔄 [UI-013] ローディング開始 - スケルトンUI表示:', page);
-        if (header) header.style.display = 'none';
-        if (skeleton) {
-          skeleton.classList.remove('hidden');
-          skeleton.style.display = ''; // インラインスタイルをクリア（重要！）
-          console.log('✅ [UI-013] スケルトンUI表示完了');
-        }
+      // 全ページでスケルトンUIを表示してスムーズに遷移
+      // iframe読み込み完了後に、スケルトンUIを非表示にしてヘッダー表示を切り替え
+      console.log('🔄 [UI-013] ローディング開始 - スケルトンUI表示:', page);
+      if (skeleton) {
+        skeleton.classList.remove('hidden');
+        skeleton.style.display = ''; // インラインスタイルをクリア（重要！）
       }
+      // ヘッダーは読み込み完了後に制御（カクつき防止）
 
       // 🔐 postMessage用のparentOriginとpmTokenを生成（二重iframe対策）
       const parentOrigin = location.origin; // https://reborn-inventory-system.pages.dev
@@ -1838,8 +1830,8 @@
       }
 
       // UI-013: iframe読み込み完了時の処理（ローディングUX改善）
-      // スケルトンUIを非表示にし、通常ページの場合はヘッダーを表示
-      if (iframe && page !== 'home') {
+      // スケルトンUIを非表示にし、ヘッダー表示を制御
+      if (iframe) {
         // 既存のloadイベントリスナーをクリア（重複防止）
         iframe.removeEventListener('load', handlePageLoadComplete);
 
@@ -1847,7 +1839,15 @@
         function handlePageLoadComplete() {
           console.log('✅ ページ読み込み完了:', page);
           if (skeleton) skeleton.classList.add('hidden');
-          if (header && page !== 'home') header.style.display = 'flex';
+
+          // ヘッダー表示制御
+          if (header) {
+            if (page === 'home') {
+              header.style.display = 'none'; // メニュー画面はヘッダー非表示
+            } else {
+              header.style.display = 'flex'; // 通常ページはヘッダー表示
+            }
+          }
         }
 
         iframe.addEventListener('load', handlePageLoadComplete, { once: true });
