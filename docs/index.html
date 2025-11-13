@@ -1162,14 +1162,14 @@
 
             console.log('[Navigation] data.action:', data.action);
             console.log('[Navigation] data.page:', data.page);
-            console.log('[Navigation] data.userId:', data.userId);
+            console.log('[Navigation] data.sessionId:', data.sessionId);
 
-            // 自分のuserIdと一致するかチェック
-            const myUserId = localStorage.getItem('reborn_user_email') || 'unknown';
-            console.log('[Navigation] myUserId:', myUserId);
+            // 自分のsessionIdと一致するかチェック
+            const mySessionId = sessionStorage.getItem('device_session_id');
+            console.log('[Navigation] mySessionId:', mySessionId);
 
-            if (data.userId !== myUserId) {
-              console.log('[Navigation] ⏭️ 他のユーザーの操作のためスキップ');
+            if (data.sessionId !== mySessionId) {
+              console.log('[Navigation] ⏭️ 他の端末の操作のためスキップ');
               return;
             }
 
@@ -1760,15 +1760,21 @@
       localStorage.setItem('pm_token', pmToken);
       console.log('🔐 [postMessage Security] parentOrigin:', parentOrigin, 'pmToken:', pmToken);
 
+      // セッションID生成（端末・タブごとに一意）
+      if (!sessionStorage.getItem('device_session_id')) {
+        const newSessionId = Date.now() + '_' + Math.random().toString(36).substring(2);
+        sessionStorage.setItem('device_session_id', newSessionId);
+        console.log('🆔 新しいセッションIDを生成:', newSessionId);
+      } else {
+        console.log('🆔 既存のセッションIDを使用:', sessionStorage.getItem('device_session_id'));
+      }
+      const sessionId = sessionStorage.getItem('device_session_id');
+      const sessionIdParam = '&sessionId=' + encodeURIComponent(sessionId);
+
       // FCMトークンをlocalStorageから取得
       const fcmToken = localStorage.getItem('reborn_fcm_token') || '';
       const fcmParam = fcmToken ? '&fcmToken=' + encodeURIComponent(fcmToken) : '';
       console.log('🔑 FCMトークンをiframeに渡します:', fcmToken ? fcmToken.substring(0, 20) + '...' : 'なし');
-
-      // userIdをlocalStorageから取得
-      const userId = localStorage.getItem('reborn_user_email') || 'unknown';
-      const userIdParam = '&userId=' + encodeURIComponent(userId);
-      console.log('🔑 userIdをiframeに渡します:', userId);
 
       // postMessage用パラメータ
       const securityParams = '&parentOrigin=' + encodeURIComponent(parentOrigin) + '&pmToken=' + encodeURIComponent(pmToken);
@@ -1780,7 +1786,7 @@
 
       if (page === 'home') {
         // UI-013: メニュー画面
-        iframe.src = baseUrl + '?menu=home' + fcmParam + userIdParam + securityParams;
+        iframe.src = baseUrl + '?menu=home' + fcmParam + sessionIdParam + securityParams;
       } else if (page === 'product') {
         iframe.src = baseUrl + '?menu=product' + fcmParam + securityParams;
         document.getElementById('drawer-product').classList.add('active');
