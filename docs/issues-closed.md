@@ -1,3 +1,98 @@
+## ARCH-001-3.2 | 改善: ブランドマスタFirestore移行（52,667件） ✅ DONE (完了日: 2025-11-14)
+
+### 📌 基本情報
+- カテゴリ: データ移行 / パフォーマンス最適化
+- 優先度: 高
+- 影響範囲: 商品登録画面（ブランドオートコンプリート）
+- 開始日: 2025-11-12
+- 完了日: 2025-11-14
+- 関連Issue: ARCH-001（PWA完全移行）
+
+### 💡 目的
+52,667件のブランドマスタデータをGASシートからFirestoreに移行し、商品登録画面の高速化を実現。
+
+**問題:**
+- GASシートから50,000件のブランド読み込みに時間がかかる
+- 商品登録画面の初期表示が遅い
+
+**期待効果:**
+- Firestoreからの高速検索・オートコンプリート
+- 商品登録画面の初期表示高速化
+- マスタ管理UI基盤の構築
+
+### ✅ 完了した実装
+
+#### 1. Batch Write API実装
+- 旧方式: 1件ごとにPATCH → 52,667回のUrlFetch
+- 新方式: 500件をまとめてBatch Write → 約106回のUrlFetch
+- **効果**: 処理速度500倍向上、タイムアウト解消
+
+#### 2. ブランド検索API（docs/js/firestore-api.js）
+```javascript
+async function searchBrands(query, limit = 50)
+async function incrementBrandUsageCount(brandId)
+```
+
+#### 3. Firestoreデータ構造
+```
+brands/{brandId}
+  - nameEn: string (英語名)
+  - nameKana: string (カナ名)
+  - searchText: string (検索用: 小文字英語,カナ)
+  - usageCount: number (使用回数)
+  - createdAt: timestamp
+  - updatedAt: timestamp
+```
+
+### 📊 移行結果
+
+**最終結果:**
+- ✅ 処理済み行: 52,666行（全行処理完了）
+- ✅ 処理済み件数: **51,342件**
+- ✅ 差分: 1,324件（重複除去 + 空行スキップ）
+- ✅ スキップ範囲: なし
+- ✅ データ欠損: なし
+- ✅ Firestore確認: brand_000001 〜 brand_051342
+
+**データ整合性:**
+- 重複ブランド: 自動除去
+- 空行: 自動スキップ
+- 差分2.5%は正常範囲
+
+### 🔧 技術的な学び
+
+**問題1: 個別PATCH方式の限界**
+- GAS制限（20,000回/日）に到達
+- 解決: Batch Write API使用
+
+**問題2: Firestore無料枠の制限**
+- 書き込み: 20,000回/日で到達
+- 解決: Blazeプランアップグレード（$300無料クレジット）
+
+**問題3: 進捗管理**
+- 実装: PropertiesServiceで進捗保存
+- 中断・再開が容易に
+
+### 📍 関連ファイル
+- `migration_brands_to_firestore.js` - 移行スクリプト
+- `docs/firestore.rules` - セキュリティルール（brands/{brandId}）
+- `docs/js/firestore-api.js` - ブランド検索API
+- スプレッドシート: 「手動管理_ブランド」（52,667行）
+
+### 🎉 成果
+- ✅ 51,342件のブランドマスタ移行完了
+- ✅ Batch Write APIによる高速処理実現
+- ✅ 進捗管理機能で安全な中断・再開
+- ✅ Firebase Blazeプラン移行（実質無料）
+- ✅ データ整合性確認完了
+
+### 📋 次のステップ
+- 商品登録画面のFirestore版作成
+- ブランド検索APIの統合
+- パフォーマンス確認
+
+---
+
 ## SEC-003 | セキュリティ: Google Safe Browsing警告（旧ドメイン） ✅ DONE (完了日: 2025-11-13)
 
 ### 📌 基本情報

@@ -807,3 +807,25 @@ if (typeof window !== 'undefined') {
     incrementBrandUsageCount
   };
 }
+
+// ES6モジュールエクスポート（import文用）
+export {
+  initializeFirestore,
+  getUserList,
+  getUserListFromFirestore,
+  getUserByName,
+  clearUserListCache,
+  getUserListFromGAS,
+  getUserListHybrid,
+  getProductList,
+  getProductListFromFirestore,
+  getProductByManagementNumber,
+  clearProductListCache,
+  getProductListHybrid,
+  getCategoryMaster,
+  getMasterOptions,
+  getOperatorName,
+  searchBrands,
+  getAllBrands,
+  incrementBrandUsageCount
+};

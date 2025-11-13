@@ -319,3 +319,9 @@ if (typeof window !== 'undefined') {
   window.hiraganaToKatakana = hiraganaToKatakana;
   console.log('[Brand Suggest Firestore] モジュール読み込み完了');
 }
+
+// ES6モジュールエクスポート（import文用）
+export {
+  attachBrandSuggestFirestore,
+  hiraganaToKatakana
+};
