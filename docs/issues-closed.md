@@ -15,6 +15,103 @@
 
 ## 📚 完了Issue一覧
 
+## NAV-001 | バグ修正: 複数端末ナビゲーション連動問題 ✅ DONE (完了日: 2025-11-13)
+
+### 📌 基本情報
+- カテゴリ: バグ修正
+- 優先度: 高
+- 影響範囲: メニュー画面ナビゲーション
+- 発見日: 2025-11-13
+- 完了日: 2025-11-13
+- デプロイ: GAS @844 + PWA b5ebb9d
+
+### 🐛 不具合内容
+複数のスマホ端末でメニュー画面を同時に開いている状態で、1台が商品登録を開くと他の端末も自動で商品登録が開かれる。
+
+**影響:**
+- 同一ユーザーが複数端末を使用している場合に全端末が連動
+- 他のユーザーの操作に影響を受ける可能性
+
+### ✅ 期待動作
+各端末の操作が独立しており、他の端末に影響を与えない。
+
+### 📍 関連ファイル
+- `docs/index.html` (Firestoreリスナー、navigateToPage関数)
+- `menu_home.html` (ナビゲーション発火)
+- `menu.js` (テンプレート変数渡し)
+
+### 🔍 原因分析
+1. **元々の設計**: 全端末が同じFirestoreドキュメント`navigation/menuControl`を監視
+2. **第一修正（失敗）**: userIdでフィルタリング → 同一ユーザーの複数端末を区別できず
+3. **根本原因**: 端末・タブごとの識別子が必要
+
+### ✏️ 修正内容
+- sessionStorageでセッションID生成（端末・タブごとに一意）
+- GASテンプレート変数でsessionIdを渡す（URLパラメータではGASの制限で失われる）
+- Firestoreにも同じsessionIdを書き込み
+- リスナーで自分のsessionIdと一致する場合のみ処理
+
+### 📝 実装詳細
+
+**docs/index.html:**
+```javascript
+// sessionStorage使用でタブごとに一意なID生成
+if (!sessionStorage.getItem('device_session_id')) {
+  const newSessionId = Date.now() + '_' + Math.random().toString(36).substring(2);
+  sessionStorage.setItem('device_session_id', newSessionId);
+}
+const sessionId = sessionStorage.getItem('device_session_id');
+const sessionIdParam = '&sessionId=' + encodeURIComponent(sessionId);
+
+// navigateToPage関数内でsessionIdParamを生成
+iframe.src = baseUrl + '?menu=home' + fcmParam + sessionIdParam + securityParams;
+
+// リスナーで自分のsessionIdと一致する場合のみ処理
+const mySessionId = sessionStorage.getItem('device_session_id');
+if (data.sessionId !== mySessionId) {
+  console.log('[Navigation] ⏭️ 他の端末の操作のためスキップ');
+  return;
+}
+```
+
+**menu.js:**
+```javascript
+if (menuType === 'home') {
+  template = HtmlService.createTemplateFromFile('menu_home');
+  title = 'REBORN - メニュー';
+  // セッションIDをテンプレート変数として渡す
+  template.sessionId = (e && e.parameter && e.parameter.sessionId) || 'unknown';
+}
+```
+
+**menu_home.html:**
+```javascript
+// セッションIDをテンプレート変数から取得（GAS側で渡される）
+const sessionId = '<?= sessionId ?>';
+
+// Firestoreに書き込み時にsessionIdを含める
+await db.collection('navigation').doc('menuControl').set({
+  action: 'navigate',
+  page: page,
+  sessionId: sessionId,
+  timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+  from: 'menu_home'
+});
+```
+
+### 📊 デプロイ履歴
+- GAS @842: sessionIdベース実装（URLパラメータ方式）
+- GAS @843: デバッグログ追加
+- GAS @844: テンプレート変数方式に変更（修正完了）
+- PWA b5ebb9d: sessionId実装
+
+### 🎯 学び
+- **GAS HTMLServiceの制約**: iframe.srcのURLパラメータは`window.location.search`で取得不可
+- **解決策**: サーバーサイドテンプレート変数`<?= sessionId ?>`を使用
+- **sessionStorage vs localStorage**: タブごとに独立したセッションが必要な場合はsessionStorageが最適
+
+---
+
 ## UI-013 | 機能追加: トップメニュー画面実装と初期表示変更 ✅ DONE (完了日: 2025-11-12)
 
 ### 📌 基本情報
