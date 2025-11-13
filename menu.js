@@ -895,7 +895,7 @@ function doGet(e) {
             body {
               font-family: system-ui, sans-serif;
               padding: 20px;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 100%);
               min-height: 100vh;
               margin: 0;
               display: flex;
@@ -951,7 +951,7 @@ function doGet(e) {
               cursor: pointer;
             }
             .menu-button:hover {
-              border-color: #667eea;
+              border-color: #3B82F6;
               background: #f9fafb;
               transform: translateY(-2px);
               box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
@@ -1066,6 +1066,8 @@ function doGet(e) {
     if (menuType === 'home') {
       template = HtmlService.createTemplateFromFile('menu_home');
       title = 'REBORN - メニュー';
+      // セッションIDをテンプレート変数として渡す
+      template.sessionId = (e && e.parameter && e.parameter.sessionId) || 'unknown';
     } else if (menuType === 'config') {
       template = HtmlService.createTemplateFromFile('sidebar_config');
       title = 'REBORN';
@@ -1116,6 +1118,7 @@ function doGet(e) {
         template = HtmlService.createTemplateFromFile('chat_ui_firestore');
         template.gasRoomId = roomId;
         template.gasBaseUrl = gasBaseUrl;  // ✅ テンプレート変数に設定
+        template.sessionId = (e && e.parameter && e.parameter.sessionId) || 'unknown';  // セッションID追加
         title = 'REBORN - チーム チャット';
         Logger.log('[doGet] chat_ui_firestoreテンプレート作成完了');
       } else {
@@ -1123,6 +1126,7 @@ function doGet(e) {
         Logger.log('[doGet] トークルーム一覧を読み込みます');
         template = HtmlService.createTemplateFromFile('chat_rooms_list');
         template.gasBaseUrl = gasBaseUrl;  // ✅ テンプレート変数に設定
+        template.sessionId = (e && e.parameter && e.parameter.sessionId) || 'unknown';  // セッションID追加
         title = 'REBORN - チーム チャット';
         Logger.log('[doGet] chat_rooms_listテンプレート作成完了');
       }

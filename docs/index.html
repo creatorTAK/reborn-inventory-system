@@ -1020,6 +1020,9 @@
       // ユーザーアイコンを読み込み
       loadUserIcon();
 
+      // アプリ再インストール時のFirestoreアイコンクリア
+      await clearFirestoreUserIconIfNeeded();
+
       // セットアップ完了済みかチェック
       const setupCompleted = localStorage.getItem('fcm-setup-completed');
       if (setupCompleted !== '1') {
@@ -2104,6 +2107,62 @@
         localStorage.removeItem('reborn_user_icon');
       }
       loadUserIcon();
+    }
+
+    // アプリ再インストール時のFirestoreアイコンクリア
+    async function clearFirestoreUserIconIfNeeded() {
+      try {
+        // localStorageにアイコンがない かつ ユーザー名がある場合
+        const userIcon = localStorage.getItem('reborn_user_icon');
+        const userName = localStorage.getItem('reborn_user_name');
+
+        if (!userIcon && userName) {
+          console.log('[Icon Init] 🔄 アイコン初期化: localStorageにアイコンなし、Firestoreをクリア');
+
+          // Firebase初期化
+          const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+          const { getFirestore, doc, getDoc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+          const firebaseConfig = {
+            apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+            authDomain: "reborn-chat.firebaseapp.com",
+            projectId: "reborn-chat",
+            storageBucket: "reborn-chat.firebasestorage.app",
+            messagingSenderId: "345706548795",
+            appId: "1:345706548795:web:058a553da6b4b74db5161e"
+          };
+
+          const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig, 'icon-clear-app');
+          const db = getFirestore(app);
+
+          // Firestoreのusersコレクションを確認
+          const userRef = doc(db, 'users', userName);
+          const userDoc = await getDoc(userRef);
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            if (userData.userIconUrl) {
+              // アイコンURLが存在する場合のみクリア
+              await updateDoc(userRef, {
+                userIconUrl: ''
+              });
+              console.log('[Icon Init] ✅ Firestoreのアイコンをクリアしました:', userName);
+            } else {
+              console.log('[Icon Init] ℹ️ Firestoreにアイコンなし（クリア不要）:', userName);
+            }
+          } else {
+            console.log('[Icon Init] ℹ️ Firestoreにユーザードキュメント未存在:', userName);
+          }
+        } else {
+          console.log('[Icon Init] ℹ️ アイコン初期化スキップ:', {
+            hasIcon: !!userIcon,
+            hasUserName: !!userName
+          });
+        }
+      } catch (error) {
+        console.error('[Icon Init] ❌ アイコン初期化エラー:', error);
+        // エラーが発生してもアプリの起動を妨げない
+      }
     }
 
     // 通知ページを開く（PWA内で遷移）

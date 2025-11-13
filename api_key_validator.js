@@ -290,7 +290,7 @@ function generateReportHtml(results, summary) {
     }
 
     .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 100%);
       color: white;
       padding: 24px;
       border-radius: 12px 12px 0 0;

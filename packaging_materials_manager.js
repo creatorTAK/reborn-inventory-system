@@ -849,7 +849,7 @@ function setupPackagingPresetsSheet() {
 
     // ヘッダー行のフォーマット
     sheet.getRange(1, 1, 1, headers.length)
-      .setBackground('#667eea')
+      .setBackground('#3B82F6')
       .setFontColor('#ffffff')
       .setFontWeight('bold')
       .setHorizontalAlignment('center');

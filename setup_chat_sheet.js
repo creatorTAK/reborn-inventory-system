@@ -46,7 +46,7 @@ function setupChatMessagesSheet() {
 
     // ヘッダー行のスタイル設定
     const headerRange = sheet.getRange(1, 1, 1, headers.length);
-    headerRange.setBackground('#667eea');
+    headerRange.setBackground('#3B82F6');
     headerRange.setFontColor('#ffffff');
     headerRange.setFontWeight('bold');
     headerRange.setHorizontalAlignment('center');
