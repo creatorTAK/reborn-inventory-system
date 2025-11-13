@@ -32,8 +32,8 @@ async function init() {
   try {
     console.log('📥 [Master Brand Manager] 初期化開始');
 
-    // Firestore APIモジュール読み込み
-    const module = await import('./firestore-api.js');
+    // Firestore APIモジュール読み込み（絶対パス使用）
+    const module = await import('/js/firestore-api.js');
     createBrand = module.createBrand;
     deleteBrand = module.deleteBrand;
     updateBrand = module.updateBrand;
@@ -442,8 +442,8 @@ function escapeHtml(str) {
  * 戻るボタン処理
  */
 window.goBack = function() {
-  // トップメニューに戻る
-  window.location.href = './index.html';
+  // トップメニューに戻る（絶対パス使用）
+  window.location.href = '/index.html';
 };
 
 /**
