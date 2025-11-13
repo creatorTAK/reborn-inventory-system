@@ -1119,17 +1119,27 @@
         onSnapshot(doc(db, 'navigation', 'chatControl'), (snapshot) => {
           if (snapshot.exists()) {
             const data = snapshot.data();
-            console.log('[Navigation] Firestore更新検知:', data);
+            console.log('[Navigation] Chat Firestore更新検知:', data);
 
             // 初回読み込みは無視（古いデータによる誤作動を防ぐ）
             if (isFirstSnapshot) {
-              console.log('[Navigation] 初回読み込みのため無視');
+              console.log('[Navigation] Chat初回読み込みのため無視');
               isFirstSnapshot = false;
               return;
             }
 
+            // 自分のsessionIdと一致するかチェック
+            const mySessionId = sessionStorage.getItem('device_session_id');
+            console.log('[Navigation] Chat mySessionId:', mySessionId);
+            console.log('[Navigation] Chat data.sessionId:', data.sessionId);
+
+            if (data.sessionId !== mySessionId) {
+              console.log('[Navigation] ⏭️ 他の端末のチャット操作のためスキップ');
+              return;
+            }
+
             if (data.action === 'goBackToList') {
-              console.log('[Navigation] goBackToList要求を受信 → openChatRooms()呼び出し');
+              console.log('[Navigation] ✅ goBackToList要求を受信 → openChatRooms()呼び出し');
               if (typeof openChatRooms === 'function') {
                 openChatRooms();
               } else {
@@ -1830,7 +1840,8 @@
           app: 'pwa',                 // ★明示フラグ（必須）
           userName: userName || '',   // 空でも可（PWAフォームで入力させる）
           parentOrigin: window.location.origin,
-          pmToken: pmToken
+          pmToken: pmToken,
+          sessionId: sessionId        // セッションID追加
         });
         // fcmTokenがあれば付与
         if (fcmToken) params.set('fcmToken', fcmToken);
