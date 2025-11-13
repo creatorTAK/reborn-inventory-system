@@ -153,7 +153,7 @@ function attachBrandSuggestFirestore(inputId, options = {}) {
   // ブランド選択処理
   // ============================================
 
-  const const selectBrand = (brand) => {
+  const selectBrand = (brand) => {
     // 英語名を入力フィールドに設定
     input.value = brand.nameEn;
 
@@ -204,7 +204,7 @@ function attachBrandSuggestFirestore(inputId, options = {}) {
         updateDescriptionFromDetail();
       }
     }
-  };;
+  };
 
   // ============================================
   // パネル表示/非表示
