@@ -838,6 +838,158 @@ async function incrementBrandUsageCount(brandId) {
   }
 }
 
+// ============================================
+// ブランドCRUD操作 (MASTER-001)
+// ============================================
+
+/**
+ * 新規ブランドを追加
+ * @param {string} nameEn - ブランド英語名
+ * @param {string} nameKana - ブランドカナ名
+ * @returns {Promise<Object>} { success: boolean, brandId?: string, error?: string }
+ */
+async function createBrand(nameEn, nameKana) {
+  try {
+    // バリデーション
+    if (!nameEn || !nameEn.trim()) {
+      return { success: false, error: 'ブランド英語名は必須です' };
+    }
+    if (!nameKana || !nameKana.trim()) {
+      return { success: false, error: 'ブランドカナ名は必須です' };
+    }
+
+    const db = await initializeFirestore();
+    const { collection, addDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    // searchText生成（英語名 + カナ名を小文字化）
+    const searchText = `${nameEn.toLowerCase()},${nameKana}`.toLowerCase();
+
+    const brandData = {
+      nameEn: nameEn.trim(),
+      nameKana: nameKana.trim(),
+      searchText: searchText,
+      usageCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    const brandsRef = collection(db, 'brands');
+    const docRef = await addDoc(brandsRef, brandData);
+
+    console.log(`✅ [BRANDS] ブランド追加成功: ${docRef.id} (${nameEn})`);
+
+    // キャッシュをクリア（次回検索時に再取得）
+    brandsCache = null;
+    window.brandsCache = null;
+    brandsCacheTimestamp = 0;
+
+    return {
+      success: true,
+      brandId: docRef.id,
+      brand: {
+        id: docRef.id,
+        nameEn: nameEn.trim(),
+        nameKana: nameKana.trim(),
+        usageCount: 0
+      }
+    };
+
+  } catch (error) {
+    console.error('❌ [BRANDS] ブランド追加エラー:', error);
+    return {
+      success: false,
+      error: error.message || 'ブランドの追加に失敗しました'
+    };
+  }
+}
+
+/**
+ * ブランドを削除
+ * @param {string} brandId - ブランドID
+ * @returns {Promise<Object>} { success: boolean, error?: string }
+ */
+async function deleteBrand(brandId) {
+  try {
+    if (!brandId || !brandId.trim()) {
+      return { success: false, error: 'ブランドIDは必須です' };
+    }
+
+    const db = await initializeFirestore();
+    const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    const brandRef = doc(db, 'brands', brandId);
+    await deleteDoc(brandRef);
+
+    console.log(`✅ [BRANDS] ブランド削除成功: ${brandId}`);
+
+    // キャッシュをクリア
+    brandsCache = null;
+    window.brandsCache = null;
+    brandsCacheTimestamp = 0;
+
+    return { success: true };
+
+  } catch (error) {
+    console.error('❌ [BRANDS] ブランド削除エラー:', error);
+    return {
+      success: false,
+      error: error.message || 'ブランドの削除に失敗しました'
+    };
+  }
+}
+
+/**
+ * ブランド情報を更新
+ * @param {string} brandId - ブランドID
+ * @param {string} nameEn - ブランド英語名
+ * @param {string} nameKana - ブランドカナ名
+ * @returns {Promise<Object>} { success: boolean, error?: string }
+ */
+async function updateBrand(brandId, nameEn, nameKana) {
+  try {
+    // バリデーション
+    if (!brandId || !brandId.trim()) {
+      return { success: false, error: 'ブランドIDは必須です' };
+    }
+    if (!nameEn || !nameEn.trim()) {
+      return { success: false, error: 'ブランド英語名は必須です' };
+    }
+    if (!nameKana || !nameKana.trim()) {
+      return { success: false, error: 'ブランドカナ名は必須です' };
+    }
+
+    const db = await initializeFirestore();
+    const { doc, updateDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    // searchText生成
+    const searchText = `${nameEn.toLowerCase()},${nameKana}`.toLowerCase();
+
+    const brandRef = doc(db, 'brands', brandId);
+    await updateDoc(brandRef, {
+      nameEn: nameEn.trim(),
+      nameKana: nameKana.trim(),
+      searchText: searchText,
+      updatedAt: serverTimestamp()
+    });
+
+    console.log(`✅ [BRANDS] ブランド更新成功: ${brandId} (${nameEn})`);
+
+    // キャッシュをクリア
+    brandsCache = null;
+    window.brandsCache = null;
+    brandsCacheTimestamp = 0;
+
+    return { success: true };
+
+  } catch (error) {
+    console.error('❌ [BRANDS] ブランド更新エラー:', error);
+    return {
+      success: false,
+      error: error.message || 'ブランドの更新に失敗しました'
+    };
+  }
+}
+
 // CommonJS環境（Node.js等）向けエクスポート
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -860,7 +1012,10 @@ if (typeof module !== 'undefined' && module.exports) {
     getAllBrands,
     incrementBrandUsageCount,
     preloadBrandsInBackground,
-    searchBrandsFromCache
+    searchBrandsFromCache,
+    createBrand,
+    deleteBrand,
+    updateBrand
   };
 }
 
@@ -886,7 +1041,10 @@ if (typeof window !== 'undefined') {
     getAllBrands,
     incrementBrandUsageCount,
     preloadBrandsInBackground,
-    searchBrandsFromCache
+    searchBrandsFromCache,
+    createBrand,
+    deleteBrand,
+    updateBrand
   };
 }
 
@@ -911,5 +1069,8 @@ export {
   getAllBrands,
   incrementBrandUsageCount,
   preloadBrandsInBackground,
-  searchBrandsFromCache
+  searchBrandsFromCache,
+  createBrand,
+  deleteBrand,
+  updateBrand
 };
