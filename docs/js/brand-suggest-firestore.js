@@ -73,6 +73,9 @@ function attachBrandSuggestFirestore(inputId, options = {}) {
   const minChars = options.minChars || 1;
   const debounceMs = options.debounceMs || 300;
 
+  // バックグラウンドでプリロード開始（GAS版と同じ動作）
+  preloadBrandsInBackground();
+
   const input = document.getElementById(inputId);
   const panel = document.getElementById('suggest-' + inputId);
 
@@ -210,7 +213,7 @@ function attachBrandSuggestFirestore(inputId, options = {}) {
   // 検索処理（Firestore）
   // ============================================
 
-  const doSearch = async () => {
+  const doSearch = () => {
     let query = (input.value || '').trim();
 
     // ひらがなをカタカナに変換
@@ -222,17 +225,24 @@ function attachBrandSuggestFirestore(inputId, options = {}) {
       return;
     }
 
+    // キャッシュがまだロードされていない場合
+    if (!window.brandsCache) {
+      panel.innerHTML = '<div class="sug-empty">読み込み中...</div>';
+      panel.hidden = false;
+      return;
+    }
+
     try {
       console.log(`[Brand Suggest] 検索開始: "${query}"`);
       const startTime = performance.now();
 
-      // Firestoreから検索
-      if (typeof searchBrands !== 'function') {
-        console.error('[Brand Suggest] searchBrands関数が見つかりません');
+      // キャッシュから検索（即座）
+      if (typeof searchBrandsFromCache !== 'function') {
+        console.error('[Brand Suggest] searchBrandsFromCache関数が見つかりません');
         return;
       }
 
-      const brands = await searchBrands(query, limit);
+      const brands = window.searchBrandsFromCache(query, limit);
       const endTime = performance.now();
 
       console.log(`[Brand Suggest] 検索完了: ${brands.length}件 (${(endTime - startTime).toFixed(2)}ms)`);

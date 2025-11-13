@@ -634,10 +634,72 @@ async function getOperatorName(identifier) {
  * @param {number} limit - 取得件数
  * @returns {Array} 検索結果
  */
+/**
+ * バックグラウンドでブランドをプリロード（GAS版と同じ動作）
+ * attachBrandSuggestFirestore呼び出し時に自動実行
+ */
+async function preloadBrandsInBackground() {
+  // 既にロード済み、またはロード中の場合はスキップ
+  if (brandsCache || window.brandsPreloading) {
+    return;
+  }
+
+  window.brandsPreloading = true;
+
+  try {
+    console.log('📥 [BRANDS] プリロード開始（バックグラウンド）...');
+    const startTime = performance.now();
+
+    const db = await initializeFirestore();
+    const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    const brandsRef = collection(db, 'brands');
+    const snapshot = await getDocs(brandsRef);
+
+    const brands = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      brands.push({
+        id: doc.id,
+        nameEn: data.nameEn || '',
+        nameKana: data.nameKana || '',
+        searchText: (data.searchText || '').toLowerCase(),
+        usageCount: data.usageCount || 0
+      });
+    });
+
+    // グローバルキャッシュに保存
+    brandsCache = brands;
+    window.brandsCache = brands;
+    brandsCacheTimestamp = Date.now();
+
+    const endTime = performance.now();
+    console.log(`✅ [BRANDS] プリロード完了: ${brands.length}件 (${(endTime - startTime).toFixed(2)}ms)`);
+
+  } catch (error) {
+    console.error('❌ [BRANDS] プリロードエラー:', error);
+  } finally {
+    window.brandsPreloading = false;
+  }
+}
+
+/**
+ * キャッシュされたブランドから検索（高速フィルタリング）
+ * @param {string} query - 検索クエリ
+ * @param {number} limit - 取得件数
+ * @returns {Array} 検索結果
+ */
 function searchBrandsFromCache(query, limit) {
+  const cache = brandsCache || window.brandsCache;
+
+  if (!cache) {
+    console.warn('[BRANDS] キャッシュがまだロードされていません');
+    return [];
+  }
+
   if (!query || query.length === 0) {
     // 空検索の場合は使用頻度上位を返す
-    return brandsCache
+    return cache
       .sort((a, b) => b.usageCount - a.usageCount)
       .slice(0, limit);
   }
@@ -645,7 +707,7 @@ function searchBrandsFromCache(query, limit) {
   const normalizedQuery = query.toLowerCase();
   
   // 検索条件に一致するブランドをフィルタ
-  const matches = brandsCache.filter(brand => {
+  const matches = cache.filter(brand => {
     return brand.searchText.includes(normalizedQuery);
   });
 
@@ -796,7 +858,9 @@ if (typeof module !== 'undefined' && module.exports) {
     getOperatorName,
     searchBrands,
     getAllBrands,
-    incrementBrandUsageCount
+    incrementBrandUsageCount,
+    preloadBrandsInBackground,
+    searchBrandsFromCache
   };
 }
 
@@ -820,7 +884,9 @@ if (typeof window !== 'undefined') {
     getOperatorName,
     searchBrands,
     getAllBrands,
-    incrementBrandUsageCount
+    incrementBrandUsageCount,
+    preloadBrandsInBackground,
+    searchBrandsFromCache
   };
 }
 
@@ -843,5 +909,7 @@ export {
   getOperatorName,
   searchBrands,
   getAllBrands,
-  incrementBrandUsageCount
+  incrementBrandUsageCount,
+  preloadBrandsInBackground,
+  searchBrandsFromCache
 };
