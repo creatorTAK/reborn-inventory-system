@@ -153,7 +153,7 @@ function attachBrandSuggestFirestore(inputId, options = {}) {
   // ブランド選択処理
   // ============================================
 
-  const selectBrand = (brand) => {
+  const const selectBrand = (brand) => {
     // 英語名を入力フィールドに設定
     input.value = brand.nameEn;
 
@@ -174,10 +174,19 @@ function attachBrandSuggestFirestore(inputId, options = {}) {
 
     // 基本情報のブランド(英語)選択時の追加処理
     if (inputId === 'ブランド(英語)') {
-      // 商品名ブロックに反映
-      if (typeof updateBrandDisplay === 'function') {
-        updateBrandDisplay();
+      // 商品名ブロックのブランドフィールドにも反映（GAS版と同じ動作）
+      const titleBrandEnField = document.getElementById('商品名_ブランド(英語)');
+      const titleBrandKanaField = document.getElementById('商品名_ブランド(カナ)');
+      
+      if (titleBrandEnField) {
+        titleBrandEnField.value = brand.nameEn;
       }
+      if (titleBrandKanaField) {
+        titleBrandKanaField.value = brand.nameKana;
+      }
+      
+      console.log(`商品名ブロックに反映: ${brand.nameEn} / ${brand.nameKana}`);
+      
       // 商品名プレビュー更新
       if (typeof updateNamePreview === 'function') {
         updateNamePreview();
@@ -195,7 +204,7 @@ function attachBrandSuggestFirestore(inputId, options = {}) {
         updateDescriptionFromDetail();
       }
     }
-  };
+  };;
 
   // ============================================
   // パネル表示/非表示
