@@ -59,6 +59,25 @@ service cloud.firestore {
     }
 
     // ========================================
+    // メッセージコレクション（トップレベル）(CHAT-001)
+    // ========================================
+    match /messages/{messageId} {
+      // 誰でも読み取り可能
+      allow read: if true;
+
+      // 誰でも書き込み可能（ユーザー名検証あり）
+      allow create: if request.resource.data.userName != null
+                  && request.resource.data.text != null
+                  && request.resource.data.timestamp != null;
+
+      // 更新（論理削除）は許可
+      allow update: if true;
+
+      // 物理削除は禁止
+      allow delete: if false;
+    }
+
+    // ========================================
     // チャットルームコレクション (Phase 1.5)
     // ========================================
     match /chat_rooms/{roomId} {
@@ -72,6 +91,32 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if true;
         allow write: if request.auth != null;
+      }
+    }
+
+    // ========================================
+    // チャットルームコレクション v2 (CHAT-001, CHAT-007, CHAT-012)
+    // ========================================
+    match /rooms/{roomId} {
+      // 読み取り: 全員許可
+      allow read: if true;
+
+      // 書き込み・削除: 全員許可（CHAT-012: スワイプ削除機能、認証不要）
+      allow write: if true;
+      allow delete: if true;
+
+      // サブコレクション: メッセージ
+      match /messages/{messageId} {
+        allow read: if true;
+        allow write: if true;
+        allow delete: if true;
+      }
+
+      // サブコレクション: 未読カウント
+      match /unreadCounts/{userId} {
+        allow read: if true;
+        allow write: if true;
+        allow delete: if true;
       }
     }
 

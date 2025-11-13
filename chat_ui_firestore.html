@@ -530,7 +530,15 @@
 
         if (roomDoc.exists()) {
           const roomData = roomDoc.data();
-          currentRoomName = roomData.name || '不明なルーム';
+
+          // 個別チャット（type: 'direct'）の場合は相手のユーザー名を動的生成
+          if (roomData.type === 'direct' && roomData.members && Array.isArray(roomData.members)) {
+            const otherMember = roomData.members.find(m => m !== currentUserName);
+            currentRoomName = otherMember || '不明なユーザー';
+          } else {
+            currentRoomName = roomData.name || '不明なルーム';
+          }
+
           const roomIcon = roomData.icon || '💬';
           document.getElementById('channelName').textContent = `${roomIcon} ${currentRoomName}`;
           console.log('[Room] ルーム名表示完了:', currentRoomName);
@@ -801,8 +809,7 @@
     // Firestoreメッセージをリアルタイムリスニング
     function startListening() {
       const q = query(
-        collection(db, 'messages'),
-        where('roomId', '==', currentRoomId),
+        collection(db, `rooms/${currentRoomId}/messages`),
         orderBy('timestamp', 'desc'),
         limit(50)
       );
@@ -976,9 +983,8 @@
       try {
         console.log('[Firestore] メッセージ送信中...');
 
-        // メッセージを送信
-        await addDoc(collection(db, 'messages'), {
-          roomId: currentRoomId,
+        // メッセージを送信（サブコレクション）
+        await addDoc(collection(db, `rooms/${currentRoomId}/messages`), {
           text: message,
           userName: currentUserName,
           timestamp: serverTimestamp(),

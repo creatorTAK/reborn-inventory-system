@@ -1,3 +1,87 @@
+## CHAT-012 | 機能追加: チャットルーム削除機能（LINE風スワイプ） ✅ DONE (完了日: 2025-11-13)
+
+### 📌 基本情報
+- カテゴリ: 機能追加
+- 優先度: 中
+- 影響範囲: チャット一覧画面
+- 要望日: 2025-11-13
+- 完了日: 2025-11-13
+- デプロイ: GAS @858 + Firestore Rules
+
+### 💡 要望内容
+チャットルーム一覧で、LINE風の左スワイプ削除機能を実装。
+- 左スワイプで赤い削除ボタン表示
+- 削除時にroomドキュメント + messagesサブコレクション + unreadCountsを完全削除
+
+### ✅ 実装内容
+- chat_rooms_list.html にスワイプジェスチャー追加
+- 左スワイプで削除ボタン表示（赤色、「削除」テキスト14px）
+- 削除確認ダイアログ実装
+- deleteRoom() 関数実装（完全削除）
+- Firestoreセキュリティルール修正（/rooms削除権限追加）
+- **データ構造統一**: chat_ui_firestore.htmlをサブコレクション方式に変更
+
+### 📝 実装詳細
+1. **スワイプUI** (@853)
+   - CSS: `.room-item-wrapper`, `.delete-button`
+   - スワイプ: `setupSwipeGesture()` 関数
+   - 削除: `deleteRoom()` - room + messages + unreadCounts完全削除
+
+2. **Firestoreルール修正** (Firebase CLI)
+   - `/rooms/{roomId}`: delete権限追加
+   - サブコレクション: messages, unreadCounts削除権限追加
+
+3. **データ構造統一** (@858)
+   - chat_ui_firestore.html: トップレベル `/messages` → `/rooms/{roomId}/messages` サブコレクションに変更
+   - 削除後の会話履歴復活問題を解決
+
+### 🎉 成果
+- LINE風の直感的な削除操作
+- 会話履歴を含む完全削除
+- データ不整合の解消
+
+---
+
+## CHAT-011 | バグ修正: 個別チャットルーム名が相手側で正しく表示されない ✅ DONE (完了日: 2025-11-13)
+
+### 📌 基本情報
+- カテゴリ: バグ修正
+- 優先度: 高
+- 影響範囲: 個別チャット機能
+- 発見日: 2025-11-13
+- 完了日: 2025-11-13
+- デプロイ: GAS @858
+
+### 🐛 不具合内容
+個別チャット（ダイレクトメッセージ）を作成した際、両方の端末で同じユーザー名（作成対象者の名前）が表示される。
+
+**具体例**：
+- オーナー（安廣拓志）が山田太郎との個別チャットを作成
+- **実際の動作**：
+  - 安廣拓志側：「山田太郎」と表示 ✅
+  - 山田太郎側：「山田太郎」と表示 ❌
+
+### 🔍 根本原因
+- **chat_rooms_list.html:1076**: `createDirectChatRoom()` で `name: targetUserName` と固定値を保存
+- **chat_rooms_list.html:706**: `renderRooms()` で `room.name` をそのまま表示
+- 結果：両端末で同じ名前（targetUserName）が表示される
+
+### ✏️ 修正内容 (@852, @858)
+1. **chat_rooms_list.html** - ルーム一覧での動的名前生成
+   - `createDirectChatRoom()`: `name: ''` に変更
+   - `renderRooms()`: 個別チャット判定ロジック追加
+
+2. **chat_ui_firestore.html** - チャット画面での動的名前生成
+   - ルーム情報取得時に `type === 'direct'` 判定
+   - members配列から相手のユーザー名を抽出して表示
+
+### 🎉 成果
+- 両端末で正しいユーザー名が表示される
+- オーナー側：相手の名前
+- 相手側：オーナーの名前
+
+---
+
 # Issues（完了・アーカイブ）
 
 このファイルは、REBORN Inventoryプロジェクトの**完了したIssue**をアーカイブします。

@@ -15,6 +15,8 @@
 ### Step 1: GASコードアップロード
 ```bash
 npx @google/clasp push
+# または
+npm run deploy:gas "変更内容"
 ```
 - コードをGASにアップロード
 - スプレッドシートのサイドバー/メニューには即反映
@@ -23,20 +25,39 @@ npx @google/clasp push
 ### Step 2: GAS Web Appデプロイ（既存IDを更新）
 ```bash
 npx @google/clasp deploy --deploymentId AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA --description "変更内容の簡潔な説明"
+# または
+npm run deploy:gas "変更内容"
 ```
 
 **重要ポイント:**
-- 同じデプロイIDを使い続ける（@679固定）
+- 同じデプロイIDを使い続ける（固定）
 - `--deploymentId` オプションで既存IDを更新
 - `--description` オプションで変更内容を記録
 - **index.html の更新不要**（デプロイIDが変わらないため）
 
 **成功例:**
 ```
-Deployed AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA @679
+Deployed AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA @856
 ```
 
-### Step 3: Cloudflare Pagesデプロイ（コード変更時のみ）
+### Step 3: Firestoreセキュリティルールデプロイ（ルール変更時のみ）
+```bash
+npx firebase deploy --only firestore:rules
+# または
+npm run deploy:rules
+```
+- docs/firestore.rules を編集後に実行
+- 所要時間：約5秒
+- Firebase Console不要（CLI経由で自動デプロイ）
+
+**成功例:**
+```
+✔ cloud.firestore: rules file docs/firestore.rules compiled successfully
+✔ firestore: released rules docs/firestore.rules to cloud.firestore
+✔ Deploy complete!
+```
+
+### Step 4: Cloudflare Pagesデプロイ（PWAコード変更時のみ）
 ```bash
 # inventory.js, config.js 等のGASファイルのみ変更した場合 → 不要
 # docs/配下のファイルを変更した場合のみ実行:
@@ -62,7 +83,11 @@ git push origin main
 - [ ] `git push origin main`
 - [ ] ✅ 完了（Cloudflare Pages自動デプロイ 1〜2分）
 
-### 両方修正時
+### Firestoreセキュリティルール修正時（docs/firestore.rules）
+- [ ] `npx firebase deploy --only firestore:rules` または `npm run deploy:rules`
+- [ ] ✅ 完了（約5秒、Firebase Console不要）
+
+### 両方修正時（GAS + PWA）
 - [ ] `npx @google/clasp push`
 - [ ] `npx @google/clasp deploy --deploymentId AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA --description "変更内容"`
 - [ ] `git add .`
@@ -142,5 +167,5 @@ npx @google/clasp undeploy [デプロイID]
 
 ---
 
-**最終更新: 2025-11-06**
-**ルール改訂理由: バージョン番号を@679に更新**
+**最終更新: 2025-11-13**
+**ルール改訂理由: Firebase CLI導入、Firestoreルールデプロイフロー追加、バージョン@856**

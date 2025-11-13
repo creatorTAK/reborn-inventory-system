@@ -13,57 +13,55 @@
 
 ---
 
-## 🔒 セキュリティ（Security）
+## 💬 チャット機能（Chat）
 
-## SEC-003 | セキュリティ: Google Safe Browsing警告（Android端末）
+## CHAT-012 | 機能追加: チャットルーム削除機能（LINE風スワイプ）
 
 ### 📌 基本情報
-- [ ] カテゴリ: セキュリティ
-- [ ] 優先度: 高
-- [ ] 影響範囲: Android端末からのアクセス
-- [ ] 発見日: 2025-11-13
+- [ ] カテゴリ: 機能追加
+- [ ] 優先度: 中
+- [ ] 影響範囲: チャット一覧画面
+- [ ] 要望日: 2025-11-13
 
-### 🐛 問題内容
-Android端末で以下のURLにアクセスすると、Google Safe Browsingによる「危険なサイト」警告が表示される：
-- https://www.reborn-inventory.com
-- https://furira.jp（おそらく同様の問題）
+### 💡 要望内容
+チャットルーム一覧で、LINE風の左スワイプ削除機能を実装。
+- 左スワイプで赤い削除ボタン表示
+- 削除時にroomドキュメント + messagesサブコレクション + unreadCountsを完全削除
 
-**警告メッセージ:**
-「危険なサイト - アクセスしようとしたサイトでは、攻撃者がユーザーを騙してソフトウェアをインストールさせたり、パスワード、電話番号、クレジットカード番号などを開示させたりする可能性があります。」
+**現在の問題:**
+- Firebase Consoleからroomを削除してもmessagesサブコレクションが残る
+- 再度同じroomIdでルーム作成すると古い会話履歴が復活する
 
-**影響:**
-- Android端末からのアクセスがブロックされる
-- ユーザーの信頼性が低下
-- PWAのインストール・利用が困難
-
-### 🔍 考えられる原因
-1. **誤報（False Positive）**: 正当なサイトが誤って危険と判定
-2. **マルウェア感染**: サイトが実際に感染している（可能性低）
-3. **フィッシング報告**: 第三者による誤った報告
-4. **ドメインの履歴**: 前所有者の問題がドメインレピュテーションに影響
-5. **CloudflareのIPレピュテーション**: 共有IPの問題
-
-### ✏️ 調査・対応手順
-- [ ] Google Search Console - セキュリティ問題確認
-- [ ] Google Safe Browsing Status確認
-  - URL: https://transparencyreport.google.com/safe-browsing/search
-  - 両ドメイン（reborn-inventory.com、furira.jp）を検索
-- [ ] Cloudflare Security - セキュリティイベント確認
-- [ ] サイトスキャン実行（マルウェアチェック）
-- [ ] 問題特定後、Googleに再審査リクエスト
+### ✅ 実装内容
+- [x] chat_rooms_list.html にスワイプジェスチャー追加
+- [x] 左スワイプで削除ボタン表示（赤色、🗑️アイコン）
+- [x] 削除確認ダイアログ実装
+- [x] deleteRoom() 関数実装
+  - roomドキュメント削除
+  - messagesサブコレクション全削除
+  - unreadCountsサブコレクション削除
+- [x] アニメーション（スムーズなスワイプ）
 
 ### 📍 関連ファイル
-- 全PWAファイル（docs/配下）
-- Firebase設定
-- Cloudflare設定
+- `chat_rooms_list.html` - スワイプUI + 削除ロジック
+- Firestore: `rooms/{roomId}`, `rooms/{roomId}/messages`, `rooms/{roomId}/unreadCounts`
+
+### ✏️ 修正内容（@853）
+- [x] 実装完了
+  - **CSS**: `.room-item-wrapper`, `.delete-button` スタイル追加
+  - **HTML**: ルームアイテムをwrapperで囲み、削除ボタン追加
+  - **スワイプ**: `setupSwipeGesture()` - touchstart/move/end イベント処理
+  - **削除確認**: `confirmDeleteRoom()` - 確認ダイアログ
+  - **完全削除**: `deleteRoom()` - roomドキュメント + 全サブコレクション削除
+  - **Firebase SDK**: `deleteDoc` インポート追加
+- [ ] テスト実行（ユーザー確認待ち）
+- [x] デプロイ（GAS @853）
 
 ### 状態
 - [ ] ✅ DONE (完了日: )
 
 ---
-
-## 🚀 パフォーマンス最適化（Performance）
-
+---
 
 ## 🚀 パフォーマンス最適化（Performance）
 

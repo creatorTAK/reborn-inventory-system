@@ -65,22 +65,51 @@
       border-radius: 16px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.1);
     }
+    .room-item-wrapper {
+      position: relative;
+      margin-bottom: 12px;
+      overflow: hidden;
+      border-radius: 12px;
+    }
     .room-item {
       background: white;
       border-radius: 12px;
       padding: 16px;
-      margin-bottom: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: transform 0.3s ease;
       display: flex;
       gap: 12px;
       align-items: center;
       position: relative;
+      z-index: 2;
     }
-    .room-item:active {
+    .room-item.swiping {
+      transition: none;
+    }
+    .room-item:active:not(.swiping) {
       transform: scale(0.98);
       background: #f7fafc;
+    }
+    .delete-button {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 80px;
+      background: #ef4444;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      z-index: 1;
+      transition: all 0.3s ease;
+    }
+    .delete-button:active {
+      background: #dc2626;
     }
     .room-icon {
       font-size: 32px;
@@ -405,7 +434,7 @@
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, where, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, where, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase設定
     const firebaseConfig = {
@@ -642,6 +671,20 @@
     function appendRoom(room) {
       const container = document.getElementById('roomsContainer');
 
+      // ルームアイテムラッパー（スワイプ削除用）
+      const wrapper = document.createElement('div');
+      wrapper.className = 'room-item-wrapper';
+      wrapper.dataset.roomId = room.id;
+
+      // 削除ボタン
+      const deleteBtn = document.createElement('div');
+      deleteBtn.className = 'delete-button';
+      deleteBtn.textContent = '削除';
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        confirmDeleteRoom(room.id, room.name || '不明なルーム');
+      };
+
       const item = document.createElement('div');
       item.className = 'room-item';
       item.onclick = () => openRoom(room.id);
@@ -703,7 +746,14 @@
 
       const name = document.createElement('div');
       name.className = 'room-name';
-      name.textContent = room.name || '無題のルーム';
+
+      // 個別チャットの場合は相手のユーザー名を動的生成
+      if (room.type === 'direct' && room.members && Array.isArray(room.members)) {
+        const otherMember = room.members.find(m => m !== currentUserName);
+        name.textContent = otherMember || '不明なユーザー';
+      } else {
+        name.textContent = room.name || '無題のルーム';
+      }
 
       // 右側メタ情報（時間 + 未読バッジ）
       const meta = document.createElement('div');
@@ -765,7 +815,12 @@
       item.appendChild(icon);
       item.appendChild(content);
 
-      container.appendChild(item);
+      // スワイプジェスチャー設定
+      setupSwipeGesture(wrapper, item);
+
+      wrapper.appendChild(deleteBtn);
+      wrapper.appendChild(item);
+      container.appendChild(wrapper);
 
       // 未読カウントをリアルタイムで取得・更新
       if (currentUserName) {
@@ -1068,12 +1123,124 @@
       }
     }
 
+    // スワイプジェスチャー設定
+    function setupSwipeGesture(wrapper, item) {
+      let startX = 0;
+      let currentX = 0;
+      let isSwiping = false;
+
+      item.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        currentX = startX;
+        item.classList.add('swiping');
+      });
+
+      item.addEventListener('touchmove', (e) => {
+        if (!isSwiping && Math.abs(e.touches[0].clientX - startX) > 10) {
+          isSwiping = true;
+        }
+
+        if (isSwiping) {
+          currentX = e.touches[0].clientX;
+          const diff = currentX - startX;
+
+          // 左スワイプのみ許可（diff < 0）
+          if (diff < 0) {
+            const offset = Math.max(diff, -80);
+            item.style.transform = `translateX(${offset}px)`;
+          }
+        }
+      });
+
+      item.addEventListener('touchend', (e) => {
+        item.classList.remove('swiping');
+        const diff = currentX - startX;
+
+        if (diff < -40) {
+          // 40px以上スワイプで削除ボタン表示
+          item.style.transform = 'translateX(-80px)';
+        } else {
+          // 閉じる
+          item.style.transform = 'translateX(0)';
+        }
+
+        isSwiping = false;
+        startX = 0;
+        currentX = 0;
+      });
+    }
+
+    // 削除確認ダイアログ
+    function confirmDeleteRoom(roomId, roomName) {
+      const displayName = roomName || '不明なルーム';
+      if (confirm(`「${displayName}」を削除しますか？\n\n会話履歴も完全に削除されます。この操作は取り消せません。`)) {
+        deleteRoom(roomId);
+      }
+    }
+
+    // ルーム削除（サブコレクション含む完全削除）
+    async function deleteRoom(roomId) {
+      try {
+        console.log('[Delete Room] 削除開始:', roomId);
+
+        // 1. messagesサブコレクションの全メッセージを削除
+        const messagesRef = collection(db, `rooms/${roomId}/messages`);
+        const messagesSnapshot = await getDocs(messagesRef);
+
+        console.log('[Delete Room] メッセージ数:', messagesSnapshot.size);
+
+        const deleteBatch = [];
+        messagesSnapshot.forEach((doc) => {
+          deleteBatch.push(deleteDoc(doc.ref));
+        });
+
+        if (deleteBatch.length > 0) {
+          await Promise.all(deleteBatch);
+          console.log('[Delete Room] メッセージ削除完了');
+        }
+
+        // 2. unreadCountsサブコレクションを削除
+        const unreadRef = collection(db, `rooms/${roomId}/unreadCounts`);
+        const unreadSnapshot = await getDocs(unreadRef);
+
+        const unreadBatch = [];
+        unreadSnapshot.forEach((doc) => {
+          unreadBatch.push(deleteDoc(doc.ref));
+        });
+
+        if (unreadBatch.length > 0) {
+          await Promise.all(unreadBatch);
+          console.log('[Delete Room] 未読カウント削除完了');
+        }
+
+        // 3. roomドキュメントを削除
+        await deleteDoc(doc(db, 'rooms', roomId));
+        console.log('[Delete Room] ルーム削除完了');
+
+        // 4. UIから削除
+        const wrapper = document.querySelector(`.room-item-wrapper[data-room-id="${roomId}"]`);
+        if (wrapper) {
+          wrapper.style.opacity = '0';
+          wrapper.style.transform = 'translateX(-100%)';
+          setTimeout(() => {
+            wrapper.remove();
+          }, 300);
+        }
+
+        alert('ルームを削除しました');
+
+      } catch (error) {
+        console.error('[Delete Room] エラー:', error);
+        alert('ルームの削除に失敗しました: ' + error.message);
+      }
+    }
+
     // Firestore roomsに個別チャットルーム作成
     async function createDirectChatRoom(roomId, targetUserName) {
       try {
         // カスタムドキュメントIDでルーム作成
         await setDoc(doc(db, 'rooms', roomId), {
-          name: targetUserName,  // 相手の名前を表示
+          name: '',  // 個別チャットは動的生成するため空欄
           type: 'direct',
           icon: '👤',
           members: [currentUserName, targetUserName],
