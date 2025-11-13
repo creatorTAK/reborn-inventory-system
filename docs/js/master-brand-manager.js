@@ -19,7 +19,7 @@ let brandToDelete = null;
 let unsubscribe = null;
 
 // Firestore API関数
-let createBrand, deleteBrand, updateBrand, initializeFirestore;
+let createBrand, deleteBrand, updateBrand, initializeFirestore, searchBrands, preloadBrandsInBackground;
 
 // ============================================
 // 初期化
@@ -38,6 +38,8 @@ async function init() {
     deleteBrand = module.deleteBrand;
     updateBrand = module.updateBrand;
     initializeFirestore = module.initializeFirestore;
+    searchBrands = module.searchBrands;
+    preloadBrandsInBackground = module.preloadBrandsInBackground;
 
     console.log('✅ [Master Brand Manager] Firestore API読み込み完了');
 
@@ -64,16 +66,24 @@ async function init() {
 
 /**
  * Firestoreリアルタイム同期設定
+ * 【重要】初回は人気上位100件のみ表示（51,342件の全件読み込みを回避）
  */
 async function setupRealtimeSync() {
   try {
     showLoading(true);
 
     const db = await initializeFirestore();
-    const { collection, onSnapshot, query, orderBy } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+    const { collection, onSnapshot, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
     const brandsRef = collection(db, 'brands');
-    const q = query(brandsRef, orderBy('nameEn', 'asc'));
+
+    // 🔥 使用頻度上位100件のみ取得（パフォーマンス対策）
+    const q = query(
+      brandsRef,
+      orderBy('usageCount', 'desc'),
+      orderBy('nameEn', 'asc'),
+      limit(100)
+    );
 
     // リアルタイムリスナー設定
     unsubscribe = onSnapshot(q, (snapshot) => {
@@ -90,7 +100,7 @@ async function setupRealtimeSync() {
         });
       });
 
-      console.log(`🔄 [Master Brand Manager] ブランドリスト更新: ${allBrands.length}件`);
+      console.log(`🔄 [Master Brand Manager] ブランドリスト更新: ${allBrands.length}件（人気上位）`);
 
       // 検索フィルタ適用
       applySearchFilter();
@@ -129,9 +139,28 @@ function setupSearchEvents() {
 
   // 入力イベント（デバウンス付き）
   let debounceTimer;
-  searchInput.addEventListener('input', (e) => {
+  searchInput.addEventListener('input', async (e) => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
+    debounceTimer = setTimeout(async () => {
+      const query = searchInput.value.trim();
+
+      if (query.length > 0) {
+        // 🔍 検索時: 全件から検索（Firestore API使用）
+        showLoading(true);
+        console.log(`🔍 [Master Brand Manager] 検索実行: "${query}"`);
+
+        try {
+          const results = await searchBrands(query, 100);
+          allBrands = results;
+          console.log(`✅ [Master Brand Manager] 検索結果: ${results.length}件`);
+        } catch (error) {
+          console.error('❌ [Master Brand Manager] 検索エラー:', error);
+        }
+
+        showLoading(false);
+      }
+
+      // フィルタ適用と表示更新
       applySearchFilter();
       renderBrandList();
       updateStats();
