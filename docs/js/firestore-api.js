@@ -35,7 +35,10 @@ let userListCache = null;
 let cacheTimestamp = 0;
 let productListCache = null;
 let productCacheTimestamp = 0;
+let brandsCache = null; // ブランドキャッシュ
+let brandsCacheTimestamp = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5分間
+const BRANDS_CACHE_DURATION = 30 * 60 * 1000; // ブランドは30分間キャッシュ
 
 // ============================================
 // Firebase初期化
@@ -625,6 +628,33 @@ async function getOperatorName(identifier) {
   }
 }
 
+/**
+ * キャッシュされたブランドから検索（高速フィルタリング）
+ * @param {string} query - 検索クエリ
+ * @param {number} limit - 取得件数
+ * @returns {Array} 検索結果
+ */
+function searchBrandsFromCache(query, limit) {
+  if (!query || query.length === 0) {
+    // 空検索の場合は使用頻度上位を返す
+    return brandsCache
+      .sort((a, b) => b.usageCount - a.usageCount)
+      .slice(0, limit);
+  }
+
+  const normalizedQuery = query.toLowerCase();
+  
+  // 検索条件に一致するブランドをフィルタ
+  const matches = brandsCache.filter(brand => {
+    return brand.searchText.includes(normalizedQuery);
+  });
+
+  // 使用頻度順にソートして返す
+  return matches
+    .sort((a, b) => b.usageCount - a.usageCount)
+    .slice(0, limit);
+}
+
 // ============================================
 // ブランド検索API (ARCH-001 Phase 3.2)
 // ============================================
@@ -637,59 +667,45 @@ async function getOperatorName(identifier) {
  */
 async function searchBrands(query = '', limit = 50) {
   try {
-    const db = await initializeFirestore();
-    const { collection, getDocs, query: fbQuery, where, orderBy, limit: fbLimit } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+    const now = Date.now();
 
-    const brandsRef = collection(db, 'brands');
-
-    // クエリが空の場合は、使用頻度の高い上位N件を返す
-    if (!query || query.trim() === '') {
-      const q = fbQuery(brandsRef, orderBy('usageCount', 'desc'), fbLimit(limit));
-      const snapshot = await getDocs(q);
-
-      const brands = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        brands.push({
-          id: doc.id,
-          nameEn: data.nameEn || '',
-          nameKana: data.nameKana || '',
-          usageCount: data.usageCount || 0
-        });
-      });
-
-      console.log(`🔍 [BRANDS] 人気上位取得: ${brands.length}件`);
-      return brands;
+    // キャッシュが有効な場合はキャッシュから検索
+    if (brandsCache && (now - brandsCacheTimestamp) < BRANDS_CACHE_DURATION) {
+      console.log('🚀 [BRANDS] キャッシュから検索');
+      return searchBrandsFromCache(query, limit);
     }
 
-    // 検索クエリがある場合は、全件取得してクライアント側フィルタ
-    // （Firestoreの制限により、部分一致検索は全件取得が必要）
+    // キャッシュがない、または期限切れの場合は全件取得
+    console.log('📥 [BRANDS] Firestoreから全件取得中...');
+    const startTime = performance.now();
+
+    const db = await initializeFirestore();
+    const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    const brandsRef = collection(db, 'brands');
     const snapshot = await getDocs(brandsRef);
-    const searchLower = query.toLowerCase();
 
     const brands = [];
     snapshot.forEach((doc) => {
       const data = doc.data();
-      const nameEn = (data.nameEn || '').toLowerCase();
-      const nameKana = data.nameKana || '';
-
-      // 英語名またはカナ名で前方一致
-      if (nameEn.startsWith(searchLower) || nameKana.startsWith(query)) {
-        brands.push({
-          id: doc.id,
-          nameEn: data.nameEn || '',
-          nameKana: data.nameKana || '',
-          usageCount: data.usageCount || 0
-        });
-      }
+      brands.push({
+        id: doc.id,
+        nameEn: data.nameEn || '',
+        nameKana: data.nameKana || '',
+        searchText: (data.searchText || '').toLowerCase(),
+        usageCount: data.usageCount || 0
+      });
     });
 
-    // 使用頻度でソート → 上位N件
-    brands.sort((a, b) => b.usageCount - a.usageCount);
-    const results = brands.slice(0, limit);
+    // キャッシュに保存
+    brandsCache = brands;
+    brandsCacheTimestamp = now;
 
-    console.log(`🔍 [BRANDS] 検索完了: "${query}" → ${results.length}件`);
-    return results;
+    const endTime = performance.now();
+    console.log(`✅ [BRANDS] 全件取得完了: ${brands.length}件 (${(endTime - startTime).toFixed(2)}ms)`);
+
+    // キャッシュから検索して返す
+    return searchBrandsFromCache(query, limit);
 
   } catch (error) {
     console.error('ブランド検索エラー:', error);
