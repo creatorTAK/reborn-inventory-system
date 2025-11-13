@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v33';  // Firebase Messaging SDK削除（2重通知防止）
+const CACHE_VERSION = 'v34';  // CSS強制更新（UI-017 REBORNデザインシステム）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -26,7 +26,7 @@ const PRECACHE_RESOURCES = [
 // Firebase Messaging SDKは使用しない（2重通知を防ぐため）
 // pushイベントを手動でハンドリングする
 
-console.log('[SW v33] Service Worker initialized - manual push handling only');
+console.log('[SW v34] Service Worker initialized - manual push handling only');
 
 // ================================================================================
 // キャッシュクリーンアップ（軽量化）
