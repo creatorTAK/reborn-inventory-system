@@ -31,9 +31,28 @@
 ```javascript
 async function searchBrands(query, limit = 50)
 async function incrementBrandUsageCount(brandId)
+async function preloadBrandsInBackground() // バックグラウンドプリロード
+function searchBrandsFromCache(query, limit) // 高速メモリ内検索
 ```
 
-#### 3. Firestoreデータ構造
+#### 3. Firestore版ブランド検索UI（docs/js/brand-suggest-firestore.js）
+```javascript
+function attachBrandSuggestFirestore(inputId, options)
+// 機能:
+// - プリロード方式（GAS版と同じUX）
+// - キーボードナビゲーション（↑↓ Enter Esc）
+// - 英語名+カナ名の2行表示
+// - 使用カウント自動更新
+// - 商品名ブロック自動反映
+```
+
+#### 4. 商品登録画面への統合（sp_scripts.html）
+- スプレッドシート版からFirestore版に完全移行
+- バックグラウンドプリロードで初期表示高速化
+- 基本情報ブランド選択時の商品名ブロック自動反映
+- 商品説明プレビューへのブランド情報反映
+
+#### 5. Firestoreデータ構造
 ```
 brands/{brandId}
   - nameEn: string (英語名)
@@ -85,11 +104,14 @@ brands/{brandId}
 - ✅ 進捗管理機能で安全な中断・再開
 - ✅ Firebase Blazeプラン移行（実質無料）
 - ✅ データ整合性確認完了
+- ✅ **商品登録画面へのFirestore版統合完了**
+- ✅ **プリロード方式でGAS版と同じUX実現**
+- ✅ **基本情報→商品名ブロック自動反映機能実装**
+- ✅ **商品説明プレビューへのブランド情報反映**
 
-### 📋 次のステップ
-- 商品登録画面のFirestore版作成
-- ブランド検索APIの統合
-- パフォーマンス確認
+### 📦 デプロイ
+- **PWA版**: Commit 147ea98 (Cloudflare Pages)
+- **GAS版**: @860
 
 ---
 
