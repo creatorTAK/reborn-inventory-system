@@ -1,3 +1,26 @@
+<!-- Firestore版ブランド検索モジュール -->
+<script type="module">
+  // Cloudflare PagesからFirestore APIモジュールを読み込み
+  import('https://reborn-inventory-system.pages.dev/js/firestore-api.js').then(module => {
+    console.log('✅ Firestore API読み込み完了');
+    
+    // グローバルにエクスポート
+    window.searchBrands = module.searchBrands || module.default?.searchBrands;
+    window.incrementBrandUsageCount = module.incrementBrandUsageCount || module.default?.incrementBrandUsageCount;
+    window.preloadBrandsInBackground = module.preloadBrandsInBackground || module.default?.preloadBrandsInBackground;
+    window.searchBrandsFromCache = module.searchBrandsFromCache || module.default?.searchBrandsFromCache;
+    
+    // ブランドサジェストモジュール読み込み
+    return import('https://reborn-inventory-system.pages.dev/js/brand-suggest-firestore.js');
+  }).then(() => {
+    console.log('✅ Brand Suggest Firestore読み込み完了');
+    // 読み込み完了フラグを設定
+    window.firestoreBrandModulesLoaded = true;
+  }).catch(error => {
+    console.error('❌ Firestoreモジュール読み込みエラー:', error);
+  });
+</script>
+
 <script>
   // ==================== デバッグ設定 ====================
   // 本番環境ではfalseに設定してログを無効化
@@ -5975,41 +5998,45 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         fillSel('サイズ(表記)_トップス', opts['サイズ(表記)']||[]);
         fillSel('サイズ(表記)_ボトムス', opts['サイズ(表記)']||[]);
 
-// ブランドデータ（従来の配列形式は互換性のため保持）
-        BRAND_EN = Array.isArray(opts['ブランド(英語)']) ? opts['ブランド(英語)'] : [];
-        BRAND_KANA = Array.isArray(opts['ブランド(カナ)']) ? opts['ブランド(カナ)'] : [];
-
-        // ブランドペアデータを別途取得
-        google.script.run
-          .withSuccessHandler(function(pairs) {
-            console.log('ブランドペアデータ取得成功:', pairs.length, '件');
-            BRAND_PAIRS = pairs || [];
-
-            // ペアデータから英語とカナの配列を再構築
-            BRAND_EN = BRAND_PAIRS.map(pair => pair.english);
-            BRAND_KANA = BRAND_PAIRS.map(pair => pair.kana);
-
-            // ペアデータ用インデックスマップを構築
-            buildBrandIndexMap();
-
-            // ブランド候補を再設定（ペアデータ使用）
-  attachBrandSuggest('ブランド(英語)', BRAND_EN);
-
-  // 商品名ブロック用のブランド候補を設定
-  attachBrandSuggest('商品名_ブランド(英語)', BRAND_EN);
-  attachBrandSuggest('商品名_ブランド(カナ)', BRAND_KANA);
-
-            console.log('ブランドペアデータ設定完了 - EN:', BRAND_EN.length, 'KANA:', BRAND_KANA.length);
-          })
-          .withFailureHandler(function(error) {
-            console.error('ブランドペアデータ取得エラー:', error);
-            // エラー時は従来の配列方式にフォールバック
-  buildBrandIndexMap();
-  attachBrandSuggest('ブランド(英語)', BRAND_EN);
-  attachBrandSuggest('商品名_ブランド(英語)', BRAND_EN);
-  attachBrandSuggest('商品名_ブランド(カナ)', BRAND_KANA);
-          })
-          .getBrandPairs();
+// ブランドデータ（Firestore版に移行）
+        // モジュール読み込み完了を待ってからFirestore版ブランド検索を初期化
+        const initFirestoreBrandSearch = () => {
+          if (typeof window.attachBrandSuggestFirestore === 'function') {
+            console.log('🔥 Firestore版ブランド検索を初期化');
+            
+            // 基本情報ブロックのブランド(英語)フィールド
+            window.attachBrandSuggestFirestore('ブランド(英語)', {
+              limit: 15,
+              minChars: 1,
+              debounceMs: 300
+            });
+            
+            // 商品名ブロックのブランド(英語)フィールド
+            window.attachBrandSuggestFirestore('商品名_ブランド(英語)', {
+              limit: 15,
+              minChars: 1,
+              debounceMs: 300
+            });
+            
+            console.log('✅ Firestore版ブランド検索初期化完了');
+          } else {
+            console.warn('⏳ Firestoreモジュール読み込み中... 1秒後に再試行');
+            setTimeout(initFirestoreBrandSearch, 1000);
+          }
+        };
+        
+        // モジュール読み込み完了を待機
+        if (window.firestoreBrandModulesLoaded) {
+          initFirestoreBrandSearch();
+        } else {
+          // 読み込み完了を監視
+          const checkInterval = setInterval(() => {
+            if (window.firestoreBrandModulesLoaded) {
+              clearInterval(checkInterval);
+              initFirestoreBrandSearch();
+            }
+          }, 100);
+        }
 
         // タイトル情報フィールド
         [
