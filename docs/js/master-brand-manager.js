@@ -65,60 +65,22 @@ async function init() {
 // ============================================
 
 /**
- * Firestoreリアルタイム同期設定
- * 【重要】初回は人気上位100件のみ表示（51,342件の全件読み込みを回避）
+ * 初期状態設定
+ * 【重要】検索主導型UI: 初期表示ではデータ読み込みなし
  */
 async function setupRealtimeSync() {
   try {
-    showLoading(true);
+    console.log('🔄 [Master Brand Manager] 検索主導型モードで起動');
 
-    const db = await initializeFirestore();
-    const { collection, onSnapshot, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+    // 初期状態: 空表示
+    allBrands = [];
+    filteredBrands = [];
 
-    const brandsRef = collection(db, 'brands');
-
-    // 🔥 使用頻度上位100件のみ取得（パフォーマンス対策）
-    const q = query(
-      brandsRef,
-      orderBy('usageCount', 'desc'),
-      orderBy('nameEn', 'asc'),
-      limit(100)
-    );
-
-    // リアルタイムリスナー設定
-    unsubscribe = onSnapshot(q, (snapshot) => {
-      allBrands = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        allBrands.push({
-          id: doc.id,
-          nameEn: data.nameEn || '',
-          nameKana: data.nameKana || '',
-          usageCount: data.usageCount || 0,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt
-        });
-      });
-
-      console.log(`🔄 [Master Brand Manager] ブランドリスト更新: ${allBrands.length}件（人気上位）`);
-
-      // 検索フィルタ適用
-      applySearchFilter();
-
-      // 表示更新
-      renderBrandList();
-      updateStats();
-
-      showLoading(false);
-    }, (error) => {
-      console.error('❌ [Master Brand Manager] リアルタイム同期エラー:', error);
-      showLoading(false);
-      alert('データの読み込みに失敗しました。');
-    });
+    renderBrandList();
+    updateStats();
 
   } catch (error) {
-    console.error('❌ [Master Brand Manager] リアルタイム同期設定エラー:', error);
-    showLoading(false);
+    console.error('❌ [Master Brand Manager] 初期化エラー:', error);
   }
 }
 
@@ -128,6 +90,7 @@ async function setupRealtimeSync() {
 
 /**
  * 検索イベント設定
+ * 【重要】検索主導型: 入力があるときのみFirestore検索
  */
 function setupSearchEvents() {
   const searchInput = document.getElementById('searchInput');
@@ -145,23 +108,30 @@ function setupSearchEvents() {
       const query = searchInput.value.trim();
 
       if (query.length > 0) {
-        // 🔍 検索時: 全件から検索（Firestore API使用）
+        // 🔍 検索実行: 全51,342件から検索（最大50件取得）
         showLoading(true);
         console.log(`🔍 [Master Brand Manager] 検索実行: "${query}"`);
 
         try {
-          const results = await searchBrands(query, 100);
+          const results = await searchBrands(query, 50);
           allBrands = results;
+          filteredBrands = results;
           console.log(`✅ [Master Brand Manager] 検索結果: ${results.length}件`);
         } catch (error) {
           console.error('❌ [Master Brand Manager] 検索エラー:', error);
+          allBrands = [];
+          filteredBrands = [];
         }
 
         showLoading(false);
+      } else {
+        // 検索クエリなし = 空表示
+        console.log('🔄 [Master Brand Manager] 検索クリア');
+        allBrands = [];
+        filteredBrands = [];
       }
 
-      // フィルタ適用と表示更新
-      applySearchFilter();
+      // 表示更新
       renderBrandList();
       updateStats();
     }, 300);
@@ -170,22 +140,11 @@ function setupSearchEvents() {
 
 /**
  * 検索フィルタ適用
+ * 【注意】検索主導型UIでは不要（検索時に直接filteredBrandsを設定）
  */
 function applySearchFilter() {
-  const searchInput = document.getElementById('searchInput');
-  const query = (searchInput?.value || '').trim().toLowerCase();
-
-  if (!query) {
-    // 検索クエリがない場合は全件表示
-    filteredBrands = [...allBrands];
-  } else {
-    // 英語名またはカナ名に一致するものをフィルタ
-    filteredBrands = allBrands.filter(brand => {
-      const nameEn = brand.nameEn.toLowerCase();
-      const nameKana = brand.nameKana.toLowerCase();
-      return nameEn.includes(query) || nameKana.includes(query);
-    });
-  }
+  // この関数は検索主導型UIでは使用しない
+  // filteredBrands は setupSearchEvents() で直接設定される
 }
 
 // ============================================
@@ -257,14 +216,9 @@ function createBrandCard(brand) {
  */
 function updateStats() {
   const totalCount = document.getElementById('totalCount');
-  const filteredCount = document.getElementById('filteredCount');
 
   if (totalCount) {
-    totalCount.textContent = allBrands.length.toLocaleString();
-  }
-
-  if (filteredCount) {
-    filteredCount.textContent = filteredBrands.length.toLocaleString();
+    totalCount.textContent = filteredBrands.length.toLocaleString();
   }
 }
 
