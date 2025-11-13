@@ -1,14 +1,18 @@
 /**
  * REBORN在庫管理システム - GAS API連携モジュール
- * 
+ *
  * PWAからGoogle Apps Script (GAS)のAPIエンドポイントを呼び出すための
  * ラッパー関数を提供します。
- * 
+ *
  * @module api
- * @version 1.0.0
+ * @version 1.0.1
  * @created 2025-11-11
- * @related-issue ARCH-001
+ * @updated 2025-11-13
+ * @related-issue ARCH-001, UI-015
  */
+
+// キャッシュバスティング用タイムスタンプ
+console.log('[API Module] Loaded v1.0.1 - 2025-11-13 12:30');
 
 // ============================================
 // 定数定義
