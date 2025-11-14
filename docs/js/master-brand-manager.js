@@ -18,14 +18,7 @@ let filteredBrands = [];
 let brandToDelete = null;
 let unsubscribe = null;
 
-// Firestore API関数（グローバルスコープ）
-window.createBrand = null;
-window.deleteBrand = null;
-window.updateBrand = null;
-window.initializeFirestore = null;
-window.searchBrands = null;
-window.preloadBrandsInBackground = null;
-
+// Firestore API関数（ローカル変数のみ、windowスコープには触らない）
 let createBrand, deleteBrand, updateBrand, initializeFirestore, searchBrands, preloadBrandsInBackground;
 
 // ============================================
