@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>マスタ管理 - REBORN在庫管理システム</title>
+
+  <!-- Bootstrap 5.3 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f6fa;
+      padding-bottom: 80px;
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ヘッダー */
+    .header {
+      background: #4facfe;
+      color: white;
+      padding: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .header-title {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .back-button {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .back-button:active {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* マスタ種別選択 */
+    .master-selector-container {
+      max-width: 800px;
+      margin: 16px auto;
+      padding: 0 16px;
+    }
+
+    .master-selector {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .master-selector-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .master-selector-dropdown {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+      background: white;
+      cursor: pointer;
+    }
+
+    .master-selector-dropdown:focus {
+      border-color: #667eea;
+    }
+
+    /* 検索バー */
+    .search-container {
+      max-width: 800px;
+      margin: 16px auto;
+      padding: 0 16px;
+    }
+
+    .search-box {
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 40px 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+      background: white;
+    }
+
+    .search-input:focus {
+      border-color: #667eea;
+    }
+
+    .search-icon {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #999;
+      font-size: 18px;
+    }
+
+    /* 拡張機能バー */
+    .action-bar {
+      max-width: 800px;
+      margin: 0 auto 16px;
+      padding: 16px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-left: 16px;
+      margin-right: 16px;
+    }
+
+    .stats-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: #666;
+      font-weight: 600;
+    }
+
+    .stats-info i {
+      color: #4facfe;
+      font-size: 18px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-action {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-add {
+      background: #4facfe;
+      color: white;
+    }
+
+    .btn-add:active {
+      transform: scale(0.95);
+      background: #3a9ae6;
+    }
+
+    .btn-select {
+      background: #f5f5f5;
+      color: #666;
+    }
+
+    .btn-select:active {
+      background: #e0e0e0;
+    }
+
+    .btn-select.active {
+      background: #4facfe;
+      color: white;
+    }
+
+    /* 選択ツールバー */
+    .selection-toolbar {
+      max-width: 800px;
+      margin: 0 auto 16px;
+      padding: 12px 16px;
+      background: #4facfe;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(79, 172, 254, 0.3);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-left: 16px;
+      margin-right: 16px;
+    }
+
+    .btn-tool {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+
+    .btn-tool:active {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-delete-selected {
+      background: rgba(255, 59, 48, 0.9);
+    }
+
+    .btn-delete-selected:active {
+      background: rgba(255, 59, 48, 1);
+    }
+
+    .selected-count {
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      flex: 1;
+      text-align: center;
+    }
+
+    /* データリスト */
+    .data-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    .data-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .data-card:active {
+      transform: scale(0.98);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    .data-info {
+      flex: 1;
+    }
+
+    .data-field {
+      margin-bottom: 4px;
+    }
+
+    .data-field-label {
+      font-size: 12px;
+      color: #999;
+      margin-right: 4px;
+    }
+
+    .data-field-value {
+      font-size: 14px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .data-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .usage-count {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: #999;
+    }
+
+    .data-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-delete {
+      background: #ff4757;
+      color: white;
+      border: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-delete:active {
+      background: #e84118;
+    }
+
+    /* 選択モード用チェックボックス */
+    .data-checkbox {
+      width: 24px;
+      height: 24px;
+      margin-right: 12px;
+      cursor: pointer;
+      accent-color: #4facfe;
+    }
+
+    .data-card.selection-mode {
+      padding-left: 12px;
+    }
+
+    .data-card.selected {
+      background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%);
+      border: 2px solid #4facfe;
+    }
+
+    /* 空状態 */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+
+    .empty-state i {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .empty-state-text {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .empty-state-hint {
+      font-size: 14px;
+      color: #bbb;
+    }
+
+    /* ローディング */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* モーダル */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      max-width: 400px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+      padding: 20px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: #667eea;
+    }
+
+    .modal-footer {
+      padding: 16px 20px;
+      border-top: 1px solid #eee;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-primary {
+      background: #4facfe;
+      color: white;
+    }
+
+    .btn-primary:active {
+      background: #3a9ae6;
+    }
+
+    .btn-secondary {
+      background: #e0e0e0;
+      color: #666;
+    }
+
+    .btn-secondary:active {
+      background: #d0d0d0;
+    }
+
+    /* エラー表示 */
+    .error-message {
+      background: #fff3f3;
+      border: 1px solid #ffcaca;
+      color: #d00;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    /* 検索結果超過通知 */
+    .more-results-notice {
+      background: #4facfe;
+      color: white;
+      padding: 16px;
+      border-radius: 12px;
+      margin-top: 16px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+    }
+
+    .more-results-notice i {
+      font-size: 20px;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .more-results-notice span {
+      display: block;
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .more-results-notice small {
+      display: block;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    /* 非表示クラス */
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" onclick="goBack()">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title" id="headerTitle">
+        <i class="bi bi-gear" id="headerIcon"></i>
+        マスタ管理
+      </div>
+      <div style="width: 40px;"></div> <!-- スペーサー -->
+    </div>
+  </div>
+
+  <!-- マスタ種別選択 -->
+  <div class="master-selector-container">
+    <div class="master-selector">
+      <label class="master-selector-label" for="masterTypeSelect">マスタ種別</label>
+      <select id="masterTypeSelect" class="master-selector-dropdown">
+        <option value="">マスタを選択してください</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 検索バー -->
+  <div class="search-container">
+    <div class="search-box">
+      <input type="text" id="searchInput" class="search-input" placeholder="絞り込み検索...">
+      <i class="bi bi-search search-icon"></i>
+    </div>
+  </div>
+
+  <!-- 拡張機能バー -->
+  <div class="action-bar">
+    <div class="stats-info">
+      <i class="bi bi-graph-up"></i>
+      <span id="statsText">検索結果: 0件</span>
+    </div>
+    <div class="action-buttons">
+      <button class="btn-action btn-add" onclick="showAddModal()">
+        <i class="bi bi-plus-circle"></i>
+        <span>新規追加</span>
+      </button>
+      <button class="btn-action btn-select" onclick="toggleSelectionMode()" id="selectModeBtn">
+        <i class="bi bi-check-square"></i>
+        <span>選択削除</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 選択モード時のツールバー -->
+  <div class="selection-toolbar hidden" id="selectionToolbar">
+    <button class="btn-tool" onclick="selectAll()">
+      <i class="bi bi-check-all"></i>
+      全選択
+    </button>
+    <span class="selected-count" id="selectedCount">0件選択中</span>
+    <button class="btn-tool btn-delete-selected" onclick="deleteSelected()">
+      <i class="bi bi-trash"></i>
+      削除
+    </button>
+  </div>
+
+  <!-- データリスト -->
+  <div class="data-container" id="dataContainer">
+    <!-- データカードがここに動的生成される -->
+  </div>
+
+  <!-- 空状態 -->
+  <div class="empty-state hidden" id="emptyState">
+    <i class="bi bi-inbox"></i>
+    <div class="empty-state-text" id="emptyStateText">マスタを選択してください</div>
+    <div class="empty-state-hint" id="emptyStateHint"></div>
+  </div>
+
+  <!-- ローディングオーバーレイ -->
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+  </div>
+
+  <!-- 追加モーダル -->
+  <div class="modal-backdrop hidden" id="addModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="addModalTitle">新規追加</div>
+      </div>
+      <div class="modal-body">
+        <div class="error-message hidden" id="addErrorMessage"></div>
+        <div id="addFormFields">
+          <!-- 動的にフィールドが生成される -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="hideAddModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="addData()">追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 削除確認モーダル -->
+  <div class="modal-backdrop hidden" id="deleteModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="deleteModalTitle">削除確認</div>
+      </div>
+      <div class="modal-body">
+        <p>以下のデータを削除してもよろしいですか？</p>
+        <div style="margin-top: 16px; padding: 12px; background: #f5f5f5; border-radius: 8px;" id="deleteDataPreview">
+          <!-- 削除対象のデータプレビューが表示される -->
+        </div>
+        <p style="margin-top: 16px; color: #ff4757; font-size: 14px;">
+          <i class="bi bi-exclamation-triangle"></i>
+          この操作は取り消せません
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="hideDeleteModal()">キャンセル</button>
+        <button class="btn btn-primary" style="background: #ff4757;" onclick="confirmDelete()">削除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5.3 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- マスタ定義設定読み込み -->
+  <script src="./js/master-config.js"></script>
+
+  <!-- Firestore API + マスタ管理ロジック読み込み -->
+  <script type="module">
+    // Firestore API読み込み
+    import('./js/firestore-api.js').then(module => {
+      console.log('✅ [Master Management] Firestore API読み込み完了');
+
+      // グローバルスコープに代入
+      window.getMasterData = module.getMasterData;
+      window.createMaster = module.createMaster;
+      window.updateMaster = module.updateMaster;
+      window.deleteMaster = module.deleteMaster;
+      window.searchMaster = module.searchMaster;
+      window.initializeFirestore = module.initializeFirestore;
+
+      console.log('✅ [Master Management] グローバル関数設定完了');
+
+      // マスタ管理ロジック読み込み
+      return import('./js/master-manager.js?v=1');
+    }).then(() => {
+      console.log('✅ [Master Management] master-manager.js読み込み完了');
+
+      // 初期化関数呼び出し
+      if (typeof window.initMasterManager === 'function') {
+        console.log('🚀 [Master Management] 初期化開始...');
+        window.initMasterManager();
+      } else {
+        console.error('❌ [Master Management] initMasterManager が見つかりません');
+      }
+    }).catch(error => {
+      console.error('❌ [Master Management] 初期化エラー:', error);
+      alert('初期化エラーが発生しました。ページを再読み込みしてください。');
+    });
+  </script>
+
+  <!-- 戻るボタン処理 -->
+  <script>
+    function goBack() {
+      window.location.href = '/';
+    }
+  </script>
+</body>
+</html>

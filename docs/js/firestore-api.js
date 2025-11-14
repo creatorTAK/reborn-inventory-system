@@ -998,6 +998,217 @@ async function updateBrand(brandId, nameEn, nameKana) {
       success: false,
       error: error.message || 'ブランドの更新に失敗しました'
     };
+    }
+}
+
+// ============================================
+// 汎用マスタ管理API（MASTER-002）
+// ============================================
+
+/**
+ * 汎用マスタ取得（コレクション全件）
+ * 
+ * @param {string} collection - Firestoreコレクション名
+ * @param {object} options - オプション
+ * @param {string} options.sortBy - ソートフィールド名
+ * @param {string} options.sortOrder - ソート順序('asc'/'desc')
+ * @param {number} options.limit - 取得件数制限
+ * @returns {Promise<Array>} マスタデータ配列
+ */
+async function getMasterData(collection, options = {}) {
+  try {
+    const db = await initializeFirestore();
+    const {
+      collection: firestoreCollection,
+      getDocs,
+      query,
+      orderBy,
+      limit: firestoreLimit
+    } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    // クエリ構築
+    let q = firestoreCollection(db, collection);
+
+    // ソート
+    if (options.sortBy) {
+      const sortOrder = options.sortOrder || 'asc';
+      q = query(q, orderBy(options.sortBy, sortOrder));
+    }
+
+    // 件数制限
+    if (options.limit) {
+      q = query(q, firestoreLimit(options.limit));
+    }
+
+    const snapshot = await getDocs(q);
+    const data = [];
+
+    snapshot.forEach((doc) => {
+      data.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    console.log(`✅ [Master API] ${collection}取得完了: ${data.length}件`);
+    return data;
+
+  } catch (error) {
+    console.error(`❌ [Master API] ${collection}取得エラー:`, error);
+    throw error;
+  }
+}
+
+/**
+ * 汎用マスタ作成
+ * 
+ * @param {string} collection - Firestoreコレクション名
+ * @param {object} data - マスタデータ
+ * @param {boolean} includeUsageCount - 使用回数カウント機能を含めるか
+ * @returns {Promise<object>} { success: boolean, id?: string, error?: string }
+ */
+async function createMaster(collection, data, includeUsageCount = false) {
+  try {
+    const db = await initializeFirestore();
+    const {
+      collection: firestoreCollection,
+      addDoc,
+      serverTimestamp
+    } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    const masterData = {
+      ...data,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    // 使用回数カウント機能
+    if (includeUsageCount) {
+      masterData.usageCount = 0;
+    }
+
+    const docRef = await addDoc(firestoreCollection(db, collection), masterData);
+    console.log(`✅ [Master API] ${collection}作成成功: ${docRef.id}`);
+
+    return {
+      success: true,
+      id: docRef.id
+    };
+
+  } catch (error) {
+    console.error(`❌ [Master API] ${collection}作成エラー:`, error);
+    return {
+      success: false,
+      error: error.message || 'マスタの作成に失敗しました'
+    };
+  }
+}
+
+/**
+ * 汎用マスタ更新
+ * 
+ * @param {string} collection - Firestoreコレクション名
+ * @param {string} id - ドキュメントID
+ * @param {object} data - 更新データ
+ * @returns {Promise<object>} { success: boolean, error?: string }
+ */
+async function updateMaster(collection, id, data) {
+  try {
+    if (!id || !id.trim()) {
+      return { success: false, error: 'IDは必須です' };
+    }
+
+    const db = await initializeFirestore();
+    const {
+      doc,
+      updateDoc,
+      serverTimestamp
+    } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    const updateData = {
+      ...data,
+      updatedAt: serverTimestamp()
+    };
+
+    const docRef = doc(db, collection, id);
+    await updateDoc(docRef, updateData);
+
+    console.log(`✅ [Master API] ${collection}更新成功: ${id}`);
+    return { success: true };
+
+  } catch (error) {
+    console.error(`❌ [Master API] ${collection}更新エラー:`, error);
+    return {
+      success: false,
+      error: error.message || 'マスタの更新に失敗しました'
+    };
+  }
+}
+
+/**
+ * 汎用マスタ削除
+ * 
+ * @param {string} collection - Firestoreコレクション名
+ * @param {string} id - ドキュメントID
+ * @returns {Promise<object>} { success: boolean, error?: string }
+ */
+async function deleteMaster(collection, id) {
+  try {
+    if (!id || !id.trim()) {
+      return { success: false, error: 'IDは必須です' };
+    }
+
+    const db = await initializeFirestore();
+    const {
+      doc,
+      deleteDoc
+    } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    const docRef = doc(db, collection, id);
+    await deleteDoc(docRef);
+
+    console.log(`✅ [Master API] ${collection}削除成功: ${id}`);
+    return { success: true };
+
+  } catch (error) {
+    console.error(`❌ [Master API] ${collection}削除エラー:`, error);
+    return {
+      success: false,
+      error: error.message || 'マスタの削除に失敗しました'
+    };
+  }
+}
+
+/**
+ * 汎用マスタ検索
+ * 
+ * @param {string} collection - Firestoreコレクション名
+ * @param {string} searchQuery - 検索クエリ
+ * @param {Array} searchFields - 検索対象フィールド名配列
+ * @param {number} limit - 取得件数制限
+ * @returns {Promise<Array>} 検索結果配列
+ */
+async function searchMaster(collection, searchQuery, searchFields, limit = 100) {
+  try {
+    // まず全件取得してクライアント側でフィルタリング
+    // (Firestoreは部分一致検索が不得意なため)
+    const allData = await getMasterData(collection);
+
+    const query = searchQuery.toLowerCase();
+    const results = allData.filter(item => {
+      return searchFields.some(field => {
+        const fieldValue = item[field];
+        if (!fieldValue) return false;
+        return fieldValue.toString().toLowerCase().includes(query);
+      });
+    });
+
+    console.log(`✅ [Master API] ${collection}検索完了: ${results.length}件 / ${allData.length}件`);
+    return results.slice(0, limit);
+
+  } catch (error) {
+    console.error(`❌ [Master API] ${collection}検索エラー:`, error);
+    throw error;
   }
 }
 
@@ -1026,7 +1237,12 @@ if (typeof module !== 'undefined' && module.exports) {
     searchBrandsFromCache,
     createBrand,
     deleteBrand,
-    updateBrand
+    updateBrand,
+    getMasterData,
+    createMaster,
+    updateMaster,
+    deleteMaster,
+    searchMaster
   };
 }
 
@@ -1055,7 +1271,12 @@ if (typeof window !== 'undefined') {
     searchBrandsFromCache,
     createBrand,
     deleteBrand,
-    updateBrand
+    updateBrand,
+    getMasterData,
+    createMaster,
+    updateMaster,
+    deleteMaster,
+    searchMaster
   };
 }
 
