@@ -14,9 +14,9 @@
 // Firestore REST API設定
 // =============================================================================
 
-const FIRESTORE_PROJECT_ID = 'reborn-chat';
-const FIRESTORE_BASE_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents`;
-const BATCH_SIZE = 500; // Firestore Batch Write APIの上限
+const MASTER_FIRESTORE_PROJECT_ID = 'reborn-chat';
+const MASTER_FIRESTORE_BASE_URL = `https://firestore.googleapis.com/v1/projects/${MASTER_FIRESTORE_PROJECT_ID}/databases/(default)/documents`;
+const MASTER_BATCH_SIZE = 500; // Firestore Batch Write APIの上限
 
 // =============================================================================
 // 発送方法マスタのFirestore移行
@@ -246,8 +246,8 @@ function saveToFirestoreBatch(collectionName, items) {
   let failedCount = 0;
 
   // Batch Write APIで処理（最大500件/バッチ）
-  for (let i = 0; i < items.length; i += BATCH_SIZE) {
-    const batchItems = items.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < items.length; i += MASTER_BATCH_SIZE) {
+    const batchItems = items.slice(i, i + MASTER_BATCH_SIZE);
 
     try {
       // Batch Write APIのリクエストボディ構築
@@ -274,7 +274,7 @@ function saveToFirestoreBatch(collectionName, items) {
 
         return {
           update: {
-            name: `projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/${collectionName}/${item.id}`,
+            name: `projects/${MASTER_FIRESTORE_PROJECT_ID}/databases/(default)/documents/${collectionName}/${item.id}`,
             fields: fields
           }
         };
@@ -285,7 +285,7 @@ function saveToFirestoreBatch(collectionName, items) {
       };
 
       // Batch Write API呼び出し
-      const url = `${FIRESTORE_BASE_URL}:batchWrite`;
+      const url = `${MASTER_FIRESTORE_BASE_URL}:batchWrite`;
       const options = {
         method: 'post',
         contentType: 'application/json',
@@ -312,7 +312,7 @@ function saveToFirestoreBatch(collectionName, items) {
       }
 
       // バッチ間に短い待機（レート制限対策）
-      if (i + BATCH_SIZE < items.length) {
+      if (i + MASTER_BATCH_SIZE < items.length) {
         Utilities.sleep(100);
       }
 
