@@ -68,11 +68,11 @@ async function init() {
 
 /**
  * 初期データロード
- * 【検索主導型】初期表示は空、検索時のみFirestore検索
+ * 【ハイブリッド方式】バックグラウンドでプリロード開始、検索時はキャッシュ優先
  */
 async function setupRealtimeSync() {
   try {
-    console.log('🔄 [Master Brand Manager] 初期化完了（検索主導型UI）');
+    console.log('🔄 [Master Brand Manager] 初期化完了（ハイブリッド方式）');
 
     // 初期表示は空（検索なし）
     allBrands = [];
@@ -80,6 +80,14 @@ async function setupRealtimeSync() {
 
     renderBrandList();
     updateStats();
+
+    // バックグラウンドで全件プリロード開始（非ブロッキング）
+    console.log('📥 [Master Brand Manager] バックグラウンドプリロード開始...');
+    window.preloadBrandsInBackground().then(() => {
+      console.log('✅ [Master Brand Manager] バックグラウンドプリロード完了');
+    }).catch(error => {
+      console.warn('⚠️ [Master Brand Manager] バックグラウンドプリロード失敗:', error);
+    });
 
   } catch (error) {
     console.error('❌ [Master Brand Manager] 初期化エラー:', error);
@@ -110,21 +118,35 @@ function setupSearchEvents() {
       const query = searchInput.value.trim();
 
       if (query.length > 0) {
-        // 🔍 Firestore検索（検索主導型UI）
+        // 🔍 ハイブリッド検索（キャッシュ優先、なければFirestore）
         console.log(`🔍 [Master Brand Manager] 検索実行: "${query}"`);
-        showLoading(true);
 
-        try {
-          const results = await window.searchBrands(query, 100); // 最大100件
-          allBrands = results || [];
-          filteredBrands = results || [];
-          console.log(`✅ [Master Brand Manager] 検索結果: ${allBrands.length}件`);
-        } catch (error) {
-          console.error('❌ [Master Brand Manager] 検索エラー:', error);
-          allBrands = [];
-          filteredBrands = [];
-        } finally {
-          showLoading(false);
+        if (window.brandsCache && window.brandsCache.length > 0) {
+          // ✅ キャッシュから検索（即時）
+          console.log('⚡ [Master Brand Manager] キャッシュから検索（高速）');
+          const lowerQuery = query.toLowerCase();
+          const results = window.brandsCache.filter(brand => {
+            return brand.searchText.includes(lowerQuery);
+          });
+          allBrands = results;
+          filteredBrands = results;
+          console.log(`✅ [Master Brand Manager] キャッシュ検索結果: ${allBrands.length}件`);
+        } else {
+          // ❌ キャッシュなし → Firestore検索（初回のみ遅い）
+          console.log('📡 [Master Brand Manager] Firestore検索（キャッシュ未完成）');
+          showLoading(true);
+          try {
+            const results = await window.searchBrands(query, 100); // 最大100件
+            allBrands = results || [];
+            filteredBrands = results || [];
+            console.log(`✅ [Master Brand Manager] Firestore検索結果: ${allBrands.length}件`);
+          } catch (error) {
+            console.error('❌ [Master Brand Manager] 検索エラー:', error);
+            allBrands = [];
+            filteredBrands = [];
+          } finally {
+            showLoading(false);
+          }
         }
       } else {
         // 検索クエリなし = 空表示
@@ -159,6 +181,9 @@ function applySearchFilter() {
 function renderBrandList() {
   const container = document.getElementById('brandsContainer');
   const emptyState = document.getElementById('emptyState');
+  const emptyStateText = document.getElementById('emptyStateText');
+  const emptyStateHint = document.getElementById('emptyStateHint');
+  const searchInput = document.getElementById('searchInput');
 
   if (!container || !emptyState) {
     console.warn('[Master Brand Manager] コンテナ要素が見つかりません');
@@ -172,6 +197,18 @@ function renderBrandList() {
   if (filteredBrands.length === 0) {
     container.classList.add('hidden');
     emptyState.classList.remove('hidden');
+
+    // 検索入力があるかどうかで文言を変更
+    const hasSearchQuery = searchInput && searchInput.value.trim().length > 0;
+    if (hasSearchQuery) {
+      // 検索後に0件の場合
+      if (emptyStateText) emptyStateText.textContent = 'ブランドが見つかりません';
+      if (emptyStateHint) emptyStateHint.textContent = '検索条件を変更してください';
+    } else {
+      // 検索前の初期状態
+      if (emptyStateText) emptyStateText.textContent = 'ブランド名を入力して検索してください';
+      if (emptyStateHint) emptyStateHint.textContent = '例: NIKE、アディダス';
+    }
     return;
   }
 
