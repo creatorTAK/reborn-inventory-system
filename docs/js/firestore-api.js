@@ -1304,5 +1304,10 @@ export {
   searchBrandsFromCache,
   createBrand,
   deleteBrand,
-  updateBrand
+  updateBrand,
+  getMasterData,
+  createMaster,
+  updateMaster,
+  deleteMaster,
+  searchMaster
 };
