@@ -68,34 +68,21 @@ async function init() {
 
 /**
  * 初期データロード
- * 【商品登録と同じ】全件をバックグラウンドでプリロード
+ * 【検索主導型】初期表示は空、検索時のみFirestore検索
  */
 async function setupRealtimeSync() {
   try {
-    console.log('🔄 [Master Brand Manager] 初期データロード開始');
-    showLoading(true);
+    console.log('🔄 [Master Brand Manager] 初期化完了（検索主導型UI）');
 
-    // 全51,342件をバックグラウンドでプリロード（商品登録と同じ）
-    await window.preloadBrandsInBackground();
-
-    // キャッシュから全件取得
-    if (window.brandsCache && window.brandsCache.length > 0) {
-      allBrands = [...window.brandsCache];
-      filteredBrands = [...window.brandsCache];
-      console.log(`✅ [Master Brand Manager] 初期データロード完了: ${allBrands.length}件`);
-    } else {
-      console.warn('⚠️ [Master Brand Manager] キャッシュが空です');
-      allBrands = [];
-      filteredBrands = [];
-    }
+    // 初期表示は空（検索なし）
+    allBrands = [];
+    filteredBrands = [];
 
     renderBrandList();
     updateStats();
-    showLoading(false);
 
   } catch (error) {
     console.error('❌ [Master Brand Manager] 初期化エラー:', error);
-    showLoading(false);
   }
 }
 
@@ -123,34 +110,27 @@ function setupSearchEvents() {
       const query = searchInput.value.trim();
 
       if (query.length > 0) {
-        // 🔍 キャッシュから高速検索（商品登録と同じ）
+        // 🔍 Firestore検索（検索主導型UI）
         console.log(`🔍 [Master Brand Manager] 検索実行: "${query}"`);
+        showLoading(true);
 
-        if (window.brandsCache && window.brandsCache.length > 0) {
-          // キャッシュから検索（高速）
-          const lowerQuery = query.toLowerCase();
-          const results = window.brandsCache.filter(brand => {
-            return brand.searchText.includes(lowerQuery);
-          });
-
-          allBrands = results;
-          filteredBrands = results;
-          console.log(`✅ [Master Brand Manager] 検索結果: ${results.length}件`);
-        } else {
-          console.warn('⚠️ [Master Brand Manager] キャッシュが空です');
+        try {
+          const results = await window.searchBrands(query, 100); // 最大100件
+          allBrands = results || [];
+          filteredBrands = results || [];
+          console.log(`✅ [Master Brand Manager] 検索結果: ${allBrands.length}件`);
+        } catch (error) {
+          console.error('❌ [Master Brand Manager] 検索エラー:', error);
           allBrands = [];
           filteredBrands = [];
+        } finally {
+          showLoading(false);
         }
       } else {
-        // 検索クエリなし = 全件表示
-        console.log('🔄 [Master Brand Manager] 検索クリア - 全件表示');
-        if (window.brandsCache && window.brandsCache.length > 0) {
-          allBrands = [...window.brandsCache];
-          filteredBrands = [...window.brandsCache];
-        } else {
-          allBrands = [];
-          filteredBrands = [];
-        }
+        // 検索クエリなし = 空表示
+        console.log('🔄 [Master Brand Manager] 検索クリア - 空表示');
+        allBrands = [];
+        filteredBrands = [];
       }
 
       // 表示更新
@@ -314,16 +294,8 @@ window.addBrand = async function() {
       console.log(`✅ [Master Brand Manager] ブランド追加成功: ${nameEn}`);
       hideAddModal();
 
-      // 検索結果に追加したブランドを反映
-      if (result.brand) {
-        allBrands.push(result.brand);
-        filteredBrands.push(result.brand);
-        renderBrandList();
-        updateStats();
-      }
-
       // 成功メッセージ
-      alert(`ブランド「${nameEn}」を追加しました`);
+      alert(`ブランド「${nameEn}」を追加しました。\n検索して確認してください。`);
     } else {
       const detailedError = result.error || 'ブランドの追加に失敗しました';
       console.error('❌ [Master Brand Manager] 追加失敗:', detailedError);
@@ -391,10 +363,17 @@ window.confirmDelete = async function() {
 
     if (result.success) {
       console.log(`✅ [Master Brand Manager] ブランド削除成功: ${brandToDelete.nameEn}`);
+
+      // 検索結果から削除したブランドを取り除く
+      allBrands = allBrands.filter(brand => brand.id !== brandToDelete.id);
+      filteredBrands = filteredBrands.filter(brand => brand.id !== brandToDelete.id);
+      renderBrandList();
+      updateStats();
+
       hideDeleteModal();
 
-      // 成功メッセージ（オプション）
-      // alert(`ブランド「${brandToDelete.nameEn}」を削除しました`);
+      // 成功メッセージ
+      alert(`ブランド「${brandToDelete.nameEn}」を削除しました`);
     } else {
       alert(result.error || 'ブランドの削除に失敗しました');
     }
