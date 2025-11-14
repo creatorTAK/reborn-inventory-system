@@ -483,11 +483,10 @@ function setupGlobalFunctions() {
 // ページ読み込み時に初期化実行
 // ============================================
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+// グローバルスコープに公開（HTMLから呼び出し可能にする）
+window.initMasterBrandManager = init;
+
+// 自動実行は削除（HTMLから明示的に呼び出す）
 
 // ページアンロード時にリスナー解除
 window.addEventListener('beforeunload', () => {
