@@ -264,7 +264,12 @@ function saveToFirestoreBatch(collectionName, items) {
           if (typeof value === 'string') {
             fields[key] = { stringValue: value };
           } else if (typeof value === 'number') {
-            fields[key] = { integerValue: value };
+            // 整数か小数点数かを判定
+            if (Number.isInteger(value)) {
+              fields[key] = { integerValue: value };
+            } else {
+              fields[key] = { doubleValue: value };
+            }
           } else if (value instanceof Date) {
             fields[key] = { stringValue: value.toISOString() };
           } else if (typeof value === 'boolean') {
