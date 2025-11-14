@@ -292,15 +292,26 @@ window.addBrand = async function() {
       console.log(`✅ [Master Brand Manager] ブランド追加成功: ${nameEn}`);
       hideAddModal();
 
-      // 成功メッセージ（オプション）
-      // alert(`ブランド「${nameEn}」を追加しました`);
+      // 検索結果に追加したブランドを反映
+      if (result.brand) {
+        allBrands.push(result.brand);
+        filteredBrands.push(result.brand);
+        renderBrandList();
+        updateStats();
+      }
+
+      // 成功メッセージ
+      alert(`ブランド「${nameEn}」を追加しました`);
     } else {
-      showError(errorMessage, result.error || 'ブランドの追加に失敗しました');
+      const detailedError = result.error || 'ブランドの追加に失敗しました';
+      console.error('❌ [Master Brand Manager] 追加失敗:', detailedError);
+      showError(errorMessage, detailedError);
     }
 
   } catch (error) {
     console.error('❌ [Master Brand Manager] ブランド追加エラー:', error);
-    showError(errorMessage, 'ブランドの追加に失敗しました');
+    const detailedError = `エラー: ${error.message || 'ブランドの追加に失敗しました'}`;
+    showError(errorMessage, detailedError);
   } finally {
     showLoading(false);
   }
