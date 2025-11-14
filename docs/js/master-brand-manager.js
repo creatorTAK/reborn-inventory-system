@@ -83,21 +83,23 @@ async function init() {
 
 /**
  * 初期データロード
- * 【改善】画面表示時に人気上位200件を事前ロード
+ * 【商品登録と同じ】全件をバックグラウンドでプリロード
  */
 async function setupRealtimeSync() {
   try {
     console.log('🔄 [Master Brand Manager] 初期データロード開始');
     showLoading(true);
 
-    // 人気上位200件を事前ロード（商品登録と同じ挙動）
-    try {
-      const topBrands = await window.searchBrands('', 200);
-      allBrands = topBrands;
-      filteredBrands = topBrands;
+    // 全51,342件をバックグラウンドでプリロード（商品登録と同じ）
+    await window.preloadBrandsInBackground();
+
+    // キャッシュから全件取得
+    if (window.brandsCache && window.brandsCache.length > 0) {
+      allBrands = [...window.brandsCache];
+      filteredBrands = [...window.brandsCache];
       console.log(`✅ [Master Brand Manager] 初期データロード完了: ${allBrands.length}件`);
-    } catch (error) {
-      console.error('❌ [Master Brand Manager] 初期データロードエラー:', error);
+    } else {
+      console.warn('⚠️ [Master Brand Manager] キャッシュが空です');
       allBrands = [];
       filteredBrands = [];
     }
@@ -136,27 +138,34 @@ function setupSearchEvents() {
       const query = searchInput.value.trim();
 
       if (query.length > 0) {
-        // 🔍 検索実行: 全51,342件から検索（最大50件取得）
-        showLoading(true);
+        // 🔍 キャッシュから高速検索（商品登録と同じ）
         console.log(`🔍 [Master Brand Manager] 検索実行: "${query}"`);
 
-        try {
-          const results = await window.searchBrands(query, 50);
+        if (window.brandsCache && window.brandsCache.length > 0) {
+          // キャッシュから検索（高速）
+          const lowerQuery = query.toLowerCase();
+          const results = window.brandsCache.filter(brand => {
+            return brand.searchText.includes(lowerQuery);
+          });
+
           allBrands = results;
           filteredBrands = results;
           console.log(`✅ [Master Brand Manager] 検索結果: ${results.length}件`);
-        } catch (error) {
-          console.error('❌ [Master Brand Manager] 検索エラー:', error);
+        } else {
+          console.warn('⚠️ [Master Brand Manager] キャッシュが空です');
           allBrands = [];
           filteredBrands = [];
         }
-
-        showLoading(false);
       } else {
-        // 検索クエリなし = 空表示
-        console.log('🔄 [Master Brand Manager] 検索クリア');
-        allBrands = [];
-        filteredBrands = [];
+        // 検索クエリなし = 全件表示
+        console.log('🔄 [Master Brand Manager] 検索クリア - 全件表示');
+        if (window.brandsCache && window.brandsCache.length > 0) {
+          allBrands = [...window.brandsCache];
+          filteredBrands = [...window.brandsCache];
+        } else {
+          allBrands = [];
+          filteredBrands = [];
+        }
       }
 
       // 表示更新
