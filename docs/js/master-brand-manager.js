@@ -39,26 +39,18 @@ async function init() {
   try {
     console.log('📥 [Master Brand Manager] 初期化開始');
 
-    // Firestore APIモジュール読み込み（同ディレクトリから相対パス）
-    const module = await import('./firestore-api.js');
+    // Firestore API関数はHTMLファイル側でwindowスコープに設定済み
+    // ローカル変数に代入（既存コードとの互換性のため）
+    createBrand = window.createBrand;
+    deleteBrand = window.deleteBrand;
+    updateBrand = window.updateBrand;
+    initializeFirestore = window.initializeFirestore;
+    searchBrands = window.searchBrands;
+    preloadBrandsInBackground = window.preloadBrandsInBackground;
 
-    // ローカル変数に代入
-    createBrand = module.createBrand;
-    deleteBrand = module.deleteBrand;
-    updateBrand = module.updateBrand;
-    initializeFirestore = module.initializeFirestore;
-    searchBrands = module.searchBrands;
-    preloadBrandsInBackground = module.preloadBrandsInBackground;
-
-    // グローバルスコープにも代入（window関数からアクセス可能にする）
-    window.createBrand = module.createBrand;
-    window.deleteBrand = module.deleteBrand;
-    window.updateBrand = module.updateBrand;
-    window.initializeFirestore = module.initializeFirestore;
-    window.searchBrands = module.searchBrands;
-    window.preloadBrandsInBackground = module.preloadBrandsInBackground;
-
-    console.log('✅ [Master Brand Manager] Firestore API読み込み完了');
+    console.log('✅ [Master Brand Manager] Firestore API関数取得完了');
+    console.log('createBrand:', typeof createBrand);
+    console.log('preloadBrandsInBackground:', typeof preloadBrandsInBackground);
 
     // リアルタイム同期開始
     await setupRealtimeSync();
