@@ -15,6 +15,147 @@
 
 ## 🗂️ マスタ管理（Master Data Management）
 
+## MASTER-003 | バグ修正: マスタ管理メニュー全面的障害（🚨 CRITICAL）
+
+### 📌 基本情報
+- [x] カテゴリ: バグ修正 / マスタ管理
+- [x] 優先度: 🚨 最高（システム停止レベル）
+- [x] 影響範囲: トップメニュー - マスタ管理全4項目
+- [x] 発見日: 2025-11-14
+- [x] 完了日: 2025-11-14（即日修正）
+
+### 🐛 不具合内容
+
+**重大な障害（2件）:**
+
+1. **商品関連マスタ管理、業務関連マスタ管理**
+   - タップすると「Googleドライブ - 現在、ファイルを開くことができません」エラー
+   - PWA版ページが全く開けない状態
+
+2. **発送方法マスタ管理、梱包資材マスタ管理**
+   - タップするとスケルトンUIのまま無限ローディング
+   - GASページが全く開けない状態
+
+**ユーザー報告:**
+> 「とにかく最悪の状態です。」
+
+### 🔍 原因分析
+
+#### 問題1: Googleドライブエラー
+- **原因**: `window.top.location.href = '/master-management.html'` で相対パスを使用
+- **結果**: GASのiframe内から相対パスで遷移すると、Googleドライブドメインに解決されてしまう
+- **影響**: PWA版ページが全く開けない
+
+#### 問題2: 無限ローディング
+- **原因**: `navigateToPage()` 関数がFirestore経由でページ遷移を試みる複雑な仕組み
+- **結果**: 通信失敗またはタイムアウトでスケルトンUIのまま
+- **影響**: GASページが全く開けない
+
+### ✅ 修正内容
+
+#### 1. openPWAPage() 関数修正
+```javascript
+// 修正前: 相対パス（エラー）
+window.top.location.href = path; // '/master-management.html?category=product'
+
+// 修正後: 絶対URL
+const baseUrl = 'https://reborn-inventory-system.pages.dev';
+const fullUrl = baseUrl + path;
+window.top.location.href = fullUrl;
+```
+
+#### 2. openGASPage() 関数新規追加
+```javascript
+// GASページを直接URLで開く（Firestore通信を廃止）
+window.openGASPage = function(page) {
+  const gasDeployId = 'AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA';
+  const baseUrl = `https://script.google.com/macros/s/${gasDeployId}/exec`;
+  const fullUrl = `${baseUrl}?menu=${page}`;
+  window.top.location.href = fullUrl;
+};
+```
+
+### 📍 関連ファイル
+
+- `menu_home.html` (GASプロジェクト)
+  - openPWAPage() 関数修正
+  - openGASPage() 関数追加
+  - マスタ管理アコーディオンのonclickハンドラ変更
+
+### 🧪 テストケース
+
+#### TC-MASTER-003-001: 商品関連マスタ管理
+**前提条件:**
+- トップメニュー（menu_home.html）を開く
+- マスタ管理アコーディオンを展開
+
+**実行操作:**
+1. 「📦 商品関連マスタ管理」をタップ
+
+**期待結果:**
+- ✅ PWA版master-management.html が開く
+- ✅ `?category=product` パラメータが渡される
+- ❌ Googleドライブエラーが出ない
+
+#### TC-MASTER-003-002: 業務関連マスタ管理
+**実行操作:**
+1. 「🏢 業務関連マスタ管理」をタップ
+
+**期待結果:**
+- ✅ PWA版master-management.html が開く
+- ✅ `?category=business` パラメータが渡される
+
+#### TC-MASTER-003-003: 発送方法マスタ管理
+**実行操作:**
+1. 「🚚 発送方法マスタ管理」をタップ
+
+**期待結果:**
+- ✅ GASページshipping_method_master_ui.html が開く
+- ❌ スケルトンUIのまま止まらない
+
+#### TC-MASTER-003-004: 梱包資材マスタ管理
+**実行操作:**
+1. 「📦 梱包資材マスタ管理」をタップ
+
+**期待結果:**
+- ✅ GASページpackaging_materials_ui.html が開く
+- ❌ スケルトンUIのまま止まらない
+
+### ✏️ 修正タスク
+- [x] openPWAPage() 関数で絶対URLを使用
+- [x] openGASPage() 関数を新規追加
+- [x] マスタ管理アコーディオンのハンドラ変更
+- [x] GASにデプロイ（@866）
+- [x] Git コミット・プッシュ
+- [x] ユーザー動作確認依頼
+
+### 📝 テスト結果
+- [ ] TC-MASTER-003-001: PASS / FAIL（ユーザー確認待ち）
+- [ ] TC-MASTER-003-002: PASS / FAIL（ユーザー確認待ち）
+- [ ] TC-MASTER-003-003: PASS / FAIL（ユーザー確認待ち）
+- [ ] TC-MASTER-003-004: PASS / FAIL（ユーザー確認待ち）
+
+### 📊 影響度分析
+- **重大度**: 🚨 最高（システム機能停止）
+- **影響範囲**: トップメニューのマスタ管理全4項目
+- **ユーザー影響**: 全ユーザーがマスタ管理機能を使用不可
+- **ビジネス影響**: マスタデータの追加・編集・削除が不可能
+
+### 🔧 デプロイ情報
+- **GAS**: @866（即座に有効）
+- **Git**: dbe8cb3
+- **デプロイ日時**: 2025-11-14 16:00
+
+### 📚 学んだこと
+1. **iframe内からの遷移**: 相対パスは使用不可、必ず絶対URLを使用
+2. **Firestore経由の通信**: 複雑すぎるアーキテクチャは避け、シンプルな直接URLアクセスを優先
+3. **緊急修正**: 重大な障害は即座に修正し、Issue起票は後でも良い（修正優先）
+
+### 状態
+- [x] ✅ DONE (完了日: 2025-11-14)
+
+---
+
 ## MASTER-002 | 機能追加: 汎用マスタ管理エンジン実装（案B+案Aハイブリッド）
 
 ### 📌 基本情報
