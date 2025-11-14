@@ -98,37 +98,41 @@
 
 ### ✅ 実装フェーズ
 
-#### Phase 1: 基盤構築（2日）
-- [ ] マスタ定義システム設計
+#### Phase 1: 基盤構築（2日） ✅ 完了
+- [x] マスタ定義システム設計
   - JavaScript設定ファイル作成
   - マスタカテゴリ定義（商品関連 / 業務関連）
   - マスタ種別定義（フィールド構成、バリデーション）
 
-- [ ] 汎用マスタ管理画面作成
+- [x] 汎用マスタ管理画面作成
   - `docs/master-management.html` 作成
   - `docs/js/master-manager.js` 作成
   - マスタ種別ドロップダウンUI
   - URL設計（`?category=product&type=brand`）
 
-- [ ] 共通CRUD API実装
+- [x] 共通CRUD API実装
   - `docs/js/firestore-api.js` 拡張
   - 汎用的なCRUD関数（createMaster, deleteMaster, updateMaster）
   - Firestore動的コレクション対応
 
-#### Phase 2: 商品関連マスタ統合（3日）
-- [ ] ブランドマスタを汎用エンジンに移行
+**完了日: 2025-11-14** (コミット: a69b05d)
+
+#### Phase 2: 商品関連マスタ統合（3日） ✅ 完了
+- [x] ブランドマスタを汎用エンジンに移行
   - 既存master-brand-list.htmlからの移行
   - マスタ定義追加
   - 動作確認
 
-- [ ] カテゴリマスタ追加
+- [x] カテゴリマスタ追加
   - マスタ定義作成
   - Firestoreコレクション準備
   - 動作確認
 
-- [ ] その他商品関連マスタ追加
+- [x] その他商品関連マスタ追加
   - 素材、生地、キーワード、セールスワード
   - 段階的に追加・テスト
+
+**完了日: 2025-11-14** (コミット: 6fed4e8)
 
 #### Phase 3: 業務関連マスタ統合（3日）
 - [ ] 既存マスタの移行
@@ -365,22 +369,26 @@ async function updateMaster(collection, id, data) {
 
 ### ✏️ 実装タスク
 
-#### Phase 1: 基盤構築
-- [ ] マスタ定義設計・実装（master-config.js）
-- [ ] 汎用マスタ管理画面HTML作成（master-management.html）
-- [ ] 汎用マスタ管理ロジック実装（master-manager.js）
-- [ ] 汎用CRUD API実装（firestore-api.js拡張）
-- [ ] メニュー構造変更（index.html）
-- [ ] URL設計実装（category/type パラメータ）
-- [ ] テスト（マスタ種別切り替え）
+#### Phase 1: 基盤構築 ✅ 完了
+- [x] マスタ定義設計・実装（master-config.js）
+- [x] 汎用マスタ管理画面HTML作成（master-management.html）
+- [x] 汎用マスタ管理ロジック実装（master-manager.js）
+- [x] 汎用CRUD API実装（firestore-api.js拡張）
+- [x] メニュー構造変更（index.html）
+- [x] URL設計実装（category/type パラメータ）
+- [x] テスト（マスタ種別切り替え）
 
-#### Phase 2: 商品関連マスタ統合
-- [ ] ブランドマスタ定義追加
-- [ ] ブランドマスタ動作確認
-- [ ] カテゴリマスタ定義追加
-- [ ] カテゴリマスタ動作確認
-- [ ] その他マスタ（素材/生地/キーワード/セールスワード）定義追加
-- [ ] 全体動作確認
+**完了日: 2025-11-14** (コミット: a69b05d)
+
+#### Phase 2: 商品関連マスタ統合 ✅ 完了
+- [x] ブランドマスタ定義追加
+- [x] ブランドマスタ動作確認
+- [x] カテゴリマスタ定義追加
+- [x] カテゴリマスタ動作確認
+- [x] その他マスタ（素材/生地/キーワード/セールスワード）定義追加
+- [x] 全体動作確認
+
+**完了日: 2025-11-14** (コミット: 6fed4e8)
 
 #### Phase 3: 業務関連マスタ統合
 - [ ] 発送方法マスタ移行（スプレッドシート → Firestore）
