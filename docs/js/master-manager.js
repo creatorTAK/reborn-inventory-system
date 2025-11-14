@@ -31,13 +31,33 @@ window.initMasterManager = function() {
 
   console.log('✅ [Master Manager] master-config.js 読み込み確認完了');
 
-  // URLパラメータから初期マスタを取得
+  // URLパラメータから初期カテゴリを取得
   const urlParams = new URLSearchParams(window.location.search);
   const urlCategory = urlParams.get('category');
-  const urlType = urlParams.get('type');
 
-  // マスタ種別ドロップダウンを初期化
-  initMasterTypeDropdown(urlCategory, urlType);
+  // カテゴリに応じてアコーディオンを開き、最初のタブをロード
+  if (urlCategory === 'business') {
+    // 業務関連マスタを開く
+    const businessCollapse = document.getElementById('businessMasterCollapse');
+    const businessButton = document.querySelector('[data-bs-target="#businessMasterCollapse"]');
+    if (businessCollapse && businessButton) {
+      // 商品関連を閉じる
+      const productCollapse = document.getElementById('productMasterCollapse');
+      const productButton = document.querySelector('[data-bs-target="#productMasterCollapse"]');
+      if (productCollapse) productCollapse.classList.remove('show');
+      if (productButton) productButton.classList.add('collapsed');
+      productButton.setAttribute('aria-expanded', 'false');
+
+      // 業務関連を開く
+      businessCollapse.classList.add('show');
+      businessButton.classList.remove('collapsed');
+      businessButton.setAttribute('aria-expanded', 'true');
+    }
+    loadMaster('business', 'shipping');
+  } else {
+    // デフォルトまたはcategory=productの場合: 商品関連マスタを開く（既にデフォルトで開いている）
+    loadMaster('product', 'brand');
+  }
 
   // イベントリスナー設定
   setupEventListeners();
@@ -46,61 +66,9 @@ window.initMasterManager = function() {
 };
 
 /**
- * マスタ種別ドロップダウン初期化
- */
-function initMasterTypeDropdown(initialCategory, initialType) {
-  const selectElement = document.getElementById('masterTypeSelect');
-  selectElement.innerHTML = '<option value="">マスタを選択してください</option>';
-
-  // カテゴリごとにグループ化してオプションを追加
-  Object.entries(window.masterCategories).forEach(([categoryKey, category]) => {
-    const optgroup = document.createElement('optgroup');
-    optgroup.label = `${category.icon} ${category.label}`;
-
-    Object.entries(category.masters).forEach(([masterKey, master]) => {
-      const option = document.createElement('option');
-      option.value = `${categoryKey}:${masterKey}`;
-      option.textContent = master.label;
-      
-      // URL指定がある場合は選択状態にする
-      if (categoryKey === initialCategory && masterKey === initialType) {
-        option.selected = true;
-      }
-      
-      optgroup.appendChild(option);
-    });
-
-    selectElement.appendChild(optgroup);
-  });
-
-  // 初期選択がある場合はマスタをロード
-  if (initialCategory && initialType) {
-    loadMaster(initialCategory, initialType);
-  }
-}
-
-/**
  * イベントリスナー設定
  */
 function setupEventListeners() {
-  // マスタ種別選択変更
-  document.getElementById('masterTypeSelect').addEventListener('change', (e) => {
-    const value = e.target.value;
-    if (!value) {
-      clearMasterDisplay();
-      return;
-    }
-
-    const [category, type] = value.split(':');
-    loadMaster(category, type);
-    
-    // URL更新
-    const url = new URL(window.location);
-    url.searchParams.set('category', category);
-    url.searchParams.set('type', type);
-    window.history.pushState({}, '', url);
-  });
-
   // 検索入力（デバウンス処理）
   document.getElementById('searchInput').addEventListener('input', (e) => {
     clearTimeout(searchDebounceTimer);
