@@ -13,6 +13,8 @@
 // グローバル変数
 // ============================================
 
+const MAX_DISPLAY_RESULTS = 100; // 表示件数上限（パフォーマンス対策）
+
 let allBrands = [];
 let filteredBrands = [];
 let brandToDelete = null;
@@ -178,7 +180,7 @@ function setupSearchEvents() {
       // 表示更新
       renderBrandList();
       updateStats();
-    }, 300);
+    }, 500); // debounce時間を500msに延長（入力パフォーマンス改善）
   });
 }
 
@@ -236,10 +238,26 @@ function renderBrandList() {
   container.classList.remove('hidden');
   emptyState.classList.add('hidden');
 
-  filteredBrands.forEach(brand => {
+  // 表示件数制限（パフォーマンス対策）
+  const displayBrands = filteredBrands.slice(0, MAX_DISPLAY_RESULTS);
+  const hasMore = filteredBrands.length > MAX_DISPLAY_RESULTS;
+
+  displayBrands.forEach(brand => {
     const card = createBrandCard(brand);
     container.appendChild(card);
   });
+
+  // 件数超過の場合は通知メッセージを表示
+  if (hasMore) {
+    const moreNotice = document.createElement('div');
+    moreNotice.className = 'more-results-notice';
+    moreNotice.innerHTML = `
+      <i class="bi bi-info-circle"></i>
+      <span>最初の${MAX_DISPLAY_RESULTS}件を表示中（全${filteredBrands.length}件）</span>
+      <small>さらに絞り込むと見つけやすくなります</small>
+    `;
+    container.appendChild(moreNotice);
+  }
 }
 
 /**
