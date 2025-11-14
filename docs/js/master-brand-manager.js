@@ -18,7 +18,14 @@ let filteredBrands = [];
 let brandToDelete = null;
 let unsubscribe = null;
 
-// Firestore API関数
+// Firestore API関数（グローバルスコープ）
+window.createBrand = null;
+window.deleteBrand = null;
+window.updateBrand = null;
+window.initializeFirestore = null;
+window.searchBrands = null;
+window.preloadBrandsInBackground = null;
+
 let createBrand, deleteBrand, updateBrand, initializeFirestore, searchBrands, preloadBrandsInBackground;
 
 // ============================================
@@ -34,12 +41,22 @@ async function init() {
 
     // Firestore APIモジュール読み込み（絶対パス使用）
     const module = await import('/js/firestore-api.js');
+
+    // ローカル変数に代入
     createBrand = module.createBrand;
     deleteBrand = module.deleteBrand;
     updateBrand = module.updateBrand;
     initializeFirestore = module.initializeFirestore;
     searchBrands = module.searchBrands;
     preloadBrandsInBackground = module.preloadBrandsInBackground;
+
+    // グローバルスコープにも代入（window関数からアクセス可能にする）
+    window.createBrand = module.createBrand;
+    window.deleteBrand = module.deleteBrand;
+    window.updateBrand = module.updateBrand;
+    window.initializeFirestore = module.initializeFirestore;
+    window.searchBrands = module.searchBrands;
+    window.preloadBrandsInBackground = module.preloadBrandsInBackground;
 
     console.log('✅ [Master Brand Manager] Firestore API読み込み完了');
 
@@ -65,22 +82,33 @@ async function init() {
 // ============================================
 
 /**
- * 初期状態設定
- * 【重要】検索主導型UI: 初期表示ではデータ読み込みなし
+ * 初期データロード
+ * 【改善】画面表示時に人気上位200件を事前ロード
  */
 async function setupRealtimeSync() {
   try {
-    console.log('🔄 [Master Brand Manager] 検索主導型モードで起動');
+    console.log('🔄 [Master Brand Manager] 初期データロード開始');
+    showLoading(true);
 
-    // 初期状態: 空表示
-    allBrands = [];
-    filteredBrands = [];
+    // 人気上位200件を事前ロード（商品登録と同じ挙動）
+    try {
+      const topBrands = await window.searchBrands('', 200);
+      allBrands = topBrands;
+      filteredBrands = topBrands;
+      console.log(`✅ [Master Brand Manager] 初期データロード完了: ${allBrands.length}件`);
+    } catch (error) {
+      console.error('❌ [Master Brand Manager] 初期データロードエラー:', error);
+      allBrands = [];
+      filteredBrands = [];
+    }
 
     renderBrandList();
     updateStats();
+    showLoading(false);
 
   } catch (error) {
     console.error('❌ [Master Brand Manager] 初期化エラー:', error);
+    showLoading(false);
   }
 }
 
@@ -113,7 +141,7 @@ function setupSearchEvents() {
         console.log(`🔍 [Master Brand Manager] 検索実行: "${query}"`);
 
         try {
-          const results = await searchBrands(query, 50);
+          const results = await window.searchBrands(query, 50);
           allBrands = results;
           filteredBrands = results;
           console.log(`✅ [Master Brand Manager] 検索結果: ${results.length}件`);
@@ -285,8 +313,8 @@ window.addBrand = async function() {
   try {
     showLoading(true);
 
-    // Firestore APIで追加
-    const result = await createBrand(nameEn, nameKana);
+    // Firestore APIで追加（グローバルスコープから取得）
+    const result = await window.createBrand(nameEn, nameKana);
 
     if (result.success) {
       console.log(`✅ [Master Brand Manager] ブランド追加成功: ${nameEn}`);
@@ -365,7 +393,7 @@ window.confirmDelete = async function() {
   try {
     showLoading(true);
 
-    const result = await deleteBrand(brandToDelete.id);
+    const result = await window.deleteBrand(brandToDelete.id);
 
     if (result.success) {
       console.log(`✅ [Master Brand Manager] ブランド削除成功: ${brandToDelete.nameEn}`);
