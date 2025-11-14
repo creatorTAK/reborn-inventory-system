@@ -227,7 +227,7 @@ function renderBrandList() {
     } else {
       // 検索前の初期状態
       if (emptyStateText) emptyStateText.textContent = 'ブランド名を入力して検索してください';
-      if (emptyStateHint) emptyStateHint.textContent = '例: NIKE、アディダス';
+      if (emptyStateHint) emptyStateHint.textContent = '';
     }
     return;
   }
