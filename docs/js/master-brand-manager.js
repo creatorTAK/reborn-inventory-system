@@ -20,6 +20,10 @@ let filteredBrands = [];
 let brandToDelete = null;
 let unsubscribe = null;
 
+// 選択モード関連
+let selectionMode = false;
+let selectedBrands = new Set(); // 選択されたブランドID
+
 // Firestore API関数（ローカル変数のみ、windowスコープには触らない）
 let createBrand, deleteBrand, updateBrand, initializeFirestore, searchBrands, preloadBrandsInBackground;
 
@@ -268,23 +272,53 @@ function renderBrandList() {
 function createBrandCard(brand) {
   const card = document.createElement('div');
   card.className = 'brand-card';
-  card.innerHTML = `
-    <div class="brand-info">
-      <div class="brand-name-en">${escapeHtml(brand.nameEn)}</div>
-      <div class="brand-name-kana">${escapeHtml(brand.nameKana)}</div>
-      <div class="brand-meta">
-        <div class="usage-count">
-          <i class="bi bi-graph-up"></i>
-          <span>使用回数: ${brand.usageCount}回</span>
+  card.setAttribute('data-brand-id', brand.id);
+
+  if (selectionMode) {
+    // 選択モード時
+    card.classList.add('selection-mode');
+    const isSelected = selectedBrands.has(brand.id);
+    if (isSelected) {
+      card.classList.add('selected');
+    }
+
+    card.innerHTML = `
+      <input type="checkbox"
+             class="brand-checkbox"
+             ${isSelected ? 'checked' : ''}
+             onchange="toggleBrandSelection('${brand.id}')">
+      <div class="brand-info">
+        <div class="brand-name-en">${escapeHtml(brand.nameEn)}</div>
+        <div class="brand-name-kana">${escapeHtml(brand.nameKana)}</div>
+        <div class="brand-meta">
+          <div class="usage-count">
+            <i class="bi bi-graph-up"></i>
+            <span>使用回数: ${brand.usageCount}回</span>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="brand-actions">
-      <button class="btn-delete" onclick="showDeleteModal('${brand.id}', '${escapeHtml(brand.nameEn)}', '${escapeHtml(brand.nameKana)}')">
-        <i class="bi bi-trash"></i>
-      </button>
-    </div>
-  `;
+    `;
+  } else {
+    // 通常モード時
+    card.innerHTML = `
+      <div class="brand-info">
+        <div class="brand-name-en">${escapeHtml(brand.nameEn)}</div>
+        <div class="brand-name-kana">${escapeHtml(brand.nameKana)}</div>
+        <div class="brand-meta">
+          <div class="usage-count">
+            <i class="bi bi-graph-up"></i>
+            <span>使用回数: ${brand.usageCount}回</span>
+          </div>
+        </div>
+      </div>
+      <div class="brand-actions">
+        <button class="btn-delete" onclick="showDeleteModal('${brand.id}', '${escapeHtml(brand.nameEn)}', '${escapeHtml(brand.nameKana)}')">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+    `;
+  }
+
   return card;
 }
 
@@ -292,10 +326,16 @@ function createBrandCard(brand) {
  * 統計情報更新
  */
 function updateStats() {
-  const totalCount = document.getElementById('totalCount');
+  const statsText = document.getElementById('statsText');
+  const totalBrands = window.brandsCache ? window.brandsCache.length : 0;
 
-  if (totalCount) {
-    totalCount.textContent = filteredBrands.length.toLocaleString();
+  if (statsText) {
+    const resultCount = filteredBrands.length;
+    if (resultCount > 0) {
+      statsText.textContent = `検索結果: ${resultCount.toLocaleString()}件 | 全${totalBrands.toLocaleString()}件`;
+    } else {
+      statsText.textContent = `全${totalBrands.toLocaleString()}件`;
+    }
   }
 }
 
@@ -542,3 +582,125 @@ window.addEventListener('beforeunload', () => {
     console.log('🔌 [Master Brand Manager] リアルタイム同期解除');
   }
 });
+
+// ============================================
+// 選択モード機能
+// ============================================
+
+/**
+ * 選択モードの切り替え
+ */
+window.toggleSelectionMode = function() {
+  selectionMode = !selectionMode;
+  selectedBrands.clear();
+
+  const selectModeBtn = document.getElementById('selectModeBtn');
+  const selectionToolbar = document.getElementById('selectionToolbar');
+
+  if (selectionMode) {
+    // 選択モードON
+    selectModeBtn.classList.add('active');
+    selectionToolbar.classList.remove('hidden');
+  } else {
+    // 選択モードOFF
+    selectModeBtn.classList.remove('active');
+    selectionToolbar.classList.add('hidden');
+  }
+
+  // リスト再描画
+  renderBrandList();
+  updateSelectionCount();
+};
+
+/**
+ * 全選択
+ */
+window.selectAll = function() {
+  filteredBrands.forEach(brand => {
+    selectedBrands.add(brand.id);
+  });
+  renderBrandList();
+  updateSelectionCount();
+};
+
+/**
+ * 選択されたブランドを削除
+ */
+window.deleteSelected = async function() {
+  if (selectedBrands.size === 0) {
+    alert('削除するブランドを選択してください');
+    return;
+  }
+
+  const count = selectedBrands.size;
+  if (!confirm(`選択した${count}件のブランドを削除しますか？\n\nこの操作は取り消せません。`)) {
+    return;
+  }
+
+  showLoading(true);
+
+  try {
+    const deletePromises = Array.from(selectedBrands).map(brandId =>
+      window.deleteBrand(brandId)
+    );
+
+    const results = await Promise.all(deletePromises);
+    const successCount = results.filter(r => r.success).length;
+
+    showLoading(false);
+
+    if (successCount === count) {
+      alert(`${successCount}件のブランドを削除しました`);
+    } else {
+      alert(`${successCount}/${count}件のブランドを削除しました\n一部削除に失敗しました`);
+    }
+
+    // 選択モードOFF
+    window.toggleSelectionMode();
+
+    // 検索を再実行
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput && searchInput.value.trim().length > 0) {
+      searchInput.dispatchEvent(new Event('input'));
+    }
+
+  } catch (error) {
+    showLoading(false);
+    console.error('❌ [Master Brand Manager] 一括削除エラー:', error);
+    alert('削除中にエラーが発生しました');
+  }
+};
+
+/**
+ * ブランドの選択状態を切り替え
+ */
+window.toggleBrandSelection = function(brandId) {
+  if (selectedBrands.has(brandId)) {
+    selectedBrands.delete(brandId);
+  } else {
+    selectedBrands.add(brandId);
+  }
+  updateSelectionCount();
+
+  // カードの見た目を更新
+  const card = document.querySelector(`[data-brand-id="${brandId}"]`);
+  const checkbox = card?.querySelector('.brand-checkbox');
+  if (card && checkbox) {
+    checkbox.checked = selectedBrands.has(brandId);
+    if (selectedBrands.has(brandId)) {
+      card.classList.add('selected');
+    } else {
+      card.classList.remove('selected');
+    }
+  }
+};
+
+/**
+ * 選択件数表示を更新
+ */
+function updateSelectionCount() {
+  const selectedCount = document.getElementById('selectedCount');
+  if (selectedCount) {
+    selectedCount.textContent = `${selectedBrands.size}件選択中`;
+  }
+}
