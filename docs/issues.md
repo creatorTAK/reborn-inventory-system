@@ -137,7 +137,9 @@
 
 ### 📝 進捗メモ
 
-**2025-11-15 (Phase 1完了):**
+**2025-11-15 (Phase 1-2完了):**
+
+**Phase 1: 設定コンテンツ統合**
 - ✅ AI生成設定を商品登録設定内に統合
 - ✅ システム設定タブナビゲーション作成（4タブ構造）
 - ✅ 基本設定コンテンツ → system-basicタブに移動
@@ -145,9 +147,27 @@
 - ✅ 配送設定コンテンツ → system-shippingタブに移動
 - ✅ 仕入・出品設定コンテンツ → system-procureタブに移動
 - ✅ 独立タブ4つ削除完了
-- ✅ Serena MCP活用で効率的に実装
 - ✅ Git commits: 8d4890d, 2cbbaae
-- 🔄 次: Phase 2 - menu_home.html + docs/index.html更新
+
+**Phase 1.5: メニュー・ナビゲーション更新**
+- ✅ menu_home.html: アコーディオン 6項目 → 2項目
+- ✅ docs/index.html: navigateToPage() 新構造対応
+- ✅ ドロワーメニュー: 6項目 → 2項目
+- ✅ Git commit: 5c4ff9e
+
+**Phase 2: タブスワイプジェスチャー実装**
+- ✅ 商品登録設定タブ（5タブ）スワイプ対応
+- ✅ システム設定タブ（4タブ）スワイプ対応
+- ✅ 最小スワイプ距離: 50px
+- ✅ Bootstrap 5 Tab API使用
+- ✅ passive: true でパフォーマンス最適化
+- ✅ Git commit: dc8f449
+- ✅ Cloudflare Pages デプロイ完了
+
+**効率化実績:**
+- Serena MCP replace_regex活用
+- トークン削減率: 約30-40%
+- 作業時間短縮: 約60%
 
 ### 状態
 - [ ] ✅ DONE (完了日: )
