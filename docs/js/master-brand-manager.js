@@ -22,6 +22,22 @@ let unsubscribe = null;
 let createBrand, deleteBrand, updateBrand, initializeFirestore, searchBrands, preloadBrandsInBackground;
 
 // ============================================
+// ユーティリティ関数（カタカナ⇔ひらがな変換）
+// ============================================
+
+/**
+ * カタカナをひらがなに変換
+ * @param {string} str - 変換する文字列
+ * @returns {string} ひらがなに変換された文字列
+ */
+function katakanaToHiragana(str) {
+  return str.replace(/[\u30a1-\u30f6]/g, (match) => {
+    const chr = match.charCodeAt(0) - 0x60;
+    return String.fromCharCode(chr);
+  });
+}
+
+// ============================================
 // 初期化
 // ============================================
 
@@ -125,8 +141,12 @@ function setupSearchEvents() {
           // ✅ キャッシュから検索（即時）
           console.log('⚡ [Master Brand Manager] キャッシュから検索（高速）');
           const lowerQuery = query.toLowerCase();
+          // ひらがな検索対応：クエリをひらがなに変換
+          const hiraganaQuery = katakanaToHiragana(lowerQuery);
           const results = window.brandsCache.filter(brand => {
-            return brand.searchText.includes(lowerQuery);
+            // searchTextをひらがなに変換して比較
+            const hiraganaSearchText = katakanaToHiragana(brand.searchText);
+            return hiraganaSearchText.includes(hiraganaQuery);
           });
           allBrands = results;
           filteredBrands = results;
