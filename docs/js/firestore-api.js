@@ -878,10 +878,19 @@ async function createBrand(nameEn, nameKana) {
 
     console.log(`✅ [BRANDS] ブランド追加成功: ${docRef.id} (${nameEn})`);
 
-    // キャッシュをクリア（次回検索時に再取得）
-    brandsCache = null;
-    window.brandsCache = null;
-    brandsCacheTimestamp = 0;
+    // キャッシュに新規ブランドを追加（クリアしない）
+    if (brandsCache && window.brandsCache) {
+      const newBrand = {
+        id: docRef.id,
+        nameEn: nameEn.trim(),
+        nameKana: nameKana.trim(),
+        searchText: searchText,
+        usageCount: 0
+      };
+      brandsCache.push(newBrand);
+      window.brandsCache.push(newBrand);
+      console.log('✅ [BRANDS] キャッシュに新規ブランド追加:', newBrand);
+    }
 
     return {
       success: true,
@@ -922,10 +931,12 @@ async function deleteBrand(brandId) {
 
     console.log(`✅ [BRANDS] ブランド削除成功: ${brandId}`);
 
-    // キャッシュをクリア
-    brandsCache = null;
-    window.brandsCache = null;
-    brandsCacheTimestamp = 0;
+    // キャッシュから削除（クリアしない）
+    if (brandsCache && window.brandsCache) {
+      brandsCache = brandsCache.filter(b => b.id !== brandId);
+      window.brandsCache = window.brandsCache.filter(b => b.id !== brandId);
+      console.log('✅ [BRANDS] キャッシュからブランド削除:', brandId);
+    }
 
     return { success: true };
 
