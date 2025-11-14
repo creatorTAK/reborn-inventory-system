@@ -39,8 +39,8 @@ async function init() {
   try {
     console.log('📥 [Master Brand Manager] 初期化開始');
 
-    // Firestore APIモジュール読み込み（絶対パス使用）
-    const module = await import('/js/firestore-api.js');
+    // Firestore APIモジュール読み込み（同ディレクトリから相対パス）
+    const module = await import('./firestore-api.js');
 
     // ローカル変数に代入
     createBrand = module.createBrand;
