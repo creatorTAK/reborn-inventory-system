@@ -181,23 +181,20 @@ class MasterCacheManager {
   }
 
   /**
-   * データ取得（キャッシュ優先、Firestore フォールバック）
+   * データ取得（SWR方式: キャッシュ優先、即座に返す）
+   * バックグラウンド更新は preloadInBackground() に任せる
    */
   async getData(collection) {
     try {
-      // キャッシュ有効性チェック
-      const cacheValid = await this.isCacheValid(collection);
-
-      if (cacheValid) {
-        // キャッシュから取得
-        const cachedData = await this.getFromCache(collection);
-        if (cachedData && cachedData.length > 0) {
-          console.log(`[MasterCache] ${collection}: ✅ キャッシュ利用 (${cachedData.length}件)`);
-          return cachedData;
-        }
+      // キャッシュ有効性に関係なく、キャッシュから即座に取得
+      const cachedData = await this.getFromCache(collection);
+      if (cachedData && cachedData.length > 0) {
+        console.log(`[MasterCache] ${collection}: ✅ キャッシュから即座に返却 (${cachedData.length}件)`);
+        return cachedData;
       }
 
-      // キャッシュ無効 or 空 → Firestoreから取得
+      // キャッシュが空の場合のみFirestoreから取得（初回のみ）
+      console.log(`[MasterCache] ${collection}: キャッシュなし、Firestoreから取得`);
       const data = await this.fetchFromFirestore(collection);
 
       // キャッシュに保存
@@ -213,7 +210,7 @@ class MasterCacheManager {
       try {
         const cachedData = await this.getFromCache(collection);
         if (cachedData && cachedData.length > 0) {
-          console.warn(`[MasterCache] ${collection}: ⚠️ エラー発生、古いキャッシュ利用 (${cachedData.length}件)`);
+          console.warn(`[MasterCache] ${collection}: ⚠️ エラー発生、既存キャッシュ利用 (${cachedData.length}件)`);
           return cachedData;
         }
       } catch (cacheError) {
@@ -225,7 +222,8 @@ class MasterCacheManager {
   }
 
   /**
-   * バックグラウンドプリロード
+   * バックグラウンドプリロード（Stale-While-Revalidate方式）
+   * キャッシュの有効期限に関係なく、常にバックグラウンドで最新データを取得してキャッシュ更新
    */
   async preloadInBackground(collection) {
     // すでにプリロード中の場合は既存のPromiseを返す
@@ -234,29 +232,35 @@ class MasterCacheManager {
       return this.preloadPromises[collection];
     }
 
-    console.log(`[MasterCache] ${collection}: バックグラウンドプリロード開始`);
+    console.log(`[MasterCache] ${collection}: バックグラウンドプリロード開始 (SWR)`);
 
     this.preloadPromises[collection] = (async () => {
       try {
-        // キャッシュ有効性チェック
-        const cacheValid = await this.isCacheValid(collection);
-
-        if (cacheValid) {
-          const cachedData = await this.getFromCache(collection);
-          console.log(`[MasterCache] ${collection}: ✅ キャッシュ有効、プリロード不要 (${cachedData.length}件)`);
-          return { cached: true, count: cachedData.length };
-        }
-
-        // Firestoreから取得してキャッシュ更新
+        // SWRパターン: キャッシュ有効性に関係なく、常にFirestoreから最新データを取得
         const data = await this.fetchFromFirestore(collection);
         await this.saveToCache(collection, data);
 
-        console.log(`[MasterCache] ${collection}: ✅ プリロード完了 (${data.length}件)`);
-        return { cached: false, count: data.length };
+        console.log(`[MasterCache] ${collection}: ✅ バックグラウンド更新完了 (${data.length}件)`);
+        return { cached: false, updated: true, count: data.length };
 
       } catch (error) {
         console.error(`[MasterCache] ${collection}: プリロードエラー`, error);
-        return { error: error.message };
+
+        // エラー時は既存キャッシュを利用
+        try {
+          const cachedData = await this.getFromCache(collection);
+          if (cachedData && cachedData.length > 0) {
+            console.warn(`[MasterCache] ${collection}: ⚠️ 更新失敗、既存キャッシュ利用 (${cachedData.length}件)`);
+            return { cached: true, error: error.message, count: cachedData.length };
+          }
+        } catch (cacheError) {
+          console.error(`[MasterCache] ${collection}: キャッシュ取得も失敗`, cacheError);
+        }
+
+        return { error: error.message, count: 0 };
+      } finally {
+        // 完了後にPromiseをクリーンアップ（再実行可能にする）
+        delete this.preloadPromises[collection];
       }
     })();
 
@@ -357,22 +361,22 @@ console.log('[MasterCache] MasterCacheManager初期化完了');
       window.masterCacheManager.preloadInBackground('categories')
     ]);
 
-    // ブランド結果
-    if (brandsResult.cached) {
-      console.log(`[MasterCache] ブランド: ✅ キャッシュ利用 (${brandsResult.count}件)`);
-    } else if (brandsResult.error) {
+    // ブランド結果 (SWR方式: 常に更新)
+    if (brandsResult.error) {
       console.warn(`[MasterCache] ブランド: ⚠️ エラー: ${brandsResult.error}`);
-    } else {
-      console.log(`[MasterCache] ブランド: ✅ Firestore読み込み完了 (${brandsResult.count}件)`);
+    } else if (brandsResult.updated) {
+      console.log(`[MasterCache] ブランド: ✅ バックグラウンド更新完了 (${brandsResult.count}件)`);
+    } else if (brandsResult.cached) {
+      console.warn(`[MasterCache] ブランド: ⚠️ 更新失敗、既存キャッシュ利用 (${brandsResult.count}件)`);
     }
 
-    // カテゴリ結果
-    if (categoriesResult.cached) {
-      console.log(`[MasterCache] カテゴリ: ✅ キャッシュ利用 (${categoriesResult.count}件)`);
-    } else if (categoriesResult.error) {
+    // カテゴリ結果 (SWR方式: 常に更新)
+    if (categoriesResult.error) {
       console.warn(`[MasterCache] カテゴリ: ⚠️ エラー: ${categoriesResult.error}`);
-    } else {
-      console.log(`[MasterCache] カテゴリ: ✅ Firestore読み込み完了 (${categoriesResult.count}件)`);
+    } else if (categoriesResult.updated) {
+      console.log(`[MasterCache] カテゴリ: ✅ バックグラウンド更新完了 (${categoriesResult.count}件)`);
+    } else if (categoriesResult.cached) {
+      console.warn(`[MasterCache] カテゴリ: ⚠️ 更新失敗、既存キャッシュ利用 (${categoriesResult.count}件)`);
     }
 
     // キャッシュ統計をコンソールに出力
