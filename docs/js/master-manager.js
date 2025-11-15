@@ -310,12 +310,13 @@ async function loadMaster(category, type) {
   if (initialDisplay === 0) {
     // 初期表示なし（検索後のみデータ表示）
     console.log('ℹ️ [Master Manager] 初期表示なし（検索後のみデータ表示）');
-    
+
     // キャッシュに先行読み込み（await で完了を待つ）
     await loadMasterDataToCache();
-    
-    allMasterData = [];
-    filteredMasterData = [];
+
+    // キャッシュからデータを取得（空で表示はしないがデータは保持）
+    allMasterData = masterCache[currentMasterConfig.collection] || [];
+    filteredMasterData = [];  // 初期表示なしなので空
     renderMasterList();
     updateStats();
   } else {
@@ -350,9 +351,23 @@ async function loadMasterDataToCache() {
     let data;
     if (currentMasterConfig.collection === 'brands' && window.masterCacheManager) {
       console.log('🚀 [Master Manager] ブランドキャッシュから読み込み');
+
+      // プリロード中の場合は完了を待つ
+      if (window.masterCacheManager.preloadPromises && window.masterCacheManager.preloadPromises['brands']) {
+        console.log('⏳ [Master Manager] ブランドプリロード完了待機中...');
+        await window.masterCacheManager.preloadPromises['brands'];
+      }
+
       data = await window.masterCacheManager.getBrands();
     } else if (currentMasterConfig.collection === 'categories' && window.masterCacheManager) {
       console.log('🚀 [Master Manager] カテゴリキャッシュから読み込み');
+
+      // プリロード中の場合は完了を待つ
+      if (window.masterCacheManager.preloadPromises && window.masterCacheManager.preloadPromises['categories']) {
+        console.log('⏳ [Master Manager] カテゴリプリロード完了待機中...');
+        await window.masterCacheManager.preloadPromises['categories'];
+      }
+
       data = await window.masterCacheManager.getCategories();
     } else {
       // その他のマスタはFirestore APIで取得
@@ -390,9 +405,23 @@ async function loadMasterData() {
     let data;
     if (currentMasterConfig.collection === 'brands' && window.masterCacheManager) {
       console.log('🚀 [Master Manager] ブランドキャッシュから読み込み');
+
+      // プリロード中の場合は完了を待つ
+      if (window.masterCacheManager.preloadPromises && window.masterCacheManager.preloadPromises['brands']) {
+        console.log('⏳ [Master Manager] ブランドプリロード完了待機中...');
+        await window.masterCacheManager.preloadPromises['brands'];
+      }
+
       data = await window.masterCacheManager.getBrands();
     } else if (currentMasterConfig.collection === 'categories' && window.masterCacheManager) {
       console.log('🚀 [Master Manager] カテゴリキャッシュから読み込み');
+
+      // プリロード中の場合は完了を待つ
+      if (window.masterCacheManager.preloadPromises && window.masterCacheManager.preloadPromises['categories']) {
+        console.log('⏳ [Master Manager] カテゴリプリロード完了待機中...');
+        await window.masterCacheManager.preloadPromises['categories'];
+      }
+
       data = await window.masterCacheManager.getCategories();
     } else {
       // その他のマスタはFirestore APIで取得
