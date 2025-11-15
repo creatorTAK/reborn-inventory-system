@@ -991,7 +991,8 @@
   <!-- Firestore API Wrapper (ARCH-001 Phase 1.5) -->
   <script type="module" src="/js/firestore-api.js"></script>
 
-  <!-- Master Cache System: master-management.htmlでのみ読み込む（トップメニューでは不要） -->
+  <!-- Master Cache System (MASTER-002: バックグラウンドプリロード) -->
+  <script src="/js/master-cache.js"></script>
 
   <script>
     // GAS API URL
@@ -1103,6 +1104,31 @@
           }
         }, 100); // 100ms遅延（体感速度向上のため）
       }
+
+      // マスタキャッシュのバックグラウンドプリロード開始
+      // firestore-api.jsの読み込み完了を待ってから実行
+      (async () => {
+        console.log('[MasterCache] プリロード準備中...');
+
+        // window.initializeFirestoreが読み込まれるまで待つ（最大5秒）
+        let attempts = 0;
+        const maxAttempts = 50; // 50回 x 100ms = 5秒
+
+        while (!window.initializeFirestore && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+
+        if (window.initializeFirestore && window.startMasterCachePreload) {
+          console.log('[MasterCache] バックグラウンドプリロード開始（トップページ）');
+          window.startMasterCachePreload(); // 非同期実行（待たない）
+        } else {
+          console.warn('[MasterCache] プリロード開始失敗:', {
+            initializeFirestore: !!window.initializeFirestore,
+            startMasterCachePreload: !!window.startMasterCachePreload
+          });
+        }
+      })();
     });
 
     // Firestoreナビゲーション監視（チャット戻るボタン用）

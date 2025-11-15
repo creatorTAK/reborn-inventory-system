@@ -200,12 +200,6 @@ window.initMasterManager = function() {
     loadMaster('product', 'category');
   }
 
-  // ブランド＋カテゴリのバックグラウンドプリロード
-  if (window.startMasterCachePreload) {
-    console.log('🚀 [Master Manager] マスタキャッシュのバックグラウンドプリロード開始');
-    window.startMasterCachePreload(); // 非同期実行（待たない）
-  }
-
   // イベントリスナー設定
   setupEventListeners();
 
