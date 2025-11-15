@@ -6,7 +6,7 @@
 
 const MASTER_CACHE_CONFIG = {
   DB_NAME: 'RebornMasterCache',
-  DB_VERSION: 1,
+  DB_VERSION: 2, // メタデータストア追加のためバージョンアップ
   CACHE_TTL: 3600000, // 1時間（ミリ秒）
   MAX_RETRY: 3,
   COLLECTIONS: {
@@ -46,6 +46,12 @@ class MasterCacheManager {
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
 
+        // メタデータストア作成（iframe間共有のため）
+        if (!db.objectStoreNames.contains('metadata')) {
+          db.createObjectStore('metadata', { keyPath: 'collection' });
+          console.log('[MasterCache] metadataストア作成完了');
+        }
+
         // ブランドストア作成
         if (!db.objectStoreNames.contains(MASTER_CACHE_CONFIG.COLLECTIONS.brands)) {
           const brandsStore = db.createObjectStore(MASTER_CACHE_CONFIG.COLLECTIONS.brands, { keyPath: 'id' });
@@ -64,25 +70,55 @@ class MasterCacheManager {
   }
 
   /**
-   * キャッシュメタデータ取得
+   * キャッシュメタデータ取得（IndexedDB版、iframe間共有）
    */
   async getCacheMetadata(collection) {
-    const key = `${collection}_cache_metadata`;
-    const metadata = localStorage.getItem(key);
-    return metadata ? JSON.parse(metadata) : null;
+    await this.initialize();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['metadata'], 'readonly');
+      const store = transaction.objectStore('metadata');
+      const request = store.get(collection);
+
+      request.onsuccess = () => {
+        resolve(request.result || null);
+      };
+
+      request.onerror = () => {
+        console.error(`[MasterCache] ${collection}: メタデータ取得エラー`, request.error);
+        reject(request.error);
+      };
+    });
   }
 
   /**
-   * キャッシュメタデータ保存
+   * キャッシュメタデータ保存（IndexedDB版、iframe間共有）
    */
-  saveCacheMetadata(collection, count) {
-    const key = `${collection}_cache_metadata`;
+  async saveCacheMetadata(collection, count) {
+    await this.initialize();
+
     const metadata = {
+      collection: collection, // keyPath
       count: count,
       timestamp: Date.now(),
       version: MASTER_CACHE_CONFIG.DB_VERSION
     };
-    localStorage.setItem(key, JSON.stringify(metadata));
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['metadata'], 'readwrite');
+      const store = transaction.objectStore('metadata');
+      store.put(metadata);
+
+      transaction.oncomplete = () => {
+        console.log(`[MasterCache] ${collection}: メタデータ保存完了`);
+        resolve();
+      };
+
+      transaction.onerror = () => {
+        console.error(`[MasterCache] ${collection}: メタデータ保存エラー`, transaction.error);
+        reject(transaction.error);
+      };
+    });
   }
 
   /**
@@ -174,7 +210,7 @@ class MasterCacheManager {
       }
 
       // メタデータ保存
-      this.saveCacheMetadata(collection, data.length);
+      await this.saveCacheMetadata(collection, data.length);
       console.log(`[MasterCache] ${collection}: ✅ ${data.length}件の保存完了`);
 
     } catch (error) {
@@ -461,15 +497,33 @@ window.startMasterCachePreload = async function() {
 // 自動バックグラウンドプリロード開始
 // ========================================
 // master-cache.js読み込み完了後、即座にバックグラウンドプリロードを開始
-// キャッシュがあれば即座に返るので、どのページでも実行して問題なし
+// キャッシュがあれば即座に返る、プリロード中なら既存Promiseを返すので安全
 console.log('[MasterCache] 自動バックグラウンドプリロード開始チェック');
 
 // 少し遅延させてFirestore初期化を確実に完了させる
-setTimeout(() => {
-  if (window.startMasterCachePreload) {
+setTimeout(async () => {
+  try {
+    // プリロード中かチェック
+    const brandsPreloading = window.masterCacheManager.preloadPromises['brands'];
+    const categoriesPreloading = window.masterCacheManager.preloadPromises['categories'];
+
+    if (brandsPreloading || categoriesPreloading) {
+      console.log('[MasterCache] ⏭️ プリロード既に実行中 - スキップ');
+      return;
+    }
+
+    // キャッシュ有効性チェック
+    const brandsValid = await window.masterCacheManager.isCacheValid('brands');
+    const categoriesValid = await window.masterCacheManager.isCacheValid('categories');
+
+    if (brandsValid && categoriesValid) {
+      console.log('[MasterCache] ✅ キャッシュ有効 - プリロード不要');
+      return;
+    }
+
     console.log('[MasterCache] ✅ 自動バックグラウンドプリロード実行');
     window.startMasterCachePreload();
-  } else {
-    console.warn('[MasterCache] ⚠️ startMasterCachePreload関数が見つかりません');
+  } catch (error) {
+    console.error('[MasterCache] 自動プリロード開始エラー:', error);
   }
 }, 100); // 100ms遅延
