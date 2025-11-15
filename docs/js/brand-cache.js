@@ -308,3 +308,27 @@ class BrandCacheManager {
 window.brandCacheManager = new BrandCacheManager();
 
 console.log('[BrandCache] BrandCacheManager初期化完了');
+
+// アプリ起動時に自動的にバックグラウンドプリロード開始
+(async function() {
+  console.log('[BrandCache] 自動バックグラウンドプリロード開始');
+
+  try {
+    const result = await window.brandCacheManager.preloadInBackground();
+
+    if (result.cached) {
+      console.log(`[BrandCache] ✅ キャッシュ利用: ${result.count}件`);
+    } else if (result.error) {
+      console.warn(`[BrandCache] ⚠️ エラー: ${result.error}`);
+    } else {
+      console.log(`[BrandCache] ✅ Firestore読み込み完了: ${result.count}件`);
+    }
+
+    // キャッシュ統計をコンソールに出力
+    const stats = await window.brandCacheManager.getCacheStats();
+    console.log('[BrandCache] 統計:', stats);
+  } catch (error) {
+    console.error('[BrandCache] 自動プリロードエラー:', error);
+    // エラーでもアプリは続行（致命的ではない）
+  }
+})();
