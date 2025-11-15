@@ -158,19 +158,51 @@ class MasterCacheManager {
   }
 
   /**
-   * Firestoreからデータ取得（既存のwindow.getMasterData()を使用）
+   * Firestoreからデータ取得（動的importで確実にモジュールをロード）
+   * Exponential backoff retry付き
    */
-  async fetchFromFirestore(collection) {
+  async fetchFromFirestore(collection, maxAttempts = 5) {
     console.log(`[MasterCache] ${collection}: Firestoreから取得開始`);
 
-    if (!window.getMasterData) {
-      throw new Error('getMasterData関数が見つかりません');
+    let attempt = 0;
+
+    while (attempt < maxAttempts) {
+      try {
+        // 動的importでfirestore-api.jsモジュールを確実にロード
+        const firestoreModule = await import('/js/firestore-api.js');
+
+        // 初期化完了を待機（window.firestoreReadyを使用）
+        if (window.firestoreReady) {
+          await window.firestoreReady;
+        }
+
+        // getMasterData関数を取得
+        const getMasterData = firestoreModule.getMasterData || window.FirestoreApi?.getMasterData;
+
+        if (!getMasterData) {
+          throw new Error('getMasterData関数が見つかりません');
+        }
+
+        // データ取得
+        const data = await getMasterData(collection);
+        console.log(`[MasterCache] ${collection}: Firestoreから${data.length}件取得`);
+        return data;
+
+      } catch (error) {
+        attempt++;
+        console.warn(`[MasterCache] ${collection}: 取得試行 ${attempt}/${maxAttempts} 失敗:`, error.message);
+
+        if (attempt >= maxAttempts) {
+          console.error(`[MasterCache] ${collection}: 最大試行回数超過`);
+          throw error;
+        }
+
+        // Exponential backoff（200ms → 400ms → 800ms → 1600ms）
+        const delay = 200 * Math.pow(2, attempt);
+        console.log(`[MasterCache] ${collection}: ${delay}ms待機後に再試行...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-
-    const data = await window.getMasterData(collection);
-
-    console.log(`[MasterCache] ${collection}: Firestoreから${data.length}件取得`);
-    return data;
   }
 
   /**

@@ -29,6 +29,7 @@ const FIREBASE_CONFIG = {
 
 let firebaseApp = null;
 let firestoreDb = null;
+let _initializePromise = null; // 初期化Promise（単一インスタンス管理）
 
 // キャッシュ管理
 let userListCache = null;
@@ -41,44 +42,58 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5分間
 const BRANDS_CACHE_DURATION = 30 * 60 * 1000; // ブランドは30分間キャッシュ
 
 // ============================================
-// Firebase初期化
+// Firebase初期化（Promise-based Singleton）
 // ============================================
 
 /**
  * Firebase/Firestoreを初期化
- * 複数回呼ばれても安全（シングルトン）
- * 
+ * 複数回呼ばれても安全（シングルトン、Promise-based）
+ *
  * @returns {Promise<Object>} Firestoreインスタンス
  */
 async function initializeFirestore() {
-  if (firestoreDb) {
-    return firestoreDb;
+  // 初期化中または初期化済みの場合、既存のPromiseを返す
+  if (_initializePromise) {
+    return _initializePromise;
   }
 
-  try {
-    // Firebase SDKを動的インポート
-    const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
-    const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-
-    // 既に初期化済みか確認
-    const existingApps = getApps();
-    if (existingApps.length > 0) {
-      firebaseApp = existingApps.find(app => app.name === 'firestore-api-app');
-      if (!firebaseApp) {
-        firebaseApp = initializeApp(FIREBASE_CONFIG, 'firestore-api-app');
-      }
-    } else {
-      firebaseApp = initializeApp(FIREBASE_CONFIG, 'firestore-api-app');
+  // 新規初期化Promiseを作成
+  _initializePromise = (async () => {
+    // 既に初期化済みの場合はそのまま返す
+    if (firestoreDb) {
+      return firestoreDb;
     }
 
-    firestoreDb = getFirestore(firebaseApp);
-    console.log('[Firestore API] 初期化完了');
+    try {
+      console.log('[Firestore API] 初期化開始...');
 
-    return firestoreDb;
-  } catch (error) {
-    console.error('[Firestore API] 初期化エラー:', error);
-    throw error;
-  }
+      // Firebase SDKを動的インポート
+      const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+      const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+      // 既に初期化済みか確認
+      const existingApps = getApps();
+      if (existingApps.length > 0) {
+        firebaseApp = existingApps.find(app => app.name === 'firestore-api-app');
+        if (!firebaseApp) {
+          firebaseApp = initializeApp(FIREBASE_CONFIG, 'firestore-api-app');
+        }
+      } else {
+        firebaseApp = initializeApp(FIREBASE_CONFIG, 'firestore-api-app');
+      }
+
+      firestoreDb = getFirestore(firebaseApp);
+      console.log('[Firestore API] ✅ 初期化完了');
+
+      return firestoreDb;
+    } catch (error) {
+      console.error('[Firestore API] ❌ 初期化エラー:', error);
+      _initializePromise = null; // エラー時はPromiseをリセット（再試行可能に）
+      throw error;
+    }
+  })();
+
+  return _initializePromise;
 }
 
 // ============================================
@@ -1356,3 +1371,7 @@ export {
 // グローバルスコープに公開（非モジュールスクリプトから使用するため）
 // master-cache.js 等の通常スクリプトから window.initializeFirestore でアクセス可能
 window.initializeFirestore = initializeFirestore;
+
+// 初期化Promiseをグローバルに公開（バックグラウンドプリロード用）
+// master-cache.js から await window.firestoreReady で初期化完了を待機可能
+window.firestoreReady = initializeFirestore();
