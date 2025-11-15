@@ -2740,21 +2740,37 @@
       console.log('[Brand Preload] バックグラウンドプリロード開始');
 
       try {
-        // Firestore初期化を待つ
+        // brandCacheManagerが読み込まれるまで待つ
         await new Promise(resolve => {
-          if (window.db) {
+          if (window.brandCacheManager) {
+            console.log('[Brand Preload] brandCacheManager 既に読み込み済み');
             resolve();
           } else {
+            console.log('[Brand Preload] brandCacheManager 読み込み待機中...');
             const checkInterval = setInterval(() => {
-              if (window.db) {
+              if (window.brandCacheManager) {
                 clearInterval(checkInterval);
+                console.log('[Brand Preload] brandCacheManager 読み込み完了');
                 resolve();
               }
             }, 100);
+
+            // 10秒後にタイムアウト
+            setTimeout(() => {
+              clearInterval(checkInterval);
+              console.error('[Brand Preload] タイムアウト: brandCacheManagerが読み込まれませんでした');
+              resolve(); // エラーでも続行
+            }, 10000);
           }
         });
 
+        if (!window.brandCacheManager) {
+          console.error('[Brand Preload] brandCacheManagerが見つかりません');
+          return;
+        }
+
         // バックグラウンドプリロード開始
+        console.log('[Brand Preload] preloadInBackground() 実行開始');
         const result = await window.brandCacheManager.preloadInBackground();
 
         if (result.cached) {
