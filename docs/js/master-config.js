@@ -56,28 +56,20 @@ const masterCategories = {
         description: '商品カテゴリを管理',
         fields: [
           {
-            name: 'name',
-            label: 'カテゴリ名',
+            name: 'fullPath',
+            label: 'カテゴリフルパス',
             required: true,
             type: 'text',
-            placeholder: '例: トップス',
+            placeholder: '例: レディース > トップス > Tシャツ',
             validation: {
               minLength: 1,
-              maxLength: 50
+              maxLength: 200
             }
-          },
-          {
-            name: 'parent',
-            label: '親カテゴリ',
-            required: false,
-            type: 'select',
-            placeholder: '親カテゴリを選択（オプション）',
-            options: [] // 動的に他のカテゴリから取得
           }
         ],
-        displayFields: ['name', 'parent'],
-        searchFields: ['name'],
-        sortBy: 'name',
+        displayFields: ['fullPath'],
+        searchFields: ['fullPath', 'level1', 'level2', 'level3', 'level4', 'level5', 'itemName'],
+        sortBy: 'fullPath',
         sortOrder: 'asc',
         searchable: true,
         usageCount: true,

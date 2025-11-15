@@ -302,32 +302,26 @@ async function loadMaster(category, type) {
   // ヘッダーにマスタ種別を表示
   updateMasterTypeDisplay();
 
-  // ブランド・カテゴリは常にキャッシュから全件表示（initialDisplay設定を無視）
-  if (currentMasterConfig.collection === 'brands' || currentMasterConfig.collection === 'categories') {
-    console.log('🚀 [Master Manager] キャッシュマスタのため全件表示');
-    await loadMasterData();
+  // initialDisplay設定チェック
+  const initialDisplay = currentMasterConfig.initialDisplay !== undefined
+    ? currentMasterConfig.initialDisplay
+    : (currentMasterConfig.maxDisplayResults || 100);
+
+  if (initialDisplay === 0) {
+    // 初期表示なし（検索後のみデータ表示）
+    console.log('ℹ️ [Master Manager] 初期表示なし（検索後のみデータ表示）');
+
+    // キャッシュに先行読み込み（await で完了を待つ）
+    await loadMasterDataToCache();
+
+    // キャッシュからデータを取得（空で表示はしないがデータは保持）
+    allMasterData = masterCache[currentMasterConfig.collection] || [];
+    filteredMasterData = [];  // 初期表示なしなので空
+    renderMasterList();
+    updateStats();
   } else {
-    // その他のマスタはinitialDisplay設定に従う
-    const initialDisplay = currentMasterConfig.initialDisplay !== undefined
-      ? currentMasterConfig.initialDisplay
-      : (currentMasterConfig.maxDisplayResults || 100);
-
-    if (initialDisplay === 0) {
-      // 初期表示なし（検索後のみデータ表示）
-      console.log('ℹ️ [Master Manager] 初期表示なし（検索後のみデータ表示）');
-
-      // キャッシュに先行読み込み（await で完了を待つ）
-      await loadMasterDataToCache();
-
-      // キャッシュからデータを取得（空で表示はしないがデータは保持）
-      allMasterData = masterCache[currentMasterConfig.collection] || [];
-      filteredMasterData = [];  // 初期表示なしなので空
-      renderMasterList();
-      updateStats();
-    } else {
-      // 初期表示あり（従来の動作）
-      await loadMasterData();
-    }
+    // 初期表示あり（従来の動作）
+    await loadMasterData();
   }
 }
 
