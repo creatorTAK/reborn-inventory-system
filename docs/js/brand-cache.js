@@ -96,7 +96,18 @@ class BrandCacheManager {
     const startTime = Date.now();
 
     try {
-      const snapshot = await db.collection('brands').get();
+      // Firestore初期化（グローバル関数を使用）
+      if (!window.initializeFirestore) {
+        throw new Error('initializeFirestore が見つかりません');
+      }
+      const db = await window.initializeFirestore();
+
+      // Firebase SDKを動的インポート
+      const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+      const brandsRef = collection(db, 'brands');
+      const snapshot = await getDocs(brandsRef);
+
       const brands = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
