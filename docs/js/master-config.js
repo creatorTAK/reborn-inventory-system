@@ -47,15 +47,7 @@ const masterCategories = {
         usageCount: true, // 使用回数カウント機能
         bulkDelete: true, // 一括削除機能
         maxDisplayResults: 100, // 表示上限
-        // オートコンプリート設定（重要マスタ専用）
-        autocomplete: true, // オートコンプリート有効化
-        autocompleteMinChars: 1, // 最小入力文字数
-        autocompleteSuggestions: 20, // 候補表示数
         initialDisplay: 0, // 初期表示件数（0=検索後のみ表示）
-        autocompleteFields: { // オートコンプリート候補の表示フィールド
-          primary: 'nameEn',   // 1行目（メイン）
-          secondary: 'nameKana' // 2行目（サブ）
-        }
       },
       
       category: {
@@ -91,15 +83,7 @@ const masterCategories = {
         usageCount: true,
         bulkDelete: true,
         maxDisplayResults: 100,
-        // オートコンプリート設定（重要マスタ専用）
-        autocomplete: true, // オートコンプリート有効化
-        autocompleteMinChars: 1, // 最小入力文字数
-        autocompleteSuggestions: 15, // 候補表示数
         initialDisplay: 0, // 初期表示件数（0=検索後のみ表示）
-        autocompleteFields: { // オートコンプリート候補の表示フィールド
-          primary: 'name',   // 1行目（メイン）
-          secondary: 'parent' // 2行目（サブ）
-        }
       },
       
       material: {

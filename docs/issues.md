@@ -506,6 +506,33 @@ window.openGASPage = function(page) {
 - ✅ 実装効率: 共通ロジック再利用
 - ✅ データ構造統一: Firestore設計も統一可能
 
+### ⚠️ 重要なフィードバック（2025-11-15）
+
+**ユーザーテスト結果：ブランドマスタの動作が間違っている**
+
+#### 現在の誤った実装（Phase 2）
+- ❌ オートコンプリート（ドロップダウン、1つ選択）
+- ❌ 選択が1つしかできない
+- ❌ 削除ボタンがない
+- ❌ ひらがな検索に反応しない
+- ❌ 検索が遅い（15秒）
+- ❌ プリロードなし
+
+#### 正しい仕様（MASTER-001の動作）
+- ✅ 一覧表示（検索結果全てを表示、最大100件）
+- ✅ 各カードに削除ボタン
+- ✅ 選択モード（チェックボックスで複数選択 → 一括削除）
+- ✅ ひらがな検索対応
+- ✅ バックグラウンドプリロード（メニュー開いた時点で開始）
+- ✅ キャッシュから高速検索（デバウンス500ms）
+
+#### 修正方針
+- master-manager.jsを修正して、master-brand-manager.jsと同じ動作を実現
+- 一覧表示モードを実装（オートコンプリートではなく）
+- ひらがな→カタカナ変換処理追加
+- バックグラウンドプリロード実装
+- キャッシュ検索ロジック追加
+
 ### 🎨 UI設計
 
 #### メインメニュー構造
@@ -576,304 +603,128 @@ window.openGASPage = function(page) {
   - 汎用的なCRUD関数（createMaster, deleteMaster, updateMaster）
   - Firestore動的コレクション対応
 
-**完了日: 2025-11-14** (コミット: a69b05d)
+#### Phase 2: 商品関連マスタ統合（3日） ⚠️ **修正必要**
+- [x] ブランドマスタ統合
+  - MASTER-001の機能を汎用エンジンに統合
+  - ~~オートコンプリート実装（誤り）~~ ← **要修正**
+  - **一覧表示実装（正しい仕様）**
+  - ひらがな検索対応
+  - バックグラウンドプリロード
+  - キャッシュ検索
 
-#### Phase 2: 商品関連マスタ統合（3日） ✅ 完了
-- [x] ブランドマスタを汎用エンジンに移行
-  - 既存master-brand-list.htmlからの移行
-  - マスタ定義追加
-  - 動作確認
+- [ ] カテゴリマスタ統合
+  - master-config.js に設定追加
+  - 階層構造対応（親カテゴリ）
 
-- [x] カテゴリマスタ追加
-  - マスタ定義作成
-  - Firestoreコレクション準備
-  - 動作確認
+- [ ] 素材・生地マスタ統合
+  - シンプルなテキストマスタ
 
-- [x] その他商品関連マスタ追加
-  - 素材、生地、キーワード、セールスワード
-  - 段階的に追加・テスト
+- [ ] キーワード・セールスワードマスタ統合
+  - 商品登録画面から使用
 
-**完了日: 2025-11-14** (コミット: 6fed4e8)
+#### Phase 3: 業務関連マスタ統合（2日）
+- [ ] 発送方法マスタ統合
+  - INV-004-UIの内容を汎用エンジンに統合
 
-#### Phase 3: 業務関連マスタ統合（3日）
-- [x] 既存UIの保持判断
-  - 発送方法マスタ → 既存UI継続使用（shipping_method_master_ui.html）
-  - 梱包資材マスタ → 既存UI継続使用（packaging_materials_ui.html）
-  - 理由：既存UIは高度にカスタマイズ済み（梱包資材は12列データで在庫管理統合）
-  - データ移行不要（スプレッドシート運用継続）
+- [ ] 梱包資材マスタ統合
+  - ロット管理対応
 
-- [ ] 新規業務マスタ追加（汎用エンジン使用）
-  - 担当者マスタ
-  - 仕入先マスタ
-  - 出品先マスタ
-  - 段階的に追加・テスト
+- [ ] 担当者マスタ統合
+  - ユーザー管理との連携
 
-#### Phase 4: UI/UX最適化（1日）
-- [ ] レスポンシブ対応
-- [ ] ローディング状態改善
-- [ ] エラーハンドリング強化
-- [ ] アクセシビリティ改善
+- [ ] 仕入先・出品先マスタ統合
+  - 業務フロー連携
 
-### 🔧 技術実装
+#### Phase 4: メインメニュー統合（1日） ✅ 完了
+- [x] menu_home.html 修正
+  - 商品関連マスタ管理メニュー追加
+  - 業務関連マスタ管理メニュー追加
+  - アコーディオンUI実装
 
-#### マスタ定義（JavaScript設定）
-```javascript
-// docs/js/master-config.js
+- [x] master-brand-list.html 廃止判断
+  - 汎用エンジンに統合完了後、旧画面削除
+  - リンク切れチェック
 
-const masterCategories = {
-  product: {
-    label: '商品関連マスタ',
-    icon: '📦',
-    masters: {
-      brand: {
-        label: 'ブランド',
-        collection: 'brands',
-        fields: [
-          { name: 'nameEn', label: 'ブランド英語名', required: true, type: 'text' },
-          { name: 'nameKana', label: 'ブランドカナ', required: true, type: 'text' }
-        ],
-        searchable: true,
-        sortBy: 'nameEn',
-        usageCount: true
-      },
-      category: {
-        label: 'カテゴリ',
-        collection: 'categories',
-        fields: [
-          { name: 'name', label: 'カテゴリ名', required: true, type: 'text' },
-          { name: 'parent', label: '親カテゴリ', required: false, type: 'select' }
-        ],
-        searchable: true,
-        sortBy: 'name',
-        usageCount: true
-      },
-      material: {
-        label: '素材',
-        collection: 'materials',
-        fields: [
-          { name: 'name', label: '素材名', required: true, type: 'text' }
-        ],
-        searchable: true,
-        sortBy: 'name',
-        usageCount: true
-      }
-      // ... 他の商品関連マスタ
-    }
-  },
+#### Phase 5: 最適化とテスト（1日）
+- [ ] パフォーマンステスト
+  - 50,000件データでの動作確認
+  - 検索速度測定
 
-  business: {
-    label: '業務関連マスタ',
-    icon: '🏢',
-    masters: {
-      shipping: {
-        label: '発送方法',
-        collection: 'shippingMethods',
-        fields: [
-          { name: 'name', label: '発送方法名', required: true, type: 'text' },
-          { name: 'price', label: '送料', required: true, type: 'number' }
-        ],
-        searchable: false,
-        sortBy: 'name',
-        usageCount: false
-      },
-      supplier: {
-        label: '仕入先',
-        collection: 'suppliers',
-        fields: [
-          { name: 'name', label: '仕入先名', required: true, type: 'text' },
-          { name: 'contact', label: '連絡先', required: false, type: 'text' },
-          { name: 'email', label: 'メールアドレス', required: false, type: 'email' }
-        ],
-        searchable: true,
-        sortBy: 'name',
-        usageCount: false
-      }
-      // ... 他の業務関連マスタ
-    }
-  }
-};
-```
+- [ ] セキュリティテスト
+  - Firestoreルール確認
+  - XSS対策確認
 
-#### 汎用CRUD API
-```javascript
-// docs/js/firestore-api.js
+- [ ] ユーザビリティテスト
+  - 実機テスト（iPhone, Android）
+  - フィードバック収集
 
-/**
- * 汎用マスタ作成
- * @param {string} collection - Firestoreコレクション名
- * @param {object} data - マスタデータ
- */
-async function createMaster(collection, data) {
-  const db = await initializeFirestore();
-  const { collection: firestoreCollection, addDoc, serverTimestamp } = await import('firebase/firestore');
-
-  const masterData = {
-    ...data,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
-
-  if (data.usageCount !== undefined) {
-    masterData.usageCount = 0;
-  }
-
-  const docRef = await addDoc(firestoreCollection(db, collection), masterData);
-  return docRef.id;
-}
-
-/**
- * 汎用マスタ削除
- * @param {string} collection - Firestoreコレクション名
- * @param {string} id - ドキュメントID
- */
-async function deleteMaster(collection, id) {
-  const db = await initializeFirestore();
-  const { doc, deleteDoc } = await import('firebase/firestore');
-
-  await deleteDoc(doc(db, collection, id));
-}
-
-/**
- * 汎用マスタ更新
- * @param {string} collection - Firestoreコレクション名
- * @param {string} id - ドキュメントID
- * @param {object} data - 更新データ
- */
-async function updateMaster(collection, id, data) {
-  const db = await initializeFirestore();
-  const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
-
-  const updateData = {
-    ...data,
-    updatedAt: serverTimestamp()
-  };
-
-  await updateDoc(doc(db, collection, id), updateData);
-}
-```
-
-### 📍 関連ファイル
-
-**新規作成:**
+### 📍 作成ファイル
 - `docs/master-management.html` - 汎用マスタ管理画面
 - `docs/js/master-manager.js` - 汎用マスタ管理ロジック
-- `docs/js/master-config.js` - マスタ定義設定
+- `docs/js/master-config.js` - マスタ定義設定ファイル
 
-**修正:**
-- `docs/index.html` - メニュー構造変更
-  - 「マスタ管理」を「商品関連マスタ管理」「業務関連マスタ管理」に分割
+### 📍 修正ファイル
 - `docs/js/firestore-api.js` - 汎用CRUD API追加
-
-**削除（移行後）:**
-- `docs/master-brand-list.html` → 汎用エンジンに統合
-- `docs/js/master-brand-manager.js` → 汎用エンジンに統合
-
-### ⚠️ 注意事項
-
-**データ移行:**
-- ブランドマスタは既にFirestoreに存在（51,342件）→ そのまま利用
-- 発送方法・梱包資材 → データ移行不要（既存UI継続使用）
-  - 理由：既存UIが高度にカスタマイズ済み（特に梱包資材は在庫管理機能統合）
-  - 汎用エンジンは新規マスタ（担当者、仕入先、出品先）のみ使用
-
-**互換性:**
-- 既存の商品登録画面は引き続きブランド検索APIを使用
-- API仕様変更なし、内部実装のみ変更
-
-**パフォーマンス:**
-- マスタ定義はグローバルスコープで保持（再読み込み不要）
-- Firestoreキャッシュ活用
-- 大量データ対策（ブランドと同様の手法）
+- `docs/menu_home.html` - メインメニュー統合（Phase 4）
+- `docs/master-brand-list.html` - 廃止予定（Phase 4完了後）
 
 ### 🧪 テストケース
 
 #### TC-MASTER-002-001: マスタ種別切り替え
 **前提条件:**
-- 商品関連マスタ管理画面を開く
+- 汎用マスタ管理画面を開く
 
 **実行操作:**
-1. マスタ種別ドロップダウンで「カテゴリ」を選択
-2. カテゴリ一覧が表示されることを確認
-3. 「ブランド」に戻す
-4. ブランド一覧が表示されることを確認
+1. マスタ種別ドロップダウンで「ブランド」選択
+2. マスタ種別ドロップダウンで「カテゴリ」選択
 
 **期待結果:**
-- ✅ マスタ種別切り替えでコンテンツが即座に変わる
-- ✅ URLパラメータが変更される
-- ✅ 検索バーがクリアされる
+- [ ] 各マスタの検索・一覧が正しく表示
+- [ ] URL が更新される（`?type=brand` → `?type=category`）
 
-#### TC-MASTER-002-002: カテゴリマスタ追加
+#### TC-MASTER-002-002: 汎用検索・追加・削除
 **前提条件:**
-- カテゴリマスタを選択
+- ブランドマスタを選択
 
 **実行操作:**
-1. [新規追加]をタップ
-2. カテゴリ名に「TEST CATEGORY」を入力
-3. [保存]をタップ
+1. 検索バーに「NIKE」入力
+2. [新規追加]ボタンで新規ブランド追加
+3. 個別[削除]ボタンで削除
 
 **期待結果:**
-- ✅ Firestoreに新規カテゴリが作成される
-- ✅ 一覧画面に即座に表示される
+- [x] ひらがな検索対応（「ないき」で検索可能）
+- [ ] キャッシュから高速検索（15秒 → 100ms未満）
+- [x] 検索結果が一覧表示（最大100件）
+- [x] 各カードに削除ボタン表示
+- [ ] 追加・削除がリアルタイム反映
 
-#### TC-MASTER-002-003: 業務マスタ（仕入先）追加
+#### TC-MASTER-002-003: 一括削除
 **前提条件:**
-- 業務関連マスタ管理画面を開く
-- 仕入先マスタを選択
+- ブランドマスタで検索結果が複数表示
 
 **実行操作:**
-1. [新規追加]をタップ
-2. 仕入先名に「TEST SUPPLIER」を入力
-3. 連絡先に「03-1234-5678」を入力
-4. [保存]をタップ
+1. [選択削除]ボタンをクリック
+2. 複数のブランドをチェックボックスで選択
+3. [削除]ボタンで一括削除
 
 **期待結果:**
-- ✅ Firestoreに新規仕入先が作成される
-- ✅ 一覧画面に即座に表示される
-
-### ✏️ 実装タスク
-
-#### Phase 1: 基盤構築 ✅ 完了
-- [x] マスタ定義設計・実装（master-config.js）
-- [x] 汎用マスタ管理画面HTML作成（master-management.html）
-- [x] 汎用マスタ管理ロジック実装（master-manager.js）
-- [x] 汎用CRUD API実装（firestore-api.js拡張）
-- [x] メニュー構造変更（index.html）
-- [x] URL設計実装（category/type パラメータ）
-- [x] テスト（マスタ種別切り替え）
-
-**完了日: 2025-11-14** (コミット: a69b05d)
-
-#### Phase 2: 商品関連マスタ統合 ✅ 完了
-- [x] ブランドマスタ定義追加
-- [x] ブランドマスタ動作確認
-- [x] カテゴリマスタ定義追加
-- [x] カテゴリマスタ動作確認
-- [x] その他マスタ（素材/生地/キーワード/セールスワード）定義追加
-- [x] 全体動作確認
-
-**完了日: 2025-11-14** (コミット: 6fed4e8)
-
-#### Phase 3: 業務関連マスタ統合
-- [ ] 発送方法マスタ移行（スプレッドシート → Firestore）
-- [ ] 梱包資材マスタ移行（スプレッドシート → Firestore）
-- [ ] 担当者マスタ定義追加
-- [ ] 仕入先マスタ定義追加
-- [ ] 出品先マスタ定義追加
-- [ ] 全体動作確認
-
-#### Phase 4: UI/UX最適化
-- [ ] レスポンシブ対応確認
-- [ ] ローディング状態改善
-- [ ] エラーハンドリング強化
-- [ ] 実機テスト
+- [ ] 選択モードが正常動作
+- [ ] 選択した全てのブランドが削除
+- [ ] キャッシュも更新
 
 ### 📝 テスト結果
+- [ ] TC-MASTER-002-001: PASS / FAIL
+- [x] TC-MASTER-002-002: PARTIAL（ひらがな非対応、遅い、オートコンプリート誤り）
+- [ ] TC-MASTER-002-003: FAIL（選択モード未実装）
+- [ ] デグレード確認: OK / NG
 
-（実装後に記録）
+### 🎯 達成した効果（Phase 1完了時点）
+- ✅ 汎用マスタ管理エンジン基盤構築完了
+- ✅ メインメニュー統合完了
+- ⚠️ ブランドマスタ統合（要修正）
 
 ### 状態
 - [ ] ✅ DONE (完了日: )
-
 ---
 
 ## 🔒 セキュリティ（Security）

@@ -1,22 +1,68 @@
 /**
  * 汎用マスタ管理ロジック
- * 
+ *
  * master-config.jsで定義されたマスタ設定に基づいて動的にUIを生成し、
  * firestore-api.jsの汎用CRUD APIを使用してマスタデータを管理する
+ *
+ * MASTER-002: 一覧表示モード実装（master-brand-manager.jsベース）
+ * - ひらがな検索対応
+ * - バックグラウンドプリロード
+ * - キャッシュ検索
+ * - 選択モード（一括削除）
  */
 
+// ============================================
 // グローバル変数
+// ============================================
+
+const MAX_DISPLAY_RESULTS = 100; // 表示件数上限（パフォーマンス対策）
+
 let currentCategory = null;
 let currentMasterType = null;
 let currentMasterConfig = null;
 let allMasterData = [];
 let filteredMasterData = [];
-let isSelectionMode = false;
-let selectedIds = new Set();
-let deleteTargetId = null;
 let searchDebounceTimer = null;
-let autocompleteSuggestions = []; // オートコンプリート候補（グローバル）
-let autocompleteSelectedIndex = -1; // 選択中のインデックス
+let masterToDelete = null;
+
+// 選択モード関連
+let selectionMode = false;
+let selectedMasterData = new Set(); // 選択されたマスタID
+
+// キャッシュ管理
+let masterCache = {}; // カテゴリ/タイプごとのキャッシュ {collection: [...]}
+
+// ============================================
+// ユーティリティ関数（カタカナ⇔ひらがな変換）
+// ============================================
+
+/**
+ * カタカナをひらがなに変換
+ * @param {string} str - 変換する文字列
+ * @returns {string} ひらがなに変換された文字列
+ */
+function katakanaToHiragana(str) {
+  return str.replace(/[\u30a1-\u30f6]/g, (match) => {
+    const chr = match.charCodeAt(0) - 0x60;
+    return String.fromCharCode(chr);
+  });
+}
+
+/**
+ * ひらがなをカタカナに変換
+ * @param {string} str - 変換する文字列
+ * @returns {string} カタカナに変換された文字列
+ */
+function hiraganaToKatakana(str) {
+  return str.replace(/[\u3041-\u3096]/g, function(match) {
+    const chr = match.charCodeAt(0) + 0x60;
+    return String.fromCharCode(chr);
+  });
+}
+
+// ============================================
+// 初期化
+// ============================================
 
 /**
  * 初期化処理
@@ -78,192 +124,345 @@ window.initMasterManager = function() {
  * イベントリスナー設定
  */
 function setupEventListeners() {
-  // 検索入力（デバウンス処理）
-  document.getElementById('searchInput').addEventListener('input', (e) => {
+  const searchInput = document.getElementById('searchInput');
+
+  if (!searchInput) {
+    console.warn('[Master Manager] 検索入力フィールドが見つかりません');
+    return;
+  }
+
+  // 入力イベント（デバウンス付き）
+  searchInput.addEventListener('input', async (e) => {
     clearTimeout(searchDebounceTimer);
-    searchDebounceTimer = setTimeout(() => {
-      filterMasterData(e.target.value);
-    }, 500);
+    searchDebounceTimer = setTimeout(async () => {
+      const query = searchInput.value.trim();
+      await performSearch(query);
+    }, 500); // デバウンス時間500ms
   });
 }
+
+// ============================================
+// マスタロード
+// ============================================
 
 /**
  * マスタロード
  */
 async function loadMaster(category, type) {
   console.log(`📋 [Master Manager] マスタロード開始: ${category}/${type}`);
-  
+
   currentCategory = category;
   currentMasterType = type;
   currentMasterConfig = window.masterCategories[category].masters[type];
 
   if (!currentMasterConfig) {
-    console.error('❌ [Master Manager] マスタ設定が見つかりません');
+    console.error(`❌ [Master Manager] マスタ設定が見つかりません: ${category}/${type}`);
     return;
   }
 
-  // ヘッダー更新
-  updateHeader();
+  console.log(`✅ [Master Manager] マスタ設定読み込み完了: ${currentMasterConfig.label}`);
 
-  // 検索プレースホルダー更新
-  document.getElementById('searchInput').placeholder = `${currentMasterConfig.label}で絞り込み...`;
+  // ヘッダーにマスタ種別を表示
+  updateMasterTypeDisplay();
 
-  // データロード
-  await loadMasterData();
+  // initialDisplay設定チェック
+  const initialDisplay = currentMasterConfig.initialDisplay !== undefined
+    ? currentMasterConfig.initialDisplay
+    : (currentMasterConfig.maxDisplayResults || 100);
+
+  if (initialDisplay === 0) {
+    // 初期表示なし（検索後のみデータ表示）
+    console.log('ℹ️ [Master Manager] 初期表示なし（検索後のみデータ表示）');
+    allMasterData = [];
+    filteredMasterData = [];
+    renderMasterList();
+    updateStats();
+  } else {
+    // 初期表示あり（従来の動作）
+    await loadMasterData();
+  }
+
+  // バックグラウンドでプリロード開始（非ブロッキング）
+  startBackgroundPreload();
 }
 
 /**
- * ヘッダー更新
+ * マスタタイプ表示更新
  */
-function updateHeader() {
-  const categoryConfig = window.masterCategories[currentCategory];
-  const headerTitle = document.getElementById('headerTitle');
-  const headerIcon = document.getElementById('headerIcon');
-
-  headerIcon.className = `bi ${getIconClass(categoryConfig.icon)}`;
-  headerTitle.innerHTML = `
-    <i class="bi ${getIconClass(categoryConfig.icon)}"></i>
-    ${currentMasterConfig.label}マスタ管理
-  `;
+function updateMasterTypeDisplay() {
+  const masterTypeDisplay = document.getElementById('master-type-display');
+  if (masterTypeDisplay && currentMasterConfig) {
+    masterTypeDisplay.textContent = currentMasterConfig.label;
+  }
 }
 
 /**
- * アイコンクラス取得
- */
-function getIconClass(emoji) {
-  const iconMap = {
-    '📦': 'bi-box-seam',
-    '🏢': 'bi-building',
-    '📋': 'bi-clipboard-data',
-    '🏷️': 'bi-tags',
-    '📊': 'bi-graph-up'
-  };
-  return iconMap[emoji] || 'bi-gear';
-}
-
-/**
- * マスタデータロード
+ * マスタデータ読み込み
  */
 async function loadMasterData() {
-  showLoading();
-
   try {
-    console.log(`🔍 [Master Manager] データ取得中: ${currentMasterConfig.collection}`);
+    console.log(`🔄 [Master Manager] データ読み込み開始: ${currentMasterConfig.collection}`);
+    showLoading(true);
 
-    // initialDisplay設定を確認（デフォルト: maxDisplayResults）
-    const initialDisplay = currentMasterConfig.initialDisplay !== undefined
-      ? currentMasterConfig.initialDisplay
-      : (currentMasterConfig.maxDisplayResults || 100);
+    // Firestore APIで取得
+    const data = await window.getMasterData(currentMasterConfig.collection);
 
-    // initialDisplay=0の場合、初期は空表示（検索後のみデータ表示）
-    if (initialDisplay === 0) {
-      console.log('ℹ️ [Master Manager] 初期表示なし（検索後のみデータ表示）');
-      allMasterData = [];
-      filteredMasterData = [];
-
-      renderMasterList();
-      updateStats();
-
-      // オートコンプリートモードの場合、検索UIを初期化
-      if (currentMasterConfig.autocomplete) {
-        initAutocomplete();
-      }
-    } else {
-      // 通常の初期表示
-      const data = await window.getMasterData(currentMasterConfig.collection, {
-        sortBy: currentMasterConfig.sortBy,
-        sortOrder: currentMasterConfig.sortOrder,
-        limit: initialDisplay
-      });
-
-      console.log(`✅ [Master Manager] データ取得完了: ${data.length}件`);
-
+    if (data && data.length > 0) {
       allMasterData = data;
       filteredMasterData = data;
 
-      renderMasterList();
-      updateStats();
+      console.log(`✅ [Master Manager] データ読み込み完了: ${data.length}件`);
+
+      // キャッシュに保存
+      masterCache[currentMasterConfig.collection] = data;
+    } else {
+      console.log(`ℹ️ [Master Manager] データなし: ${currentMasterConfig.collection}`);
+      allMasterData = [];
+      filteredMasterData = [];
     }
 
+    renderMasterList();
+    updateStats();
+
   } catch (error) {
-    console.error('❌ [Master Manager] データ取得エラー:', error);
-    showError('データの取得に失敗しました');
+    console.error(`❌ [Master Manager] データ読み込みエラー:`, error);
+    alert('データの読み込みに失敗しました');
   } finally {
-    hideLoading();
+    showLoading(false);
   }
 }
 
 /**
- * マスタリスト描画
+ * バックグラウンドプリロード開始
  */
-function renderMasterList() {
-  const container = document.getElementById('dataContainer');
-  const emptyState = document.getElementById('emptyState');
+function startBackgroundPreload() {
+  const collection = currentMasterConfig.collection;
 
-  if (filteredMasterData.length === 0) {
-    container.innerHTML = '';
-    emptyState.classList.remove('hidden');
-    document.getElementById('emptyStateText').textContent = 
-      allMasterData.length === 0 ? 'データが登録されていません' : '検索結果が見つかりませんでした';
-    document.getElementById('emptyStateHint').textContent = 
-      allMasterData.length === 0 ? '新規追加ボタンからデータを追加してください' : '検索条件を変更してください';
+  // 既にキャッシュがあればスキップ
+  if (masterCache[collection] && masterCache[collection].length > 0) {
+    console.log(`✅ [Master Manager] キャッシュ済み: ${collection}`);
     return;
   }
 
-  emptyState.classList.add('hidden');
-  container.innerHTML = filteredMasterData.map(item => createDataCard(item)).join('');
+  console.log(`📥 [Master Manager] バックグラウンドプリロード開始: ${collection}`);
+
+  window.getMasterData(collection).then(data => {
+    if (data && data.length > 0) {
+      masterCache[collection] = data;
+      console.log(`✅ [Master Manager] バックグラウンドプリロード完了: ${collection} (${data.length}件)`);
+    }
+  }).catch(error => {
+    console.warn(`⚠️ [Master Manager] バックグラウンドプリロード失敗: ${collection}`, error);
+  });
+}
+
+// ============================================
+// 検索・フィルタ
+// ============================================
+
+/**
+ * 検索実行
+ */
+async function performSearch(query) {
+  const collection = currentMasterConfig.collection;
+
+  if (query.length > 0) {
+    console.log(`🔍 [Master Manager] 検索実行: "${query}"`);
+
+    // ひらがなをカタカナに変換
+    const katakanaQuery = hiraganaToKatakana(query);
+
+    if (masterCache[collection] && masterCache[collection].length > 0) {
+      // ✅ キャッシュから検索（高速）
+      console.log('⚡ [Master Manager] キャッシュから検索');
+      const lowerQuery = katakanaQuery.toLowerCase();
+      const hiraganaQuery = katakanaToHiragana(lowerQuery);
+
+      const results = masterCache[collection].filter(item => {
+        // searchTextをひらがなに変換して比較
+        const searchText = item.searchText || '';
+        const hiraganaSearchText = katakanaToHiragana(searchText.toLowerCase());
+        return hiraganaSearchText.includes(hiraganaQuery);
+      });
+
+      allMasterData = results;
+      filteredMasterData = results;
+      console.log(`✅ [Master Manager] キャッシュ検索結果: ${results.length}件`);
+    } else {
+      // ❌ キャッシュなし → Firestore検索
+      console.log('📡 [Master Manager] Firestore検索');
+      showLoading(true);
+      try {
+        const results = await window.searchMaster(
+          collection,
+          query,
+          currentMasterConfig.searchFields || [],
+          currentMasterConfig.maxDisplayResults || 100
+        );
+        allMasterData = results || [];
+        filteredMasterData = results || [];
+        console.log(`✅ [Master Manager] Firestore検索結果: ${allMasterData.length}件`);
+      } catch (error) {
+        console.error('❌ [Master Manager] 検索エラー:', error);
+        allMasterData = [];
+        filteredMasterData = [];
+      } finally {
+        showLoading(false);
+      }
+    }
+  } else {
+    // 検索クエリなし = 空表示（initialDisplay: 0の場合）
+    console.log('🔄 [Master Manager] 検索クリア');
+    allMasterData = [];
+    filteredMasterData = [];
+  }
+
+  renderMasterList();
+  updateStats();
 }
 
 /**
- * データカード生成
+ * フィルタ適用（従来互換）
  */
-function createDataCard(item) {
-  const displayFields = currentMasterConfig.displayFields || [];
-  const fieldsHtml = displayFields.map(fieldName => {
-    const field = currentMasterConfig.fields.find(f => f.name === fieldName);
-    const label = field ? field.label : fieldName;
-    const value = item[fieldName] || '-';
+function filterMasterData(query) {
+  performSearch(query);
+}
 
-    return `
-      <div class="data-field">
-        <span class="data-field-label">${label}:</span>
-        <span class="data-field-value">${escapeHtml(value)}</span>
+// ============================================
+// 表示更新
+// ============================================
+
+/**
+ * マスタリスト表示
+ */
+function renderMasterList() {
+  const container = document.getElementById('masterListContainer');
+  const emptyState = document.getElementById('emptyState');
+  const searchInput = document.getElementById('searchInput');
+
+  if (!container || !emptyState) {
+    console.warn('[Master Manager] コンテナ要素が見つかりません');
+    return;
+  }
+
+  // コンテナクリア
+  container.innerHTML = '';
+
+  // 空状態チェック
+  if (filteredMasterData.length === 0) {
+    container.classList.add('hidden');
+    emptyState.classList.remove('hidden');
+
+    // 検索入力があるかどうかで文言を変更
+    const hasSearchQuery = searchInput && searchInput.value.trim().length > 0;
+    const emptyStateText = emptyState.querySelector('.empty-state-text');
+    const emptyStateHint = emptyState.querySelector('.empty-state-hint');
+
+    if (hasSearchQuery) {
+      // 検索後に0件の場合
+      if (emptyStateText) emptyStateText.textContent = 'データが見つかりません';
+      if (emptyStateHint) emptyStateHint.textContent = '検索条件を変更してください';
+    } else {
+      // 検索前の初期状態
+      if (emptyStateText) emptyStateText.textContent = '検索して絞り込んでください';
+      if (emptyStateHint) emptyStateHint.textContent = '';
+    }
+    return;
+  }
+
+  // リスト表示
+  container.classList.remove('hidden');
+  emptyState.classList.add('hidden');
+
+  // 表示件数制限（パフォーマンス対策）
+  const displayItems = filteredMasterData.slice(0, MAX_DISPLAY_RESULTS);
+  const hasMore = filteredMasterData.length > MAX_DISPLAY_RESULTS;
+
+  displayItems.forEach(item => {
+    const card = createMasterCard(item);
+    container.appendChild(card);
+  });
+
+  // 件数超過の場合は通知メッセージを表示
+  if (hasMore) {
+    const moreNotice = document.createElement('div');
+    moreNotice.className = 'more-results-notice';
+    moreNotice.innerHTML = `
+      <i class="bi bi-info-circle"></i>
+      <span>最初の${MAX_DISPLAY_RESULTS}件を表示中（全${filteredMasterData.length}件）</span>
+      <small>さらに絞り込むと見つけやすくなります</small>
+    `;
+    container.appendChild(moreNotice);
+  }
+}
+
+/**
+ * マスタカード作成
+ * @param {Object} item - マスタデータ
+ * @returns {HTMLElement} カード要素
+ */
+function createMasterCard(item) {
+  const card = document.createElement('div');
+  card.className = 'master-card';
+  card.setAttribute('data-master-id', item.id);
+
+  // カード内容を構築
+  let cardContent = '';
+
+  if (selectionMode) {
+    // 選択モード時
+    card.classList.add('selection-mode');
+    const isSelected = selectedMasterData.has(item.id);
+    if (isSelected) {
+      card.classList.add('selected');
+    }
+
+    cardContent += `
+      <input type="checkbox"
+             class="master-checkbox"
+             ${isSelected ? 'checked' : ''}
+             onchange="toggleMasterSelection('${item.id}')">
+    `;
+  }
+
+  // メイン情報部分
+  cardContent += '<div class="master-info">';
+
+  // displayFieldsに従ってフィールドを表示
+  const displayFields = currentMasterConfig.displayFields || ['name'];
+  displayFields.forEach((fieldName, index) => {
+    const fieldValue = item[fieldName] || '';
+    const className = index === 0 ? 'master-field-primary' : 'master-field-secondary';
+    cardContent += `<div class="${className}">${escapeHtml(fieldValue)}</div>`;
+  });
+
+  // 使用回数表示（usageCount対応の場合）
+  if (currentMasterConfig.usageCount && item.usageCount !== undefined) {
+    cardContent += `
+      <div class="master-meta">
+        <div class="usage-count">
+          <i class="bi bi-graph-up"></i>
+          <span>使用回数: ${item.usageCount}回</span>
+        </div>
       </div>
     `;
-  }).join('');
+  }
 
-  const usageCountHtml = currentMasterConfig.usageCount && item.usageCount !== undefined ? `
-    <div class="usage-count">
-      <i class="bi bi-graph-up"></i>
-      使用回数: ${item.usageCount}回
-    </div>
-  ` : '';
+  cardContent += '</div>'; // master-info終了
 
-  const checkboxHtml = isSelectionMode ? `
-    <input type="checkbox" class="data-checkbox" 
-      ${selectedIds.has(item.id) ? 'checked' : ''}
-      onchange="toggleSelection('${item.id}')">
-  ` : '';
-
-  const deleteButtonHtml = !isSelectionMode ? `
-    <button class="btn-delete" onclick="showDeleteModal('${item.id}')">
-      <i class="bi bi-trash"></i>
-    </button>
-  ` : '';
-
-  return `
-    <div class="data-card ${isSelectionMode ? 'selection-mode' : ''} ${selectedIds.has(item.id) ? 'selected' : ''}" 
-      data-id="${item.id}">
-      ${checkboxHtml}
-      <div class="data-info">
-        ${fieldsHtml}
-        ${usageCountHtml ? `<div class="data-meta">${usageCountHtml}</div>` : ''}
+  // 通常モード時のみ削除ボタン表示
+  if (!selectionMode) {
+    cardContent += `
+      <div class="master-actions">
+        <button class="btn-delete" onclick="showDeleteModal('${item.id}')">
+          <i class="bi bi-trash"></i>
+        </button>
       </div>
-      <div class="data-actions">
-        ${deleteButtonHtml}
-      </div>
-    </div>
-  `;
+    `;
+  }
+
+  card.innerHTML = cardContent;
+  return card;
 }
 
 /**
@@ -271,621 +470,419 @@ function createDataCard(item) {
  */
 function updateStats() {
   const statsText = document.getElementById('statsText');
-  statsText.textContent = `検索結果: ${filteredMasterData.length}件`;
-}
+  const collection = currentMasterConfig?.collection;
+  const totalItems = masterCache[collection] ? masterCache[collection].length : 0;
 
-/**
- * マスタデータフィルタリング
- */
-function filterMasterData(query) {
-  if (!query || query.trim() === '') {
-    filteredMasterData = allMasterData;
-  } else {
-    const searchFields = currentMasterConfig.searchFields || [];
-    const lowerQuery = query.toLowerCase();
-
-    filteredMasterData = allMasterData.filter(item => {
-      return searchFields.some(field => {
-        const value = item[field];
-        return value && value.toString().toLowerCase().includes(lowerQuery);
-      });
-    });
+  if (statsText) {
+    const resultCount = filteredMasterData.length;
+    if (resultCount > 0) {
+      statsText.textContent = `検索結果: ${resultCount.toLocaleString()}件 | 全${totalItems.toLocaleString()}件`;
+    } else {
+      statsText.textContent = `全${totalItems.toLocaleString()}件`;
+    }
   }
-
-  renderMasterList();
-  updateStats();
 }
 
+// ============================================
+// マスタ追加
+// ============================================
+
 /**
- * 新規追加モーダル表示
+ * 追加モーダル表示
  */
 window.showAddModal = function() {
-  if (!currentMasterConfig) {
-    alert('マスタを選択してください');
-    return;
+  const modal = document.getElementById('addModal');
+  const modalBody = document.getElementById('addModalBody');
+  const errorMessage = document.getElementById('addErrorMessage');
+
+  if (!modal || !modalBody) return;
+
+  // エラーメッセージクリア
+  if (errorMessage) {
+    errorMessage.textContent = '';
+    errorMessage.classList.add('hidden');
   }
 
-  document.getElementById('addModalTitle').textContent = `${currentMasterConfig.label}新規追加`;
-  document.getElementById('addErrorMessage').classList.add('hidden');
-  
-  // フォームフィールド動的生成
-  const formFields = document.getElementById('addFormFields');
-  formFields.innerHTML = currentMasterConfig.fields.map(field => {
-    return createFormField(field);
-  }).join('');
+  // 入力フォーム動的生成
+  modalBody.innerHTML = '';
 
-  document.getElementById('addModal').classList.remove('hidden');
+  currentMasterConfig.fields.forEach(field => {
+    const formGroup = document.createElement('div');
+    formGroup.className = 'form-group';
+
+    const label = document.createElement('label');
+    label.className = 'form-label';
+    label.htmlFor = `add-${field.name}`;
+    label.textContent = field.label;
+    if (field.required) {
+      label.innerHTML += ' <span style="color: #ff4757;">*</span>';
+    }
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = `add-${field.name}`;
+    input.className = 'form-input';
+    input.placeholder = field.placeholder || '';
+    if (field.maxLength) {
+      input.maxLength = field.maxLength;
+    }
+
+    formGroup.appendChild(label);
+    formGroup.appendChild(input);
+    modalBody.appendChild(formGroup);
+  });
+
+  modal.classList.remove('hidden');
 };
 
 /**
- * フォームフィールド生成
- */
-function createFormField(field) {
-  const required = field.required ? '<span style="color: #ff4757;">*</span>' : '';
-  const placeholder = field.placeholder || '';
-  
-  let inputHtml = '';
-
-  switch (field.type) {
-    case 'textarea':
-      inputHtml = `<textarea id="field_${field.name}" class="form-textarea" placeholder="${placeholder}"></textarea>`;
-      break;
-    
-    case 'select':
-      const options = field.options || [];
-      const optionsHtml = options.map(opt => `<option value="${opt.value || opt}">${opt.label || opt}</option>`).join('');
-      inputHtml = `
-        <select id="field_${field.name}" class="form-select">
-          <option value="">選択してください</option>
-          ${optionsHtml}
-        </select>
-      `;
-      break;
-    
-    case 'number':
-      inputHtml = `<input type="number" id="field_${field.name}" class="form-input" placeholder="${placeholder}">`;
-      break;
-    
-    case 'email':
-      inputHtml = `<input type="email" id="field_${field.name}" class="form-input" placeholder="${placeholder}">`;
-      break;
-    
-    case 'tel':
-      inputHtml = `<input type="tel" id="field_${field.name}" class="form-input" placeholder="${placeholder}">`;
-      break;
-    
-    case 'url':
-      inputHtml = `<input type="url" id="field_${field.name}" class="form-input" placeholder="${placeholder}">`;
-      break;
-    
-    default: // text
-      inputHtml = `<input type="text" id="field_${field.name}" class="form-input" placeholder="${placeholder}">`;
-  }
-
-  return `
-    <div class="form-group">
-      <label class="form-label" for="field_${field.name}">${field.label} ${required}</label>
-      ${inputHtml}
-    </div>
-  `;
-}
-
-/**
- * 新規追加モーダル非表示
+ * 追加モーダル非表示
  */
 window.hideAddModal = function() {
-  document.getElementById('addModal').classList.add('hidden');
+  const modal = document.getElementById('addModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
 };
 
 /**
- * データ追加
+ * マスタ追加実行
  */
-window.addData = async function() {
-  const errorElement = document.getElementById('addErrorMessage');
-  errorElement.classList.add('hidden');
+window.addMaster = async function() {
+  const errorMessage = document.getElementById('addErrorMessage');
 
-  // フォームデータ収集
+  if (!errorMessage) return;
+
+  // 入力値を収集
   const data = {};
   let hasError = false;
 
-  for (const field of currentMasterConfig.fields) {
-    const inputElement = document.getElementById(`field_${field.name}`);
-    const value = inputElement.value.trim();
+  currentMasterConfig.fields.forEach(field => {
+    const input = document.getElementById(`add-${field.name}`);
+    const value = input ? input.value.trim() : '';
 
-    // 必須チェック
+    // バリデーション
     if (field.required && !value) {
-      errorElement.textContent = `${field.label}は必須です`;
-      errorElement.classList.remove('hidden');
+      showError(errorMessage, `${field.label}を入力してください`);
+      hasError = true;
       return;
     }
 
-    // バリデーション
-    if (value && field.validation) {
-      const validation = field.validation;
+    data[field.name] = value;
+  });
 
-      // 最小長チェック
-      if (validation.minLength && value.length < validation.minLength) {
-        errorElement.textContent = `${field.label}は${validation.minLength}文字以上で入力してください`;
-        errorElement.classList.remove('hidden');
-        return;
-      }
-
-      // 最大長チェック
-      if (validation.maxLength && value.length > validation.maxLength) {
-        errorElement.textContent = `${field.label}は${validation.maxLength}文字以内で入力してください`;
-        errorElement.classList.remove('hidden');
-        return;
-      }
-
-      // 数値範囲チェック
-      if (field.type === 'number') {
-        const numValue = parseFloat(value);
-        if (validation.min !== undefined && numValue < validation.min) {
-          errorElement.textContent = `${field.label}は${validation.min}以上で入力してください`;
-          errorElement.classList.remove('hidden');
-          return;
-        }
-        if (validation.max !== undefined && numValue > validation.max) {
-          errorElement.textContent = `${field.label}は${validation.max}以下で入力してください`;
-          errorElement.classList.remove('hidden');
-          return;
-        }
-      }
-    }
-
-    // データに追加
-    if (field.type === 'number' && value) {
-      data[field.name] = parseFloat(value);
-    } else {
-      data[field.name] = value;
-    }
-  }
-
-  showLoading();
+  if (hasError) return;
 
   try {
-    const result = await window.createMaster(
-      currentMasterConfig.collection,
-      data,
-      currentMasterConfig.usageCount || false
-    );
+    showLoading(true);
 
-    if (!result.success) {
-      throw new Error(result.error || 'データの作成に失敗しました');
+    // Firestore APIで追加
+    const result = await window.createMaster(currentMasterConfig.collection, data);
+
+    if (result.success) {
+      console.log(`✅ [Master Manager] 追加成功: ${currentMasterConfig.label}`);
+
+      // キャッシュクリア（再読み込み強制）
+      delete masterCache[currentMasterConfig.collection];
+
+      hideAddModal();
+      alert(`${currentMasterConfig.label}を追加しました。\n検索して確認してください。`);
+
+      // 検索を再実行
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput && searchInput.value.trim().length > 0) {
+        await performSearch(searchInput.value.trim());
+      }
+    } else {
+      const detailedError = result.error || '追加に失敗しました';
+      console.error('❌ [Master Manager] 追加失敗:', detailedError);
+      showError(errorMessage, detailedError);
     }
 
-    console.log('✅ [Master Manager] データ追加成功');
-    hideAddModal();
-    await loadMasterData();
-
   } catch (error) {
-    console.error('❌ [Master Manager] データ追加エラー:', error);
-    errorElement.textContent = error.message || 'データの追加に失敗しました';
-    errorElement.classList.remove('hidden');
+    console.error('❌ [Master Manager] 追加エラー:', error);
+    const detailedError = `エラー: ${error.message || '追加に失敗しました'}`;
+    showError(errorMessage, detailedError);
   } finally {
-    hideLoading();
+    showLoading(false);
   }
 };
 
+// ============================================
+// マスタ削除
+// ============================================
+
 /**
- * 削除モーダル表示
+ * 削除確認モーダル表示
+ * @param {string} masterId - マスタID
  */
-window.showDeleteModal = function(id) {
-  deleteTargetId = id;
-  
-  const item = allMasterData.find(d => d.id === id);
-  if (!item) return;
+window.showDeleteModal = function(masterId) {
+  const modal = document.getElementById('deleteModal');
+  const deleteNameDisplay = document.getElementById('deleteNameDisplay');
 
-  document.getElementById('deleteModalTitle').textContent = `${currentMasterConfig.label}削除確認`;
+  if (!modal) return;
 
-  // データプレビュー生成
-  const displayFields = currentMasterConfig.displayFields || [];
-  const previewHtml = displayFields.map(fieldName => {
-    const field = currentMasterConfig.fields.find(f => f.name === fieldName);
-    const label = field ? field.label : fieldName;
-    const value = item[fieldName] || '-';
+  // 削除対象を検索
+  const item = filteredMasterData.find(m => m.id === masterId);
+  if (!item) {
+    console.error('[Master Manager] 削除対象が見つかりません:', masterId);
+    return;
+  }
 
-    return `
-      <div style="margin-bottom: 8px;">
-        <strong>${label}:</strong> ${escapeHtml(value)}
-      </div>
+  masterToDelete = item;
+
+  // プライマリフィールドを表示
+  const primaryField = currentMasterConfig.displayFields[0];
+  const displayName = item[primaryField] || '';
+
+  if (deleteNameDisplay) {
+    deleteNameDisplay.innerHTML = `
+      <div style="font-weight: 600; color: #333;">${escapeHtml(displayName)}</div>
     `;
-  }).join('');
+  }
 
-  document.getElementById('deleteDataPreview').innerHTML = previewHtml;
-  document.getElementById('deleteModal').classList.remove('hidden');
+  modal.classList.remove('hidden');
 };
 
 /**
- * 削除モーダル非表示
+ * 削除確認モーダル非表示
  */
 window.hideDeleteModal = function() {
-  document.getElementById('deleteModal').classList.add('hidden');
-  deleteTargetId = null;
+  const modal = document.getElementById('deleteModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  masterToDelete = null;
 };
 
 /**
- * 削除確認
+ * マスタ削除実行
  */
 window.confirmDelete = async function() {
-  if (!deleteTargetId) return;
-
-  showLoading();
+  if (!masterToDelete) {
+    console.warn('[Master Manager] 削除対象が選択されていません');
+    return;
+  }
 
   try {
-    const result = await window.deleteMaster(currentMasterConfig.collection, deleteTargetId);
+    showLoading(true);
 
-    if (!result.success) {
-      throw new Error(result.error || '削除に失敗しました');
+    const result = await window.deleteMaster(currentMasterConfig.collection, masterToDelete.id);
+
+    if (result.success) {
+      console.log(`✅ [Master Manager] 削除成功: ${masterToDelete.id}`);
+
+      // 検索結果から削除
+      allMasterData = allMasterData.filter(item => item.id !== masterToDelete.id);
+      filteredMasterData = filteredMasterData.filter(item => item.id !== masterToDelete.id);
+
+      // キャッシュからも削除
+      if (masterCache[currentMasterConfig.collection]) {
+        masterCache[currentMasterConfig.collection] = masterCache[currentMasterConfig.collection].filter(
+          item => item.id !== masterToDelete.id
+        );
+      }
+
+      renderMasterList();
+      updateStats();
+
+      hideDeleteModal();
+      alert(`${currentMasterConfig.label}を削除しました`);
+    } else {
+      alert(result.error || '削除に失敗しました');
     }
 
-    console.log('✅ [Master Manager] データ削除成功');
-    hideDeleteModal();
-    await loadMasterData();
-
   } catch (error) {
-    console.error('❌ [Master Manager] データ削除エラー:', error);
-    alert(error.message || 'データの削除に失敗しました');
+    console.error('❌ [Master Manager] 削除エラー:', error);
+    alert('削除に失敗しました');
   } finally {
-    hideLoading();
+    showLoading(false);
+    masterToDelete = null;
   }
 };
 
+// ============================================
+// 選択モード機能
+// ============================================
+
 /**
- * 選択モード切り替え
+ * 選択モードの切り替え
  */
 window.toggleSelectionMode = function() {
-  isSelectionMode = !isSelectionMode;
-  selectedIds.clear();
+  selectionMode = !selectionMode;
+  selectedMasterData.clear();
 
   const selectModeBtn = document.getElementById('selectModeBtn');
   const selectionToolbar = document.getElementById('selectionToolbar');
 
-  if (isSelectionMode) {
-    selectModeBtn.classList.add('active');
-    selectionToolbar.classList.remove('hidden');
+  if (selectionMode) {
+    // 選択モードON
+    if (selectModeBtn) selectModeBtn.classList.add('active');
+    if (selectionToolbar) selectionToolbar.classList.remove('hidden');
   } else {
-    selectModeBtn.classList.remove('active');
-    selectionToolbar.classList.add('hidden');
+    // 選択モードOFF
+    if (selectModeBtn) selectModeBtn.classList.remove('active');
+    if (selectionToolbar) selectionToolbar.classList.add('hidden');
   }
 
+  // リスト再描画
   renderMasterList();
-  updateSelectedCount();
-};
-
-/**
- * 選択切り替え
- */
-window.toggleSelection = function(id) {
-  if (selectedIds.has(id)) {
-    selectedIds.delete(id);
-  } else {
-    selectedIds.add(id);
-  }
-  
-  renderMasterList();
-  updateSelectedCount();
+  updateSelectionCount();
 };
 
 /**
  * 全選択
  */
 window.selectAll = function() {
-  filteredMasterData.forEach(item => selectedIds.add(item.id));
+  filteredMasterData.forEach(item => {
+    selectedMasterData.add(item.id);
+  });
   renderMasterList();
-  updateSelectedCount();
+  updateSelectionCount();
 };
 
 /**
- * 選択数更新
- */
-function updateSelectedCount() {
-  document.getElementById('selectedCount').textContent = `${selectedIds.size}件選択中`;
-}
-
-/**
- * 選択削除
+ * 選択されたマスタを削除
  */
 window.deleteSelected = async function() {
-  if (selectedIds.size === 0) {
+  if (selectedMasterData.size === 0) {
     alert('削除するデータを選択してください');
     return;
   }
 
-  if (!confirm(`${selectedIds.size}件のデータを削除してもよろしいですか？\nこの操作は取り消せません。`)) {
+  const count = selectedMasterData.size;
+  if (!confirm(`選択した${count}件を削除しますか？\n\nこの操作は取り消せません。`)) {
     return;
   }
 
-  showLoading();
+  showLoading(true);
 
   try {
-    // 並列削除実行
-    const deletePromises = Array.from(selectedIds).map(id =>
+    const deletePromises = Array.from(selectedMasterData).map(id =>
       window.deleteMaster(currentMasterConfig.collection, id)
     );
 
     const results = await Promise.all(deletePromises);
+    const successCount = results.filter(r => r.success).length;
 
-    const failedCount = results.filter(r => !r.success).length;
+    showLoading(false);
 
-    if (failedCount > 0) {
-      console.warn(`⚠️ [Master Manager] ${failedCount}件の削除に失敗`);
-      alert(`${results.length - failedCount}件削除しました（${failedCount}件失敗）`);
+    if (successCount === count) {
+      alert(`${successCount}件を削除しました`);
     } else {
-      console.log(`✅ [Master Manager] ${results.length}件削除成功`);
+      alert(`${successCount}/${count}件を削除しました\n一部削除に失敗しました`);
     }
 
-    // 選択モード解除
-    toggleSelectionMode();
-    
-    // データ再読み込み
-    await loadMasterData();
+    // キャッシュクリア
+    delete masterCache[currentMasterConfig.collection];
+
+    // 選択モードOFF
+    window.toggleSelectionMode();
+
+    // 検索を再実行
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput && searchInput.value.trim().length > 0) {
+      await performSearch(searchInput.value.trim());
+    } else {
+      allMasterData = [];
+      filteredMasterData = [];
+      renderMasterList();
+      updateStats();
+    }
 
   } catch (error) {
+    showLoading(false);
     console.error('❌ [Master Manager] 一括削除エラー:', error);
-    alert('削除処理でエラーが発生しました');
-  } finally {
-    hideLoading();
+    alert('削除中にエラーが発生しました');
   }
 };
 
 /**
- * マスタ表示クリア
+ * マスタの選択状態を切り替え
  */
-function clearMasterDisplay() {
-  currentCategory = null;
-  currentMasterType = null;
-  currentMasterConfig = null;
-  allMasterData = [];
-  filteredMasterData = [];
+window.toggleMasterSelection = function(masterId) {
+  if (selectedMasterData.has(masterId)) {
+    selectedMasterData.delete(masterId);
+  } else {
+    selectedMasterData.add(masterId);
+  }
+  updateSelectionCount();
 
-  document.getElementById('dataContainer').innerHTML = '';
-  document.getElementById('emptyState').classList.remove('hidden');
-  document.getElementById('emptyStateText').textContent = 'マスタを選択してください';
-  document.getElementById('emptyStateHint').textContent = '';
-  
-  document.getElementById('headerTitle').innerHTML = '<i class="bi bi-gear"></i> マスタ管理';
-  document.getElementById('searchInput').value = '';
-  document.getElementById('searchInput').placeholder = '絞り込み検索...';
-  document.getElementById('statsText').textContent = '検索結果: 0件';
+  // カードの見た目を更新
+  const card = document.querySelector(`[data-master-id="${masterId}"]`);
+  const checkbox = card?.querySelector('.master-checkbox');
+  if (card && checkbox) {
+    checkbox.checked = selectedMasterData.has(masterId);
+    if (selectedMasterData.has(masterId)) {
+      card.classList.add('selected');
+    } else {
+      card.classList.remove('selected');
+    }
+  }
+};
 
-  // URL更新
-  const url = new URL(window.location);
-  url.searchParams.delete('category');
-  url.searchParams.delete('type');
-  window.history.pushState({}, '', url);
+/**
+ * 選択件数表示を更新
+ */
+function updateSelectionCount() {
+  const selectedCount = document.getElementById('selectedCount');
+  if (selectedCount) {
+    selectedCount.textContent = `${selectedMasterData.size}件選択中`;
+  }
+}
+
+// ============================================
+// ユーティリティ関数
+// ============================================
+
+/**
+ * ローディング表示制御
+ * @param {boolean} show - 表示/非表示
+ */
+function showLoading(show) {
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) {
+    if (show) {
+      overlay.classList.remove('hidden');
+    } else {
+      overlay.classList.add('hidden');
+    }
+  }
 }
 
 /**
- * ローディング表示
+ * エラーメッセージ表示
+ * @param {HTMLElement} element - エラー表示要素
+ * @param {string} message - エラーメッセージ
  */
-function showLoading() {
-  document.getElementById('loadingOverlay').classList.remove('hidden');
-}
-
-/**
- * ローディング非表示
- */
-function hideLoading() {
-  document.getElementById('loadingOverlay').classList.add('hidden');
-}
-
-/**
- * エラー表示
- */
-function showError(message) {
-  alert(message);
+function showError(element, message) {
+  if (element) {
+    element.textContent = message;
+    element.classList.remove('hidden');
+  }
 }
 
 /**
  * HTMLエスケープ
+ * @param {string} str - エスケープする文字列
+ * @returns {string} エスケープされた文字列
  */
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 /**
- * オートコンプリート初期化
+ * 戻るボタン処理
  */
-function initAutocomplete() {
-  console.log('🔍 [Master Manager] オートコンプリートモード初期化');
-
-  const searchInput = document.getElementById('searchInput');
-
-  // 既存のイベントリスナーを解除して再設定
-  const newSearchInput = searchInput.cloneNode(true);
-  searchInput.parentNode.replaceChild(newSearchInput, searchInput);
-
-  // オートコンプリート用の候補リスト要素を作成
-  let suggestionList = document.getElementById('autocompleteSuggestions');
-  if (!suggestionList) {
-    suggestionList = document.createElement('div');
-    suggestionList.id = 'autocompleteSuggestions';
-    suggestionList.className = 'autocomplete-suggestions';
-    suggestionList.style.cssText = `
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: white;
-      border: 2px solid #667eea;
-      border-top: none;
-      border-radius: 0 0 12px 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      max-height: 400px;
-      overflow-y: auto;
-      z-index: 1000;
-      display: none;
-    `;
-    newSearchInput.parentElement.appendChild(suggestionList);
-    newSearchInput.parentElement.style.position = 'relative';
-  }
-
-  // 検索入力時の処理
-  newSearchInput.addEventListener('input', async (e) => {
-    const query = e.target.value.trim();
-    const minChars = currentMasterConfig.autocompleteMinChars || 1;
-
-    if (query.length < minChars) {
-      suggestionList.style.display = 'none';
-      autocompleteSuggestions = [];
-      return;
-    }
-
-    // Firestore検索
-    try {
-      const results = await window.searchMaster(
-        currentMasterConfig.collection,
-        query,
-        currentMasterConfig.searchFields || [],
-        currentMasterConfig.autocompleteSuggestions || 20
-      );
-
-      autocompleteSuggestions = results; // グローバル変数に保存
-      renderAutocompleteSuggestions(results, suggestionList);
-      autocompleteSelectedIndex = -1;
-
-    } catch (error) {
-      console.error('❌ [Master Manager] オートコンプリート検索エラー:', error);
-    }
-  });
-
-  // キーボードナビゲーション
-  newSearchInput.addEventListener('keydown', (e) => {
-    if (autocompleteSuggestions.length === 0) return;
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        autocompleteSelectedIndex = Math.min(autocompleteSelectedIndex + 1, autocompleteSuggestions.length - 1);
-        updateSuggestionSelection(suggestionList, autocompleteSelectedIndex);
-        break;
-
-      case 'ArrowUp':
-        e.preventDefault();
-        autocompleteSelectedIndex = Math.max(autocompleteSelectedIndex - 1, -1);
-        updateSuggestionSelection(suggestionList, autocompleteSelectedIndex);
-        break;
-
-      case 'Enter':
-        e.preventDefault();
-        if (autocompleteSelectedIndex >= 0 && autocompleteSelectedIndex < autocompleteSuggestions.length) {
-          selectSuggestion(autocompleteSuggestions[autocompleteSelectedIndex]);
-        }
-        break;
-
-      case 'Escape':
-        suggestionList.style.display = 'none';
-        autocompleteSelectedIndex = -1;
-        break;
-    }
-  });
-
-  // 外部クリックで候補リストを閉じる
-  document.addEventListener('click', (e) => {
-    if (!newSearchInput.contains(e.target) && !suggestionList.contains(e.target)) {
-      suggestionList.style.display = 'none';
-    }
-  });
-}
-
-/**
- * オートコンプリート候補を描画
- */
-function renderAutocompleteSuggestions(suggestions, container) {
-  if (suggestions.length === 0) {
-    container.style.display = 'none';
-    return;
-  }
-
-  const primaryField = currentMasterConfig.autocompleteFields?.primary || currentMasterConfig.displayFields[0];
-  const secondaryField = currentMasterConfig.autocompleteFields?.secondary || currentMasterConfig.displayFields[1];
-
-  container.innerHTML = suggestions.map((item, index) => {
-    const primaryValue = item[primaryField] || '-';
-    const secondaryValue = secondaryField && item[secondaryField] ? item[secondaryField] : '';
-
-    return `
-      <div class="autocomplete-item" data-index="${index}" style="
-        padding: 12px 16px;
-        cursor: pointer;
-        border-bottom: 1px solid #f0f0f0;
-        transition: background 0.2s;
-      " onmouseenter="this.style.background='#f9f5ff'" onmouseleave="this.style.background='white'" onclick="window.selectSuggestionByIndex(${index})">
-        <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
-          ${escapeHtml(primaryValue)}
-        </div>
-        ${secondaryValue ? `
-          <div style="font-size: 13px; color: #666;">
-            ${escapeHtml(secondaryValue)}
-          </div>
-        ` : ''}
-        ${item.usageCount !== undefined ? `
-          <div style="font-size: 12px; color: #999; margin-top: 4px;">
-            <i class="bi bi-graph-up"></i> ${item.usageCount}回使用
-          </div>
-        ` : ''}
-      </div>
-    `;
-  }).join('');
-
-  container.style.display = 'block';
-}
-
-/**
- * 候補選択状態を更新
- */
-function updateSuggestionSelection(container, index) {
-  const items = container.querySelectorAll('.autocomplete-item');
-  items.forEach((item, i) => {
-    if (i === index) {
-      item.style.background = '#f9f5ff';
-      item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    } else {
-      item.style.background = 'white';
-    }
-  });
-}
-
-/**
- * 候補を選択（グローバル関数）
- */
-window.selectSuggestionByIndex = function(index) {
-  if (index >= 0 && index < autocompleteSuggestions.length) {
-    selectSuggestion(autocompleteSuggestions[index]);
-  }
+window.goBack = function() {
+  // トップメニューに戻る（絶対パス使用）
+  window.location.href = '/index.html';
 };
 
-/**
- * 候補を選択して表示
- */
-function selectSuggestion(item) {
-  console.log('✅ [Master Manager] 候補選択:', item);
-
-  // 検索フィールドをクリア
-  document.getElementById('searchInput').value = '';
-
-  // 候補リストを閉じる
-  const suggestionList = document.getElementById('autocompleteSuggestions');
-  if (suggestionList) {
-    suggestionList.style.display = 'none';
-  }
-
-  // 選択したアイテムのみを表示
-  allMasterData = [item];
-  filteredMasterData = [item];
-
-  renderMasterList();
-  updateStats();
-
-  // 使用回数をインクリメント（usageCountが有効な場合）
-  if (currentMasterConfig.usageCount && item.id) {
-    window.incrementMasterUsageCount(currentMasterConfig.collection, item.id).catch(err => {
-      console.warn('⚠️ [Master Manager] 使用回数更新エラー:', err);
-    });
-  }
-}
-
-console.log('✅ [Master Manager] master-manager.js読み込み完了');
+console.log('✅ [Master Manager] モジュール読み込み完了');
