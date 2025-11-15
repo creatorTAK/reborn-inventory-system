@@ -195,6 +195,10 @@ async function loadMaster(category, type) {
   if (initialDisplay === 0) {
     // 初期表示なし（検索後のみデータ表示）
     console.log('ℹ️ [Master Manager] 初期表示なし（検索後のみデータ表示）');
+    
+    // キャッシュに先行読み込み（await で完了を待つ）
+    await loadMasterDataToCache();
+    
     allMasterData = [];
     filteredMasterData = [];
     renderMasterList();
@@ -203,9 +207,6 @@ async function loadMaster(category, type) {
     // 初期表示あり（従来の動作）
     await loadMasterData();
   }
-
-  // バックグラウンドでプリロード開始（非ブロッキング）
-  startBackgroundPreload();
 }
 
 /**
@@ -221,6 +222,34 @@ function updateMasterTypeDisplay() {
 /**
  * マスタデータ読み込み
  */
+/**
+ * マスタデータをキャッシュに読み込む（レンダリングなし）
+ * initialDisplay: 0 の場合に使用し、検索高速化のため先行読み込みする
+ */
+async function loadMasterDataToCache() {
+  try {
+    console.log(`📥 [Master Manager] キャッシュ読み込み開始: ${currentMasterConfig.collection}`);
+    showLoading(true);
+
+    // Firestore APIで取得
+    const data = await window.getMasterData(currentMasterConfig.collection);
+
+    if (data && data.length > 0) {
+      masterCache[currentMasterConfig.collection] = data;
+      console.log(`✅ [Master Manager] キャッシュ読み込み完了: ${data.length}件`);
+    } else {
+      console.log(`ℹ️ [Master Manager] データなし: ${currentMasterConfig.collection}`);
+      masterCache[currentMasterConfig.collection] = [];
+    }
+
+  } catch (error) {
+    console.error(`❌ [Master Manager] キャッシュ読み込みエラー:`, error);
+    alert('データの読み込みに失敗しました');
+  } finally {
+    showLoading(false);
+  }
+}
+
 async function loadMasterData() {
   try {
     console.log(`🔄 [Master Manager] データ読み込み開始: ${currentMasterConfig.collection}`);
@@ -254,29 +283,7 @@ async function loadMasterData() {
   }
 }
 
-/**
- * バックグラウンドプリロード開始
- */
-function startBackgroundPreload() {
-  const collection = currentMasterConfig.collection;
-
-  // 既にキャッシュがあればスキップ
-  if (masterCache[collection] && masterCache[collection].length > 0) {
-    console.log(`✅ [Master Manager] キャッシュ済み: ${collection}`);
-    return;
-  }
-
-  console.log(`📥 [Master Manager] バックグラウンドプリロード開始: ${collection}`);
-
-  window.getMasterData(collection).then(data => {
-    if (data && data.length > 0) {
-      masterCache[collection] = data;
-      console.log(`✅ [Master Manager] バックグラウンドプリロード完了: ${collection} (${data.length}件)`);
-    }
-  }).catch(error => {
-    console.warn(`⚠️ [Master Manager] バックグラウンドプリロード失敗: ${collection}`, error);
-  });
-}
+// バックグラウンドプリロード関数は削除（loadMasterDataToCache()に統合）
 
 // ============================================
 // 検索・フィルタ
