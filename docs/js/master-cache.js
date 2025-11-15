@@ -499,34 +499,23 @@ window.startMasterCachePreload = async function() {
 // ========================================
 // 自動バックグラウンドプリロード開始
 // ========================================
-// master-cache.js読み込み完了後、即座にバックグラウンドプリロードを開始
-// キャッシュがあれば即座に返る、プリロード中なら既存Promiseを返すので安全
+// index.html（親ページ）からのみ実行
+// iframe内（master-management.html）では実行しない
 console.log('[MasterCache] 自動バックグラウンドプリロード開始チェック');
 
-// 少し遅延させてFirestore初期化を確実に完了させる
-setTimeout(async () => {
-  try {
-    // プリロード中かチェック
-    const brandsPreloading = window.masterCacheManager.preloadPromises['brands'];
-    const categoriesPreloading = window.masterCacheManager.preloadPromises['categories'];
+// iframe内かチェック
+const isIframe = window.self !== window.top;
 
-    if (brandsPreloading || categoriesPreloading) {
-      console.log('[MasterCache] ⏭️ プリロード既に実行中 - スキップ');
-      return;
+if (isIframe) {
+  console.log('[MasterCache] ⏭️ iframe内のため自動プリロードスキップ');
+} else {
+  // 親ページからのみ実行
+  setTimeout(async () => {
+    try {
+      console.log('[MasterCache] ✅ 親ページから自動バックグラウンドプリロード実行');
+      window.startMasterCachePreload();
+    } catch (error) {
+      console.error('[MasterCache] 自動プリロード開始エラー:', error);
     }
-
-    // キャッシュ有効性チェック
-    const brandsValid = await window.masterCacheManager.isCacheValid('brands');
-    const categoriesValid = await window.masterCacheManager.isCacheValid('categories');
-
-    if (brandsValid && categoriesValid) {
-      console.log('[MasterCache] ✅ キャッシュ有効 - プリロード不要');
-      return;
-    }
-
-    console.log('[MasterCache] ✅ 自動バックグラウンドプリロード実行');
-    window.startMasterCachePreload();
-  } catch (error) {
-    console.error('[MasterCache] 自動プリロード開始エラー:', error);
-  }
-}, 100); // 100ms遅延
+  }, 1000); // 1秒遅延（Firestore初期化完了を確実に待つ）
+}
