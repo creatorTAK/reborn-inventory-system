@@ -313,7 +313,7 @@ console.log('[MasterCache] MasterCacheManager初期化完了');
   console.log('[MasterCache] 自動バックグラウンドプリロード準備開始');
 
   try {
-    // window.initializeFirestore が読み込まれるまで待つ（最大15秒）
+    // window.initializeFirestore が読み込まれるまで待つ（最大60秒）
     console.log('[MasterCache] initializeFirestore 読み込み待機中...');
     await new Promise((resolve) => {
       if (window.initializeFirestore) {
@@ -330,12 +330,12 @@ console.log('[MasterCache] MasterCacheManager初期化完了');
         }
       }, 100);
 
-      // 15秒後にタイムアウト
+      // 60秒後にタイムアウト
       setTimeout(() => {
         clearInterval(checkInterval);
         console.error('[MasterCache] タイムアウト: initializeFirestoreが読み込まれませんでした');
         resolve(); // エラーでも続行
-      }, 15000);
+      }, 60000);
     });
 
     if (!window.initializeFirestore) {
