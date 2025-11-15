@@ -244,7 +244,13 @@ async function loadMasterDataToCache() {
 
   } catch (error) {
     console.error(`❌ [Master Manager] キャッシュ読み込みエラー:`, error);
-    alert('データの読み込みに失敗しました');
+    console.error(`エラー詳細 - コレクション: ${currentMasterConfig.collection}`, error.message || error);
+
+    // 空のキャッシュを設定して処理を継続
+    masterCache[currentMasterConfig.collection] = [];
+
+    // ユーザーに通知（詳細情報付き）
+    alert(`データの読み込みに失敗しました\n\nコレクション: ${currentMasterConfig.collection}\nエラー: ${error.message || 'Firestore接続エラー'}\n\n「OK」を押すと空の状態で画面を開きます。`);
   } finally {
     showLoading(false);
   }
@@ -277,7 +283,16 @@ async function loadMasterData() {
 
   } catch (error) {
     console.error(`❌ [Master Manager] データ読み込みエラー:`, error);
-    alert('データの読み込みに失敗しました');
+    console.error(`エラー詳細 - コレクション: ${currentMasterConfig.collection}`, error.message || error);
+
+    // 空のデータを設定して処理を継続
+    allMasterData = [];
+    filteredMasterData = [];
+    renderMasterList();
+    updateStats();
+
+    // ユーザーに通知（詳細情報付き）
+    alert(`データの読み込みに失敗しました\n\nコレクション: ${currentMasterConfig.collection}\nエラー: ${error.message || 'Firestore接続エラー'}\n\n「OK」を押すと空の状態で画面を開きます。`);
   } finally {
     showLoading(false);
   }
