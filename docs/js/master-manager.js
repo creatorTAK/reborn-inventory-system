@@ -151,12 +151,34 @@ function setupEventListeners() {
 async function loadMaster(category, type) {
   console.log(`📋 [Master Manager] マスタロード開始: ${category}/${type}`);
 
+  // window.masterCategoriesの存在確認
+  if (!window.masterCategories) {
+    console.error('❌ [Master Manager] master-config.js が読み込まれていません');
+    alert('マスタ設定が読み込まれていません。ページを再読み込みしてください。');
+    return;
+  }
+
+  // カテゴリの存在確認
+  if (!window.masterCategories[category]) {
+    console.error(`❌ [Master Manager] カテゴリが見つかりません: ${category}`);
+    alert(`カテゴリ「${category}」が見つかりません。`);
+    return;
+  }
+
+  // マスタタイプの存在確認
+  if (!window.masterCategories[category].masters) {
+    console.error(`❌ [Master Manager] カテゴリ「${category}」にmastersが定義されていません`);
+    alert(`マスタ設定にエラーがあります。`);
+    return;
+  }
+
   currentCategory = category;
   currentMasterType = type;
   currentMasterConfig = window.masterCategories[category].masters[type];
 
   if (!currentMasterConfig) {
     console.error(`❌ [Master Manager] マスタ設定が見つかりません: ${category}/${type}`);
+    alert(`マスタ「${type}」が見つかりません。`);
     return;
   }
 
@@ -495,7 +517,24 @@ window.showAddModal = function() {
   const modalBody = document.getElementById('addModalBody');
   const errorMessage = document.getElementById('addErrorMessage');
 
-  if (!modal || !modalBody) return;
+  if (!modal || !modalBody) {
+    console.error('[Master Manager] モーダル要素が見つかりません');
+    return;
+  }
+
+  // currentMasterConfigが未設定の場合はエラー
+  if (!currentMasterConfig) {
+    console.error('[Master Manager] マスタが選択されていません');
+    alert('マスタを選択してください');
+    return;
+  }
+
+  // fieldsが未定義の場合はエラー
+  if (!currentMasterConfig.fields || currentMasterConfig.fields.length === 0) {
+    console.error('[Master Manager] マスタ設定にfieldsが定義されていません:', currentMasterConfig);
+    alert('マスタ設定にエラーがあります');
+    return;
+  }
 
   // エラーメッセージクリア
   if (errorMessage) {
