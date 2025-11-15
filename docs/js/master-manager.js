@@ -15,13 +15,15 @@ let isSelectionMode = false;
 let selectedIds = new Set();
 let deleteTargetId = null;
 let searchDebounceTimer = null;
+let autocompleteSuggestions = []; // オートコンプリート候補（グローバル）
+let autocompleteSelectedIndex = -1; // 選択中のインデックス
 
 /**
  * 初期化処理
  */
 window.initMasterManager = function() {
   console.log('🚀 [Master Manager] 初期化開始');
-  
+
   // master-config.jsが読み込まれているか確認
   if (typeof window.masterCategories === 'undefined') {
     console.error('❌ [Master Manager] master-config.js が読み込まれていません');
@@ -35,27 +37,34 @@ window.initMasterManager = function() {
   const urlParams = new URLSearchParams(window.location.search);
   const urlCategory = urlParams.get('category');
 
-  // カテゴリに応じてアコーディオンを開き、最初のタブをロード
+  // カテゴリに応じて不要なアコーディオンを削除（メニュー重複解消）
   if (urlCategory === 'business') {
-    // 業務関連マスタを開く
+    // 業務関連マスタのみ表示 → 商品関連アコーディオンを削除
+    const productAccordionItem = document.querySelector('[data-bs-target="#productMasterCollapse"]')?.closest('.accordion-item');
+    if (productAccordionItem) {
+      productAccordionItem.remove();
+      console.log('✅ [Master Manager] 商品関連アコーディオン削除（業務関連モード）');
+    }
+
+    // 業務関連を開く
     const businessCollapse = document.getElementById('businessMasterCollapse');
     const businessButton = document.querySelector('[data-bs-target="#businessMasterCollapse"]');
     if (businessCollapse && businessButton) {
-      // 商品関連を閉じる
-      const productCollapse = document.getElementById('productMasterCollapse');
-      const productButton = document.querySelector('[data-bs-target="#productMasterCollapse"]');
-      if (productCollapse) productCollapse.classList.remove('show');
-      if (productButton) productButton.classList.add('collapsed');
-      productButton.setAttribute('aria-expanded', 'false');
-
-      // 業務関連を開く
       businessCollapse.classList.add('show');
       businessButton.classList.remove('collapsed');
       businessButton.setAttribute('aria-expanded', 'true');
     }
+
     loadMaster('business', 'shipping');
   } else {
-    // デフォルトまたはcategory=productの場合: 商品関連マスタを開く（既にデフォルトで開いている）
+    // 商品関連マスタのみ表示 → 業務関連アコーディオンを削除
+    const businessAccordionItem = document.querySelector('[data-bs-target="#businessMasterCollapse"]')?.closest('.accordion-item');
+    if (businessAccordionItem) {
+      businessAccordionItem.remove();
+      console.log('✅ [Master Manager] 業務関連アコーディオン削除（商品関連モード）');
+    }
+
+    // 商品関連はデフォルトで開いている
     loadMaster('product', 'brand');
   }
 
@@ -141,19 +150,40 @@ async function loadMasterData() {
   try {
     console.log(`🔍 [Master Manager] データ取得中: ${currentMasterConfig.collection}`);
 
-    const data = await window.getMasterData(currentMasterConfig.collection, {
-      sortBy: currentMasterConfig.sortBy,
-      sortOrder: currentMasterConfig.sortOrder,
-      limit: currentMasterConfig.maxDisplayResults || 100
-    });
+    // initialDisplay設定を確認（デフォルト: maxDisplayResults）
+    const initialDisplay = currentMasterConfig.initialDisplay !== undefined
+      ? currentMasterConfig.initialDisplay
+      : (currentMasterConfig.maxDisplayResults || 100);
 
-    console.log(`✅ [Master Manager] データ取得完了: ${data.length}件`);
+    // initialDisplay=0の場合、初期は空表示（検索後のみデータ表示）
+    if (initialDisplay === 0) {
+      console.log('ℹ️ [Master Manager] 初期表示なし（検索後のみデータ表示）');
+      allMasterData = [];
+      filteredMasterData = [];
 
-    allMasterData = data;
-    filteredMasterData = data;
-    
-    renderMasterList();
-    updateStats();
+      renderMasterList();
+      updateStats();
+
+      // オートコンプリートモードの場合、検索UIを初期化
+      if (currentMasterConfig.autocomplete) {
+        initAutocomplete();
+      }
+    } else {
+      // 通常の初期表示
+      const data = await window.getMasterData(currentMasterConfig.collection, {
+        sortBy: currentMasterConfig.sortBy,
+        sortOrder: currentMasterConfig.sortOrder,
+        limit: initialDisplay
+      });
+
+      console.log(`✅ [Master Manager] データ取得完了: ${data.length}件`);
+
+      allMasterData = data;
+      filteredMasterData = data;
+
+      renderMasterList();
+      updateStats();
+    }
 
   } catch (error) {
     console.error('❌ [Master Manager] データ取得エラー:', error);
@@ -654,6 +684,208 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+/**
+ * オートコンプリート初期化
+ */
+function initAutocomplete() {
+  console.log('🔍 [Master Manager] オートコンプリートモード初期化');
+
+  const searchInput = document.getElementById('searchInput');
+
+  // 既存のイベントリスナーを解除して再設定
+  const newSearchInput = searchInput.cloneNode(true);
+  searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+
+  // オートコンプリート用の候補リスト要素を作成
+  let suggestionList = document.getElementById('autocompleteSuggestions');
+  if (!suggestionList) {
+    suggestionList = document.createElement('div');
+    suggestionList.id = 'autocompleteSuggestions';
+    suggestionList.className = 'autocomplete-suggestions';
+    suggestionList.style.cssText = `
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 2px solid #667eea;
+      border-top: none;
+      border-radius: 0 0 12px 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      max-height: 400px;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+    `;
+    newSearchInput.parentElement.appendChild(suggestionList);
+    newSearchInput.parentElement.style.position = 'relative';
+  }
+
+  // 検索入力時の処理
+  newSearchInput.addEventListener('input', async (e) => {
+    const query = e.target.value.trim();
+    const minChars = currentMasterConfig.autocompleteMinChars || 1;
+
+    if (query.length < minChars) {
+      suggestionList.style.display = 'none';
+      autocompleteSuggestions = [];
+      return;
+    }
+
+    // Firestore検索
+    try {
+      const results = await window.searchMaster(
+        currentMasterConfig.collection,
+        query,
+        currentMasterConfig.searchFields || [],
+        currentMasterConfig.autocompleteSuggestions || 20
+      );
+
+      autocompleteSuggestions = results; // グローバル変数に保存
+      renderAutocompleteSuggestions(results, suggestionList);
+      autocompleteSelectedIndex = -1;
+
+    } catch (error) {
+      console.error('❌ [Master Manager] オートコンプリート検索エラー:', error);
+    }
+  });
+
+  // キーボードナビゲーション
+  newSearchInput.addEventListener('keydown', (e) => {
+    if (autocompleteSuggestions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        autocompleteSelectedIndex = Math.min(autocompleteSelectedIndex + 1, autocompleteSuggestions.length - 1);
+        updateSuggestionSelection(suggestionList, autocompleteSelectedIndex);
+        break;
+
+      case 'ArrowUp':
+        e.preventDefault();
+        autocompleteSelectedIndex = Math.max(autocompleteSelectedIndex - 1, -1);
+        updateSuggestionSelection(suggestionList, autocompleteSelectedIndex);
+        break;
+
+      case 'Enter':
+        e.preventDefault();
+        if (autocompleteSelectedIndex >= 0 && autocompleteSelectedIndex < autocompleteSuggestions.length) {
+          selectSuggestion(autocompleteSuggestions[autocompleteSelectedIndex]);
+        }
+        break;
+
+      case 'Escape':
+        suggestionList.style.display = 'none';
+        autocompleteSelectedIndex = -1;
+        break;
+    }
+  });
+
+  // 外部クリックで候補リストを閉じる
+  document.addEventListener('click', (e) => {
+    if (!newSearchInput.contains(e.target) && !suggestionList.contains(e.target)) {
+      suggestionList.style.display = 'none';
+    }
+  });
+}
+
+/**
+ * オートコンプリート候補を描画
+ */
+function renderAutocompleteSuggestions(suggestions, container) {
+  if (suggestions.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  const primaryField = currentMasterConfig.autocompleteFields?.primary || currentMasterConfig.displayFields[0];
+  const secondaryField = currentMasterConfig.autocompleteFields?.secondary || currentMasterConfig.displayFields[1];
+
+  container.innerHTML = suggestions.map((item, index) => {
+    const primaryValue = item[primaryField] || '-';
+    const secondaryValue = secondaryField && item[secondaryField] ? item[secondaryField] : '';
+
+    return `
+      <div class="autocomplete-item" data-index="${index}" style="
+        padding: 12px 16px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background 0.2s;
+      " onmouseenter="this.style.background='#f9f5ff'" onmouseleave="this.style.background='white'" onclick="window.selectSuggestionByIndex(${index})">
+        <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
+          ${escapeHtml(primaryValue)}
+        </div>
+        ${secondaryValue ? `
+          <div style="font-size: 13px; color: #666;">
+            ${escapeHtml(secondaryValue)}
+          </div>
+        ` : ''}
+        ${item.usageCount !== undefined ? `
+          <div style="font-size: 12px; color: #999; margin-top: 4px;">
+            <i class="bi bi-graph-up"></i> ${item.usageCount}回使用
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  container.style.display = 'block';
+}
+
+/**
+ * 候補選択状態を更新
+ */
+function updateSuggestionSelection(container, index) {
+  const items = container.querySelectorAll('.autocomplete-item');
+  items.forEach((item, i) => {
+    if (i === index) {
+      item.style.background = '#f9f5ff';
+      item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } else {
+      item.style.background = 'white';
+    }
+  });
+}
+
+/**
+ * 候補を選択（グローバル関数）
+ */
+window.selectSuggestionByIndex = function(index) {
+  if (index >= 0 && index < autocompleteSuggestions.length) {
+    selectSuggestion(autocompleteSuggestions[index]);
+  }
+};
+
+/**
+ * 候補を選択して表示
+ */
+function selectSuggestion(item) {
+  console.log('✅ [Master Manager] 候補選択:', item);
+
+  // 検索フィールドをクリア
+  document.getElementById('searchInput').value = '';
+
+  // 候補リストを閉じる
+  const suggestionList = document.getElementById('autocompleteSuggestions');
+  if (suggestionList) {
+    suggestionList.style.display = 'none';
+  }
+
+  // 選択したアイテムのみを表示
+  allMasterData = [item];
+  filteredMasterData = [item];
+
+  renderMasterList();
+  updateStats();
+
+  // 使用回数をインクリメント（usageCountが有効な場合）
+  if (currentMasterConfig.usageCount && item.id) {
+    window.incrementMasterUsageCount(currentMasterConfig.collection, item.id).catch(err => {
+      console.warn('⚠️ [Master Manager] 使用回数更新エラー:', err);
+    });
+  }
 }
 
 console.log('✅ [Master Manager] master-manager.js読み込み完了');

@@ -16,10 +16,10 @@ const masterCategories = {
         collection: 'brands',
         description: 'ブランド名を管理（英語名・カナ名）',
         fields: [
-          { 
-            name: 'nameEn', 
-            label: 'ブランド英語名', 
-            required: true, 
+          {
+            name: 'nameEn',
+            label: 'ブランド英語名',
+            required: true,
             type: 'text',
             placeholder: '例: NIKE',
             validation: {
@@ -27,10 +27,10 @@ const masterCategories = {
               maxLength: 100
             }
           },
-          { 
-            name: 'nameKana', 
-            label: 'ブランドカナ', 
-            required: true, 
+          {
+            name: 'nameKana',
+            label: 'ブランドカナ',
+            required: true,
             type: 'text',
             placeholder: '例: ナイキ',
             validation: {
@@ -40,13 +40,22 @@ const masterCategories = {
           }
         ],
         displayFields: ['nameEn', 'nameKana'], // 一覧画面で表示するフィールド
-        searchFields: ['nameEn', 'nameKana'], // 検索対象フィールド
+        searchFields: ['nameEn', 'nameKana', 'searchText'], // 検索対象フィールド
         sortBy: 'nameEn',
         sortOrder: 'asc',
         searchable: true,
         usageCount: true, // 使用回数カウント機能
         bulkDelete: true, // 一括削除機能
-        maxDisplayResults: 100 // 表示上限
+        maxDisplayResults: 100, // 表示上限
+        // オートコンプリート設定（重要マスタ専用）
+        autocomplete: true, // オートコンプリート有効化
+        autocompleteMinChars: 1, // 最小入力文字数
+        autocompleteSuggestions: 20, // 候補表示数
+        initialDisplay: 0, // 初期表示件数（0=検索後のみ表示）
+        autocompleteFields: { // オートコンプリート候補の表示フィールド
+          primary: 'nameEn',   // 1行目（メイン）
+          secondary: 'nameKana' // 2行目（サブ）
+        }
       },
       
       category: {
@@ -54,10 +63,10 @@ const masterCategories = {
         collection: 'categories',
         description: '商品カテゴリを管理',
         fields: [
-          { 
-            name: 'name', 
-            label: 'カテゴリ名', 
-            required: true, 
+          {
+            name: 'name',
+            label: 'カテゴリ名',
+            required: true,
             type: 'text',
             placeholder: '例: トップス',
             validation: {
@@ -65,10 +74,10 @@ const masterCategories = {
               maxLength: 50
             }
           },
-          { 
-            name: 'parent', 
-            label: '親カテゴリ', 
-            required: false, 
+          {
+            name: 'parent',
+            label: '親カテゴリ',
+            required: false,
             type: 'select',
             placeholder: '親カテゴリを選択（オプション）',
             options: [] // 動的に他のカテゴリから取得
@@ -81,7 +90,16 @@ const masterCategories = {
         searchable: true,
         usageCount: true,
         bulkDelete: true,
-        maxDisplayResults: 100
+        maxDisplayResults: 100,
+        // オートコンプリート設定（重要マスタ専用）
+        autocomplete: true, // オートコンプリート有効化
+        autocompleteMinChars: 1, // 最小入力文字数
+        autocompleteSuggestions: 15, // 候補表示数
+        initialDisplay: 0, // 初期表示件数（0=検索後のみ表示）
+        autocompleteFields: { // オートコンプリート候補の表示フィールド
+          primary: 'name',   // 1行目（メイン）
+          secondary: 'parent' // 2行目（サブ）
+        }
       },
       
       material: {

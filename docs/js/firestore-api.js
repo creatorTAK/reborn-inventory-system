@@ -1146,8 +1146,47 @@ async function updateMaster(collection, id, data) {
 }
 
 /**
+ * マスタ使用回数をインクリメント（汎用）
+ *
+ * @param {string} collection - Firestoreコレクション名
+ * @param {string} id - ドキュメントID
+ * @returns {Promise<object>} { success: boolean, error?: string }
+ */
+async function incrementMasterUsageCount(collection, id) {
+  try {
+    if (!id || !id.trim()) {
+      return { success: false, error: 'IDは必須です' };
+    }
+
+    const db = await initializeFirestore();
+    const {
+      doc,
+      updateDoc,
+      increment,
+      serverTimestamp
+    } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+    const docRef = doc(db, collection, id);
+    await updateDoc(docRef, {
+      usageCount: increment(1),
+      updatedAt: serverTimestamp()
+    });
+
+    console.log(`✅ [Master API] ${collection}使用回数更新: ${id}`);
+    return { success: true };
+
+  } catch (error) {
+    console.error(`❌ [Master API] ${collection}使用回数更新エラー:`, error);
+    return {
+      success: false,
+      error: error.message || '使用回数の更新に失敗しました'
+    };
+  }
+}
+
+/**
  * 汎用マスタ削除
- * 
+ *
  * @param {string} collection - Firestoreコレクション名
  * @param {string} id - ドキュメントID
  * @returns {Promise<object>} { success: boolean, error?: string }
@@ -1276,7 +1315,8 @@ if (typeof window !== 'undefined') {
     createMaster,
     updateMaster,
     deleteMaster,
-    searchMaster
+    searchMaster,
+    incrementMasterUsageCount
   };
 }
 
@@ -1309,5 +1349,6 @@ export {
   createMaster,
   updateMaster,
   deleteMaster,
-  searchMaster
+  searchMaster,
+  incrementMasterUsageCount
 };
