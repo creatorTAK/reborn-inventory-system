@@ -127,34 +127,60 @@ class MasterCacheManager {
   }
 
   /**
-   * キャッシュにデータ保存
+   * キャッシュにデータ保存（チャンク分割で安定化）
    */
   async saveToCache(collection, data) {
     await this.initialize();
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([collection], 'readwrite');
-      const store = transaction.objectStore(collection);
+    const CHUNK_SIZE = 1000; // 1000件ずつ分割保存
+    const totalChunks = Math.ceil(data.length / CHUNK_SIZE);
 
-      // 既存データクリア
-      store.clear();
+    console.log(`[MasterCache] ${collection}: ${data.length}件を${totalChunks}チャンクに分割して保存開始`);
 
-      // 新データ追加
-      data.forEach(item => {
-        store.add(item);
+    try {
+      // ステップ1: 既存データクリア
+      await new Promise((resolve, reject) => {
+        const transaction = this.db.transaction([collection], 'readwrite');
+        const store = transaction.objectStore(collection);
+        store.clear();
+
+        transaction.oncomplete = () => {
+          console.log(`[MasterCache] ${collection}: 既存データクリア完了`);
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error);
       });
 
-      transaction.oncomplete = () => {
-        this.saveCacheMetadata(collection, data.length);
-        console.log(`[MasterCache] ${collection}: ${data.length}件をキャッシュに保存`);
-        resolve();
-      };
+      // ステップ2: チャンクごとに保存
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, data.length);
+        const chunk = data.slice(start, end);
 
-      transaction.onerror = () => {
-        console.error(`[MasterCache] ${collection}: 保存エラー`, transaction.error);
-        reject(transaction.error);
-      };
-    });
+        await new Promise((resolve, reject) => {
+          const transaction = this.db.transaction([collection], 'readwrite');
+          const store = transaction.objectStore(collection);
+
+          chunk.forEach(item => {
+            store.add(item);
+          });
+
+          transaction.oncomplete = () => {
+            console.log(`[MasterCache] ${collection}: チャンク ${i + 1}/${totalChunks} 保存完了 (${chunk.length}件)`);
+            resolve();
+          };
+          transaction.onerror = () => reject(transaction.error);
+        });
+      }
+
+      // メタデータ保存
+      this.saveCacheMetadata(collection, data.length);
+      console.log(`[MasterCache] ${collection}: ✅ ${data.length}件の保存完了`);
+
+    } catch (error) {
+      console.error(`[MasterCache] ${collection}: 保存エラー`, error);
+      throw error;
+    }
   }
 
   /**
