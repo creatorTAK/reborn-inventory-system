@@ -159,7 +159,7 @@ class MasterCacheManager {
 
   /**
    * Firestoreからデータ取得（動的importで確実にモジュールをロード）
-   * Exponential backoff retry付き
+   * Exponential backoff retry + タイムアウト付き
    */
   async fetchFromFirestore(collection, maxAttempts = 5) {
     console.log(`[MasterCache] ${collection}: Firestoreから取得開始`);
@@ -168,29 +168,50 @@ class MasterCacheManager {
 
     while (attempt < maxAttempts) {
       try {
-        // 動的importでfirestore-api.jsモジュールを確実にロード
-        const firestoreModule = await import('/js/firestore-api.js');
+        // タイムアウト付きPromise（60秒）
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('取得タイムアウト (60秒)')), 60000);
+        });
 
-        // 初期化完了を待機（window.firestoreReadyを使用）
-        if (window.firestoreReady) {
-          await window.firestoreReady;
-        }
+        const fetchPromise = (async () => {
+          // 動的importでfirestore-api.jsモジュールを確実にロード
+          console.log(`[MasterCache] ${collection}: モジュールインポート開始`);
+          const firestoreModule = await import('/js/firestore-api.js');
+          console.log(`[MasterCache] ${collection}: モジュールインポート完了`);
 
-        // getMasterData関数を取得
-        const getMasterData = firestoreModule.getMasterData || window.FirestoreApi?.getMasterData;
+          // 初期化完了を待機（window.firestoreReadyを使用）
+          if (window.firestoreReady) {
+            console.log(`[MasterCache] ${collection}: Firestore初期化待機中...`);
+            await window.firestoreReady;
+            console.log(`[MasterCache] ${collection}: Firestore初期化完了`);
+          }
 
-        if (!getMasterData) {
-          throw new Error('getMasterData関数が見つかりません');
-        }
+          // getMasterData関数を取得
+          const getMasterData = firestoreModule.getMasterData || window.FirestoreApi?.getMasterData;
 
-        // データ取得
-        const data = await getMasterData(collection);
-        console.log(`[MasterCache] ${collection}: Firestoreから${data.length}件取得`);
+          if (!getMasterData) {
+            throw new Error('getMasterData関数が見つかりません');
+          }
+
+          console.log(`[MasterCache] ${collection}: getMasterData呼び出し開始`);
+          // データ取得
+          const data = await getMasterData(collection);
+          console.log(`[MasterCache] ${collection}: Firestoreから${data.length}件取得`);
+          return data;
+        })();
+
+        // タイムアウトとの競争
+        const data = await Promise.race([fetchPromise, timeoutPromise]);
         return data;
 
       } catch (error) {
         attempt++;
-        console.warn(`[MasterCache] ${collection}: 取得試行 ${attempt}/${maxAttempts} 失敗:`, error.message);
+        console.error(`[MasterCache] ${collection}: 取得試行 ${attempt}/${maxAttempts} 失敗:`, error);
+        console.error(`[MasterCache] ${collection}: エラー詳細:`, {
+          message: error.message,
+          stack: error.stack,
+          type: error.constructor.name
+        });
 
         if (attempt >= maxAttempts) {
           console.error(`[MasterCache] ${collection}: 最大試行回数超過`);
