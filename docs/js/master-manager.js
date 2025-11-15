@@ -346,11 +346,14 @@ async function loadMasterDataToCache() {
     console.log(`📥 [Master Manager] キャッシュ読み込み開始: ${currentMasterConfig.collection}`);
     showLoading(true);
 
-    // ブランドマスタの場合はbrandCacheManagerを使用（高速化）
+    // ブランド・カテゴリはmasterCacheManagerを使用（高速化）
     let data;
-    if (currentMasterConfig.collection === 'brands' && window.brandCacheManager) {
+    if (currentMasterConfig.collection === 'brands' && window.masterCacheManager) {
       console.log('🚀 [Master Manager] ブランドキャッシュから読み込み');
-      data = await window.brandCacheManager.getBrands();
+      data = await window.masterCacheManager.getBrands();
+    } else if (currentMasterConfig.collection === 'categories' && window.masterCacheManager) {
+      console.log('🚀 [Master Manager] カテゴリキャッシュから読み込み');
+      data = await window.masterCacheManager.getCategories();
     } else {
       // その他のマスタはFirestore APIで取得
       data = await window.getMasterData(currentMasterConfig.collection);
@@ -383,11 +386,14 @@ async function loadMasterData() {
     console.log(`🔄 [Master Manager] データ読み込み開始: ${currentMasterConfig.collection}`);
     showLoading(true);
 
-    // ブランドマスタの場合はbrandCacheManagerを使用（高速化）
+    // ブランド・カテゴリはmasterCacheManagerを使用（高速化）
     let data;
-    if (currentMasterConfig.collection === 'brands' && window.brandCacheManager) {
+    if (currentMasterConfig.collection === 'brands' && window.masterCacheManager) {
       console.log('🚀 [Master Manager] ブランドキャッシュから読み込み');
-      data = await window.brandCacheManager.getBrands();
+      data = await window.masterCacheManager.getBrands();
+    } else if (currentMasterConfig.collection === 'categories' && window.masterCacheManager) {
+      console.log('🚀 [Master Manager] カテゴリキャッシュから読み込み');
+      data = await window.masterCacheManager.getCategories();
     } else {
       // その他のマスタはFirestore APIで取得
       data = await window.getMasterData(currentMasterConfig.collection);
