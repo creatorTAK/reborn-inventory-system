@@ -158,23 +158,16 @@ class MasterCacheManager {
   }
 
   /**
-   * Firestoreからデータ取得（Firebase v10 Modular API対応）
+   * Firestoreからデータ取得（既存のwindow.getMasterData()を使用）
    */
   async fetchFromFirestore(collection) {
     console.log(`[MasterCache] ${collection}: Firestoreから取得開始`);
 
-    if (!window.initializeFirestore) {
-      throw new Error('initializeFirestore関数が見つかりません');
+    if (!window.getMasterData) {
+      throw new Error('getMasterData関数が見つかりません');
     }
 
-    const db = await window.initializeFirestore();
-
-    // Firebase v10 Modular APIを使用
-    const { collection: firestoreCollection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-
-    const collectionRef = firestoreCollection(db, collection);
-    const snapshot = await getDocs(collectionRef);
-    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const data = await window.getMasterData(collection);
 
     console.log(`[MasterCache] ${collection}: Firestoreから${data.length}件取得`);
     return data;
