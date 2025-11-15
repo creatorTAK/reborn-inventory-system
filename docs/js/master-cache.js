@@ -456,3 +456,20 @@ window.startMasterCachePreload = async function() {
     console.error('[MasterCache] プリロードエラー:', error);
   }
 };
+
+// ========================================
+// 自動バックグラウンドプリロード開始
+// ========================================
+// master-cache.js読み込み完了後、即座にバックグラウンドプリロードを開始
+// キャッシュがあれば即座に返るので、どのページでも実行して問題なし
+console.log('[MasterCache] 自動バックグラウンドプリロード開始チェック');
+
+// 少し遅延させてFirestore初期化を確実に完了させる
+setTimeout(() => {
+  if (window.startMasterCachePreload) {
+    console.log('[MasterCache] ✅ 自動バックグラウンドプリロード実行');
+    window.startMasterCachePreload();
+  } else {
+    console.warn('[MasterCache] ⚠️ startMasterCachePreload関数が見つかりません');
+  }
+}, 100); // 100ms遅延
