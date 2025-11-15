@@ -311,9 +311,40 @@ console.log('[BrandCache] BrandCacheManager初期化完了');
 
 // アプリ起動時に自動的にバックグラウンドプリロード開始
 (async function() {
-  console.log('[BrandCache] 自動バックグラウンドプリロード開始');
+  console.log('[BrandCache] 自動バックグラウンドプリロード準備開始');
 
   try {
+    // window.initializeFirestore が読み込まれるまで待つ（最大15秒）
+    console.log('[BrandCache] initializeFirestore 読み込み待機中...');
+    await new Promise((resolve) => {
+      if (window.initializeFirestore) {
+        console.log('[BrandCache] initializeFirestore 既に読み込み済み');
+        resolve();
+        return;
+      }
+
+      const checkInterval = setInterval(() => {
+        if (window.initializeFirestore) {
+          clearInterval(checkInterval);
+          console.log('[BrandCache] initializeFirestore 読み込み完了');
+          resolve();
+        }
+      }, 100);
+
+      // 15秒後にタイムアウト
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        console.error('[BrandCache] タイムアウト: initializeFirestoreが読み込まれませんでした');
+        resolve(); // エラーでも続行
+      }, 15000);
+    });
+
+    if (!window.initializeFirestore) {
+      console.error('[BrandCache] initializeFirestoreが見つかりません。プリロードをスキップします。');
+      return;
+    }
+
+    console.log('[BrandCache] バックグラウンドプリロード開始');
     const result = await window.brandCacheManager.preloadInBackground();
 
     if (result.cached) {

@@ -196,8 +196,8 @@ window.initMasterManager = function() {
       console.log('✅ [Master Manager] 業務関連アコーディオン削除（商品関連モード）');
     }
 
-    // 商品関連はデフォルトで開いている
-    loadMaster('product', 'brand');
+    // 商品関連はデフォルトで開いている（カテゴリを最初に表示）
+    loadMaster('product', 'category');
   }
 
   // ブランドキャッシュのバックグラウンドプリロード
