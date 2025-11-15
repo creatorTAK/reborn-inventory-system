@@ -960,4 +960,9 @@ window.goBack = function() {
   window.location.href = '/index.html';
 };
 
+/**
+ * グローバル関数公開（HTML onclickから呼び出し可能にする）
+ */
+window.loadMaster = loadMaster;
+
 console.log('✅ [Master Manager] モジュール読み込み完了');
