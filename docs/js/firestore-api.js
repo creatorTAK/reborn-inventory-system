@@ -1354,5 +1354,5 @@ export {
 };
 
 // グローバルスコープに公開（非モジュールスクリプトから使用するため）
-// brand-cache.js 等の通常スクリプトから window.initializeFirestore でアクセス可能
+// master-cache.js 等の通常スクリプトから window.initializeFirestore でアクセス可能
 window.initializeFirestore = initializeFirestore;
