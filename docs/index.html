@@ -988,6 +988,9 @@
     }
   </script>
 
+  <!-- Brand Cache System (MASTER-002: バックグラウンドプリロード) -->
+  <script src="/js/brand-cache.js"></script>
+
   <!-- Firestore API Wrapper (ARCH-001 Phase 1.5) -->
   <script type="module" src="/js/firestore-api.js"></script>
 
@@ -2727,6 +2730,47 @@
         } else {
           console.error('[Chat FAB] startChatUnreadListener関数が見つかりません');
         }
+      }
+    })();
+  </script>
+
+  <!-- Brand Background Preload (MASTER-002) -->
+  <script>
+    (async function() {
+      console.log('[Brand Preload] バックグラウンドプリロード開始');
+
+      try {
+        // Firestore初期化を待つ
+        await new Promise(resolve => {
+          if (window.db) {
+            resolve();
+          } else {
+            const checkInterval = setInterval(() => {
+              if (window.db) {
+                clearInterval(checkInterval);
+                resolve();
+              }
+            }, 100);
+          }
+        });
+
+        // バックグラウンドプリロード開始
+        const result = await window.brandCacheManager.preloadInBackground();
+
+        if (result.cached) {
+          console.log(`[Brand Preload] ✅ キャッシュ利用: ${result.count}件`);
+        } else if (result.error) {
+          console.warn(`[Brand Preload] ⚠️ エラー: ${result.error}`);
+        } else {
+          console.log(`[Brand Preload] ✅ 読み込み完了: ${result.count}件`);
+        }
+
+        // キャッシュ統計をコンソールに出力
+        const stats = await window.brandCacheManager.getCacheStats();
+        console.log('[Brand Preload] 統計:', stats);
+      } catch (error) {
+        console.error('[Brand Preload] 初期化エラー:', error);
+        // エラーでもアプリは続行（致命的ではない）
       }
     })();
   </script>
