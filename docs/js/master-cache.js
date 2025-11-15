@@ -274,38 +274,56 @@ class MasterCacheManager {
    * バックグラウンドプリロード
    */
   async preloadInBackground(collection) {
+    console.log(`[MasterCache] ========== ${collection}: preloadInBackground() 呼び出し ==========`);
+    console.log(`[MasterCache] ${collection}: プリロード中チェック: ${!!this.preloadPromises[collection]}`);
+
     // すでにプリロード中の場合は既存のPromiseを返す
     if (this.preloadPromises[collection]) {
-      console.log(`[MasterCache] ${collection}: プリロード既に実行中`);
+      console.log(`[MasterCache] ${collection}: ⚠️ プリロード既に実行中 - 既存Promiseを返す`);
       return this.preloadPromises[collection];
     }
 
-    console.log(`[MasterCache] ${collection}: バックグラウンドプリロード開始`);
+    console.log(`[MasterCache] ${collection}: 🚀 バックグラウンドプリロード開始（新規Promise作成）`);
 
     this.preloadPromises[collection] = (async () => {
       try {
+        console.log(`[MasterCache] ${collection}: ステップ1 - キャッシュ有効性チェック開始`);
+
         // キャッシュ有効性チェック
         const cacheValid = await this.isCacheValid(collection);
+        console.log(`[MasterCache] ${collection}: ステップ1完了 - キャッシュ有効性: ${cacheValid}`);
 
         if (cacheValid) {
+          console.log(`[MasterCache] ${collection}: ステップ2a - キャッシュ有効なのでキャッシュから取得`);
           const cachedData = await this.getFromCache(collection);
           console.log(`[MasterCache] ${collection}: ✅ キャッシュ有効、プリロード不要 (${cachedData.length}件)`);
           return { cached: true, count: cachedData.length };
         }
 
+        console.log(`[MasterCache] ${collection}: ステップ2b - キャッシュ無効なのでFirestoreから取得開始`);
+
         // Firestoreから取得してキャッシュ更新
         const data = await this.fetchFromFirestore(collection);
+        console.log(`[MasterCache] ${collection}: ステップ3 - Firestore取得完了 (${data.length}件)、キャッシュ保存開始`);
+
         await this.saveToCache(collection, data);
+        console.log(`[MasterCache] ${collection}: ステップ4 - キャッシュ保存完了`);
 
         console.log(`[MasterCache] ${collection}: ✅ プリロード完了 (${data.length}件)`);
         return { cached: false, count: data.length };
 
       } catch (error) {
-        console.error(`[MasterCache] ${collection}: プリロードエラー`, error);
+        console.error(`[MasterCache] ${collection}: ❌ プリロードエラー`, error);
+        console.error(`[MasterCache] ${collection}: エラー詳細:`, {
+          message: error.message,
+          stack: error.stack,
+          type: error.constructor.name
+        });
         return { error: error.message };
       }
     })();
 
+    console.log(`[MasterCache] ${collection}: Promise作成完了、返却します`);
     return this.preloadPromises[collection];
   }
 
@@ -363,13 +381,26 @@ console.log('[MasterCache] MasterCacheManager初期化完了');
 
 // バックグラウンドプリロード開始関数（master-manager.jsから呼び出し）
 window.startMasterCachePreload = async function() {
-  console.log('[MasterCache] バックグラウンドプリロード開始（ブランド＋カテゴリ）');
+  console.log('========================================');
+  console.log('[MasterCache] 🚀 バックグラウンドプリロード開始（ブランド＋カテゴリ）');
+  console.log('========================================');
 
   try {
+    console.log('[MasterCache] Promise.all で並列プリロード開始');
+    console.log('[MasterCache] - brands: preloadInBackground() 呼び出し準備');
+    console.log('[MasterCache] - categories: preloadInBackground() 呼び出し準備');
+
     const [brandsResult, categoriesResult] = await Promise.all([
       window.masterCacheManager.preloadInBackground('brands'),
       window.masterCacheManager.preloadInBackground('categories')
     ]);
+
+    console.log('========================================');
+    console.log('[MasterCache] Promise.all 完了 - 結果集計開始');
+    console.log('========================================');
+
+    console.log('[MasterCache] brandsResult:', brandsResult);
+    console.log('[MasterCache] categoriesResult:', categoriesResult);
 
     // ブランド結果
     if (brandsResult.cached) {
