@@ -404,7 +404,7 @@ const masterCategories = {
       
       staff: {
         label: '担当者',
-        collection: 'staff',
+        collection: 'staffMembers',
         description: 'スタッフ・担当者を管理',
         fields: [
           { 
@@ -508,7 +508,7 @@ const masterCategories = {
       
       marketplace: {
         label: '出品先',
-        collection: 'marketplaces',
+        collection: 'salesChannels',
         description: '出品先プラットフォームを管理',
         fields: [
           { 
