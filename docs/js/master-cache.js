@@ -308,43 +308,11 @@ window.brandCacheManager = {
 
 console.log('[MasterCache] MasterCacheManager初期化完了');
 
-// アプリ起動時に自動的にバックグラウンドプリロード開始（ブランド＋カテゴリ）
-(async function() {
-  console.log('[MasterCache] 自動バックグラウンドプリロード準備開始');
+// バックグラウンドプリロード開始関数（master-manager.jsから呼び出し）
+window.startMasterCachePreload = async function() {
+  console.log('[MasterCache] バックグラウンドプリロード開始（ブランド＋カテゴリ）');
 
   try {
-    // window.initializeFirestore が読み込まれるまで待つ（最大60秒）
-    console.log('[MasterCache] initializeFirestore 読み込み待機中...');
-    await new Promise((resolve) => {
-      if (window.initializeFirestore) {
-        console.log('[MasterCache] initializeFirestore 既に読み込み済み');
-        resolve();
-        return;
-      }
-
-      const checkInterval = setInterval(() => {
-        if (window.initializeFirestore) {
-          clearInterval(checkInterval);
-          console.log('[MasterCache] initializeFirestore 読み込み完了');
-          resolve();
-        }
-      }, 100);
-
-      // 60秒後にタイムアウト
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        console.error('[MasterCache] タイムアウト: initializeFirestoreが読み込まれませんでした');
-        resolve(); // エラーでも続行
-      }, 60000);
-    });
-
-    if (!window.initializeFirestore) {
-      console.error('[MasterCache] initializeFirestoreが見つかりません。プリロードをスキップします。');
-      return;
-    }
-
-    // ブランドとカテゴリを並列プリロード
-    console.log('[MasterCache] バックグラウンドプリロード開始（ブランド＋カテゴリ）');
     const [brandsResult, categoriesResult] = await Promise.all([
       window.masterCacheManager.preloadInBackground('brands'),
       window.masterCacheManager.preloadInBackground('categories')
@@ -375,7 +343,6 @@ console.log('[MasterCache] MasterCacheManager初期化完了');
     console.log('[MasterCache] カテゴリ統計:', categoriesStats);
 
   } catch (error) {
-    console.error('[MasterCache] 自動プリロードエラー:', error);
-    // エラーでもアプリは続行（致命的ではない）
+    console.error('[MasterCache] プリロードエラー:', error);
   }
-})();
+};

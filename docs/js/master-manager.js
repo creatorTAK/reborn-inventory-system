@@ -200,23 +200,10 @@ window.initMasterManager = function() {
     loadMaster('product', 'category');
   }
 
-  // ブランドキャッシュのバックグラウンドプリロード
-  if (window.brandCacheManager) {
-    console.log('🚀 [Master Manager] ブランドキャッシュのバックグラウンドプリロード開始');
-    window.brandCacheManager.preloadInBackground()
-      .then(result => {
-        if (result.cached) {
-          console.log(`✅ [Brand Preload] キャッシュ利用: ${result.count}件`);
-        } else if (result.error) {
-          console.warn(`⚠️ [Brand Preload] エラー: ${result.error}`);
-        } else {
-          console.log(`✅ [Brand Preload] 読み込み完了: ${result.count}件`);
-        }
-      })
-      .catch(error => {
-        console.error('❌ [Brand Preload] エラー:', error);
-        // エラーでもアプリは続行
-      });
+  // ブランド＋カテゴリのバックグラウンドプリロード
+  if (window.startMasterCachePreload) {
+    console.log('🚀 [Master Manager] マスタキャッシュのバックグラウンドプリロード開始');
+    window.startMasterCachePreload(); // 非同期実行（待たない）
   }
 
   // イベントリスナー設定
