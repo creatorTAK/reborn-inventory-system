@@ -903,12 +903,28 @@
         // iframe内から親ページのトップメニューに戻る（Firestore経由）
         console.log('[master-management] iframe内で開かれているため、Firestore経由で戻る');
         try {
+          // Firestoreを初期化
+          if (typeof window.initializeFirestore !== 'function') {
+            console.error('[master-management] ❌ initializeFirestore関数が未定義');
+            alert('Firestore初期化関数が見つかりません');
+            return;
+          }
+
+          const db = await window.initializeFirestore();
+          console.log('[master-management] ✅ Firestore初期化完了');
+
           const sessionId = sessionStorage.getItem('device_session_id');
-          await db.collection('navigation').doc('menuControl').set({
+          console.log('[master-management] sessionId:', sessionId);
+
+          // FieldValueを取得
+          const { getFirestore, collection, doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+          // menuControlドキュメントに書き込み
+          await setDoc(doc(db, 'navigation', 'menuControl'), {
             action: 'navigate',
             page: 'home',
             sessionId: sessionId,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            timestamp: serverTimestamp(),
             from: 'master-management'
           });
           console.log('[master-management] ✅ Firestore書き込み成功 - トップメニューに戻る');
