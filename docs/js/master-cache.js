@@ -220,11 +220,10 @@ class MasterCacheManager {
   }
 
   /**
-   * Firestoreからデータ取得（ページネーション: 1000件ずつ）
-   * 大量データ（51,343件）による接続エラーを回避
+   * Firestoreからデータ取得（全件取得、120秒タイムアウト）
    */
-  async fetchFromFirestore(collection, maxAttempts = 5) {
-    console.log(`[MasterCache] ${collection}: Firestoreからページネーション取得開始`);
+  async fetchFromFirestore(collection, maxAttempts = 3) {
+    console.log(`[MasterCache] ${collection}: Firestoreから全件取得開始`);
 
     let attempt = 0;
 
@@ -237,66 +236,25 @@ class MasterCacheManager {
           console.log(`[MasterCache] ${collection}: Firestore初期化完了`);
         }
 
-        // getMasterData関数を使用（ページネーション対応版）
+        // getMasterData関数を使用
         const getMasterData = window.getMasterData || window.FirestoreApi?.getMasterData;
 
         if (!getMasterData) {
           throw new Error('getMasterData関数が見つかりません');
         }
 
-        console.log(`[MasterCache] ${collection}: 全件取得開始（1000件ずつ）`);
+        console.log(`[MasterCache] ${collection}: getMasterData呼び出し開始`);
 
-        // ページネーション: 1000件ずつ取得
-        let allData = [];
-        let lastDocSnapshot = null;
-        let pageNum = 1;
-        const PAGE_SIZE = 1000;
+        // タイムアウト付き（120秒）
+        const fetchPromise = getMasterData(collection);
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('取得タイムアウト (120秒)')), 120000);
+        });
 
-        while (true) {
-          console.log(`[MasterCache] ${collection}: ページ ${pageNum} 取得中...`);
+        const data = await Promise.race([fetchPromise, timeoutPromise]);
 
-          // タイムアウト付き（各ページ30秒）
-          const options = { limit: PAGE_SIZE };
-          if (lastDocSnapshot) {
-            options.startAfterDoc = lastDocSnapshot;
-          }
-
-          const pagePromise = getMasterData(collection, options);
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error(`ページ${pageNum}取得タイムアウト (30秒)`)), 30000);
-          });
-
-          const result = await Promise.race([pagePromise, timeoutPromise]);
-
-          // getMasterDataは { data, lastDocSnapshot } を返す
-          const pageData = result.data || result; // 互換性のため
-          const newLastDocSnapshot = result.lastDocSnapshot;
-
-          if (!pageData || pageData.length === 0) {
-            console.log(`[MasterCache] ${collection}: ページ ${pageNum} - データなし（取得完了）`);
-            break;
-          }
-
-          console.log(`[MasterCache] ${collection}: ページ ${pageNum} - ${pageData.length}件取得（累計: ${allData.length + pageData.length}件）`);
-
-          allData = allData.concat(pageData);
-
-          // 次のページがあるかチェック
-          if (pageData.length < PAGE_SIZE) {
-            console.log(`[MasterCache] ${collection}: 最終ページ到達（全${allData.length}件）`);
-            break;
-          }
-
-          // 次のページ用に最後のドキュメントスナップショットを保存
-          lastDocSnapshot = newLastDocSnapshot;
-          pageNum++;
-
-          // 連続リクエストの間隔を空ける（Firestore負荷軽減）
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        console.log(`[MasterCache] ${collection}: Firestoreから全${allData.length}件取得完了`);
-        return allData;
+        console.log(`[MasterCache] ${collection}: Firestoreから${data.length}件取得完了`);
+        return data;
 
       } catch (error) {
         attempt++;
@@ -312,8 +270,8 @@ class MasterCacheManager {
           throw error;
         }
 
-        // Exponential backoff（500ms → 1000ms → 2000ms → 4000ms）
-        const delay = 500 * Math.pow(2, attempt);
+        // Exponential backoff（1秒 → 2秒 → 4秒）
+        const delay = 1000 * Math.pow(2, attempt);
         console.log(`[MasterCache] ${collection}: ${delay}ms待機後に再試行...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
