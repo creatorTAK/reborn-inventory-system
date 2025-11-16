@@ -665,32 +665,8 @@
     </div>
   </div>
 
-  <!-- マスタカテゴリ選択（第1階層：商品関連/業務関連） -->
-  <div class="master-category-selector" style="max-width: 800px; margin: 16px auto; padding: 0 16px;">
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-      <button
-        id="product-category-btn"
-        onclick="selectMasterCategory('product')"
-        style="padding: 16px; border-radius: 12px; border: 2px solid #40B4E5; background: white; color: #1f2937; font-weight: 600; font-size: 16px; cursor: pointer; transition: all 0.2s;"
-        onmouseover="this.style.background='#f0f9ff'"
-        onmouseout="this.style.background='white'">
-        <i class="bi bi-box" style="margin-right: 8px; color: #40B4E5;"></i>
-        商品関連マスタ管理
-      </button>
-      <button
-        id="business-category-btn"
-        onclick="selectMasterCategory('business')"
-        style="padding: 16px; border-radius: 12px; border: 2px solid #e5e7eb; background: white; color: #1f2937; font-weight: 600; font-size: 16px; cursor: pointer; transition: all 0.2s;"
-        onmouseover="this.style.background='#f0f9ff'"
-        onmouseout="this.style.background='white'">
-        <i class="bi bi-building" style="margin-right: 8px; color: #40B4E5;"></i>
-        業務関連マスタ管理
-      </button>
-    </div>
-  </div>
-
-  <!-- マスタタブナビゲーション（第2階層） -->
-  <div class="master-tabs-container" style="max-width: 800px; margin: 0 auto 16px; padding: 0 16px;">
+  <!-- マスタタブナビゲーション -->
+  <div class="master-tabs-container" style="max-width: 800px; margin: 16px auto; padding: 0 16px;">
     <!-- 商品関連マスタタブ -->
     <div id="product-master-tabs" style="display: none;">
       <ul class="nav nav-tabs" id="productMasterTabs" role="tablist">
@@ -882,10 +858,30 @@
         console.log('🚀 [Master Management] 初期化開始...');
         window.initMasterManager();
 
-        // デフォルトで商品関連マスタを表示
+        // URLパラメータから category を取得
+        const urlParams = new URLSearchParams(window.location.search);
+        const category = urlParams.get('category') || 'product'; // デフォルトは product
+        console.log('[Master Management] URLパラメータ category:', category);
+
+        // カテゴリに応じてタブを表示/非表示
         setTimeout(() => {
-          if (typeof selectMasterCategory === 'function') {
-            selectMasterCategory('product');
+          const productTabs = document.getElementById('product-master-tabs');
+          const businessTabs = document.getElementById('business-master-tabs');
+
+          if (category === 'product') {
+            productTabs.style.display = 'block';
+            businessTabs.style.display = 'none';
+            // 商品関連マスタの最初のタブ（ブランド）をロード
+            if (typeof window.loadMaster === 'function') {
+              window.loadMaster('product', 'brand');
+            }
+          } else if (category === 'business') {
+            productTabs.style.display = 'none';
+            businessTabs.style.display = 'block';
+            // 業務関連マスタの最初のタブ（発送方法）をロード
+            if (typeof window.loadMaster === 'function') {
+              window.loadMaster('business', 'shipping');
+            }
           }
         }, 100);
       } else {
@@ -899,64 +895,9 @@
 
   <!-- 戻るボタン処理 -->
   <script>
-    async function goBack() {
-      // Firestore経由でトップメニュー画面に戻る
-      try {
-        const sessionId = sessionStorage.getItem('device_session_id');
-        await db.collection('navigation').doc('menuControl').set({
-          action: 'navigate',
-          page: 'home',
-          sessionId: sessionId,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-          from: 'master-management'
-        });
-        console.log('[master-management] ✅ Firestore書き込み成功 - トップメニューに戻る');
-      } catch (error) {
-        console.error('[master-management] ❌ Firestoreエラー:', error);
-        // フォールバック: トップメニューに直接遷移
-        window.location.href = '/';
-      }
-    }
-
-    // マスタカテゴリ選択処理
-    function selectMasterCategory(category) {
-      console.log('[Master Management] マスタカテゴリ選択:', category);
-
-      // ボタンのスタイルを更新
-      const productBtn = document.getElementById('product-category-btn');
-      const businessBtn = document.getElementById('business-category-btn');
-
-      if (category === 'product') {
-        productBtn.style.borderColor = '#40B4E5';
-        productBtn.style.background = '#f0f9ff';
-        businessBtn.style.borderColor = '#e5e7eb';
-        businessBtn.style.background = 'white';
-      } else {
-        businessBtn.style.borderColor = '#40B4E5';
-        businessBtn.style.background = '#f0f9ff';
-        productBtn.style.borderColor = '#e5e7eb';
-        productBtn.style.background = 'white';
-      }
-
-      // タブの表示/非表示を切り替え
-      const productTabs = document.getElementById('product-master-tabs');
-      const businessTabs = document.getElementById('business-master-tabs');
-
-      if (category === 'product') {
-        productTabs.style.display = 'block';
-        businessTabs.style.display = 'none';
-        // 商品関連マスタの最初のタブ（ブランド）をロード
-        if (typeof window.loadMaster === 'function') {
-          window.loadMaster('product', 'brand');
-        }
-      } else {
-        productTabs.style.display = 'none';
-        businessTabs.style.display = 'block';
-        // 業務関連マスタの最初のタブ（発送方法）をロード
-        if (typeof window.loadMaster === 'function') {
-          window.loadMaster('business', 'shipping');
-        }
-      }
+    function goBack() {
+      // シンプルにindex.htmlに戻る
+      window.location.href = '/';
     }
   </script>
 
