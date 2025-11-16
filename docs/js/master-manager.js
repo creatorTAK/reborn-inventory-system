@@ -196,9 +196,8 @@ window.initMasterManager = function() {
       console.log('✅ [Master Manager] 業務関連アコーディオン削除（商品関連モード）');
     }
 
-    // 初期読み込みをスキップ（バックグラウンドプリロード完了待ち）
-    // ユーザーがタブをクリックした時に初めて表示
-    console.log('⏭️ [Master Manager] 初期データ読み込みスキップ - タブクリック時に表示');
+    // 初回はカテゴリを表示（シンプル設計: 開いた時にキャッシュ）
+    loadMaster('product', 'category');
   }
 
   // イベントリスナー設定
