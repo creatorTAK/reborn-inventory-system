@@ -196,7 +196,7 @@ window.initMasterManager = function() {
       console.log('✅ [Master Manager] 業務関連アコーディオン削除（商品関連モード）');
     }
 
-    // 初回はブランドを表示（シンプル設計: 開いた時にキャッシュ）
+    // 初回はブランドを表示（検索専用モード）
     loadMaster('product', 'brand');
   }
 
@@ -290,14 +290,12 @@ async function loadMaster(category, type) {
 
   if (initialDisplay === 0) {
     // 初期表示なし（検索後のみデータ表示）
-    console.log('ℹ️ [Master Manager] 初期表示なし（検索後のみデータ表示）');
+    // キャッシュ読み込みもスキップ（検索時のみFirestoreクエリ実行）
+    console.log('ℹ️ [Master Manager] 検索専用モード（初期ロードなし、検索時のみFirestoreクエリ）');
 
-    // キャッシュに先行読み込み（await で完了を待つ）
-    await loadMasterDataToCache();
-
-    // キャッシュからデータを取得（空で表示はしないがデータは保持）
-    allMasterData = masterCache[currentMasterConfig.collection] || [];
-    filteredMasterData = [];  // 初期表示なしなので空
+    // 空の状態で初期化
+    allMasterData = [];
+    filteredMasterData = [];
     renderMasterList();
     updateStats();
   } else {
