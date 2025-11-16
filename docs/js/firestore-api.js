@@ -1248,12 +1248,29 @@ async function searchMaster(collection, searchQuery, searchFields, limit = 100) 
     // (Firestoreは部分一致検索が不得意なため)
     const allData = await getMasterData(collection);
 
+    // カタカナ→ひらがな変換関数
+    const katakanaToHiragana = (str) => {
+      return str.replace(/[\u30a1-\u30f6]/g, (match) => {
+        const chr = match.charCodeAt(0) - 0x60;
+        return String.fromCharCode(chr);
+      });
+    };
+
+    // 検索クエリをひらがなに変換
     const query = searchQuery.toLowerCase();
+    const hiraganaQuery = katakanaToHiragana(query);
+
     const results = allData.filter(item => {
       return searchFields.some(field => {
         const fieldValue = item[field];
         if (!fieldValue) return false;
-        return fieldValue.toString().toLowerCase().includes(query);
+
+        // フィールド値もひらがなに変換して比較
+        const hiraganaFieldValue = katakanaToHiragana(fieldValue.toString().toLowerCase());
+
+        // ひらがな検索とオリジナル検索の両方に対応
+        return hiraganaFieldValue.includes(hiraganaQuery) ||
+               fieldValue.toString().toLowerCase().includes(query);
       });
     });
 

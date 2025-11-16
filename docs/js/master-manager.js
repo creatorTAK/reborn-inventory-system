@@ -647,13 +647,22 @@ function updateStats() {
   const statsText = document.getElementById('statsText');
   const collection = currentMasterConfig?.collection;
   const totalItems = masterCache[collection] ? masterCache[collection].length : 0;
+  const initialDisplay = currentMasterConfig?.initialDisplay;
 
   if (statsText) {
     const resultCount = filteredMasterData.length;
+
+    // 検索結果がある場合は件数のみ表示（「全〇件」は不要）
     if (resultCount > 0) {
-      statsText.textContent = `検索結果: ${resultCount.toLocaleString()}件 | 全${totalItems.toLocaleString()}件`;
+      statsText.textContent = `検索結果: ${resultCount.toLocaleString()}件`;
     } else {
-      statsText.textContent = `全${totalItems.toLocaleString()}件`;
+      // 検索専用モード（initialDisplay: 0）の場合
+      if (initialDisplay === 0) {
+        statsText.textContent = '検索して絞り込んでください';
+      } else {
+        // 通常モード
+        statsText.textContent = `全${totalItems.toLocaleString()}件`;
+      }
     }
   }
 }
