@@ -895,14 +895,27 @@
 
   <!-- 戻るボタン処理 -->
   <script>
-    function goBack() {
+    async function goBack() {
       // iframe内で開かれているか判定
       const isInIframe = window.self !== window.top;
 
       if (isInIframe) {
-        // iframe内から親ページのトップメニューに戻る（postMessage送信）
-        console.log('[master-management] iframe内で開かれているため、親ページにpostMessage送信');
-        window.parent.postMessage({ type: 'navigateToHome' }, '*');
+        // iframe内から親ページのトップメニューに戻る（Firestore経由）
+        console.log('[master-management] iframe内で開かれているため、Firestore経由で戻る');
+        try {
+          const sessionId = sessionStorage.getItem('device_session_id');
+          await db.collection('navigation').doc('menuControl').set({
+            action: 'navigate',
+            page: 'home',
+            sessionId: sessionId,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            from: 'master-management'
+          });
+          console.log('[master-management] ✅ Firestore書き込み成功 - トップメニューに戻る');
+        } catch (error) {
+          console.error('[master-management] ❌ Firestoreエラー:', error);
+          alert('戻る処理でエラーが発生しました: ' + error.message);
+        }
       } else {
         // 直接開かれている場合はブラウザの履歴で戻る
         console.log('[master-management] 直接開かれているため、history.back()で戻る');
