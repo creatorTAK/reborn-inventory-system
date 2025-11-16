@@ -1038,21 +1038,38 @@ async function getMasterData(collection, options = {}) {
       getDocs,
       query,
       orderBy,
-      limit: firestoreLimit
+      limit: firestoreLimit,
+      startAfter
     } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
     // クエリ構築
     let q = firestoreCollection(db, collection);
+    const queryConstraints = [];
 
-    // ソート
-    if (options.sortBy) {
+    // ページネーション用のソート（idでソート）
+    if (options.limit || options.startAfter) {
+      queryConstraints.push(orderBy('id', 'asc'));
+    }
+
+    // カスタムソート（ページネーション時は上書きされる）
+    if (options.sortBy && !options.limit && !options.startAfter) {
       const sortOrder = options.sortOrder || 'asc';
-      q = query(q, orderBy(options.sortBy, sortOrder));
+      queryConstraints.push(orderBy(options.sortBy, sortOrder));
     }
 
     // 件数制限
     if (options.limit) {
-      q = query(q, firestoreLimit(options.limit));
+      queryConstraints.push(firestoreLimit(options.limit));
+    }
+
+    // ページネーション開始位置
+    if (options.startAfter) {
+      queryConstraints.push(startAfter(options.startAfter.id));
+    }
+
+    // クエリ適用
+    if (queryConstraints.length > 0) {
+      q = query(q, ...queryConstraints);
     }
 
     const snapshot = await getDocs(q);
