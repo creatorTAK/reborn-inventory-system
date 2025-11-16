@@ -656,9 +656,9 @@ function updateStats() {
     if (resultCount > 0) {
       statsText.textContent = `検索結果: ${resultCount.toLocaleString()}件`;
     } else {
-      // 検索専用モード（initialDisplay: 0）の場合
+      // 検索専用モード（initialDisplay: 0）の場合は空欄
       if (initialDisplay === 0) {
-        statsText.textContent = '検索して絞り込んでください';
+        statsText.textContent = '';
       } else {
         // 通常モード
         statsText.textContent = `全${totalItems.toLocaleString()}件`;
