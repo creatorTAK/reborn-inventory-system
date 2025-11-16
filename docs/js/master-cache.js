@@ -452,11 +452,8 @@ window.startMasterCachePreload = async function() {
     console.log('[MasterCache] - brands: preloadInBackground() 呼び出し準備');
     console.log('[MasterCache] - categories: preloadInBackground() 呼び出し準備');
 
-    // 一時的にブランドを無効化（デバッグ用）
-    console.log('[MasterCache] ⚠️ デバッグモード: ブランドプリロード無効、カテゴリのみ');
-
     const [brandsResult, categoriesResult] = await Promise.all([
-      Promise.resolve({ cached: true, count: 0, debug: 'disabled' }), // ブランドを無効化
+      window.masterCacheManager.preloadInBackground('brands'),
       window.masterCacheManager.preloadInBackground('categories')
     ]);
 

@@ -991,11 +991,8 @@
   <!-- Firestore API Wrapper (ARCH-001 Phase 1.5) -->
   <script type="module" src="/js/firestore-api.js"></script>
 
-  <!-- Master Config (マスタ定義設定) -->
-  <script src="/js/master-config.js"></script>
-
   <!-- Master Cache System (MASTER-002: バックグラウンドプリロード) -->
-  <script src="/js/master-cache.js"></script>
+  <!-- master-config.js と master-cache.js は動的ロードに移行（Service Worker対策） -->
 
   <script>
     // GAS API URL
@@ -1020,9 +1017,18 @@
     document.addEventListener('DOMContentLoaded', async () => {
       console.log('⚡ DOMContentLoaded - 初期化開始');
 
-      // Service Worker登録
+      // Service Worker登録（キャッシュクリア処理付き）
       if ('serviceWorker' in navigator) {
         try {
+          // 古いキャッシュをクリア（MASTER-002対応）
+          const cacheNames = await caches.keys();
+          console.log('[Service Worker] キャッシュクリア開始:', cacheNames);
+          for (const cacheName of cacheNames) {
+            await caches.delete(cacheName);
+            console.log('[Service Worker] キャッシュ削除:', cacheName);
+          }
+          console.log('[Service Worker] ✅ 全キャッシュクリア完了');
+
           const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
           swRegistration = registration;
           console.log('✅ Service Worker 登録成功:', registration.scope);
@@ -1109,19 +1115,61 @@
       }
 
       // マスタキャッシュのバックグラウンドプリロード開始
-      // 動的import + window.firestoreReadyで確実にロード完了を待機
+      // Firebase初期化完了後に動的ロードで確実に実行
       console.log('========================================');
-      console.log('[index.html] マスタキャッシュプリロードチェック開始');
-      console.log('[index.html] window.startMasterCachePreload 存在:', !!window.startMasterCachePreload);
-      console.log('[index.html] window.masterCacheManager 存在:', !!window.masterCacheManager);
-      console.log('========================================');
+      console.log('[index.html] マスタキャッシュプリロード初期化開始');
 
-      if (window.startMasterCachePreload) {
-        console.log('[index.html] ✅ startMasterCachePreload関数が見つかりました - 実行します');
-        window.startMasterCachePreload(); // 非同期実行（待たない）
-      } else {
-        console.warn('[index.html] ❌ startMasterCachePreload関数が見つかりません');
-      }
+      (async () => {
+        try {
+          // Step 1: Firebase初期化完了を待機
+          if (window.firestoreReady) {
+            console.log('[index.html] Firebase初期化完了を待機中...');
+            await window.firestoreReady;
+            console.log('[index.html] ✅ Firebase初期化完了');
+          }
+
+          // Step 2: master-config.js を動的ロード（まだロードされていない場合）
+          if (!window.masterCategories) {
+            console.log('[index.html] master-config.js を動的ロード中...');
+            const configScript = document.createElement('script');
+            configScript.src = '/js/master-config.js';
+            await new Promise((resolve, reject) => {
+              configScript.onload = resolve;
+              configScript.onerror = reject;
+              document.head.appendChild(configScript);
+            });
+            console.log('[index.html] ✅ master-config.js ロード完了');
+          }
+
+          // Step 3: master-cache.js を動的ロード
+          if (!window.startMasterCachePreload) {
+            console.log('[index.html] master-cache.js を動的ロード中...');
+            const cacheScript = document.createElement('script');
+            cacheScript.src = '/js/master-cache.js';
+            await new Promise((resolve, reject) => {
+              cacheScript.onload = resolve;
+              cacheScript.onerror = reject;
+              document.head.appendChild(cacheScript);
+            });
+            console.log('[index.html] ✅ master-cache.js ロード完了');
+
+            // ロード後、自動実行を待つ（master-cache.js内で1秒後に実行される）
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          }
+
+          // Step 4: プリロード実行確認
+          if (window.startMasterCachePreload) {
+            console.log('[index.html] ✅ バックグラウンドプリロード開始準備完了');
+            console.log('[index.html] window.masterCacheManager 存在:', !!window.masterCacheManager);
+          } else {
+            console.error('[index.html] ❌ master-cache.js ロード後も関数が見つかりません');
+          }
+        } catch (error) {
+          console.error('[index.html] ❌ マスタキャッシュ初期化エラー:', error);
+        }
+      })();
+
+      console.log('========================================');
     });
 
     // Firestoreナビゲーション監視（チャット戻るボタン用）
