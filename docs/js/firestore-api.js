@@ -1039,20 +1039,21 @@ async function getMasterData(collection, options = {}) {
       query,
       orderBy,
       limit: firestoreLimit,
-      startAfter
+      startAfter,
+      documentId
     } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
     // クエリ構築
     let q = firestoreCollection(db, collection);
     const queryConstraints = [];
 
-    // ページネーション用のソート（idでソート）
-    if (options.limit || options.startAfter) {
-      queryConstraints.push(orderBy('id', 'asc'));
+    // ページネーション用のソート（ドキュメントIDでソート）
+    if (options.limit || options.startAfterDoc) {
+      queryConstraints.push(orderBy(documentId()));
     }
 
-    // カスタムソート（ページネーション時は上書きされる）
-    if (options.sortBy && !options.limit && !options.startAfter) {
+    // カスタムソート（ページネーション時は使用しない）
+    if (options.sortBy && !options.limit && !options.startAfterDoc) {
       const sortOrder = options.sortOrder || 'asc';
       queryConstraints.push(orderBy(options.sortBy, sortOrder));
     }
@@ -1062,9 +1063,9 @@ async function getMasterData(collection, options = {}) {
       queryConstraints.push(firestoreLimit(options.limit));
     }
 
-    // ページネーション開始位置
-    if (options.startAfter) {
-      queryConstraints.push(startAfter(options.startAfter.id));
+    // ページネーション開始位置（ドキュメントスナップショット）
+    if (options.startAfterDoc) {
+      queryConstraints.push(startAfter(options.startAfterDoc));
     }
 
     // クエリ適用
@@ -1074,16 +1075,25 @@ async function getMasterData(collection, options = {}) {
 
     const snapshot = await getDocs(q);
     const data = [];
+    let lastDocSnapshot = null;
 
     snapshot.forEach((doc) => {
       data.push({
         id: doc.id,
         ...doc.data()
       });
+      lastDocSnapshot = doc; // 最後のドキュメントスナップショットを保存
     });
 
     console.log(`✅ [Master API] ${collection}取得完了: ${data.length}件`);
-    return data;
+
+    // ページネーション使用時は { data, lastDocSnapshot } を返す
+    // 通常呼び出しは配列をそのまま返す（互換性）
+    if (options.limit || options.startAfterDoc) {
+      return { data, lastDocSnapshot };
+    } else {
+      return data;
+    }
 
   } catch (error) {
     console.error(`❌ [Master API] ${collection}取得エラー:`, error);

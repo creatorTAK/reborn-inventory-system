@@ -248,7 +248,7 @@ class MasterCacheManager {
 
         // ページネーション: 1000件ずつ取得
         let allData = [];
-        let lastDoc = null;
+        let lastDocSnapshot = null;
         let pageNum = 1;
         const PAGE_SIZE = 1000;
 
@@ -257,8 +257,8 @@ class MasterCacheManager {
 
           // タイムアウト付き（各ページ30秒）
           const options = { limit: PAGE_SIZE };
-          if (lastDoc) {
-            options.startAfter = lastDoc;
+          if (lastDocSnapshot) {
+            options.startAfterDoc = lastDocSnapshot;
           }
 
           const pagePromise = getMasterData(collection, options);
@@ -266,7 +266,11 @@ class MasterCacheManager {
             setTimeout(() => reject(new Error(`ページ${pageNum}取得タイムアウト (30秒)`)), 30000);
           });
 
-          const pageData = await Promise.race([pagePromise, timeoutPromise]);
+          const result = await Promise.race([pagePromise, timeoutPromise]);
+
+          // getMasterDataは { data, lastDocSnapshot } を返す
+          const pageData = result.data || result; // 互換性のため
+          const newLastDocSnapshot = result.lastDocSnapshot;
 
           if (!pageData || pageData.length === 0) {
             console.log(`[MasterCache] ${collection}: ページ ${pageNum} - データなし（取得完了）`);
@@ -283,8 +287,8 @@ class MasterCacheManager {
             break;
           }
 
-          // 次のページ用に最後のドキュメントを保存
-          lastDoc = pageData[pageData.length - 1];
+          // 次のページ用に最後のドキュメントスナップショットを保存
+          lastDocSnapshot = newLastDocSnapshot;
           pageNum++;
 
           // 連続リクエストの間隔を空ける（Firestore負荷軽減）
