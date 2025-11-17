@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v37';  // MASTER-002 ブランドバックグラウンドプリロード実装
+const CACHE_VERSION = 'v38';  // UI-017 統一ヘッダーCSS追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -26,7 +26,7 @@ const PRECACHE_RESOURCES = [
 // Firebase Messaging SDKは使用しない（2重通知を防ぐため）
 // pushイベントを手動でハンドリングする
 
-console.log('[SW v34] Service Worker initialized - manual push handling only');
+console.log('[SW v38] Service Worker initialized - manual push handling only');
 
 // ================================================================================
 // キャッシュクリーンアップ（軽量化）
