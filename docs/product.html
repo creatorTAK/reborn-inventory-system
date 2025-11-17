@@ -69,15 +69,815 @@ function navigateInPWA(url) {
 
 <!-- コンテンツエリア -->
 <div class="content-container">
-<?!= include('sp_block_manage'); ?>
-<?!= include('sp_block_basic'); ?>
-<?!= include('sp_block_title'); ?>
-<?!= include('sp_block_description'); ?> <!-- ★ 新規「商品の説明」（商品名の下） -->
-<?!= include('sp_block_product_images'); ?> <!-- 商品画像（条件付き表示） -->
-<?!= include('sp_block_shipping'); ?> <!-- 配送について -->
-<?!= include('sp_block_procure'); ?> <!-- 仕入情報 -->
-<?!= include('sp_block_listing'); ?> <!-- 出品情報 -->
-<div class="actions">
+<div class="group management-section">
+  <div class="group-title"><span class="group-emoji">🏷️</span> 管理番号</div>
+
+  <div class="form-section">
+    <!-- 動的に生成されるセグメント入力フィールド -->
+    <div id="managementNumberFields" style="display: none;"></div>
+
+    <!-- 使用可能な管理番号 -->
+    <div id="managementNumberPreview" style="margin-top: 8px; display: none;">
+      <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">使用可能な管理番号</label>
+      <div style="display: flex; gap: 4px; align-items: stretch;">
+        <input id="管理番号" type="text" readonly placeholder="自動採番されます" class="mgmt-number-field" style="flex: 1; background: #f3f4f6; color: #1f2937; font-weight: 600; text-align: left; border: 1px solid #d1d5db; padding: 6px 8px;">
+        <button type="button" onclick="adjustManagementNumber(1)" class="mgmt-adjust-btn" style="width: 32px; padding: 0; border: 1px solid #d1d5db; background: white; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">▲</button>
+        <button type="button" onclick="adjustManagementNumber(-1)" class="mgmt-adjust-btn" style="width: 32px; padding: 0; border: 1px solid #d1d5db; background: white; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; border-radius: 4px;">▼</button>
+      </div>
+    </div>
+
+    <!-- 担当者 -->
+    <div style="margin-top: 12px;">
+      <label>担当者</label>
+      <input type="text" id="担当者" readonly style="background-color: #f3f4f6; cursor: not-allowed;">
+    </div>
+  </div>
+</div>
+<div class="group basic-section">
+  <div class="group-title"><span class="group-emoji">📋</span> 基本情報</div>
+
+  <div class="form-section">
+    <div class="section-title">カテゴリー</div>
+    <div style="margin-top: 4px;">
+      <label>大分類</label>
+      <select id="大分類(カテゴリ)">
+        <option value="">--選択してください--</option>
+      </select>
+    </div>
+
+    <div style="margin-top: 8px;">
+      <label>中分類</label>
+      <select id="中分類(カテゴリ)" disabled>
+        <option value="">--選択してください--</option>
+      </select>
+    </div>
+
+    <div style="margin-top: 8px;">
+      <label>小分類</label>
+      <select id="小分類(カテゴリ)" disabled>
+        <option value="">--選択してください--</option>
+      </select>
+    </div>
+
+    <div id="saibunruiRow" style="display: none; margin-top: 8px;">
+      <label>細分類1</label>
+      <select id="細分類(カテゴリ)" disabled>
+        <option value="">--選択してください--</option>
+      </select>
+    </div>
+
+    <div style="display: none; margin-top: 8px;" id="saibunrui2Container">
+      <label>細分類2</label>
+      <select id="細分類2" disabled>
+        <option value="">--選択してください--</option>
+      </select>
+    </div>
+
+    <div style="margin-top: 8px;">
+      <label>アイテム名</label>
+      <select id="アイテム名" class="full" disabled>
+        <option value="">--選択してください--</option>
+      </select>
+    </div>
+
+    <div style="margin-top: 8px;">
+      <label>サイズ</label>
+      <select id="サイズ">
+        <option value="">--選択してください--</option>
+      </select>
+    </div>
+
+    <div style="margin-top: 8px;">
+      <label>商品の状態</label>
+      <select id="商品の状態">
+        <option value="">--選択してください--</option>
+      </select>
+    </div>
+
+    <div class="brand-field" style="margin-top: 8px; position: relative;">
+      <label>ブランド</label>
+      <input id="ブランド(英語)" autocomplete="off" placeholder="入力すると候補が表示されます">
+      <div class="suggest" id="suggest-ブランド(英語)" hidden></div>
+      <!-- ブランド(カナ)を隠しフィールドとして保持 -->
+      <input type="hidden" id="ブランド(カナ)">
+    </div>
+  </div>
+</div><div class="group title-section">
+    <div class="group-title">
+      <span><span class="group-emoji">✏️</span> 商品名</span>
+    </div>
+
+    <!-- 商品名プレビュー（ブロック外） -->
+    <div style="margin-bottom: 12px;">
+      <label style="display: flex; justify-content: space-between; align-items: center;">
+        <span>商品名プレビュー</span>
+        <span class="counter" id="nameCounter">
+          <span id="nameCount">0</span>/<span id="nameMax">40</span> 文字
+        </span>
+      </label>
+      <textarea id="商品名プレビュー" rows="2"
+                placeholder="選択した値をスペース区切りで自動表示されます"
+                style="margin-top: 4px;"></textarea>
+      <input id="商品名(タイトル)" type="hidden">
+    </div>
+
+    <!-- ボタン -->
+    <div style="margin-bottom: 16px;">
+      <button type="button" onclick="copyToClipboard('商品名プレビュー', 'copyNameBtn')" id="copyNameBtn" style="width: 100%;">
+        <span class="button-emoji">📋</span> 商品名をコピー
+      </button>
+    </div>
+
+    <!-- 並び替え可能なブロックコンテナ -->
+    <div id="titleBlockContainer">
+
+    <!-- セールスワードセクション -->
+    <div class="form-section title-draggable-block" data-block-id="salesword" draggable="true">
+      <h3 class="section-title" style="display: flex; align-items: center; gap: 8px;">
+        <span class="drag-handle" style="cursor: move; font-size: 16px; color: #9ca3af;">⋮⋮</span>
+        <span class="section-icon">🏷️</span>セールスワード
+        <button type="button" class="collapse-btn" onclick="toggleTitleBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+      </h3>
+      <div class="section-content">
+        <div class="row">
+          <div>
+            <label>カテゴリ</label>
+            <select id="セールスワード(カテゴリ)" class="full">
+              <option value="">--選択してください--</option>
+            </select>
+          </div>
+          <div>
+            <label>キーワード</label>
+            <select id="セールスワード" class="full">
+              <option value="">--選択してください--</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ブランド情報セクション -->
+    <div class="form-section title-draggable-block" data-block-id="brand" draggable="true">
+      <h3 class="section-title" style="display: flex; align-items: center; gap: 8px;">
+        <span class="drag-handle" style="cursor: move; font-size: 16px; color: #9ca3af;">⋮⋮</span>
+        <span class="section-icon">🏢</span>ブランド情報
+        <button type="button" class="collapse-btn" onclick="toggleTitleBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+      </h3>
+      <div class="section-content">
+        <div class="row">
+          <div class="brand-field" style="position: relative;">
+            <label>ブランド(英語)</label>
+            <div style="display: flex; align-items: center; gap: 4px; width: 100%;">
+              <input type="checkbox" id="商品名_ブランド(英語)_チェック" checked onchange="updateNamePreview()" style="width: 20px; flex-shrink: 0;">
+              <input id="商品名_ブランド(英語)" autocomplete="off" placeholder="入力すると候補が表示されます" style="flex: 1; min-width: 0;">
+            </div>
+            <div class="suggest" id="suggest-商品名_ブランド(英語)" hidden></div>
+          </div>
+          <div class="brand-field" style="position: relative;">
+            <label>ブランド(カナ)</label>
+            <div style="display: flex; align-items: center; gap: 4px; width: 100%;">
+              <input type="checkbox" id="商品名_ブランド(カナ)_チェック" checked onchange="updateNamePreview()" style="width: 20px; flex-shrink: 0;">
+              <input id="商品名_ブランド(カナ)" autocomplete="off" placeholder="入力すると候補が表示されます" style="flex: 1; min-width: 0;">
+            </div>
+            <div class="suggest" id="suggest-商品名_ブランド(カナ)" hidden></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アイテム名セクション -->
+    <div class="form-section title-draggable-block" data-block-id="item" draggable="true">
+      <h3 class="section-title" style="display: flex; align-items: center; gap: 8px;">
+        <span class="drag-handle" style="cursor: move; font-size: 16px; color: #9ca3af;">⋮⋮</span>
+        <span class="section-icon">📦</span>アイテム名
+        <button type="button" class="collapse-btn" onclick="toggleTitleBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+      </h3>
+      <div class="section-content">
+        <input id="商品名_アイテム名" type="text" placeholder="基本情報のアイテム名を選択するか、ここに直接入力" onchange="updateNamePreview()" oninput="updateNamePreview()" style="width: 100%;">
+      </div>
+    </div>
+
+    <!-- 商品属性セクション -->
+    <div class="form-section title-draggable-block" data-block-id="attribute" draggable="true">
+      <h3 class="section-title" style="display: flex; align-items: center; gap: 8px;">
+        <span class="drag-handle" style="cursor: move; font-size: 16px; color: #9ca3af;">⋮⋮</span>
+        <span class="section-icon">🎨</span>商品属性
+        <button type="button" class="collapse-btn" onclick="toggleTitleBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+      </h3>
+      <div class="section-content">
+        <div id="attributeList">
+          <!-- 初期表示は1セット -->
+          <div class="attribute-item" data-index="1">
+            <div class="attribute-header">
+              <span>属性 1</span>
+              <button type="button" class="remove-attribute-btn" onclick="removeProductAttribute(1)" style="display:none;">削除</button>
+            </div>
+
+            <div class="row" style="margin-top: 6px;">
+              <div>
+                <label>カテゴリ</label>
+                <select id="商品属性1_カテゴリ">
+                  <option value="">--選択してください--</option>
+                </select>
+              </div>
+              <div>
+                <label>値</label>
+                <select id="商品属性1_値" disabled>
+                  <option value="">--カテゴリを選択してください--</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button type="button" id="addAttributeBtn" class="add-attribute-btn">+ 商品属性を追加</button>
+      </div>
+    </div>
+
+    </div><!-- titleBlockContainer -->
+
+  </div><div class="group description-section">
+  <div class="group-title">
+    <span><span class="group-emoji">📝</span> 商品の説明</span>
+  </div>
+
+  <!-- 商品の説明欄（プレビュー） -->
+  <div style="margin-bottom: 12px;">
+    <label style="display: flex; justify-content: space-between; align-items: center;">
+      <span>商品の説明</span>
+      <span class="counter" id="descCounter">
+        <span id="descCount">0</span>/<span id="descMax">1000</span> 文字
+      </span>
+    </label>
+    <textarea
+      id="商品の説明"
+      placeholder="商品の状態・素材・サイズ感・ディテール・注意点などを記入してください"
+      style="margin-top: 4px; min-height: 120px; resize: none;"
+    ></textarea>
+  </div>
+
+  <!-- コピーボタン -->
+  <div style="margin-bottom: 16px;">
+    <button type="button" onclick="copyToClipboard('商品の説明', 'copyDescBtn')" id="copyDescBtn" style="width: 100%;">
+      <span class="button-emoji">📋</span> 商品の説明をコピー
+    </button>
+  </div>
+
+  <!-- ドラッグ可能なブロックコンテナ -->
+  <div id="descriptionBlocksContainer">
+
+  <!-- ブランド名セクション（条件付き表示） -->
+  <div id="brandNameSection" class="form-section desc-draggable-block" data-block-type="brandName" style="margin-bottom: 12px; display: none;">
+    <h3 class="section-title" style="display: flex; align-items: center;">
+      <span class="drag-handle" style="cursor: move; margin-right: 8px; color: #9ca3af; font-size: 14px;">⋮⋮</span>
+      <span class="section-icon">🏷️</span>ブランド名
+      <button type="button" class="collapse-btn" onclick="toggleDescBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+    </h3>
+    <div class="section-content">
+      <div style="font-size: 11px; color: #6b7280; padding: 8px; background: #f9fafb; border-radius: 4px;">
+        💡 基本情報で選択したブランド名が自動的にプレビューに表示されます。<br>
+        このブロックの位置を変更することで、プレビュー内の表示位置を調整できます。
+      </div>
+    </div>
+  </div>
+
+  <!-- サイズ情報セクション -->
+  <div id="sizeSection" class="form-section desc-draggable-block" data-block-type="size" style="margin-bottom: 12px; display: none;">
+    <h3 class="section-title" style="display: flex; align-items: center;">
+      <span class="drag-handle" style="cursor: move; margin-right: 8px; color: #9ca3af; font-size: 14px;">⋮⋮</span>
+      <span class="section-icon" id="sizeIconDisplay">👕</span><span id="sizeLabelDisplay">サイズ</span>
+      <button type="button" class="collapse-btn" onclick="toggleDescBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+    </h3>
+    <div class="section-content">
+      <!-- トップス/アウター用サイズ -->
+      <div id="topsSize" style="display: none;">
+        <!-- サイズ(表記) -->
+        <div style="margin-bottom: 12px;">
+          <label style="font-weight: 600; color: #374151; margin-bottom: 4px; display: block;">サイズ(表記)</label>
+          <select id="サイズ(表記)_トップス" style="width: 100%;">
+            <option value="">--</option>
+          </select>
+        </div>
+
+        <!-- サイズ(実寸) -->
+        <div style="margin-bottom: 8px;">
+          <label style="font-weight: 600; color: #374151; margin-bottom: 4px; display: block;">サイズ(実寸)</label>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px;">
+          <div>
+            <label class="small" id="shoulderWidthLabel">肩幅</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <select id="肩幅" style="flex: 1;">
+                <option value="">--</option>
+              </select>
+              <span style="font-size: 12px; color: #6b7280;">cm</span>
+            </div>
+          </div>
+          <div>
+            <label class="small">身幅</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <select id="身幅" style="flex: 1;">
+                <option value="">--</option>
+              </select>
+              <span style="font-size: 12px; color: #6b7280;">cm</span>
+            </div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <div>
+            <label class="small">袖丈</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <select id="袖丈" style="flex: 1;">
+                <option value="">--</option>
+              </select>
+              <span style="font-size: 12px; color: #6b7280;">cm</span>
+            </div>
+          </div>
+          <div>
+            <label class="small">着丈</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <select id="着丈" style="flex: 1;">
+                <option value="">--</option>
+              </select>
+              <span style="font-size: 12px; color: #6b7280;">cm</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- パンツ用サイズ -->
+      <div id="bottomsSize" style="display: none;">
+        <!-- サイズ(表記) -->
+        <div style="margin-bottom: 12px;">
+          <label style="font-weight: 600; color: #374151; margin-bottom: 4px; display: block;">サイズ(表記)</label>
+          <select id="サイズ(表記)_ボトムス" style="width: 100%;">
+            <option value="">--</option>
+          </select>
+        </div>
+
+        <!-- サイズ(実寸) -->
+        <div style="margin-bottom: 8px;">
+          <label style="font-weight: 600; color: #374151; margin-bottom: 4px; display: block;">サイズ(実寸)</label>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px;">
+          <div>
+            <label class="small">ウエスト</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <select id="ウエスト" style="flex: 1;">
+                <option value="">--</option>
+              </select>
+              <span style="font-size: 12px; color: #6b7280;">cm</span>
+            </div>
+          </div>
+          <div>
+            <label class="small">ヒップ</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <select id="ヒップ" style="flex: 1;">
+                <option value="">--</option>
+              </select>
+              <span style="font-size: 12px; color: #6b7280;">cm</span>
+            </div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <div>
+            <label class="small">股上</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <select id="股上" style="flex: 1;">
+                <option value="">--</option>
+              </select>
+              <span style="font-size: 12px; color: #6b7280;">cm</span>
+            </div>
+          </div>
+          <div>
+            <label class="small">股下</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <select id="股下" style="flex: 1;">
+                <option value="">--</option>
+              </select>
+              <span style="font-size: 12px; color: #6b7280;">cm</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 靴用サイズ -->
+      <div id="shoesSize" style="display: none;">
+        <!-- サイズ(表記) -->
+        <div style="margin-bottom: 12px;">
+          <label style="font-weight: 600; color: #374151; margin-bottom: 4px; display: block;">サイズ(表記)</label>
+          <select id="サイズ(表記)_靴" style="width: 100%;">
+            <option value="">--</option>
+          </select>
+        </div>
+
+        <!-- その他のサイズ表記 -->
+        <div style="margin-bottom: 12px;">
+          <label style="font-weight: 600; color: #374151; margin-bottom: 4px; display: block;">その他のサイズ表記</label>
+          <input type="text" id="その他のサイズ表記_靴" placeholder="例: US8, EU38" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+        </div>
+
+        <!-- 普段のサイズ -->
+        <div style="margin-bottom: 12px;">
+          <label style="font-weight: 600; color: #374151; margin-bottom: 4px; display: block;">普段のサイズ</label>
+          <input type="text" id="普段のサイズ_靴" placeholder="例: 普段は25.0cmを履いています" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px;">
+        </div>
+
+        <!-- フィット感 -->
+        <div style="margin-bottom: 12px;">
+          <label style="font-weight: 600; color: #374151; margin-bottom: 4px; display: block;">フィット感・注意点</label>
+          <textarea id="フィット感_靴" placeholder="例: 細めの作りです。普段より0.5cm大きめをおすすめします" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; min-height: 60px; resize: vertical;"></textarea>
+        </div>
+
+        <div style="font-size: 11px; color: #6b7280; padding: 8px; background: #f9fafb; border-radius: 4px;">
+          💡 サイズ(表記)は基本情報ブロックで選択したサイズが自動反映されます。<br>
+          💡 その他のサイズ表記、普段のサイズ、フィット感は購入者がサイズ感を把握しやすくするための補足情報です。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- カラー(詳細)セクション -->
+  <div class="form-section desc-draggable-block" data-block-type="color" style="margin-bottom: 12px;">
+    <h3 class="section-title" style="display: flex; align-items: center;">
+      <span class="drag-handle" style="cursor: move; margin-right: 8px; color: #9ca3af; font-size: 14px;">⋮⋮</span>
+      <span class="section-icon">🎨</span>カラー(詳細)
+      <button type="button" class="collapse-btn" onclick="toggleDescBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+    </h3>
+    <div class="section-content">
+      <div id="colorList">
+        <!-- 初期表示は1セット -->
+        <div class="color-item" data-index="1">
+          <div class="color-header">
+            <span>カラー 1</span>
+            <button type="button" class="remove-color-btn" onclick="removeColor(1)" style="display:none;">削除</button>
+          </div>
+
+          <div class="color-fields">
+            <label>色:
+              <select id="カラー1" class="color-select">
+                <option value="">--</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" id="addColorBtn" class="add-color-btn">+ カラーを追加</button>
+    </div>
+  </div>
+
+  <!-- 商品状態(詳細)セクション -->
+  <div class="form-section desc-draggable-block" data-block-type="condition" style="margin-bottom: 12px;">
+    <h3 class="section-title" style="display: flex; align-items: center;">
+      <span class="drag-handle" style="cursor: move; margin-right: 8px; color: #9ca3af; font-size: 14px;">⋮⋮</span>
+      <span class="section-icon">📋</span>商品状態(詳細)
+      <button type="button" class="collapse-btn" onclick="toggleDescBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+    </h3>
+    <div class="section-content">
+      <!-- クイック挿入ボタン群 -->
+      <div id="quickInsertButtonsContainer" class="quick-insert-buttons" style="margin-bottom: 8px;">
+        <!-- ボタンは「商品の状態」に応じて動的に表示 -->
+      </div>
+
+      <!-- オートコンプリート対応のテキストエリア -->
+      <div style="position: relative;">
+        <textarea
+          id="商品状態詳細"
+          rows="3"
+          placeholder="商品の詳細な状態を入力してください（傷、汚れ、使用感など）"
+        ></textarea>
+        <div id="suggest-商品状態詳細" class="suggest" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 素材入力セクション -->
+  <div class="form-section desc-draggable-block" data-block-type="material" style="margin-bottom: 12px;">
+    <h3 class="section-title" style="display: flex; align-items: center;">
+      <span class="drag-handle" style="cursor: move; margin-right: 8px; color: #9ca3af; font-size: 14px;">⋮⋮</span>
+      <span class="section-icon">🧵</span>素材
+      <button type="button" class="collapse-btn" onclick="toggleDescBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+    </h3>
+    <div class="section-content">
+      <div id="materialList">
+        <!-- 初期表示は1セット -->
+        <div class="material-item" data-index="1">
+          <div class="material-header">
+            <span>素材 1</span>
+            <button type="button" class="remove-material-btn" onclick="removeMaterial(1)"
+style="display:none;">削除</button>
+          </div>
+
+          <div class="material-fields">
+            <label>箇所:
+              <select id="素材1_箇所" class="material-location">
+                <option value="">--</option>
+              </select>
+            </label>
+
+            <div class="material-composition">
+              <div class="composition-row">
+                <label>種類:
+                  <select id="素材1_種類1" class="material-type">
+                    <option value="">--</option>
+                  </select>
+                </label>
+                <label>割合:
+                  <select id="素材1_％1" class="material-percent">
+                    <option value="">--%</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="composition-row">
+                <label>種類:
+                  <select id="素材1_種類2" class="material-type">
+                    <option value="">--</option>
+                  </select>
+                </label>
+                <label>割合:
+                  <select id="素材1_％2" class="material-percent">
+                    <option value="">--%</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" id="addMaterialBtn" class="add-material-btn">+ 素材を追加</button>
+    </div>
+  </div>
+
+  <!-- AI生成ブロック（親） -->
+  <div class="form-section desc-draggable-block" data-block-type="aiGeneration" style="margin-bottom: 12px;">
+    <h3 class="section-title" style="display: flex; align-items: center;">
+      <span class="drag-handle" style="cursor: move; margin-right: 8px; color: #9ca3af; font-size: 14px;">⋮⋮</span>
+      <span class="section-icon">✨</span>AI生成
+      <button type="button" class="collapse-btn" onclick="toggleDescBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+    </h3>
+    <div class="section-content">
+      <!-- 説明文 -->
+      <div style="font-size: 11px; color: #6b7280; margin-bottom: 12px; padding: 8px; background: #f9fafb; border-radius: 6px; border-left: 3px solid #d1d5db;">
+        <span class="info-emoji">💡</span> 以下の情報を入力してAI生成ボタンを押すと、魅力的な商品説明文が自動生成されます。<br>
+        <span style="color: #6b7280;">⚠️ 生成後は必ず内容をご確認ください。</span>
+      </div>
+
+      <!-- サブブロック1: 追加属性（任意） -->
+      <div class="ai-sub-block" style="margin-bottom: 12px; padding: 12px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <h4 style="display: flex; align-items: center; margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: #374151; cursor: pointer;" onclick="toggleAiSubBlock(this)">
+          <span class="section-icon">🏷️</span>追加属性（任意）
+          <button type="button" class="ai-sub-collapse-btn" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 12px; color: #6b7280; padding: 0 8px;">▶</button>
+        </h4>
+        <div class="ai-sub-content" style="display: none;">
+          <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px; padding: 6px 8px; background: #f9fafb; border-radius: 4px;">
+            <span class="info-emoji">💡</span> 商品の詳細な属性を入力してください。AI生成時に活用されます。
+          </div>
+          <textarea
+            id="AI用商品属性"
+            rows="3"
+            placeholder="商品の詳細な属性を入力してください（例: ヴィンテージ、90年代、USA製、希少、限定品、タグ付き、デッドストック）&#10;&#10;カンマ区切りで複数入力可能です。"
+            style="width: 100%; padding: 10px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical;"
+          ></textarea>
+          <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+            例: ヴィンテージ、90年代、USA製、希少、限定品
+          </div>
+        </div>
+      </div>
+
+      <!-- サブブロック2: 品番・製番（任意） -->
+      <div class="ai-sub-block" style="margin-bottom: 12px; padding: 12px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <h4 style="display: flex; align-items: center; margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: #374151; cursor: pointer;" onclick="toggleAiSubBlock(this)">
+          <span class="section-icon">🔢</span>品番・製番（任意）
+          <button type="button" class="ai-sub-collapse-btn" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 12px; color: #6b7280; padding: 0 8px;">▶</button>
+        </h4>
+        <div class="ai-sub-content" style="display: none;">
+          <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px; padding: 6px 8px; background: #f9fafb; border-radius: 4px;">
+            <span class="info-emoji">💡</span> 商品の品番・型番を入力してください。
+          </div>
+          <input
+            type="text"
+            id="品番型番"
+            placeholder="例: 555088-101, DM0522-100, FW23-M001"
+            style="width: 100%; padding: 10px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px;"
+          />
+        </div>
+      </div>
+
+      <!-- サブブロック3: 商品画像（任意） -->
+      <div class="ai-sub-block" style="margin-bottom: 12px; padding: 12px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <h4 style="display: flex; align-items: center; margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: #374151; cursor: pointer;" onclick="toggleAiSubBlock(this)">
+          <span class="section-icon">📷</span>商品画像（任意）
+          <button type="button" class="ai-sub-collapse-btn" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 12px; color: #6b7280; padding: 0 8px;">▶</button>
+        </h4>
+        <div class="ai-sub-content" style="display: none;">
+          <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px; padding: 6px 8px; background: #f9fafb; border-radius: 4px;">
+            <span class="info-emoji">💡</span> 画像をアップロードするとAIが解析してより詳細な説明文を生成します
+          </div>
+
+          <!-- 画像選択ボタン -->
+          <input
+            type="file"
+            id="productImages"
+            accept="image/*"
+            multiple
+            style="display: none;"
+            onchange="handleImageUpload(event)"
+          />
+          <button
+            type="button"
+            onclick="document.getElementById('productImages').click()"
+            style="padding: 10px 16px; background: #e0f2fe; border: 2px dashed #0ea5e9; border-radius: 6px; color: #0369a1; font-size: 13px; cursor: pointer; width: 100%; font-weight: 500; margin-bottom: 12px;"
+          >
+            <span class="button-emoji">📷</span> 画像を選択
+          </button>
+
+          <!-- 画像プレビューエリア -->
+          <div id="imagePreviewContainer" style="display: none;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 8px;">
+              <span>選択した画像（<span id="imageCount">0</span>/20）</span>
+              <span>AI生成用: <span id="aiImageCount">0</span>/3</span>
+            </div>
+            <div id="imagePreviewList" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+              <!-- プレビュー画像がここに追加される -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI生成ボタン（親ブロックの最後） -->
+      <div style="margin-top: 12px;">
+        <button
+          type="button"
+          onclick="generateAiDescription()"
+          id="aiGenBtn"
+          style="width: 100%; padding: 12px 16px; background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%); border: none; border-radius: 6px; color: white; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(139, 92, 246, 0.3);"
+        >
+          <span class="button-emoji">✨</span> AI生成
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 割引情報選択（折りたたみ可能） -->
+  <div class="form-section desc-draggable-block" data-block-type="discount" style="margin-bottom: 12px;">
+    <h3 class="section-title" style="display: flex; align-items: center;">
+      <span class="drag-handle" style="cursor: move; margin-right: 8px; color: #9ca3af; font-size: 14px;">⋮⋮</span>
+      <span class="section-icon">💰</span>割引情報
+      <button type="button" class="collapse-btn" onclick="toggleDescBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+    </h3>
+    <div id="discountSection" class="section-content collapsible-content">
+      <div id="discountCheckboxContainer" style="padding: 8px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;">
+        <!-- 割引情報チェックボックスが動的に生成される -->
+        <div style="font-size: 11px; color: #6b7280; text-align: center;">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- オリジナルハッシュタグ選択（折りたたみ可能） -->
+  <div class="form-section desc-draggable-block" data-block-type="hashtag" style="margin-bottom: 12px;">
+    <h3 class="section-title" style="display: flex; align-items: center;">
+      <span class="drag-handle" style="cursor: move; margin-right: 8px; color: #9ca3af; font-size: 14px;">⋮⋮</span>
+      <span class="section-icon">🏷️</span>オリジナルハッシュタグ
+      <button type="button" class="collapse-btn" onclick="toggleDescBlock(this)" style="margin-left: auto; background: none; border: none; cursor: pointer; font-size: 14px; color: #6b7280; padding: 0 8px;">▼</button>
+    </h3>
+    <div id="hashtagSection" class="section-content collapsible-content">
+      <div id="hashtagCheckboxContainer" style="padding: 8px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;">
+        <!-- ハッシュタグチェックボックスが動的に生成される -->
+        <div style="font-size: 11px; color: #6b7280; text-align: center;">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /descriptionBlocksContainer -->
+
+</div>
+<div class="group product-images-section" id="productImagesBlock" style="display: none;">
+  <div class="group-title">
+    <span><span class="group-emoji">🖼️</span> 商品画像</span>
+  </div>
+  <div class="form-section">
+    <!-- ヒント -->
+    <div style="font-size: 11px; color: #6b7280; margin-bottom: 12px; padding: 10px 12px; background: #f9fafb; border-radius: 6px; border-left: 3px solid #d1d5db; line-height: 1.6;">
+      <span class="info-emoji">💡</span> メルカリShopsなどに出品する画像をアップロードします（最大20枚）<br>
+      画像はJSON形式でGoogle Driveに保存され、チーム間で共有したり、複数のプラットフォームで使い回すことができます
+    </div>
+
+    <!-- 画像アップロード -->
+    <div style="margin-bottom: 16px;">
+      <input
+        type="file"
+        id="productImagesForSave"
+        accept="image/*"
+        multiple
+        style="display: none;"
+        onchange="handleProductImageUpload(event)"
+      />
+      <button
+        type="button"
+        onclick="document.getElementById('productImagesForSave').click()"
+        style="padding: 10px 16px; background: #e0f2fe; border: 2px dashed #0ea5e9; border-radius: 6px; color: #0369a1; font-size: 13px; cursor: pointer; width: 100%; font-weight: 500;"
+      >
+        <span class="button-emoji">📷</span> 画像を選択
+      </button>
+    </div>
+
+    <!-- 画像プレビューエリア -->
+    <div id="productImagesPreviewContainer" style="display: none;">
+      <div style="font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+        <span>アップロード済み（<span id="productImageCount">0</span>/20）</span>
+        <button
+          type="button"
+          onclick="clearAllProductImages()"
+          style="padding: 4px 8px; background: white; border: 1px solid #ef4444; border-radius: 4px; color: #ef4444; font-size: 11px; cursor: pointer; font-weight: 500;"
+          title="すべての画像を削除"
+        >
+          🗑️ すべて削除
+        </button>
+      </div>
+      <div id="productImagesPreviewList" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+        <!-- プレビュー画像がここに追加される -->
+      </div>
+    </div>
+  </div>
+</div>
+<div class="group shipping-section">
+  <div class="group-title"><span class="group-emoji">🚛</span> 配送について</div>
+  <div class="form-section">
+    <div class="row">
+      <div>
+        <label>配送料の負担</label>
+        <select id="配送料の負担">
+          <option value="送料込み(出品者負担)">送料込み(出品者負担)</option>
+        </select>
+      </div>
+      <div>
+        <label>配送の方法</label>
+        <select id="配送の方法">
+          <option value="ゆうゆうメルカリ便">ゆうゆうメルカリ便</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:4px;">
+      <div>
+        <label>発送元の地域</label>
+        <select id="発送元の地域">
+          <option value="岡山県">岡山県</option>
+        </select>
+      </div>
+      <div>
+        <label>発送までの日数</label>
+        <select id="発送までの日数">
+          <option value="1~2日で発送">1~2日で発送</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div><div class="group purchase-section">
+  <div class="group-title"><span class="group-emoji">💰</span> 仕入情報</div>
+  <div class="form-section">
+    <div class="row">
+      <div>
+        <label>仕入日</label>
+        <input id="仕入日" type="date">
+      </div>
+      <div>
+        <label>仕入先</label>
+        <select id="仕入先">
+          <option value="">--選択してください--</option>
+        </select>
+      </div>
+    </div>
+    
+    <div style="margin-top: 4px;">
+      <label>仕入金額</label>
+      <input id="仕入金額" type="number" min="0" step="1" placeholder="0">
+    </div>
+  </div>
+</div><div class="group listing-section">
+  <div class="group-title"><span class="group-emoji">📤</span> 出品情報</div>
+  <div class="form-section">
+    <div class="row">
+      <div>
+        <label>出品日</label>
+        <input id="出品日" type="date">
+      </div>
+      <div>
+        <label>出品先</label>
+        <select id="出品先">
+          <option value="">--選択してください--</option>
+        </select>
+      </div>
+    </div>
+    
+    <div style="margin-top: 4px;">
+      <label>出品金額</label>
+      <input id="出品金額" type="number" min="0" step="1" placeholder="0">
+    </div>
+  </div>
+</div><div class="actions">
 <button onclick="onSave()">保存</button>
 <button onclick="onReset()">リセット</button>
 </div>
@@ -2791,8 +3591,8 @@ function navigateInPWA(url) {
   function loadManagementNumberPlacementFromServer() {
     console.log('🔄 PropertiesServiceから管理番号配置設定を読み込み中...');
     console.log('google:', typeof google);
-    console.log('google.script:', typeof google?.script);
-    console.log('google.script.run:', typeof google?.script?.run);
+    console.log('google.script:', typeof google !== 'undefined' ? typeof google.script : 'undefined');
+    console.log('google.script.run:', typeof google !== 'undefined' && google.script ? typeof google.script.run : 'undefined');
 
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       console.log('✅ google.script.run利用可能、loadConfigMaster呼び出し開始');
