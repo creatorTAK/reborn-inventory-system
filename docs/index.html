@@ -1099,12 +1099,21 @@
           }
           const sessionId = sessionStorage.getItem('device_session_id');
 
+          // ユーザー情報取得
+          const userName = localStorage.getItem('reborn_user_name') || '';
+          const userIconUrl = localStorage.getItem('reborn_user_icon_url') || '';
+
           const pwaBaseUrl = 'https://reborn-inventory-system.pages.dev';
-          const sessionIdParam = '?sessionId=' + sessionId;
-          const menuHomeUrl = pwaBaseUrl + '/menu_home.html' + sessionIdParam;
+          const params = new URLSearchParams({
+            userName: userName,
+            userIconUrl: userIconUrl,
+            sessionId: sessionId
+          });
+          const menuHomeUrl = pwaBaseUrl + '/menu_home.html?' + params.toString();
 
           console.log('🏠 [初期設定完了済み] PWA版menu_homeを直接ロード:', menuHomeUrl);
           console.log('🆔 sessionId:', sessionId);
+          console.log('👤 userName:', userName);
           iframe.setAttribute('data-src', menuHomeUrl);
         }
       }
@@ -1870,7 +1879,16 @@
       if (page === 'home') {
         // PWA版トップメニューを直接読み込み（超高速化：2秒 → 50ms）
         const pwaBaseUrl = 'https://reborn-inventory-system.pages.dev';
-        iframe.src = pwaBaseUrl + '/menu_home.html' + sessionIdParam;
+        const userName = localStorage.getItem('reborn_user_name') || '';
+        const userIconUrl = localStorage.getItem('reborn_user_icon_url') || '';
+
+        const params = new URLSearchParams({
+          userName: userName,
+          userIconUrl: userIconUrl,
+          sessionId: sessionId
+        });
+
+        iframe.src = pwaBaseUrl + '/menu_home.html?' + params.toString();
       } else if (page === 'product') {
         iframe.src = baseUrl + '?menu=product' + fcmParam + securityParams;
         document.getElementById('drawer-product').classList.add('active');
@@ -2047,19 +2065,8 @@
         return;
       }
 
-      // トップメニューに戻る要求の処理（マスタ管理画面から）
-      if (data.type === 'navigateToHome') {
-        console.log('========================================');
-        console.log('🏠 [postMessage] トップメニューに戻る要求を受信');
-        console.log('========================================');
-        if (typeof navigateToPage === 'function') {
-          navigateToPage('home');
-          console.log('[postMessage] ✅ navigateToPage(\'home\')呼び出し完了（200ms遅延モード）');
-        } else {
-          console.error('[postMessage] ❌ navigateToPage()が未定義');
-        }
-        return;
-      }
+      // トップメニューに戻る要求の処理（削除: 早期登録リスナーと重複）
+      // 早期登録リスナー（行935-954）で処理されるため、ここでは不要
 
       if (data.type === 'navigateToChat') {
         console.log('========================================');
