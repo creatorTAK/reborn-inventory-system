@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="apple-touch-icon" sizes="180x180" href="https://creatortak.github.io/reborn-inventory-system/icon-180.png">
+<base target="_top">
+
+<!-- iOS PWA対応 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="REBORN">
+
+<!-- PWA対応 -->
+<link rel="manifest" href="<?= ScriptApp.getService().getUrl() ?>?menu=manifest">
+<meta name="theme-color" content="#000000">
+
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<!-- REBORN Brand Colors & Theme -->
+<link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-brand-colors.css?v=0bd1a9b">
+<link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
+
+<?!= include('sp_styles'); ?>
+<?!= include('mobile_header'); ?>
+
+<!-- Sortable.js - タッチ対応のドラッグ&ドロップライブラリ -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+</head>
+<body class="<?!= typeof isSidebar !== 'undefined' && isSidebar ? 'sidebar' : '' ?>">
+<script>
+function navigateInPWA(url) {
+  try {
+    // iframe内にいる場合、最上位ウィンドウにpostMessageで通知
+    if (window.top && window.top !== window.self) {
+      console.log('📤 postMessage送信 (to window.top):', url);
+      window.top.postMessage({
+        type: 'navigate',
+        url: url
+      }, '*'); // GASのサンドボックスiframeから送信するため、ワイルドカードを使用
+    } else {
+      // iframe外（通常のブラウザ）の場合
+      window.location.href = url;
+    }
+  } catch (e) {
+    console.error('❌ ナビゲーションエラー:', e);
+    // フォールバック: 通常の遷移
+    window.location.href = url;
+  }
+}
+</script>
+
+<!-- 統一ヘッダー -->
+<div class="header">
+  <div class="header-content">
+    <button class="back-button" id="back-button">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+    <div class="header-title">
+      <span style="font-size: 20px;">📝</span>
+      商品登録
+    </div>
+    <div style="width: 40px;"></div>
+  </div>
+  </div>
+</div>
+
+<!-- コンテンツエリア -->
+<div class="content-container">
+<?!= include('sp_block_manage'); ?>
+<?!= include('sp_block_basic'); ?>
+<?!= include('sp_block_title'); ?>
+<?!= include('sp_block_description'); ?> <!-- ★ 新規「商品の説明」（商品名の下） -->
+<?!= include('sp_block_product_images'); ?> <!-- 商品画像（条件付き表示） -->
+<?!= include('sp_block_shipping'); ?> <!-- 配送について -->
+<?!= include('sp_block_procure'); ?> <!-- 仕入情報 -->
+<?!= include('sp_block_listing'); ?> <!-- 出品情報 -->
+<div class="actions">
+<button onclick="onSave()">保存</button>
+<button onclick="onReset()">リセット</button>
+</div>
+<div class="msg" id="msg"></div>
+</div> <!-- /content-container -->
+
+<script>
+  // FCMトークンをグローバル変数として定義（sp_scripts.html で使用）
+  var GLOBAL_FCM_TOKEN = '<?= fcmToken ?>';
+</script>
+
+<!-- 戻るボタン処理 --><script>
+  console.log('[sidebar_product] ✅ Script loaded - Version @899-debug');
+  
+  async function goBack() {
+    console.log('[sidebar_product] >>> goBack() called at', new Date().toISOString());
+    const isInIframe = window.self !== window.top;
+    console.log('[sidebar_product] isInIframe:', isInIframe);
+    
+    if (isInIframe) {
+      console.log('[sidebar_product] iframe内で開かれているため、postMessage送信');
+      window.top.postMessage({ type: 'navigateToHome' }, '*');
+      console.log('[sidebar_product] ✅ postMessage送信完了');
+    } else {
+      console.log('[sidebar_product] 直接開かれているため、google.script.host.close()');
+      google.script.host.close();
+    }
+  }
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('[sidebar_product] DOMContentLoaded fired');
+    const backButton = document.getElementById('back-button');
+    console.log('[sidebar_product] backButton element:', backButton);
+    
+    if (backButton) {
+      backButton.addEventListener('click', goBack);
+      console.log('[sidebar_product] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
+    } else {
+      console.error('[sidebar_product] ❌ 戻るボタンが見つかりません');
+    }
+  });
+</script>
+
+<?!= include('sp_scripts'); ?>
+</body>
+</html>
