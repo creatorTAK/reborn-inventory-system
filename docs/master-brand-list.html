@@ -681,6 +681,39 @@
       console.error('❌ [Master Brand] 初期化エラー:', error);
       alert('初期化エラーが発生しました。ページを再読み込みしてください。');
     });
+
+    // 戻るボタンのgoBack関数定義
+    async function goBack() {
+      const sessionId = sessionStorage.getItem('device_session_id');
+      if (sessionId) {
+        try {
+          const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+          const db = window.db;
+          if (!db) {
+            console.error('[master-brand-list] ❌ Firestore未初期化');
+            window.history.back();
+            return;
+          }
+          await setDoc(doc(db, 'navigation', sessionId), {
+            action: 'navigate',
+            destination: 'top-menu',
+            sessionId: sessionId,
+            timestamp: serverTimestamp(),
+            from: 'master-brand-list'
+          });
+          console.log('[master-brand-list] ✅ Firestore書き込み成功 - トップメニューに戻る');
+        } catch (error) {
+          console.error('[master-brand-list] ❌ Firestoreエラー:', error);
+          window.history.back();
+        }
+      } else {
+        console.log('[master-brand-list] 直接開かれているため、history.back()で戻る');
+        window.history.back();
+      }
+    }
+
+    // goBack関数をグローバルスコープに公開
+    window.goBack = goBack;
   </script>
 </body>
 </html>
