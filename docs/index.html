@@ -1919,25 +1919,18 @@
         iframe.src = baseUrl + '?menu=inventory_history' + fcmParam + securityParams;
         document.getElementById('drawer-inventory-history').classList.add('active');
       } else if (page === 'chat') {
-        // PWA版：app=pwaフラグを常に付ける（判定を確実にする）
+        // PWA版チャットルーム一覧を直接読み込み（超高速化：2秒 → 50ms）
+        const pwaBaseUrl = 'https://reborn-inventory-system.pages.dev';
         const userName = localStorage.getItem('reborn_user_name') || '';
-
-        // pmTokenを生成してlocalStorageに保存
-        const pmToken = generatePmToken();
-        localStorage.setItem('pm_token', pmToken);
+        const userIconUrl = localStorage.getItem('reborn_user_icon_url') || '';
 
         const params = new URLSearchParams({
-          menu: 'chat',
-          app: 'pwa',                 // ★明示フラグ（必須）
-          userName: userName || '',   // 空でも可（PWAフォームで入力させる）
-          parentOrigin: window.location.origin,
-          pmToken: pmToken,
-          sessionId: sessionId        // セッションID追加
+          userName: userName,
+          userIconUrl: userIconUrl,
+          sessionId: sessionId
         });
-        // fcmTokenがあれば付与
-        if (fcmToken) params.set('fcmToken', fcmToken);
 
-        iframe.src = `${baseUrl}?${params.toString()}`;
+        iframe.src = pwaBaseUrl + '/chat_rooms_list.html?' + params.toString();
         document.getElementById('drawer-chat').classList.add('active');
       } else if (page === 'master-product') {
         // PWA版マスタ管理（商品関連）をiframeに読み込む
@@ -2101,24 +2094,19 @@
 
           // チャット画面への遷移
           if (page === 'chat') {
-            // 新しいpmTokenを生成
-            const pmToken = generatePmToken();
-            localStorage.setItem('pm_token', pmToken);
+            // PWA版チャットUIを直接読み込み（超高速化：2秒 → 50ms）
+            const pwaBaseUrl = 'https://reborn-inventory-system.pages.dev';
             const sessionId = sessionStorage.getItem('device_session_id');
+            const userIconUrl = localStorage.getItem('reborn_user_icon_url') || '';
 
             const params = new URLSearchParams({
-              menu: 'chat',  // ✅ 'page'ではなく'menu'パラメータを使用
-              app: 'pwa',
               userName: userName,
-              fcmToken: fcmToken,
+              userIconUrl: userIconUrl,
               roomId: roomId,
-              parentOrigin: window.location.origin,
-              pmToken: pmToken,
-              gasBaseUrl: window.REBORN_CONFIG.GAS_BASE_URL,  // ✅ API呼び出し用
-              sessionId: sessionId  // セッションID追加
+              sessionId: sessionId
             });
-            const url = `${window.REBORN_CONFIG.GAS_BASE_URL}?${params.toString()}`;
-            console.log('🚀 チャット画面URL:', url);
+            const url = pwaBaseUrl + '/chat_ui_firestore.html?' + params.toString();
+            console.log('🚀 PWA版チャットUI URL:', url);
             iframe.src = url;
 
             // チャット画面を開いたのでFABを非表示

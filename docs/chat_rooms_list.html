@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Cache Bust: 2025-11-13 12:45 -->
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>チーム チャット</title>
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <!-- REBORN Brand Colors & Theme -->
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-brand-colors.css?v=0bd1a9b">
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
+      height: 100vh;
+      overflow: hidden;
+    }
+    .user-info {
+      font-size: 13px;
+      color: #6b7280;
+      padding: 8px 16px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .create-room-button {
+      background: var(--reborn-primary);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 20px;
+      margin: 16px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .create-room-button:active {
+      transform: scale(0.98);
+      box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+    }
+    .rooms-container {
+      height: calc(100vh - 120px);
+      overflow-y: auto;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.9);
+      margin: 0 16px 16px 16px;
+      border-radius: 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+    .room-item-wrapper {
+      position: relative;
+      margin-bottom: 12px;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+    .room-item {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+    }
+    .room-item.swiping {
+      transition: none;
+    }
+    .room-item:active:not(.swiping) {
+      transform: scale(0.98);
+      background: #f7fafc;
+    }
+
+    /* スケルトンUI（ルームタップ時に全画面表示） */
+    #skeleton-loader {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      background: rgba(255, 255, 255, 0.95);
+      z-index: 9999;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    #skeleton-loader.active {
+      display: block;
+    }
+
+    .skeleton-header {
+      width: 100%;
+      height: 60px;
+      background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .skeleton-room {
+      width: 100%;
+      height: 80px;
+      background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    .loading-spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px;
+      height: 48px;
+      border: 4px solid #e0e0e0;
+      border-top: 4px solid var(--reborn-primary);
+      border-radius: 50%;
+      animation: spinner-rotate 1s linear infinite;
+      z-index: 10;
+    }
+
+    @keyframes skeleton-pulse {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    @keyframes spinner-rotate {
+      0% { transform: translate(-50%, -50%) rotate(0deg); }
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+    .delete-button {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 80px;
+      background: #ef4444;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      z-index: 1;
+      transition: all 0.3s ease;
+    }
+    .delete-button:active {
+      background: #dc2626;
+    }
+    .room-icon {
+      font-size: 32px;
+      flex-shrink: 0;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
+      border-radius: 50%;
+      color: white;
+    }
+    .room-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .room-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 4px;
+    }
+    .room-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2d3748;
+      flex: 1;
+    }
+    .room-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+    .room-time {
+      font-size: 12px;
+      color: #a0aec0;
+    }
+    .room-preview {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .room-last-message {
+      font-size: 14px;
+      color: #718096;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+    .unread-badge {
+      background: #ef4444;
+      color: white;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      min-width: 20px;
+      text-align: center;
+      display: inline-block;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #718096;
+    }
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+    .empty-state-text {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #718096;
+    }
+    /* モーダル */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+    .modal-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #4a5568;
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s ease;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--reborn-primary);
+    }
+    .form-select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 16px;
+      background: white;
+      cursor: pointer;
+    }
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .modal-button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .modal-button.primary {
+      background: var(--reborn-primary);
+      color: white;
+    }
+    .modal-button.primary:hover {
+      background: #5568d3;
+    }
+    .modal-button.secondary {
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+    .modal-button.secondary:hover {
+      background: #cbd5e0;
+    }
+    .user-list-item {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .user-list-item:hover {
+      border-color: #48bb78;
+      background: #f0fff4;
+    }
+    .user-list-item:active {
+      transform: scale(0.98);
+    }
+    .user-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .user-icon img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #e2e8f0;
+    }
+    .user-icon-placeholder {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 600;
+      flex-shrink: 0;
+      border: 2px solid #e2e8f0;
+    }
+    .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .user-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 4px;
+    }
+    .user-permission {
+      font-size: 12px;
+      color: #718096;
+    }
+  </style>
+</head>
+<body>
+  <!-- スケルトンUI（ルームタップ時に全画面表示） -->
+  <div id="skeleton-loader">
+    <div class="skeleton-header"></div>
+    <div class="skeleton-room"></div>
+    <div class="skeleton-room"></div>
+    <div class="skeleton-room"></div>
+    <div class="skeleton-room"></div>
+    <div class="skeleton-room"></div>
+    <div class="loading-spinner"></div>
+  </div>
+
+  <!-- 統一ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" id="back-button">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <i class="bi bi-chat-dots"></i>
+        チャットルーム
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+  </div>
+
+  <!-- ユーザー情報バー -->
+  <div class="user-info" id="userInfo">読み込み中...</div>
+
+  <button class="create-room-button" id="createRoomButton" onclick="createRoom()">
+    ➕ 新しいルーム作成
+  </button>
+
+  <button class="create-room-button" id="createDirectChatButton" onclick="createDirectChat()" style="background: #48bb78; box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);">
+    👤 個別チャット作成
+  </button>
+
+  <div class="rooms-container" id="roomsContainer">
+    <div class="loading">トークルームを読み込んでいます...</div>
+  </div>
+
+  <!-- ルーム作成モーダル -->
+  <div class="modal-overlay" id="createRoomModal">
+    <div class="modal-content">
+      <div class="modal-title">➕ 新しいルーム作成</div>
+      <form id="createRoomForm" onsubmit="return false;">
+        <div class="form-group">
+          <label class="form-label" for="roomNameInput">ルーム名 *</label>
+          <input
+            type="text"
+            class="form-input"
+            id="roomNameInput"
+            placeholder="例: 商品企画ミーティング"
+            maxlength="50"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="roomIconSelect">アイコン</label>
+          <select class="form-select" id="roomIconSelect">
+            <option value="💬">💬 チャット</option>
+            <option value="📢">📢 お知らせ</option>
+            <option value="💡">💡 アイデア</option>
+            <option value="📊">📊 会議</option>
+            <option value="🎯">🎯 プロジェクト</option>
+            <option value="📦">📦 在庫</option>
+            <option value="🚀">🚀 リリース</option>
+            <option value="🔧">🔧 メンテナンス</option>
+            <option value="🎉">🎉 イベント</option>
+            <option value="⭐">⭐ 重要</option>
+          </select>
+        </div>
+        <div class="modal-buttons">
+          <button type="button" class="modal-button secondary" onclick="closeCreateRoomModal()">
+            キャンセル
+          </button>
+          <button type="submit" class="modal-button primary" onclick="submitCreateRoom()">
+            作成
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 個別チャット作成モーダル -->
+  <div class="modal-overlay" id="directChatModal">
+    <div class="modal-content">
+      <div class="modal-title">👤 個別チャット作成</div>
+      <div style="margin-bottom: 16px; font-size: 14px; color: #718096;">
+        チャットしたいユーザーを選択してください
+      </div>
+      
+      <!-- ユーザー一覧 -->
+      <div id="userListContainer" style="max-height: 400px; overflow-y: auto; margin-bottom: 16px;">
+        <div class="loading">ユーザー一覧を読み込んでいます...</div>
+      </div>
+
+      <div class="modal-buttons">
+        <button type="button" class="modal-button secondary" onclick="closeDirectChatModal()">
+          キャンセル
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firestore API Wrapper (ARCH-001 Phase 2) -->
+  <script type="module" src="https://www.reborn-inventory.com/js/firestore-api.js?v=850"></script>
+
+  <!-- GAS API Wrapper (ARCH-001 Phase 2) -->
+  <script src="https://www.reborn-inventory.com/js/api.js?v=850"></script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, where, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    // Firebase設定
+    const firebaseConfig = {
+      apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjwwtCorUZQ",
+      authDomain: "reborn-chat.firebaseapp.com",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "345706548795",
+      appId: "1:345706548795:web:058a553da6b4b74db5161e"
+    };
+
+    // Firebase初期化
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    console.log('[Firestore] 初期化完了');
+
+    // URLパラメータ取得用のヘルパー関数
+    function getQueryParam(key) {
+      try {
+        return new URLSearchParams(location.search).get(key) || '';
+      } catch(e) {
+        return '';
+      }
+    }
+
+    // グローバル変数
+    let currentUserName = '';
+    let usersCache = []; // ユーザーアイコン表示用キャッシュ
+
+    // GASテンプレート変数をJavaScript変数に変換
+    const isPWAFlag        = <?= JSON.stringify(!!isPWA) ?>;
+    const pwaUserNameParam = <?= JSON.stringify(typeof pwaUserName !== 'undefined' ? pwaUserName : "") ?>;
+    const gasUserNameParam = <?= JSON.stringify(typeof gasUserName !== 'undefined' ? gasUserName : "") ?>;
+    // parentOrigin と pmToken はシングルクォートで直接展開（JSON.stringify不要）
+    const pwaParentOriginParam = '<?= typeof pwaParentOrigin !== "undefined" ? pwaParentOrigin : "" ?>';
+    const pwaPmTokenParam = '<?= typeof pwaPmToken !== "undefined" ? pwaPmToken : "" ?>';
+    const gasBaseUrlParam  = '<?= typeof gasBaseUrl !== "undefined" ? gasBaseUrl : "" ?>';  // ✅ API呼び出し用URL
+
+    // parentOrigin と pmToken を設定（URLパラメータ → テンプレート変数 → デフォルト値の優先順）
+    const parentOrigin = getQueryParam('parentOrigin') || pwaParentOriginParam || 'https://www.reborn-inventory.com';
+    const pmToken = getQueryParam('pmToken') || pwaPmTokenParam || '';
+
+    // デバッグログ
+    console.log('[Rooms List] デバッグ情報:');
+    console.log('  - URLパラメータ parentOrigin:', getQueryParam('parentOrigin'));
+    console.log('  - テンプレート pwaParentOriginParam:', pwaParentOriginParam);
+    console.log('  - 最終 parentOrigin:', parentOrigin);
+    console.log('  - URLパラメータ pmToken:', getQueryParam('pmToken'));
+    console.log('  - テンプレート pwaPmTokenParam:', pwaPmTokenParam);
+    console.log('  - 最終 pmToken:', pmToken);
+
+    // 判定ロジック
+    const isEmbedded = (window.top !== window);
+    const looksLikePWA = isEmbedded && pwaUserNameParam !== "";
+    const isPWA = isPWAFlag || looksLikePWA;
+    const isGAS = !isPWA;
+
+    // 初期化
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('[Rooms List] 初期化開始');
+
+      // ユーザー名設定
+      if (isGAS) {
+        if (gasUserNameParam && gasUserNameParam.trim() !== '') {
+          try {
+            currentUserName = JSON.parse(gasUserNameParam);
+          } catch (e) {
+            currentUserName = gasUserNameParam;
+          }
+          document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
+          console.log('[GAS] ユーザー名自動設定:', currentUserName);
+        }
+      } else {
+        try {
+          currentUserName = JSON.parse(pwaUserNameParam);
+        } catch (e) {
+          currentUserName = pwaUserNameParam;
+        }
+        document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
+        console.log('[PWA] ユーザー名設定:', currentUserName);
+      }
+
+      // ユーザー一覧を取得してキャッシュ（アイコン表示用）
+      if (isPWA) {
+        // PWA版：api.js経由でFirestore優先取得（ARCH-001 Phase 2）
+        console.log('[User Cache] api.js経由でユーザー一覧取得開始');
+        getUserList()
+          .then(users => {
+            if (users && users.length > 0) {
+              usersCache = users;
+              console.log('[User Cache] ユーザー一覧キャッシュ完了:', usersCache.length + '件');
+              console.log('[User Cache] キャッシュ内容:', usersCache);
+
+              // キャッシュ取得完了後、ルーム一覧を表示
+              console.log('[Rooms List] キャッシュ取得完了、リスニング開始');
+              startListening();
+            } else {
+              console.warn('[User Cache] ユーザー一覧が空です');
+              // 空の場合でもルーム一覧は表示する
+              startListening();
+            }
+          })
+          .catch(error => {
+            console.error('[User Cache] ユーザー一覧取得エラー:', error);
+            // エラーの場合でもルーム一覧は表示する
+            startListening();
+          });
+      } else if (typeof google !== 'undefined' && google.script && google.script.run) {
+        // GAS版：google.script.runで呼び出し
+        google.script.run
+          .withSuccessHandler(function(users) {
+            if (users && users.length > 0) {
+              usersCache = users;
+              console.log('[User Cache] GAS版 ユーザー一覧キャッシュ完了:', usersCache.length + '件');
+              console.log('[User Cache] キャッシュ内容:', usersCache);
+            } else {
+              console.warn('[User Cache] ユーザー一覧が空です');
+            }
+            // GAS版は即座にstartListening
+            startListening();
+          })
+          .withFailureHandler(function(error) {
+            console.error('[User Cache] GAS版 ユーザー一覧取得エラー:', error);
+            // エラーの場合でもstartListening
+            startListening();
+          })
+          .getUserListForUI();
+      } else {
+        // どちらでもない場合
+        console.warn('[User Cache] ユーザーキャッシュ取得をスキップ');
+        startListening();
+      }
+    });
+
+    // トークルーム一覧をリアルタイムリスニング
+    function startListening() {
+      const q = query(
+        collection(db, 'rooms'),
+        orderBy('lastMessageAt', 'desc')
+      );
+
+      onSnapshot(q, (snapshot) => {
+        console.log('[Firestore] ルーム更新:', snapshot.size + '件');
+
+        const container = document.getElementById('roomsContainer');
+        container.innerHTML = '';
+
+        if (snapshot.empty) {
+          // 空の状態
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">💬</div>
+              <div class="empty-state-text">トークルームがありません</div>
+              <div style="font-size: 14px; color: #a0aec0;">「新しいルーム作成」から始めましょう</div>
+            </div>
+          `;
+          return;
+        }
+
+        // デバッグ情報
+        console.log('[Filter] currentUserName:', currentUserName);
+        console.log('[Filter] 全ルーム数:', snapshot.size);
+
+        let visibleRoomCount = 0;
+        snapshot.forEach((doc) => {
+          const room = { id: doc.id, ...doc.data() };
+
+          // デバッグ: 各ルームの情報を出力
+          console.log('[Filter] ルーム検証:', {
+            id: room.id,
+            name: room.name,
+            type: room.type,
+            members: room.members,
+            includes: room.members?.includes(currentUserName)
+          });
+
+          // フィルタリング: 自分が参加しているルームのみ表示
+          // - type='system'のルームは全員に表示
+          // - それ以外は members配列に自分のユーザー名が含まれる場合のみ表示
+          if (room.type === 'system' || (room.members && room.members.includes(currentUserName))) {
+            console.log('[Filter] ✅ ルーム表示:', room.id, room.name);
+            appendRoom(room);
+            visibleRoomCount++;
+          } else {
+            console.log('[Filter] ❌ ルームをスキップ:', room.id, room.name, 'members:', room.members);
+          }
+        });
+
+        // フィルタリング後に表示するルームがない場合
+        if (visibleRoomCount === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">💬</div>
+              <div class="empty-state-text">参加中のトークルームがありません</div>
+              <div style="font-size: 14px; color: #a0aec0;">「新しいルーム作成」または「個別チャット作成」から始めましょう</div>
+            </div>
+          `;
+        }
+      }, (error) => {
+        console.error('[Firestore] リスニングエラー:', error);
+        const container = document.getElementById('roomsContainer');
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⚠️</div>
+            <div class="empty-state-text">トークルームの読み込みに失敗しました</div>
+            <div style="font-size: 14px; color: #a0aec0;">${error.message}</div>
+          </div>
+        `;
+      });
+    }
+
+    // ユーザーアイコンURLを取得
+    function getUserIconUrl(userName) {
+      console.log('[Room Icon] getUserIconUrl:', { userName, cacheSize: usersCache?.length || 0 });
+
+      if (!userName || !usersCache || usersCache.length === 0) {
+        console.warn('[Room Icon] キャッシュが空またはユーザー名なし');
+        return null;
+      }
+
+      const user = usersCache.find(u => u.userName === userName);
+      console.log('[Room Icon] 検索結果:', user);
+
+      if (user && user.userIconUrl) {
+        console.log('[Room Icon] アイコンURL返却:', user.userIconUrl);
+        return user.userIconUrl;
+      } else {
+        console.warn('[Room Icon] アイコンURLなし:', userName);
+        return null;
+      }
+    }
+
+    // トークルームをUIに追加
+    function appendRoom(room) {
+      const container = document.getElementById('roomsContainer');
+
+      // ルームアイテムラッパー（スワイプ削除用）
+      const wrapper = document.createElement('div');
+      wrapper.className = 'room-item-wrapper';
+      wrapper.dataset.roomId = room.id;
+
+      // 削除ボタン
+      const deleteBtn = document.createElement('div');
+      deleteBtn.className = 'delete-button';
+      deleteBtn.textContent = '削除';
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        confirmDeleteRoom(room.id, room.name || '不明なルーム');
+      };
+
+      const item = document.createElement('div');
+      item.className = 'room-item';
+      item.onclick = () => openRoom(room.id);
+
+      // アイコン
+      const icon = document.createElement('div');
+      icon.className = 'room-icon';
+
+      // 個別チャット（DM）の場合は相手ユーザーのアイコンを表示
+      if (room.type === 'direct' && room.members && room.members.length === 2) {
+        // 自分以外のメンバーを取得
+        const otherUser = room.members.find(m => m !== currentUserName);
+        const iconUrl = getUserIconUrl(otherUser);
+
+        console.log('[Room Icon] 個別チャット:', { roomId: room.id, otherUser, iconUrl });
+
+        if (iconUrl) {
+          // アイコン画像がある場合
+          const img = document.createElement('img');
+          img.src = iconUrl;
+          img.alt = otherUser || '匿名';
+          img.style.width = '40px';
+          img.style.height = '40px';
+          img.style.borderRadius = '50%';
+          img.style.objectFit = 'cover';
+          img.onerror = function() {
+            // 画像読み込みエラー時はプレースホルダー
+            icon.textContent = (otherUser || '匿').charAt(0);
+            icon.style.background = 'linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%)';
+            icon.style.color = 'white';
+            icon.style.display = 'flex';
+            icon.style.alignItems = 'center';
+            icon.style.justifyContent = 'center';
+            icon.style.fontWeight = '600';
+          };
+          icon.appendChild(img);
+        } else {
+          // アイコン画像がない場合はプレースホルダー
+          icon.textContent = (otherUser || '匿').charAt(0);
+          icon.style.background = 'linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%)';
+          icon.style.color = 'white';
+          icon.style.display = 'flex';
+          icon.style.alignItems = 'center';
+          icon.style.justifyContent = 'center';
+          icon.style.fontWeight = '600';
+        }
+      } else {
+        // システムルームや全体チャットはデフォルトアイコン
+        icon.textContent = room.icon || '💬';
+      }
+
+      // コンテンツ
+      const content = document.createElement('div');
+      content.className = 'room-content';
+
+      // ヘッダー（ルーム名 + 右側メタ情報）
+      const header = document.createElement('div');
+      header.className = 'room-header';
+
+      const name = document.createElement('div');
+      name.className = 'room-name';
+
+      // 個別チャットの場合は相手のユーザー名を動的生成
+      if (room.type === 'direct' && room.members && Array.isArray(room.members)) {
+        const otherMember = room.members.find(m => m !== currentUserName);
+        name.textContent = otherMember || '不明なユーザー';
+      } else {
+        name.textContent = room.name || '無題のルーム';
+      }
+
+      // 右側メタ情報（時間 + 未読バッジ）
+      const meta = document.createElement('div');
+      meta.className = 'room-meta';
+
+      const time = document.createElement('div');
+      time.className = 'room-time';
+      if (room.lastMessageAt && room.lastMessageAt.toDate) {
+        const date = room.lastMessageAt.toDate();
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) {
+          time.textContent = 'たった今';
+        } else if (diffMins < 60) {
+          time.textContent = `${diffMins}分前`;
+        } else if (diffHours < 24) {
+          time.textContent = `${diffHours}時間前`;
+        } else if (diffDays < 7) {
+          time.textContent = `${diffDays}日前`;
+        } else {
+          time.textContent = date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+        }
+      }
+
+      meta.appendChild(time);
+
+      // 未読バッジ（時間の下に配置）
+      const badge = document.createElement('div');
+      badge.className = 'unread-badge';
+      badge.id = `unread-badge-${room.id}`;
+      badge.style.display = 'none'; // 初期非表示
+      meta.appendChild(badge);
+
+      header.appendChild(name);
+      header.appendChild(meta);
+
+      // プレビュー（最新メッセージ + 未読バッジ）
+      const preview = document.createElement('div');
+      preview.className = 'room-preview';
+
+      const lastMessage = document.createElement('div');
+      lastMessage.className = 'room-last-message';
+      if (room.lastMessage) {
+        const sender = room.lastMessageBy || '';
+        lastMessage.textContent = `${sender}: ${room.lastMessage}`;
+      } else {
+        lastMessage.textContent = 'メッセージはまだありません';
+      }
+
+      preview.appendChild(lastMessage);
+
+      content.appendChild(header);
+      content.appendChild(preview);
+
+      item.appendChild(icon);
+      item.appendChild(content);
+
+      // スワイプジェスチャー設定
+      setupSwipeGesture(wrapper, item);
+
+      wrapper.appendChild(deleteBtn);
+      wrapper.appendChild(item);
+      container.appendChild(wrapper);
+
+      // 未読カウントをリアルタイムで取得・更新
+      if (currentUserName) {
+        const unreadRef = doc(db, `rooms/${room.id}/unreadCounts/${currentUserName}`);
+        onSnapshot(unreadRef, (unreadDoc) => {
+          const badgeEl = document.getElementById(`unread-badge-${room.id}`);
+          if (badgeEl) {
+            const unreadData = unreadDoc.data();
+            const unreadCount = unreadData?.unreadCount || 0;
+
+            if (unreadCount > 0) {
+              badgeEl.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
+              badgeEl.style.display = 'inline-block';
+            } else {
+              badgeEl.style.display = 'none';
+            }
+          }
+        }, (error) => {
+          console.error('[Rooms List] 未読カウント取得エラー:', room.id, error);
+        });
+      }
+    }
+
+    // トークルームを開く
+    window.openRoom = function(roomId) {
+      console.log('[Rooms List] ルーム選択:', roomId);
+
+      // スケルトンUIを表示（全画面ローディング）
+      const skeleton = document.getElementById('skeleton-loader');
+      if (skeleton) {
+        skeleton.classList.add('active');
+        console.log('[Rooms List] ✅ スケルトンUI表示');
+      }
+
+      // チャット画面に遷移（roomIdをパラメータで渡す）
+      if (isGAS) {
+        // GAS版: 同じウィンドウで開く
+        window.location.href = `<?= ScriptApp.getService().getUrl() ?>?page=chat&roomId=${roomId}`;
+      } else {
+        // PWA版: window.top.postMessageで親ウィンドウに送信
+        // targetOriginが空文字列の場合はデフォルト値を使用（SyntaxError対策）
+        const targetOrigin = parentOrigin || 'https://www.reborn-inventory.com';
+
+        console.log('[Rooms List] postMessage送信:', {
+          page: 'chat',
+          roomId: roomId,
+          userName: currentUserName,
+          targetOrigin: targetOrigin,
+          pmToken: pmToken
+        });
+
+        try {
+          window.top.postMessage({
+            __reborn: true,
+            type: 'navigate',
+            page: 'chat',
+            roomId: roomId,
+            userName: currentUserName || '',
+            pmToken: pmToken
+          }, targetOrigin);
+          console.log('[Rooms List] postMessage送信成功');
+        } catch (error) {
+          console.error('[Rooms List] postMessage送信エラー:', error);
+          alert('画面遷移エラー: ' + error.message);
+        }
+      }
+    };
+
+    // トークルーム作成モーダルを開く
+    window.createRoom = function() {
+      console.log('[Rooms List] ルーム作成モーダルを開く');
+      document.getElementById('createRoomModal').classList.add('active');
+      document.getElementById('roomNameInput').focus();
+    };
+
+    // トークルーム作成モーダルを閉じる
+    window.closeCreateRoomModal = function() {
+      console.log('[Rooms List] ルーム作成モーダルを閉じる');
+      document.getElementById('createRoomModal').classList.remove('active');
+      document.getElementById('createRoomForm').reset();
+    };
+
+    // トークルーム作成実行
+    window.submitCreateRoom = async function() {
+      console.log('[Rooms List] ルーム作成処理開始');
+
+      const roomName = document.getElementById('roomNameInput').value.trim();
+      const roomIcon = document.getElementById('roomIconSelect').value;
+
+      // バリデーション: ルーム名必須
+      if (!roomName) {
+        alert('ルーム名を入力してください');
+        return;
+      }
+
+      // バリデーション: ルーム名重複チェック
+      try {
+        const q = query(
+          collection(db, 'rooms'),
+          where('name', '==', roomName)
+        );
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+          alert('同じ名前のルームがすでに存在します。\n別の名前を入力してください。');
+          return;
+        }
+
+        // Firestoreにルーム作成
+        console.log('[Rooms List] Firestoreにルーム作成:', { roomName, roomIcon });
+
+        const newRoom = await addDoc(collection(db, 'rooms'), {
+          name: roomName,
+          icon: roomIcon,
+          createdBy: currentUserName || '不明',
+          createdAt: serverTimestamp(),
+          lastMessageAt: serverTimestamp(),
+          lastMessageText: '',
+          lastMessageSender: '',
+          members: [currentUserName || '不明']
+        });
+
+        console.log('[Rooms List] ルーム作成成功:', newRoom.id);
+
+        // モーダルを閉じる
+        closeCreateRoomModal();
+
+        // 作成したルームを開く
+        setTimeout(() => {
+          openRoom(newRoom.id);
+        }, 500);
+
+      } catch (error) {
+        console.error('[Rooms List] ルーム作成エラー:', error);
+        alert('ルーム作成に失敗しました: ' + error.message);
+      }
+    };
+
+    // ========================================
+    // 個別チャット機能
+    // ========================================
+
+    // 個別チャット作成モーダルを開く
+    window.createDirectChat = async function() {
+      console.log('[Direct Chat] 個別チャット作成モーダルを開く');
+      document.getElementById('directChatModal').classList.add('active');
+
+      // ユーザー一覧を読み込む
+      await loadUserList();
+    };
+
+    // 個別チャット作成モーダルを閉じる
+    window.closeDirectChatModal = function() {
+      console.log('[Direct Chat] 個別チャット作成モーダルを閉じる');
+      document.getElementById('directChatModal').classList.remove('active');
+    };
+
+    // ユーザー一覧を読み込む
+    async function loadUserList() {
+      console.log('[Direct Chat] ユーザー一覧を読み込み中...');
+      const container = document.getElementById('userListContainer');
+      container.innerHTML = '<div class="loading">ユーザー一覧を読み込んでいます...</div>';
+
+      try {
+        // GAS APIからユーザー一覧取得
+        const users = await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)
+            .getUserListForUI();
+        });
+
+        console.log('[Direct Chat] ユーザー一覧取得成功:', users.length + '件');
+
+        if (!users || users.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">👥</div>
+              <div class="empty-state-text">ユーザーが見つかりません</div>
+            </div>
+          `;
+          return;
+        }
+
+        // 自分自身を除外
+        const filteredUsers = users.filter(u => u.userName !== currentUserName);
+
+        if (filteredUsers.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">👥</div>
+              <div class="empty-state-text">他のユーザーが見つかりません</div>
+            </div>
+          `;
+          return;
+        }
+
+        // ユーザー一覧を表示
+        container.innerHTML = '';
+        filteredUsers.forEach(user => {
+          const item = document.createElement('div');
+          item.className = 'user-list-item';
+          item.onclick = () => selectUserForDirectChat(user.userName);
+
+          // ユーザーアイコン表示
+          let iconElement;
+          if (user.userIconUrl) {
+            // アイコン画像がある場合
+            iconElement = document.createElement('div');
+            iconElement.className = 'user-icon';
+            
+            const img = document.createElement('img');
+            img.src = user.userIconUrl;
+            img.alt = user.userName;
+            img.onerror = function() {
+              // 画像読み込みエラー時はプレースホルダーに切り替え
+              const placeholder = document.createElement('div');
+              placeholder.className = 'user-icon-placeholder';
+              placeholder.textContent = user.userName.charAt(0);
+              this.parentElement.replaceWith(placeholder);
+            };
+            
+            iconElement.appendChild(img);
+          } else {
+            // アイコン画像がない場合はプレースホルダー
+            iconElement = document.createElement('div');
+            iconElement.className = 'user-icon-placeholder';
+            iconElement.textContent = user.userName.charAt(0);
+          }
+
+          const info = document.createElement('div');
+          info.className = 'user-info';
+
+          const name = document.createElement('div');
+          name.className = 'user-name';
+          name.textContent = user.userName;
+
+          const permission = document.createElement('div');
+          permission.className = 'user-permission';
+          permission.textContent = user.permission || 'スタッフ';
+
+          info.appendChild(name);
+          info.appendChild(permission);
+
+          item.appendChild(iconElement);
+          item.appendChild(info);
+
+          container.appendChild(item);
+        });
+
+      } catch (error) {
+        console.error('[Direct Chat] ユーザー一覧取得エラー:', error);
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⚠️</div>
+            <div class="empty-state-text">ユーザー一覧の読み込みに失敗しました</div>
+            <div style="font-size: 14px; color: #a0aec0;">${error.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    // roomId生成（dm_[user1]_[user2]、アルファベット順）
+    function generateDirectRoomId(user1, user2) {
+      const users = [user1, user2].sort();
+      return `dm_${users[0]}_${users[1]}`;
+    }
+
+    // ユーザー選択時の処理
+    async function selectUserForDirectChat(targetUserName) {
+      console.log('[Direct Chat] ユーザー選択:', targetUserName);
+
+      if (!currentUserName) {
+        alert('ユーザー情報が取得できません');
+        return;
+      }
+
+      try {
+        // roomId生成
+        const roomId = generateDirectRoomId(currentUserName, targetUserName);
+        console.log('[Direct Chat] 生成されたroomId:', roomId);
+
+        // 既存のDMルームをチェック
+        const q = query(
+          collection(db, 'rooms'),
+          where('__name__', '==', roomId)
+        );
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+          // 既存ルームが存在 → 開くだけ
+          console.log('[Direct Chat] 既存のDMルームを開く:', roomId);
+          closeDirectChatModal();
+          setTimeout(() => {
+            openRoom(roomId);
+          }, 300);
+          return;
+        }
+
+        // 新規DMルーム作成
+        console.log('[Direct Chat] 新規DMルーム作成:', roomId);
+        await createDirectChatRoom(roomId, targetUserName);
+
+      } catch (error) {
+        console.error('[Direct Chat] DMルーム作成エラー:', error);
+        alert('個別チャットの作成に失敗しました: ' + error.message);
+      }
+    }
+
+    // スワイプジェスチャー設定
+    function setupSwipeGesture(wrapper, item) {
+      let startX = 0;
+      let currentX = 0;
+      let isSwiping = false;
+
+      item.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        currentX = startX;
+        item.classList.add('swiping');
+      });
+
+      item.addEventListener('touchmove', (e) => {
+        if (!isSwiping && Math.abs(e.touches[0].clientX - startX) > 10) {
+          isSwiping = true;
+        }
+
+        if (isSwiping) {
+          currentX = e.touches[0].clientX;
+          const diff = currentX - startX;
+
+          // 左スワイプのみ許可（diff < 0）
+          if (diff < 0) {
+            const offset = Math.max(diff, -80);
+            item.style.transform = `translateX(${offset}px)`;
+          }
+        }
+      });
+
+      item.addEventListener('touchend', (e) => {
+        item.classList.remove('swiping');
+        const diff = currentX - startX;
+
+        if (diff < -40) {
+          // 40px以上スワイプで削除ボタン表示
+          item.style.transform = 'translateX(-80px)';
+        } else {
+          // 閉じる
+          item.style.transform = 'translateX(0)';
+        }
+
+        isSwiping = false;
+        startX = 0;
+        currentX = 0;
+      });
+    }
+
+    // 削除確認ダイアログ
+    function confirmDeleteRoom(roomId, roomName) {
+      const displayName = roomName || '不明なルーム';
+      if (confirm(`「${displayName}」を削除しますか？\n\n会話履歴も完全に削除されます。この操作は取り消せません。`)) {
+        deleteRoom(roomId);
+      }
+    }
+
+    // ルーム削除（サブコレクション含む完全削除）
+    async function deleteRoom(roomId) {
+      try {
+        console.log('[Delete Room] 削除開始:', roomId);
+
+        // 1. messagesサブコレクションの全メッセージを削除
+        const messagesRef = collection(db, `rooms/${roomId}/messages`);
+        const messagesSnapshot = await getDocs(messagesRef);
+
+        console.log('[Delete Room] メッセージ数:', messagesSnapshot.size);
+
+        const deleteBatch = [];
+        messagesSnapshot.forEach((doc) => {
+          deleteBatch.push(deleteDoc(doc.ref));
+        });
+
+        if (deleteBatch.length > 0) {
+          await Promise.all(deleteBatch);
+          console.log('[Delete Room] メッセージ削除完了');
+        }
+
+        // 2. unreadCountsサブコレクションを削除
+        const unreadRef = collection(db, `rooms/${roomId}/unreadCounts`);
+        const unreadSnapshot = await getDocs(unreadRef);
+
+        const unreadBatch = [];
+        unreadSnapshot.forEach((doc) => {
+          unreadBatch.push(deleteDoc(doc.ref));
+        });
+
+        if (unreadBatch.length > 0) {
+          await Promise.all(unreadBatch);
+          console.log('[Delete Room] 未読カウント削除完了');
+        }
+
+        // 3. roomドキュメントを削除
+        await deleteDoc(doc(db, 'rooms', roomId));
+        console.log('[Delete Room] ルーム削除完了');
+
+        // 4. UIから削除
+        const wrapper = document.querySelector(`.room-item-wrapper[data-room-id="${roomId}"]`);
+        if (wrapper) {
+          wrapper.style.opacity = '0';
+          wrapper.style.transform = 'translateX(-100%)';
+          setTimeout(() => {
+            wrapper.remove();
+          }, 300);
+        }
+
+        alert('ルームを削除しました');
+
+      } catch (error) {
+        console.error('[Delete Room] エラー:', error);
+        alert('ルームの削除に失敗しました: ' + error.message);
+      }
+    }
+
+    // Firestore roomsに個別チャットルーム作成
+    async function createDirectChatRoom(roomId, targetUserName) {
+      try {
+        // カスタムドキュメントIDでルーム作成
+        await setDoc(doc(db, 'rooms', roomId), {
+          name: '',  // 個別チャットは動的生成するため空欄
+          type: 'direct',
+          icon: '👤',
+          members: [currentUserName, targetUserName],
+          createdBy: currentUserName,
+          createdAt: serverTimestamp(),
+          lastMessageAt: serverTimestamp(),
+          lastMessage: '',
+          lastMessageBy: ''
+        });
+
+        console.log('[Direct Chat] DMルーム作成成功:', roomId);
+
+        // モーダルを閉じる
+        closeDirectChatModal();
+
+        // 作成したルームを開く
+        setTimeout(() => {
+          openRoom(roomId);
+        }, 500);
+
+      } catch (error) {
+        console.error('[Direct Chat] Firestore書き込みエラー:', error);
+        throw error;
+      }
+    }
+  </script>
+
+  <!-- 戻るボタン処理 -->
+<script>
+  console.log('[chat_rooms_list] ✅ Script loaded - Version @899-debug');
+  
+  async function goBack() {
+    console.log('[chat_rooms_list] >>> goBack() called at', new Date().toISOString());
+    const isInIframe = window.self !== window.top;
+    console.log('[chat_rooms_list] isInIframe:', isInIframe);
+    
+    if (isInIframe) {
+      console.log('[chat_rooms_list] iframe内で開かれているため、postMessage送信');
+      window.top.postMessage({ type: 'navigateToHome' }, '*');
+      console.log('[chat_rooms_list] ✅ postMessage送信完了');
+    } else {
+      console.log('[chat_rooms_list] 直接開かれているため、google.script.host.close()');
+      google.script.host.close();
+    }
+  }
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('[chat_rooms_list] DOMContentLoaded fired');
+    const backButton = document.getElementById('back-button');
+    console.log('[chat_rooms_list] backButton element:', backButton);
+    
+    if (backButton) {
+      backButton.addEventListener('click', goBack);
+      console.log('[chat_rooms_list] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
+    } else {
+      console.error('[chat_rooms_list] ❌ 戻るボタンが見つかりません');
+    }
+  });
+</script>
+
+</body>
+</html>
