@@ -198,7 +198,7 @@
   <div id="app-container">
     <!-- ヘッダー -->
     <div class="header">
-      <button class="back-button" onclick="goBack()">← 戻る</button>
+      <button class="back-button" id="back-button">← 戻る</button>
       <div class="header-title">🔔 通知</div>
     </div>
 
@@ -275,42 +275,38 @@
       }
     }
 
-    // 戻るボタン（Firestore経由でトップメニューに戻る）
+    // ページ読み込み時に表示を更新
+    window.addEventListener('load', () => {
+      updateDisplay();
+    });
+  </script>
+
+  <!-- 戻るボタン処理 -->
+  <script>
     async function goBack() {
-      const sessionId = sessionStorage.getItem('device_session_id');
-      if (sessionId) {
-        try {
-          const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-          const db = window.db;
-          if (!db) {
-            console.error('[notifications] ❌ Firestore未初期化');
-            window.location.href = '/index.html';
-            return;
-          }
-          await setDoc(doc(db, 'navigation', sessionId), {
-            action: 'navigate',
-            destination: 'top-menu',
-            sessionId: sessionId,
-            timestamp: serverTimestamp(),
-            from: 'notifications'
-          });
-          console.log('[notifications] ✅ Firestore書き込み成功 - トップメニューに戻る');
-        } catch (error) {
-          console.error('[notifications] ❌ Firestoreエラー:', error);
-          window.location.href = '/index.html';
-        }
+      console.log('[notifications] >>> goBack() called at', new Date().toISOString());
+
+      const isInIframe = window.self !== window.top;
+
+      if (isInIframe) {
+        console.log('[notifications] iframe内で開かれているため、Firestore経由で戻る');
+        // notifications.htmlはFirebase未使用のため、postMessageで親に通知
+        window.parent.postMessage({ type: 'navigateToHome' }, '*');
+        console.log('[notifications] ✅ postMessage送信完了 - トップメニューに戻る');
       } else {
         console.log('[notifications] 直接開かれているため、index.htmlに遷移');
         window.location.href = '/index.html';
       }
     }
 
-    // goBack関数をグローバルスコープに公開
-    window.goBack = goBack;
-
-    // ページ読み込み時に表示を更新
-    window.addEventListener('load', () => {
-      updateDisplay();
+    document.addEventListener('DOMContentLoaded', () => {
+      const backButton = document.getElementById('back-button');
+      if (backButton) {
+        backButton.addEventListener('click', goBack);
+        console.log('[notifications] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
+      } else {
+        console.error('[notifications] ❌ 戻るボタンが見つかりません');
+      }
     });
   </script>
 </body>

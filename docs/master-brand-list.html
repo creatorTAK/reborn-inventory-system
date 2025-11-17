@@ -530,7 +530,7 @@
   <!-- ヘッダー -->
   <div class="header">
     <div class="header-content">
-      <button class="back-button" onclick="goBack()">
+      <button class="back-button" id="back-button">
         <i class="bi bi-chevron-left"></i>
       </button>
       <div class="header-title">
@@ -681,22 +681,35 @@
       console.error('❌ [Master Brand] 初期化エラー:', error);
       alert('初期化エラーが発生しました。ページを再読み込みしてください。');
     });
+  </script>
 
-    // 戻るボタンのgoBack関数定義
+  <!-- 戻るボタン処理 -->
+  <script>
     async function goBack() {
-      const sessionId = sessionStorage.getItem('device_session_id');
-      if (sessionId) {
+      console.log('[master-brand-list] >>> goBack() called at', new Date().toISOString());
+
+      const isInIframe = window.self !== window.top;
+
+      if (isInIframe) {
+        console.log('[master-brand-list] iframe内で開かれているため、Firestore経由で戻る');
         try {
-          const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-          const db = window.db;
-          if (!db) {
-            console.error('[master-brand-list] ❌ Firestore未初期化');
-            window.history.back();
+          if (typeof window.initializeFirestore !== 'function') {
+            console.error('[master-brand-list] ❌ initializeFirestore関数が未定義');
+            alert('Firestore初期化関数が見つかりません');
             return;
           }
-          await setDoc(doc(db, 'navigation', sessionId), {
+
+          const db = await window.initializeFirestore();
+          console.log('[master-brand-list] ✅ Firestore初期化完了');
+
+          const sessionId = sessionStorage.getItem('device_session_id');
+          console.log('[master-brand-list] sessionId:', sessionId);
+
+          const { getFirestore, collection, doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+          await setDoc(doc(db, 'navigation', 'menuControl'), {
             action: 'navigate',
-            destination: 'top-menu',
+            page: 'home',
             sessionId: sessionId,
             timestamp: serverTimestamp(),
             from: 'master-brand-list'
@@ -704,7 +717,7 @@
           console.log('[master-brand-list] ✅ Firestore書き込み成功 - トップメニューに戻る');
         } catch (error) {
           console.error('[master-brand-list] ❌ Firestoreエラー:', error);
-          window.history.back();
+          alert('戻る処理でエラーが発生しました: ' + error.message);
         }
       } else {
         console.log('[master-brand-list] 直接開かれているため、history.back()で戻る');
@@ -712,8 +725,15 @@
       }
     }
 
-    // goBack関数をグローバルスコープに公開
-    window.goBack = goBack;
+    document.addEventListener('DOMContentLoaded', () => {
+      const backButton = document.getElementById('back-button');
+      if (backButton) {
+        backButton.addEventListener('click', goBack);
+        console.log('[master-brand-list] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
+      } else {
+        console.error('[master-brand-list] ❌ 戻るボタンが見つかりません');
+      }
+    });
   </script>
 </body>
 </html>
