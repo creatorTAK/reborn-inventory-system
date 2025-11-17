@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>設定管理</title>
+  <title>設定管理 v930</title>
 
   <!-- PWA対応 -->
   <link rel="manifest" href="<?= ScriptApp.getService().getUrl() ?>?menu=manifest">
@@ -1534,7 +1534,7 @@
 </div>
 
 <script>
-  // 管理番号ビルダーシステム
+  // 管理番号ビルダーシステム (PWA対応 @916)
   const ManagementNumberBuilder = {
     segments: [],
     currentEditingIndex: null,
@@ -1702,7 +1702,7 @@
       this.renderTypeGrid();
       this.updatePreview();
       this.setupDragAndDrop();
-      this.loadSettings();
+      // loadSettings()はFirebase初期化後に外部から呼ばれる
       this.setupPresetSelector();
     },
 
@@ -1730,22 +1730,34 @@
       });
     },
 
-    // 設定をサーバーから読み込み
+    // 設定をFirestoreから読み込み（高速化・compat版）
     loadSettings() {
-      if (google && google.script && google.script.run) {
-        google.script.run
-          .withSuccessHandler((config) => {
-            if (config && config.segments && config.segments.length > 0) {
-              this.segments = config.segments;
-              this.renderSegments();
-              this.updatePreview();
-              console.log('管理番号設定を読み込みました:', config.segments.length, 'セグメント');
+      if (!window.firestoreReady || !window.db) {
+        console.warn('⚠️ Firestoreが初期化されていません');
+        return;
+      }
+
+      try {
+        // compat版API使用
+        window.db.collection('settings').doc('common').get()
+          .then((docSnap) => {
+            if (docSnap.exists) {
+              const data = docSnap.data();
+              if (data.managementNumber && data.managementNumber.segments) {
+                this.segments = data.managementNumber.segments;
+                this.renderSegments();
+                this.updatePreview();
+                console.log('✅ Firestoreから管理番号設定を読み込み:', this.segments.length, 'セグメント');
+              }
+            } else {
+              console.log('📝 Firestoreに設定が見つかりません（初回起動）');
             }
           })
-          .withFailureHandler((error) => {
-            console.error('管理番号設定の読み込みエラー:', error);
-          })
-          .getManagementNumberConfig();
+          .catch((e) => {
+            console.error('❌ Firestore読み込みエラー:', e);
+          });
+      } catch (e) {
+        console.error('❌ Firestore読み込みエラー:', e);
       }
     },
 
@@ -2749,7 +2761,7 @@ ${descFormattedNumber}`;
 
     <!-- 保存ボタン -->
     <div class="save-btn" style="display: flex; justify-content: center;">
-      <button type="button" onclick="saveConfig()" style="background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%); color: white; border: none; padding: 12px 48px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='linear-gradient(135deg, #2E94C5 0%, #1A6A8F 100%)'" onmouseout="this.style.background='linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%)'" onmousedown="this.style.transform='scale(0.98)'; this.style.opacity='0.8';" onmouseup="this.style.transform='scale(1)'; this.style.opacity='1';">
+      <button type="button" onclick="window.saveConfig()" style="background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%); color: white; border: none; padding: 12px 48px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='linear-gradient(135deg, #2E94C5 0%, #1A6A8F 100%)'" onmouseout="this.style.background='linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%)'" onmousedown="this.style.transform='scale(0.98)'; this.style.opacity='0.8';" onmouseup="this.style.transform='scale(1)'; this.style.opacity='1';">
         ✓ 設定を保存
       </button>
     </div>
@@ -4328,6 +4340,45 @@ ${descFormattedNumber}`;
     }
 
     /**
+     * 全設定をFirestoreに保存（PWA版からアクセス可能）
+     */
+    function saveConfigToFirestore(config) {
+      if (!window.firestoreReady || !window.db) {
+        console.warn('⚠️ Firestoreが初期化されていません（localStorage のみ保存）');
+        return Promise.resolve(false);
+      }
+
+      try {
+        console.log('📤 Firestoreに設定を保存中...');
+
+        // compat版API使用
+        return window.db.collection('settings').doc('common').set({
+          conditionButtons: config['商品状態ボタン'] || {},
+          hashtag: config['ハッシュタグ'] || {},
+          discount: config['割引情報'] || {},
+          shippingDefault: config['配送デフォルト'] || {},
+          procureListingDefault: config['仕入出品デフォルト'] || {},
+          managementNumber: config['管理番号設定'] || {},
+          salesword: config['よく使うセールスワード'] || {},
+          aiSettings: config['AI生成設定'] || {},
+          designTheme: config['デザインテーマ'] || 'modern',
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        })
+        .then(() => {
+          console.log('✅ Firestoreへの保存完了（settings/common）');
+          return true;
+        })
+        .catch((e) => {
+          console.error('❌ Firestore保存エラー:', e);
+          return false;
+        });
+      } catch (e) {
+        console.error('❌ Firestore保存エラー:', e);
+        return Promise.resolve(false);
+      }
+    }
+
+    /**
      * 設定変更を商品登録画面に通知（postMessage）
      */
     function notifyConfigChange() {
@@ -4400,7 +4451,7 @@ ${descFormattedNumber}`;
     /**
      * 設定を保存
      */
-    function saveConfig() {
+    window.saveConfig = function() {
       try {
         console.log('=== saveConfig 開始 ===');
         const managementConfig = collectManagementConfig();
@@ -4435,7 +4486,7 @@ ${descFormattedNumber}`;
         }
       }
 
-      // アイコン画像をアップロード（選択されている場合）
+        // アイコン画像をアップロード（選択されている場合）
       if (pendingUserIconData && google && google.script && google.script.run) {
         console.log('アイコン画像をアップロード中...');
         google.script.run
@@ -4528,19 +4579,25 @@ ${descFormattedNumber}`;
         console.log('Step 10: localStorageに保存中...');
         const localStorageSaved = saveConfigToLocalStorage(newConfig);
 
-        // 2. postMessageで商品登録画面に通知（リロード不要で反映）
-        console.log('Step 11: postMessage通知中...');
+        // 2. Firestoreに保存（PWA版からアクセス可能）
+        console.log('Step 11: Firestoreに保存中...');
+        saveConfigToFirestore(newConfig).catch(err => {
+          console.warn('⚠️ Firestore保存は失敗しましたが、localStorageには保存されました:', err);
+        });
+
+        // 3. postMessageで商品登録画面に通知（リロード不要で反映）
+        console.log('Step 12: postMessage通知中...');
         notifyConfigChange();
 
-        // 3. PropertiesServiceに保存（バックアップ・他端末同期用）
-        console.log('Step 12: PropertiesServiceに保存中（リトライ機能付き）...');
+        // 4. PropertiesServiceに保存（バックアップ・他端末同期用）
+        console.log('Step 13: PropertiesServiceに保存中（リトライ機能付き）...');
         if (google && google.script && google.script.run) {
           // リトライ機能付きで保存
           saveConfigMasterWithRetry(newConfig, 0, 3, localStorageSaved);
         } else {
-          console.log('Step 13: google.script.run が利用不可');
+          console.log('Step 14: google.script.run が利用不可');
           if (localStorageSaved) {
-            alert('✅ 設定完了しました');
+            alert('✅ 設定完了しました（Firestore + localStorage）');
           } else {
             alert('❌ 設定の保存に失敗しました');
           }
@@ -6492,17 +6549,20 @@ ${prompt || '（未設定）'}
     })();
   </script>
 
+  <!-- Firebase SDK (compat版: UMD形式) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
   <!-- Firebase Cloud Messaging - フォアグラウンド通知対応 -->
-  <script type="module">
-    // Firebase設定
+  <script>
+    // Firebase設定（reborn-chatプロジェクトに統一）
     const firebaseConfig = {
-      apiKey: "AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A",
-      authDomain: "reborn-pwa.firebaseapp.com",
-      projectId: "reborn-pwa",
-      storageBucket: "reborn-pwa.firebasestorage.app",
-      messagingSenderId: "345653439471",
-      appId: "1:345653439471:web:7620819ce3f022d9cd241a",
-      measurementId: "G-SX48K45X75"
+      apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+      authDomain: "reborn-chat.firebaseapp.com",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "345706548795",
+      appId: "1:345706548795:web:058a553da6b4b74db5161e"
     };
 
     // ================= 画像管理設定 =================
@@ -6683,54 +6743,47 @@ ${prompt || '（未設定）'}
       }
     });
 
-    // Firebase初期化
-    async function initFirebaseMessaging() {
-      try {
-        // Firebase App と Messaging をインポート
-        const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
-        const { getMessaging, onMessage } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
+    // グローバル変数: Firestore インスタンス（window に公開）
+    window.db = null;
+    window.firestoreReady = false;
 
-        // 既に初期化されているかチェック
-        let app;
-        if (getApps().length === 0) {
-          app = initializeApp(firebaseConfig);
-          console.log('✅ Firebase App初期化（設定管理ページ）');
-        } else {
-          app = getApp();
-          console.log('✅ 既存のFirebase Appを使用（設定管理ページ）');
+    // Firebase初期化（compat版: GAS Web App対応）
+    function initFirebase() {
+      try {
+        console.log('[sidebar_config] Firebase初期化開始');
+        console.log('[sidebar_config] firebase:', typeof firebase);
+
+        if (typeof firebase === 'undefined') {
+          throw new Error('Firebase SDK が読み込まれていません');
         }
 
-        const messaging = getMessaging(app);
-        console.log('✅ Firebase Messaging取得完了（設定管理ページ）');
+        // Firebase App初期化
+        const app = firebase.initializeApp(firebaseConfig);
+        console.log('✅ Firebase App初期化（設定管理ページ）');
 
-        // フォアグラウンドメッセージ受信（アプリが開いている時）
-        onMessage(messaging, (payload) => {
-          console.log('📨 フォアグラウンドメッセージ受信（設定管理ページ）:', payload);
+        // Firestore初期化（compat版: window に公開）
+        window.db = firebase.firestore();
 
-          // 通知データを取得
-          const notificationTitle = payload.data?.title || payload.notification?.title || 'REBORN';
-          const notificationBody = payload.data?.body || payload.notification?.body || '新しい通知があります';
+        // GAS iframe での CORS エラー回避: WebSocket を無効化して long-polling を使用
+        try {
+          window.db.settings({
+            experimentalForceLongPolling: true,
+            experimentalAutoDetectLongPolling: false
+          });
+          console.log('✅ Firestore long-polling設定完了');
+        } catch (settingsError) {
+          console.error('⚠️ Firestore settings エラー:', settingsError);
+        }
 
-          // バッジを更新
-          incrementBadgeIfAvailable();
-
-          // ブラウザ通知を表示
-          if (Notification.permission === 'granted') {
-            new Notification(notificationTitle, {
-              body: notificationBody,
-              icon: '/reborn-inventory-system/icon-180.png',
-              badge: '/reborn-inventory-system/icon-192.png',
-              tag: 'reborn-notification-config-page',
-              requireInteraction: false  // 自動で消える
-            });
-            console.log('🔔 ブラウザ通知を表示しました（設定管理ページ）');
-          }
-        });
+        window.firestoreReady = true;
+        console.log('✅ Firestore初期化完了（設定管理ページ）');
+        console.log('[sidebar_config] db:', window.db);
 
       } catch (error) {
-        // エラーが発生してもページの他の機能に影響しないようにする
-        console.error('❌ Firebase Messaging初期化エラー:', error);
-        console.log('⚠️ 通知機能は利用できませんが、他の機能は正常に動作します');
+        // Firebase初期化エラー
+        console.error('❌ Firebase初期化エラー:', error);
+        console.error('[sidebar_config] error.message:', error.message);
+        console.error('[sidebar_config] error.stack:', error.stack);
       }
     }
 
@@ -6756,14 +6809,21 @@ ${prompt || '（未設定）'}
       }
     }
 
-    // ページ読み込み完了後、少し遅延させてからFirebase Messagingを初期化
-    // （他のスクリプトが完全に読み込まれるのを待つ）
+    // Firebase初期化を即座に実行し、完了後にloadSettings()を呼ぶ
+    function initFirebaseAndLoadSettings() {
+      initFirebase();
+
+      // Firestore初期化完了後、ManagementNumberBuilderのloadSettings()を呼ぶ
+      if (window.ManagementNumberBuilder && window.firestoreReady) {
+        console.log('🔥 Firebase初期化完了 → ManagementNumberBuilder.loadSettings()を呼び出します');
+        window.ManagementNumberBuilder.loadSettings();
+      }
+    }
+
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(initFirebaseMessaging, 2000);
-      });
+      document.addEventListener('DOMContentLoaded', initFirebaseAndLoadSettings);
     } else {
-      setTimeout(initFirebaseMessaging, 2000);
+      initFirebaseAndLoadSettings();
     }
 
     /**
@@ -6979,7 +7039,7 @@ ${prompt || '（未設定）'}
 
   <!-- 戻るボタン処理 -->
 <script>
-  console.log('[sidebar_config] ✅ Script loaded - Version @915-ManagementNumberBuilder-embedded');
+  console.log('[sidebar_config] ✅ Script loaded - Version @930-LongPolling-Forced');
   
   async function goBack() {
     console.log('[sidebar_config] >>> goBack() called at', new Date().toISOString());
