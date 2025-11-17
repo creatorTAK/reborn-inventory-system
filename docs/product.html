@@ -248,58 +248,21 @@ function navigateInPWA(url) {
       console.error('localStorage読み込みエラー:', e);
     }
 
-    // 2. バックグラウンドでサーバーから読み込んで同期（バックアップ復元）
-    if (google && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(config) {
-          if (config) {
-            console.log('📥 Step 2: サーバーから設定を取得しました:', config);
+    // PWA版：localStorageのみを使用（Firestore同期は将来実装予定）
+    console.log('✅ PWA版: localStorage設定を使用（Firestore同期は未実装）');
 
-            // サーバーの設定でCACHED_CONFIGとlocalStorageを更新（同期）
-            CACHED_CONFIG = config;
-
-            // localStorageにも保存（バックアップ復元 + 次回起動の高速化）
-            try {
-              localStorage.setItem(CONFIG_STORAGE_KEYS.CONDITION_BUTTONS, JSON.stringify(config['商品状態ボタン'] || []));
-              localStorage.setItem(CONFIG_STORAGE_KEYS.HASHTAG, JSON.stringify(config['ハッシュタグ'] || {}));
-              localStorage.setItem(CONFIG_STORAGE_KEYS.DISCOUNT, JSON.stringify(config['割引情報'] || {}));
-              localStorage.setItem(CONFIG_STORAGE_KEYS.SHIPPING_DEFAULT, JSON.stringify(config['配送デフォルト'] || {}));
-              localStorage.setItem(CONFIG_STORAGE_KEYS.PROCURE_LISTING_DEFAULT, JSON.stringify(config['仕入出品デフォルト'] || {}));
-              localStorage.setItem(CONFIG_STORAGE_KEYS.MANAGEMENT_NUMBER, JSON.stringify(config['管理番号設定'] || {}));
-              localStorage.setItem(CONFIG_STORAGE_KEYS.SALESWORD, JSON.stringify(config['よく使うセールスワード'] || {}));
-              localStorage.setItem(CONFIG_STORAGE_KEYS.AI_SETTINGS, JSON.stringify(config['AI生成設定'] || {}));
-              if (config['デザインテーマ']) {
-                localStorage.setItem(CONFIG_STORAGE_KEYS.DESIGN_THEME, config['デザインテーマ']);
-              }
-              console.log('✅ サーバー設定をlocalStorageに同期しました');
-            } catch (e) {
-              console.warn('localStorage同期エラー:', e);
-            }
-
-            // デザインテーマを適用
-            if (config.デザインテーマ) {
-              const theme = config.デザインテーマ;
-              console.log('✅ デザインテーマを読み込みました:', theme);
-
-              // テーマクラスを適用（LocalStorageと異なる場合のみ）
-              if (theme !== 'casual') {
-                const themeClass = 'theme-' + theme;
-                if (!document.body.classList.contains(themeClass)) {
-                  document.body.classList.add(themeClass);
-                  console.log('✅ テーマクラスを追加:', themeClass);
-                }
-              } else {
-                // カジュアルテーマに戻す場合は全テーマクラスを削除
-                document.body.classList.remove('theme-modern');
-                console.log('ℹ️ カジュアルテーマ（デフォルト）を使用');
-              }
-            }
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('❌ サーバー設定読み込みエラー（localStorageを使用）:', error);
-        })
-        .loadConfigMaster();
+    // デザインテーマを適用（localStorageから）
+    try {
+      const savedTheme = localStorage.getItem(CONFIG_STORAGE_KEYS.DESIGN_THEME);
+      if (savedTheme && savedTheme !== 'casual') {
+        const themeClass = 'theme-' + savedTheme;
+        if (!document.body.classList.contains(themeClass)) {
+          document.body.classList.add(themeClass);
+          console.log('✅ デザインテーマを適用:', themeClass);
+        }
+      }
+    } catch (e) {
+      console.warn('デザインテーマ適用エラー:', e);
     }
   }
 
@@ -435,41 +398,24 @@ function navigateInPWA(url) {
     }
   }
 
-  // 担当者名を読み込む（FCMトークンから）
+  // 担当者名を読み込む（PWA版：URLパラメータから取得）
   function loadOperatorName() {
-    if (google && google.script && google.script.run) {
-      // グローバル変数からFCMトークンを取得（sidebar_product.html で定義）
-      const fcmToken = (typeof GLOBAL_FCM_TOKEN !== 'undefined' ? GLOBAL_FCM_TOKEN : '');
-      console.log('📱 FCMトークン取得 (GASテンプレート):', fcmToken ? fcmToken.substring(0, 20) + '...' : 'なし');
+    try {
+      // URLパラメータからuserNameを取得
+      const urlParams = new URLSearchParams(window.location.search);
+      const userName = urlParams.get('userName') || '';
 
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success && result.name) {
-            const staffField = document.getElementById('担当者');
-            if (staffField) {
-              staffField.value = result.name;
-              console.log('✅ 担当者名を設定しました:', result.name, '(取得元:', result.source + ')');
-            }
-          } else {
-            console.log('ℹ️ 担当者名が設定されていません');
-          }
-
-          // アイコンURLをPWAに送信（あれば）
-          if (result.iconUrl) {
-            // window.topに送信（最上位ウィンドウ = PWA）
-            if (window.top && window.top !== window.self) {
-              window.top.postMessage({
-                type: 'UPDATE_USER_ICON',
-                iconUrl: result.iconUrl
-              }, '*');
-              console.log('📤 PWAにアイコンURLを送信');
-            }
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('❌ 担当者名読み込みエラー:', error);
-        })
-        .getOperatorNameByTokenAPI(fcmToken);
+      if (userName) {
+        const staffField = document.getElementById('担当者');
+        if (staffField) {
+          staffField.value = userName;
+          console.log('✅ 担当者名を設定しました (PWA版):', userName);
+        }
+      } else {
+        console.log('ℹ️ 担当者名がURLパラメータに含まれていません');
+      }
+    } catch (error) {
+      console.error('❌ 担当者名読み込みエラー:', error);
     }
   }
   const REQUIRED = [];
@@ -6107,9 +6053,19 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
       }
     })(); // 即座実行
 
-    // マスタオプション取得
-    if (google && google.script && google.script.run && google.script.run.getMasterOptions) {
-      google.script.run.withSuccessHandler(opts=>{
+    // マスタオプション取得（PWA版：Firestoreから直接取得）
+    (async function loadMasterOptions() {
+      try {
+        const db = firebase.firestore();
+        const docRef = db.collection('master_options').doc('master');
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+          show('NG(MASTER): マスタオプションが見つかりません');
+          return;
+        }
+
+        const opts = docSnap.data();
         if (!opts || typeof opts !== 'object') {
           show('NG(MASTER): 空の応答');
           return;
@@ -6136,33 +6092,33 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         fillSel('サイズ(表記)_トップス', opts['サイズ(表記)']||[]);
         fillSel('サイズ(表記)_ボトムス', opts['サイズ(表記)']||[]);
 
-// ブランドデータ（Firestore版に移行）
+        // ブランドデータ（Firestore版に移行）
         // モジュール読み込み完了を待ってからFirestore版ブランド検索を初期化
         const initFirestoreBrandSearch = () => {
           if (typeof window.attachBrandSuggestFirestore === 'function') {
             console.log('🔥 Firestore版ブランド検索を初期化');
-            
+
             // 基本情報ブロックのブランド(英語)フィールド
             window.attachBrandSuggestFirestore('ブランド(英語)', {
               limit: 15,
               minChars: 1,
               debounceMs: 300
             });
-            
+
             // 商品名ブロックのブランド(英語)フィールド
             window.attachBrandSuggestFirestore('商品名_ブランド(英語)', {
               limit: 15,
               minChars: 1,
               debounceMs: 300
             });
-            
+
             console.log('✅ Firestore版ブランド検索初期化完了');
           } else {
             console.warn('⏳ Firestoreモジュール読み込み中... 1秒後に再試行');
             setTimeout(initFirestoreBrandSearch, 1000);
           }
         };
-        
+
         // モジュール読み込み完了を待機
         if (window.firestoreBrandModulesLoaded) {
           initFirestoreBrandSearch();
@@ -6191,45 +6147,46 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         fillSel('発送元の地域', opts['発送元の地域']||[]);
         fillSel('発送までの日数', opts['発送までの日数']||[]);
 
-applyShippingDefaults();
-applyProcureListingDefaults();
+        applyShippingDefaults();
+        applyProcureListingDefaults();
 
-// ★★★ ここから追加 ★★★
-// サイズ・商品の状態などのイベントリスナーを設定
-const sizeSelect = document.getElementById('サイズ');
-if (sizeSelect) {
-  sizeSelect.removeEventListener('change', updateNamePreview);
-  sizeSelect.addEventListener('change', updateNamePreview);
-  console.log('サイズプルダウンのイベントリスナー設定完了');
-}
+        // サイズ・商品の状態などのイベントリスナーを設定
+        const sizeSelect = document.getElementById('サイズ');
+        if (sizeSelect) {
+          sizeSelect.removeEventListener('change', updateNamePreview);
+          sizeSelect.addEventListener('change', updateNamePreview);
+          console.log('サイズプルダウンのイベントリスナー設定完了');
+        }
 
-const conditionSelect = document.getElementById('商品の状態');
-if (conditionSelect) {
-  conditionSelect.removeEventListener('change', updateDescriptionFromDetail);
-  conditionSelect.addEventListener('change', updateDescriptionFromDetail);
-  conditionSelect.removeEventListener('change', updateConditionButtons);
-  conditionSelect.addEventListener('change', updateConditionButtons);
-  console.log('商品の状態プルダウンのイベントリスナー設定完了');
-}
+        const conditionSelect = document.getElementById('商品の状態');
+        if (conditionSelect) {
+          conditionSelect.removeEventListener('change', updateDescriptionFromDetail);
+          conditionSelect.addEventListener('change', updateDescriptionFromDetail);
+          conditionSelect.removeEventListener('change', updateConditionButtons);
+          conditionSelect.addEventListener('change', updateConditionButtons);
+          console.log('商品の状態プルダウンのイベントリスナー設定完了');
+        }
 
-const staffSelect = document.getElementById('担当者');
-if (staffSelect) {
-  staffSelect.removeEventListener('change', updateNamePreview);
-  staffSelect.addEventListener('change', updateNamePreview);
-  console.log('担当者プルダウンのイベントリスナー設定完了');
-}
+        const staffSelect = document.getElementById('担当者');
+        if (staffSelect) {
+          staffSelect.removeEventListener('change', updateNamePreview);
+          staffSelect.addEventListener('change', updateNamePreview);
+          console.log('担当者プルダウンのイベントリスナー設定完了');
+        }
 
-  // グローバルにマスターオプションを保存（階層式セレクター用）
-  window.globalMasterOptions = opts;
-
-  // ブランド候補設定は getBrandPairs() の成功時に実行される
+        // グローバルにマスターオプションを保存（階層式セレクター用）
+        window.globalMasterOptions = opts;
 
         wirePreviewWatchers();
         updateNamePreview();
         adjustPreviewHeight();
 
-      }).withFailureHandler(e=> show(`NG(MASTER): ${e && e.message ? e.message : e}`)).getMasterOptions();
-    }
+        console.log('✅ マスタオプション読み込み完了');
+      } catch (error) {
+        console.error('❌ マスタオプション読み込みエラー:', error);
+        show(`NG(MASTER): ${error && error.message ? error.message : error}`);
+      }
+    })(); // 即座実行
 
 // 階層式商品属性セレクター設定
   setupAttributeSelectors();
