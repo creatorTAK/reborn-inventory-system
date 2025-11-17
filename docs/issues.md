@@ -13,6 +13,605 @@
 
 ---
 
+## 🎨 UI/UX改善（UI/UX Improvement）
+
+## UI-017 | UI改善: 全メニューヘッダーUI統一化
+
+### 📌 基本情報
+- [ ] カテゴリ: UI改善 / デザインシステム
+- [ ] 優先度: 高
+- [ ] 影響範囲: 全メニュー（商品登録、在庫管理、入出庫履歴、設定管理）
+- [ ] 開始日: 2025-11-16
+- [ ] 関連Issue: UI-016（戻るボタン実装の前提条件）
+- [ ] 技術文書: `claudedocs/HEADER-UI-UNIFICATION-ANALYSIS.md`
+
+### 💡 目的
+全メニュー画面のヘッダーUIを統一し、一貫性のあるユーザー体験を提供する。戻るボタン実装（UI-016）の前提条件として、まずヘッダー構造を統一する。
+
+**背景:**
+- 現在、各メニュー画面のヘッダーUIがバラバラで統一感がない
+- ヘッダーがない画面、簡易タイトルのみの画面など、構造が不統一
+- 戻るボタンを配置する前に、まず土台となるヘッダーUIを統一する必要がある
+- PWA版マスタ管理のヘッダー構造が最も洗練されているため、これを標準とする
+
+**期待効果:**
+- ✅ 一貫性：全画面で統一されたヘッダーデザイン
+- ✅ プロフェッショナル：洗練されたUI体験
+- ✅ 拡張性：戻るボタン等の機能追加が容易
+- ✅ ユーザビリティ向上：どの画面にいるか明確に把握できる
+
+### 🔍 現状分析
+
+| 画面 | ファイル | ヘッダー構造 | 問題点 |
+|------|----------|--------------|--------|
+| **PWA版マスタ管理** | `docs/master-management.html` | ✅ 統一ヘッダーあり | 唯一の標準形 |
+| **商品登録** | `sidebar_product.html` | ❌ ヘッダーなし | mobile_header includeあるが空 |
+| **在庫管理** | `sidebar_inventory.html` | ❌ ヘッダーなし | モーダルタイトルのみ |
+| **入出庫履歴** | `inventory_history_viewer.html` | ⚠️ 簡易タイトルのみ | `<h4 class="page-title">` |
+| **設定管理** | `sidebar_config.html` | ❌ ヘッダーなし | タブナビゲーションのみ |
+
+**詳細な問題点:**
+- **ヘッダー構造が不統一**: あるものとないもの、タイトルのみの画面など様々
+- **タイトル表示が不統一**: `<h4>`, `<h5>`, `<div class="header-title">` など
+- **レイアウトが不統一**: 3カラム、中央寄せ、左寄せなど
+- **戻るボタン配置場所がない**: ヘッダーがないため、追加できない
+
+### 🎯 標準ヘッダー仕様
+
+#### 統一HTML構造
+```html
+<!-- 統一ヘッダー -->
+<div class="header">
+  <div class="header-content">
+    <!-- 左：戻るボタン -->
+    <button class="back-button" id="back-button">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+
+    <!-- 中央：タイトル -->
+    <div class="header-title" id="headerTitle">
+      <i class="bi bi-[ICON]" id="headerIcon"></i>
+      [画面タイトル]
+    </div>
+
+    <!-- 右：スペーサー（または機能ボタン） -->
+    <div style="width: 40px;"></div>
+  </div>
+</div>
+```
+
+#### 画面別タイトルとアイコン
+
+| 画面 | タイトル | Bootstrap Icons |
+|------|----------|----------------|
+| 商品登録 | 商品登録 | `bi-box-seam` |
+| 在庫管理 | 在庫管理 | `bi-clipboard-data` |
+| 入出庫履歴 | 入出庫履歴 | `bi-clock-history` |
+| 設定管理 | 設定管理 | `bi-gear` |
+| マスタ管理 | マスタ管理 | `bi-gear` |
+
+#### デザイン仕様
+- **レイアウト**: 3カラム（左：戻るボタン、中央：タイトル、右：スペーサー）
+- **配置**: Flexbox（`justify-content: space-between`）
+- **最大幅**: 800px（PC版、中央寄せ）
+- **背景**: 白（`#ffffff`）
+- **ボーダー**: 下部に1px（`#e5e7eb`）
+- **Position**: `sticky`（スクロール時も固定表示）
+
+### 📝 実装内容
+
+#### Phase 1: 共通CSS追加
+
+**ファイル**: `css/reborn-theme.css`
+
+**追加CSS**:
+```css
+/* ========================================
+   統一ヘッダーシステム
+   ======================================== */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 16px;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.back-button {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: #374151;
+  font-size: 20px;
+}
+
+.back-button:hover {
+  background: #e5e7eb;
+}
+
+.back-button:active {
+  background: #d1d5db;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+}
+
+.header-title i {
+  font-size: 20px;
+}
+
+/* レスポンシブ調整 */
+@media (max-width: 767px) {
+  .header {
+    padding: 10px 12px;
+  }
+
+  .header-title {
+    font-size: 16px;
+  }
+}
+```
+
+**デプロイ**: PWA（`git push origin main`）
+
+#### Phase 2: 各メニューへのヘッダー実装
+
+##### 2.1. 商品登録 (`sidebar_product.html`)
+
+**追加箇所**: `<body>` タグ直後
+
+```html
+<body class="<?!= typeof isSidebar !== 'undefined' && isSidebar ? 'sidebar' : '' ?>">
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" id="back-button">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <i class="bi bi-box-seam"></i>
+        商品登録
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+  </div>
+
+  <!-- 既存のコンテンツ -->
+  <?!= include('sp_block_manage'); ?>
+  ...
+```
+
+**CSS追加**（`<head>`内）:
+```html
+<link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=XXXX">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+```
+
+**デプロイ**: GAS（`clasp push` + `clasp deploy`）
+
+##### 2.2. 在庫管理 (`sidebar_inventory.html`)
+
+**追加箇所**: Loading Overlay直後
+
+```html
+<body>
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">...</div>
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" id="back-button">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <i class="bi bi-clipboard-data"></i>
+        在庫管理
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+  </div>
+
+  <!-- モーダル類 -->
+  ...
+```
+
+**デプロイ**: GAS（`clasp push` + `clasp deploy`）
+
+##### 2.3. 入出庫履歴 (`inventory_history_viewer.html`)
+
+**変更箇所**: 既存の `<h4 class="page-title">` を削除し、ヘッダー構造に置き換え
+
+```html
+<body>
+  <!-- 既存のタイトルを削除 -->
+  <!-- <h4 class="page-title">📊 入出庫履歴</h4> -->
+
+  <!-- 新しいヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" id="back-button">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <i class="bi bi-clock-history"></i>
+        入出庫履歴
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+    <!-- フィルタリングセクション -->
+    ...
+```
+
+**削除するCSS**（既存の.page-titleクラス）:
+```css
+/* 削除対象 */
+.page-title {
+  margin: 0 0 16px 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #212529;
+}
+
+@media (min-width: 768px) {
+  .page-title {
+    display: none;
+  }
+}
+```
+
+**デプロイ**: GAS（`clasp push` + `clasp deploy`）
+
+##### 2.4. 設定管理 (`sidebar_config.html`)
+
+**追加箇所**: `<body>` タグ直後
+
+```html
+<body>
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" id="back-button">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <i class="bi bi-gear"></i>
+        設定管理
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+  </div>
+
+  <!-- 既存のコンテンツ -->
+  <div class="config-container">
+    ...
+```
+
+**注意**: タブナビゲーションとの共存確認（z-index管理）
+
+**デプロイ**: GAS（`clasp push` + `clasp deploy`）
+
+### ✅ 実装チェックリスト
+
+#### 共通準備
+- [ ] `css/reborn-theme.css` に統一ヘッダーCSS追加
+- [ ] キャッシュバスター更新（`?v=xxxx`）
+- [ ] PWAデプロイ（`git push origin main`）
+
+#### 商品登録 (`sidebar_product.html`)
+- [ ] ヘッダーHTML追加
+- [ ] Bootstrap Icons CDN追加
+- [ ] reborn-theme.css読み込み確認
+- [ ] 動作確認（iframe内）
+- [ ] GASデプロイ
+
+#### 在庫管理 (`sidebar_inventory.html`)
+- [ ] ヘッダーHTML追加
+- [ ] Bootstrap Icons CDN追加
+- [ ] reborn-theme.css読み込み確認
+- [ ] 動作確認（iframe内）
+- [ ] GASデプロイ
+
+#### 入出庫履歴 (`inventory_history_viewer.html`)
+- [ ] 既存タイトル削除
+- [ ] ヘッダーHTML追加
+- [ ] Bootstrap Icons CDN追加
+- [ ] reborn-theme.css読み込み確認
+- [ ] 旧CSSクラス削除
+- [ ] 動作確認（iframe内 + 直接開く）
+- [ ] GASデプロイ
+
+#### 設定管理 (`sidebar_config.html`)
+- [ ] ヘッダーHTML追加
+- [ ] Bootstrap Icons CDN確認
+- [ ] reborn-theme.css読み込み確認
+- [ ] タブナビゲーションとの共存確認
+- [ ] 動作確認（iframe内）
+- [ ] GASデプロイ
+
+### 🔄 段階的ロールアウト戦略
+
+#### ステップ1: CSS統一（リスク低）
+1. `css/reborn-theme.css` に統一ヘッダーCSS追加
+2. キャッシュバスター更新
+3. PWAデプロイ（`git push origin main`）
+4. 影響確認（既存画面に影響なし）
+
+#### ステップ2: 1画面でテスト実装（リスク中）
+1. **入出庫履歴** (`inventory_history_viewer.html`) で先行実装
+   - 理由: 既存ヘッダーが最もシンプル
+2. GASデプロイ + 動作確認
+3. フィードバック収集
+
+#### ステップ3: 残り3画面を順次実装（リスク中）
+1. 在庫管理 (`sidebar_inventory.html`)
+2. 商品登録 (`sidebar_product.html`)
+3. 設定管理 (`sidebar_config.html`)
+4. 各実装後に動作確認
+
+#### ステップ4: 戻るボタン機能追加（次フェーズ）
+1. ヘッダーUI統一完了後
+2. UI-016に移行（戻るボタン実装）
+
+### 📊 成功基準
+- ✅ 全画面で統一されたヘッダーデザイン
+- ✅ レスポンシブ対応（SP/PC両方で適切に表示）
+- ✅ 既存機能に影響なし
+- ✅ ユーザーから「どの画面にいるか分かりやすくなった」とのフィードバック
+
+### 🔗 関連ドキュメント
+- **技術文書**: `claudedocs/HEADER-UI-UNIFICATION-ANALYSIS.md`
+- **戻るボタン技術パターン**: `claudedocs/TECH-PATTERN-back-button.md`
+- **次フェーズ**: Issue UI-016（戻るボタン実装）
+- **デザインシステム**: `.claude/skills/reborn-design-system.md`
+
+---
+
+## UI-016 | UI改善: 全メニューに統一的な戻るボタン実装
+
+### 📌 基本情報
+- [ ] カテゴリ: UI改善 / ナビゲーション
+- [ ] 優先度: 中
+- [ ] 影響範囲: 全メニュー（商品登録、在庫管理、入出庫履歴、設定管理）
+- [ ] 開始日: 2025-11-16
+- [ ] 関連Issue: MASTER-002（戻るボタン技術パターン確立）
+
+### 💡 目的
+MASTER-002で確立した戻るボタン技術パターンを、全てのメニュー画面に適用し、統一的なナビゲーション体験を提供する。
+
+**背景:**
+- MASTER-002（マスタ管理）で戻るボタン問題を解決
+- addEventListener + sessionId受け渡しパターンが確立された
+- 現在、商品登録・在庫管理・入出庫履歴・設定管理には戻るボタンがない
+- ユーザーから全メニューに戻るボタンを設置したいという要望
+
+**期待効果:**
+- ✅ 操作性向上：全画面から1タップでトップメニューに戻れる
+- ✅ 一貫性：全メニューで統一されたUI/UX
+- ✅ 効率化：技術パターン再利用による高速実装
+
+### 🎯 対象メニュー
+
+| メニュー名 | navigateToPage() | iframe.src | GASファイル | 戻るボタン |
+|-----------|-----------------|-----------|------------|----------|
+| 商品登録 | `'product'` | `baseUrl + '?menu=product'` | 不明 | ❌ なし |
+| 在庫管理 | `'inventory'` | `baseUrl + '?menu=inventory'` | sidebar_inventory_firestore.html? | ❌ なし |
+| 入出庫履歴 | `'inventory_history'` | `baseUrl + '?menu=inventory_history'` | inventory_history_viewer.html? | ❌ なし |
+| 設定管理（商品登録設定） | `'config-product'` | `baseUrl + '?menu=config&activeTab=product'` | sidebar_config.html | ❌ なし |
+| 設定管理（システム設定） | `'config-system'` | `baseUrl + '?menu=config&activeTab=system'` | sidebar_config.html | ❌ なし |
+| マスタ管理（商品関連） | `'master-product'` | PWA版 | master-management.html | ✅ **実装済み** |
+| マスタ管理（業務関連） | `'master-business'` | PWA版 | master-management.html | ✅ **実装済み** |
+
+### 📝 実装内容
+
+#### Phase 1: 親ページ（index.html）修正
+- [ ] navigateToPage()関数でsessionIdParamを追加
+  - `page === 'product'`: sessionIdParam追加
+  - `page === 'inventory'`: sessionIdParam追加
+  - `page === 'inventory_history'`: sessionIdParam追加
+  - `page === 'config-product'`: sessionIdParam追加
+  - `page === 'config-system'`: sessionIdParam追加
+
+**修正例**:
+```javascript
+// 修正前
+iframe.src = baseUrl + '?menu=product' + fcmParam + securityParams;
+
+// 修正後
+iframe.src = baseUrl + '?menu=product' + sessionIdParam + fcmParam + securityParams;
+```
+
+#### Phase 2: GAS版メニュー画面修正
+
+**各ファイルに以下を実装**:
+
+1. **ヘッダーHTML追加**:
+```html
+<div class="header">
+  <div class="header-content">
+    <button class="back-button" id="back-button">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+    <div class="header-title">ページタイトル</div>
+  </div>
+</div>
+```
+
+2. **JavaScript追加**:
+```javascript
+// sessionId受け渡し（初期化時）
+document.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const sessionId = urlParams.get('sessionId');
+
+  if (sessionId) {
+    sessionStorage.setItem('device_session_id', sessionId);
+    console.log('[ページ名] ✅ sessionIdをsessionStorageに保存しました');
+  }
+
+  const backButton = document.getElementById('back-button');
+  if (backButton) {
+    backButton.addEventListener('click', goBack);
+    console.log('[ページ名] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
+  }
+});
+
+// goBack()関数（Firestore経由）
+async function goBack() {
+  console.log('[ページ名] >>> goBack() called at', new Date().toISOString());
+
+  const isInIframe = window.self !== window.top;
+
+  if (isInIframe) {
+    console.log('[ページ名] iframe内で開かれているため、Firestore経由で戻る');
+    try {
+      // GAS版ではFirebaseがグローバルに初期化されている前提
+      const db = firebase.firestore();
+      const sessionId = sessionStorage.getItem('device_session_id');
+
+      await db.collection('navigation').doc('menuControl').set({
+        action: 'navigate',
+        page: 'home',
+        sessionId: sessionId,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        from: 'ページ識別子' // 例: 'product', 'inventory', 'config'
+      });
+      console.log('[ページ名] ✅ Firestore書き込み成功 - トップメニューに戻る');
+    } catch (error) {
+      console.error('[ページ名] ❌ Firestoreエラー:', error);
+      alert('戻る処理でエラーが発生しました: ' + error.message);
+    }
+  } else {
+    console.log('[ページ名] 直接開かれているため、history.back()で戻る');
+    window.history.back();
+  }
+}
+```
+
+#### Phase 3: 各メニュー個別対応
+
+**商品登録（GASファイル未確定）**:
+- [ ] GASファイル特定（menu=productで読み込まれるファイル）
+- [ ] ヘッダーHTML追加
+- [ ] JavaScript追加（sessionId + goBack）
+- [ ] from: 'product'
+
+**在庫管理（sidebar_inventory_firestore.html）**:
+- [ ] ヘッダーHTML追加
+- [ ] JavaScript追加（sessionId + goBack）
+- [ ] from: 'inventory'
+
+**入出庫履歴（inventory_history_viewer.html）**:
+- [ ] ヘッダーHTML追加
+- [ ] JavaScript追加（sessionId + goBack）
+- [ ] from: 'inventory_history'
+
+**設定管理（sidebar_config.html）**:
+- [ ] ヘッダーHTML追加
+- [ ] JavaScript追加（sessionId + goBack）
+- [ ] activeTabパラメータに応じたfrom設定
+- [ ] from: 'config-product' または 'config-system'
+
+### 📍 参考資料
+
+**技術ドキュメント**:
+- `claudedocs/TECH-PATTERN-back-button.md` - 完全な実装パターン
+
+**実装事例**:
+- `docs/master-management.html` - PWA版実装例
+- `docs/index.html` (line 1882, 1886) - sessionIdParam追加例
+
+**コミット**:
+- ea7d682: addEventListener方式に変更
+- 9b98152: sessionId問題修正
+
+### 🧪 テストケース
+
+#### TC-UI-016-001: 商品登録画面から戻る
+**前提条件:**
+- トップメニューから商品登録を開く
+
+**実行操作:**
+1. 戻るボタンをクリック
+
+**期待結果:**
+- [x] トップメニューに戻る
+- [x] コンソールに正しいログが出る
+- [x] sessionIdが正しく取得できている
+
+#### TC-UI-016-002: 在庫管理画面から戻る
+**前提条件:**
+- トップメニューから在庫管理を開く
+
+**実行操作:**
+1. 戻るボタンをクリック
+
+**期待結果:**
+- [ ] トップメニューに戻る
+- [ ] コンソールに正しいログが出る
+
+#### TC-UI-016-003: 入出庫履歴画面から戻る
+**前提条件:**
+- トップメニューから入出庫履歴を開く
+
+**実行操作:**
+1. 戻るボタンをクリック
+
+**期待結果:**
+- [ ] トップメニューに戻る
+- [ ] コンソールに正しいログが出る
+
+#### TC-UI-016-004: 設定管理画面から戻る
+**前提条件:**
+- トップメニューから設定管理を開く
+
+**実行操作:**
+1. 戻るボタンをクリック
+
+**期待結果:**
+- [ ] トップメニューに戻る
+- [ ] コンソールに正しいログが出る
+
+### 📝 テスト結果
+- [ ] TC-UI-016-001: PASS / FAIL
+- [ ] TC-UI-016-002: PASS / FAIL
+- [ ] TC-UI-016-003: PASS / FAIL
+- [ ] TC-UI-016-004: PASS / FAIL
+- [ ] デグレード確認: OK / NG
+
+### 状態
+- [ ] ✅ DONE (完了日: )
+
+---
+
 ## 📋 タスク管理（Task Management）
 
 ## TASK-001 | 機能追加: やることリスト機能（タスク管理・通知・バッジ）
@@ -722,6 +1321,27 @@ window.openGASPage = function(page) {
 - ✅ 汎用マスタ管理エンジン基盤構築完了
 - ✅ メインメニュー統合完了
 - ⚠️ ブランドマスタ統合（要修正）
+
+### 🔧 追加修正（2025-11-16）
+
+#### 戻るボタン問題の修正 ✅ 完了
+**問題**: トップメニューから商品関連マスタ管理を開いた後、戻るボタンをクリックしても何も起こらない
+
+**原因**:
+1. `onclick="goBack()"` が機能しない（goBack関数が未定義）
+2. iframe内でsessionIdが取得できず、Firestore navigation が sessionIdチェックで弾かれる
+
+**修正内容**:
+- [x] goBack()をaddEventListener方式に変更（inline onclick廃止）
+- [x] URLパラメータからsessionIdを取得してsessionStorageに保存
+- [x] index.htmlでiframe.srcにsessionIdパラメータ追加
+- [x] 確実なログ追加（関数呼び出し確認用）
+
+**コミット**:
+- ea7d682: addEventListener方式に変更
+- 9b98152: sessionId問題修正
+
+**テスト結果**: ✅ PASS - トップメニューに正常に戻ることを確認
 
 ### 状態
 - [ ] ✅ DONE (完了日: )

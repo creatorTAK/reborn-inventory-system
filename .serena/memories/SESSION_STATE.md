@@ -1,47 +1,47 @@
-# セッション状態 - 2025-11-15
+セッション開始: 2025-11-17 (新規セッション)
 
-## 現在の状況
+## 読み込み完了
+- ✅ MANDATORY_SESSION_START_CHECKLIST
+- ✅ DEPLOYMENT_RULES
+- ✅ issues-summary.md
+- ✅ TDD_POLICY.md
 
-**セッション開始時刻**: 2025-11-15 (新規セッション)
+## 未完了Issue状況
+- **総Issue数: 4件** (優先度高: 2件、中: 1件、低: 1件)
+- **保持Issue数: 7件** (自動読み込み対象外)
 
-**前回からの継続タスク:**
-- カテゴリマスタ移行スクリプト準備完了
-- `migration_categories.js` がGASにプッシュ済み
-- 実行待ち状態
+### 優先度高（2件）
+1. **UI-017**: 全メニューヘッダーUI統一化
+2. **MASTER-002**: 汎用マスタ管理エンジン実装（要修正：一覧表示復元）
 
-## 完了した作業
+### 優先度中（1件）
+3. **TASK-001**: やることリスト機能（タスク管理・通知・バッジ）
 
-### 前セッションで完了
-1. ブランドバックグラウンドプリロード実装（3回の修正）
-   - initializeFirestoreのグローバル公開
-   - 自動実行コードの移動
-   - 依存関係待機ロジック追加
-2. 商品マスタタブ順序変更（カテゴリ→ブランド）
-3. Firestoreルール修正（カテゴリ書き込み許可）
-4. カテゴリマスタ移行スクリプト作成
-   - REST API方式（既存パターンに統一）
-   - バッチ処理（500件/回）
-   - 進捗管理機能
+### 優先度低（1件）
+4. **UI-015**: チャットメニュー追加（トップメニュー・サイドメニュー）
 
-## 次のステップ
+## Git状態
+- **最新コミット**: 9b98152 - fix(MASTER-002): iframe内でsessionIdをsessionStorageに保存+親ページからURLパラメータで渡す
+- **ブランチ**: main (origin/mainと同期)
+- **未コミット変更あり**:
+  - modified: .serena/memories/SESSION_STATE.md
+  - modified: docs/issues-summary.md
+  - modified: docs/issues.md
+  - modified: management_number_builder.html
+  - modified: sidebar_config.html
+  - untracked: claudedocs/ 配下に3ファイル
 
-**即座に実行可能:**
-1. ユーザーがGASエディタで `migrateCategoriesNextBatch()` を実行
-2. 約4回の実行で1685件のカテゴリ移行完了
-3. カテゴリマスタ表示確認
-4. ブランドプリロード動作確認
+## デプロイ状態
+- **PWAデプロイID**: AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA
+- **最新バージョン**: @889
+- **最新デプロイ内容**: UI改善: 保存ボタン位置修正（margin削除で中央配置）
 
-**その後の予定:**
-- MASTER-002: 汎用マスタ管理エンジン実装（次の優先タスク）
+## 前回セッションの作業内容（推測）
+- 設定管理画面（sidebar_config.html）のUI改善
+- 管理番号ビルダー（management_number_builder.html）の修正
+- Issues管理ドキュメントの更新
+- claudedocsディレクトリに分析ドキュメント作成
 
-## 技術的メモ
-
-- カテゴリ構造: 6層階層（大分類→中分類→小分類→細分類1→細分類2→アイテム名）
-- Firestore REST API使用（既存パターン）
-- デプロイID: AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA
-
-## 未完了Issue
-
-- MASTER-002: 汎用マスタ管理エンジン実装（高優先度）
-- TASK-001: やることリスト機能（中優先度）
-- UI-015: チャットメニュー追加（低優先度）
+## セッション準備完了
+- ✅ 全チェック完了
+- ✅ 作業継続可能
