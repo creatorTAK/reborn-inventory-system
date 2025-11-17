@@ -4608,30 +4608,34 @@ style="display:none;">削除</button>
     }
     setManagementNumber('', '採番中…');
 
-    // PWA版：Firestoreで採番（Transaction使用で競合回避）
+    // PWA版：セグメント設定に基づいて管理番号を生成
     if (!(typeof google !== 'undefined' && google.script && google.script.run)) {
       try {
         if (!window.db) {
           throw new Error('Firestoreが初期化されていません');
         }
 
-        const counterRef = window.db.collection('counters').doc(`shelf_${shelf}`);
-        const newNumber = await window.db.runTransaction(async (transaction) => {
-          const counterDoc = await transaction.get(counterRef);
-          let currentCount = 0;
-          if (counterDoc.exists) {
-            currentCount = counterDoc.data().count || 0;
-          }
-          const nextCount = currentCount + 1;
-          transaction.set(counterRef, {
-            count: nextCount,
-            shelf: shelf,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
-          return nextCount;
-        });
+        // localStorage から segments 設定を読み込み
+        const saved = localStorage.getItem('rebornConfig_managementNumber');
+        let segments = [];
 
-        const managementNumber = `${shelf}-${String(newNumber).padStart(5, '0')}`;
+        if (saved) {
+          const config = JSON.parse(saved);
+          segments = config.segments || [];
+          console.log('📋 管理番号セグメント設定:', segments);
+        }
+
+        // セグメントが未設定の場合、デフォルト（棚-連番）
+        if (segments.length === 0) {
+          segments = [
+            { type: 'shelf', config: { format: 'AA' }, separator: '-' },
+            { type: 'sequence', config: { digits: '5', start: '1' }, separator: '' }
+          ];
+          console.log('⚠️ セグメント未設定、デフォルト使用:', segments);
+        }
+
+        // 管理番号を生成
+        const managementNumber = await generateManagementNumber(segments, shelf);
         setManagementNumber(managementNumber, '');
         console.log('✅ 管理番号採番成功 (PWA版):', managementNumber);
       } catch (error) {
@@ -4654,6 +4658,126 @@ style="display:none;">削除</button>
       show(`NG(UNKNOWN): ${e && e.message ? e.message : e}`);
       setManagementNumber('', 'エラー');
     }).getNextManagementNumber(shelf);
+  }
+
+  // セグメント設定に基づいて管理番号を生成
+  async function generateManagementNumber(segments, selectedShelf) {
+    const parts = [];
+    let counterKey = 'counter';  // カウンターキーの構築
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      const config = segment.config || {};
+      let value = '';
+
+      switch (segment.type) {
+        case 'shelf':
+          // 棚番号：商品登録画面で選択された値を使用
+          if (config.format === 'custom') {
+            value = config.code || selectedShelf;
+          } else {
+            value = selectedShelf;  // 実際に選択された棚番号
+          }
+          counterKey += `_shelf_${value}`;
+          break;
+
+        case 'category':
+          // カテゴリコード：固定値
+          value = config.code || 'K';
+          counterKey += `_category_${value}`;
+          break;
+
+        case 'date':
+          // 登録日：現在日時をフォーマット
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const d = String(now.getDate()).padStart(2, '0');
+
+          switch(config.format) {
+            case 'YYYYMMDD':
+              value = `${y}${m}${d}`;
+              break;
+            case 'YYMD':
+              value = `${String(y).slice(2)}${parseInt(m)}${parseInt(d)}`;
+              break;
+            case 'YYMM':
+              value = `${String(y).slice(2)}${m}`;
+              break;
+            default: // 'YYMMDD'
+              value = `${String(y).slice(2)}${m}${d}`;
+          }
+          counterKey += `_date_${value}`;
+          break;
+
+        case 'rank':
+          // 品質ランク：固定値
+          value = config.value || 'A';
+          counterKey += `_rank_${value}`;
+          break;
+
+        case 'size':
+          // サイズコード：固定値
+          value = config.code || 'M';
+          counterKey += `_size_${value}`;
+          break;
+
+        case 'color':
+          // 色コード：固定値
+          value = config.code || 'DB';
+          counterKey += `_color_${value}`;
+          break;
+
+        case 'custom':
+          // カスタム固定値
+          value = config.value || 'XXX';
+          counterKey += `_custom_${value}`;
+          break;
+
+        case 'sequence':
+          // 連番：Firestoreカウンターから取得
+          const digits = parseInt(config.digits) || 3;
+          const startNum = parseInt(config.start) || 1;
+
+          // Firestore Transactionでカウンター取得
+          const counterRef = window.db.collection('counters').doc(counterKey);
+          const newNumber = await window.db.runTransaction(async (transaction) => {
+            const counterDoc = await transaction.get(counterRef);
+            let currentCount = 0;
+            if (counterDoc.exists) {
+              currentCount = counterDoc.data().count || 0;
+            }
+            // 初回は開始番号、以降はインクリメント
+            const nextCount = currentCount === 0 ? startNum : currentCount + 1;
+            transaction.set(counterRef, {
+              count: nextCount,
+              key: counterKey,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            return nextCount;
+          });
+
+          value = String(newNumber).padStart(digits, '0');
+          console.log('🔢 連番生成:', { counterKey, value, newNumber });
+          break;
+
+        default:
+          console.warn('⚠️ 未知のセグメントタイプ:', segment.type);
+          value = '';
+      }
+
+      if (value) {
+        parts.push(value);
+        // 次のセグメントがある場合は区切り文字を追加
+        if (i < segments.length - 1 && segment.separator) {
+          parts.push(segment.separator);
+        }
+      }
+    }
+
+    const managementNumber = parts.join('');
+    console.log('📝 管理番号生成完了:', { segments, counterKey, managementNumber });
+    return managementNumber;
   }
 
   // 管理番号フィールドに値を設定
