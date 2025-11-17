@@ -503,28 +503,36 @@
     const db = getFirestore(app);
     console.log('[Firestore] 初期化完了');
 
+    // URLパラメータ取得用のヘルパー関数
+    function getQueryParam(key) {
+      try {
+        return new URLSearchParams(location.search).get(key) || '';
+      } catch(e) {
+        return '';
+      }
+    }
+
     // グローバル変数（JSON.stringifyで安全に受け取る）
     let currentUserName = '';
     let currentRoomId = '';
     let currentRoomName = '';
     let usersCache = []; // ユーザー一覧キャッシュ（アイコン表示用）
 
-    // GASテンプレート変数をJavaScript変数に変換（変数名の衝突を避ける）
-    const isPWAFlag        = <?= JSON.stringify(!!isPWA) ?>;
-    const pwaUserNameParam = <?= JSON.stringify(typeof pwaUserName !== 'undefined' ? pwaUserName : "") ?>;
-    // roomId はシングルクォートで直接展開（JSON.stringify不要）
-    const pwaRoomIdParam   = '<?= typeof pwaRoomId !== "undefined" ? pwaRoomId : "" ?>';
-    const gasUserNameParam = <?= JSON.stringify(typeof gasUserName !== 'undefined' ? gasUserName : "") ?>;
-    const gasRoomIdParam   = '<?= typeof gasRoomId !== "undefined" ? gasRoomId : "" ?>';
-    const fcmTokenParam    = <?= JSON.stringify(typeof fcmToken !== 'undefined' ? fcmToken : "") ?>;
-    const gasBaseUrlParam  = '<?= typeof gasBaseUrl !== "undefined" ? gasBaseUrl : "" ?>';  // ✅ API呼び出し用URL
-    const sessionIdParam   = '<?= typeof sessionId !== "undefined" ? sessionId : "unknown" ?>';  // セッションID
+    // PWA版：URLパラメータから取得（GASテンプレート変数は使用しない）
+    const isPWAFlag        = true;  // PWA版として動作
+    const pwaUserNameParam = getQueryParam('userName') || '';
+    const pwaRoomIdParam   = getQueryParam('roomId') || '';
+    const gasUserNameParam = '';
+    const gasRoomIdParam   = '';
+    const fcmTokenParam    = '';
+    const gasBaseUrlParam  = '';
+    const sessionIdParam   = getQueryParam('sessionId') || 'unknown';
 
-    // 判定ロジック：明示フラグ優先、補助として iframe 内かつ userName/fcmToken のどちらかが非空
-    const isEmbedded = (window.top !== window); // iframe内ならtrue
-    const looksLikePWA = isEmbedded && (pwaUserNameParam !== "" || fcmTokenParam !== "");
-    const isPWA = isPWAFlag || looksLikePWA;
-    const isGAS = !isPWA;
+    // 判定ロジック：PWA版として動作
+    const isEmbedded = (window.top !== window);
+    const looksLikePWA = true;
+    const isPWA = true;
+    const isGAS = false;
 
     // 初期化
     document.addEventListener('DOMContentLoaded', async function() {
