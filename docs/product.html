@@ -6040,14 +6040,22 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     const sh = document.getElementById('棚番号');
     if (sh) sh.addEventListener('change', requestNextManagementNumber);
 
-    // カテゴリマスタ取得
-    if (google && google.script && google.script.run && google.script.run.getCategoryRows) {
-      google.script.run.withSuccessHandler(res=>{
-        if (!res || !res.ok) {
-          show(res && res.msg ? res.msg : 'NG(MASTER): マスタを取得できませんでした');
+    // カテゴリマスタ取得（PWA版：Firestoreから直接取得）
+    (async function loadCategoryMaster() {
+      try {
+        const db = firebase.firestore();
+        const docRef = db.collection('categories').doc('master');
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+          show('NG(MASTER): カテゴリマスタが見つかりません');
           return;
         }
-        CAT_ROWS = (res.rows || []).map(r=>({
+
+        const data = docSnap.data();
+        const rows = data.rows || [];
+
+        CAT_ROWS = rows.map(r=>({
           大分類:String(r.大分類||'').trim(),
           中分類:String(r.中分類||'').trim(),
           小分類:String(r.小分類||'').trim(),
@@ -6091,8 +6099,13 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         wirePreviewWatchers();
         updateNamePreview();
         adjustPreviewHeight();
-      }).withFailureHandler(e=> show(`NG(MASTER): ${e && e.message ? e.message : e}`)).getCategoryRows();
-    }
+
+        console.log('✅ カテゴリマスタ読み込み完了:', CAT_ROWS.length + '件');
+      } catch (error) {
+        console.error('❌ カテゴリマスタ読み込みエラー:', error);
+        show(`NG(MASTER): ${error && error.message ? error.message : error}`);
+      }
+    })(); // 即座実行
 
     // マスタオプション取得
     if (google && google.script && google.script.run && google.script.run.getMasterOptions) {
