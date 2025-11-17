@@ -5,9 +5,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <base target="_top">
-  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-brand-colors.css?v=9635">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <!-- REBORN Brand Colors & Theme -->
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-brand-colors.css?v=0bd1a9b">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=9635">
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -399,29 +402,41 @@
   </style>
 </head>
 <body>
-  <div class="chat-header">
-    <button class="back-btn" onclick="goBackToList()" title="チャット一覧に戻る">‹</button>
-    <h1>💬 チーム チャット
-      <button class="toggle-selection-btn" onclick="toggleSelectionMode()">🗑️ 選択削除</button>
-    </h1>
-    <div class="channel-info">
+  <!-- 統一ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" id="back-button">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <i class="bi bi-chat-dots"></i>
+        チャット
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+  </div>
+
+  <!-- チャンネル情報バー -->
+  <div style="background: #f8f9fa; padding: 8px 16px; border-bottom: 1px solid #e5e7eb;">
+    <div style="font-size: 13px; color: #6b7280;">
       <span id="channelName">読み込み中...</span>
       <span id="userInfo" style="margin-left: 12px;"></span>
+      <button class="toggle-selection-btn" onclick="toggleSelectionMode()" style="float: right; background: #fff; border: 1px solid #d1d5db; color: #374151; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;">🗑️ 選択削除</button>
     </div>
 
     <!-- GAS版：ユーザー名選択ドロップダウン -->
     <div id="userSelectContainer" style="display: none; margin-top: 8px;">
-      <label style="font-size: 12px; opacity: 0.9; margin-right: 4px;">送信者:</label>
-      <select id="userSelect" style="background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.5); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+      <label style="font-size: 12px; margin-right: 4px;">送信者:</label>
+      <select id="userSelect" style="background: white; border: 1px solid #d1d5db; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
         <option value="">選択してください</option>
       </select>
     </div>
 
     <!-- PWA版：ユーザー名入力 -->
     <div id="userNameInputContainer" style="display: none; margin-top: 8px;">
-      <label style="font-size: 12px; opacity: 0.9; margin-right: 4px;">あなたの名前:</label>
-      <input type="text" id="userNameInput" placeholder="名前を入力" style="background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.5); padding: 4px 8px; border-radius: 4px; font-size: 12px; width: 150px;">
-      <button id="saveUserNameBtn" style="background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.5); padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 4px;">保存</button>
+      <label style="font-size: 12px; margin-right: 4px;">あなたの名前:</label>
+      <input type="text" id="userNameInput" placeholder="名前を入力" style="background: white; border: 1px solid #d1d5db; padding: 4px 8px; border-radius: 4px; font-size: 12px; width: 150px;">
+      <button id="saveUserNameBtn" style="background: white; border: 1px solid #d1d5db; padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 4px;">保存</button>
     </div>
   </div>
 
@@ -1460,5 +1475,39 @@
       });
     }
   </script>
+
+  <!-- 戻るボタン処理 -->
+<script>
+  console.log('[chat_ui_firestore] ✅ Script loaded - Version @899-debug');
+  
+  async function goBack() {
+    console.log('[chat_ui_firestore] >>> goBack() called at', new Date().toISOString());
+    const isInIframe = window.self !== window.top;
+    console.log('[chat_ui_firestore] isInIframe:', isInIframe);
+
+    if (isInIframe) {
+      console.log('[chat_ui_firestore] iframe内で開かれているため、postMessage送信（トーク一覧へ戻る）');
+      window.top.postMessage({ type: 'navigateToChat' }, '*');
+      console.log('[chat_ui_firestore] ✅ postMessage送信完了');
+    } else {
+      console.log('[chat_ui_firestore] 直接開かれているため、google.script.host.close()');
+      google.script.host.close();
+    }
+  }
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('[chat_ui_firestore] DOMContentLoaded fired');
+    const backButton = document.getElementById('back-button');
+    console.log('[chat_ui_firestore] backButton element:', backButton);
+    
+    if (backButton) {
+      backButton.addEventListener('click', goBack);
+      console.log('[chat_ui_firestore] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
+    } else {
+      console.error('[chat_ui_firestore] ❌ 戻るボタンが見つかりません');
+    }
+  });
+</script>
+
 </body>
 </html>
