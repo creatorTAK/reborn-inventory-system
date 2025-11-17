@@ -4595,7 +4595,7 @@ style="display:none;">削除</button>
   }
 
   // 棚番号選択時に管理番号を取得
-  function requestNextManagementNumber() {
+  async function requestNextManagementNumber() {
     const shelfSel = document.getElementById('棚番号');
     if (!shelfSel) {
       setManagementNumber('', '選択してください');
@@ -4607,10 +4607,42 @@ style="display:none;">削除</button>
       return;
     }
     setManagementNumber('', '採番中…');
+
+    // PWA版：Firestoreで採番（Transaction使用で競合回避）
     if (!(typeof google !== 'undefined' && google.script && google.script.run)) {
-      setManagementNumber('', '');
+      try {
+        if (!window.db) {
+          throw new Error('Firestoreが初期化されていません');
+        }
+
+        const counterRef = window.db.collection('counters').doc(`shelf_${shelf}`);
+        const newNumber = await window.db.runTransaction(async (transaction) => {
+          const counterDoc = await transaction.get(counterRef);
+          let currentCount = 0;
+          if (counterDoc.exists) {
+            currentCount = counterDoc.data().count || 0;
+          }
+          const nextCount = currentCount + 1;
+          transaction.set(counterRef, {
+            count: nextCount,
+            shelf: shelf,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+          return nextCount;
+        });
+
+        const managementNumber = `${shelf}-${String(newNumber).padStart(5, '0')}`;
+        setManagementNumber(managementNumber, '');
+        console.log('✅ 管理番号採番成功 (PWA版):', managementNumber);
+      } catch (error) {
+        console.error('❌ 採番エラー:', error);
+        setManagementNumber('', 'エラー');
+        show(`NG(採番): ${error.message}`);
+      }
       return;
     }
+
+    // GAS版（従来）
     google.script.run.withSuccessHandler(res=>{
       if (typeof res === 'string' && res.startsWith('NG(')) {
         show(res);
