@@ -509,7 +509,7 @@
       flex-direction: column;
       padding: 20px;
       box-sizing: border-box;
-      transition: opacity 0.3s ease-out;
+      transition: opacity 0.15s ease-out; /* 案C: 高速化 0.3s → 0.15s */
     }
 
     #skeleton-loader.hidden {
@@ -1808,15 +1808,16 @@
       closeDrawer();
 
       // UI-013: ページ遷移時のローディングUX改善
-      // 戻るボタン時はスケルトンUIをスキップして高速化
-      // 通常遷移時はスケルトンUIを表示してスムーズに遷移
-      if (!skipSkeleton) {
-        console.log('🔄 [UI-013] ローディング開始 - スケルトンUI表示:', page);
-        if (skeleton) {
+      // 案B: 200ms遅延でスケルトンUI表示（キャッシュされたページは高速表示）
+      // 案C: フェードアウトを高速化（0.15s）
+      let skeletonTimeout = null;
+      if (!skipSkeleton && skeleton) {
+        skeletonTimeout = setTimeout(() => {
+          console.log('🔄 [UI-013] ローディング200ms超過 - スケルトンUI表示:', page);
           skeleton.classList.remove('hidden');
           skeleton.style.display = ''; // インラインスタイルをクリア（重要！）
-        }
-      } else {
+        }, 200);
+      } else if (skipSkeleton) {
         console.log('⚡ [UI-013] 高速遷移モード - スケルトンUIスキップ:', page);
       }
       // ヘッダーは読み込み完了後に制御（カクつき防止）
@@ -1925,6 +1926,13 @@
         // 新しいイベントリスナーを追加
         function handlePageLoadComplete() {
           console.log('✅ ページ読み込み完了:', page);
+
+          // 案B: タイムアウトをクリア（スケルトンUI表示前にロード完了した場合）
+          if (skeletonTimeout) {
+            clearTimeout(skeletonTimeout);
+            console.log('⚡ 高速ロード（200ms以内） - スケルトンUI表示をキャンセル');
+          }
+
           if (skeleton) skeleton.classList.add('hidden');
 
           // ヘッダー表示制御
