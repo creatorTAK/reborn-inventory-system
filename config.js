@@ -323,3 +323,86 @@ function convertFirestoreValue(value) {
   
   return null;
 }
+
+/**
+ * ========================================
+ * ブランドマスタ取得（Firestore REST API）
+ * ========================================
+ * GAS版商品登録画面でブランドデータを取得
+ * クライアント側のiframe CORS問題を回避するため、
+ * サーバー側（GAS）でFirestore REST APIを使用
+ */
+
+/**
+ * Firestoreからブランドマスタを全件取得
+ * @return {Array} ブランドデータ配列
+ */
+function getBrandsFromFirestore() {
+  try {
+    console.log('📥 [GAS] Firestoreからブランドマスタを取得開始...');
+    const startTime = new Date().getTime();
+
+    const projectId = 'reborn-chat';
+    const collectionPath = 'brands';
+
+    // Firestore REST API URL
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionPath}`;
+
+    // OAuth2トークンを取得
+    const token = ScriptApp.getOAuthToken();
+
+    // Firestore REST APIでブランドを全件取得
+    const response = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      muteHttpExceptions: true
+    });
+
+    const responseCode = response.getResponseCode();
+    if (responseCode !== 200) {
+      console.error('❌ [GAS] Firestore取得エラー:', responseCode, response.getContentText());
+      return [];
+    }
+
+    const data = JSON.parse(response.getContentText());
+    const brands = [];
+
+    // documentsがない場合は空配列を返す
+    if (!data.documents || !Array.isArray(data.documents)) {
+      console.log('⚠️ [GAS] ブランドドキュメントが見つかりません');
+      return [];
+    }
+
+    // Firestoreのドキュメントをブランドオブジェクトに変換
+    for (let i = 0; i < data.documents.length; i++) {
+      const doc = data.documents[i];
+      const fields = doc.fields || {};
+
+      // ドキュメントIDを抽出（name から取得）
+      const docName = doc.name || '';
+      const docId = docName.split('/').pop();
+
+      brands.push({
+        id: docId,
+        nameEn: convertFirestoreValue(fields.nameEn) || '',
+        nameKana: convertFirestoreValue(fields.nameKana) || '',
+        searchText: (convertFirestoreValue(fields.searchText) || '').toLowerCase(),
+        usageCount: convertFirestoreValue(fields.usageCount) || 0
+      });
+    }
+
+    const endTime = new Date().getTime();
+    const duration = endTime - startTime;
+
+    console.log(`✅ [GAS] ブランドマスタ取得完了: ${brands.length}件 (${duration}ms)`);
+
+    return brands;
+
+  } catch (error) {
+    console.error('❌ [GAS] getBrandsFromFirestore エラー:', error);
+    return [];
+  }
+}

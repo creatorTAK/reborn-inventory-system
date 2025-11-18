@@ -1,24 +1,146 @@
-<!-- Firestore版ブランド検索モジュール -->
-<script type="module">
-  // Cloudflare PagesからFirestore APIモジュールを読み込み
-  import('https://reborn-inventory-system.pages.dev/js/firestore-api.js').then(module => {
-    console.log('✅ Firestore API読み込み完了');
-    
-    // グローバルにエクスポート
-    window.searchBrands = module.searchBrands || module.default?.searchBrands;
-    window.incrementBrandUsageCount = module.incrementBrandUsageCount || module.default?.incrementBrandUsageCount;
-    window.preloadBrandsInBackground = module.preloadBrandsInBackground || module.default?.preloadBrandsInBackground;
-    window.searchBrandsFromCache = module.searchBrandsFromCache || module.default?.searchBrandsFromCache;
-    
-    // ブランドサジェストモジュール読み込み
-    return import('https://reborn-inventory-system.pages.dev/js/brand-suggest-firestore.js');
-  }).then(() => {
-    console.log('✅ Brand Suggest Firestore読み込み完了');
-    // 読み込み完了フラグを設定
-    window.firestoreBrandModulesLoaded = true;
-  }).catch(error => {
-    console.error('❌ Firestoreモジュール読み込みエラー:', error);
-  });
+<!-- GAS版ブランド検索（Firestore REST API経由・CORS回避） -->
+<script>
+  // ブランドキャッシュ（グローバル変数）
+  window.brandsCache = null;
+  window.brandsCacheTimestamp = 0;
+  window.brandsPreloading = false;
+
+  /**
+   * GASサーバー経由でブランドをプリロード
+   * iframe CORS問題を回避するため、GAS側でFirestore REST APIを使用
+   */
+  function preloadBrandsViaGAS() {
+    if (window.brandsCache || window.brandsPreloading) {
+      console.log('⏩ ブランドプリロードスキップ（既にロード済みまたはロード中）');
+      return;
+    }
+
+    window.brandsPreloading = true;
+    console.log('📥 [GAS経由] ブランドプリロード開始...');
+    const startTime = performance.now();
+
+    if (google && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(brands) {
+          window.brandsCache = brands;
+          window.brandsCacheTimestamp = Date.now();
+          window.brandsPreloading = false;
+
+          const endTime = performance.now();
+          const duration = (endTime - startTime).toFixed(2);
+
+          console.log(`✅ [GAS経由] ブランドプリロード完了: ${brands.length}件 (${duration}ms)`);
+
+          // ブランドサジェストを初期化（キャッシュ使用）
+          if (typeof initBrandSuggestWithCache === 'function') {
+            initBrandSuggestWithCache();
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('❌ [GAS経由] ブランドプリロードエラー:', error);
+          window.brandsPreloading = false;
+        })
+        .getBrandsFromFirestore();
+    } else {
+      console.warn('⚠️ google.script.run が利用できません');
+      window.brandsPreloading = false;
+    }
+  }
+
+  /**
+   * キャッシュからブランドを検索
+   */
+  function searchBrandsFromCache(query, limit) {
+    const cache = window.brandsCache;
+
+    if (!cache) {
+      console.warn('[BRANDS] キャッシュがまだロードされていません');
+      return [];
+    }
+
+    if (!query || query.length === 0) {
+      // 空検索の場合は使用頻度上位を返す
+      return cache
+        .sort((a, b) => b.usageCount - a.usageCount)
+        .slice(0, limit);
+    }
+
+    const normalizedQuery = query.toLowerCase();
+
+    // 検索条件に一致するブランドをフィルタ
+    const matches = cache.filter(brand => {
+      return brand.searchText.includes(normalizedQuery);
+    });
+
+    // 使用頻度順にソートして返す
+    return matches
+      .sort((a, b) => b.usageCount - a.usageCount)
+      .slice(0, limit);
+  }
+
+  // グローバルにエクスポート
+  window.searchBrandsFromCache = searchBrandsFromCache;
+  window.preloadBrandsViaGAS = preloadBrandsViaGAS;
+
+  // 5秒遅延でブランドプリロード開始（管理番号UI優先）
+  setTimeout(() => {
+    console.log('⏰ ブランドプリロード開始（5秒遅延）');
+    preloadBrandsViaGAS();
+  }, 5000);
+</script>
+
+<!-- ブランドサジェストUI（簡易版） -->
+<script>
+  /**
+   * ブランドサジェストを初期化（GASキャッシュ使用版）
+   */
+  function initBrandSuggestWithCache() {
+    console.log('🎨 ブランドサジェストUI初期化開始');
+
+    // ブランド(英語)フィールドにサジェスト設定
+    attachBrandSuggestSimple('ブランド(英語)');
+    attachBrandSuggestSimple('商品名_ブランド(英語)');
+
+    console.log('✅ ブランドサジェストUI初期化完了');
+  }
+
+  /**
+   * 簡易ブランドサジェスト（datalist使用）
+   */
+  function attachBrandSuggestSimple(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) {
+      console.warn(`⚠️ 要素が見つかりません: ${inputId}`);
+      return;
+    }
+
+    // datalist要素を作成
+    const datalistId = 'suggest-' + inputId;
+    let datalist = document.getElementById(datalistId);
+
+    if (!datalist) {
+      datalist = document.createElement('datalist');
+      datalist.id = datalistId;
+      input.parentNode.insertBefore(datalist, input.nextSibling);
+      input.setAttribute('list', datalistId);
+    }
+
+    // 入力時にサジェスト更新
+    input.addEventListener('input', function() {
+      const query = this.value;
+      const results = searchBrandsFromCache(query, 50);
+
+      // datalistを更新
+      datalist.innerHTML = '';
+      results.forEach(brand => {
+        const option = document.createElement('option');
+        option.value = brand.nameEn;
+        datalist.appendChild(option);
+      });
+    });
+
+    console.log(`✅ ブランドサジェスト設定完了: ${inputId}`);
+  }
 </script>
 
 <script>
