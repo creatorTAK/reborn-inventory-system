@@ -91,8 +91,31 @@
    - getBrandsFromFirestore()（config.js）を呼び出し
    - JSON形式で51,343件のブランドを返す
 
-4. ✅ git commit & push 完了（次のcommit予定）
-5. ✅ Cloudflare Pages自動デプロイ（git push後）
+4. ✅ git commit & push 完了（commit: bbe69a0）
+5. ✅ Cloudflare Pages自動デプロイ完了
+6. ✅ clasp push & deploy 完了（@937）
+
+### 修正版デプロイ（@945-fix）
+
+**問題発覚:**
+- ❌ GAS APIが100件しか返していなかった（ページング未対応）
+- ❌ Firestore直接アクセスが実行されていた（129秒）
+- ❌ 前回より遅くなっていた（117秒 → 129秒）
+
+**修正内容:**
+
+1. ✅ config.js: ページネーション対応
+   - do-while ループで全件取得
+   - pageSize=1000、pageToken で次ページ取得
+   - 51,343件全部取得可能に（52ページ分）
+
+2. ✅ docs/js/brand-suggest-firestore.js: キャッシュチェック追加
+   - window.brandsCache が存在する場合、Firestoreプリロードをスキップ
+   - postMessageで受信したキャッシュを優先
+
+3. ✅ git commit & push 完了（commit: 86cd14b）
+4. ✅ Cloudflare Pages自動デプロイ中
+5. ✅ clasp push & deploy 完了（@938）
 
 ### @945 の期待される効果
 
