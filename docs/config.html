@@ -2919,24 +2919,8 @@ ${descFormattedNumber}`;
         console.error('❌ [設定画面] localStorage読み込みエラー:', e);
       }
       
-      // Step 2: PropertiesServiceから読み込んで更新（タスクキル対応）
-      // GAS版専用コード（PWA版では不要） catch (e) {
-                console.error('❌ [設定画面] localStorage同期エラー:', e);
-              }
-              
-              // 画面を更新
-              renderAllConfig(config);
-              console.log('✅ [設定画面] PropertiesServiceの設定で画面を更新しました');
-            }
-          })
-          .withFailureHandler(function(error) {
-            console.error('❌ [設定画面] PropertiesService読み込みエラー:', error);
-            alert('設定の読み込みに失敗しました: ' + error);
-          })
-          .loadConfigMaster();
-      } else {
-        console.warn('⚠️ [設定画面] // Removed GAS dependency
-      }
+      // Step 2: PWA版ではFirestoreから読み込む（GASコードは不要）
+      // Firestoreからの読み込みは既に完了している（上のlocalStorageで十分）
     }
 
     /**
@@ -4380,31 +4364,8 @@ ${descFormattedNumber}`;
     /**
      * PropertiesServiceへの保存をリトライ機能付きで実行
      */
-    // saveConfigMaster removed (PWA版では不要) else {
-            alert('サーバーへの保存に失敗しましたが、\nローカル設定は保存されています\n\nエラー: ' + result.error);
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error(`❌ PropertiesService保存失敗 (試行${retryCount + 1}):`, error);
-
-          if (retryCount < maxRetries) {
-            // リトライ
-            console.log(`⏳ ${delay}ms 後にリトライします...`);
-            setTimeout(function() {
-              saveConfigMasterWithRetry(config, retryCount + 1, maxRetries, localStorageSaved);
-            }, delay);
-          } else {
-            // 最大リトライ回数に達した
-            console.error('❌ 最大リトライ回数に達しました');
-            if (localStorageSaved) {
-              alert('⚠️ サーバーへの保存に失敗しましたが、\nローカル設定は保存されています\n\nエラー: ' + error + '\n\n（' + (maxRetries + 1) + '回試行しました）');
-            } else {
-              alert('❌ 設定の保存に失敗しました\n\nエラー: ' + error);
-            }
-          }
-        })
-        .saveConfigMaster(config);
-    }
+    // PWA版では PropertiesService 保存は不要（Firestore を使用）
+  }
 
     /**
      * 設定を保存
@@ -4432,28 +4393,14 @@ ${descFormattedNumber}`;
         console.log('基本設定を保存:', basicSettings);
 
         // 基本設定をサーバーに保存
-        // GAS版専用コード（PWA版では不要）)
-            .withFailureHandler(function(error) {
-              console.error('基本設定保存エラー:', error);
-            })
-            .saveUserBasicSettingsByTokenAPI(fcmToken, basicSettings);
+        // PWA版では不要（Firestoreを使用）
         }
       }
 
         // アイコン画像をアップロード（選択されている場合）
       // PWA版では画像アップロードは別実装
 
-              pendingUserIconData = null; // アップロード完了後にクリア
-            } else {
-              console.error('❌ アイコンアップロード失敗:', result.message);
-              alert('アイコンのアップロードに失敗しました: ' + result.message);
-            }
-          })
-          .withFailureHandler(function(error) {
-            console.error('❌ アイコンアップロードエラー:', error);
-            alert('アイコンのアップロードに失敗しました: ' + error.message);
-          })
-          .uploadUserIconByTokenAPI(fcmToken, pendingUserIconData);
+              // PWA版では画像アップロードは別実装（Firebaseを使用）
       }
 
       // 画像管理設定をLocalStorageに保存
@@ -4892,13 +4839,10 @@ ${descFormattedNumber}`;
      * セールスワードマスタデータを読み込み
      */
     function loadSaleswordMasterData() {
-      // Removed GAS dependency
-          initSaleswordDropdowns();
-        })
-        .withFailureHandler(function(error) {
-          console.error('セールスワードマスタデータ取得エラー:', error);
-        })
-        .getSaleswordHierarchy();
+      // PWA版では Firestore から読み込み（未実装）
+      // 暫定: 空のマスタデータで初期化
+      SALESWORD_MASTER = {};
+      initSaleswordDropdowns();
     }
 
     /**
@@ -5464,25 +5408,20 @@ ${descFormattedNumber}`;
      * セールスワード設定を読み込み
      */
     function loadSaleswordConfig() {
-      // GAS版専用コード（PWA版では不要）);
-              } else if (Array.isArray(config.よく使うセールスワード)) {
-                // 旧形式（配列のみ）に対応
-                SALESWORD_LIST = config.よく使うセールスワード;
-                renderSaleswordList();
-                renderSaleswordFormat({ globalPrefix: '【', globalSuffix: '】', wordOverrides: [] });
-              } else {
-                // 空オブジェクトの場合はデフォルト値を使用
-                console.log('よく使うセールスワードが空です。デフォルト値を使用します。');
-                SALESWORD_LIST = [];
-                renderSaleswordList();
-                renderSaleswordFormat({ globalPrefix: '【', globalSuffix: '】', wordOverrides: [] });
-              }
-            }
-          })
-          .withFailureHandler(function(error) {
-            console.error('セールスワード設定読み込みエラー:', error);
-          })
-          .loadConfigMaster();
+      // PWA版では Firestore から読み込み
+      // 暫定: localStorage から読み込み
+      const config = JSON.parse(localStorage.getItem('config') || '{}');
+      if (config.salesword) {
+        renderSaleswordFormat(config.salesword);
+      }
+      if (config.よく使うセールスワード) {
+        if (config.よく使うセールスワード.list) {
+          SALESWORD_LIST = config.よく使うセールスワード.list;
+          renderSaleswordList();
+        } else if (Array.isArray(config.よく使うセールスワード)) {
+          SALESWORD_LIST = config.よく使うセールスワード;
+          renderSaleswordList();
+        }
       }
     }
 
@@ -5559,17 +5498,10 @@ ${descFormattedNumber}`;
           console.error('❌ 仕入先キャッシュ読み込みエラー:', e);
         }
         
-        // Step 2: サーバーから最新データを取得して更新（バックグラウンド）
-        // GAS版専用コード（PWA版では不要）
-                }
-              }
-            })
-            .withFailureHandler(function(error) {
-              console.error('❌ 仕入先データ取得エラー:', error);
-            })
-            .getMasterData('仕入先');
-        }
+        // PWA版では Firestore から取得（未実装）
+        // 暫定: localStorage のキャッシュのみ使用
       }
+    }
       
       // 出品先プルダウンを初期化
       const listingSelect = document.getElementById('デフォルト出品先');
@@ -5598,18 +5530,11 @@ ${descFormattedNumber}`;
           console.error('❌ 出品先キャッシュ読み込みエラー:', e);
         }
         
-        // Step 2: サーバーから最新データを取得して更新（バックグラウンド）
-        // GAS版専用コード（PWA版では不要）
-                }
-              }
-            })
-            .withFailureHandler(function(error) {
-              console.error('❌ 出品先データ取得エラー:', error);
-            })
-            .getMasterData('出品先');
-        }
+        // PWA版では Firestore から取得（未実装）
+        // 暫定: localStorage のキャッシュのみ使用
       }
     }
+  }
     
     /**
      * selectタグにoptionを追加するヘルパー関数
@@ -6504,28 +6429,9 @@ ${prompt || '（未設定）'}
           : 'OFF（商品画像ブロックは非表示）';
       }
 
-      // バックグラウンドでサーバーから読み込み（iOS/スマホ対応・バックアップ復元）
-      // GAS版専用コード（PWA版では不要） catch (e) {
-                console.warn('localStorage更新エラー（iOS/スマホでは制限される場合があります）');
-              }
-
-              // UIを更新
-              if (checkbox) {
-                checkbox.checked = enabled;
-              }
-
-              if (statusText) {
-                statusText.textContent = enabled
-                  ? 'ON（商品画像ブロックが表示されます）'
-                  : 'OFF（商品画像ブロックは非表示）';
-              }
-            }
-          })
-          .withFailureHandler(function(error) {
-            console.error('❌ サーバーからの読み込みエラー:', error);
-          })
-          .loadImageSettingFromServer();
-      }
+      // PWA版では Firestore から読み込み（未実装）
+      // 暫定: localStorage のみ使用
+    }
     };
 
     /**
@@ -6563,16 +6469,9 @@ ${prompt || '（未設定）'}
         console.error('⚠️ localStorage保存エラー（iOS/スマホでは制限される場合があります）:', e);
       }
 
-      // 2. PropertiesServiceに保存（iOS/スマホ用・永続化）
-      // GAS版専用コード（PWA版では不要） else {
-              console.error('❌ サーバー保存失敗:', result.error);
-            }
-          })
-          .withFailureHandler(function(error) {
-            console.error('❌ サーバー保存失敗:', error);
-          })
-          .saveImageSettingToServer(enabled);
-      }
+      // PWA版では Firestore に保存（未実装）
+      // 暫定: localStorage のみ使用
+    }
     };
 
     /**
@@ -6682,54 +6581,55 @@ ${prompt || '（未設定）'}
      * 基本設定を読み込む
      */
     function loadBasicSettings() {
-      // Removed GAS dependency
-              // クリアボタンの表示制御
-              const clearBtn = document.getElementById('clearUserNameBtn');
-              if (clearBtn) {
-                clearBtn.style.display = result.data.userName ? 'block' : 'none';
-              }
-            }
-
-            // メールアドレス
-            if (result.data.email) {
-              document.getElementById('basicUserEmail').value = result.data.email;
-            }
-
-            // 通知設定
-            if (result.data.notificationEnabled !== undefined) {
-              document.getElementById('basicNotificationEnabled').checked = result.data.notificationEnabled;
-            }
-            if (result.data.notificationSound !== undefined) {
-              document.getElementById('basicNotificationSound').checked = result.data.notificationSound;
-            }
-
-            // アイコンプレビュー
-            if (result.data.userIconUrl) {
-              document.getElementById('basicUserIconPreview').innerHTML =
-                '<img src="' + result.data.userIconUrl + '" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">';
-
-              // PWAにアイコンを通知
-              if (window.parent) {
-                window.parent.postMessage({
-                  type: 'UPDATE_USER_ICON',
-                  iconUrl: result.data.userIconUrl
-                }, '*');
-                console.log('📤 PWAに初期アイコンを通知');
-              }
-            }
+      // PWA版では Firestore から読み込み（暫定: localStorage使用）
+      try {
+        const config = JSON.parse(localStorage.getItem('config') || '{}');
+        
+        // ユーザー名
+        if (config.userName) {
+          const userNameInput = document.getElementById('basicUserName');
+          if (userNameInput) {
+            userNameInput.value = config.userName;
           }
-
-          // ローディング非表示、コンテンツ表示
-          document.getElementById('basicSettingsLoading').style.display = 'none';
-          document.getElementById('basicSettingsContent').style.display = 'block';
-        })
-        .withFailureHandler(function(error) {
-          console.error('基本設定読み込みエラー:', error);
-          // エラー時もコンテンツを表示
-          document.getElementById('basicSettingsLoading').style.display = 'none';
-          document.getElementById('basicSettingsContent').style.display = 'block';
-        })
-        .getUserBasicSettingsByTokenAPI(fcmToken);
+          
+          // クリアボタンの表示制御
+          const clearBtn = document.getElementById('clearUserNameBtn');
+          if (clearBtn) {
+            clearBtn.style.display = 'block';
+          }
+        }
+        
+        // メールアドレス
+        if (config.email) {
+          const emailInput = document.getElementById('basicUserEmail');
+          if (emailInput) {
+            emailInput.value = config.email;
+          }
+        }
+        
+        // 通知設定
+        if (config.notificationEnabled !== undefined) {
+          const notifCheckbox = document.getElementById('basicNotificationEnabled');
+          if (notifCheckbox) {
+            notifCheckbox.checked = config.notificationEnabled;
+          }
+        }
+        
+        if (config.notificationSound !== undefined) {
+          const soundCheckbox = document.getElementById('basicNotificationSound');
+          if (soundCheckbox) {
+            soundCheckbox.checked = config.notificationSound;
+          }
+        }
+        
+        console.log('✅ 基本設定を読み込みました (localStorage)');
+      } catch (e) {
+        console.error('❌ 基本設定読み込みエラー:', e);
+      }
+      
+      // ローディング非表示、コンテンツ表示
+      document.getElementById('basicSettingsLoading').style.display = 'none';
+      document.getElementById('basicSettingsContent').style.display = 'block';
     }
 
     /**
@@ -6749,27 +6649,31 @@ ${prompt || '（未設定）'}
         notificationSound: document.getElementById('basicNotificationSound').checked
       };
 
-      // 保存ボタンをローディング状態に
-      const saveButton = event.target;
-      saveButton.disabled = true;
-      saveButton.innerHTML = '<span style="display: inline-block; width: 14px; height: 14px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite;"></span> 保存中...';
-
-      // Removed GAS dependency
-            // ボタンを元に戻す
-            saveButton.disabled = false;
-            saveButton.innerHTML = '💾 保存';
-          } else {
-            alert('❌ 保存に失敗しました: ' + result.message);
-            saveButton.disabled = false;
-            saveButton.innerHTML = '💾 保存';
-          }
-        })
-        .withFailureHandler(function(error) {
-          alert('❌ 保存に失敗しました: ' + error.message);
-          saveButton.disabled = false;
-          saveButton.innerHTML = '💾 保存';
-        })
-        .saveUserBasicSettingsByTokenAPI(fcmToken, settings);
+      // PWA版では Firestore に保存（暫定: localStorage使用）
+      try {
+        // 既存設定を読み込み
+        const config = JSON.parse(localStorage.getItem('config') || '{}');
+        
+        // 基本設定を更新
+        config.userName = settings.userName;
+        config.notificationEnabled = settings.notificationEnabled;
+        config.notificationSound = settings.notificationSound;
+        
+        // localStorage に保存
+        localStorage.setItem('config', JSON.stringify(config));
+        
+        // クリアボタンの表示制御
+        const clearBtn = document.getElementById('clearUserNameBtn');
+        if (clearBtn) {
+          clearBtn.style.display = settings.userName ? 'block' : 'none';
+        }
+        
+        alert('✅ 基本設定を保存しました');
+        console.log('✅ 基本設定を保存しました (localStorage):', settings);
+      } catch (e) {
+        console.error('❌ 基本設定保存エラー:', e);
+        alert('❌ 保存に失敗しました: ' + e.message);
+      }
     }
 
     // 基本設定タブが表示されたら設定を読み込む
