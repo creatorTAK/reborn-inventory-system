@@ -6620,33 +6620,39 @@ ${prompt || '（未設定）'}
     window.db = null;
     window.firestoreReady = false;
 
-    // Firebase初期化（compat版: GAS Web App対応）
+    // Firebase初期化（compat版: PWA対応 - CORS問題修正版）
     function initFirebase() {
       try {
-        console.log('[sidebar_config] Firebase初期化開始');
-        console.log('[sidebar_config] firebase:', typeof firebase);
+        console.log('[config] Firebase初期化開始');
+        console.log('[config] firebase:', typeof firebase);
 
         if (typeof firebase === 'undefined') {
           throw new Error('Firebase SDK が読み込まれていません');
         }
 
-        // Firebase App初期化
+        // 既に初期化済みかチェック（二重初期化を防ぐ）
+        if (window.firebase && firebase.apps && firebase.apps.length > 0) {
+          console.log('✅ Firebase already initialized. Reusing existing app.');
+          window.db = firebase.firestore(); // 既存 app に紐づく firestore を利用
+          window.firestoreReady = true;
+          return;
+        }
+
+        // 初回初期化
         const app = firebase.initializeApp(firebaseConfig);
         console.log('✅ Firebase App初期化（設定管理ページ）');
 
         // Firestore初期化（compat版: window に公開）
         window.db = firebase.firestore();
 
-        // GAS iframe での CORS エラー回避: WebSocket を無効化して long-polling を使用
-        try {
-          window.db.settings({
-            experimentalForceLongPolling: true,
-            experimentalAutoDetectLongPolling: false
-          });
-          console.log('✅ Firestore long-polling設定完了');
-        } catch (settingsError) {
-          console.error('⚠️ Firestore settings エラー:', settingsError);
-        }
+        // 🔥 重要: experimentalForceLongPolling を削除（PWA版では不要、CORS問題の原因）
+        // PWA（Cloudflare Pages）では通常の接続が使えるため、long-polling強制は不要
+        // この設定がCORSエラーを引き起こしていた可能性が高い
+
+        // オプション: 必要に応じて autoDetect を有効化（通常は不要）
+        // window.db.settings({ experimentalAutoDetectLongPolling: true });
+
+        console.log('✅ Firestore初期化完了（long-polling強制なし）');
 
         window.firestoreReady = true;
         console.log('✅ Firestore初期化完了（設定管理ページ）');
