@@ -2449,6 +2449,60 @@ style="display:none;">削除</button>
   });
 </script>
 
+<!-- postMessage受信処理（Phase 1: GAS経由ブランドデータ） -->
+<script>
+  console.log('[product.html] ✅ Script loaded - Version @945-PWA-Brand-Preload');
+
+  // ブランドキャッシュをグローバルに初期化
+  window.brandsCache = null;
+  window.brandsCacheTimestamp = null;
+
+  /**
+   * 親ウィンドウからブランドデータを受信
+   * - GAS経由でプリロードされたブランドデータを受け取る
+   * - Firestore直接アクセスをスキップして高速化
+   */
+  window.addEventListener('message', function(event) {
+    // セキュリティ: 送信元を検証
+    const allowedOrigins = [
+      'https://reborn-inventory-system.pages.dev',
+      'https://furira.jp',
+      'http://localhost:8080',
+      'http://127.0.0.1:8080'
+    ];
+
+    if (!allowedOrigins.includes(event.origin)) {
+      console.warn('⚠️ [postMessage] 許可されていないオリジンから受信:', event.origin);
+      return;
+    }
+
+    // ブランドデータを受信
+    if (event.data && event.data.type === 'brands') {
+      const brands = event.data.brands;
+
+      if (!brands || !Array.isArray(brands)) {
+        console.error('❌ [postMessage] 無効なブランドデータ:', brands);
+        return;
+      }
+
+      // キャッシュに保存
+      window.brandsCache = brands;
+      window.brandsCacheTimestamp = Date.now();
+
+      console.log('✅ [postMessage] ブランドデータ受信完了:', brands.length + '件');
+      console.log('📦 [postMessage] キャッシュ保存完了、Firestore直接アクセスをスキップ');
+
+      // ブランドサジェストを初期化（モジュールが読み込まれている場合）
+      if (window.firestoreBrandModulesLoaded && typeof window.initBrandSuggestWithCache === 'function') {
+        console.log('🎨 ブランドサジェスト初期化開始（postMessage経由）');
+        window.initBrandSuggestWithCache();
+      }
+    }
+  }, false);
+
+  console.log('👂 [postMessage] ブランドデータ受信リスナー登録完了');
+</script>
+
 <!-- Firestore版ブランド検索モジュール -->
 <script type="module">
   // Cloudflare PagesからFirestore APIモジュールを読み込み

@@ -499,6 +499,28 @@ function doGet(e) {
         }
       }
 
+      if (action === 'getBrands') {
+        // ブランドマスタをFirestoreから取得（PWA版商品登録用）
+        try {
+          Logger.log('[doGet] getBrands API呼び出し開始');
+
+          const brands = getBrandsFromFirestore(); // config.js の関数を呼び出し
+
+          Logger.log('[doGet] getBrands API成功: ' + brands.length + '件');
+
+          return ContentService.createTextOutput(JSON.stringify(brands))
+            .setMimeType(ContentService.MimeType.JSON);
+        } catch (error) {
+          Logger.log('[doGet] getBrands API ERROR: ' + error);
+          const errorResponse = {
+            success: false,
+            error: error.toString()
+          };
+          return ContentService.createTextOutput(JSON.stringify(errorResponse))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
       if (action === 'subscribeFCM') {
         // FCMトークンを保存（GETメソッド、チーム利用対応 + ユーザー名対応 + メールアドレス + 権限 + 通知設定）
         const token = e.parameter.token;
