@@ -521,6 +521,28 @@ function doGet(e) {
         }
       }
 
+      if (action === 'getManagementConfig') {
+        // 管理番号設定をFirestoreから取得（PWA版商品登録用）
+        try {
+          Logger.log('[doGet] getManagementConfig API呼び出し開始');
+
+          const config = getManagementConfig(); // config.js の関数を呼び出し
+
+          Logger.log('[doGet] getManagementConfig API成功: prefix=' + (config ? config.prefix : 'null'));
+
+          return ContentService.createTextOutput(JSON.stringify(config))
+            .setMimeType(ContentService.MimeType.JSON);
+        } catch (error) {
+          Logger.log('[doGet] getManagementConfig API ERROR: ' + error);
+          const errorResponse = {
+            success: false,
+            error: error.toString()
+          };
+          return ContentService.createTextOutput(JSON.stringify(errorResponse))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
       if (action === 'subscribeFCM') {
         // FCMトークンを保存（GETメソッド、チーム利用対応 + ユーザー名対応 + メールアドレス + 権限 + 通知設定）
         const token = e.parameter.token;

@@ -1044,44 +1044,44 @@
     window.brandsCacheTimestamp = null;
 
     /**
-     * GAS経由でFirestoreからブランドマスタをプリロード
-     * - GASサーバー側でFirestore REST API使用（CORS問題回避）
-     * - 51,343件のブランドを15秒で取得（iframe CORS影響なし）
+     * GAS経由でFirestoreから管理番号設定をプリロード（Algolia移行版）
+     * - ブランドはAlgoliaで検索（プリロード不要）
+     * - 管理番号設定のみGAS経由で取得（1-2秒で完了）
      */
-    async function preloadBrandsForPWA() {
-      if (window.brandsCache || window.brandsPreloading) {
-        console.log('⏩ [PWA] ブランドプリロードスキップ（既にロード済みまたはロード中）');
+    async function preloadManagementConfigForPWA() {
+      if (window.managementConfigCache || window.managementConfigPreloading) {
+        console.log('⏩ [PWA] 管理番号設定プリロードスキップ（既にロード済みまたはロード中）');
         return;
       }
 
-      window.brandsPreloading = true;
-      console.log('📥 [PWA-GAS経由] ブランドプリロード開始...');
+      window.managementConfigPreloading = true;
+      console.log('📥 [PWA-GAS経由] 管理番号設定プリロード開始...');
       const startTime = performance.now();
 
       try {
-        // GAS getBrandsFromFirestore() を呼び出し
-        const response = await fetch(GAS_API_URL + '?action=getBrands');
+        // GAS getManagementConfig() を呼び出し
+        const response = await fetch(GAS_API_URL + '?action=getManagementConfig');
 
         if (!response.ok) {
           throw new Error('GAS API エラー: ' + response.status);
         }
 
-        const brands = await response.json();
+        const config = await response.json();
 
-        window.brandsCache = brands;
-        window.brandsCacheTimestamp = Date.now();
-        window.brandsPreloading = false;
+        window.managementConfigCache = config;
+        window.managementConfigCacheTimestamp = Date.now();
+        window.managementConfigPreloading = false;
 
         const endTime = performance.now();
         const duration = (endTime - startTime).toFixed(2);
 
-        console.log(`✅ [PWA-GAS経由] ブランドプリロード完了: ${brands.length}件 (${duration}ms)`);
+        console.log(`✅ [PWA-GAS経由] 管理番号設定プリロード完了: prefix="${config?.prefix}", segments=${config?.segments?.length}件 (${duration}ms)`);
 
-        return brands;
+        return config;
 
       } catch (error) {
-        console.error('❌ [PWA-GAS経由] ブランドプリロードエラー:', error);
-        window.brandsPreloading = false;
+        console.error('❌ [PWA-GAS経由] 管理番号設定プリロードエラー:', error);
+        window.managementConfigPreloading = false;
         return null;
       }
     }
@@ -1166,10 +1166,10 @@
           console.log('👤 userName:', userName);
           iframe.setAttribute('data-src', menuHomeUrl);
 
-          // ブランドプリロード開始（5秒遅延、メニュー表示を優先）
+          // 管理番号設定プリロード開始（5秒遅延、メニュー表示を優先）
           setTimeout(() => {
-            console.log('⏰ [PWA] ブランドプリロード開始（5秒遅延）');
-            preloadBrandsForPWA();
+            console.log('⏰ [PWA] 管理番号設定プリロード開始（5秒遅延）');
+            preloadManagementConfigForPWA();
           }, 5000);
         }
       }
@@ -1960,47 +1960,47 @@
         iframe.src = pwaBaseUrl + '/product.html?' + params.toString();
         document.getElementById('drawer-product').classList.add('active');
 
-        // ブランドデータをpostMessageで送信（iframe読み込み後）
-        iframe.addEventListener('load', function sendBrandsToProduct() {
-          console.log('📦 [PWA] product.html読み込み完了、ブランドデータ送信を試行');
+        // 管理番号設定をpostMessageで送信（iframe読み込み後）
+        iframe.addEventListener('load', function sendManagementConfigToProduct() {
+          console.log('📦 [PWA] product.html読み込み完了、管理番号設定送信を試行');
 
-          if (window.brandsCache) {
+          if (window.managementConfigCache) {
             // キャッシュ済み → 即座に送信
-            console.log('📤 [PWA] ブランドデータをpostMessage送信:', window.brandsCache.length + '件');
+            console.log('📤 [PWA] 管理番号設定をpostMessage送信: prefix="' + window.managementConfigCache.prefix + '"');
             iframe.contentWindow.postMessage({
-              type: 'brands',
-              brands: window.brandsCache
+              type: 'managementConfig',
+              config: window.managementConfigCache
             }, pwaBaseUrl);
-          } else if (window.brandsPreloading) {
+          } else if (window.managementConfigPreloading) {
             // ロード中 → 待機して再試行
-            console.log('⏳ [PWA] ブランドプリロード中... 5秒後に再試行');
+            console.log('⏳ [PWA] 管理番号設定プリロード中... 3秒後に再試行');
             setTimeout(() => {
-              if (window.brandsCache) {
-                console.log('📤 [PWA] ブランドデータをpostMessage送信（遅延）:', window.brandsCache.length + '件');
+              if (window.managementConfigCache) {
+                console.log('📤 [PWA] 管理番号設定をpostMessage送信（遅延）: prefix="' + window.managementConfigCache.prefix + '"');
                 iframe.contentWindow.postMessage({
-                  type: 'brands',
-                  brands: window.brandsCache
+                  type: 'managementConfig',
+                  config: window.managementConfigCache
                 }, pwaBaseUrl);
               } else {
-                console.warn('⚠️ [PWA] ブランドプリロード未完了（タイムアウト）');
+                console.warn('⚠️ [PWA] 管理番号設定プリロード未完了（タイムアウト）');
               }
-            }, 5000);
+            }, 3000);
           } else {
             // 未ロード → プリロード開始して待機
-            console.log('🚀 [PWA] ブランドプリロード開始（オンデマンド）');
-            preloadBrandsForPWA().then(() => {
-              if (window.brandsCache) {
-                console.log('📤 [PWA] ブランドデータをpostMessage送信（オンデマンド完了）:', window.brandsCache.length + '件');
+            console.log('🚀 [PWA] 管理番号設定プリロード開始（オンデマンド）');
+            preloadManagementConfigForPWA().then(() => {
+              if (window.managementConfigCache) {
+                console.log('📤 [PWA] 管理番号設定をpostMessage送信（オンデマンド完了）: prefix="' + window.managementConfigCache.prefix + '"');
                 iframe.contentWindow.postMessage({
-                  type: 'brands',
-                  brands: window.brandsCache
+                  type: 'managementConfig',
+                  config: window.managementConfigCache
                 }, pwaBaseUrl);
               }
             });
           }
 
           // イベントリスナーを1回だけ実行
-          iframe.removeEventListener('load', sendBrandsToProduct);
+          iframe.removeEventListener('load', sendManagementConfigToProduct);
         }, { once: true });
       } else if (page === 'config-product') {
         // PWA版設定管理をiframeで開く（product.htmlと同じパターン）

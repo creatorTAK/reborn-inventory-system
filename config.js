@@ -420,3 +420,56 @@ function getBrandsFromFirestore() {
     return [];
   }
 }
+
+/**
+ * Firestoreから管理番号設定を取得（settings/common）
+ * @return {Object} 管理番号設定オブジェクト { prefix: string, segments: Array }
+ */
+function getManagementConfig() {
+  try {
+    console.log('📥 [GAS] Firestoreから管理番号設定を取得開始...');
+    const startTime = new Date().getTime();
+
+    const projectId = 'reborn-chat';
+    const documentPath = 'settings/common';
+    const token = ScriptApp.getOAuthToken();
+
+    // Firestore REST API URL（単一ドキュメント取得）
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${documentPath}`;
+
+    const response = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      muteHttpExceptions: true
+    });
+
+    const responseCode = response.getResponseCode();
+    if (responseCode !== 200) {
+      console.error('❌ [GAS] Firestore取得エラー:', responseCode, response.getContentText());
+      return null;
+    }
+
+    const data = JSON.parse(response.getContentText());
+    const fields = data.fields || {};
+
+    // 管理番号設定を抽出
+    const config = {
+      prefix: convertFirestoreValue(fields.managementNumberPrefix) || '',
+      segments: convertFirestoreValue(fields.segments) || []
+    };
+
+    const endTime = new Date().getTime();
+    const duration = endTime - startTime;
+
+    console.log(`✅ [GAS] 管理番号設定取得完了: prefix="${config.prefix}", segments=${config.segments.length}件 (${duration}ms)`);
+
+    return config;
+
+  } catch (error) {
+    console.error('❌ [GAS] getManagementConfig エラー:', error);
+    return null;
+  }
+}

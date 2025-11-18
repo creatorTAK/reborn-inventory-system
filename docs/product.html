@@ -2458,9 +2458,9 @@ style="display:none;">削除</button>
   window.brandsCacheTimestamp = null;
 
   /**
-   * 親ウィンドウからブランドデータを受信
-   * - GAS経由でプリロードされたブランドデータを受け取る
-   * - Firestore直接アクセスをスキップして高速化
+   * 親ウィンドウからデータを受信（Algolia移行版）
+   * - 管理番号設定: GAS経由で受け取る（Firestore直接アクセスをスキップ）
+   * - ブランド: Algoliaで検索（プリロード不要）
    */
   window.addEventListener('message', function(event) {
     // セキュリティ: 送信元を検証
@@ -2476,7 +2476,31 @@ style="display:none;">削除</button>
       return;
     }
 
-    // ブランドデータを受信
+    // 管理番号設定を受信
+    if (event.data && event.data.type === 'managementConfig') {
+      const config = event.data.config;
+
+      if (!config || typeof config !== 'object') {
+        console.error('❌ [postMessage] 無効な管理番号設定:', config);
+        return;
+      }
+
+      // localStorageに保存
+      localStorage.setItem('managementNumberPrefix', config.prefix || '');
+      localStorage.setItem('segments', JSON.stringify(config.segments || []));
+      localStorage.setItem('managementConfigTimestamp', Date.now().toString());
+
+      console.log('✅ [postMessage] 管理番号設定受信完了: prefix="' + config.prefix + '", segments=' + (config.segments?.length || 0) + '件');
+      console.log('📦 [postMessage] localStorage保存完了、Firestore直接アクセスをスキップ');
+
+      // 管理番号UI更新（既に初期化されている場合）
+      if (typeof window.updateManagementNumberUI === 'function') {
+        console.log('🎨 管理番号UI更新開始（postMessage経由）');
+        window.updateManagementNumberUI();
+      }
+    }
+
+    // ブランドデータを受信（互換性維持、Algolia移行後は不要になる）
     if (event.data && event.data.type === 'brands') {
       const brands = event.data.brands;
 
@@ -2500,7 +2524,7 @@ style="display:none;">削除</button>
     }
   }, false);
 
-  console.log('👂 [postMessage] ブランドデータ受信リスナー登録完了');
+  console.log('👂 [postMessage] データ受信リスナー登録完了（管理番号設定 + ブランド）');
 </script>
 
 <!-- Firestore版ブランド検索モジュール -->
@@ -2515,12 +2539,12 @@ style="display:none;">削除</button>
     window.preloadBrandsInBackground = module.preloadBrandsInBackground || module.default?.preloadBrandsInBackground;
     window.searchBrandsFromCache = module.searchBrandsFromCache || module.default?.searchBrandsFromCache;
     
-    // ブランドサジェストモジュール読み込み
-    return import('https://reborn-inventory-system.pages.dev/js/brand-suggest-firestore.js');
+    // ブランドサジェストモジュール読み込み（Algolia版）
+    return import('https://reborn-inventory-system.pages.dev/js/brand-suggest-algolia.js');
   }).then(() => {
-    console.log('✅ Brand Suggest Firestore読み込み完了');
+    console.log('✅ Brand Suggest Algolia読み込み完了');
     // 読み込み完了フラグを設定
-    window.firestoreBrandModulesLoaded = true;
+    window.algoliaBrandModulesLoaded = true;
   }).catch(error => {
     console.error('❌ Firestoreモジュール読み込みエラー:', error);
   });
@@ -9026,41 +9050,41 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         fillSel('サイズ(表記)_ボトムス', opts['サイズ(表記)']||[]);
 
         // ブランドデータ（Firestore版に移行）
-        // モジュール読み込み完了を待ってからFirestore版ブランド検索を初期化
-        const initFirestoreBrandSearch = () => {
-          if (typeof window.attachBrandSuggestFirestore === 'function') {
-            console.log('🔥 Firestore版ブランド検索を初期化');
+        // モジュール読み込み完了を待ってからAlgolia版ブランド検索を初期化
+        const initAlgoliaBrandSearch = () => {
+          if (typeof window.attachBrandSuggestAlgolia === 'function') {
+            console.log('🔍 Algolia版ブランド検索を初期化');
 
             // 基本情報ブロックのブランド(英語)フィールド
-            window.attachBrandSuggestFirestore('ブランド(英語)', {
+            window.attachBrandSuggestAlgolia('ブランド(英語)', {
               limit: 15,
               minChars: 1,
               debounceMs: 300
             });
 
             // 商品名ブロックのブランド(英語)フィールド
-            window.attachBrandSuggestFirestore('商品名_ブランド(英語)', {
+            window.attachBrandSuggestAlgolia('商品名_ブランド(英語)', {
               limit: 15,
               minChars: 1,
               debounceMs: 300
             });
 
-            console.log('✅ Firestore版ブランド検索初期化完了');
+            console.log('✅ Algolia版ブランド検索初期化完了');
           } else {
-            console.warn('⏳ Firestoreモジュール読み込み中... 1秒後に再試行');
-            setTimeout(initFirestoreBrandSearch, 1000);
+            console.warn('⏳ Algoliaモジュール読み込み中... 1秒後に再試行');
+            setTimeout(initAlgoliaBrandSearch, 1000);
           }
         };
 
         // モジュール読み込み完了を待機
-        if (window.firestoreBrandModulesLoaded) {
-          initFirestoreBrandSearch();
+        if (window.algoliaBrandModulesLoaded) {
+          initAlgoliaBrandSearch();
         } else {
           // 読み込み完了を監視
           const checkInterval = setInterval(() => {
-            if (window.firestoreBrandModulesLoaded) {
+            if (window.algoliaBrandModulesLoaded) {
               clearInterval(checkInterval);
-              initFirestoreBrandSearch();
+              initAlgoliaBrandSearch();
             }
           }, 100);
         }
