@@ -455,10 +455,36 @@ function getManagementConfig() {
     const data = JSON.parse(response.getContentText());
     const fields = data.fields || {};
 
-    // 管理番号設定を抽出
+    // デバッグ: フィールド名を確認
+    console.log('[GAS] 利用可能なフィールド:', Object.keys(fields).join(', '));
+
+    // 管理番号設定を抽出（managementNumberオブジェクト内をチェック）
+    let prefix = '';
+    let segments = [];
+
+    // パターン1: managementNumber.prefix と managementNumber.segments
+    if (fields.managementNumber && fields.managementNumber.mapValue) {
+      const mnFields = fields.managementNumber.mapValue.fields || {};
+      prefix = convertFirestoreValue(mnFields.prefix) || '';
+      segments = convertFirestoreValue(mnFields.segments) || [];
+      console.log('[GAS] パターン1で取得（managementNumber内）');
+    }
+    // パターン2: 直接 managementNumberPrefix と segments
+    else if (fields.managementNumberPrefix || fields.segments) {
+      prefix = convertFirestoreValue(fields.managementNumberPrefix) || '';
+      segments = convertFirestoreValue(fields.segments) || [];
+      console.log('[GAS] パターン2で取得（直接フィールド）');
+    }
+    // パターン3: prefix と segments（シンプル名）
+    else if (fields.prefix || fields.segments) {
+      prefix = convertFirestoreValue(fields.prefix) || '';
+      segments = convertFirestoreValue(fields.segments) || [];
+      console.log('[GAS] パターン3で取得（シンプル名）');
+    }
+
     const config = {
-      prefix: convertFirestoreValue(fields.managementNumberPrefix) || '',
-      segments: convertFirestoreValue(fields.segments) || []
+      prefix: prefix,
+      segments: segments
     };
 
     const endTime = new Date().getTime();

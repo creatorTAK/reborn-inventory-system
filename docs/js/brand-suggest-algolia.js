@@ -63,11 +63,18 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
     return;
   }
 
-  // Algoliaクライアント初期化（動的インポート）
+  // Algoliaクライアント初期化（CDN版）
   let searchClient;
+
+  // Algolia SDKをCDNから読み込み（scriptタグで読み込まれる想定）
+  if (typeof window.algoliasearch === 'undefined') {
+    console.error('❌ [Algolia] algoliasearch SDKが読み込まれていません');
+    console.log('💡 product.htmlに<script src="https://cdn.jsdelivr.net/npm/algoliasearch@4/dist/algoliasearch-lite.umd.js"></script>を追加してください');
+    return;
+  }
+
   try {
-    const { algoliasearch } = await import('https://cdn.jsdelivr.net/npm/algoliasearch@5/dist/builds/browser.min.js');
-    searchClient = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_SEARCH_KEY);
+    searchClient = window.algoliasearch(ALGOLIA_APP_ID, ALGOLIA_SEARCH_KEY);
     console.log('✅ [Algolia] クライアント初期化成功');
   } catch (error) {
     console.error('❌ [Algolia] クライアント初期化エラー:', error);
