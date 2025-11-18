@@ -73,8 +73,14 @@ function attachBrandSuggestFirestore(inputId, options = {}) {
   const minChars = options.minChars || 1;
   const debounceMs = options.debounceMs || 300;
 
-  // バックグラウンドでプリロード開始（GAS版と同じ動作）
-  preloadBrandsInBackground();
+  // バックグラウンドでプリロード開始（5秒遅延で管理番号UI優先）
+  if (!window.brandsPreloadScheduled) {
+    window.brandsPreloadScheduled = true;
+    setTimeout(() => {
+      console.log('⏰ ブランドプリロード開始（5秒遅延）');
+      preloadBrandsInBackground();
+    }, 5000);
+  }
 
   const input = document.getElementById(inputId);
   const panel = document.getElementById('suggest-' + inputId);
