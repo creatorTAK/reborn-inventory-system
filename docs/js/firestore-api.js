@@ -46,10 +46,10 @@ const BRANDS_CACHE_DURATION = 30 * 60 * 1000; // ブランドは30分間キャ�
 // ============================================
 
 /**
- * Firebase/Firestoreを初期化
- * 複数回呼ばれても安全（シングルトン、Promise-based）
+ * Firebase/Firestoreを初期化（compat版統一）
+ * product.htmlで初期化済みのwindow.dbを使用（競合回避）
  *
- * @returns {Promise<Object>} Firestoreインスタンス
+ * @returns {Promise<Object>} Firestoreインスタンス（compat版）
  */
 async function initializeFirestore() {
   // 初期化中または初期化済みの場合、既存のPromiseを返す
@@ -67,23 +67,26 @@ async function initializeFirestore() {
     try {
       console.log('[Firestore API] 初期化開始...');
 
-      // Firebase SDKを動的インポート
-      const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
-      const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-
-      // 既に初期化済みか確認
-      const existingApps = getApps();
-      if (existingApps.length > 0) {
-        firebaseApp = existingApps.find(app => app.name === 'firestore-api-app');
-        if (!firebaseApp) {
-          firebaseApp = initializeApp(FIREBASE_CONFIG, 'firestore-api-app');
-        }
-      } else {
-        firebaseApp = initializeApp(FIREBASE_CONFIG, 'firestore-api-app');
+      // product.htmlで初期化済みのcompat版dbを使用（競合回避）
+      if (window.db && typeof window.db.collection === 'function') {
+        console.log('[Firestore API] ✅ 既存のcompat版dbを使用（競合回避）');
+        firestoreDb = window.db;
+        return firestoreDb;
       }
 
-      firestoreDb = getFirestore(firebaseApp);
-      console.log('[Firestore API] ✅ 初期化完了');
+      // window.dbがない場合はcompat版で初期化
+      if (typeof firebase === 'undefined') {
+        throw new Error('Firebase compat SDKが読み込まれていません');
+      }
+
+      // compat版で初期化
+      if (!firebase.apps.length) {
+        firebase.initializeApp(FIREBASE_CONFIG);
+      }
+      firestoreDb = firebase.firestore();
+      window.db = firestoreDb; // グローバルに公開
+
+      console.log('[Firestore API] ✅ compat版で初期化完了');
 
       return firestoreDb;
     } catch (error) {
