@@ -1731,34 +1731,30 @@
     },
 
     // 設定をFirestoreから読み込み（高速化・compat版）
+    // 設定をGASサーバー経由でFirestoreから読み込み（CORS回避）
     loadSettings() {
-      if (!window.firestoreReady || !window.db) {
-        console.warn('⚠️ Firestoreが初期化されていません');
+      if (!google || !google.script || !google.script.run) {
+        console.warn('⚠️ google.script.runが利用できません');
         return;
       }
 
-      try {
-        // compat版API使用
-        window.db.collection('settings').doc('common').get()
-          .then((docSnap) => {
-            if (docSnap.exists) {
-              const data = docSnap.data();
-              if (data.managementNumber && data.managementNumber.segments) {
-                this.segments = data.managementNumber.segments;
-                this.renderSegments();
-                this.updatePreview();
-                console.log('✅ Firestoreから管理番号設定を読み込み:', this.segments.length, 'セグメント');
-              }
-            } else {
-              console.log('📝 Firestoreに設定が見つかりません（初回起動）');
-            }
-          })
-          .catch((e) => {
-            console.error('❌ Firestore読み込みエラー:', e);
-          });
-      } catch (e) {
-        console.error('❌ Firestore読み込みエラー:', e);
-      }
+      console.log('📥 Firestoreから設定を読み込み中（GAS経由）...');
+      
+      google.script.run
+        .withSuccessHandler((config) => {
+          if (config && config.managementNumber && config.managementNumber.segments) {
+            this.segments = config.managementNumber.segments;
+            this.renderSegments();
+            this.updatePreview();
+            console.log('✅ Firestoreから管理番号設定を読み込み（GAS経由）:', this.segments.length, 'セグメント');
+          } else {
+            console.log('📝 Firestoreに設定が見つかりません（初回起動）');
+          }
+        })
+        .withFailureHandler((error) => {
+          console.error('❌ Firestore読み込みエラー（GAS）:', error);
+        })
+        .loadConfigFromFirestore();
     },
 
     // セグメントタイプグリッドを描画
@@ -4342,40 +4338,34 @@ ${descFormattedNumber}`;
     /**
      * 全設定をFirestoreに保存（PWA版からアクセス可能）
      */
+    /**
+     * 全設定をFirestoreに保存（GASサーバー経由でCORS回避）
+     */
     function saveConfigToFirestore(config) {
-      if (!window.firestoreReady || !window.db) {
-        console.warn('⚠️ Firestoreが初期化されていません（localStorage のみ保存）');
+      if (!google || !google.script || !google.script.run) {
+        console.warn('⚠️ google.script.runが利用できません（localStorage のみ保存）');
         return Promise.resolve(false);
       }
 
-      try {
-        console.log('📤 Firestoreに設定を保存中...');
-
-        // compat版API使用
-        return window.db.collection('settings').doc('common').set({
-          conditionButtons: config['商品状態ボタン'] || {},
-          hashtag: config['ハッシュタグ'] || {},
-          discount: config['割引情報'] || {},
-          shippingDefault: config['配送デフォルト'] || {},
-          procureListingDefault: config['仕入出品デフォルト'] || {},
-          managementNumber: config['管理番号設定'] || {},
-          salesword: config['よく使うセールスワード'] || {},
-          aiSettings: config['AI生成設定'] || {},
-          designTheme: config['デザインテーマ'] || 'modern',
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        })
-        .then(() => {
-          console.log('✅ Firestoreへの保存完了（settings/common）');
-          return true;
-        })
-        .catch((e) => {
-          console.error('❌ Firestore保存エラー:', e);
-          return false;
-        });
-      } catch (e) {
-        console.error('❌ Firestore保存エラー:', e);
-        return Promise.resolve(false);
-      }
+      return new Promise((resolve, reject) => {
+        console.log('📤 Firestoreに設定を保存中（GAS経由）...');
+        
+        google.script.run
+          .withSuccessHandler((result) => {
+            if (result && result.success) {
+              console.log('✅ Firestoreへの保存完了（GAS経由）: settings/common');
+              resolve(true);
+            } else {
+              console.error('❌ Firestore保存失敗（GAS）:', result);
+              resolve(false);
+            }
+          })
+          .withFailureHandler((error) => {
+            console.error('❌ Firestore保存エラー（GAS）:', error);
+            resolve(false);
+          })
+          .saveConfigToFirestore(config);
+      });
     }
 
     /**

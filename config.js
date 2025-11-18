@@ -116,3 +116,210 @@ function getHeaderMap_() {
   }
   return { map, lastCol };
 }
+
+/**
+ * ========================================
+ * Firestore操作関数（設定管理用）
+ * ========================================
+ * GAS iframeからのCORS問題を回避するため、
+ * サーバー側（GAS）でFirestore REST APIを使用
+ */
+
+/**
+ * 設定をFirestoreに保存（settings/commonドキュメント）
+ * @param {Object} config - 設定オブジェクト
+ * @return {Object} 成功/失敗の結果
+ */
+function saveConfigToFirestore(config) {
+  try {
+    const projectId = 'reborn-chat';
+    const collectionPath = 'settings';
+    const documentId = 'common';
+    
+    // Firestore REST API URL
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionPath}/${documentId}`;
+    
+    // Firestoreドキュメント形式に変換
+    const firestoreDoc = {
+      fields: {
+        conditionButtons: { arrayValue: { values: (config['商品状態ボタン'] || []).map(v => ({ stringValue: v })) } },
+        hashtag: { mapValue: { fields: convertToFirestoreMap(config['ハッシュタグ'] || {}) } },
+        discount: { mapValue: { fields: convertToFirestoreMap(config['割引情報'] || {}) } },
+        shippingDefault: { mapValue: { fields: convertToFirestoreMap(config['配送デフォルト'] || {}) } },
+        procureListingDefault: { mapValue: { fields: convertToFirestoreMap(config['仕入出品デフォルト'] || {}) } },
+        managementNumber: { mapValue: { fields: convertToFirestoreMap(config['管理番号設定'] || {}) } },
+        salesword: { mapValue: { fields: convertToFirestoreMap(config['よく使うセールスワード'] || {}) } },
+        aiSettings: { mapValue: { fields: convertToFirestoreMap(config['AI生成設定'] || {}) } },
+        designTheme: { stringValue: config['デザインテーマ'] || 'modern' },
+        updatedAt: { timestampValue: new Date().toISOString() }
+      }
+    };
+    
+    // OAuth2トークン取得
+    const token = ScriptApp.getOAuthToken();
+    
+    // PATCH request（ドキュメント更新・存在しなければ作成）
+    const options = {
+      method: 'patch',
+      contentType: 'application/json',
+      headers: {
+        'Authorization': 'Bearer ' + token
+      },
+      payload: JSON.stringify(firestoreDoc),
+      muteHttpExceptions: true
+    };
+    
+    const response = UrlFetchApp.fetch(url, options);
+    const responseCode = response.getResponseCode();
+    
+    if (responseCode === 200) {
+      Logger.log('✅ Firestoreに保存成功: settings/common');
+      return { success: true, message: 'Firestoreに保存しました' };
+    } else {
+      const errorText = response.getContentText();
+      Logger.log('❌ Firestore保存エラー: ' + responseCode + ' - ' + errorText);
+      return { success: false, error: errorText, code: responseCode };
+    }
+    
+  } catch (error) {
+    Logger.log('❌ Firestore保存例外: ' + error.toString());
+    return { success: false, error: error.toString() };
+  }
+}
+
+/**
+ * JavaScriptオブジェクトをFirestore Map形式に変換
+ * @param {Object} obj - 変換元オブジェクト
+ * @return {Object} Firestore Map形式
+ */
+function convertToFirestoreMap(obj) {
+  const result = {};
+  
+  for (const key in obj) {
+    const value = obj[key];
+    
+    if (value === null || value === undefined) {
+      result[key] = { nullValue: null };
+    } else if (typeof value === 'string') {
+      result[key] = { stringValue: value };
+    } else if (typeof value === 'number') {
+      result[key] = Number.isInteger(value) 
+        ? { integerValue: value.toString() }
+        : { doubleValue: value };
+    } else if (typeof value === 'boolean') {
+      result[key] = { booleanValue: value };
+    } else if (Array.isArray(value)) {
+      result[key] = { 
+        arrayValue: { 
+          values: value.map(v => {
+            if (typeof v === 'string') return { stringValue: v };
+            if (typeof v === 'number') return { doubleValue: v };
+            if (typeof v === 'boolean') return { booleanValue: v };
+            if (typeof v === 'object') return { mapValue: { fields: convertToFirestoreMap(v) } };
+            return { stringValue: String(v) };
+          })
+        }
+      };
+    } else if (typeof value === 'object') {
+      result[key] = { mapValue: { fields: convertToFirestoreMap(value) } };
+    } else {
+      result[key] = { stringValue: String(value) };
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * Firestoreから設定を読み込み（settings/commonドキュメント）
+ * @return {Object} 設定オブジェクトまたはnull
+ */
+function loadConfigFromFirestore() {
+  try {
+    const projectId = 'reborn-chat';
+    const collectionPath = 'settings';
+    const documentId = 'common';
+    
+    // Firestore REST API URL
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionPath}/${documentId}`;
+    
+    // OAuth2トークン取得
+    const token = ScriptApp.getOAuthToken();
+    
+    // GET request
+    const options = {
+      method: 'get',
+      headers: {
+        'Authorization': 'Bearer ' + token
+      },
+      muteHttpExceptions: true
+    };
+    
+    const response = UrlFetchApp.fetch(url, options);
+    const responseCode = response.getResponseCode();
+    
+    if (responseCode === 200) {
+      const data = JSON.parse(response.getContentText());
+      Logger.log('✅ Firestoreから読み込み成功: settings/common');
+      return convertFromFirestoreDoc(data);
+    } else if (responseCode === 404) {
+      Logger.log('📝 Firestoreドキュメントが存在しません: settings/common');
+      return null;
+    } else {
+      const errorText = response.getContentText();
+      Logger.log('❌ Firestore読み込みエラー: ' + responseCode + ' - ' + errorText);
+      return null;
+    }
+    
+  } catch (error) {
+    Logger.log('❌ Firestore読み込み例外: ' + error.toString());
+    return null;
+  }
+}
+
+/**
+ * FirestoreドキュメントをJavaScriptオブジェクトに変換
+ * @param {Object} doc - Firestoreドキュメント
+ * @return {Object} JavaScriptオブジェクト
+ */
+function convertFromFirestoreDoc(doc) {
+  if (!doc || !doc.fields) return {};
+  
+  const result = {};
+  
+  for (const key in doc.fields) {
+    result[key] = convertFirestoreValue(doc.fields[key]);
+  }
+  
+  return result;
+}
+
+/**
+ * Firestore値をJavaScript値に変換
+ * @param {Object} value - Firestore値
+ * @return {*} JavaScript値
+ */
+function convertFirestoreValue(value) {
+  if (!value) return null;
+  
+  if (value.stringValue !== undefined) return value.stringValue;
+  if (value.integerValue !== undefined) return parseInt(value.integerValue);
+  if (value.doubleValue !== undefined) return value.doubleValue;
+  if (value.booleanValue !== undefined) return value.booleanValue;
+  if (value.nullValue !== undefined) return null;
+  if (value.timestampValue !== undefined) return new Date(value.timestampValue);
+  
+  if (value.arrayValue && value.arrayValue.values) {
+    return value.arrayValue.values.map(v => convertFirestoreValue(v));
+  }
+  
+  if (value.mapValue && value.mapValue.fields) {
+    const obj = {};
+    for (const k in value.mapValue.fields) {
+      obj[k] = convertFirestoreValue(value.mapValue.fields[k]);
+    }
+    return obj;
+  }
+  
+  return null;
+}
