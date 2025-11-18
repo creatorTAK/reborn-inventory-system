@@ -81,8 +81,10 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
     return;
   }
 
+  // インデックス初期化
+  const index = searchClient.initIndex(ALGOLIA_INDEX_NAME);
+
   let debounceTimer = null;
-  let currentRequest = null;
 
   /**
    * Algoliaでブランド検索
@@ -91,25 +93,13 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
     try {
       const startTime = performance.now();
 
-      // 前回のリクエストをキャンセル
-      if (currentRequest) {
-        currentRequest.abort();
-      }
-
-      currentRequest = new AbortController();
-
-      const { results } = await searchClient.search({
-        requests: [
-          {
-            indexName: ALGOLIA_INDEX_NAME,
-            query: query,
-            hitsPerPage: limit,
-            attributesToRetrieve: ['id', 'name', 'nameKana', 'usageCount']
-          }
-        ]
+      // v4 APIでは index.search() を使用
+      const { hits } = await index.search(query, {
+        hitsPerPage: limit,
+        attributesToRetrieve: ['id', 'name', 'nameKana', 'usageCount']
       });
 
-      const brands = results[0].hits;
+      const brands = hits;
 
       const endTime = performance.now();
       const duration = (endTime - startTime).toFixed(2);
@@ -119,14 +109,8 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
       return brands;
 
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.log('⏹️  [Algolia] 検索キャンセル');
-        return [];
-      }
       console.error('❌ [Algolia] 検索エラー:', error);
       return [];
-    } finally {
-      currentRequest = null;
     }
   }
 
