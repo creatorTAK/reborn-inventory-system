@@ -2417,7 +2417,7 @@ style="display:none;">削除</button>
 </script>
 
 <!-- 戻るボタン処理 --><script>
-  console.log('[sidebar_product] ✅ Script loaded - Version @937-PWA-Numbering');
+  console.log('[sidebar_product] ✅ Script loaded - Version @938-Counter-Fix');
   
   async function goBack() {
     console.log('[sidebar_product] >>> goBack() called at', new Date().toISOString());
@@ -4110,47 +4110,63 @@ style="display:none;">削除</button>
     let config = null;
     let segments = null;
 
-    // 1. まずFirestoreから読み込みを試みる（PWA版で最新設定にアクセス可能）
-    try {
-      config = await loadManagementConfigFromFirestore();
-      if (config) {
-        console.log('✅ Firestoreから設定を読み込みました:', config);
+    // 1. まずlocalStorageキャッシュから即座に読み込み（高速表示）
+    const cachedConfigStr = localStorage.getItem('rebornConfig_managementNumber');
+    console.log('📦 localStorage確認 (rebornConfig_managementNumber):', {
+      cachedConfigStr: cachedConfigStr,
+      type: typeof cachedConfigStr,
+      isTruthy: !!cachedConfigStr,
+      length: cachedConfigStr ? cachedConfigStr.length : 'N/A'
+    });
+
+    if (cachedConfigStr) {
+      console.log('✅ localStorageから設定を即座に読み込みます');
+      try {
+        config = JSON.parse(cachedConfigStr);
+        console.log('📦 管理番号設定をlocalStorageから読み込み:', config);
         segments = config.segments || null;
+        console.log('📦 セグメント配列:', segments);
+
+        // キャッシュがあれば即座にUI描画
+        if (segments && segments.length > 0) {
+          console.log('⚡ キャッシュからUIを即座に描画');
+          renderManagementSegmentUI(segments);
+        }
+      } catch (e) {
+        console.error('❌ localStorage パースに失敗:', e);
+      }
+    } else {
+      console.log('⚠️ localStorageにキャッシュが存在しません');
+    }
+
+    // 2. バックグラウンドでFirestoreから最新設定を取得
+    try {
+      const latestConfig = await loadManagementConfigFromFirestore();
+      if (latestConfig) {
+        console.log('✅ Firestoreから最新設定を取得:', latestConfig);
+        const latestSegments = latestConfig.segments || null;
+
+        // 設定が変更されていればUIを更新
+        const cachedStr = JSON.stringify(config?.segments || []);
+        const latestStr = JSON.stringify(latestSegments || []);
+
+        if (cachedStr !== latestStr) {
+          console.log('🔄 設定が変更されているため、UIを更新します');
+          if (latestSegments && latestSegments.length > 0) {
+            renderManagementSegmentUI(latestSegments);
+          }
+          config = latestConfig;
+          segments = latestSegments;
+        } else {
+          console.log('✅ 設定に変更なし、UIそのまま');
+        }
       }
     } catch (e) {
-      console.warn('⚠️ Firestore読み込み失敗、localStorageにフォールバック:', e);
+      console.warn('⚠️ Firestore読み込み失敗（キャッシュを使用）:', e);
     }
 
-    // 2. Firestoreから読み込めなかった場合、localStorageから取得
-    if (!config) {
-      const cachedConfigStr = localStorage.getItem('rebornConfig_managementNumber');
-      console.log('📦 localStorage確認 (rebornConfig_managementNumber):', {
-        cachedConfigStr: cachedConfigStr,
-        type: typeof cachedConfigStr,
-        isTruthy: !!cachedConfigStr,
-        length: cachedConfigStr ? cachedConfigStr.length : 'N/A'
-      });
-
-      if (cachedConfigStr) {
-        console.log('✅ localStorageから設定を読み込みます');
-        try {
-          config = JSON.parse(cachedConfigStr);
-          console.log('📦 管理番号設定をlocalStorageから読み込み:', config);
-          segments = config.segments || null;
-          console.log('📦 セグメント配列:', segments);
-        } catch (e) {
-          console.error('❌ localStorage パースに失敗:', e);
-        }
-      } else {
-        console.log('⚠️ localStorageにも管理番号設定が存在しません');
-      }
-    }
-
-    // 3. セグメント設定があればUIを描画
-    if (segments && segments.length > 0) {
-      console.log('✅ セグメント設定が存在、UIを描画します');
-      renderManagementSegmentUI(segments);
-    } else {
+    // 3. キャッシュもFirestoreもなければレガシーUIへ
+    if (!segments || segments.length === 0) {
       console.log('⚠️ セグメント配列が空です');
     }
 
@@ -4704,8 +4720,8 @@ style="display:none;">削除</button>
               if (counterDoc.exists) {
                 currentCount = counterDoc.data().count || 0;
               }
-              // 初回は開始番号、以降はインクリメント
-              const nextCount = currentCount === 0 ? startNum : currentCount + 1;
+              // 現在のカウントが開始番号未満の場合は、開始番号から開始
+              const nextCount = currentCount < startNum ? startNum : currentCount + 1;
               transaction.set(counterRef, {
                 count: nextCount,
                 key: counterKey,
