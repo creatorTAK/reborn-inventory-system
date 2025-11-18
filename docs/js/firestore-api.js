@@ -529,12 +529,11 @@ async function getUserListHybrid(forceRefresh = false) {
 async function getCategoryMaster() {
   try {
     const db = await initializeFirestore();
-    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    const docRef = doc(db, 'categories', 'master');
-    const docSnap = await getDoc(docRef);
+    // compat版：collection().doc().get()
+    const docSnap = await db.collection('categories').doc('master').get();
 
-    if (!docSnap.exists()) {
+    if (!docSnap.exists) {
       console.warn('カテゴリマスタが見つかりません');
       return { ok: true, rows: [] };
     }
@@ -558,13 +557,11 @@ async function getCategoryMaster() {
 async function getMasterOptions() {
   try {
     const db = await initializeFirestore();
-    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    // インデックスドキュメントから全フィールド名を取得
-    const indexRef = doc(db, 'masterOptions', '_index');
-    const indexSnap = await getDoc(indexRef);
+    // compat版：collection().doc().get()
+    const indexSnap = await db.collection('masterOptions').doc('_index').get();
 
-    if (!indexSnap.exists()) {
+    if (!indexSnap.exists) {
       console.warn('マスタオプションインデックスが見つかりません');
       return {};
     }
@@ -582,10 +579,10 @@ async function getMasterOptions() {
         .replace(/\)/g, '_')
         .replace(/\s/g, '_');
 
-      const fieldRef = doc(db, 'masterOptions', safeFieldName);
-      const fieldSnap = await getDoc(fieldRef);
+      // compat版：collection().doc().get()
+      const fieldSnap = await db.collection('masterOptions').doc(safeFieldName).get();
 
-      if (fieldSnap.exists()) {
+      if (fieldSnap.exists) {
         const fieldData = fieldSnap.data();
         options[fieldName] = fieldData.items || [];
       } else {
@@ -669,10 +666,9 @@ async function preloadBrandsInBackground() {
     const startTime = performance.now();
 
     const db = await initializeFirestore();
-    const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    const brandsRef = collection(db, 'brands');
-    const snapshot = await getDocs(brandsRef);
+    // compat版：collection().get()
+    const snapshot = await db.collection('brands').get();
 
     const brands = [];
     snapshot.forEach((doc) => {
@@ -760,10 +756,9 @@ async function searchBrands(query = '', limit = 50) {
     const startTime = performance.now();
 
     const db = await initializeFirestore();
-    const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    const brandsRef = collection(db, 'brands');
-    const snapshot = await getDocs(brandsRef);
+    // compat版：collection().get()
+    const snapshot = await db.collection('brands').get();
 
     const brands = [];
     snapshot.forEach((doc) => {
@@ -801,13 +796,12 @@ async function searchBrands(query = '', limit = 50) {
 async function getAllBrands(limit = 500) {
   try {
     const db = await initializeFirestore();
-    const { collection, getDocs, query, orderBy, limit: fbLimit } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    const brandsRef = collection(db, 'brands');
-
-    // 使用頻度の高い順に取得
-    const q = query(brandsRef, orderBy('usageCount', 'desc'), fbLimit(limit));
-    const snapshot = await getDocs(q);
+    // compat版：collection().orderBy().limit().get()
+    const snapshot = await db.collection('brands')
+      .orderBy('usageCount', 'desc')
+      .limit(limit)
+      .get();
 
     const brands = [];
     snapshot.forEach((doc) => {
@@ -837,14 +831,11 @@ async function getAllBrands(limit = 500) {
 async function incrementBrandUsageCount(brandId) {
   try {
     const db = await initializeFirestore();
-    const { doc, updateDoc, increment, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    const brandRef = doc(db, 'brands', brandId);
-
-    // usageCountをインクリメント
-    await updateDoc(brandRef, {
-      usageCount: increment(1),
-      updatedAt: serverTimestamp()
+    // compat版：collection().doc().update()
+    await db.collection('brands').doc(brandId).update({
+      usageCount: firebase.firestore.FieldValue.increment(1),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
     console.log(`✅ [BRANDS] 使用カウント更新: ${brandId}`);
@@ -877,7 +868,6 @@ async function createBrand(nameEn, nameKana) {
     }
 
     const db = await initializeFirestore();
-    const { collection, addDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
     // searchText生成（英語名 + カナ名を小文字化）
     const searchText = `${nameEn.toLowerCase()},${nameKana}`.toLowerCase();
@@ -887,12 +877,12 @@ async function createBrand(nameEn, nameKana) {
       nameKana: nameKana.trim(),
       searchText: searchText,
       usageCount: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    const brandsRef = collection(db, 'brands');
-    const docRef = await addDoc(brandsRef, brandData);
+    // compat版：collection().add()
+    const docRef = await db.collection('brands').add(brandData);
 
     console.log(`✅ [BRANDS] ブランド追加成功: ${docRef.id} (${nameEn})`);
 
@@ -942,10 +932,9 @@ async function deleteBrand(brandId) {
     }
 
     const db = await initializeFirestore();
-    const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    const brandRef = doc(db, 'brands', brandId);
-    await deleteDoc(brandRef);
+    // compat版：collection().doc().delete()
+    await db.collection('brands').doc(brandId).delete();
 
     console.log(`✅ [BRANDS] ブランド削除成功: ${brandId}`);
 
@@ -988,17 +977,16 @@ async function updateBrand(brandId, nameEn, nameKana) {
     }
 
     const db = await initializeFirestore();
-    const { doc, updateDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
     // searchText生成
     const searchText = `${nameEn.toLowerCase()},${nameKana}`.toLowerCase();
 
-    const brandRef = doc(db, 'brands', brandId);
-    await updateDoc(brandRef, {
+    // compat版：collection().doc().update()
+    await db.collection('brands').doc(brandId).update({
       nameEn: nameEn.trim(),
       nameKana: nameKana.trim(),
       searchText: searchText,
-      updatedAt: serverTimestamp()
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
     console.log(`✅ [BRANDS] ブランド更新成功: ${brandId} (${nameEn})`);
