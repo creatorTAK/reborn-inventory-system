@@ -344,60 +344,74 @@ function getBrandsFromFirestore() {
 
     const projectId = 'reborn-chat';
     const collectionPath = 'brands';
-
-    // Firestore REST API URL
-    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionPath}`;
-
-    // OAuth2トークンを取得
     const token = ScriptApp.getOAuthToken();
 
-    // Firestore REST APIでブランドを全件取得
-    const response = UrlFetchApp.fetch(url, {
-      method: 'get',
-      headers: {
-        'Authorization': 'Bearer ' + token,
-        'Content-Type': 'application/json'
-      },
-      muteHttpExceptions: true
-    });
+    let brands = [];
+    let pageToken = null;
+    let pageCount = 0;
 
-    const responseCode = response.getResponseCode();
-    if (responseCode !== 200) {
-      console.error('❌ [GAS] Firestore取得エラー:', responseCode, response.getContentText());
-      return [];
-    }
+    // ページネーションで全件取得（Firestore REST APIは1リクエストで最大数百件まで）
+    do {
+      pageCount++;
 
-    const data = JSON.parse(response.getContentText());
-    const brands = [];
+      // Firestore REST API URL（pageSize=1000で最大取得、pageTokenがあれば追加）
+      let url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionPath}?pageSize=1000`;
+      if (pageToken) {
+        url += `&pageToken=${encodeURIComponent(pageToken)}`;
+      }
 
-    // documentsがない場合は空配列を返す
-    if (!data.documents || !Array.isArray(data.documents)) {
-      console.log('⚠️ [GAS] ブランドドキュメントが見つかりません');
-      return [];
-    }
-
-    // Firestoreのドキュメントをブランドオブジェクトに変換
-    for (let i = 0; i < data.documents.length; i++) {
-      const doc = data.documents[i];
-      const fields = doc.fields || {};
-
-      // ドキュメントIDを抽出（name から取得）
-      const docName = doc.name || '';
-      const docId = docName.split('/').pop();
-
-      brands.push({
-        id: docId,
-        nameEn: convertFirestoreValue(fields.nameEn) || '',
-        nameKana: convertFirestoreValue(fields.nameKana) || '',
-        searchText: (convertFirestoreValue(fields.searchText) || '').toLowerCase(),
-        usageCount: convertFirestoreValue(fields.usageCount) || 0
+      const response = UrlFetchApp.fetch(url, {
+        method: 'get',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json'
+        },
+        muteHttpExceptions: true
       });
-    }
+
+      const responseCode = response.getResponseCode();
+      if (responseCode !== 200) {
+        console.error('❌ [GAS] Firestore取得エラー:', responseCode, response.getContentText());
+        break;
+      }
+
+      const data = JSON.parse(response.getContentText());
+
+      // ドキュメントを処理
+      if (data.documents && Array.isArray(data.documents)) {
+        for (let i = 0; i < data.documents.length; i++) {
+          const doc = data.documents[i];
+          const fields = doc.fields || {};
+          const docName = doc.name || '';
+          const docId = docName.split('/').pop();
+
+          brands.push({
+            id: docId,
+            nameEn: convertFirestoreValue(fields.nameEn) || '',
+            nameKana: convertFirestoreValue(fields.nameKana) || '',
+            searchText: (convertFirestoreValue(fields.searchText) || '').toLowerCase(),
+            usageCount: convertFirestoreValue(fields.usageCount) || 0
+          });
+        }
+      }
+
+      // 次のページのトークンを取得
+      pageToken = data.nextPageToken || null;
+
+      console.log(`📄 [GAS] ページ ${pageCount}: ${data.documents ? data.documents.length : 0}件取得（累計: ${brands.length}件）`);
+
+      // GASの実行時間制限（6分）を考慮して、50ページ以上は打ち切り
+      if (pageCount >= 50) {
+        console.log('⚠️ [GAS] ページ数上限に達したため、取得を終了します');
+        break;
+      }
+
+    } while (pageToken); // pageTokenがある限り繰り返す
 
     const endTime = new Date().getTime();
     const duration = endTime - startTime;
 
-    console.log(`✅ [GAS] ブランドマスタ取得完了: ${brands.length}件 (${duration}ms)`);
+    console.log(`✅ [GAS] ブランドマスタ取得完了: ${brands.length}件 (${duration}ms、${pageCount}ページ)`);
 
     return brands;
 

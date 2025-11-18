@@ -74,12 +74,20 @@ function attachBrandSuggestFirestore(inputId, options = {}) {
   const debounceMs = options.debounceMs || 300;
 
   // バックグラウンドでプリロード開始（5秒遅延で管理番号UI優先）
-  if (!window.brandsPreloadScheduled) {
+  // ただし、postMessageで受信したキャッシュがあればスキップ
+  if (!window.brandsPreloadScheduled && !window.brandsCache) {
     window.brandsPreloadScheduled = true;
     setTimeout(() => {
-      console.log('⏰ ブランドプリロード開始（5秒遅延）');
-      preloadBrandsInBackground();
+      // 再度チェック: タイムアウト前にpostMessageで受信していたらスキップ
+      if (!window.brandsCache) {
+        console.log('⏰ ブランドプリロード開始（5秒遅延、Firestore直接アクセス）');
+        preloadBrandsInBackground();
+      } else {
+        console.log('✅ ブランドキャッシュが既に存在（postMessage受信済み）、Firestoreプリロードをスキップ');
+      }
     }, 5000);
+  } else if (window.brandsCache) {
+    console.log('✅ ブランドキャッシュが既に存在（postMessage受信済み）、Firestoreプリロードをスキップ');
   }
 
   const input = document.getElementById(inputId);
