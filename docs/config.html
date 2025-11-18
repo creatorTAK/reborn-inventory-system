@@ -6444,7 +6444,7 @@ ${prompt || '（未設定）'}
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-  <!-- Firebase Cloud Messaging - フォアグラウンド通知対応 -->
+  <!-- Firebase初期化（product.htmlと同じパターン：即座に実行） -->
   <script>
     // Firebase設定（reborn-chatプロジェクトに統一）
     const firebaseConfig = {
@@ -6455,6 +6455,26 @@ ${prompt || '（未設定）'}
       messagingSenderId: "345706548795",
       appId: "1:345706548795:web:058a553da6b4b74db5161e"
     };
+
+    // Firebase即座に初期化（product.htmlと同じパターン）
+    try {
+      if (typeof firebase !== 'undefined') {
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        window.db = db; // グローバルに公開
+        window.firestoreReady = true;
+        console.log('✅ Firebase初期化完了 (config.html PWA版)');
+      } else {
+        console.error('❌ Firebase SDKが読み込まれていません');
+      }
+    } catch (error) {
+      console.error('❌ Firebase初期化エラー:', error);
+    }
+  </script>
+
+  <!-- 以下、他の初期化スクリプト -->
+  <script>
+    // この後の設定変数（firebaseConfigは上で定義済み）
 
     // ================= 画像管理設定 =================
 
@@ -6616,55 +6636,8 @@ ${prompt || '（未設定）'}
       }
     });
 
-    // グローバル変数: Firestore インスタンス（window に公開）
-    window.db = null;
-    window.firestoreReady = false;
-
-    // Firebase初期化（compat版: PWA対応 - CORS問題修正版）
-    function initFirebase() {
-      try {
-        console.log('[config] Firebase初期化開始');
-        console.log('[config] firebase:', typeof firebase);
-
-        if (typeof firebase === 'undefined') {
-          throw new Error('Firebase SDK が読み込まれていません');
-        }
-
-        // 既に初期化済みかチェック（二重初期化を防ぐ）
-        if (window.firebase && firebase.apps && firebase.apps.length > 0) {
-          console.log('✅ Firebase already initialized. Reusing existing app.');
-          window.db = firebase.firestore(); // 既存 app に紐づく firestore を利用
-          window.firestoreReady = true;
-          return;
-        }
-
-        // 初回初期化
-        const app = firebase.initializeApp(firebaseConfig);
-        console.log('✅ Firebase App初期化（設定管理ページ）');
-
-        // Firestore初期化（compat版: window に公開）
-        window.db = firebase.firestore();
-
-        // 🔥 重要: experimentalForceLongPolling を削除（PWA版では不要、CORS問題の原因）
-        // PWA（Cloudflare Pages）では通常の接続が使えるため、long-polling強制は不要
-        // この設定がCORSエラーを引き起こしていた可能性が高い
-
-        // オプション: 必要に応じて autoDetect を有効化（通常は不要）
-        // window.db.settings({ experimentalAutoDetectLongPolling: true });
-
-        console.log('✅ Firestore初期化完了（long-polling強制なし）');
-
-        window.firestoreReady = true;
-        console.log('✅ Firestore初期化完了（設定管理ページ）');
-        console.log('[sidebar_config] db:', window.db);
-
-      } catch (error) {
-        // Firebase初期化エラー
-        console.error('❌ Firebase初期化エラー:', error);
-        console.error('[sidebar_config] error.message:', error.message);
-        console.error('[sidebar_config] error.stack:', error.stack);
-      }
-    }
+    // Firebase は上のスクリプトで既に初期化済み
+    // window.db と window.firestoreReady は既に設定されている
 
     // バッジカウントを増やす（利用可能な場合）
     function incrementBadgeIfAvailable() {
