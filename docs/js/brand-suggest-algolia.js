@@ -115,7 +115,7 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
   }
 
   /**
-   * サジェストパネルを表示
+   * サジェストパネルを表示（Firestore版と同じ2行表示）
    */
   function showSuggestions(brands) {
     if (brands.length === 0) {
@@ -123,35 +123,52 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
       return;
     }
 
-    const html = brands.map(brand => {
-      const displayName = brand.name || brand.nameKana || brand.id;
-      const displayKana = brand.nameKana || '';
-      const count = brand.usageCount || 0;
+    panel.innerHTML = '';
 
-      return `
-        <div class="suggest-item" data-value="${escapeHtml(brand.name)}" data-id="${escapeHtml(brand.id)}">
-          <strong>${escapeHtml(displayName)}</strong>
-          ${displayKana ? `<span class="kana">${escapeHtml(displayKana)}</span>` : ''}
-          ${count > 0 ? `<span class="count">(${count})</span>` : ''}
-        </div>
+    brands.forEach((brand, i) => {
+      const div = document.createElement('div');
+      div.className = 'sug-item brand-item';
+
+      // HTMLエスケープ
+      const escapedNameEn = escapeHtml(brand.name || '');
+      const escapedNameKana = escapeHtml(brand.nameKana || '');
+
+      // 2行表示（英語名 + カナ名）
+      div.innerHTML = `
+        <div class="brand-english">${escapedNameEn}</div>
+        <div class="brand-kana">${escapedNameKana}</div>
       `;
-    }).join('');
 
-    panel.innerHTML = html;
-    panel.style.display = 'block';
+      // データ属性に保存
+      div.dataset.brandId = brand.id;
+      div.dataset.nameEn = brand.name || '';
+      div.dataset.nameKana = brand.nameKana || '';
 
-    // クリックイベント登録
-    panel.querySelectorAll('.suggest-item').forEach(item => {
-      item.addEventListener('click', function() {
-        const value = this.getAttribute('data-value');
-        input.value = value;
+      // マウスホバーイベント
+      div.addEventListener('mousemove', () => {
+        Array.from(panel.querySelectorAll('.sug-item')).forEach(x => x.classList.remove('active'));
+        div.classList.add('active');
+      });
+
+      // マウスダウンイベント（フォーカス維持）
+      div.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+      });
+
+      // クリックイベント
+      div.addEventListener('click', () => {
+        input.value = brand.name || brand.nameKana || '';
         panel.style.display = 'none';
 
         // 入力イベントを発火（他のハンドラーに通知）
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
       });
+
+      panel.appendChild(div);
     });
+
+    panel.style.display = 'block';
   }
 
   /**
