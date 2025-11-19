@@ -5459,9 +5459,47 @@ window.updateLoadingProgress = function(percent, text) {
 
       console.log('[DEBUG] Firestore保存成功:', docRef.id);
 
-      // 📢 システム通知ルームへの投稿（Webhook方式）
-      // TODO: Firestore保存後の通知送信を実装
-      console.log('[System Notification] Firestore保存完了 - 通知送信は今後実装予定');
+      // 📢 システム通知ルームへの投稿（Firestore直接書き込み）
+      try {
+        // 現在のユーザー名を取得
+        const userName = window.CACHED_CONFIG?.userName || '不明';
+
+        // 通知本文を作成
+        const brandName = d['ブランド(英語)'] || d['ブランド(カナ)'] || '';
+        const itemName = d['アイテム名'] || '';
+        const category = d['大分類(カテゴリ)'] || d['大分類'] || '';
+        const managementNumber = d['管理番号'] || '';
+        const listingDestination = d['出品先'] || '';
+        const listingAmount = d['出品金額'] || '';
+
+        const productName = (brandName ? brandName + ' ' : '') + (itemName || category || '');
+        const notificationText = `✅ 商品登録完了\n${userName}さんが商品を登録しました\n\n管理番号: ${managementNumber}\n${productName}\n${listingDestination ? '出品先: ' + listingDestination : ''}\n${listingAmount ? '出品金額: ' + Number(listingAmount).toLocaleString() + '円' : ''}`;
+
+        // システム通知ルームIDは固定
+        const systemRoomId = 'room_system_notifications';
+
+        // Firestoreにメッセージを投稿（チャットと同じ形式）
+        await window.db.collection(`rooms/${systemRoomId}/messages`).add({
+          text: notificationText,
+          userName: 'システム',
+          timestamp: new Date(),
+          deletedBy: []
+        });
+
+        // ルーム情報を更新
+        await window.db.collection('rooms').doc(systemRoomId).set({
+          lastMessage: notificationText,
+          lastMessageAt: new Date(),
+          lastMessageBy: 'システム',
+          members: [], // システム通知は全ユーザーが閲覧可能
+          roomName: '📢 システム通知'
+        }, { merge: true });
+
+        console.log('[System Notification] システム通知ルームへの投稿完了');
+      } catch (notificationError) {
+        console.error('[System Notification] 通知投稿エラー:', notificationError);
+        // 通知エラーは商品保存の成功には影響しない
+      }
 
       // 楽観的UI: ローディングは既にアニメーションで閉じている
       // 保存完了後の処理のみ実行
