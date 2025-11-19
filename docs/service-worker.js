@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v17'; // PWA版：設定管理 - セグメント編集UI改善（タイプグリッド非表示）
+const CACHE_NAME = 'reborn-v18'; // PWA版：管理番号採番バグ修正（BroadcastChannel対応）
 const urlsToCache = [
   '/',
   '/index.html',

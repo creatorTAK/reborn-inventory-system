@@ -2278,6 +2278,7 @@ window.updateLoadingProgress = function(percent, text) {
       // グローバル変数が存在すればそれを使用（Firestoreアクセスを回避）
       if (window.managementNumberConfig && window.managementNumberConfig.segments) {
         console.log('✅ グローバル変数から設定を取得（Firestoreアクセス不要）');
+        console.log('🔍 window.managementNumberConfig全体:', JSON.stringify(window.managementNumberConfig, null, 2));
         segments = window.managementNumberConfig.segments;
       } else {
         // グローバル変数がない場合のみFirestoreから読み込み
@@ -2290,10 +2291,12 @@ window.updateLoadingProgress = function(percent, text) {
         }
 
         const data = docSnap.data();
+        console.log('🔍 Firestoreから取得したdata.managementNumber:', JSON.stringify(data.managementNumber, null, 2));
         segments = data.managementNumber?.segments || [];
 
         // グローバル変数にも保存（次回のため）
         window.managementNumberConfig = data.managementNumber || null;
+        console.log('🔍 グローバル変数に保存完了:', JSON.stringify(window.managementNumberConfig, null, 2));
       }
 
       if (segments.length === 0) {
@@ -2409,8 +2412,14 @@ window.updateLoadingProgress = function(percent, text) {
 
           case 'sequence':
             // 連番：既存商品データを真実のソースとする（プレビュー表示のみ、counter更新はしない）
+            console.log('🔍 連番セグメント設定確認:', {
+              'config.digits': config.digits,
+              'config.start': config.start,
+              'segment全体': segment
+            });
             const digits = parseInt(config.digits) || 3;
             const startNum = parseInt(config.start) || 1;
+            console.log('🔍 パース後の値:', { digits, startNum });
 
             // プレフィックスを構築（連番セグメントより前の部分）
             const prefix = parts.join('');
@@ -6860,6 +6869,37 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
 
     // 管理番号UI初期化（動的セグメント対応）
     initManagementNumberUI();
+
+    // ★ 別タブから設定変更通知を受信（BroadcastChannel）
+    if ('BroadcastChannel' in window) {
+      const channel = new BroadcastChannel('reborn_config_updates');
+      channel.addEventListener('message', async (event) => {
+        if (event.data && event.data.type === 'configChanged') {
+          console.log('📥 BroadcastChannelで設定変更通知を受信しました:', event.data.timestamp);
+
+          // localStorageから最新設定を読み込み
+          const cachedConfigStr = localStorage.getItem('rebornConfig_managementNumber');
+          if (cachedConfigStr) {
+            try {
+              const newConfig = JSON.parse(cachedConfigStr);
+              window.managementNumberConfig = newConfig;
+              console.log('✅ グローバル変数を更新しました:', newConfig);
+
+              // UIも再描画
+              if (newConfig.segments && newConfig.segments.length > 0) {
+                renderManagementSegmentUI(newConfig.segments);
+                console.log('✅ 管理番号UIを再描画しました');
+              }
+            } catch (e) {
+              console.error('❌ localStorage設定のパースに失敗:', e);
+            }
+          }
+        }
+      });
+      console.log('📡 BroadcastChannelリスナー起動完了（reborn_config_updates）');
+    } else {
+      console.warn('⚠️ BroadcastChannel非対応ブラウザ（設定変更の自動反映不可）');
+    }
 
     // 素材追加ボタンのイベントリスナー
     const addBtn = document.getElementById('addMaterialBtn');
