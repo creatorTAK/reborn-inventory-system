@@ -17,9 +17,8 @@ function navigateInPWA(url) {
     window.location.href = url;
   }
 }
-</script>
-  
-  async function goBack() {
+
+async function goBack() {
     console.log('[sidebar_product] >>> goBack() called at', new Date().toISOString());
     const isInIframe = window.self !== window.top;
     console.log('[sidebar_product] isInIframe:', isInIframe);
@@ -41,8 +40,8 @@ function navigateInPWA(url) {
       console.error('[sidebar_product] ❌ 戻るボタンが見つかりません');
     }
   });
-</script>
-  console.log('[product.html] ✅ Script loaded - Version @945-PWA-Brand-Preload');
+
+console.log('[product.html] ✅ Script loaded - Version @945-PWA-Brand-Preload');
 
   // ブランドキャッシュをグローバルに初期化
   window.brandsCache = null;
@@ -113,22 +112,22 @@ function navigateInPWA(url) {
     }
   }, false);
 
-  console.log('👂 [postMessage] データ受信リスナー登録完了（管理番号設定 + ブランド）');
-</script>
-  // ==================== デバッグ設定 ====================
+console.log('👂 [postMessage] データ受信リスナー登録完了（管理番号設定 + ブランド）');
+
+// ==================== デバッグ設定 ====================
   // 本番環境ではfalseに設定してログを無効化
   const DEBUG_MODE = true;
 
   // デバッグ用ログユーティリティ
   const debug = {
-    log: (...args) => { if (DEBUG_MODE) console.log(...args); },
-    warn: (...args) => { if (DEBUG_MODE) console.warn(...args); },
-    error: (...args) => { console.error(...args); }, // エラーは常に表示
-    info: (...args) => { if (DEBUG_MODE) console.info(...args); }
-  };
+  log: (...args) => { if (DEBUG_MODE) console.log(...args); },
+  warn: (...args) => { if (DEBUG_MODE) console.warn(...args); },
+  error: (...args) => { console.error(...args); }, // エラーは常に表示
+  info: (...args) => { if (DEBUG_MODE) console.info(...args); }
+};
 
-  // ==================== 定数定義 ====================
-  const NAME_LIMIT = 40;
+// ==================== 定数定義 ====================
+const NAME_LIMIT = 40;
   const NAME_LIMIT_MODE = 'warn';
   const DESC_LIMIT = 1000;
   const DESC_LIMIT_MODE = 'warn';
@@ -138,11 +137,11 @@ function navigateInPWA(url) {
   // 'r2': Cloudflare R2（将来: SaaS化時）
   const IMAGE_STORAGE_PROVIDER = 'gdrive';
 
-  // AI生成文を保存するグローバル変数
-  let AI_GENERATED_TEXT = '';
+// AI生成文を保存するグローバル変数
+window.AI_GENERATED_TEXT = '';
 
-  // 設定マスタ全体をキャッシュ
-  let CACHED_CONFIG = null;
+// 設定マスタ全体をキャッシュ
+window.CACHED_CONFIG = null;
 
   // localStorageキー定義（設定システム用）
   const CONFIG_STORAGE_KEYS = {
@@ -191,8 +190,8 @@ function navigateInPWA(url) {
 
     // 1. まずlocalStorageから即座に読み込み（高速表示）
     try {
-      if (!CACHED_CONFIG) {
-        CACHED_CONFIG = {};
+      if (!window.CACHED_CONFIG) {
+        window.CACHED_CONFIG = {};
       }
 
       const conditionButtons = localStorage.getItem('rebornConfig_conditionButtons');
@@ -204,16 +203,16 @@ function navigateInPWA(url) {
       const salesword = localStorage.getItem('rebornConfig_salesword');
       const aiSettings = localStorage.getItem('rebornConfig_aiSettings');
 
-      if (conditionButtons) CACHED_CONFIG['商品状態ボタン'] = JSON.parse(conditionButtons);
-      if (hashtag) CACHED_CONFIG['ハッシュタグ'] = JSON.parse(hashtag);
-      if (discount) CACHED_CONFIG['割引情報'] = JSON.parse(discount);
-      if (shippingDefault) CACHED_CONFIG['配送デフォルト'] = JSON.parse(shippingDefault);
-      if (procureListingDefault) CACHED_CONFIG['仕入出品デフォルト'] = JSON.parse(procureListingDefault);
-      if (managementNumber) CACHED_CONFIG['管理番号設定'] = JSON.parse(managementNumber);
-      if (salesword) CACHED_CONFIG['よく使うセールスワード'] = JSON.parse(salesword);
-      if (aiSettings) CACHED_CONFIG['AI生成設定'] = JSON.parse(aiSettings);
+      if (conditionButtons) window.CACHED_CONFIG['商品状態ボタン'] = JSON.parse(conditionButtons);
+      if (hashtag) window.CACHED_CONFIG['ハッシュタグ'] = JSON.parse(hashtag);
+      if (discount) window.CACHED_CONFIG['割引情報'] = JSON.parse(discount);
+      if (shippingDefault) window.CACHED_CONFIG['配送デフォルト'] = JSON.parse(shippingDefault);
+      if (procureListingDefault) window.CACHED_CONFIG['仕入出品デフォルト'] = JSON.parse(procureListingDefault);
+      if (managementNumber) window.CACHED_CONFIG['管理番号設定'] = JSON.parse(managementNumber);
+      if (salesword) window.CACHED_CONFIG['よく使うセールスワード'] = JSON.parse(salesword);
+      if (aiSettings) window.CACHED_CONFIG['AI生成設定'] = JSON.parse(aiSettings);
 
-      console.log('✅ Step 1: localStorageから読み込み完了:', CACHED_CONFIG);
+      console.log('✅ Step 1: localStorageから読み込み完了:', window.CACHED_CONFIG);
     } catch (e) {
       console.error('localStorage読み込みエラー:', e);
     }
@@ -4322,7 +4321,7 @@ function navigateInPWA(url) {
           debug.log('AI生成成功:', generatedText);
 
           // AI生成文をグローバル変数に保存
-          AI_GENERATED_TEXT = generatedText;
+          window.AI_GENERATED_TEXT = generatedText;
 
           // プレビューを更新
           updateDescriptionFromDetail();
@@ -4540,8 +4539,8 @@ function navigateInPWA(url) {
 
           // AI生成文を取得
           let aiGenerationSection = '';
-          if (AI_GENERATED_TEXT) {
-            aiGenerationSection = `${AI_GENERATED_TEXT}\n\n`;
+          if (window.AI_GENERATED_TEXT) {
+            aiGenerationSection = `${window.AI_GENERATED_TEXT}\n\n`;
           }
 
         // ハッシュタグ生成
@@ -5202,11 +5201,11 @@ function navigateInPWA(url) {
     // ここでは何もしません（Base64データをスプレッドシートに保存するとエラーになるため）
 
     // === AI生成履歴を追加 ===
-    debug.log(`AI_GENERATED_TEXT: "${AI_GENERATED_TEXT ? AI_GENERATED_TEXT.substring(0, 50) + '...' : '(空)'}"`);
-    if (AI_GENERATED_TEXT && AI_GENERATED_TEXT.trim() !== '') {
+    debug.log(`window.AI_GENERATED_TEXT: "${window.AI_GENERATED_TEXT ? window.AI_GENERATED_TEXT.substring(0, 50) + '...' : '(空)'}"`);
+    if (window.AI_GENERATED_TEXT && window.AI_GENERATED_TEXT.trim() !== '') {
       const aiHistory = {
         timestamp: new Date().toISOString(),
-        text: AI_GENERATED_TEXT,
+        text: window.AI_GENERATED_TEXT,
         imageCount: uploadedImages ? uploadedImages.length : 0,
         brandName: _val('ブランド(英語)') || _val('商品名_ブランド(英語)') || '',
         itemName: _val('アイテム名') || ''
@@ -5419,8 +5418,8 @@ function navigateInPWA(url) {
           debug.log('保存成功後に商品画像データをクリアしました');
         }
 
-        if (AI_GENERATED_TEXT) {
-          AI_GENERATED_TEXT = '';
+        if (window.AI_GENERATED_TEXT) {
+          window.AI_GENERATED_TEXT = '';
           debug.log('保存成功後にAI生成テキストをクリアしました');
         }
 
@@ -5831,7 +5830,7 @@ function navigateInPWA(url) {
   function resetProductImages() {
     try {
       // グローバル変数をクリア
-      if (typeof AI_GENERATED_TEXT !== 'undefined') AI_GENERATED_TEXT = '';
+      if (typeof window.AI_GENERATED_TEXT !== 'undefined') window.AI_GENERATED_TEXT = '';
       if (typeof uploadedImages !== 'undefined') uploadedImages = [];
 
       // プレビューコンテナを非表示
@@ -5922,7 +5921,7 @@ function navigateInPWA(url) {
       console.log('=== リセット開始 ===');
 
       // 0. AI生成文をクリア
-      AI_GENERATED_TEXT = '';
+      window.AI_GENERATED_TEXT = '';
 
       // 0-1. 画像データをクリア
       if (uploadedImages && uploadedImages.length > 0) {
