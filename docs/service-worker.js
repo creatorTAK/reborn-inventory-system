@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v22'; // PWA版：商品登録のFirestore直接保存実装
+const CACHE_NAME = 'reborn-v23'; // PWA版：チャット最小限テストHTML配置
 const urlsToCache = [
   '/',
   '/index.html',
