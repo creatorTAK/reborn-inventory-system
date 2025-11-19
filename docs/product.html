@@ -2403,8 +2403,15 @@ style="display:none;">削除</button>
     if (typeof firebase !== 'undefined') {
       const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
       const db = firebase.firestore();
+
+      // Firestore設定の最適化（WebChannelエラー対策）
+      db.settings({
+        cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+        experimentalForceLongPolling: true // WebSocketの代わりにlong pollingを使用
+      });
+
       window.db = db; // グローバルに公開
-      console.log('✅ Firebase初期化完了 (PWA版)');
+      console.log('✅ Firebase初期化完了 (PWA版 + long polling設定)');
       console.log('   firebase.apps.length:', firebase.apps.length);
     } else {
       console.error('❌ Firebase SDKが読み込まれていません');
@@ -4145,7 +4152,7 @@ style="display:none;">削除</button>
   // ========== 管理番号セグメント方式UI ==========
 
   /**
-   * Firestoreから管理番号設定を読み込み
+   * Firestoreから管理番号設定を読み込み（タイムアウト付き）
    * @returns {Promise<Object|null>} 管理番号設定オブジェクト、または null
    */
   async function loadManagementConfigFromFirestore() {
@@ -4154,11 +4161,24 @@ style="display:none;">削除</button>
       return null;
     }
 
+    const startTime = performance.now();
+
     try {
-      const startTime = performance.now();
       console.log('📥 Firestoreから管理番号設定を読み込み中...');
-      const docRef = firebase.firestore().collection('settings').doc('common');
-      const docSnap = await docRef.get();
+
+      // タイムアウト処理（3秒）
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Firestore読み込みタイムアウト（3秒）')), 3000)
+      );
+
+      const fetchPromise = (async () => {
+        const docRef = firebase.firestore().collection('settings').doc('common');
+        const docSnap = await docRef.get();
+        return docSnap;
+      })();
+
+      // Firestore読み込みとタイムアウトを競争
+      const docSnap = await Promise.race([fetchPromise, timeoutPromise]);
       const duration = (performance.now() - startTime).toFixed(2);
 
       if (docSnap.exists) {
@@ -4180,10 +4200,18 @@ style="display:none;">削除</button>
         return null;
       }
     } catch (e) {
-      console.error('❌ Firestore読み込みエラー:', e);
+      const duration = (performance.now() - startTime).toFixed(2);
+      if (e.message.includes('タイムアウト')) {
+        console.warn(`⏱️ ${e.message} (${duration}ms経過) → キャッシュを使用`);
+      } else {
+        console.error('❌ Firestore読み込みエラー:', e);
+      }
       return null;
     }
   }
+
+  // グローバル変数：管理番号設定をキャッシュ
+  window.managementNumberConfig = null;
 
   // 管理番号セグメントUIを初期化
   async function initManagementNumberUI() {
@@ -4208,6 +4236,9 @@ style="display:none;">削除</button>
         console.log('📦 管理番号設定をlocalStorageから読み込み:', config);
         segments = config.segments || null;
         console.log('📦 セグメント配列:', segments);
+
+        // グローバル変数にも保存
+        window.managementNumberConfig = config;
 
         // キャッシュがあれば即座にUI描画
         if (segments && segments.length > 0) {
@@ -4243,6 +4274,8 @@ style="display:none;">削除</button>
           }
           config = latestConfig;
           segments = latestSegments;
+          // グローバル変数にも保存
+          window.managementNumberConfig = latestConfig;
         } else {
           // 2回目以降は差分チェック
           const cachedStr = JSON.stringify(config.segments);
@@ -4255,6 +4288,8 @@ style="display:none;">削除</button>
             }
             config = latestConfig;
             segments = latestSegments;
+            // グローバル変数にも保存
+            window.managementNumberConfig = latestConfig;
           } else {
             console.log('✅ 設定に変更なし、UIそのまま');
           }
@@ -4684,16 +4719,28 @@ style="display:none;">削除</button>
 
       console.log('📥 PWA版管理番号採番開始:', userInputs);
 
-      // Firestoreから設定を読み込み
-      const docRef = window.db.collection('settings').doc('common');
-      const docSnap = await docRef.get();
+      let segments = null;
 
-      if (!docSnap.exists) {
-        throw new Error('管理番号設定が見つかりません');
+      // グローバル変数が存在すればそれを使用（Firestoreアクセスを回避）
+      if (window.managementNumberConfig && window.managementNumberConfig.segments) {
+        console.log('✅ グローバル変数から設定を取得（Firestoreアクセス不要）');
+        segments = window.managementNumberConfig.segments;
+      } else {
+        // グローバル変数がない場合のみFirestoreから読み込み
+        console.log('📥 グローバル変数なし → Firestoreから設定を読み込み');
+        const docRef = window.db.collection('settings').doc('common');
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+          throw new Error('管理番号設定が見つかりません');
+        }
+
+        const data = docSnap.data();
+        segments = data.managementNumber?.segments || [];
+
+        // グローバル変数にも保存（次回のため）
+        window.managementNumberConfig = data.managementNumber || null;
       }
-
-      const data = docSnap.data();
-      const segments = data.managementNumber?.segments || [];
 
       if (segments.length === 0) {
         throw new Error('セグメント設定が空です');
