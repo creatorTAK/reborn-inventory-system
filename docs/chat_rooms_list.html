@@ -542,6 +542,8 @@
     // グローバル変数
     let currentUserName = '';
     let usersCache = []; // ユーザーアイコン表示用キャッシュ
+    let unsubscribeRooms = null; // Firestoreリスナーの解除用
+    let startListeningCallCount = 0; // startListening()の呼び出し回数
 
     // PWA版：URLパラメータから取得（GASテンプレート変数は使用しない）
     const isPWAFlag        = true;  // PWA版として動作
@@ -649,12 +651,23 @@
 
     // トークルーム一覧をリアルタイムリスニング
     function startListening() {
+      startListeningCallCount++;
+      console.log(`[Firestore] startListening() 呼び出し回数: ${startListeningCallCount}`);
+
+      // 既存のリスナーを解除（重複登録防止）
+      if (unsubscribeRooms) {
+        console.log('[Firestore] 既存リスナー解除');
+        unsubscribeRooms();
+        unsubscribeRooms = null;
+      }
+
       const q = query(
         collection(db, 'rooms'),
         orderBy('lastMessageAt', 'desc')
       );
 
-      onSnapshot(q, (snapshot) => {
+      console.log('[Firestore] 新規リスナー登録');
+      unsubscribeRooms = onSnapshot(q, (snapshot) => {
         console.log('[Firestore] ルーム更新:', snapshot.size + '件');
 
         const container = document.getElementById('roomsContainer');
