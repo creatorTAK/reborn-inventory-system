@@ -4789,7 +4789,7 @@ style="display:none;">削除</button>
             break;
 
           case 'sequence':
-            // 連番：既存商品データとFirestoreカウンターを参照（プレビュー表示のみ、更新はしない）
+            // 連番：既存商品データを真実のソースとする（プレビュー表示のみ、counter更新はしない）
             const digits = parseInt(config.digits) || 3;
             const startNum = parseInt(config.start) || 1;
 
@@ -4797,28 +4797,18 @@ style="display:none;">削除</button>
             const prefix = parts.join('');
             console.log('🔍 採番プレフィックス:', prefix);
 
-            // 既存商品から最大番号を取得
+            // 既存商品から最大番号を取得（これが真実のソース）
             const maxNumberFromProducts = await getMaxSequenceNumberFromProducts(prefix);
             console.log('📊 既存商品の最大番号:', maxNumberFromProducts);
 
-            // Firestore Counterから現在値を取得（読み取り専用、更新はしない）
-            const counterRef = window.db.collection('counters').doc(counterKey);
-            const counterDoc = await counterRef.get();
-            let currentCount = 0;
-            if (counterDoc.exists) {
-              currentCount = counterDoc.data().count || 0;
-            }
-
-            // 既存商品の最大番号、カウンター、開始番号の中で最大のものを使用
+            // 既存商品の最大番号と開始番号を比較（counterは無視）
             const candidateNumber = Math.max(
               maxNumberFromProducts || 0,
-              currentCount || 0,
               startNum - 1
             ) + 1;
 
             console.log('🔢 採番候補（プレビュー表示のみ）:', {
               maxFromProducts: maxNumberFromProducts,
-              counterCount: currentCount,
               startNum: startNum,
               nextNumber: candidateNumber
             });
