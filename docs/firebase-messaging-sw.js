@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v43';  // PWA版：管理番号上下ボタン修正（GAS API削除、即座に番号変更）
+const CACHE_VERSION = 'v44';  // PWA版：設定管理 - 連番桁数制限＆ピンチイン防止
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）

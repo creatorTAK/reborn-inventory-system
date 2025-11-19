@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v14'; // PWA版：管理番号上下ボタン修正（GAS API削除、即座に番号変更）
+const CACHE_NAME = 'reborn-v15'; // PWA版：設定管理 - 連番桁数制限＆ピンチイン防止
 const urlsToCache = [
   '/',
   '/index.html',

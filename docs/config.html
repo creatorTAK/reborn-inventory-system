@@ -3,10 +3,11 @@
 <head>
   <base target="_top">
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>設定管理 v930</title>
+  <title>設定管理 v931</title>
 
   <!-- PWA対応 -->
   <link rel="manifest" href="/manifest.json">
@@ -1874,6 +1875,36 @@
           input.type = field.type;
           input.id = `mnbField_${field.id}`;
           input.placeholder = field.placeholder || '';
+
+          // 連番の開始番号の場合、桁数制限を動的に設定
+          if (typeKey === 'sequence' && field.id === 'start') {
+            // 初期桁数制限（デフォルト3桁）
+            input.setAttribute('maxlength', '3');
+
+            // 桁数セレクトが変更されたら、開始番号のmaxlengthを更新
+            const setupDigitsListener = () => {
+              const digitsSelect = document.getElementById('mnbField_digits');
+              if (digitsSelect) {
+                digitsSelect.addEventListener('change', (e) => {
+                  const selectedDigits = e.target.value;
+                  input.setAttribute('maxlength', selectedDigits);
+
+                  // 現在の値が桁数を超えている場合は切り詰める
+                  if (input.value.length > parseInt(selectedDigits)) {
+                    input.value = input.value.slice(0, parseInt(selectedDigits));
+                  }
+                });
+
+                // 初回読み込み時にも桁数を反映
+                const currentDigits = digitsSelect.value || '3';
+                input.setAttribute('maxlength', currentDigits);
+              }
+            };
+
+            // DOMが構築された後にリスナーを設定
+            setTimeout(setupDigitsListener, 0);
+          }
+
           group.appendChild(input);
         }
 
