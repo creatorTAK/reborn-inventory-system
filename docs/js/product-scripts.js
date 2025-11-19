@@ -143,8 +143,8 @@ window.AI_GENERATED_TEXT = '';
 // 設定マスタ全体をキャッシュ
 window.CACHED_CONFIG = null;
 
-  // localStorageキー定義（設定システム用）
-  const CONFIG_STORAGE_KEYS = {
+// localStorageキー定義（設定システム用）
+window.CONFIG_STORAGE_KEYS = {
     CONDITION_BUTTONS: 'rebornConfig_conditionButtons',
     HASHTAG: 'rebornConfig_hashtag',
     DISCOUNT: 'rebornConfig_discount',
@@ -222,7 +222,7 @@ window.CACHED_CONFIG = null;
 
     // デザインテーマを適用（localStorageから）
     try {
-      const savedTheme = localStorage.getItem(CONFIG_STORAGE_KEYS.DESIGN_THEME);
+      const savedTheme = localStorage.getItem(window.CONFIG_STORAGE_KEYS.DESIGN_THEME);
       if (savedTheme && savedTheme !== 'casual') {
         const themeClass = 'theme-' + savedTheme;
         if (!document.body.classList.contains(themeClass)) {
