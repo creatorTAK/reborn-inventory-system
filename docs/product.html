@@ -4228,19 +4228,36 @@ style="display:none;">削除</button>
         console.log('✅ Firestoreから最新設定を取得:', latestConfig);
         const latestSegments = latestConfig.segments || null;
 
-        // 設定が変更されていればUIを更新
-        const cachedStr = JSON.stringify(config?.segments || []);
-        const latestStr = JSON.stringify(latestSegments || []);
+        console.log('🔍 [デバッグ] segments比較:', {
+          'config?.segments': config?.segments,
+          'latestSegments': latestSegments,
+          'cachedStr': JSON.stringify(config?.segments || []),
+          'latestStr': JSON.stringify(latestSegments || [])
+        });
 
-        if (cachedStr !== latestStr) {
-          console.log('🔄 設定が変更されているため、UIを更新します');
+        // 初回ロード時は必ずUIを生成
+        if (!config || !config.segments) {
+          console.log('⚡ 初回ロード検知 → 強制的にUI生成');
           if (latestSegments && latestSegments.length > 0) {
             renderManagementSegmentUI(latestSegments);
           }
           config = latestConfig;
           segments = latestSegments;
         } else {
-          console.log('✅ 設定に変更なし、UIそのまま');
+          // 2回目以降は差分チェック
+          const cachedStr = JSON.stringify(config.segments);
+          const latestStr = JSON.stringify(latestSegments || []);
+
+          if (cachedStr !== latestStr) {
+            console.log('🔄 設定が変更されているため、UIを更新します');
+            if (latestSegments && latestSegments.length > 0) {
+              renderManagementSegmentUI(latestSegments);
+            }
+            config = latestConfig;
+            segments = latestSegments;
+          } else {
+            console.log('✅ 設定に変更なし、UIそのまま');
+          }
         }
       }
     } catch (e) {
