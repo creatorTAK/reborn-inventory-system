@@ -237,10 +237,10 @@ window.CONFIG_STORAGE_KEYS = {
 
   // ==================== ローディングオーバーレイ ====================
 
-  /**
-   * ローディングオーバーレイを初期化
-   */
-  function initLoadingOverlay() {
+/**
+ * ローディングオーバーレイを初期化
+ */
+window.initLoadingOverlay = function() {
     // オーバーレイHTMLを動的に生成
     const overlayHTML = `
       <div id="loadingOverlay">
@@ -261,12 +261,12 @@ window.CONFIG_STORAGE_KEYS = {
     console.log('✅ ローディングオーバーレイを初期化しました');
   }
 
-  /**
-   * ローディングオーバーレイを表示
-   * @param {string} title - タイトルテキスト（デフォルト: "データを保存中..."）
-   * @param {string} message - メッセージテキスト（デフォルト: "しばらくお待ちください"）
-   */
-  function showLoadingOverlay(title = 'データを保存中...', message = 'しばらくお待ちください') {
+/**
+ * ローディングオーバーレイを表示
+ * @param {string} title - タイトルテキスト（デフォルト: "データを保存中..."）
+ * @param {string} message - メッセージテキスト（デフォルト: "しばらくお待ちください"）
+ */
+window.showLoadingOverlay = function(title = 'データを保存中...', message = 'しばらくお待ちください') {
     const overlay = document.getElementById('loadingOverlay');
     const titleEl = document.getElementById('loadingTitle');
     const messageEl = document.getElementById('loadingMessage');
@@ -279,10 +279,10 @@ window.CONFIG_STORAGE_KEYS = {
     }
   }
 
-  /**
-   * ローディングオーバーレイを非表示
-   */
-  function hideLoadingOverlay() {
+/**
+ * ローディングオーバーレイを非表示
+ */
+window.hideLoadingOverlay = function() {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) {
       overlay.classList.remove('active');
@@ -294,7 +294,7 @@ window.CONFIG_STORAGE_KEYS = {
    * @param {number} percent - 進捗率（0-100）
    * @param {string} text - 進捗テキスト（例: "画像アップロード中 (2/3)"）
    */
-  function updateLoadingProgress(percent, text) {
+window.updateLoadingProgress = function(percent, text) {
     const progressBar = document.getElementById('loadingProgressBar');
     const progressText = document.getElementById('loadingProgressText');
     const messageEl = document.getElementById('loadingMessage');
@@ -7607,5 +7607,3 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     loadDescriptionBlocksCollapseState();
     loadTitleBlocksCollapseState();
     }, 1000);
-
-</script>

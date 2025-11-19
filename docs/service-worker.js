@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v12'; // グローバル変数スコープ修正（window.CACHED_CONFIG）
+const CACHE_NAME = 'reborn-v13'; // 残存HTMLタグ削除＆ローディング関数スコープ修正
 const urlsToCache = [
   '/',
   '/index.html',
