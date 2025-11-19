@@ -5073,6 +5073,52 @@ style="display:none;">削除</button>
     }).getNextManagementNumber(shelf);
   }
 
+  /**
+   * 既存商品から指定プレフィックスの最大連番を取得
+   * @param {string} prefix - プレフィックス（例: 'AA-251119-'）
+   * @returns {Promise<number>} 最大連番（見つからない場合は0）
+   */
+  async function getMaxSequenceNumberFromProducts(prefix) {
+    try {
+      console.log('🔍 既存商品から最大番号を検索:', prefix);
+
+      // Firestoreから全商品を取得
+      const productsRef = window.db.collection('products');
+      const snapshot = await productsRef.get();
+
+      let maxNumber = 0;
+
+      // プレフィックスに一致する管理番号から最大の連番を探す
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const managementNumber = data.managementNumber || '';
+
+        // プレフィックスで始まるかチェック
+        if (managementNumber.startsWith(prefix)) {
+          // プレフィックス以降の部分を取得
+          const suffix = managementNumber.substring(prefix.length);
+
+          // 連番部分を抽出（数字のみ、ハイフン等の区切り文字を除外）
+          const match = suffix.match(/^(\d+)/);
+          if (match) {
+            const number = parseInt(match[1], 10);
+            if (!isNaN(number) && number > maxNumber) {
+              maxNumber = number;
+              console.log(`  → 管理番号: ${managementNumber}, 連番: ${number}`);
+            }
+          }
+        }
+      });
+
+      console.log(`✅ 最大番号: ${maxNumber} (プレフィックス: ${prefix})`);
+      return maxNumber;
+
+    } catch (error) {
+      console.error('❌ 最大番号取得エラー:', error);
+      return 0;
+    }
+  }
+
   // セグメント設定に基づいて管理番号を生成
   async function generateManagementNumber(segments, selectedShelf) {
     const parts = [];
@@ -5148,9 +5194,17 @@ style="display:none;">削除</button>
           break;
 
         case 'sequence':
-          // 連番：Firestoreカウンターから取得
+          // 連番：既存商品データとFirestoreカウンターを参照
           const digits = parseInt(config.digits) || 3;
           const startNum = parseInt(config.start) || 1;
+
+          // プレフィックスを構築（連番セグメントより前の部分）
+          const prefix = parts.join('');
+          console.log('🔍 採番プレフィックス:', prefix);
+
+          // 既存商品から最大番号を取得
+          const maxNumberFromProducts = await getMaxSequenceNumberFromProducts(prefix);
+          console.log('📊 既存商品の最大番号:', maxNumberFromProducts);
 
           // Firestore Transactionでカウンター取得
           const counterRef = window.db.collection('counters').doc(counterKey);
@@ -5160,18 +5214,32 @@ style="display:none;">削除</button>
             if (counterDoc.exists) {
               currentCount = counterDoc.data().count || 0;
             }
-            // 初回は開始番号、以降はインクリメント
-            const nextCount = currentCount === 0 ? startNum : currentCount + 1;
+
+            // 既存商品の最大番号、カウンター、開始番号の中で最大のものを使用
+            const candidateNumber = Math.max(
+              maxNumberFromProducts || 0,
+              currentCount || 0,
+              startNum - 1
+            ) + 1;
+
+            console.log('🔢 採番候補:', {
+              maxFromProducts: maxNumberFromProducts,
+              counterCount: currentCount,
+              startNum: startNum,
+              nextNumber: candidateNumber
+            });
+
             transaction.set(counterRef, {
-              count: nextCount,
+              count: candidateNumber,
               key: counterKey,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
-            return nextCount;
+
+            return candidateNumber;
           });
 
           value = String(newNumber).padStart(digits, '0');
-          console.log('🔢 連番生成:', { counterKey, value, newNumber });
+          console.log('✅ 連番生成:', { counterKey, prefix, value, newNumber });
           break;
 
         default:
