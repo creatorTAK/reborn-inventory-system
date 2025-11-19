@@ -3,94 +3,64 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>チャットテスト - Step 2</title>
+  <title>チャットテスト - Step 3</title>
 </head>
 <body style="padding: 20px; font-family: sans-serif;">
-  <h1 style="color: green;">✅ Step 2: Firebase SDK読み込みテスト</h1>
+  <h1 style="color: green;">✅ Step 3: 外部JSファイル読み込みテスト</h1>
   <p>このメッセージが見えていれば、HTMLファイルは正しく読み込まれています。</p>
   <p>現在時刻: <span id="time"></span></p>
   <div id="status" style="margin-top: 20px; padding: 15px; border-radius: 8px;"></div>
 
-  <!-- Firebase SDK -->
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-    import { getFirestore, collection, query, orderBy, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+  <!-- 🔍 外部JSファイル読み込み -->
+  <script type="module" src="/js/firestore-api.js?v=850"></script>
+  <script src="/js/api.js?v=850"></script>
 
+  <script type="module">
     document.getElementById('time').textContent = new Date().toLocaleString('ja-JP');
 
     const statusDiv = document.getElementById('status');
     statusDiv.style.background = '#e3f2fd';
     statusDiv.style.color = '#1976d2';
-    statusDiv.innerHTML = '<strong>ステータス:</strong> Firebase SDK読み込み開始...';
+    statusDiv.innerHTML = '<strong>ステータス:</strong> 外部JS読み込み開始...';
 
     // エラー表示
     window.addEventListener('error', (e) => {
       statusDiv.style.background = '#ffebee';
       statusDiv.style.color = '#c62828';
-      statusDiv.innerHTML = `<strong>エラー:</strong> ${e.message}<br><small>${e.filename}:${e.lineno}</small>`;
+      statusDiv.innerHTML = `<strong>❌ エラー:</strong> ${e.message}<br><small>${e.filename}:${e.lineno}:${e.colno}</small>`;
       console.error('Global error:', e);
     });
 
     window.addEventListener('unhandledrejection', (e) => {
       statusDiv.style.background = '#fff3e0';
       statusDiv.style.color = '#e65100';
-      statusDiv.innerHTML = `<strong>Promise拒否:</strong> ${e.reason}`;
+      statusDiv.innerHTML = `<strong>⚠️ Promise拒否:</strong> ${e.reason}`;
       console.error('Unhandled rejection:', e);
     });
 
-    try {
-      // Firebase初期化
-      const firebaseConfig = {
-        apiKey: "AIzaSyBN9VT9GShYEBd2JhN4zyEg8rAU_QWFSQY",
-        authDomain: "reborn-inventory-system.firebaseapp.com",
-        projectId: "reborn-inventory-system",
-        storageBucket: "reborn-inventory-system.firebasestorage.app",
-        messagingSenderId: "406470286096",
-        appId: "1:406470286096:web:7e9a5ba23dd28773c1ab13"
-      };
-
-      const app = initializeApp(firebaseConfig);
-      const db = getFirestore(app);
+    // 外部JS読み込み確認（3秒待機）
+    setTimeout(() => {
+      statusDiv.innerHTML = '<strong>ステータス:</strong> 外部JS読み込み確認中...';
       
-      statusDiv.style.background = '#e8f5e9';
-      statusDiv.style.color = '#2e7d32';
-      statusDiv.innerHTML = '<strong>✅ Firebase初期化成功！</strong><br>Firestore接続OK';
+      // firestore-api.jsが読み込まれているか確認
+      if (typeof window.db !== 'undefined') {
+        statusDiv.style.background = '#e8f5e9';
+        statusDiv.style.color = '#2e7d32';
+        statusDiv.innerHTML = '<strong>✅ firestore-api.js読み込み成功</strong><br>window.db が存在します';
+      } else {
+        statusDiv.style.background = '#fff3e0';
+        statusDiv.style.color = '#e65100';
+        statusDiv.innerHTML = '<strong>⚠️ firestore-api.js読み込み失敗</strong><br>window.db が存在しません';
+      }
 
-      // 5秒後にFirestoreクエリテスト
-      setTimeout(async () => {
-        try {
-          statusDiv.innerHTML += '<br><br>Firestoreクエリテスト中...';
-          
-          const q = query(
-            collection(db, 'rooms'),
-            orderBy('lastMessageAt', 'desc')
-          );
+      // api.jsが読み込まれているか確認
+      if (typeof window.gasApi !== 'undefined') {
+        statusDiv.innerHTML += '<br>✅ api.js読み込み成功<br>window.gasApi が存在します';
+      } else {
+        statusDiv.innerHTML += '<br>⚠️ api.js読み込み失敗<br>window.gasApi が存在しません（PWAでは正常）';
+      }
 
-          statusDiv.innerHTML += '<br>✅ クエリ作成成功';
-          
-          // リスナー登録テスト（1件だけ取得）
-          const unsubscribe = onSnapshot(q, (snapshot) => {
-            statusDiv.innerHTML += `<br>✅ Firestoreリスナー成功: ${snapshot.size}件のルーム`;
-            unsubscribe(); // すぐに解除
-          }, (error) => {
-            statusDiv.style.background = '#ffebee';
-            statusDiv.style.color = '#c62828';
-            statusDiv.innerHTML += `<br>❌ Firestoreエラー: ${error.message}`;
-          });
-
-        } catch (error) {
-          statusDiv.style.background = '#ffebee';
-          statusDiv.style.color = '#c62828';
-          statusDiv.innerHTML += `<br>❌ エラー: ${error.message}`;
-        }
-      }, 5000);
-
-    } catch (error) {
-      statusDiv.style.background = '#ffebee';
-      statusDiv.style.color = '#c62828';
-      statusDiv.innerHTML = `<strong>❌ Firebase初期化失敗:</strong> ${error.message}`;
-      console.error('Firebase init error:', error);
-    }
+    }, 3000);
   </script>
 </body>
 </html>
