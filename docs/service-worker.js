@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v15'; // PWA版：設定管理 - 連番桁数制限＆ピンチイン防止
+const CACHE_NAME = 'reborn-v16'; // PWA版：設定管理 - ピンチイン防止強化（全入力欄16px）
 const urlsToCache = [
   '/',
   '/index.html',
