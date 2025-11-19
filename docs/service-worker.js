@@ -1,14 +1,13 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v10'; // CSS外部化（product-styles.css）
+const CACHE_NAME = 'reborn-v9'; // FCM通知+アプリバッジ実装（Service Worker対応）
 const urlsToCache = [
   '/',
   '/index.html',
   '/notifications.html',
   '/manifest.json',
-  '/icon-180.png',
-  '/css/product-styles.css'
+  '/icon-180.png'
 ];
 
 // Service Workerのインストール
