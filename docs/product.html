@@ -4789,7 +4789,7 @@ style="display:none;">削除</button>
             break;
 
           case 'sequence':
-            // 連番：既存商品データとFirestoreカウンターを参照
+            // 連番：既存商品データとFirestoreカウンターを参照（プレビュー表示のみ、更新はしない）
             const digits = parseInt(config.digits) || 3;
             const startNum = parseInt(config.start) || 1;
 
@@ -4801,40 +4801,30 @@ style="display:none;">削除</button>
             const maxNumberFromProducts = await getMaxSequenceNumberFromProducts(prefix);
             console.log('📊 既存商品の最大番号:', maxNumberFromProducts);
 
-            // Firestore Transactionでカウンター取得
+            // Firestore Counterから現在値を取得（読み取り専用、更新はしない）
             const counterRef = window.db.collection('counters').doc(counterKey);
-            const newNumber = await window.db.runTransaction(async (transaction) => {
-              const counterDoc = await transaction.get(counterRef);
-              let currentCount = 0;
-              if (counterDoc.exists) {
-                currentCount = counterDoc.data().count || 0;
-              }
+            const counterDoc = await counterRef.get();
+            let currentCount = 0;
+            if (counterDoc.exists) {
+              currentCount = counterDoc.data().count || 0;
+            }
 
-              // 既存商品の最大番号、カウンター、開始番号の中で最大のものを使用
-              const candidateNumber = Math.max(
-                maxNumberFromProducts || 0,
-                currentCount || 0,
-                startNum - 1
-              ) + 1;
+            // 既存商品の最大番号、カウンター、開始番号の中で最大のものを使用
+            const candidateNumber = Math.max(
+              maxNumberFromProducts || 0,
+              currentCount || 0,
+              startNum - 1
+            ) + 1;
 
-              console.log('🔢 採番候補:', {
-                maxFromProducts: maxNumberFromProducts,
-                counterCount: currentCount,
-                startNum: startNum,
-                nextNumber: candidateNumber
-              });
-
-              transaction.set(counterRef, {
-                count: candidateNumber,
-                key: counterKey,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-              }, { merge: true });
-
-              return candidateNumber;
+            console.log('🔢 採番候補（プレビュー表示のみ）:', {
+              maxFromProducts: maxNumberFromProducts,
+              counterCount: currentCount,
+              startNum: startNum,
+              nextNumber: candidateNumber
             });
 
-            value = String(newNumber).padStart(digits, '0');
-            console.log('✅ 連番生成:', { counterKey, prefix, value, newNumber });
+            value = String(candidateNumber).padStart(digits, '0');
+            console.log('✅ 連番生成（プレビュー）:', { counterKey, prefix, value, newNumber: candidateNumber });
             break;
 
           default:
