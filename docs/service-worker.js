@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v20'; // PWA版：カウンター初回作成時に既存商品から移行
+const CACHE_NAME = 'reborn-v21'; // PWA版：採番タイミングを商品登録時に変更+重複チェック実装
 const urlsToCache = [
   '/',
   '/index.html',

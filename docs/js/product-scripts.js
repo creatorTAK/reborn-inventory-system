@@ -2691,14 +2691,14 @@ window.updateLoadingProgress = function(percent, text) {
   }
 
   /**
-   * カウンター方式で指定プレフィックスの次の連番を取得
+   * カウンター方式で指定プレフィックスの次の連番を取得（プレビュー表示用）
    * @param {string} prefix - プレフィックス（例: 'AA-', 'AA-251119-'）
    * @param {number} startNum - 開始番号（設定値）
-   * @returns {Promise<number>} 次の連番
+   * @returns {Promise<number>} 次の連番（カウンターは更新しない）
    */
   async function getNextSequenceNumber(prefix, startNum) {
     try {
-      console.log('🔍 カウンター方式で次の番号を取得:', { prefix, startNum });
+      console.log('🔍 カウンター方式で次の番号を取得（プレビュー用）:', { prefix, startNum });
 
       // プレフィックスをFirestore ドキュメントIDに使える形式に変換（ハイフン等を除去）
       const counterKey = prefix.replace(/[^a-zA-Z0-9]/g, '_');
@@ -2716,7 +2716,7 @@ window.updateLoadingProgress = function(percent, text) {
 
         // 既存の最大値と設定の開始番号を比較
         nextNumber = Math.max(currentNumber, startNum - 1) + 1;
-        console.log('🔢 次の番号:', nextNumber);
+        console.log('🔢 次の番号（プレビュー）:', nextNumber);
       } else {
         // カウンターが存在しない場合（初回）→ 既存商品をスキャンして移行
         console.log('⚡ カウンター初回作成 → 既存商品をスキャン');
@@ -2726,17 +2726,11 @@ window.updateLoadingProgress = function(percent, text) {
 
         // 既存商品の最大値と設定の開始番号を比較
         nextNumber = Math.max(maxFromProducts, startNum - 1) + 1;
-        console.log('🔢 移行後の次の番号:', nextNumber);
+        console.log('🔢 移行後の次の番号（プレビュー）:', nextNumber);
       }
 
-      // カウンターを更新（楽観的ロック不要、プレビュー表示のみで実際の保存時に確定）
-      await counterRef.set({
-        currentNumber: nextNumber,
-        prefix: prefix,
-        lastUpdated: new Date().toISOString()
-      }, { merge: true });
-
-      console.log(`✅ カウンター更新完了: ${counterKey} = ${nextNumber}`);
+      // ★ カウンター更新はしない（商品登録時に更新）
+      console.log(`📌 カウンター未更新（商品登録時に確定）: ${counterKey}`);
       return nextNumber;
 
     } catch (error) {
@@ -2745,6 +2739,61 @@ window.updateLoadingProgress = function(percent, text) {
       return startNum;
     }
   }
+
+  /**
+   * 商品登録時に管理番号を確定してカウンターを更新
+   * @param {string} managementNumber - 管理番号（例: 'AA-1015'）
+   * @returns {Promise<boolean>} 成功/失敗
+   */
+  async function confirmManagementNumber(managementNumber) {
+    try {
+      console.log('🔒 管理番号確定処理開始:', managementNumber);
+
+      // 1. 重複チェック
+      const productsRef = window.db.collection('products');
+      const duplicateCheck = await productsRef
+        .where('managementNumber', '==', managementNumber)
+        .limit(1)
+        .get();
+
+      if (!duplicateCheck.empty) {
+        console.error('❌ 管理番号が重複しています:', managementNumber);
+        alert('❌ この管理番号はすでに使用されています。\n\n番号を変更してから再度保存してください。');
+        return false;
+      }
+
+      // 2. プレフィックスと連番を抽出
+      const match = managementNumber.match(/^(.+?)(\d+)$/);
+      if (!match) {
+        console.warn('⚠️ 管理番号の形式が不正:', managementNumber);
+        return true; // 形式が不正でもスキップ（手動入力を許容）
+      }
+
+      const prefix = match[1];
+      const number = parseInt(match[2], 10);
+
+      // 3. カウンター更新
+      const counterKey = prefix.replace(/[^a-zA-Z0-9]/g, '_');
+      const counterRef = window.db.collection('managementNumberCounters').doc(counterKey);
+
+      await counterRef.set({
+        currentNumber: number,
+        prefix: prefix,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+
+      console.log(`✅ カウンター確定: ${counterKey} = ${number}`);
+      return true;
+
+    } catch (error) {
+      console.error('❌ 管理番号確定エラー:', error);
+      alert('❌ 管理番号の確定処理でエラーが発生しました。\n\n' + error.message);
+      return false;
+    }
+  }
+
+  // グローバル公開（商品登録処理から呼び出せるように）
+  window.confirmManagementNumber = confirmManagementNumber;
 
   // セグメント設定に基づいて管理番号を生成
   async function generateManagementNumber(segments, selectedShelf) {
@@ -5373,6 +5422,31 @@ window.updateLoadingProgress = function(percent, text) {
    */
   function saveProductToSheet(d) {
     console.log('[DEBUG] saveProductToSheet() called with data:', d);
+
+    // ★ 管理番号の重複チェックとカウンター更新
+    const managementNumber = d['管理番号'];
+    if (managementNumber) {
+      confirmManagementNumber(managementNumber).then(confirmed => {
+        if (!confirmed) {
+          // 重複エラー：保存を中断
+          hideLoadingOverlay();
+          return;
+        }
+
+        // 重複チェックOK：GASへ保存
+        executeSaveToGAS(d);
+      });
+    } else {
+      // 管理番号なし：そのまま保存
+      executeSaveToGAS(d);
+    }
+  }
+
+  /**
+   * GASへの保存実行（confirmManagementNumber後に呼び出し）
+   * @param {Object} d - 商品データ
+   */
+  function executeSaveToGAS(d) {
     google.script.run
       .withSuccessHandler(function(result) {
         console.log('[DEBUG] saveProduct API response:', result);
