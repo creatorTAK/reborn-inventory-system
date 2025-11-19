@@ -354,8 +354,8 @@ function getBrandsFromFirestore() {
     do {
       pageCount++;
 
-      // Firestore REST API URL（pageSize=1000で最大取得、pageTokenがあれば追加）
-      let url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionPath}?pageSize=1000`;
+      // Firestore REST API URL（pageSize=1000で最大取得、orderBy追加で安定したページネーション）
+      let url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionPath}?pageSize=1000&orderBy=__name__`;
       if (pageToken) {
         url += `&pageToken=${encodeURIComponent(pageToken)}`;
       }
@@ -376,6 +376,9 @@ function getBrandsFromFirestore() {
       }
 
       const data = JSON.parse(response.getContentText());
+
+      // デバッグ: レスポンスの詳細をログ出力
+      console.log(`🔍 [DEBUG] ページ${pageCount}: documentsCount=${data.documents ? data.documents.length : 0}, hasNextPageToken=${!!data.nextPageToken}`);
 
       // ドキュメントを処理
       if (data.documents && Array.isArray(data.documents)) {
@@ -398,11 +401,11 @@ function getBrandsFromFirestore() {
       // 次のページのトークンを取得
       pageToken = data.nextPageToken || null;
 
-      console.log(`📄 [GAS] ページ ${pageCount}: ${data.documents ? data.documents.length : 0}件取得（累計: ${brands.length}件）`);
+      console.log(`📄 [GAS] ページ ${pageCount}: ${data.documents ? data.documents.length : 0}件取得（累計: ${brands.length}件）nextPageToken=${pageToken ? 'あり' : 'なし'}`);
 
-      // GASの実行時間制限（6分）を考慮して、50ページ以上は打ち切り
-      if (pageCount >= 50) {
-        console.log('⚠️ [GAS] ページ数上限に達したため、取得を終了します');
+      // GASの実行時間制限（6分）を考慮して、200ページ以上は打ち切り（最大60000件）
+      if (pageCount >= 200) {
+        console.log('⚠️ [GAS] ページ数上限（200ページ）に達したため、取得を終了します');
         break;
       }
 
@@ -413,11 +416,25 @@ function getBrandsFromFirestore() {
 
     console.log(`✅ [GAS] ブランドマスタ取得完了: ${brands.length}件 (${duration}ms、${pageCount}ページ)`);
 
-    return brands;
+    // デバッグ情報付きで返す
+    return {
+      brands: brands,
+      debug: {
+        pageCount: pageCount,
+        duration: duration,
+        lastPageHadToken: pageToken !== null,
+        totalFetched: brands.length
+      }
+    };
 
   } catch (error) {
     console.error('❌ [GAS] getBrandsFromFirestore エラー:', error);
-    return [];
+    return {
+      brands: [],
+      debug: {
+        error: error.toString()
+      }
+    };
   }
 }
 

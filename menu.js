@@ -504,11 +504,28 @@ function doGet(e) {
         try {
           Logger.log('[doGet] getBrands API呼び出し開始');
 
-          const brands = getBrandsFromFirestore(); // config.js の関数を呼び出し
+          // offset/limitパラメータを取得（デフォルト: offset=0, limit=10000）
+          const offset = parseInt(e.parameter.offset || '0', 10);
+          const limit = parseInt(e.parameter.limit || '10000', 10);
 
-          Logger.log('[doGet] getBrands API成功: ' + brands.length + '件');
+          Logger.log('[doGet] offset=' + offset + ', limit=' + limit);
 
-          return ContentService.createTextOutput(JSON.stringify(brands))
+          const result = getBrandsFromFirestore(); // 全件取得（デバッグ情報付き）
+          const allBrands = result.brands || result; // 互換性のため
+          const brands = allBrands.slice(offset, offset + limit); // 指定範囲を切り出し
+
+          Logger.log('[doGet] getBrands API成功: ' + brands.length + '件（全' + allBrands.length + '件中）');
+
+          // レスポンスに総件数情報とデバッグ情報を含める
+          const response = {
+            brands: brands,
+            total: allBrands.length,
+            offset: offset,
+            limit: limit,
+            debug: result.debug || null // デバッグ情報があれば含める
+          };
+
+          return ContentService.createTextOutput(JSON.stringify(response))
             .setMimeType(ContentService.MimeType.JSON);
         } catch (error) {
           Logger.log('[doGet] getBrands API ERROR: ' + error);

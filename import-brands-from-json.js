@@ -96,8 +96,7 @@ async function importBrandsToAlgolia(brands) {
         // 検索対象の属性（優先度順）
         searchableAttributes: [
           'name',
-          'nameKana',
-          'searchText'
+          'nameKana'
         ],
         // 検索結果の属性
         attributesToRetrieve: [
@@ -111,8 +110,8 @@ async function importBrandsToAlgolia(brands) {
         customRanking: [
           'desc(usageCount)'
         ],
-        // タイポ許容
-        typoTolerance: true,
+        // タイポ許容を無効化（NIKE→Nigelなどの誤マッチを防ぐ）
+        typoTolerance: false,
         // 前方一致優先
         queryType: 'prefixAll',
         // ハイライト設定

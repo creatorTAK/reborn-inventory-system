@@ -33,6 +33,18 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+/**
+ * ひらがなをカタカナに変換
+ * @param {string} str - 変換する文字列
+ * @returns {string} カタカナに変換された文字列
+ */
+function hiraganaToKatakana(str) {
+  return str.replace(/[\u3041-\u3096]/g, function(match) {
+    const chr = match.charCodeAt(0) + 0x60;
+    return String.fromCharCode(chr);
+  });
+}
+
 // ============================================
 // Algoliaブランドサジェスト
 // ============================================
@@ -93,8 +105,11 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
     try {
       const startTime = performance.now();
 
+      // ひらがなをカタカナに変換（例: なぎけ → ナイキ）
+      const convertedQuery = hiraganaToKatakana(query);
+
       // v4 APIでは index.search() を使用
-      const { hits } = await index.search(query, {
+      const { hits } = await index.search(convertedQuery, {
         hitsPerPage: limit,
         attributesToRetrieve: ['id', 'name', 'nameKana', 'usageCount']
       });
@@ -104,7 +119,7 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
       const endTime = performance.now();
       const duration = (endTime - startTime).toFixed(2);
 
-      console.log(`✅ [Algolia] 検索完了: "${query}" → ${brands.length}件 (${duration}ms)`);
+      console.log(`✅ [Algolia] 検索完了: "${query}" → "${convertedQuery}" → ${brands.length}件 (${duration}ms)`);
 
       return brands;
 
