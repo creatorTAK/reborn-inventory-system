@@ -2477,49 +2477,16 @@ window.updateLoadingProgress = function(percent, text) {
 
     // 新しい番号を計算
     let newNumber = currentNumber + delta;
-
-    // 下げる場合は、サーバーに問い合わせて最小値を確認
-    if (delta < 0) {
-      // 一時的に無効化して二重クリックを防止
-      const buttons = document.querySelectorAll('button[onclick*="adjustManagementNumber"]');
-      buttons.forEach(btn => btn.disabled = true);
-
-      // サーバーに問い合わせ
-      google.script.run
-        .withSuccessHandler(function(minAvailableNumber) {
-          buttons.forEach(btn => btn.disabled = false);
-
-          if (typeof minAvailableNumber === 'string' && minAvailableNumber.startsWith('NG(')) {
-            console.error('最小番号取得エラー:', minAvailableNumber);
-            return;
-          }
-
-          // 最小使用可能番号以上に制限
-          const finalNumber = Math.max(minAvailableNumber, newNumber);
-          const paddedNumber = String(finalNumber).padStart(digits, '0');
-          const newValue = prefix + paddedNumber;
-
-          input.value = newValue;
-          console.log(`管理番号を調整: ${currentValue} → ${newValue} (最小: ${minAvailableNumber})`);
-
-          if (finalNumber === minAvailableNumber && newNumber < minAvailableNumber) {
-            // 既に最小値に達している場合は通知
-            console.log('これ以上下げられません（使用済みの番号です）');
-          }
-        })
-        .withFailureHandler(function(error) {
-          buttons.forEach(btn => btn.disabled = false);
-          console.error('最小番号取得失敗:', error);
-        })
-        .getMinAvailableNumber(prefix.replace(/-$/, ''), digits, parseInt(match[2]));
-    } else {
-      // 上げる場合はそのまま適用
-      newNumber = Math.max(1, newNumber);
-      const paddedNumber = String(newNumber).padStart(digits, '0');
-      const newValue = prefix + paddedNumber;
-      input.value = newValue;
-      console.log(`管理番号を調整: ${currentValue} → ${newValue}`);
-    }
+    
+    // 最小値は1（0以下にはしない）
+    newNumber = Math.max(1, newNumber);
+    
+    // ゼロパディングして適用
+    const paddedNumber = String(newNumber).padStart(digits, '0');
+    const newValue = prefix + paddedNumber;
+    input.value = newValue;
+    
+    console.log(`管理番号を調整: ${currentValue} → ${newValue}`);
   }
 
   // 旧UI初期化（後方互換用）
