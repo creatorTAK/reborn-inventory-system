@@ -5433,87 +5433,94 @@ window.updateLoadingProgress = function(percent, text) {
           return;
         }
 
-        // 重複チェックOK：GASへ保存
-        executeSaveToGAS(d);
+        // 重複チェックOK：Firestoreへ保存
+        executeSaveToFirestore(d);
       });
     } else {
       // 管理番号なし：そのまま保存
-      executeSaveToGAS(d);
+      executeSaveToFirestore(d);
     }
   }
 
   /**
-   * GASへの保存実行（confirmManagementNumber後に呼び出し）
+   * Firestoreへの保存実行（confirmManagementNumber後に呼び出し）
    * @param {Object} d - 商品データ
    */
-  function executeSaveToGAS(d) {
-    google.script.run
-      .withSuccessHandler(function(result) {
-        console.log('[DEBUG] saveProduct API response:', result);
+  async function executeSaveToFirestore(d) {
+    try {
+      console.log('[DEBUG] Firestore保存開始:', d);
 
-        // 📢 システム通知ルームへの投稿（Webhook方式）
-        // Webhook方式に移行したため、postMessage送信は不要
-        // GAS → Cloudflare Worker → Firestore + FCM で完結
-        console.log('[System Notification] Webhook方式による通知送信完了（GAS側で実行済み）');
+      // Firestoreに商品データを保存
+      const docRef = await window.db.collection('products').add({
+        ...d,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
 
-        // 楽観的UI: ローディングは既にアニメーションで閉じている
-        // 保存完了後の処理のみ実行
+      console.log('[DEBUG] Firestore保存成功:', docRef.id);
 
-        show(''); // メッセージをクリア
-        // alert(result); // 削除: 通知で完結するため不要
-        // 保存成功後も商品の説明エリアの高さを保持
-        const descTextarea = document.getElementById('商品の説明');
-        if (descTextarea) {
-          autoResizeTextarea(descTextarea);
+      // 📢 システム通知ルームへの投稿（Webhook方式）
+      // TODO: Firestore保存後の通知送信を実装
+      console.log('[System Notification] Firestore保存完了 - 通知送信は今後実装予定');
+
+      // 楽観的UI: ローディングは既にアニメーションで閉じている
+      // 保存完了後の処理のみ実行
+
+      show(''); // メッセージをクリア
+      
+      // 保存成功後も商品の説明エリアの高さを保持
+      const descTextarea = document.getElementById('商品の説明');
+      if (descTextarea) {
+        autoResizeTextarea(descTextarea);
+      }
+      
+      // 保存成功後に開閉状態と管理番号配置を保存
+      saveDescriptionBlocksCollapseState();
+      saveTitleBlocksCollapseState();
+      saveManagementNumberPlacementSettings();
+      console.log('保存成功：開閉状態と管理番号配置を保存しました');
+
+      // === 保存成功後に画像データとAI生成テキストをクリア ===
+      // AI生成用画像（uploadedImages）をクリア
+      if (uploadedImages && uploadedImages.length > 0) {
+        uploadedImages = [];
+        const container = document.getElementById('imagePreviewContainer');
+        if (container) {
+          container.style.display = 'none';
         }
-        // 保存成功後に開閉状態と管理番号配置を保存
-        saveDescriptionBlocksCollapseState();
-        saveTitleBlocksCollapseState();
-        saveManagementNumberPlacementSettings();
-        console.log('保存成功：開閉状態と管理番号配置を保存しました');
-
-        // === 保存成功後に画像データとAI生成テキストをクリア ===
-        // AI生成用画像（uploadedImages）をクリア
-        if (uploadedImages && uploadedImages.length > 0) {
-          uploadedImages = [];
-          const container = document.getElementById('imagePreviewContainer');
-          if (container) {
-            container.style.display = 'none';
-          }
-          const fileInput = document.getElementById('productImages');
-          if (fileInput) {
-            fileInput.value = '';
-          }
-          debug.log('保存成功後にAI生成用画像データをクリアしました');
+        const fileInput = document.getElementById('productImages');
+        if (fileInput) {
+          fileInput.value = '';
         }
+        debug.log('保存成功後にAI生成用画像データをクリアしました');
+      }
 
-        // 商品画像（productImages）をクリア
-        if (productImages && productImages.length > 0) {
-          productImages = [];
-          const container = document.getElementById('productImagesPreviewContainer');
-          if (container) {
-            container.style.display = 'none';
-          }
-          const fileInput = document.getElementById('productImagesForSave');
-          if (fileInput) {
-            fileInput.value = '';
-          }
-          debug.log('保存成功後に商品画像データをクリアしました');
+      // 商品画像（productImages）をクリア
+      if (productImages && productImages.length > 0) {
+        productImages = [];
+        const container = document.getElementById('productImagesPreviewContainer');
+        if (container) {
+          container.style.display = 'none';
         }
-
-        if (window.AI_GENERATED_TEXT) {
-          window.AI_GENERATED_TEXT = '';
-          debug.log('保存成功後にAI生成テキストをクリアしました');
+        const fileInput = document.getElementById('productImagesForSave');
+        if (fileInput) {
+          fileInput.value = '';
         }
+        debug.log('保存成功後に商品画像データをクリアしました');
+      }
 
-        // 通知はsaveProduct関数内で送信される
-      })
-      .withFailureHandler(function(error) {
-        console.log('[DEBUG] saveProduct API call failed:', error);
-        hideLoadingOverlay();
-        show(`NG(UNKNOWN): ${error && error.message ? error.message : error}`);
-      })
-      .saveProduct(d);
+      if (window.AI_GENERATED_TEXT) {
+        window.AI_GENERATED_TEXT = '';
+        debug.log('保存成功後にAI生成テキストをクリアしました');
+      }
+
+      hideLoadingOverlay();
+      
+    } catch (error) {
+      console.error('[DEBUG] Firestore保存エラー:', error);
+      hideLoadingOverlay();
+      show(`保存エラー: ${error && error.message ? error.message : error}`);
+    }
   }
 
   // ==================== リセット機能（新実装） ====================
