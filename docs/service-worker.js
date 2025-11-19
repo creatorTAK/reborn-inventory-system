@@ -1,14 +1,15 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v10'; // product.html CSS外部化（product-styles.css）
+const CACHE_NAME = 'reborn-v11'; // product.html JS外部化（product-scripts.js）
 const urlsToCache = [
   '/',
   '/index.html',
   '/notifications.html',
   '/manifest.json',
   '/icon-180.png',
-  '/css/product-styles.css'
+  '/css/product-styles.css',
+  '/js/product-scripts.js'
 ];
 
 // Service Workerのインストール
