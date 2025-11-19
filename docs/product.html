@@ -4789,9 +4789,17 @@ style="display:none;">削除</button>
             break;
 
           case 'sequence':
-            // 連番：Firestoreカウンターから取得
+            // 連番：既存商品データとFirestoreカウンターを参照
             const digits = parseInt(config.digits) || 3;
             const startNum = parseInt(config.start) || 1;
+
+            // プレフィックスを構築（連番セグメントより前の部分）
+            const prefix = parts.join('');
+            console.log('🔍 採番プレフィックス:', prefix);
+
+            // 既存商品から最大番号を取得
+            const maxNumberFromProducts = await getMaxSequenceNumberFromProducts(prefix);
+            console.log('📊 既存商品の最大番号:', maxNumberFromProducts);
 
             // Firestore Transactionでカウンター取得
             const counterRef = window.db.collection('counters').doc(counterKey);
@@ -4801,18 +4809,32 @@ style="display:none;">削除</button>
               if (counterDoc.exists) {
                 currentCount = counterDoc.data().count || 0;
               }
-              // 現在のカウントが開始番号未満の場合は、開始番号から開始
-              const nextCount = currentCount < startNum ? startNum : currentCount + 1;
+
+              // 既存商品の最大番号、カウンター、開始番号の中で最大のものを使用
+              const candidateNumber = Math.max(
+                maxNumberFromProducts || 0,
+                currentCount || 0,
+                startNum - 1
+              ) + 1;
+
+              console.log('🔢 採番候補:', {
+                maxFromProducts: maxNumberFromProducts,
+                counterCount: currentCount,
+                startNum: startNum,
+                nextNumber: candidateNumber
+              });
+
               transaction.set(counterRef, {
-                count: nextCount,
+                count: candidateNumber,
                 key: counterKey,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
               }, { merge: true });
-              return nextCount;
+
+              return candidateNumber;
             });
 
             value = String(newNumber).padStart(digits, '0');
-            console.log('🔢 連番生成:', { counterKey, value, newNumber });
+            console.log('✅ 連番生成:', { counterKey, prefix, value, newNumber });
             break;
 
           default:
