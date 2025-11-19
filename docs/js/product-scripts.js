@@ -2644,6 +2644,53 @@ window.updateLoadingProgress = function(percent, text) {
   }
 
   /**
+   * 既存商品から指定プレフィックスの最大連番を取得（移行時のみ使用）
+   * @param {string} prefix - プレフィックス（例: 'AA-'）
+   * @returns {Promise<number>} 最大連番（見つからない場合は0）
+   */
+  async function scanExistingProductsForMigration(prefix) {
+    try {
+      console.log('🔍 [移行] 既存商品から最大番号をスキャン:', prefix);
+
+      // Firestoreから全商品を取得
+      const productsRef = window.db.collection('products');
+      const snapshot = await productsRef.get();
+
+      let maxNumber = 0;
+      let matchCount = 0;
+
+      // プレフィックスに一致する管理番号から最大の連番を探す
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const managementNumber = data.managementNumber || '';
+
+        // プレフィックスで始まるかチェック
+        if (managementNumber.startsWith(prefix)) {
+          matchCount++;
+          // プレフィックス以降の部分を取得
+          const suffix = managementNumber.substring(prefix.length);
+
+          // 連番部分を抽出（数字のみ、ハイフン等の区切り文字を除外）
+          const match = suffix.match(/^(\d+)/);
+          if (match) {
+            const number = parseInt(match[1], 10);
+            if (!isNaN(number) && number > maxNumber) {
+              maxNumber = number;
+            }
+          }
+        }
+      });
+
+      console.log(`✅ [移行] スキャン完了: ${matchCount}件の商品から最大番号 ${maxNumber} を検出`);
+      return maxNumber;
+
+    } catch (error) {
+      console.error('❌ [移行] スキャンエラー:', error);
+      return 0;
+    }
+  }
+
+  /**
    * カウンター方式で指定プレフィックスの次の連番を取得
    * @param {string} prefix - プレフィックス（例: 'AA-', 'AA-251119-'）
    * @param {number} startNum - 開始番号（設定値）
@@ -2671,9 +2718,15 @@ window.updateLoadingProgress = function(percent, text) {
         nextNumber = Math.max(currentNumber, startNum - 1) + 1;
         console.log('🔢 次の番号:', nextNumber);
       } else {
-        // カウンターが存在しない場合（初回）
-        console.log('⚡ カウンター初回作成:', startNum);
-        nextNumber = startNum;
+        // カウンターが存在しない場合（初回）→ 既存商品をスキャンして移行
+        console.log('⚡ カウンター初回作成 → 既存商品をスキャン');
+
+        const maxFromProducts = await scanExistingProductsForMigration(prefix);
+        console.log('📊 既存商品の最大番号:', maxFromProducts);
+
+        // 既存商品の最大値と設定の開始番号を比較
+        nextNumber = Math.max(maxFromProducts, startNum - 1) + 1;
+        console.log('🔢 移行後の次の番号:', nextNumber);
       }
 
       // カウンターを更新（楽観的ロック不要、プレビュー表示のみで実際の保存時に確定）

@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v48';  // PWA版：管理番号採番をカウンター方式に変更（パフォーマンス改善）
+const CACHE_VERSION = 'v49';  // PWA版：カウンター初回作成時に既存商品から移行
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
