@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v23'; // PWA版：チャット最小限テストHTML配置
+const CACHE_NAME = 'reborn-v24'; // PWA版：Firebase SDK読み込みテスト
 const urlsToCache = [
   '/',
   '/index.html',
