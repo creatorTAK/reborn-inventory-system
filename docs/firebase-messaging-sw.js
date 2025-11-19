@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v45';  // PWA版：設定管理 - ピンチイン防止強化（全入力欄16px）
+const CACHE_VERSION = 'v46';  // PWA版：設定管理 - セグメント編集UI改善（タイプグリッド非表示）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
