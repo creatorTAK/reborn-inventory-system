@@ -2278,7 +2278,6 @@ window.updateLoadingProgress = function(percent, text) {
       // グローバル変数が存在すればそれを使用（Firestoreアクセスを回避）
       if (window.managementNumberConfig && window.managementNumberConfig.segments) {
         console.log('✅ グローバル変数から設定を取得（Firestoreアクセス不要）');
-        console.log('🔍 window.managementNumberConfig全体:', JSON.stringify(window.managementNumberConfig, null, 2));
         segments = window.managementNumberConfig.segments;
       } else {
         // グローバル変数がない場合のみFirestoreから読み込み
@@ -2291,12 +2290,10 @@ window.updateLoadingProgress = function(percent, text) {
         }
 
         const data = docSnap.data();
-        console.log('🔍 Firestoreから取得したdata.managementNumber:', JSON.stringify(data.managementNumber, null, 2));
         segments = data.managementNumber?.segments || [];
 
         // グローバル変数にも保存（次回のため）
         window.managementNumberConfig = data.managementNumber || null;
-        console.log('🔍 グローバル変数に保存完了:', JSON.stringify(window.managementNumberConfig, null, 2));
       }
 
       if (segments.length === 0) {
@@ -2411,38 +2408,17 @@ window.updateLoadingProgress = function(percent, text) {
             break;
 
           case 'sequence':
-            // 連番：既存商品データを真実のソースとする（プレビュー表示のみ、counter更新はしない）
-            console.log('🔍 連番セグメント設定確認:', {
-              'config.digits': config.digits,
-              'config.start': config.start,
-              'segment全体': segment
-            });
+            // 連番：カウンター方式で高速採番（O(1)）
             const digits = parseInt(config.digits) || 3;
             const startNum = parseInt(config.start) || 1;
-            console.log('🔍 パース後の値:', { digits, startNum });
 
             // プレフィックスを構築（連番セグメントより前の部分）
             const prefix = parts.join('');
-            console.log('🔍 採番プレフィックス:', prefix);
 
-            // 既存商品から最大番号を取得（これが真実のソース）
-            const maxNumberFromProducts = await getMaxSequenceNumberFromProducts(prefix);
-            console.log('📊 既存商品の最大番号:', maxNumberFromProducts);
+            // カウンター方式で次の番号を取得（O(1)の高速アクセス）
+            const nextNumber = await getNextSequenceNumber(prefix, startNum);
 
-            // 既存商品の最大番号と開始番号を比較（counterは無視）
-            const candidateNumber = Math.max(
-              maxNumberFromProducts || 0,
-              startNum - 1
-            ) + 1;
-
-            console.log('🔢 採番候補（プレビュー表示のみ）:', {
-              maxFromProducts: maxNumberFromProducts,
-              startNum: startNum,
-              nextNumber: candidateNumber
-            });
-
-            value = String(candidateNumber).padStart(digits, '0');
-            console.log('✅ 連番生成（プレビュー）:', { counterKey, prefix, value, newNumber: candidateNumber });
+            value = String(nextNumber).padStart(digits, '0');
             break;
 
           default:
@@ -2668,48 +2644,52 @@ window.updateLoadingProgress = function(percent, text) {
   }
 
   /**
-   * 既存商品から指定プレフィックスの最大連番を取得
-   * @param {string} prefix - プレフィックス（例: 'AA-251119-'）
-   * @returns {Promise<number>} 最大連番（見つからない場合は0）
+   * カウンター方式で指定プレフィックスの次の連番を取得
+   * @param {string} prefix - プレフィックス（例: 'AA-', 'AA-251119-'）
+   * @param {number} startNum - 開始番号（設定値）
+   * @returns {Promise<number>} 次の連番
    */
-  async function getMaxSequenceNumberFromProducts(prefix) {
+  async function getNextSequenceNumber(prefix, startNum) {
     try {
-      console.log('🔍 既存商品から最大番号を検索:', prefix);
+      console.log('🔍 カウンター方式で次の番号を取得:', { prefix, startNum });
 
-      // Firestoreから全商品を取得
-      const productsRef = window.db.collection('products');
-      const snapshot = await productsRef.get();
+      // プレフィックスをFirestore ドキュメントIDに使える形式に変換（ハイフン等を除去）
+      const counterKey = prefix.replace(/[^a-zA-Z0-9]/g, '_');
+      console.log('📋 カウンターキー:', counterKey);
 
-      let maxNumber = 0;
+      const counterRef = window.db.collection('managementNumberCounters').doc(counterKey);
+      const counterDoc = await counterRef.get();
 
-      // プレフィックスに一致する管理番号から最大の連番を探す
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        const managementNumber = data.managementNumber || '';
+      let nextNumber;
 
-        // プレフィックスで始まるかチェック
-        if (managementNumber.startsWith(prefix)) {
-          // プレフィックス以降の部分を取得
-          const suffix = managementNumber.substring(prefix.length);
+      if (counterDoc.exists) {
+        // カウンターが存在する場合
+        const currentNumber = counterDoc.data().currentNumber || 0;
+        console.log('✅ 既存カウンター値:', currentNumber);
 
-          // 連番部分を抽出（数字のみ、ハイフン等の区切り文字を除外）
-          const match = suffix.match(/^(\d+)/);
-          if (match) {
-            const number = parseInt(match[1], 10);
-            if (!isNaN(number) && number > maxNumber) {
-              maxNumber = number;
-              console.log(`  → 管理番号: ${managementNumber}, 連番: ${number}`);
-            }
-          }
-        }
-      });
+        // 既存の最大値と設定の開始番号を比較
+        nextNumber = Math.max(currentNumber, startNum - 1) + 1;
+        console.log('🔢 次の番号:', nextNumber);
+      } else {
+        // カウンターが存在しない場合（初回）
+        console.log('⚡ カウンター初回作成:', startNum);
+        nextNumber = startNum;
+      }
 
-      console.log(`✅ 最大番号: ${maxNumber} (プレフィックス: ${prefix})`);
-      return maxNumber;
+      // カウンターを更新（楽観的ロック不要、プレビュー表示のみで実際の保存時に確定）
+      await counterRef.set({
+        currentNumber: nextNumber,
+        prefix: prefix,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+
+      console.log(`✅ カウンター更新完了: ${counterKey} = ${nextNumber}`);
+      return nextNumber;
 
     } catch (error) {
-      console.error('❌ 最大番号取得エラー:', error);
-      return 0;
+      console.error('❌ カウンター取得エラー:', error);
+      // エラー時は開始番号を返す
+      return startNum;
     }
   }
 
@@ -2788,7 +2768,7 @@ window.updateLoadingProgress = function(percent, text) {
           break;
 
         case 'sequence':
-          // 連番：既存商品データとFirestoreカウンターを参照
+          // 連番：カウンター方式で高速採番（O(1)）
           const digits = parseInt(config.digits) || 3;
           const startNum = parseInt(config.start) || 1;
 
@@ -2796,34 +2776,34 @@ window.updateLoadingProgress = function(percent, text) {
           const prefix = parts.join('');
           console.log('🔍 採番プレフィックス:', prefix);
 
-          // 既存商品から最大番号を取得
-          const maxNumberFromProducts = await getMaxSequenceNumberFromProducts(prefix);
-          console.log('📊 既存商品の最大番号:', maxNumberFromProducts);
+          // カウンター方式で次の番号を取得（O(1)の高速アクセス）
+          const newNumber = await getNextSequenceNumber(prefix, startNum);
+          console.log('📊 次の番号:', newNumber);
 
-          // Firestore Transactionでカウンター取得
-          const counterRef = window.db.collection('counters').doc(counterKey);
-          const newNumber = await window.db.runTransaction(async (transaction) => {
-            const counterDoc = await transaction.get(counterRef);
+          value = String(newNumber).padStart(digits, '0');
+          console.log('✅ 連番生成:', { counterKey, prefix, value, newNumber });
+          break;
+
+        case 'sequence_legacy_old':
+          // レガシー：既存商品データとFirestoreカウンターを参照（削除予定）
+          const digitsOld = parseInt(config.digits) || 3;
+          const startNumOld = parseInt(config.start) || 1;
+
+          const prefixOld = parts.join('');
+          const counterRefOld = window.db.collection('counters').doc(counterKey);
+          const newNumberOld = await window.db.runTransaction(async (transaction) => {
+            const counterDoc = await transaction.get(counterRefOld);
             let currentCount = 0;
             if (counterDoc.exists) {
               currentCount = counterDoc.data().count || 0;
             }
 
-            // 既存商品の最大番号、カウンター、開始番号の中で最大のものを使用
             const candidateNumber = Math.max(
-              maxNumberFromProducts || 0,
               currentCount || 0,
-              startNum - 1
+              startNumOld - 1
             ) + 1;
 
-            console.log('🔢 採番候補:', {
-              maxFromProducts: maxNumberFromProducts,
-              counterCount: currentCount,
-              startNum: startNum,
-              nextNumber: candidateNumber
-            });
-
-            transaction.set(counterRef, {
+            transaction.set(counterRefOld, {
               count: candidateNumber,
               key: counterKey,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -2832,8 +2812,8 @@ window.updateLoadingProgress = function(percent, text) {
             return candidateNumber;
           });
 
-          value = String(newNumber).padStart(digits, '0');
-          console.log('✅ 連番生成:', { counterKey, prefix, value, newNumber });
+          value = String(newNumberOld).padStart(digitsOld, '0');
+          console.log('✅ 連番生成（レガシー）:', { counterKey, prefixOld, value, newNumberOld });
           break;
 
         default:
