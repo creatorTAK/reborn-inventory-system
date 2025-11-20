@@ -185,7 +185,7 @@ window.CONFIG_STORAGE_KEYS = {
   }
 
   // 設定マスタ全体を読み込む（localStorage優先、サーバーでバックアップ同期）
-  function loadAllConfig() {
+  async function loadAllConfig() {
     console.log('🚀 設定読み込み開始（ハイブリッド方式）');
     console.log('📍 [DEBUG] 現在のURL:', window.location.href);
     console.log('📍 [DEBUG] オリジン:', window.location.origin);
@@ -229,8 +229,59 @@ window.CONFIG_STORAGE_KEYS = {
       console.error('localStorage読み込みエラー:', e);
     }
 
-    // PWA版：localStorageのみを使用（Firestore同期は将来実装予定）
-    console.log('✅ PWA版: localStorage設定を使用（Firestore同期は未実装）');
+    // 2. Firestoreから最新設定を取得してCACHED_CONFIGに統合（PWA版）
+    console.log('🔄 Step 2: Firestoreから最新設定を取得中...');
+    try {
+      const docRef = firebase.firestore().collection('settings').doc('common');
+      const docSnap = await docRef.get();
+      
+      if (docSnap.exists) {
+        const firestoreData = docSnap.data();
+        console.log('✅ Firestoreから設定取得成功:', firestoreData);
+        
+        // Firestoreのデータを日本語キーに変換してCACHED_CONFIGにマージ
+        if (firestoreData.conditionButtons) {
+          window.CACHED_CONFIG['商品状態ボタン'] = firestoreData.conditionButtons;
+          localStorage.setItem('rebornConfig_conditionButtons', JSON.stringify(firestoreData.conditionButtons));
+        }
+        if (firestoreData.hashtag) {
+          window.CACHED_CONFIG['ハッシュタグ'] = firestoreData.hashtag;
+          localStorage.setItem('rebornConfig_hashtag', JSON.stringify(firestoreData.hashtag));
+        }
+        if (firestoreData.discount) {
+          window.CACHED_CONFIG['割引情報'] = firestoreData.discount;
+          localStorage.setItem('rebornConfig_discount', JSON.stringify(firestoreData.discount));
+        }
+        if (firestoreData.shippingDefault) {
+          window.CACHED_CONFIG['配送デフォルト'] = firestoreData.shippingDefault;
+          localStorage.setItem('rebornConfig_shippingDefault', JSON.stringify(firestoreData.shippingDefault));
+        }
+        if (firestoreData.procureListingDefault) {
+          window.CACHED_CONFIG['仕入出品デフォルト'] = firestoreData.procureListingDefault;
+          localStorage.setItem('rebornConfig_procureListingDefault', JSON.stringify(firestoreData.procureListingDefault));
+        }
+        if (firestoreData.managementNumber) {
+          window.CACHED_CONFIG['管理番号設定'] = firestoreData.managementNumber;
+          localStorage.setItem('rebornConfig_managementNumber', JSON.stringify(firestoreData.managementNumber));
+        }
+        if (firestoreData.salesword) {
+          window.CACHED_CONFIG['よく使うセールスワード'] = firestoreData.salesword;
+          localStorage.setItem('rebornConfig_salesword', JSON.stringify(firestoreData.salesword));
+          console.log('✅ セールスワード設定をCACHED_CONFIGに反映:', firestoreData.salesword);
+        }
+        if (firestoreData.aiSettings) {
+          window.CACHED_CONFIG['AI生成設定'] = firestoreData.aiSettings;
+          localStorage.setItem('rebornConfig_aiSettings', JSON.stringify(firestoreData.aiSettings));
+        }
+        
+        console.log('✅ Step 2: Firestore設定をCACHED_CONFIGに統合完了:', window.CACHED_CONFIG);
+      } else {
+        console.log('⚠️ Firestore settings/commonが存在しません');
+      }
+    } catch (e) {
+      console.error('❌ Firestore設定取得エラー:', e);
+      console.log('⚠️ localStorageのみを使用します');
+    }
 
     // デザインテーマを適用（localStorageから）
     try {
@@ -6900,7 +6951,7 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
   }
 
   // カテゴリマスタ読み込みは即座実行（非同期なのでOK）
-  (function() {
+  (async function() {
 
     // カテゴリマスタ取得（PWA版：Firestoreから直接取得）
     (async function loadCategoryMaster() {
@@ -7139,7 +7190,7 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     initializeSalesWords();
 
     // 設定マスタ全体を読み込み（配置順序を含む）
-    loadAllConfig();
+    await loadAllConfig();
 
     // 設定マスタから商品状態ボタンを読み込み
     loadConditionButtonsFromConfig();
