@@ -177,7 +177,6 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
 
         // 英語名を入力フィールドに設定
         input.value = brandNameEn || brandNameKana;
-        panel.style.display = 'none';
 
         // カナ名を隠しフィールドに設定
         const kanaField = document.getElementById('ブランド(カナ)');
@@ -205,9 +204,17 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
           window.updateNamePreview();
         }
 
+        // サジェストパネルを非表示
+        panel.style.display = 'none';
+
+        // キーボードを閉じる（モバイル対応）
+        input.blur();
+
         // 入力イベントを発火（他のハンドラーに通知）
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        // ※ サジェスト再表示を防ぐため、blur()の後に実行
+        setTimeout(() => {
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }, 100);
       });
 
       panel.appendChild(div);
