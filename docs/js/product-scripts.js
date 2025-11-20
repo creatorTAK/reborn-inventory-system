@@ -4932,12 +4932,44 @@ window.updateLoadingProgress = function(percent, text) {
       console.log('カテゴリ数:', result.categories.length);
       console.log('全ワード数:', result.allWords.length);
 
-      setupCategoryDropdown();
+      // CACHED_CONFIG初期化を待ってからsetupCategoryDropdown()を実行
+      waitForCachedConfigAndSetup();
 
     } catch (error) {
       console.error('[Firestore] セールスワード読み込みエラー:', error);
       setupFallbackSalesWords();
     }
+  }
+
+  /**
+   * CACHED_CONFIG初期化を待ってセールスワードカテゴリプルダウンをセットアップ
+   */
+  function waitForCachedConfigAndSetup() {
+    const maxWaitTime = 5000; // 最大5秒
+    const checkInterval = 100; // 100msごとにチェック
+    let elapsedTime = 0;
+
+    console.log('[waitForCachedConfigAndSetup] CACHED_CONFIG初期化待機開始');
+
+    const intervalId = setInterval(() => {
+      elapsedTime += checkInterval;
+
+      // CACHED_CONFIGが初期化されたらセットアップ実行
+      if (window.CACHED_CONFIG) {
+        clearInterval(intervalId);
+        console.log('[waitForCachedConfigAndSetup] ✅ CACHED_CONFIG初期化完了（' + elapsedTime + 'ms経過）');
+        setupCategoryDropdown();
+        applyDefaultSalesword();
+        return;
+      }
+
+      // タイムアウト
+      if (elapsedTime >= maxWaitTime) {
+        clearInterval(intervalId);
+        console.warn('[waitForCachedConfigAndSetup] ⚠️ CACHED_CONFIG初期化タイムアウト（' + maxWaitTime + 'ms）、⭐よく使うワードなしでセットアップ');
+        setupCategoryDropdown();
+      }
+    }, checkInterval);
   }
 
   function setupFallbackSalesWords() {
@@ -4958,7 +4990,9 @@ window.updateLoadingProgress = function(percent, text) {
       wordsByCategory: fallbackWords,
       allWords: Object.values(fallbackWords).flat()
     };
-    setupCategoryDropdown();
+
+    // CACHED_CONFIG初期化を待ってからセットアップ
+    waitForCachedConfigAndSetup();
   }
 
   function setupSalesWordEventListeners() {
