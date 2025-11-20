@@ -5159,6 +5159,8 @@ window.updateLoadingProgress = function(percent, text) {
     // 細分類行を非表示
     const saibunruiRow = document.getElementById('saibunruiRow');
     if (saibunruiRow) saibunruiRow.style.display = 'none';
+    const saibunrui2Container = document.getElementById('saibunrui2Container');
+    if (saibunrui2Container) saibunrui2Container.style.display = 'none';
 
     const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
     if (l1) {
@@ -5177,6 +5179,8 @@ window.updateLoadingProgress = function(percent, text) {
     // 細分類行を非表示
     const saibunruiRow = document.getElementById('saibunruiRow');
     if (saibunruiRow) saibunruiRow.style.display = 'none';
+    const saibunrui2Container = document.getElementById('saibunrui2Container');
+    if (saibunrui2Container) saibunrui2Container.style.display = 'none';
 
     const l1 = (document.getElementById('大分類(カテゴリ)')?.value||'').trim();
     const l2 = (document.getElementById('中分類(カテゴリ)')?.value||'').trim();
@@ -5200,6 +5204,7 @@ window.updateLoadingProgress = function(percent, text) {
     const l2 = (document.getElementById('中分類(カテゴリ)')?.value||'').trim();
     const l3 = (document.getElementById('小分類(カテゴリ)')?.value||'').trim();
     const saibunruiRow = document.getElementById('saibunruiRow');
+    const saibunrui2Container = document.getElementById('saibunrui2Container');
 
     if (l3) {
       const mins = uniqKeepOrder(CAT_ROWS.filter(r=>r.大分類===l1 && r.中分類===l2 && r.小分類===l3).map(r=>r.細分類));
@@ -5215,6 +5220,8 @@ window.updateLoadingProgress = function(percent, text) {
       // 小分類が未選択の場合は非表示
       if (saibunruiRow) saibunruiRow.style.display = 'none';
     }
+    // 細分類2も非表示にリセット
+    if (saibunrui2Container) saibunrui2Container.style.display = 'none';
     refreshItems();
   }
 
@@ -5225,9 +5232,21 @@ window.updateLoadingProgress = function(percent, text) {
     const l2 = (document.getElementById('中分類(カテゴリ)')?.value||'').trim();
     const l3 = (document.getElementById('小分類(カテゴリ)')?.value||'').trim();
     const l4 = (document.getElementById('細分類(カテゴリ)')?.value||'').trim();
+    const saibunrui2Container = document.getElementById('saibunrui2Container');
+
     if (l4) {
       const fin2 = uniqKeepOrder(CAT_ROWS.filter(r=>r.大分類===l1 && r.中分類===l2 && r.小分類===l3 && r.細分類===l4).map(r=>r.細分類2));
       fillSelectSafe(document.getElementById('細分類2'), fin2);
+
+      // 細分類2の選択肢がある場合のみ表示
+      if (fin2.length > 0 && saibunrui2Container) {
+        saibunrui2Container.style.display = '';
+      } else if (saibunrui2Container) {
+        saibunrui2Container.style.display = 'none';
+      }
+    } else {
+      // 細分類1が未選択の場合は非表示
+      if (saibunrui2Container) saibunrui2Container.style.display = 'none';
     }
     refreshItems();
   }
