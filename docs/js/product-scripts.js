@@ -187,6 +187,18 @@ window.CONFIG_STORAGE_KEYS = {
   // 設定マスタ全体を読み込む（localStorage優先、サーバーでバックアップ同期）
   function loadAllConfig() {
     console.log('🚀 設定読み込み開始（ハイブリッド方式）');
+    console.log('📍 [DEBUG] 現在のURL:', window.location.href);
+    console.log('📍 [DEBUG] オリジン:', window.location.origin);
+    console.log('📍 [DEBUG] localStorageの状態:');
+    console.log('  - localStorage使用可能:', typeof Storage !== 'undefined');
+    console.log('  - localStorage.length:', localStorage.length);
+    
+    // localStorage内の全キーを表示
+    console.log('  - 保存されているキー一覧:');
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      console.log(`    [${i}] ${key}`);
+    }
 
     // 1. まずlocalStorageから即座に読み込み（高速表示）
     try {
