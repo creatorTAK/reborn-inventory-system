@@ -172,8 +172,38 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
 
       // クリックイベント
       div.addEventListener('click', () => {
-        input.value = brand.name || brand.nameKana || '';
+        const brandNameEn = brand.name || '';
+        const brandNameKana = brand.nameKana || '';
+
+        // 英語名を入力フィールドに設定
+        input.value = brandNameEn || brandNameKana;
         panel.style.display = 'none';
+
+        // カナ名を隠しフィールドに設定
+        const kanaField = document.getElementById('ブランド(カナ)');
+        if (kanaField) {
+          kanaField.value = brandNameKana;
+        }
+
+        // 商品名ブロックのブランドフィールドに反映
+        const titleBrandEnField = document.getElementById('商品名_ブランド(英語)');
+        const titleBrandKanaField = document.getElementById('商品名_ブランド(カナ)');
+        if (titleBrandEnField) {
+          titleBrandEnField.value = brandNameEn;
+        }
+        if (titleBrandKanaField) {
+          titleBrandKanaField.value = brandNameKana;
+        }
+
+        // updateBrandDisplay() を呼び出し（商品名プレビュー更新）
+        if (typeof window.updateBrandDisplay === 'function') {
+          window.updateBrandDisplay();
+        }
+
+        // updateNamePreview() を呼び出し
+        if (typeof window.updateNamePreview === 'function') {
+          window.updateNamePreview();
+        }
 
         // 入力イベントを発火（他のハンドラーに通知）
         input.dispatchEvent(new Event('input', { bubbles: true }));

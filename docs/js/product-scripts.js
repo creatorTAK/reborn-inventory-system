@@ -7793,3 +7793,9 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     loadDescriptionBlocksCollapseState();
     loadTitleBlocksCollapseState();
     }, 1000);
+
+// ============================================
+// グローバルスコープに公開（外部モジュールから呼び出し可能に）
+// ============================================
+window.updateBrandDisplay = updateBrandDisplay;
+window.updateNamePreview = updateNamePreview;
