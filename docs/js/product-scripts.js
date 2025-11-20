@@ -296,6 +296,56 @@ window.CONFIG_STORAGE_KEYS = {
     } catch (e) {
       console.warn('デザインテーマ適用エラー:', e);
     }
+
+    // 梱包資材一覧を読み込み
+    try {
+      await loadPackagingMaterialsToSelect();
+    } catch (e) {
+      console.warn('梱包資材読み込みエラー:', e);
+    }
+  }
+
+  /**
+   * Firestoreから梱包資材一覧を取得してプルダウンに設定
+   */
+  async function loadPackagingMaterialsToSelect() {
+    if (!firebase || !firebase.firestore) {
+      console.warn('⚠️ Firestoreが初期化されていません（梱包資材読み込みスキップ）');
+      return;
+    }
+
+    try {
+      console.log('📦 Firestoreから梱包資材一覧を取得中...');
+      const db = firebase.firestore();
+      const snapshot = await db.collection('packagingMaterials')
+        .orderBy('name', 'asc')
+        .get();
+
+      const select = document.getElementById('梱包資材');
+      if (!select) {
+        console.warn('⚠️ 梱包資材selectが見つかりません');
+        return;
+      }
+
+      // 既存のオプション（「-- 選択してください --」）は残して、データを追加
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const option = document.createElement('option');
+        option.value = data.name;
+        option.textContent = data.name + (data.abbreviation ? ` (${data.abbreviation})` : '');
+        select.appendChild(option);
+      });
+
+      console.log(`✅ 梱包資材 ${snapshot.size}件 を読み込みました`);
+
+      // デフォルト値を適用
+      if (window.CACHED_CONFIG && window.CACHED_CONFIG['配送デフォルト'] && window.CACHED_CONFIG['配送デフォルト']['梱包資材デフォルト']) {
+        select.value = window.CACHED_CONFIG['配送デフォルト']['梱包資材デフォルト'];
+        console.log('✅ 梱包資材デフォルト値を適用:', select.value);
+      }
+    } catch (error) {
+      console.error('❌ 梱包資材読み込みエラー:', error);
+    }
   }
 
   // ==================== ローディングオーバーレイ ====================
