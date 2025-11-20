@@ -4728,10 +4728,10 @@ window.updateLoadingProgress = function(percent, text) {
   // ================= 新セールスワードシステム =================
   function initializeSalesWords() {
     console.log('=== セールスワード初期化開始 ===');
-    // PWA版：google.script.runは使用不可
+    // PWA版：Firestoreから読み込み
     if (!(typeof google !== 'undefined' && google.script && google.script.run)) {
-      console.log('PWA版：google.script.run が利用できません、フォールバック処理を実行');
-      setupFallbackSalesWords();
+      console.log('PWA版：Firestoreからセールスワードを読み込み');
+      loadSalesWordsFromFirestore();
       return;
     }
 
@@ -4873,6 +4873,53 @@ window.updateLoadingProgress = function(percent, text) {
     keywordSelect.disabled = categoryWords.length === 0;
     console.log(`キーワード設定完了: ${categoryWords.length}件`);
     updateNamePreview();
+  }
+
+  /**
+   * PWA版：FirestoreからセールスワードマスタをFirestoreから読み込み
+   */
+  async function loadSalesWordsFromFirestore() {
+    try {
+      console.log('[Firestore] セールスワードマスタ読み込み開始');
+
+      if (!window.db) {
+        console.error('[Firestore] Firestoreが初期化されていません、フォールバックを使用');
+        setupFallbackSalesWords();
+        return;
+      }
+
+      const snapshot = await window.db.collection('saleswords').orderBy('order').get();
+
+      if (snapshot.empty) {
+        console.warn('[Firestore] セールスワードデータが存在しません、フォールバックを使用');
+        setupFallbackSalesWords();
+        return;
+      }
+
+      const result = {
+        categories: [],
+        wordsByCategory: {},
+        allWords: []
+      };
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        result.categories.push(data.category);
+        result.wordsByCategory[data.category] = data.words || [];
+        result.allWords = result.allWords.concat(data.words || []);
+      });
+
+      SALESWORD_DATA = result;
+      console.log('[Firestore] セールスワードマスタ読み込み成功');
+      console.log('カテゴリ数:', result.categories.length);
+      console.log('全ワード数:', result.allWords.length);
+
+      setupCategoryDropdown();
+
+    } catch (error) {
+      console.error('[Firestore] セールスワード読み込みエラー:', error);
+      setupFallbackSalesWords();
+    }
   }
 
   function setupFallbackSalesWords() {
