@@ -893,7 +893,9 @@ style="display:none;">削除</button>
       });
 
       window.db = db; // グローバルに公開
-          console.log('   firebase.apps.length:', firebase.apps.length);
+      window.firestoreReady = true; // Firestore初期化完了フラグ
+      console.log('✅ Firestore初期化完了');
+      console.log('   firebase.apps.length:', firebase.apps.length);
     } else {
       console.error('❌ Firebase SDKが読み込まれていません');
     }
@@ -1331,8 +1333,25 @@ style="display:none;">削除</button>
     }
   }
 
-  // DOMContentLoaded後にセールスワードカテゴリを初期化
-  document.addEventListener('DOMContentLoaded', initSaleswordCategory);
+  // DOMContentLoaded後、Firestore初期化完了を待ってセールスワードカテゴリを初期化
+  document.addEventListener('DOMContentLoaded', () => {
+    // Firestore初期化を待つ
+    const waitForFirestore = setInterval(() => {
+      if (window.firestoreReady && window.db) {
+        clearInterval(waitForFirestore);
+        console.log('[DOMContentLoaded] Firestore準備完了、セールスワード初期化開始');
+        initSaleswordCategory();
+      }
+    }, 100);
+
+    // タイムアウト（10秒）
+    setTimeout(() => {
+      clearInterval(waitForFirestore);
+      if (!window.firestoreReady) {
+        console.error('[DOMContentLoaded] ❌ Firestore初期化タイムアウト');
+      }
+    }, 10000);
+  });
 
 </script>
 
