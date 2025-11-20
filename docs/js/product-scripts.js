@@ -5012,45 +5012,75 @@ window.updateLoadingProgress = function(percent, text) {
    * CACHED_CONFIGから読み込んで適用（引数不要）
    */
   function applyDefaultSalesword() {
-    console.log('[applyDefaultSalesword] 開始');
+    console.log('==========================================================');
+    console.log('[applyDefaultSalesword] 🔍 デバッグ開始');
+    console.log('==========================================================');
+
+    // 1. CACHED_CONFIG確認
+    console.log('[applyDefaultSalesword] window.CACHED_CONFIG:', window.CACHED_CONFIG);
 
     const saleswordConfig = window.CACHED_CONFIG?.['よく使うセールスワード'];
-    const defaultConfig = saleswordConfig?.デフォルト;
-
     console.log('[applyDefaultSalesword] saleswordConfig:', saleswordConfig);
+
+    const defaultConfig = saleswordConfig?.デフォルト;
     console.log('[applyDefaultSalesword] defaultConfig:', defaultConfig);
 
     if (!defaultConfig || !defaultConfig.カテゴリ || !defaultConfig.セールスワード) {
-      console.log('[applyDefaultSalesword] デフォルト設定がありません');
+      console.error('[applyDefaultSalesword] ❌ デフォルト設定がありません');
+      console.log('[applyDefaultSalesword] saleswordConfig:', saleswordConfig);
+      console.log('==========================================================');
       return;
     }
 
+    // 2. DOM要素確認
     const categorySelect = document.getElementById('セールスワード(カテゴリ)');
     const saleswordSelect = document.getElementById('セールスワード');
 
+    console.log('[applyDefaultSalesword] categorySelect:', categorySelect);
+    console.log('[applyDefaultSalesword] saleswordSelect:', saleswordSelect);
+
     if (!categorySelect || !saleswordSelect) {
-      console.error('[applyDefaultSalesword] セールスワードの要素が見つかりません');
+      console.error('[applyDefaultSalesword] ❌ セールスワードの要素が見つかりません');
+      console.log('==========================================================');
       return;
     }
 
-    // カテゴリを設定
-    categorySelect.value = defaultConfig.カテゴリ;
-    console.log('[applyDefaultSalesword] カテゴリを設定:', defaultConfig.カテゴリ);
+    // 3. カテゴリプルダウンの選択肢を確認
+    console.log('[applyDefaultSalesword] カテゴリプルダウンの選択肢数:', categorySelect.options.length);
+    for (let i = 0; i < categorySelect.options.length; i++) {
+      console.log(`  選択肢${i}: value="${categorySelect.options[i].value}", text="${categorySelect.options[i].text}"`);
+    }
 
-    // カテゴリ変更イベントをトリガー（セールスワードプルダウンを更新）
+    // 4. カテゴリを設定
+    console.log('[applyDefaultSalesword] 設定するカテゴリ:', defaultConfig.カテゴリ);
+    categorySelect.value = defaultConfig.カテゴリ;
+    console.log('[applyDefaultSalesword] カテゴリ設定後のvalue:', categorySelect.value);
+
+    // 5. カテゴリ変更イベントをトリガー
+    console.log('[applyDefaultSalesword] onSalesWordCategoryChanged()実行');
     onSalesWordCategoryChanged();
 
-    // セールスワードを設定（プルダウン更新後に設定）
+    // 6. セールスワードを設定（プルダウン更新後）
     setTimeout(() => {
-      saleswordSelect.value = defaultConfig.セールスワード;
-      console.log('[applyDefaultSalesword] セールスワードを設定:', defaultConfig.セールスワード);
+      console.log('[applyDefaultSalesword] セールスワードプルダウンの選択肢数:', saleswordSelect.options.length);
+      for (let i = 0; i < saleswordSelect.options.length; i++) {
+        console.log(`  選択肢${i}: value="${saleswordSelect.options[i].value}"`);
+      }
 
-      // 商品名プレビューを更新
+      console.log('[applyDefaultSalesword] 設定するセールスワード:', defaultConfig.セールスワード);
+      saleswordSelect.value = defaultConfig.セールスワード;
+      console.log('[applyDefaultSalesword] セールスワード設定後のvalue:', saleswordSelect.value);
+
+      // 7. 商品名プレビューを更新
       if (typeof updateNamePreview === 'function') {
         updateNamePreview();
         console.log('[applyDefaultSalesword] ✅ 商品名プレビュー更新完了');
       }
-    }, 100);
+
+      console.log('==========================================================');
+      console.log('[applyDefaultSalesword] 🎉 完了');
+      console.log('==========================================================');
+    }, 200);  // 100ms → 200msに延長
   }
 
   // ================= カテゴリ階層 =================
