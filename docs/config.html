@@ -4974,6 +4974,7 @@ ${descFormattedNumber}`;
 
       categorySelect.innerHTML = '<option value="">--選択--</option>';
 
+      // ⭐よく使うワードはFirestoreには無いので表示しない（3️⃣は「よく使う」リストに追加する機能）
       Object.keys(SALESWORD_MASTER).sort().forEach(category => {
         const option = document.createElement('option');
         option.value = category;
@@ -5081,7 +5082,26 @@ ${descFormattedNumber}`;
 
       categorySelect.innerHTML = '<option value="">--選択--</option>';
 
+      // ⭐よく使うワードをCACHED_CONFIGから追加
+      if (window.CACHED_CONFIG && window.CACHED_CONFIG['よく使うセールスワード']) {
+        const saleswordConfig = window.CACHED_CONFIG['よく使うセールスワード'];
+        const frequentWords = saleswordConfig.よく使う || [];
+
+        if (frequentWords.length > 0) {
+          const option = document.createElement('option');
+          option.value = '⭐よく使うワード';
+          option.textContent = '⭐よく使うワード';
+          categorySelect.appendChild(option);
+
+          // SALESWORD_MASTERにも追加
+          SALESWORD_MASTER['⭐よく使うワード'] = frequentWords;
+        }
+      }
+
       Object.keys(SALESWORD_MASTER).sort().forEach(category => {
+        // ⭐よく使うワードは既に追加済みなのでスキップ
+        if (category === '⭐よく使うワード') return;
+
         const option = document.createElement('option');
         option.value = category;
         option.textContent = category;
@@ -5120,17 +5140,29 @@ ${descFormattedNumber}`;
      * デフォルトセールスワード設定を画面に反映
      */
     function renderDefaultSalesword(config) {
-      if (!config || !config.デフォルト) return;
+      console.log('[renderDefaultSalesword] 実行開始');
+      console.log('[renderDefaultSalesword] config:', config);
+
+      if (!config || !config.デフォルト) {
+        console.warn('[renderDefaultSalesword] デフォルト設定が見つかりません');
+        return;
+      }
 
       const defaultConfig = config.デフォルト;
+      console.log('[renderDefaultSalesword] デフォルト設定:', defaultConfig);
+
       const categorySelect = document.getElementById('defaultSaleswordCategory');
       const saleswordSelect = document.getElementById('defaultSalesword');
 
-      if (!categorySelect || !saleswordSelect) return;
+      if (!categorySelect || !saleswordSelect) {
+        console.error('[renderDefaultSalesword] プルダウン要素が見つかりません');
+        return;
+      }
 
       // カテゴリを設定
       if (defaultConfig.カテゴリ) {
         categorySelect.value = defaultConfig.カテゴリ;
+        console.log('[renderDefaultSalesword] カテゴリ設定:', defaultConfig.カテゴリ);
         // セールスワードプルダウンを更新
         updateDefaultSaleswordOptions();
 
@@ -5138,6 +5170,8 @@ ${descFormattedNumber}`;
         setTimeout(() => {
           if (defaultConfig.セールスワード) {
             saleswordSelect.value = defaultConfig.セールスワード;
+            console.log('[renderDefaultSalesword] セールスワード設定:', defaultConfig.セールスワード);
+            console.log('[renderDefaultSalesword] ✅ デフォルトセールスワード復元完了');
           }
         }, 100);
       }
@@ -5537,6 +5571,9 @@ ${descFormattedNumber}`;
       console.log('[loadSaleswordConfig] config全体:', config);
       console.log('[loadSaleswordConfig] よく使うセールスワード:', config.よく使うセールスワード);
 
+      // CACHED_CONFIGをグローバルに設定（product-scripts.jsと同じ）
+      window.CACHED_CONFIG = config;
+
       // よく使うセールスワード（リスト）
       if (config.よく使うセールスワード) {
         if (config.よく使うセールスワード.よく使う) {
@@ -5544,6 +5581,9 @@ ${descFormattedNumber}`;
           renderSaleswordList();
           console.log('[loadSaleswordConfig] よく使うワード読み込み:', SALESWORD_LIST);
         }
+
+        // デフォルトセールスワードプルダウンを再初期化（⭐よく使うワード追加のため）
+        initDefaultSaleswordDropdowns();
 
         // デフォルトセールスワード
         if (config.よく使うセールスワード.デフォルト) {
