@@ -1164,193 +1164,24 @@ style="display:none;">削除</button>
     }
   }
 
-  /**
-   * セールスワードカテゴリプルダウンを初期化（⭐よく使うワード追加）
-   */
-  async function initSaleswordCategory() {
-    try {
-      console.log('[initSaleswordCategory] カテゴリプルダウン初期化開始');
-
-      const categorySelect = document.getElementById('セールスワード(カテゴリ)');
-      if (!categorySelect) {
-        console.error('[initSaleswordCategory] カテゴリプルダウンが見つかりません');
-        return;
-      }
-
-      // ⭐よく使うワードを最初に追加
-      const frequentOption = document.createElement('option');
-      frequentOption.value = '⭐よく使うワード';
-      frequentOption.textContent = '⭐よく使うワード';
-      categorySelect.insertBefore(frequentOption, categorySelect.children[1]);
-      console.log('[initSaleswordCategory] ⭐よく使うワードを追加');
-
-      // Firestoreからカテゴリ一覧を取得して追加
-      if (window.db) {
-        const snapshot = await window.db.collection('saleswords').orderBy('order').get();
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          const option = document.createElement('option');
-          option.value = data.category;
-          option.textContent = data.category;
-          categorySelect.appendChild(option);
-        });
-        console.log('[initSaleswordCategory] Firestoreからカテゴリ読み込み:', snapshot.size + '件');
-      }
-
-      // カテゴリ変更イベントリスナーを追加
-      categorySelect.addEventListener('change', handleSaleswordCategoryChange);
-      console.log('[initSaleswordCategory] ✅ イベントリスナー登録完了');
-
-    } catch (error) {
-      console.error('[initSaleswordCategory] ❌ エラー:', error);
-    }
-  }
-
-  /**
-   * セールスワードカテゴリ変更時の処理
-   */
-  function handleSaleswordCategoryChange(event) {
-    try {
-      const category = event.target.value;
-      console.log('[handleSaleswordCategoryChange] カテゴリ選択:', category);
-
-      const saleswordSelect = document.getElementById('セールスワード');
-      if (!saleswordSelect) {
-        console.error('[handleSaleswordCategoryChange] セールスワードプルダウンが見つかりません');
-        return;
-      }
-
-      // プルダウンをクリア
-      saleswordSelect.innerHTML = '<option value="">--選択してください--</option>';
-
-      if (!category) {
-        saleswordSelect.disabled = true;
-        return;
-      }
-
-      // ⭐よく使うワードの場合
-      if (category === '⭐よく使うワード') {
-        loadFrequentSaleswords(saleswordSelect);
-        return;
-      }
-
-      // 通常のカテゴリの場合（Firestore から読み込み）
-      loadSaleswordsByCategory(category, saleswordSelect);
-
-    } catch (error) {
-      console.error('[handleSaleswordCategoryChange] ❌ エラー:', error);
-    }
-  }
-
-  /**
-   * よく使うワードをプルダウンに読み込み
-   */
-  function loadFrequentSaleswords(saleswordSelect) {
-    try {
-      console.log('[loadFrequentSaleswords] よく使うワード読み込み開始');
-
-      if (!window.CACHED_CONFIG || !window.CACHED_CONFIG['よく使うセールスワード']) {
-        console.warn('[loadFrequentSaleswords] セールスワード設定が見つかりません');
-        saleswordSelect.disabled = true;
-        return;
-      }
-
-      const saleswordConfig = window.CACHED_CONFIG['よく使うセールスワード'];
-      const frequentWords = saleswordConfig.よく使う || [];
-
-      console.log('[loadFrequentSaleswords] よく使うワード:', frequentWords);
-
-      if (!frequentWords || frequentWords.length === 0) {
-        console.warn('[loadFrequentSaleswords] よく使うワードが設定されていません');
-        saleswordSelect.disabled = true;
-        const emptyOption = document.createElement('option');
-        emptyOption.value = '';
-        emptyOption.textContent = '（よく使うワードが未設定）';
-        saleswordSelect.appendChild(emptyOption);
-        return;
-      }
-
-      // よく使うワードをプルダウンに追加
-      frequentWords.forEach(word => {
-        const option = document.createElement('option');
-        option.value = word;
-        option.textContent = word;
-        saleswordSelect.appendChild(option);
-      });
-
-      saleswordSelect.disabled = false;
-      console.log('[loadFrequentSaleswords] ✅ よく使うワード読み込み完了:', frequentWords.length + '件');
-
-    } catch (error) {
-      console.error('[loadFrequentSaleswords] ❌ エラー:', error);
-      saleswordSelect.disabled = true;
-    }
-  }
-
-  /**
-   * カテゴリ別セールスワードをFirestoreから読み込み
-   */
-  async function loadSaleswordsByCategory(category, saleswordSelect) {
-    try {
-      console.log('[loadSaleswordsByCategory] カテゴリ別セールスワード読み込み:', category);
-
-      if (!window.db) {
-        console.error('[loadSaleswordsByCategory] Firestoreが初期化されていません');
-        saleswordSelect.disabled = true;
-        return;
-      }
-
-      // Firestoreから該当カテゴリのセールスワードを取得
-      const snapshot = await window.db.collection('saleswords')
-        .where('category', '==', category)
-        .get();
-
-      if (snapshot.empty) {
-        console.warn('[loadSaleswordsByCategory] カテゴリが見つかりません:', category);
-        saleswordSelect.disabled = true;
-        return;
-      }
-
-      const doc = snapshot.docs[0];
-      const words = doc.data().words || [];
-
-      console.log('[loadSaleswordsByCategory] セールスワード取得:', words.length + '件');
-
-      // プルダウンに追加
-      words.forEach(word => {
-        const option = document.createElement('option');
-        option.value = word;
-        option.textContent = word;
-        saleswordSelect.appendChild(option);
-      });
-
-      saleswordSelect.disabled = false;
-      console.log('[loadSaleswordsByCategory] ✅ セールスワード読み込み完了');
-
-    } catch (error) {
-      console.error('[loadSaleswordsByCategory] ❌ エラー:', error);
-      saleswordSelect.disabled = true;
-    }
-  }
-
-  // DOMContentLoaded後、Firestore初期化完了を待ってセールスワードカテゴリを初期化
+  // DOMContentLoaded後、CACHED_CONFIG初期化完了を待ってデフォルトセールスワードを適用
   document.addEventListener('DOMContentLoaded', () => {
-    // Firestore初期化を待つ
-    const waitForFirestore = setInterval(() => {
-      if (window.firestoreReady && window.db) {
-        clearInterval(waitForFirestore);
-        console.log('[DOMContentLoaded] Firestore準備完了、セールスワード初期化開始');
-        initSaleswordCategory();
+    // CACHED_CONFIG初期化を待つ
+    const waitForConfig = setInterval(() => {
+      if (window.CACHED_CONFIG && window.CACHED_CONFIG['よく使うセールスワード']) {
+        clearInterval(waitForConfig);
+        console.log('[DOMContentLoaded] CACHED_CONFIG準備完了、デフォルトセールスワード適用開始');
+        applyDefaultSalesword();
       }
     }, 100);
 
-    // タイムアウト（10秒）
+    // タイムアウト（5秒）
     setTimeout(() => {
-      clearInterval(waitForFirestore);
-      if (!window.firestoreReady) {
-        console.error('[DOMContentLoaded] ❌ Firestore初期化タイムアウト');
+      clearInterval(waitForConfig);
+      if (!window.CACHED_CONFIG || !window.CACHED_CONFIG['よく使うセールスワード']) {
+        console.error('[DOMContentLoaded] ❌ CACHED_CONFIG初期化タイムアウト');
       }
-    }, 10000);
+    }, 5000);
   });
 
 </script>

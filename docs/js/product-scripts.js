@@ -4810,12 +4810,21 @@ window.updateLoadingProgress = function(percent, text) {
     // プルダウンをクリア
     categorySelect.innerHTML = '<option value="">-- カテゴリを選択 --</option>';
 
-    // 「よく使う」カテゴリを先頭に追加
-    if (SALESWORD_DATA.wordsByCategory['よく使う']) {
-      const option = document.createElement('option');
-      option.value = 'よく使う';
-      option.textContent = '⭐ よく使う';
-      categorySelect.appendChild(option);
+    // 「⭐よく使うワード」カテゴリを先頭に追加（CACHED_CONFIGから読み込み）
+    if (window.CACHED_CONFIG && window.CACHED_CONFIG['よく使うセールスワード']) {
+      const saleswordConfig = window.CACHED_CONFIG['よく使うセールスワード'];
+      const frequentWords = saleswordConfig.よく使う || [];
+
+      if (frequentWords.length > 0) {
+        const option = document.createElement('option');
+        option.value = '⭐よく使うワード';
+        option.textContent = '⭐よく使うワード';
+        categorySelect.appendChild(option);
+
+        // SALESWORD_DATAにも追加（onSalesWordCategoryChangedで使用）
+        SALESWORD_DATA.wordsByCategory['⭐よく使うワード'] = frequentWords;
+        console.log(`⭐よく使うワード追加: ${frequentWords.length}件`);
+      }
     }
 
     // その他のカテゴリオプションを追加
@@ -4826,7 +4835,7 @@ window.updateLoadingProgress = function(percent, text) {
       categorySelect.appendChild(option);
     });
 
-    const totalCategories = SALESWORD_DATA.categories.length + (SALESWORD_DATA.wordsByCategory['よく使う'] ? 1 : 0);
+    const totalCategories = SALESWORD_DATA.categories.length + (SALESWORD_DATA.wordsByCategory['⭐よく使うワード'] ? 1 : 0);
     console.log(`カテゴリプルダウン設定完了: ${totalCategories}件`);
     // キーワードプルダウンをリセット
     resetKeywordDropdown();
