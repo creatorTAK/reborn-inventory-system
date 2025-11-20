@@ -4810,25 +4810,13 @@ window.updateLoadingProgress = function(percent, text) {
     // プルダウンをクリア
     categorySelect.innerHTML = '<option value="">-- カテゴリを選択 --</option>';
 
-    // 「⭐よく使うワード」カテゴリを先頭に追加（CACHED_CONFIGから読み込み）
-    const saleswordConfig = window.CACHED_CONFIG?.['よく使うセールスワード'];
-    const frequentWords = saleswordConfig?.よく使う || [];
-
-    console.log('[setupCategoryDropdown] saleswordConfig:', saleswordConfig);
-    console.log('[setupCategoryDropdown] frequentWords:', frequentWords);
-
-    if (frequentWords.length > 0) {
+    // 「よく使う」カテゴリを先頭に追加（SALESWORD_DATAから読み込み）
+    if (SALESWORD_DATA.wordsByCategory && SALESWORD_DATA.wordsByCategory['よく使う']) {
       const option = document.createElement('option');
-      option.value = '⭐よく使うワード';
-      option.textContent = '⭐よく使うワード';
+      option.value = 'よく使う';
+      option.textContent = '⭐ よく使う';
       categorySelect.appendChild(option);
-
-      // SALESWORD_DATAにも追加（onSalesWordCategoryChangedで使用）
-      if (!SALESWORD_DATA.wordsByCategory) {
-        SALESWORD_DATA.wordsByCategory = {};
-      }
-      SALESWORD_DATA.wordsByCategory['⭐よく使うワード'] = frequentWords;
-      console.log(`✅ ⭐よく使うワード追加: ${frequentWords.length}件`);
+      console.log(`✅ よく使うワード追加: ${SALESWORD_DATA.wordsByCategory['よく使う'].length}件`);
     } else {
       console.log('⚠️ よく使うワードが設定されていません');
     }
@@ -4843,7 +4831,7 @@ window.updateLoadingProgress = function(percent, text) {
       });
     }
 
-    const totalCategories = (SALESWORD_DATA.categories?.length || 0) + (SALESWORD_DATA.wordsByCategory?.['⭐よく使うワード'] ? 1 : 0);
+    const totalCategories = (SALESWORD_DATA.categories?.length || 0) + (SALESWORD_DATA.wordsByCategory?.['よく使う'] ? 1 : 0);
     console.log(`✅ カテゴリプルダウン設定完了: ${totalCategories}件`);
 
     // キーワードプルダウンをリセット
@@ -4958,6 +4946,19 @@ window.updateLoadingProgress = function(percent, text) {
       if (window.CACHED_CONFIG) {
         clearInterval(intervalId);
         console.log('[waitForCachedConfigAndSetup] ✅ CACHED_CONFIG初期化完了（' + elapsedTime + 'ms経過）');
+
+        // CACHED_CONFIGから「よく使う」を取得してSALESWORD_DATAに追加
+        const saleswordConfig = window.CACHED_CONFIG['よく使うセールスワード'];
+        const frequentWords = saleswordConfig?.よく使う || [];
+
+        console.log('[waitForCachedConfigAndSetup] saleswordConfig:', saleswordConfig);
+        console.log('[waitForCachedConfigAndSetup] よく使うワード:', frequentWords);
+
+        if (frequentWords.length > 0) {
+          SALESWORD_DATA.wordsByCategory['よく使う'] = frequentWords;
+          console.log('[waitForCachedConfigAndSetup] ✅ SALESWORD_DATAに「よく使う」を追加:', frequentWords.length + '件');
+        }
+
         setupCategoryDropdown();
         applyDefaultSalesword();
         return;
@@ -4966,7 +4967,7 @@ window.updateLoadingProgress = function(percent, text) {
       // タイムアウト
       if (elapsedTime >= maxWaitTime) {
         clearInterval(intervalId);
-        console.warn('[waitForCachedConfigAndSetup] ⚠️ CACHED_CONFIG初期化タイムアウト（' + maxWaitTime + 'ms）、⭐よく使うワードなしでセットアップ');
+        console.warn('[waitForCachedConfigAndSetup] ⚠️ CACHED_CONFIG初期化タイムアウト（' + maxWaitTime + 'ms）、よく使うワードなしでセットアップ');
         setupCategoryDropdown();
       }
     }, checkInterval);
