@@ -123,18 +123,29 @@ async function postToSystemRoom(notificationData) {
     const systemRoomId = 'system';
     const messageId = `${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 
-    await db.collection('rooms').doc(systemRoomId).collection('messages').doc(messageId).set({
+    console.log('🔍 [DEBUG] postToSystemRoom開始');
+    console.log('🔍 [DEBUG] messageId:', messageId);
+    console.log('🔍 [DEBUG] notificationData:', JSON.stringify(notificationData));
+
+    const messageData = {
       id: messageId,
       text: notificationData.content,
       sender: notificationData.sender,
       timestamp: new Date(),
       deleted: false,
       type: 'system'
-    });
+    };
+
+    console.log('🔍 [DEBUG] messageData:', JSON.stringify(messageData));
+    console.log('🔍 [DEBUG] Firestore書き込み開始...');
+
+    await db.collection('rooms').doc(systemRoomId).collection('messages').doc(messageId).set(messageData);
 
     console.log('📨 [postToSystemRoom] システム通知ルーム投稿完了');
   } catch (error) {
     console.error('❌ [postToSystemRoom] エラー:', error);
+    console.error('❌ [postToSystemRoom] エラー詳細:', error.message);
+    console.error('❌ [postToSystemRoom] スタック:', error.stack);
   }
 }
 
