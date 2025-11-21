@@ -44,17 +44,22 @@ exports.onProductCreated = onDocumentCreated('products/{productId}', async (even
     const targetUsers = await getTargetUsers(notificationData.userName);
     console.log(`👥 [onProductCreated] 対象ユーザー: ${targetUsers.length}人`);
 
-    // 並列処理で高速化
-    await Promise.all([
-      // 1. システム通知ルームに投稿
+    // FCMプッシュ通知を最優先で送信（順次実行）
+    console.log('🚀 [onProductCreated] FCM送信開始（最優先）');
+    try {
+      await sendFCMNotifications(notificationData, targetUsers);
+      console.log('✅ [onProductCreated] FCM送信完了');
+    } catch (error) {
+      console.error('❌ [onProductCreated] FCM送信エラー:', error.message);
+    }
+
+    // その後、並列でシステム通知ルームと未読カウント更新
+    console.log('🚀 [onProductCreated] システム通知・未読カウント更新開始');
+    await Promise.allSettled([
       postToSystemRoom(notificationData),
-
-      // 2. FCMプッシュ通知送信
-      sendFCMNotifications(notificationData, targetUsers),
-
-      // 3. 未読カウント更新
       updateUnreadCounts(targetUsers)
     ]);
+    console.log('✅ [onProductCreated] すべての処理完了');
 
     const duration = Date.now() - startTime;
     console.log(`✅ [onProductCreated] 通知完了: ${duration}ms`);
@@ -101,12 +106,19 @@ async function getTargetUsers(excludeUser) {
     const usersSnapshot = await db.collection('users').get();
     const targetUsers = [];
 
+    console.log(`🔍 [getTargetUsers] 全ユーザー数: ${usersSnapshot.size}`);
+
     usersSnapshot.forEach(doc => {
       const userData = doc.data();
       const userName = userData.userName || userData.email;
 
+      console.log(`🔍 [getTargetUsers] ユーザー: ${doc.id}, userName: ${userName}, email: ${userData.email}`);
+
       if (userName && userName !== excludeUser && userName !== 'システム') {
         targetUsers.push(userName);
+        console.log(`✅ [getTargetUsers] 追加: ${userName}`);
+      } else {
+        console.log(`⏭️ [getTargetUsers] スキップ: ${userName} (excludeUser: ${excludeUser})`);
       }
     });
 
@@ -121,6 +133,7 @@ async function getTargetUsers(excludeUser) {
  * システム通知ルームに投稿
  */
 async function postToSystemRoom(notificationData) {
+  console.log('📨 [postToSystemRoom] 関数開始');
   try {
     const systemRoomId = 'system';
     const messageId = `${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
@@ -130,11 +143,25 @@ async function postToSystemRoom(notificationData) {
     console.log('🔍 [DEBUG] notificationData:', JSON.stringify(notificationData));
 
     // システムルーム存在確認と自動作成
+    console.log('🔍 [postToSystemRoom] systemRoomRef取得開始');
     const systemRoomRef = db.collection('rooms').doc(systemRoomId);
-    const systemRoomDoc = await systemRoomRef.get();
+
+    console.log('🔍 [postToSystemRoom] systemRoomDoc.get()開始');
+    let systemRoomDoc;
+    try {
+      systemRoomDoc = await Promise.race([
+        systemRoomRef.get(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore get() timeout')), 5000))
+      ]);
+      console.log('✅ [postToSystemRoom] systemRoomDoc.get()完了, exists:', systemRoomDoc.exists);
+    } catch (error) {
+      console.error('❌ [postToSystemRoom] systemRoomDoc.get()エラー:', error.message);
+      throw error;
+    }
 
     if (!systemRoomDoc.exists) {
       console.log('⚠️ [postToSystemRoom] システムルーム未作成、自動作成します');
+      console.log('🔍 [postToSystemRoom] systemRoomRef.set()開始');
       await systemRoomRef.set({
         id: 'system',
         name: 'システム通知',
@@ -148,6 +175,7 @@ async function postToSystemRoom(notificationData) {
       console.log('✅ [postToSystemRoom] システムルーム作成完了');
     } else {
       // 既存ルームの lastMessage を更新
+      console.log('🔍 [postToSystemRoom] systemRoomRef.update()開始');
       await systemRoomRef.update({
         lastMessageAt: new Date(),
         lastMessage: notificationData.content,
@@ -169,6 +197,7 @@ async function postToSystemRoom(notificationData) {
     console.log('🔍 [DEBUG] Firestore書き込み開始...');
 
     await db.collection('rooms').doc(systemRoomId).collection('messages').doc(messageId).set(messageData);
+    console.log('✅ [postToSystemRoom] Firestore書き込み完了');
 
     console.log('📨 [postToSystemRoom] システム通知ルーム投稿完了');
   } catch (error) {
@@ -182,6 +211,7 @@ async function postToSystemRoom(notificationData) {
  * FCMプッシュ通知送信
  */
 async function sendFCMNotifications(notificationData, targetUsers) {
+  console.log('🔔 [sendFCMNotifications] 関数開始');
   try {
     if (targetUsers.length === 0) {
       console.log('⏭️ [sendFCMNotifications] 対象ユーザーなし、スキップ');
@@ -190,19 +220,50 @@ async function sendFCMNotifications(notificationData, targetUsers) {
 
     console.log(`🔔 [sendFCMNotifications] FCM送信開始: ${targetUsers.length}人`);
 
-    // ユーザーごとのFCMトークンを取得
+    // ユーザーごとのアクティブデバイスからFCMトークンを取得
     const tokensPromises = targetUsers.map(async (userName) => {
       try {
-        const userDoc = await db.collection('users').doc(userName).get();
-        const fcmToken = userDoc.data()?.fcmToken;
-        return fcmToken ? { userName, token: fcmToken } : null;
+        console.log(`🔍 [sendFCMNotifications] デバイストークン取得試行: users/${userName}/devices`);
+
+        // devicesサブコレクションからアクティブなデバイスを取得
+        const devicesSnapshot = await Promise.race([
+          db.collection('users').doc(userName).collection('devices')
+            .where('active', '==', true)
+            .get(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`Firestore devices query timeout for ${userName}`)), 5000))
+        ]);
+
+        console.log(`✅ [sendFCMNotifications] デバイスクエリ完了: users/${userName}/devices (${devicesSnapshot.size}件)`);
+
+        if (devicesSnapshot.empty) {
+          console.log(`⚠️ [sendFCMNotifications] アクティブデバイスなし: ${userName}`);
+          return [];
+        }
+
+        // すべてのアクティブデバイスのトークンを取得
+        const userTokens = [];
+        devicesSnapshot.forEach(deviceDoc => {
+          const deviceData = deviceDoc.data();
+          const fcmToken = deviceData?.fcmToken;
+          const permission = deviceData?.permission || 'スタッフ';
+
+          if (fcmToken) {
+            console.log(`✅ [sendFCMNotifications] トークン取得成功: ${userName} (${permission}) → ${fcmToken.substring(0, 20)}...`);
+            userTokens.push({ userName, token: fcmToken, permission });
+          } else {
+            console.log(`⚠️ [sendFCMNotifications] トークンなし: ${userName} device=${deviceDoc.id}`);
+          }
+        });
+
+        return userTokens;
       } catch (error) {
-        console.error(`❌ [sendFCMNotifications] ユーザー${userName}のトークン取得エラー:`, error);
-        return null;
+        console.error(`❌ [sendFCMNotifications] ユーザー${userName}のデバイス取得エラー:`, error);
+        return [];
       }
     });
 
-    const tokensData = (await Promise.all(tokensPromises)).filter(data => data !== null);
+    // flat()で配列を平坦化（各ユーザーが複数デバイスを持つため）
+    const tokensData = (await Promise.all(tokensPromises)).flat().filter(data => data && data.token);
     const tokens = tokensData.map(data => data.token);
 
     if (tokens.length === 0) {
@@ -255,6 +316,7 @@ async function sendFCMNotifications(notificationData, targetUsers) {
  * 未読カウント更新
  */
 async function updateUnreadCounts(targetUsers) {
+  console.log('📊 [updateUnreadCounts] 関数開始');
   try {
     const systemRoomId = 'system';
     const batch = db.batch();

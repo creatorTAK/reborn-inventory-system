@@ -117,7 +117,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getMessaging, getToken } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
-    import { getFirestore, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, doc, setDoc, collection, addDoc, query, where, orderBy, getDocs, updateDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase 設定（firebase-messaging-sw.jsと同じ設定）
     const firebaseConfig = {
@@ -140,6 +140,14 @@
     window.firebaseDB = db;
     window.firestoreDoc = doc;
     window.firestoreSetDoc = setDoc;
+    window.firestoreCollection = collection;
+    window.firestoreAddDoc = addDoc;
+    window.firestoreQuery = query;
+    window.firestoreWhere = where;
+    window.firestoreOrderBy = orderBy;
+    window.firestoreGetDocs = getDocs;
+    window.firestoreUpdateDoc = updateDoc;
+    window.firestoreTimestamp = Timestamp;
 
     // VAPID公開鍵（Firebase Console > Cloud Messaging > Web Push certificates）
     const vapidKey = 'BLt5H1TPMi9OetYHgqoDXVoSkPQziC0Ulimr1-xv8rPObF693SCMWkzP8UhZLMaZzYGd_jP5V3JugDTROjKInbY';
@@ -270,8 +278,8 @@
           return;
         }
 
-        // GASにトークンを保存
-        await saveFCMTokenToGAS(token);
+        // Firestoreにトークンを保存
+        await saveFCMTokenToFirestore(token);
       } catch (error) {
         console.error('❌ FCMトークン取得エラー:', error);
         alert('❌ FCMトークン取得エラー:\n\n' + error.message + '\n\n詳細はコンソールを確認してください。');
@@ -294,64 +302,71 @@
       }
     }
 
-    // FCMトークンをGASとFirestoreに保存（チーム利用対応: デバイス情報も送信）
-    async function saveFCMTokenToGAS(token) {
+    // FCMトークンをFirestoreに保存（デバイス管理: 最大2台まで）
+    async function saveFCMTokenToFirestore(token) {
       try {
-        console.log('🔄 FCMトークンをGAS・Firestoreに保存中...');
+        console.log('🔄 Firestore devices サブコレクションに保存開始...');
 
         // デバイス情報を取得
         const deviceInfo = getDeviceInfo();
         console.log('📱 デバイス情報:', deviceInfo);
 
-        // GASに保存
-        const url = GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(token) +
-                   (deviceInfo ? '&deviceInfo=' + encodeURIComponent(JSON.stringify(deviceInfo)) : '');
-        console.log('📤 リクエストURL:', url);
+        // localStorageからユーザー情報と権限を取得
+        const currentUserEmail = localStorage.getItem('userEmail');
+        const currentUserName = localStorage.getItem('userName');
+        const userPermission = localStorage.getItem('userPermission') || 'スタッフ';
 
-        const response = await fetch(url);
-        console.log('📥 レスポンス受信:', response.status);
-
-        const result = await response.json();
-        console.log('📋 結果:', result);
-
-        if (result.status === 'success') {
-          console.log('✅ FCMトークンをGASに保存しました');
-
-          // Firestoreにも保存（Firebase Functions用）
-          try {
-            const currentUserEmail = localStorage.getItem('userEmail');
-            const currentUserName = localStorage.getItem('userName');
-
-            if (currentUserEmail && currentUserName) {
-              const db = window.firebaseDB;
-              const docRef = window.firestoreDoc;
-              const setDocFunc = window.firestoreSetDoc;
-
-              if (db && docRef && setDocFunc) {
-                const userDocRef = docRef(db, 'users', currentUserName);
-                await setDocFunc(userDocRef, {
-                  fcmToken: token,
-                  lastUpdated: new Date()
-                }, { merge: true });
-
-                console.log('✅ FCMトークンをFirestoreに保存しました:', currentUserName);
-              } else {
-                console.error('❌ Firestore初期化エラー: db, doc, setDocが未定義');
-              }
-            } else {
-              console.warn('⚠️ ユーザー情報が取得できないため、Firestoreへの保存をスキップ');
-            }
-          } catch (firestoreError) {
-            console.error('❌ Firestore保存エラー:', firestoreError);
-            // Firestore保存失敗してもGAS保存は成功しているので続行
-          }
-
-          alert('✅ 通知設定が完了しました！\n\n商品登録時に通知が届くようになります。');
-        } else {
-          const errorMsg = '❌ FCMトークン保存失敗: ' + result.message;
-          console.error(errorMsg);
-          alert(errorMsg);
+        if (!currentUserName || !token) {
+          throw new Error('ユーザー名またはトークンが取得できません');
         }
+
+        console.log('👤 ユーザー名:', currentUserName);
+        console.log('🔐 権限:', userPermission);
+
+        const db = window.firebaseDB;
+        const collectionFunc = window.firestoreCollection;
+        const addDocFunc = window.firestoreAddDoc;
+        const queryFunc = window.firestoreQuery;
+        const whereFunc = window.firestoreWhere;
+        const orderByFunc = window.firestoreOrderBy;
+        const getDocsFunc = window.firestoreGetDocs;
+        const updateDocFunc = window.firestoreUpdateDoc;
+
+        if (!db || !collectionFunc || !addDocFunc || !queryFunc || !whereFunc || !orderByFunc || !getDocsFunc || !updateDocFunc) {
+          throw new Error('Firestore関数が初期化されていません');
+        }
+
+        // 1. アクティブなデバイスを取得（最大2台まで）
+        const devicesRef = collectionFunc(db, 'users', currentUserName, 'devices');
+        const activeQuery = queryFunc(devicesRef, whereFunc('active', '==', true), orderByFunc('registeredAt', 'asc'));
+        const activeDevices = await getDocsFunc(activeQuery);
+
+        console.log(`📱 現在のアクティブデバイス数: ${activeDevices.size}`);
+
+        // 2. 2台以上ある場合、最も古いデバイスを非アクティブに
+        if (activeDevices.size >= 2) {
+          const oldestDevice = activeDevices.docs[0];
+          await updateDocFunc(oldestDevice.ref, { active: false });
+          console.log(`⏸️ 最も古いデバイスを非アクティブ化: ${oldestDevice.id}`);
+        }
+
+        // 3. 新しいデバイスを追加
+        const newDevice = {
+          fcmToken: token,
+          deviceInfo: deviceInfo,
+          active: true,
+          permission: userPermission,
+          registeredAt: new Date(),
+          lastUsedAt: new Date()
+        };
+
+        const deviceDocRef = await addDocFunc(devicesRef, newDevice);
+        console.log('✅ FCMトークンをFirestoreに保存しました:', deviceDocRef.id);
+        console.log('   - ユーザー名:', currentUserName);
+        console.log('   - 権限:', userPermission);
+        console.log('   - アクティブデバイス数:', activeDevices.size >= 2 ? 2 : activeDevices.size + 1);
+
+        alert('✅ 通知設定が完了しました！\n\n商品登録時に通知が届くようになります。');
       } catch (error) {
         console.error('❌ FCMトークン保存エラー:', error);
         alert('❌ FCMトークン保存エラー:\n\n' + error.message + '\n\n詳細はコンソールを確認してください。');

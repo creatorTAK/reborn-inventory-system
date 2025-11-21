@@ -967,7 +967,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getMessaging, onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
-    import { getFirestore, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, doc, setDoc, collection, addDoc, query, where, orderBy, getDocs, updateDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase 設定（reborn-chat に統一）
     const firebaseConfig = {
@@ -990,6 +990,14 @@
       window.firebaseDB = db;
       window.firestoreDoc = doc;
       window.firestoreSetDoc = setDoc;
+      window.firestoreCollection = collection;
+      window.firestoreAddDoc = addDoc;
+      window.firestoreQuery = query;
+      window.firestoreWhere = where;
+      window.firestoreOrderBy = orderBy;
+      window.firestoreGetDocs = getDocs;
+      window.firestoreUpdateDoc = updateDoc;
+      window.firestoreTimestamp = Timestamp;
 
       // ★ フォアグラウンド通知対応 ★
       // アプリを開いている状態で通知を受信した時の処理
@@ -1648,61 +1656,56 @@
           console.log('🔐 権限:', userPermission);
           console.log('📧 メールアドレス:', userEmail);
 
-          // 通知設定（通知を許可している場合はtrue）
-          const notificationEnabled = true;
-          const notificationSound = true;
-          console.log('🔔 通知有効:', notificationEnabled);
-          console.log('🔊 通知音:', notificationSound);
-
-          // GASにトークン、デバイス情報、ユーザーID、ユーザー名、メールアドレス、権限、通知設定を送信
-          const response = await fetch(GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(currentToken) +
-                                      '&deviceInfo=' + encodeURIComponent(JSON.stringify(deviceInfo)) +
-                                      '&userId=' + encodeURIComponent(userEmail) +
-                                      '&userName=' + encodeURIComponent(userName) +
-                                      '&email=' + encodeURIComponent(userEmail) +
-                                      '&permission=' + encodeURIComponent(userPermission) +
-                                      '&notificationEnabled=' + encodeURIComponent(notificationEnabled) +
-                                      '&notificationSound=' + encodeURIComponent(notificationSound));
-
-          console.log('📡 FCM登録レスポンス:', response.status, response.statusText);
-          const responseText = await response.text();
-          console.log('📄 FCM登録レスポンス内容:', responseText);
-
-          if (response.ok) {
-            const data = JSON.parse(responseText);
-
-            // ✅ サーバー側のバリデーション結果をチェック
-            if (data.success === false) {
-              throw new Error(data.message || '登録に失敗しました');
+          // Firestoreに保存（Firebase Functions用）
+          try {
+            if (!userName || !currentToken) {
+              throw new Error('ユーザー名またはトークンが取得できません');
             }
 
-            console.log('✅ FCMトークンをGASに保存しました');
+            console.log('🔄 Firestore devices サブコレクションに保存開始...');
 
-            // Firestoreにも保存（Firebase Functions用）
-            try {
-              if (userName && currentToken) {
-                const db = window.firebaseDB;
-                const docRef = window.firestoreDoc;
-                const setDocFunc = window.firestoreSetDoc;
+            const db = window.firebaseDB;
+            const collectionFunc = window.firestoreCollection;
+            const addDocFunc = window.firestoreAddDoc;
+            const queryFunc = window.firestoreQuery;
+            const whereFunc = window.firestoreWhere;
+            const orderByFunc = window.firestoreOrderBy;
+            const getDocsFunc = window.firestoreGetDocs;
+            const updateDocFunc = window.firestoreUpdateDoc;
 
-                if (db && docRef && setDocFunc) {
-                  const userDocRef = docRef(db, 'users', userName);
-                  await setDocFunc(userDocRef, {
-                    fcmToken: currentToken,
-                    lastUpdated: new Date()
-                  }, { merge: true });
-
-                  console.log('✅ FCMトークンをFirestoreに保存しました:', userName);
-                } else {
-                  console.error('❌ Firestore初期化エラー: db, doc, setDocが未定義');
-                }
-              } else {
-                console.warn('⚠️ ユーザー情報またはトークンが取得できないため、Firestoreへの保存をスキップ');
-              }
-            } catch (firestoreError) {
-              console.error('❌ Firestore保存エラー:', firestoreError);
-              // Firestore保存失敗してもGAS保存は成功しているので続行
+            if (!db || !collectionFunc || !addDocFunc || !queryFunc || !whereFunc || !orderByFunc || !getDocsFunc || !updateDocFunc) {
+              throw new Error('Firestore関数が初期化されていません');
             }
+
+            // 1. アクティブなデバイスを取得（最大2台まで）
+            const devicesRef = collectionFunc(db, 'users', userName, 'devices');
+            const activeQuery = queryFunc(devicesRef, whereFunc('active', '==', true), orderByFunc('registeredAt', 'asc'));
+            const activeDevices = await getDocsFunc(activeQuery);
+
+            console.log(`📱 現在のアクティブデバイス数: ${activeDevices.size}`);
+
+            // 2. 2台以上ある場合、最も古いデバイスを非アクティブに
+            if (activeDevices.size >= 2) {
+              const oldestDevice = activeDevices.docs[0];
+              await updateDocFunc(oldestDevice.ref, { active: false });
+              console.log(`⏸️ 最も古いデバイスを非アクティブ化: ${oldestDevice.id}`);
+            }
+
+            // 3. 新しいデバイスを追加
+            const newDevice = {
+              fcmToken: currentToken,
+              deviceInfo: deviceInfo,
+              active: true,
+              permission: userPermission,
+              registeredAt: new Date(),
+              lastUsedAt: new Date()
+            };
+
+            const deviceDocRef = await addDocFunc(devicesRef, newDevice);
+            console.log('✅ FCMトークンをFirestoreに保存しました:', deviceDocRef.id);
+            console.log('   - ユーザー名:', userName);
+            console.log('   - 権限:', userPermission);
+            console.log('   - アクティブデバイス数:', activeDevices.size >= 2 ? 2 : activeDevices.size + 1);
 
             resultDiv.textContent = '✅ FCM登録が完了しました！\n\n下の「アプリを開く」ボタンを押してください。\n\n※ 通知テストは任意です（スキップ可）';
             resultDiv.className = 'step-result success';
@@ -1720,11 +1723,14 @@
                 startChatUnreadListener();
               }, 1000); // 1秒後に実行（ユーザー名設定が完了するまで待機）
             }
-          } else {
-            throw new Error('HTTP ' + response.status);
+          } catch (firestoreError) {
+            console.error('❌ Firestore保存エラー:', firestoreError);
+            resultDiv.textContent = '❌ 登録失敗\n\nエラー: ' + firestoreError.message;
+            resultDiv.className = 'step-result error';
           }
         } else {
-          throw new Error('トークンの取得に失敗しました');
+          resultDiv.textContent = '❌ トークンの取得に失敗しました';
+          resultDiv.className = 'step-result error';
         }
       } catch (error) {
         resultDiv.textContent = '❌ 登録失敗\n\nエラー: ' + error.message;
