@@ -14,24 +14,28 @@
  *   - order: 表示順序
  */
 
+// Firestore REST API設定
+const SALESWORDS_FIRESTORE_PROJECT_ID = 'reborn-chat';
+const SALESWORDS_FIRESTORE_BASE_URL = `https://firestore.googleapis.com/v1/projects/${SALESWORDS_FIRESTORE_PROJECT_ID}/databases/(default)/documents`;
+
 function migrateSalesWordsToFirestore() {
   try {
-    console.log('=== セールスワードマスタFirestore移行開始 ===');
+    Logger.log('=== セールスワードマスタFirestore移行開始 ===');
 
     // 1. スプレッドシートからデータ取得
     const salesWordData = getSalesWordData();
 
     if (!salesWordData || !salesWordData.categories || salesWordData.categories.length === 0) {
-      console.error('❌ セールスワードデータが取得できませんでした');
+      Logger.log('❌ セールスワードデータが取得できませんでした');
       return;
     }
 
-    console.log('✅ スプレッドシートからデータ取得成功');
-    console.log('カテゴリ数:', salesWordData.categories.length);
-    console.log('カテゴリ一覧:', salesWordData.categories);
+    Logger.log('✅ スプレッドシートからデータ取得成功');
+    Logger.log('カテゴリ数: ' + salesWordData.categories.length);
+    Logger.log('カテゴリ一覧: ' + salesWordData.categories.join(', '));
 
-    // 2. Firestoreにデータを保存
-    const firestore = getFirestore();
+    // 2. Firestoreにデータを保存（REST API使用）
+    const accessToken = ScriptApp.getOAuthToken();
     let successCount = 0;
     let errorCount = 0;
 
@@ -39,35 +43,61 @@ function migrateSalesWordsToFirestore() {
       try {
         const words = salesWordData.wordsByCategory[category] || [];
 
-        const docData = {
-          category: category,
-          words: words,
-          order: index + 1,
-          updatedAt: new Date().toISOString()
+        // Firestore REST API用のデータ構造
+        const firestoreDoc = {
+          fields: {
+            category: { stringValue: category },
+            words: {
+              arrayValue: {
+                values: words.map(word => ({ stringValue: word }))
+              }
+            },
+            order: { integerValue: index + 1 },
+            updatedAt: { stringValue: new Date().toISOString() }
+          }
         };
 
-        // Firestoreに保存（カテゴリ名をドキュメントIDとして使用）
-        const docId = category; // 例: "価格・セール"
-        firestore.collection('saleswords').doc(docId).set(docData);
+        // ドキュメントIDはカテゴリ名（URLエンコード）
+        const docId = encodeURIComponent(category);
+        const url = `${SALESWORDS_FIRESTORE_BASE_URL}/saleswords/${docId}`;
 
-        console.log(`✅ [${index + 1}/${salesWordData.categories.length}] ${category}: ${words.length}件のワード`);
-        successCount++;
+        const options = {
+          method: 'patch',
+          contentType: 'application/json',
+          headers: {
+            'Authorization': 'Bearer ' + accessToken
+          },
+          payload: JSON.stringify(firestoreDoc),
+          muteHttpExceptions: true
+        };
+
+        const response = UrlFetchApp.fetch(url, options);
+        const statusCode = response.getResponseCode();
+
+        if (statusCode === 200) {
+          Logger.log(`✅ [${index + 1}/${salesWordData.categories.length}] ${category}: ${words.length}件のワード`);
+          successCount++;
+        } else {
+          Logger.log(`❌ [${index + 1}/${salesWordData.categories.length}] ${category} 保存失敗 (HTTP ${statusCode})`);
+          Logger.log(response.getContentText());
+          errorCount++;
+        }
 
       } catch (error) {
-        console.error(`❌ ${category} の保存エラー:`, error);
+        Logger.log(`❌ ${category} の保存エラー: ${error}`);
         errorCount++;
       }
     });
 
-    console.log('=== 移行完了 ===');
-    console.log('成功:', successCount, '件');
-    console.log('失敗:', errorCount, '件');
+    Logger.log('=== 移行完了 ===');
+    Logger.log('成功: ' + successCount + '件');
+    Logger.log('失敗: ' + errorCount + '件');
 
     // 3. 移行結果をスプレッドシートに記録
     recordMigrationResult('saleswords', successCount, errorCount);
 
   } catch (error) {
-    console.error('❌ 移行処理エラー:', error);
+    Logger.log('❌ 移行処理エラー: ' + error);
   }
 }
 
@@ -92,24 +122,44 @@ function recordMigrationResult(collectionName, successCount, errorCount) {
       errorCount === 0 ? '正常終了' : 'エラーあり'
     ]);
 
-    console.log('✅ 移行ログ記録完了');
+    Logger.log('✅ 移行ログ記録完了');
 
   } catch (error) {
-    console.error('❌ 移行ログ記録エラー:', error);
+    Logger.log('❌ 移行ログ記録エラー: ' + error);
   }
 }
 
 /**
- * Firestoreから読み込みテスト
+ * Firestoreから読み込みテスト（REST API使用）
  */
 function testReadSalesWordsFromFirestore() {
   try {
-    console.log('=== Firestore読み込みテスト開始 ===');
+    Logger.log('=== Firestore読み込みテスト開始 ===');
 
-    const firestore = getFirestore();
-    const docs = firestore.collection('saleswords').orderBy('order').get();
+    const accessToken = ScriptApp.getOAuthToken();
+    const url = `${SALESWORDS_FIRESTORE_BASE_URL}/saleswords?orderBy=order`;
 
-    console.log('取得件数:', docs.length);
+    const options = {
+      method: 'get',
+      headers: {
+        'Authorization': 'Bearer ' + accessToken
+      },
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(url, options);
+    const statusCode = response.getResponseCode();
+
+    if (statusCode !== 200) {
+      Logger.log('❌ Firestore読み込み失敗 (HTTP ' + statusCode + ')');
+      Logger.log(response.getContentText());
+      return;
+    }
+
+    const data = JSON.parse(response.getContentText());
+    const documents = data.documents || [];
+
+    Logger.log('取得件数: ' + documents.length);
 
     const result = {
       categories: [],
@@ -117,20 +167,23 @@ function testReadSalesWordsFromFirestore() {
       allWords: []
     };
 
-    docs.forEach(doc => {
-      const data = doc.data();
-      result.categories.push(data.category);
-      result.wordsByCategory[data.category] = data.words;
-      result.allWords = result.allWords.concat(data.words);
+    documents.forEach(doc => {
+      const fields = doc.fields;
+      const category = fields.category.stringValue;
+      const words = (fields.words.arrayValue.values || []).map(v => v.stringValue);
+
+      result.categories.push(category);
+      result.wordsByCategory[category] = words;
+      result.allWords = result.allWords.concat(words);
     });
 
-    console.log('カテゴリ一覧:', result.categories);
-    console.log('全ワード数:', result.allWords.length);
+    Logger.log('カテゴリ一覧: ' + result.categories.join(', '));
+    Logger.log('全ワード数: ' + result.allWords.length);
 
-    console.log('=== テスト完了 ===');
+    Logger.log('=== テスト完了 ===');
     return result;
 
   } catch (error) {
-    console.error('❌ 読み込みテストエラー:', error);
+    Logger.log('❌ 読み込みテストエラー: ' + error);
   }
 }

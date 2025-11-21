@@ -9,8 +9,8 @@
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <!-- REBORN Brand Colors & Theme -->
-  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-brand-colors.css?v=0bd1a9b">
-  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
+  <link rel="stylesheet" href="/css/reborn-brand-colors.css?v=0bd1a9b">
+  <link rel="stylesheet" href="/css/reborn-theme.css?v=0bd1a9b">
   <style>
     * {
       margin: 0;
@@ -505,13 +505,30 @@
   </div>
 
   <!-- Firestore API Wrapper (ARCH-001 Phase 2) -->
-  <script type="module" src="https://www.reborn-inventory.com/js/firestore-api.js?v=850"></script>
+  <script type="module" src="/js/firestore-api.js?v=850"></script>
 
   <!-- GAS API Wrapper (ARCH-001 Phase 2) -->
-  <script src="https://www.reborn-inventory.com/js/api.js?v=850"></script>
+  <script src="/js/api.js?v=850"></script>
 
   <!-- Firebase SDK -->
   <script type="module">
+    // 🚨 緊急デバッグモード: エラーを画面に表示
+    window.addEventListener('error', (e) => {
+      const errorDiv = document.createElement('div');
+      errorDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:20px;z-index:9999;font-size:14px;';
+      errorDiv.innerHTML = `<strong>エラー:</strong> ${e.message}<br><small>${e.filename}:${e.lineno}</small>`;
+      document.body.appendChild(errorDiv);
+      console.error('Global error:', e);
+    });
+
+    window.addEventListener('unhandledrejection', (e) => {
+      const errorDiv = document.createElement('div');
+      errorDiv.style.cssText = 'position:fixed;top:60px;left:0;right:0;background:orange;color:white;padding:20px;z-index:9999;font-size:14px;';
+      errorDiv.innerHTML = `<strong>Promise拒否:</strong> ${e.reason}`;
+      document.body.appendChild(errorDiv);
+      console.error('Unhandled rejection:', e);
+    });
+
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getFirestore, collection, doc, query, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, where, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
@@ -542,19 +559,20 @@
     // グローバル変数
     let currentUserName = '';
     let usersCache = []; // ユーザーアイコン表示用キャッシュ
+    let unsubscribeRooms = null; // Firestoreリスナーの解除用
+    let startListeningCallCount = 0; // startListening()の呼び出し回数
 
-    // GASテンプレート変数をJavaScript変数に変換
-    const isPWAFlag        = <?= JSON.stringify(!!isPWA) ?>;
-    const pwaUserNameParam = <?= JSON.stringify(typeof pwaUserName !== 'undefined' ? pwaUserName : "") ?>;
-    const gasUserNameParam = <?= JSON.stringify(typeof gasUserName !== 'undefined' ? gasUserName : "") ?>;
-    // parentOrigin と pmToken はシングルクォートで直接展開（JSON.stringify不要）
-    const pwaParentOriginParam = '<?= typeof pwaParentOrigin !== "undefined" ? pwaParentOrigin : "" ?>';
-    const pwaPmTokenParam = '<?= typeof pwaPmToken !== "undefined" ? pwaPmToken : "" ?>';
-    const gasBaseUrlParam  = '<?= typeof gasBaseUrl !== "undefined" ? gasBaseUrl : "" ?>';  // ✅ API呼び出し用URL
+    // PWA版：URLパラメータから取得（GASテンプレート変数は使用しない）
+    const isPWAFlag        = true;  // PWA版として動作
+    const pwaUserNameParam = getQueryParam('userName') || '';
+    const gasUserNameParam = '';
+    const pwaParentOriginParam = window.location.origin;  // PWA版のorigin
+    const pwaPmTokenParam = '';
+    const gasBaseUrlParam  = '';
 
-    // parentOrigin と pmToken を設定（URLパラメータ → テンプレート変数 → デフォルト値の優先順）
-    const parentOrigin = getQueryParam('parentOrigin') || pwaParentOriginParam || 'https://www.reborn-inventory.com';
-    const pmToken = getQueryParam('pmToken') || pwaPmTokenParam || '';
+    // parentOrigin と pmToken を設定（PWA版ではURLパラメータから取得）
+    const parentOrigin = getQueryParam('parentOrigin') || window.location.origin;
+    const pmToken = getQueryParam('pmToken') || '';
 
     // デバッグログ
     console.log('[Rooms List] デバッグ情報:');
@@ -650,12 +668,32 @@
 
     // トークルーム一覧をリアルタイムリスニング
     function startListening() {
+      startListeningCallCount++;
+      console.log(`[Firestore] startListening() 呼び出し回数: ${startListeningCallCount}`);
+
+      // 🚨 デバッグ: ステータス表示
+      const container = document.getElementById('roomsContainer');
+      if (container) {
+        container.innerHTML = `<div style="padding:20px;background:#e3f2fd;color:#1976d2;border-radius:8px;">
+          <strong>デバッグ:</strong> startListening()呼び出し回数: ${startListeningCallCount}<br>
+          <small>Firestoreリスナー登録中...</small>
+        </div>`;
+      }
+
+      // 既存のリスナーを解除（重複登録防止）
+      if (unsubscribeRooms) {
+        console.log('[Firestore] 既存リスナー解除');
+        unsubscribeRooms();
+        unsubscribeRooms = null;
+      }
+
       const q = query(
         collection(db, 'rooms'),
         orderBy('lastMessageAt', 'desc')
       );
 
-      onSnapshot(q, (snapshot) => {
+      console.log('[Firestore] 新規リスナー登録');
+      unsubscribeRooms = onSnapshot(q, (snapshot) => {
         console.log('[Firestore] ルーム更新:', snapshot.size + '件');
 
         const container = document.getElementById('roomsContainer');
@@ -673,19 +711,32 @@
           return;
         }
 
-        // デバッグ情報（簡略化）
-        console.log('[Filter] currentUserName:', currentUserName, '全ルーム数:', snapshot.size);
+        // デバッグ情報
+        console.log('[Filter] currentUserName:', currentUserName);
+        console.log('[Filter] 全ルーム数:', snapshot.size);
 
         let visibleRoomCount = 0;
         snapshot.forEach((doc) => {
           const room = { id: doc.id, ...doc.data() };
 
+          // デバッグ: 各ルームの情報を出力
+          console.log('[Filter] ルーム検証:', {
+            id: room.id,
+            name: room.name,
+            type: room.type,
+            members: room.members,
+            includes: room.members?.includes(currentUserName)
+          });
+
           // フィルタリング: 自分が参加しているルームのみ表示
           // - type='system'のルームは全員に表示
           // - それ以外は members配列に自分のユーザー名が含まれる場合のみ表示
           if (room.type === 'system' || (room.members && room.members.includes(currentUserName))) {
+            console.log('[Filter] ✅ ルーム表示:', room.id, room.name);
             appendRoom(room);
             visibleRoomCount++;
+          } else {
+            console.log('[Filter] ❌ ルームをスキップ:', room.id, room.name, 'members:', room.members);
           }
         });
 
@@ -923,12 +974,12 @@
 
       // チャット画面に遷移（roomIdをパラメータで渡す）
       if (isGAS) {
-        // GAS版: 同じウィンドウで開く
-        window.location.href = `<?= ScriptApp.getService().getUrl() ?>?page=chat&roomId=${roomId}`;
+        // GAS版: 同じウィンドウで開く（PWA版では使用されない）
+        console.warn('[Rooms List] GAS mode is not supported in PWA');
       } else {
         // PWA版: window.top.postMessageで親ウィンドウに送信
         // targetOriginが空文字列の場合はデフォルト値を使用（SyntaxError対策）
-        const targetOrigin = parentOrigin || 'https://www.reborn-inventory.com';
+        const targetOrigin = parentOrigin || window.location.origin;
 
         console.log('[Rooms List] postMessage送信:', {
           page: 'chat',

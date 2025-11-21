@@ -8,10 +8,12 @@
 const {onDocumentCreated} = require('firebase-functions/v2/firestore');
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
+const {getMessaging} = require('firebase-admin/messaging');
 
 // Firebase Admin初期化
 initializeApp();
 const db = getFirestore();
+const messaging = getMessaging();
 
 /**
  * 商品登録時の通知処理
@@ -127,6 +129,33 @@ async function postToSystemRoom(notificationData) {
     console.log('🔍 [DEBUG] messageId:', messageId);
     console.log('🔍 [DEBUG] notificationData:', JSON.stringify(notificationData));
 
+    // システムルーム存在確認と自動作成
+    const systemRoomRef = db.collection('rooms').doc(systemRoomId);
+    const systemRoomDoc = await systemRoomRef.get();
+
+    if (!systemRoomDoc.exists) {
+      console.log('⚠️ [postToSystemRoom] システムルーム未作成、自動作成します');
+      await systemRoomRef.set({
+        id: 'system',
+        name: 'システム通知',
+        type: 'system',
+        members: [], // 全員が参加
+        createdAt: new Date(),
+        lastMessageAt: new Date(),
+        lastMessage: notificationData.content,
+        lastMessageSender: notificationData.sender
+      });
+      console.log('✅ [postToSystemRoom] システムルーム作成完了');
+    } else {
+      // 既存ルームの lastMessage を更新
+      await systemRoomRef.update({
+        lastMessageAt: new Date(),
+        lastMessage: notificationData.content,
+        lastMessageSender: notificationData.sender
+      });
+      console.log('✅ [postToSystemRoom] システムルーム更新完了');
+    }
+
     const messageData = {
       id: messageId,
       text: notificationData.content,
@@ -154,10 +183,69 @@ async function postToSystemRoom(notificationData) {
  */
 async function sendFCMNotifications(notificationData, targetUsers) {
   try {
-    // TODO: FCM送信実装
-    // 現在はFirestore投稿のみ実装
-    // FCM実装は次のステップで追加
-    console.log('⏳ [sendFCMNotifications] FCM送信は次フェーズで実装');
+    if (targetUsers.length === 0) {
+      console.log('⏭️ [sendFCMNotifications] 対象ユーザーなし、スキップ');
+      return;
+    }
+
+    console.log(`🔔 [sendFCMNotifications] FCM送信開始: ${targetUsers.length}人`);
+
+    // ユーザーごとのFCMトークンを取得
+    const tokensPromises = targetUsers.map(async (userName) => {
+      try {
+        const userDoc = await db.collection('users').doc(userName).get();
+        const fcmToken = userDoc.data()?.fcmToken;
+        return fcmToken ? { userName, token: fcmToken } : null;
+      } catch (error) {
+        console.error(`❌ [sendFCMNotifications] ユーザー${userName}のトークン取得エラー:`, error);
+        return null;
+      }
+    });
+
+    const tokensData = (await Promise.all(tokensPromises)).filter(data => data !== null);
+    const tokens = tokensData.map(data => data.token);
+
+    if (tokens.length === 0) {
+      console.log('⏭️ [sendFCMNotifications] FCMトークンなし、スキップ');
+      return;
+    }
+
+    console.log(`📨 [sendFCMNotifications] 送信先トークン数: ${tokens.length}`);
+
+    // FCM通知メッセージ作成
+    const message = {
+      notification: {
+        title: notificationData.title,
+        body: `${notificationData.managementNumber} ${notificationData.productName}`
+      },
+      data: {
+        type: notificationData.type,
+        managementNumber: notificationData.managementNumber,
+        productName: notificationData.productName,
+        userName: notificationData.userName,
+        timestamp: notificationData.timestamp
+      }
+    };
+
+    // 複数のトークンに送信
+    const sendPromises = tokens.map(async (token) => {
+      try {
+        await messaging.send({
+          ...message,
+          token: token
+        });
+        console.log(`✅ [sendFCMNotifications] 送信成功: ${token.substring(0, 20)}...`);
+        return { success: true };
+      } catch (error) {
+        console.error(`❌ [sendFCMNotifications] 送信失敗: ${token.substring(0, 20)}...`, error.message);
+        return { success: false, error: error.message };
+      }
+    });
+
+    const results = await Promise.all(sendPromises);
+    const successCount = results.filter(r => r.success).length;
+    console.log(`📊 [sendFCMNotifications] 送信結果: ${successCount}/${tokens.length}件成功`);
+
   } catch (error) {
     console.error('❌ [sendFCMNotifications] エラー:', error);
   }
@@ -174,7 +262,7 @@ async function updateUnreadCounts(targetUsers) {
     targetUsers.forEach(userName => {
       const unreadRef = db.collection('rooms').doc(systemRoomId).collection('unreadCounts').doc(userName);
       batch.set(unreadRef, {
-        count: FieldValue.increment(1),
+        unreadCount: FieldValue.increment(1), // PWA側と統一: count → unreadCount
         lastUpdated: new Date()
       }, { merge: true });
     });

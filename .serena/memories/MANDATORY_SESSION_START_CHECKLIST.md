@@ -12,6 +12,15 @@ Read: /Users/yasuhirotakushi/Desktop/reborn-project/docs/issues-summary.md
 - 今回の作業に関連するIssueがないか確認
 - **詳細が必要な場合のみ** issues.md から該当Issueを読む
 
+**🚨 重要: issues.md全体読み込み禁止**
+```
+❌ Read("docs/issues.md")  # 絶対に禁止！25,549トークン消費
+✅ Grep("ISSUE-ID", path="docs/issues.md")  # 必要部分だけ検索
+```
+- **理由**: issues.mdは25,549トークン（1回の上限25,000超え）
+- **対策**: Grepで部分検索、replace_regexで部分編集のみ
+- **参照**: ISSUES_MANAGEMENT_RULES メモリー（詳細ルール）
+
 ### 2. TDD_POLICY.mdを読む
 ```
 Read: /Users/yasuhirotakushi/Desktop/reborn-project/docs/TDD_POLICY.md
@@ -26,6 +35,14 @@ Serena Memory: DEPLOYMENT_RULES
 - **デプロイは既存ID更新方式**（効率化）
 - デプロイフロー確認（2ステップ）
 - デプロイチェックリスト確認
+
+### 3.5. **Firestoreセキュリティルールの場所を確認**
+```
+File: docs/firestore.rules
+```
+- **新しいコレクション追加時は必ずセキュリティルールも追加**
+- デプロイコマンド: `npx firebase deploy --only firestore:rules --project reborn-chat`
+- 追加後は必ずデプロイを実行（権限エラー防止）
 
 ### 4. **🆕 Cloudflare Pages デプロイ構造を読む（必須）**
 ```
@@ -105,6 +122,7 @@ Grep: "AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHM
 - **issues-summary.mdとissues.mdの不整合を放置**
 - **PWA内リンクで相対パスを使用**（予測不可能な挙動）
 - **PWA内リンクでサブディレクトリパスを使用**（404エラー）
+- **🚨 issues.md全体をReadで読み込む**（25,549トークン消費、上限超えエラー）
 
 ---
 
@@ -118,8 +136,9 @@ Grep: "AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHM
 - **issues.mdが肥大化してセッション開始時に読み込めなくなる（1回発生済み → サマリー方式で解決）**
 - **issues-summary.mdとissues.mdが不整合になり、誤った情報で開発を進める**
 - **🆕 PWAのパス構造を誤解して404エラー（1回発生済み → 2025-11-06解決）**
+- **🚨 issues.md全体読み込みで25,000トークン超過エラー（2025-11-19発生 → 禁止ルール追加）**
 
 ---
 
-**最終更新: 2025-11-06**
-**更新内容: Cloudflare Pagesデプロイ構造チェックを追加**
+**最終更新: 2025-11-19**
+**更新内容: issues.md全体読み込み禁止ルール追加、ISSUES_MANAGEMENT_RULES参照追加**

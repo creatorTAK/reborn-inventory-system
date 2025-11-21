@@ -1094,6 +1094,10 @@ function doGet(e) {
             .setHeader('Access-Control-Allow-Headers', 'Content-Type');
         }
 
+      case 'subscribeFCM':
+        // FCM通知登録（スプレッドシート + Firestore）
+        return subscribeFCMAPI(e.parameter);
+
       default:
         return jsonErrorResponse(`未対応のアクション: ${action}`);
     }
@@ -2687,5 +2691,127 @@ function getOperatorNameByFCMToken(fcmToken) {
         error: error.message
       };
     }
+  }
+}
+
+/**
+ * FCM通知登録API（スプレッドシート + Firestore保存）
+ * @param {Object} params - リクエストパラメータ
+ * @return {ContentService} JSON形式のレスポンス
+ */
+function subscribeFCMAPI(params) {
+  try {
+    Logger.log('=== subscribeFCMAPI 開始 ===');
+    Logger.log('パラメータ: ' + JSON.stringify(params));
+
+    const token = params.token;
+    const userId = params.userId;
+    const userName = params.userName;
+    const email = params.email;
+    const permission = params.permission || 'スタッフ';
+    const deviceInfo = params.deviceInfo ? JSON.parse(params.deviceInfo) : {};
+    const notificationEnabled = params.notificationEnabled === 'true';
+    const notificationSound = params.notificationSound === 'true';
+
+    if (!token || !userId) {
+      return ContentService.createTextOutput(JSON.stringify({
+        success: false,
+        message: 'トークンまたはユーザーIDが指定されていません'
+      }))
+        .setMimeType(ContentService.MimeType.JSON)
+        .setHeader('Access-Control-Allow-Origin', '*')
+        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
+
+    // 1. スプレッドシートに保存（既存処理）
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('FCM通知登録');
+
+    if (!sheet) {
+      Logger.log('FCM通知登録シートが見つかりません');
+    } else {
+      const lastRow = sheet.getLastRow();
+      const dataRange = sheet.getRange(2, 1, Math.max(lastRow - 1, 1), 7);
+      const data = dataRange.getValues();
+
+      let foundRow = -1;
+      for (let i = 0; i < data.length; i++) {
+        if (data[i][0] === userId) {
+          foundRow = i + 2;
+          break;
+        }
+      }
+
+      const now = new Date();
+      if (foundRow > 0) {
+        // 更新
+        sheet.getRange(foundRow, 1, 1, 7).setValues([[
+          userId,
+          userName,
+          email,
+          token,
+          permission,
+          now,
+          JSON.stringify(deviceInfo)
+        ]]);
+        Logger.log('スプレッドシート更新: 行' + foundRow);
+      } else {
+        // 新規追加
+        sheet.appendRow([
+          userId,
+          userName,
+          email,
+          token,
+          permission,
+          now,
+          JSON.stringify(deviceInfo)
+        ]);
+        Logger.log('スプレッドシート新規追加');
+      }
+    }
+
+    // 2. Firestoreに保存（Firebase Functions用）
+    // TODO: FirestoreApp libraryの初期化が必要
+    // try {
+    //   const firestore = getFirestoreApp();
+    //   const userDocName = userName || userId;
+    //
+    //   firestore.updateDocument('users/' + userDocName, {
+    //     fcmToken: token,
+    //     email: email || userId,
+    //     userName: userName,
+    //     permission: permission,
+    //     notificationEnabled: notificationEnabled,
+    //     notificationSound: notificationSound,
+    //     deviceInfo: deviceInfo,
+    //     updatedAt: new Date().toISOString()
+    //   }, true); // mergeオプション
+    //
+    //   Logger.log('✅ Firestoreに保存: users/' + userDocName);
+    // } catch (firestoreError) {
+    //   Logger.log('⚠️ Firestore保存エラー（スプレッドシートには保存済み）: ' + firestoreError);
+    // }
+    Logger.log('⏭️ Firestore保存は次フェーズで実装（スプレッドシートには保存済み）');
+
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      message: 'FCM登録が完了しました'
+    }))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+      .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  } catch (error) {
+    Logger.log('[subscribeFCMAPI] ERROR: ' + error);
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      message: 'FCM登録エラー: ' + error.toString()
+    }))
+      .setMimeType(ContentService.MimeType.JSON)
+      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+      .setHeader('Access-Control-Allow-Headers', 'Content-Type');
   }
 }
