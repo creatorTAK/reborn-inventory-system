@@ -24,7 +24,9 @@ exports.onProductCreated = onDocumentCreated('products/{productId}', async (even
   console.log('🔔 [onProductCreated] 商品登録検知:', productId);
 
   try {
+    console.log('🔍 [DEBUG] event.data:', event.data);
     const productData = event.data.data();
+    console.log('🔍 [DEBUG] productData:', productData);
 
     if (!productData) {
       console.error('❌ [onProductCreated] 商品データが空');
@@ -32,8 +34,9 @@ exports.onProductCreated = onDocumentCreated('products/{productId}', async (even
     }
 
     // 通知データ作成
+    console.log('🔍 [DEBUG] createNotificationData開始');
     const notificationData = createNotificationData(productData);
-    console.log('📋 [onProductCreated] 通知データ作成完了');
+    console.log('📋 [onProductCreated] 通知データ作成完了:', notificationData);
 
     // 対象ユーザー取得（商品登録者以外の全ユーザー）
     const targetUsers = await getTargetUsers(notificationData.userName);
