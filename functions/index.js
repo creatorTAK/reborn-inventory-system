@@ -100,27 +100,35 @@ function createNotificationData(productData) {
 
 /**
  * 対象ユーザー取得（登録者以外の全ユーザー）
+ * Collection Group Queryでdevicesサブコレクションから取得
  */
 async function getTargetUsers(excludeUser) {
   try {
-    const usersSnapshot = await db.collection('users').get();
-    const targetUsers = [];
+    // Collection Group Queryでアクティブなデバイスを取得
+    const devicesSnapshot = await db.collectionGroup('devices')
+      .where('active', '==', true)
+      .get();
 
-    console.log(`🔍 [getTargetUsers] 全ユーザー数: ${usersSnapshot.size}`);
+    console.log(`🔍 [getTargetUsers] アクティブデバイス数: ${devicesSnapshot.size}`);
 
-    usersSnapshot.forEach(doc => {
-      const userData = doc.data();
-      const userName = userData.userName || userData.email;
+    const userNameSet = new Set(); // 重複排除用
 
-      console.log(`🔍 [getTargetUsers] ユーザー: ${doc.id}, userName: ${userName}, email: ${userData.email}`);
+    devicesSnapshot.forEach(deviceDoc => {
+      const deviceData = deviceDoc.data();
+      const userName = deviceData.userName;
+
+      console.log(`🔍 [getTargetUsers] デバイス: ${deviceDoc.id}, userName: ${userName}, email: ${deviceData.userEmail}`);
 
       if (userName && userName !== excludeUser && userName !== 'システム') {
-        targetUsers.push(userName);
+        userNameSet.add(userName);
         console.log(`✅ [getTargetUsers] 追加: ${userName}`);
       } else {
         console.log(`⏭️ [getTargetUsers] スキップ: ${userName} (excludeUser: ${excludeUser})`);
       }
     });
+
+    const targetUsers = Array.from(userNameSet);
+    console.log(`📊 [getTargetUsers] 対象ユーザー（重複排除後）: ${targetUsers.length}人`);
 
     return targetUsers;
   } catch (error) {
