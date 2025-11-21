@@ -8043,7 +8043,243 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     }, 1000);
 
 // ============================================
+// 商品保存（Firestore直接保存） - PROD-002 完全移行
+// ============================================
+
+/**
+ * 商品番号を生成（P + YYYYMMDD + 連番3桁）
+ * @returns {Promise<String>} 商品番号（例：P20251121001）
+ */
+async function generateProductId() {
+  try {
+    if (!window.db) {
+      throw new Error('Firestoreが初期化されていません');
+    }
+
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const dateStr = `${year}${month}${day}`;
+
+    // 今日の開始時刻（00:00:00）
+    const todayStart = new Date(year, today.getMonth(), today.getDate());
+
+    // 今日登録された商品をクエリ
+    const snapshot = await window.db.collection('products')
+      .where('createdAt', '>=', todayStart)
+      .get();
+
+    // 今日の商品数をカウント
+    const todayCount = snapshot.size || 0;
+    const serial = String(todayCount + 1).padStart(3, '0');
+
+    const productId = `P${dateStr}${serial}`;
+    console.log(`[generateProductId] 生成: ${productId} (今日の商品数: ${todayCount})`);
+
+    return productId;
+
+  } catch (error) {
+    console.error('[generateProductId] エラー:', error);
+    // エラー時はタイムスタンプベースのIDを生成
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const timestamp = Date.now();
+    return `P${dateStr}${String(timestamp).slice(-3)}`;
+  }
+}
+
+/**
+ * フォームデータをFirestore用のドキュメントに変換
+ * @param {Object} formData - フォームデータ
+ * @param {String} productId - 商品番号
+ * @param {String} userEmail - ユーザーメールアドレス
+ * @returns {Object} Firestoreドキュメント
+ */
+function convertFormToFirestoreDoc(formData, productId, userEmail) {
+  const now = new Date();
+
+  // 基本情報
+  const doc = {
+    productId: productId,
+    shelfNumber: formData['棚番号'] || '',
+    managementNumber: formData['管理番号'] || '',
+
+    // 商品情報
+    productName: formData['商品名(タイトル)'] || '',
+    brand: {
+      nameEn: formData['ブランド(英語)'] || '',
+      nameKana: formData['ブランド(カナ)'] || ''
+    },
+    category: {
+      major: formData['大分類(カテゴリ)'] || formData['大分類'] || '',
+      middle: formData['中分類(カテゴリ)'] || formData['中分類'] || '',
+      minor: formData['小分類(カテゴリ)'] || formData['小分類'] || '',
+      detail1: formData['細分類(カテゴリ)'] || formData['細分類1'] || '',
+      detail2: formData['細分類2'] || ''
+    },
+
+    // 商品詳細
+    description: formData['商品の説明'] || '',
+    condition: formData['商品の状態'] || '',
+    conditionDetail: formData['商品状態詳細'] || formData['商品状態(詳細)'] || '',
+    itemName: formData['アイテム名'] || '',
+    size: {
+      display: formData['サイズ'] || '',
+      actual: formData['サイズ(表記)'] || ''
+    },
+
+    // セールスワード
+    salesWord: {
+      category: formData['セールスワード(カテゴリ)'] || '',
+      word: formData['セールスワード'] || ''
+    },
+
+    // 商品属性
+    attributes: {
+      material: formData['生地・素材・質感系'] || '',
+      season: formData['季節感・機能性'] || '',
+      scene: formData['着用シーン・イベント'] || '',
+      appearance: formData['見た目・印象'] || '',
+      trend: formData['トレンド表現'] || '',
+      sizeFeeling: formData['サイズ感・体型カバー'] || '',
+      style: formData['年代・テイスト・スタイル'] || '',
+      color: formData['カラー/配色/トーン'] || '',
+      pattern: formData['柄・模様'] || '',
+      detail: formData['ディテール・仕様'] || '',
+      silhouette: formData['シルエット/ライン'] || '',
+      neckline: formData['ネックライン'] || '',
+      collar: formData['襟・衿'] || '',
+      sleeve: formData['袖・袖付け'] || '',
+      length: formData['丈'] || '',
+      leather: formData['革/加工'] || '',
+      fur: formData['毛皮/加工'] || '',
+      origin: formData['生産国'] || ''
+    },
+
+    // 寸法
+    measurements: {
+      shoulderWidth: formData['肩幅'] || '',
+      chestWidth: formData['身幅'] || '',
+      sleeveLength: formData['袖丈'] || '',
+      length: formData['着丈'] || '',
+      waist: formData['ウエスト'] || '',
+      hip: formData['ヒップ'] || '',
+      rise: formData['股上'] || '',
+      inseam: formData['股下'] || ''
+    },
+
+    // 仕入情報
+    purchase: {
+      date: formData['仕入日'] ? new Date(formData['仕入日']) : null,
+      supplier: formData['仕入先'] || '',
+      amount: formData['仕入金額'] ? Number(formData['仕入金額']) : 0
+    },
+
+    // 出品情報
+    listing: {
+      date: formData['出品日'] ? new Date(formData['出品日']) : null,
+      destination: formData['出品先'] || '',
+      amount: formData['出品金額'] ? Number(formData['出品金額']) : 0
+    },
+
+    // 配送設定
+    shipping: {
+      feeBearer: formData['配送料の負担'] || '',
+      method: formData['配送の方法'] || '',
+      region: formData['発送元の地域'] || '',
+      days: formData['発送までの日数'] || ''
+    },
+
+    // 梱包資材（PROD-002）- 将来実装
+    packaging: {
+      preset: '',
+      materials: [],
+      totalCost: 0
+    },
+
+    // ステータス管理
+    status: formData['ステータス'] || '登録済み',
+
+    // 担当者
+    assignedTo: formData['担当者'] || userEmail,
+
+    // メタデータ
+    createdBy: userEmail,
+    createdAt: now,
+    updatedBy: userEmail,
+    updatedAt: now,
+
+    // AI関連（将来使用）
+    aiGenerated: {
+      history: formData['AI生成履歴'] ? JSON.parse(formData['AI生成履歴']) : [],
+      tags: formData['AIタグ'] ? formData['AIタグ'].split(',') : [],
+      analysis: formData['Agent分析結果'] ? JSON.parse(formData['Agent分析結果']) : {}
+    },
+
+    // 画像
+    images: formData['JSON_データ'] ? JSON.parse(formData['JSON_データ']) : []
+  };
+
+  return doc;
+}
+
+/**
+ * 商品データをFirestoreに保存
+ * @param {Object} formData - フォームデータ
+ * @returns {Promise<Object>} 保存結果
+ */
+async function saveProductToFirestore(formData) {
+  console.log('[saveProductToFirestore] 開始');
+  console.log('[saveProductToFirestore] フォームデータ:', formData);
+
+  try {
+    if (!window.db) {
+      throw new Error('Firestoreが初期化されていません');
+    }
+
+    // ユーザーメールアドレス取得（Firebase Auth使用）
+    let userEmail = 'unknown@example.com';
+    if (firebase.auth && firebase.auth().currentUser) {
+      userEmail = firebase.auth().currentUser.email;
+      console.log('[saveProductToFirestore] ユーザーメール:', userEmail);
+    } else {
+      console.warn('[saveProductToFirestore] ユーザー未認証、デフォルトメール使用');
+    }
+
+    // 商品番号生成
+    const productId = await generateProductId();
+    console.log(`[saveProductToFirestore] 商品番号: ${productId}`);
+
+    // Firestoreドキュメント作成
+    const doc = convertFormToFirestoreDoc(formData, productId, userEmail);
+    console.log(`[saveProductToFirestore] ドキュメント作成完了`);
+
+    // Firestoreに保存（ドキュメントIDは商品番号）
+    await window.db.collection('products').doc(productId).set(doc);
+    console.log(`[saveProductToFirestore] Firestore保存完了: products/${productId}`);
+
+    // 成功レスポンス
+    return {
+      success: true,
+      message: '登録完了しました',
+      productId: productId,
+      managementNumber: formData['管理番号'] || ''
+    };
+
+  } catch (error) {
+    console.error('[saveProductToFirestore] エラー:', error);
+    console.error('[saveProductToFirestore] スタック:', error.stack);
+
+    return {
+      success: false,
+      message: `NG(ERROR): ${error.message}`
+    };
+  }
+}
+
+// ============================================
 // グローバルスコープに公開（外部モジュールから呼び出し可能に）
 // ============================================
 window.updateBrandDisplay = updateBrandDisplay;
 window.updateNamePreview = updateNamePreview;
+window.saveProductToFirestore = saveProductToFirestore;
