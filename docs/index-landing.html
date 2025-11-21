@@ -336,26 +336,39 @@
           throw new Error('Firestore関数が初期化されていません');
         }
 
-        // 1. アクティブなデバイスを取得（最大2台まで）
+        // 1. すべてのデバイスを取得（オーナー制限チェック用）
         const devicesRef = collectionFunc(db, 'users', currentUserName, 'devices');
+        const allDevicesQuery = queryFunc(devicesRef, whereFunc('permission', '==', 'オーナー'));
+        const ownerDevices = await getDocsFunc(allDevicesQuery);
+
+        console.log(`🔍 オーナーデバイス数: ${ownerDevices.size}`);
+
+        // オーナー制限: 既にオーナーデバイスが存在する場合、新しいデバイスは強制的にスタッフに降格
+        let finalPermission = userPermission;
+        if (ownerDevices.size > 0 && userPermission === 'オーナー') {
+          finalPermission = 'スタッフ';
+          console.log('⚠️ オーナーデバイスが既に存在するため、スタッフに降格');
+        }
+
+        // 2. アクティブなデバイスを取得（最大2台制限用）
         const activeQuery = queryFunc(devicesRef, whereFunc('active', '==', true), orderByFunc('registeredAt', 'asc'));
         const activeDevices = await getDocsFunc(activeQuery);
 
         console.log(`📱 現在のアクティブデバイス数: ${activeDevices.size}`);
 
-        // 2. 2台以上ある場合、最も古いデバイスを非アクティブに
+        // 3. 2台以上ある場合、最も古いデバイスを非アクティブに
         if (activeDevices.size >= 2) {
           const oldestDevice = activeDevices.docs[0];
           await updateDocFunc(oldestDevice.ref, { active: false });
           console.log(`⏸️ 最も古いデバイスを非アクティブ化: ${oldestDevice.id}`);
         }
 
-        // 3. 新しいデバイスを追加
+        // 4. 新しいデバイスを追加
         const newDevice = {
           fcmToken: token,
           deviceInfo: deviceInfo,
           active: true,
-          permission: userPermission,
+          permission: finalPermission,
           registeredAt: new Date(),
           lastUsedAt: new Date()
         };
@@ -363,7 +376,7 @@
         const deviceDocRef = await addDocFunc(devicesRef, newDevice);
         console.log('✅ FCMトークンをFirestoreに保存しました:', deviceDocRef.id);
         console.log('   - ユーザー名:', currentUserName);
-        console.log('   - 権限:', userPermission);
+        console.log('   - 権限:', finalPermission, userPermission !== finalPermission ? `(${userPermission} → 降格)` : '');
         console.log('   - アクティブデバイス数:', activeDevices.size >= 2 ? 2 : activeDevices.size + 1);
 
         alert('✅ 通知設定が完了しました！\n\n商品登録時に通知が届くようになります。');
