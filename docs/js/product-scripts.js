@@ -8269,6 +8269,17 @@ async function saveProductToFirestore(formData) {
     const productId = await generateProductId();
     console.log(`[saveProductToFirestore] 商品番号: ${productId}`);
 
+    // 管理番号の確定とカウンター更新
+    const managementNumber = formData['管理番号'];
+    if (managementNumber) {
+      console.log(`[saveProductToFirestore] 管理番号確定処理: ${managementNumber}`);
+      const confirmed = await window.confirmManagementNumber(managementNumber);
+      if (!confirmed) {
+        throw new Error('管理番号が重複しています');
+      }
+      console.log(`[saveProductToFirestore] 管理番号確定完了`);
+    }
+
     // Firestoreドキュメント作成
     const doc = convertFormToFirestoreDoc(formData, productId, userEmail);
     console.log(`[saveProductToFirestore] ドキュメント作成完了`);
