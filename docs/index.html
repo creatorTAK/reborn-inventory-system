@@ -967,6 +967,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getMessaging, onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
+    import { getFirestore, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase 設定（reborn-chat に統一）
     const firebaseConfig = {
@@ -982,9 +983,13 @@
     try {
       const app = initializeApp(firebaseConfig);
       const messaging = getMessaging(app);
+      const db = getFirestore(app);
 
       // グローバル変数として公開
       window.firebaseMessaging = messaging;
+      window.firebaseDB = db;
+      window.firestoreDoc = doc;
+      window.firestoreSetDoc = setDoc;
 
       // ★ フォアグラウンド通知対応 ★
       // アプリを開いている状態で通知を受信した時の処理
@@ -1669,6 +1674,34 @@
             // ✅ サーバー側のバリデーション結果をチェック
             if (data.success === false) {
               throw new Error(data.message || '登録に失敗しました');
+            }
+
+            console.log('✅ FCMトークンをGASに保存しました');
+
+            // Firestoreにも保存（Firebase Functions用）
+            try {
+              if (userName && currentToken) {
+                const db = window.firebaseDB;
+                const docRef = window.firestoreDoc;
+                const setDocFunc = window.firestoreSetDoc;
+
+                if (db && docRef && setDocFunc) {
+                  const userDocRef = docRef(db, 'users', userName);
+                  await setDocFunc(userDocRef, {
+                    fcmToken: currentToken,
+                    lastUpdated: new Date()
+                  }, { merge: true });
+
+                  console.log('✅ FCMトークンをFirestoreに保存しました:', userName);
+                } else {
+                  console.error('❌ Firestore初期化エラー: db, doc, setDocが未定義');
+                }
+              } else {
+                console.warn('⚠️ ユーザー情報またはトークンが取得できないため、Firestoreへの保存をスキップ');
+              }
+            } catch (firestoreError) {
+              console.error('❌ Firestore保存エラー:', firestoreError);
+              // Firestore保存失敗してもGAS保存は成功しているので続行
             }
 
             resultDiv.textContent = '✅ FCM登録が完了しました！\n\n下の「アプリを開く」ボタンを押してください。\n\n※ 通知テストは任意です（スキップ可）';
