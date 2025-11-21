@@ -2,7 +2,7 @@
  * Cloudflare Pages Function - GAS API プロキシ
  *
  * CORS問題を解決するため、furira.jpドメインでGAS APIへのプロキシを提供
- * パス: /api/gas-proxy
+ * パス: /gas-proxy
  */
 
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
