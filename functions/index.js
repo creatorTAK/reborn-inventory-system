@@ -245,11 +245,12 @@ async function sendFCMNotifications(notificationData, targetUsers) {
         devicesSnapshot.forEach(deviceDoc => {
           const deviceData = deviceDoc.data();
           const fcmToken = deviceData?.fcmToken;
-          const permission = deviceData?.permission || 'スタッフ';
+          const permissionId = deviceData?.permissionId || 'staff';
+          const permissionDisplay = deviceData?.permissionDisplay || 'スタッフ';
 
           if (fcmToken) {
-            console.log(`✅ [sendFCMNotifications] トークン取得成功: ${userName} (${permission}) → ${fcmToken.substring(0, 20)}...`);
-            userTokens.push({ userName, token: fcmToken, permission });
+            console.log(`✅ [sendFCMNotifications] トークン取得成功: ${userName} (${permissionDisplay}) → ${fcmToken.substring(0, 20)}...`);
+            userTokens.push({ userName, token: fcmToken, permissionId, permissionDisplay });
           } else {
             console.log(`⚠️ [sendFCMNotifications] トークンなし: ${userName} device=${deviceDoc.id}`);
           }
