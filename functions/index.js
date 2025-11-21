@@ -7,7 +7,7 @@
 
 const {onDocumentCreated} = require('firebase-functions/v2/firestore');
 const {initializeApp} = require('firebase-admin/app');
-const {getFirestore} = require('firebase-admin/firestore');
+const {getFirestore, FieldValue} = require('firebase-admin/firestore');
 
 // Firebase Admin初期化
 initializeApp();
@@ -160,7 +160,7 @@ async function updateUnreadCounts(targetUsers) {
     targetUsers.forEach(userName => {
       const unreadRef = db.collection('rooms').doc(systemRoomId).collection('unreadCounts').doc(userName);
       batch.set(unreadRef, {
-        count: db.FieldValue.increment(1),
+        count: FieldValue.increment(1),
         lastUpdated: new Date()
       }, { merge: true });
     });
