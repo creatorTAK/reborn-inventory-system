@@ -1,17 +1,50 @@
-セッション開始: 2025-11-21 16:00
-読み込み完了: MANDATORY_SESSION_START_CHECKLIST, DEPLOYMENT_RULES, issues-summary.md, TDD_POLICY.md
-未完了Issue: 5件
-  - PROD-002: 商品登録時の発送方法・梱包資材の事前選択（🔴最高優先度）
-  - TEST-001: Firestore移行後の全メニュー機能検証（🔴最高優先度）
-  - UI-017: 全メニューヘッダーUI統一化（高）
-  - TASK-001: やることリスト機能（中）
-  - MASTER-002: 汎用マスタ管理エンジン実装（高）
-最新コミット: a1678e7 debug: postToSystemRoom詳細ログ追加
-PWAデプロイID: AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA (7箇所確認済み)
-未プッシュコミット: 3件
-  - a1678e7 debug: postToSystemRoom詳細ログ追加
-  - dc2002c debug: Firebase Functions詳細ログ追加
-  - adfaa57 fix(PROD-002): Firebase Functions FieldValue.increment()修正
-変更ファイル: 
-  - functions/index.js (FCM通知実装済み・デプロイ済み)
-  - その他ドキュメント・メモリファイル
+# セッション状態
+
+**セッション開始日時:** 2025-11-21 14:35
+
+## 📊 現在の状況
+
+### 未完了Issue
+- **総Issue数: 5件** (優先度: 🔴最高2件, 高2件, 中1件)
+- **最優先:** PROD-002, TEST-001
+
+### 進行中タスク（前セッションからの継続）
+**FCM通知実装 - Phase 3: CORS問題解決**
+
+#### 完了済み
+1. ✅ システム通知メッセージ送信実装
+2. ✅ バッジ未読カウント修正 (`count` → `unreadCount`)
+3. ✅ FCM通知送信ロジック実装（Firebase Functions）
+4. ✅ CORS問題原因特定（プリフライトOPTIONS問題）
+5. ✅ Cloudflare Workerプロキシ実装 (`/gas-proxy`)
+6. ✅ PWA API URL変更 (`/gas-proxy`)
+7. ✅ デプロイ完了 (95e57eb)
+
+#### 現在の状態
+- **ステータス:** テスト待ち
+- **待機内容:** ユーザーによるFCM登録テスト
+- **期待結果:** CORSエラー解消、FCMトークンがFirestore/スプレッドシートに保存成功
+
+#### 次のステップ
+1. ユーザーのテスト結果確認
+2. 成功 → FCM通知エンドツーエンドテスト
+3. 失敗 → 追加デバッグ
+
+### 最近のコミット
+- 95e57eb: docs: Workerコメント修正
+- da1ce49: fix(CORS): Workerパス修正 /gas-proxy
+- 95b5546: fix(CORS): Cloudflare Workerプロキシ実装
+
+### Git状態
+- ブランチ: main
+- 状態: clean（未コミット変更なし）
+
+## 🎯 セッション目標
+
+1. FCM登録CORSエラー解決確認
+2. FCM通知エンドツーエンド動作確認
+3. PROD-002（商品登録時の発送方法・梱包資材事前選択）開始検討
+
+---
+
+**最終更新: 2025-11-21 14:35**
