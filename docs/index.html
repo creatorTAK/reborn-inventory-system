@@ -967,7 +967,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getMessaging, onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
-    import { getFirestore, doc, setDoc, collection, collectionGroup, addDoc, query, where, orderBy, getDocs, updateDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, doc, getDoc, setDoc, collection, collectionGroup, addDoc, query, where, orderBy, getDocs, updateDoc, Timestamp, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase 設定（reborn-chat に統一）
     const firebaseConfig = {
@@ -989,6 +989,7 @@
       window.firebaseMessaging = messaging;
       window.firebaseDB = db;
       window.firestoreDoc = doc;
+      window.firestoreGetDoc = getDoc;
       window.firestoreSetDoc = setDoc;
       window.firestoreCollection = collection;
       window.firestoreCollectionGroup = collectionGroup;
@@ -999,6 +1000,7 @@
       window.firestoreGetDocs = getDocs;
       window.firestoreUpdateDoc = updateDoc;
       window.firestoreTimestamp = Timestamp;
+      window.firestoreServerTimestamp = serverTimestamp;
 
       // ★ フォアグラウンド通知対応 ★
       // アプリを開いている状態で通知を受信した時の処理
@@ -1136,8 +1138,8 @@
         // 初回 → セットアップ画面を表示
         document.getElementById('setup-screen').style.display = 'flex';
         document.getElementById('app-screen').style.display = 'none';
-        // 権限選択肢を初期化（サーバー側判定方式）
-        setupPermissionOptionsWithServerValidation();
+        // 権限選択肢を動的ロード（Firestoreから取得して生成）
+        await loadAndRenderPermissions();
       } else {
         // セットアップ完了済み → FCMトークンをチェック（Phase 2: NOTIF-003）
         await checkAndUpdateFCMToken();
@@ -1346,82 +1348,228 @@
       }
     });
 
-    // 権限選択肢の表示制御（初回登録判定）
-    function checkPermissionOptions() {
-      const ownerOption = document.getElementById('owner-option');
-      const staffOption = document.getElementById('staff-option');
-      const outsourceOption = document.getElementById('outsource-option');
-      const permissionInfo = document.getElementById('permission-info');
+    /**
+     * Firestore settings/permissions コレクション初期化
+     * 存在しない場合は自動的にデフォルトデータを作成
+     */
+    async function initializePermissionsSettings() {
+      const db = window.firebaseDB;
+      const docFunc = window.firestoreDoc;
+      const getDocFunc = window.firestoreGetDoc;
+      const setDocFunc = window.firestoreSetDoc;
+      const serverTimestampFunc = window.firestoreServerTimestamp;
 
-      console.log('[checkPermissionOptions] 既存ユーザー数を確認中...');
+      if (!db || !docFunc || !getDocFunc || !setDocFunc || !serverTimestampFunc) {
+        console.error('[initPermissions] Firestore関数が初期化されていません');
+        return null;
+      }
 
-      // GASから既存ユーザー数を取得（inventory.js doGetにgetExistingUserCountケース追加済み@732）
-      const baseUrl = '/gas-proxy';
-      fetch(baseUrl + '?action=getExistingUserCount')
-        .then(response => response.json())
-        .then(data => {
-          console.log('[checkPermissionOptions] 既存ユーザー数:', data.count);
+      try {
+        const permissionsDocRef = docFunc(db, 'settings', 'permissions');
+        const permissionsDoc = await getDocFunc(permissionsDocRef);
 
-          if (data.count === 0) {
-            // 初回登録者 → オーナーのみ表示
-            ownerOption.style.display = 'flex';
-            ownerOption.querySelector('input').checked = true;
-            staffOption.style.display = 'none';
-            outsourceOption.style.display = 'none';
-            permissionInfo.textContent = '✨ 初回登録者のため、オーナー権限で登録されます';
-            permissionInfo.style.background = '#fef3c7';
-            permissionInfo.style.color = '#92400e';
-            console.log('[checkPermissionOptions] 初回登録者モード: オーナーのみ表示');
-          } else {
-            // 2人目以降 → スタッフ・外注のみ表示
-            ownerOption.style.display = 'none';
-            staffOption.style.display = 'flex';
-            outsourceOption.style.display = 'flex';
-            staffOption.querySelector('input').checked = true;
-            permissionInfo.textContent = '💡 オーナー権限は管理者が「ユーザー権限管理」から設定します';
-            console.log('[checkPermissionOptions] 通常モード: スタッフ・外注のみ表示');
-          }
-        })
-        .catch(error => {
-          console.error('[checkPermissionOptions] エラー:', error);
-          // エラー時は安全側に倒す（スタッフ・外注のみ）
-          ownerOption.style.display = 'none';
-          staffOption.style.display = 'flex';
-          outsourceOption.style.display = 'flex';
-          staffOption.querySelector('input').checked = true;
-          permissionInfo.textContent = '⚠️ 権限確認エラー（スタッフ・外注のみ選択可能）';
-          permissionInfo.style.background = '#fef2f2';
-          permissionInfo.style.color = '#991b1b';
-        });
+        if (permissionsDoc.exists()) {
+          console.log('[initPermissions] ✅ 権限設定が既に存在します');
+          return permissionsDoc.data();
+        }
+
+        // 存在しない場合、デフォルトデータを作成
+        console.log('[initPermissions] 🔄 デフォルト権限設定を作成中...');
+
+        const defaultPermissions = {
+          roles: [
+            {
+              id: 'owner',
+              display: 'オーナー',
+              description: 'システム全体の管理者',
+              order: 1,
+              isSystem: true,
+              canModify: false
+            },
+            {
+              id: 'staff',
+              display: 'スタッフ',
+              description: '通常の従業員',
+              order: 2,
+              isSystem: true,
+              canModify: false
+            },
+            {
+              id: 'partner',
+              display: '外注',
+              description: '外部パートナー',
+              order: 3,
+              isSystem: true,
+              canModify: false
+            }
+          ],
+          lastUpdated: serverTimestampFunc(),
+          version: 1
+        };
+
+        await setDocFunc(permissionsDocRef, defaultPermissions);
+        console.log('[initPermissions] ✅ デフォルト権限設定を作成しました');
+
+        return defaultPermissions;
+      } catch (error) {
+        console.error('[initPermissions] ❌ エラー:', error);
+        return null;
+      }
     }
 
     /**
-     * 権限選択肢を設定（サーバー側判定方式）
-     * すべての選択肢を表示し、サーバー側でオーナー重複をチェック
+     * Firestoreから権限設定を取得して、動的にUIを生成
      */
-    function setupPermissionOptionsWithServerValidation() {
-      const ownerOption = document.getElementById('owner-option');
-      const staffOption = document.getElementById('staff-option');
-      const outsourceOption = document.getElementById('outsource-option');
-      const permissionInfo = document.getElementById('permission-info');
+    async function loadAndRenderPermissions() {
+      console.log('[loadPermissions] 🔄 権限設定をロード中...');
 
-      console.log('[setupPermissionOptions] サーバー側判定方式で初期化');
+      try {
+        // 1. 権限設定を初期化（存在しない場合は作成）
+        const permissionsData = await initializePermissionsSettings();
 
-      // すべての選択肢を表示
-      ownerOption.style.display = 'flex';
-      staffOption.style.display = 'flex';
-      outsourceOption.style.display = 'flex';
+        if (!permissionsData || !permissionsData.roles) {
+          throw new Error('権限設定の取得に失敗しました');
+        }
 
-      // デフォルトはスタッフ選択
-      staffOption.querySelector('input').checked = true;
+        // 2. Collection Group Queryでシステム全体のオーナー存在チェック
+        const db = window.firebaseDB;
+        const collectionGroupFunc = window.firestoreCollectionGroup;
+        const queryFunc = window.firestoreQuery;
+        const whereFunc = window.firestoreWhere;
+        const getDocsFunc = window.firestoreGetDocs;
 
-      // 情報メッセージ
-      permissionInfo.textContent = '💡 初回登録者のみオーナー権限で登録できます（サーバー側で自動判定）';
-      permissionInfo.style.background = '#fef3c7';
-      permissionInfo.style.color = '#92400e';
+        const allDevicesQuery = queryFunc(
+          collectionGroupFunc(db, 'devices'),
+          whereFunc('permissionId', '==', 'owner'),
+          whereFunc('active', '==', true)
+        );
+        const ownerDevices = await getDocsFunc(allDevicesQuery);
+        const hasOwner = ownerDevices.size > 0;
 
-      console.log('[setupPermissionOptions] すべての選択肢を表示（サーバー側でオーナー重複チェック）');
+        console.log(`[loadPermissions] システム全体のオーナーデバイス数: ${ownerDevices.size}`);
+
+        // 3. 権限オプションをUIに動的生成
+        const permissionContainer = document.getElementById('permission-options');
+        const permissionInfo = document.getElementById('permission-info');
+
+        if (!permissionContainer) {
+          console.error('[loadPermissions] permission-options要素が見つかりません');
+          return;
+        }
+
+        permissionContainer.innerHTML = ''; // 既存のHTMLをクリア
+
+        // roles を order でソート
+        const sortedRoles = permissionsData.roles.sort((a, b) => a.order - b.order);
+
+        // アイコンマッピング
+        const iconMap = {
+          owner: '📕',
+          staff: '📘',
+          partner: '📙'
+        };
+
+        // カラーマッピング
+        const colorMap = {
+          owner: '#dc2626',
+          staff: '#1e40af',
+          partner: '#4338ca'
+        };
+
+        let defaultChecked = false;
+
+        sortedRoles.forEach((role, index) => {
+          const isOwner = role.id === 'owner';
+          const shouldShow = isOwner ? !hasOwner : true; // オーナーは未登録時のみ表示
+
+          // デフォルトチェックロジック: オーナーがいなければowner、いればstaff
+          const shouldCheck = (!defaultChecked && shouldShow &&
+            ((isOwner && !hasOwner) || (!isOwner && role.id === 'staff' && hasOwner)));
+
+          if (shouldCheck) defaultChecked = true;
+
+          const label = document.createElement('label');
+          label.id = `${role.id}-option`;
+          label.style.display = shouldShow ? 'flex' : 'none';
+          label.style.alignItems = 'center';
+          label.style.padding = '12px';
+          label.style.border = '2px solid #e5e7eb';
+          label.style.borderRadius = '8px';
+          label.style.cursor = 'pointer';
+          label.style.transition = 'all 0.2s';
+
+          const radio = document.createElement('input');
+          radio.type = 'radio';
+          radio.name = 'user-permission';
+          radio.value = role.id; // Internal ID
+          radio.dataset.display = role.display; // Display name
+          radio.style.marginRight = '8px';
+          radio.style.width = '18px';
+          radio.style.height = '18px';
+          radio.style.cursor = 'pointer';
+          if (shouldCheck) radio.checked = true;
+
+          const textDiv = document.createElement('div');
+
+          const titleDiv = document.createElement('div');
+          titleDiv.style.fontSize = '15px';
+          titleDiv.style.fontWeight = '600';
+          titleDiv.style.color = colorMap[role.id] || '#000';
+          titleDiv.textContent = `${iconMap[role.id] || '📄'} ${role.display}`;
+
+          const descDiv = document.createElement('div');
+          descDiv.style.fontSize = '12px';
+          descDiv.style.color = '#6b7280';
+          descDiv.style.marginTop = '2px';
+          descDiv.textContent = role.description;
+
+          textDiv.appendChild(titleDiv);
+          textDiv.appendChild(descDiv);
+          label.appendChild(radio);
+          label.appendChild(textDiv);
+          permissionContainer.appendChild(label);
+        });
+
+        // 情報メッセージ
+        if (!hasOwner) {
+          permissionInfo.textContent = '✨ 初回登録者のため、オーナー権限で登録されます';
+          permissionInfo.style.background = '#fef3c7';
+          permissionInfo.style.color = '#92400e';
+        } else {
+          permissionInfo.textContent = '💡 オーナー権限は管理者が「ユーザー権限管理」から設定します';
+          permissionInfo.style.background = '#e0e7ff';
+          permissionInfo.style.color = '#1e40af';
+        }
+
+        console.log('[loadPermissions] ✅ 権限選択UIを動的生成しました');
+
+      } catch (error) {
+        console.error('[loadPermissions] ❌ エラー:', error);
+
+        // フォールバック: エラー時は安全側に倒す（スタッフのみ表示）
+        const permissionContainer = document.getElementById('permission-options');
+        const permissionInfo = document.getElementById('permission-info');
+
+        if (permissionContainer) {
+          permissionContainer.innerHTML = `
+            <label style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;">
+              <input type="radio" name="user-permission" value="staff" data-display="スタッフ" checked style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
+              <div>
+                <div style="font-size: 15px; font-weight: 600; color: #1e40af;">📘 スタッフ</div>
+                <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">通常の従業員</div>
+              </div>
+            </label>
+          `;
+        }
+
+        if (permissionInfo) {
+          permissionInfo.textContent = '⚠️ 権限設定の読み込みに失敗しました（スタッフとして登録されます）';
+          permissionInfo.style.background = '#fef2f2';
+          permissionInfo.style.color = '#991b1b';
+        }
+      }
     }
+
 
     // ⓪ ユーザー情報を保存
     async function saveUserInfo() {
@@ -1432,9 +1580,10 @@
       const userName = nameInput.value.trim();
       const email = emailInput.value.trim();
 
-      // 権限を取得
+      // 権限を取得（permissionId と permissionDisplay の両方）
       const permissionRadio = document.querySelector('input[name="user-permission"]:checked');
-      const permission = permissionRadio ? permissionRadio.value : 'スタッフ';
+      const permissionId = permissionRadio ? permissionRadio.value : 'staff'; // Internal ID
+      const permissionDisplay = permissionRadio ? permissionRadio.dataset.display : 'スタッフ'; // Display name
 
       // バリデーション
       if (!userName) {
@@ -1466,7 +1615,7 @@
       resultDiv.style.display = 'block';
 
       // ✅ オーナー権限の場合、サーバー側でオーナー重複チェック
-      if (permission === 'オーナー') {
+      if (permissionId === 'owner') {
         try {
           const baseUrl = '/gas-proxy';
           const response = await fetch(baseUrl + '?action=getExistingUserCount');
@@ -1495,8 +1644,9 @@
       try {
         localStorage.setItem('reborn_user_name', userName);
         localStorage.setItem('reborn_user_email', email);
-        localStorage.setItem('reborn_user_permission', permission);
-        console.log('✅ ユーザー情報保存:', { name: userName, email: email, permission: permission });
+        localStorage.setItem('reborn_user_permission_id', permissionId);
+        localStorage.setItem('reborn_user_permission_display', permissionDisplay);
+        console.log('✅ ユーザー情報保存:', { name: userName, email: email, permissionId: permissionId, permissionDisplay: permissionDisplay });
 
         // IndexedDBにも保存（Service Workerからアクセス可能にするため）
         const request = indexedDB.open('RebornUserDB', 1);
@@ -1651,11 +1801,12 @@
           // LocalStorageからユーザーIDとユーザー名と権限を取得
           const userEmail = localStorage.getItem('reborn_user_email') || 'unknown';
           const userName = localStorage.getItem('reborn_user_name') || '';
-          const userPermission = localStorage.getItem('reborn_user_permission') || 'スタッフ';
+          const userPermissionId = localStorage.getItem('reborn_user_permission_id') || 'staff';
+          const userPermissionDisplay = localStorage.getItem('reborn_user_permission_display') || 'スタッフ';
           console.log('📧 ユーザーID:', userEmail);
           console.log('👤 ユーザー名:', userName);
-          console.log('🔐 権限:', userPermission);
-          console.log('📧 メールアドレス:', userEmail);
+          console.log('🔐 権限ID:', userPermissionId);
+          console.log('🔐 権限表示名:', userPermissionDisplay);
 
           // Firestoreに保存（Firebase Functions用）
           try {
@@ -1679,15 +1830,21 @@
             }
 
             // 1. システム全体のオーナーデバイスをチェック（Collection Group Query）
-            const allDevicesQuery = queryFunc(collectionGroupFunc(db, 'devices'), whereFunc('permission', '==', 'オーナー'));
+            const allDevicesQuery = queryFunc(
+              collectionGroupFunc(db, 'devices'),
+              whereFunc('permissionId', '==', 'owner'),
+              whereFunc('active', '==', true)
+            );
             const ownerDevices = await getDocsFunc(allDevicesQuery);
 
             console.log(`🔍 システム全体のオーナーデバイス数: ${ownerDevices.size}`);
 
             // オーナー制限: システム全体で既にオーナーが存在する場合、新しいデバイスは強制的にスタッフに降格
-            let finalPermission = userPermission;
-            if (ownerDevices.size > 0 && userPermission === 'オーナー') {
-              finalPermission = 'スタッフ';
+            let finalPermissionId = userPermissionId;
+            let finalPermissionDisplay = userPermissionDisplay;
+            if (ownerDevices.size > 0 && userPermissionId === 'owner') {
+              finalPermissionId = 'staff';
+              finalPermissionDisplay = 'スタッフ';
               console.log('⚠️ システム全体で既にオーナーデバイスが存在するため、スタッフに降格');
             }
 
@@ -1711,7 +1868,8 @@
               fcmToken: currentToken,
               deviceInfo: deviceInfo,
               active: true,
-              permission: finalPermission,
+              permissionId: finalPermissionId,
+              permissionDisplay: finalPermissionDisplay,
               userName: userName,
               userEmail: userEmail,
               registeredAt: new Date(),
@@ -1722,7 +1880,8 @@
             console.log('✅ FCMトークンをFirestoreに保存しました:', deviceDocRef.id);
             console.log('   - メールアドレス:', userEmail);
             console.log('   - ユーザー名:', userName);
-            console.log('   - 権限:', finalPermission, userPermission !== finalPermission ? `(${userPermission} → 降格)` : '');
+            console.log('   - 権限ID:', finalPermissionId);
+            console.log('   - 権限表示名:', finalPermissionDisplay, userPermissionId !== finalPermissionId ? `(${userPermissionDisplay} → 降格)` : '');
             console.log('   - アクティブデバイス数: 1（既存デバイスを置き換え）');
 
             resultDiv.textContent = '✅ FCM登録が完了しました！\n\n下の「アプリを開く」ボタンを押してください。\n\n※ 通知テストは任意です（スキップ可）';
@@ -1869,7 +2028,7 @@
         // LocalStorageからユーザー情報を取得
         const userEmail = localStorage.getItem('reborn_user_email') || 'unknown';
         const userName = localStorage.getItem('reborn_user_name') || '';
-        const permission = localStorage.getItem('reborn_user_permission') || 'スタッフ';
+        const permissionDisplay = localStorage.getItem('reborn_user_permission_display') || 'スタッフ';
         const notificationEnabled = true;
         const notificationSound = true;
 
@@ -1879,7 +2038,7 @@
                                     '&userId=' + encodeURIComponent(userEmail) +
                                     '&userName=' + encodeURIComponent(userName) +
                                     '&email=' + encodeURIComponent(userEmail) +
-                                    '&permission=' + encodeURIComponent(permission) +
+                                    '&permission=' + encodeURIComponent(permissionDisplay) +
                                     '&notificationEnabled=' + encodeURIComponent(notificationEnabled) +
                                     '&notificationSound=' + encodeURIComponent(notificationSound));
 
