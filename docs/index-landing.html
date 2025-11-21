@@ -289,15 +289,16 @@
       }
     }
 
-    // FCMトークンをGASに保存（チーム利用対応: デバイス情報も送信）
+    // FCMトークンをGASとFirestoreに保存（チーム利用対応: デバイス情報も送信）
     async function saveFCMTokenToGAS(token) {
       try {
-        console.log('🔄 FCMトークンをGASに保存中...');
+        console.log('🔄 FCMトークンをGAS・Firestoreに保存中...');
 
         // デバイス情報を取得
         const deviceInfo = getDeviceInfo();
         console.log('📱 デバイス情報:', deviceInfo);
 
+        // GASに保存
         const url = GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(token) +
                    (deviceInfo ? '&deviceInfo=' + encodeURIComponent(JSON.stringify(deviceInfo)) : '');
         console.log('📤 リクエストURL:', url);
@@ -310,6 +311,28 @@
 
         if (result.status === 'success') {
           console.log('✅ FCMトークンをGASに保存しました');
+
+          // Firestoreにも保存（Firebase Functions用）
+          try {
+            const currentUserEmail = localStorage.getItem('userEmail');
+            const currentUserName = localStorage.getItem('userName');
+
+            if (currentUserEmail && currentUserName) {
+              const userDocRef = doc(db, 'users', currentUserName);
+              await setDoc(userDocRef, {
+                fcmToken: token,
+                lastUpdated: new Date()
+              }, { merge: true });
+
+              console.log('✅ FCMトークンをFirestoreに保存しました:', currentUserName);
+            } else {
+              console.warn('⚠️ ユーザー情報が取得できないため、Firestoreへの保存をスキップ');
+            }
+          } catch (firestoreError) {
+            console.error('❌ Firestore保存エラー:', firestoreError);
+            // Firestore保存失敗してもGAS保存は成功しているので続行
+          }
+
           alert('✅ 通知設定が完了しました！\n\n商品登録時に通知が届くようになります。');
         } else {
           const errorMsg = '❌ FCMトークン保存失敗: ' + result.message;
