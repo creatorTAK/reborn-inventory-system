@@ -5566,7 +5566,7 @@ window.updateLoadingProgress = function(percent, text) {
     return '';
   }
 
-  function onSave() {
+  async function onSave() {
     console.log('[DEBUG] onSave() called');
     updateNamePreview();
     updateDesc();
@@ -5609,9 +5609,28 @@ window.updateLoadingProgress = function(percent, text) {
     const isPWA = !(typeof google !== 'undefined' && google.script && google.script.run);
 
     if (isPWA) {
-      // PWA版：画像アップロード未対応、直接Firestore保存
-      console.log('[PWA] 画像なしでFirestoreに保存');
-      saveProductToSheet(d);
+      // PWA版：Firestore直接保存（PROD-002 Phase 1）
+      console.log('[PWA] Firestoreに保存');
+      try {
+        const result = await saveProductToFirestore(d);
+        console.log('[onSave] Firestore保存結果:', result);
+
+        if (result.success) {
+          // 成功メッセージ表示
+          show(`✅ ${result.message}\n商品番号: ${result.productId}\n管理番号: ${result.managementNumber}`);
+
+          // フォームリセット
+          setTimeout(() => {
+            onReset();
+          }, 2000);
+        } else {
+          // エラーメッセージ表示
+          show(result.message);
+        }
+      } catch (error) {
+        console.error('[onSave] エラー:', error);
+        show(`NG(ERROR): ${error.message}`);
+      }
     } else {
       // GAS版：従来の画像アップロード処理
       if (productImages && productImages.length > 0) {
