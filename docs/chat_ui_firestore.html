@@ -550,6 +550,7 @@
 
     // グローバル変数（JSON.stringifyで安全に受け取る）
     let currentUserName = '';
+    let currentUserEmail = '';
     let currentRoomId = '';
     let currentRoomName = '';
     let usersCache = []; // ユーザー一覧キャッシュ（アイコン表示用）
@@ -557,28 +558,30 @@
     // URLパラメータを取得（PWA版で使用）
     const urlParams = new URLSearchParams(window.location.search);
 
-    // GASテンプレート変数をJavaScript変数に変換（変数名の衝突を避ける）
-    const isPWAFlag        = <?= JSON.stringify(!!isPWA) ?>;
-    const pwaUserNameParam = urlParams.get('userName') || <?= JSON.stringify(typeof pwaUserName !== 'undefined' ? pwaUserName : "") ?>;
-    // roomId はURLパラメータから取得（PWA版）またはGASテンプレート変数（GAS版）
-    const pwaRoomIdParam   = urlParams.get('roomId') || '<?= typeof pwaRoomId !== "undefined" ? pwaRoomId : "" ?>';
-    const gasUserNameParam = <?= JSON.stringify(typeof gasUserName !== 'undefined' ? gasUserName : "") ?>;
-    const gasRoomIdParam   = '<?= typeof gasRoomId !== "undefined" ? gasRoomId : "" ?>';
-    const fcmTokenParam    = <?= JSON.stringify(typeof fcmToken !== 'undefined' ? fcmToken : "") ?>;
-    const gasBaseUrlParam  = '<?= typeof gasBaseUrl !== "undefined" ? gasBaseUrl : "" ?>';  // ✅ API呼び出し用URL
-    const sessionIdParam   = '<?= typeof sessionId !== "undefined" ? sessionId : "unknown" ?>';  // セッションID
+    // PWA版: URLパラメータから取得
+    const pwaUserNameParam = urlParams.get('userName') || '';
+    const pwaRoomIdParam   = urlParams.get('roomId') || '';
+    const pwaUserEmailParam = urlParams.get('userEmail') || '';
+    const sessionIdParam   = urlParams.get('sessionId') || 'unknown';
 
-    // 判定ロジック：明示フラグ優先、補助として iframe 内かつ userName/fcmToken のどちらかが非空
+    // GAS版の変数（PWA版では未使用だが互換性のため定義）
+    const gasUserNameParam = '';
+    const gasRoomIdParam   = '';
+    const fcmTokenParam    = '';
+    const gasBaseUrlParam  = '';
+
+    // 判定ロジック：iframe内かどうかで判定
     const isEmbedded = (window.top !== window); // iframe内ならtrue
-    const looksLikePWA = isEmbedded && (pwaUserNameParam !== "" || fcmTokenParam !== "");
-    const isPWA = isPWAFlag || looksLikePWA;
+    const isPWA = isEmbedded; // PWA版は常にiframe内で動作
     const isGAS = !isPWA;
 
-    console.log('[Chat UI] URLパラメータ:', {
-      userName: urlParams.get('userName'),
-      roomId: urlParams.get('roomId'),
-      userEmail: urlParams.get('userEmail'),
-      sessionId: urlParams.get('sessionId')
+    console.log('[Chat UI] 初期化情報:', {
+      isPWA: isPWA,
+      isEmbedded: isEmbedded,
+      userName: pwaUserNameParam,
+      roomId: pwaRoomIdParam,
+      userEmail: pwaUserEmailParam,
+      sessionId: sessionIdParam
     });
 
     // 初期化
@@ -605,32 +608,20 @@
           showUserSelect();
         }
       } else {
-        // PWA版：URLパラメータから取得（親ページのlocalStorageから渡される）
-        // JSON.parse()でダブルクォーテーションを削除
-        try {
-          currentUserName = JSON.parse(pwaUserNameParam);
-        } catch (e) {
-          // パースできない場合はそのまま使用
-          currentUserName = pwaUserNameParam;
-        }
+        // PWA版：URLパラメータから取得（デコード済みの文字列）
+        currentUserName = pwaUserNameParam;
+        currentUserEmail = pwaUserEmailParam;
 
-        console.log('[PWA] pwaUserNameParam受信:', pwaUserNameParam);
-        console.log('[PWA] currentUserName設定:', currentUserName);
-        console.log('[PWA] currentUserName length:', currentUserName.length);
+        console.log('[PWA] URLパラメータから設定:', {
+          userName: currentUserName,
+          userEmail: currentUserEmail
+        });
 
         if (currentUserName && currentUserName.trim() !== '') {
           document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
           console.log('[PWA] ユーザー名表示完了:', currentUserName);
         } else {
-          // ユーザー名が未設定の場合、入力UIを表示
-          console.log('[PWA] ユーザー名未設定 - 入力UIを表示');
-          const container = document.getElementById('userNameInputContainer');
-          if (container) {
-            container.style.display = 'block';
-            console.log('[PWA] ユーザー名入力UI表示完了');
-          } else {
-            console.error('[PWA] userNameInputContainer が見つかりません');
-          }
+          console.error('[PWA] ユーザー名が取得できませんでした');
         }
       }
 
