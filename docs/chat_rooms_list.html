@@ -1158,7 +1158,7 @@
         filteredUsers.forEach(user => {
           const item = document.createElement('div');
           item.className = 'user-list-item';
-          item.onclick = () => selectUserForDirectChat(user.userName);
+          item.onclick = () => selectUserForDirectChat(user);
 
           // ユーザーアイコン表示
           let iconElement;
@@ -1218,24 +1218,26 @@
       }
     }
 
-    // roomId生成（dm_[user1]_[user2]、アルファベット順）
-    function generateDirectRoomId(user1, user2) {
-      const users = [user1, user2].sort();
-      return `dm_${users[0]}_${users[1]}`;
+    // roomId生成（dm_[email1]_[email2]、アルファベット順）
+    function generateDirectRoomId(email1, email2) {
+      // @を_at_に、.を_に置換（Firestore互換）
+      const sanitize = (email) => email.replace(/@/g, '_at_').replace(/\./g, '_');
+      const emails = [sanitize(email1), sanitize(email2)].sort();
+      return `dm_${emails[0]}_${emails[1]}`;
     }
 
     // ユーザー選択時の処理
-    async function selectUserForDirectChat(targetUserName) {
-      console.log('[Direct Chat] ユーザー選択:', targetUserName);
+    async function selectUserForDirectChat(targetUser) {
+      console.log('[Direct Chat] ユーザー選択:', targetUser.userName, targetUser.email);
 
-      if (!currentUserName) {
+      if (!currentUserEmail || !targetUser.email) {
         alert('ユーザー情報が取得できません');
         return;
       }
 
       try {
-        // roomId生成
-        const roomId = generateDirectRoomId(currentUserName, targetUserName);
+        // roomId生成（メールアドレスベース）
+        const roomId = generateDirectRoomId(currentUserEmail, targetUser.email);
         console.log('[Direct Chat] 生成されたroomId:', roomId);
 
         // 既存のDMルームをチェック
@@ -1257,7 +1259,7 @@
 
         // 新規DMルーム作成
         console.log('[Direct Chat] 新規DMルーム作成:', roomId);
-        await createDirectChatRoom(roomId, targetUserName);
+        await createDirectChatRoom(roomId, targetUser);
 
       } catch (error) {
         console.error('[Direct Chat] DMルーム作成エラー:', error);
@@ -1378,14 +1380,15 @@
     }
 
     // Firestore roomsに個別チャットルーム作成
-    async function createDirectChatRoom(roomId, targetUserName) {
+    async function createDirectChatRoom(roomId, targetUser) {
       try {
         // カスタムドキュメントIDでルーム作成
         await setDoc(doc(db, 'rooms', roomId), {
           name: '',  // 個別チャットは動的生成するため空欄
           type: 'direct',
           icon: '👤',
-          members: [currentUserName, targetUserName],
+          members: [currentUserName, targetUser.userName],
+          memberEmails: [currentUserEmail, targetUser.email],  // メールアドレスも保存
           createdBy: currentUserName,
           createdAt: serverTimestamp(),
           lastMessageAt: serverTimestamp(),
