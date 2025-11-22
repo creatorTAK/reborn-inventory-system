@@ -202,6 +202,7 @@ async function postToSystemRoom(notificationData) {
       id: messageId,
       text: notificationData.content,
       sender: notificationData.sender,
+      userName: notificationData.userName,  // チャットUI用
       timestamp: new Date(),
       deleted: false,
       type: 'system'
