@@ -1228,16 +1228,18 @@
 
     // ユーザー選択時の処理
     async function selectUserForDirectChat(targetUser) {
-      console.log('[Direct Chat] ユーザー選択:', targetUser.userName, targetUser.email);
+      // Firestoreから取得したデータは userEmail フィールドを使用
+      const targetEmail = targetUser.userEmail || targetUser.email;
+      console.log('[Direct Chat] ユーザー選択:', targetUser.userName, targetEmail);
 
-      if (!currentUserEmail || !targetUser.email) {
+      if (!currentUserEmail || !targetEmail) {
         alert('ユーザー情報が取得できません');
         return;
       }
 
       try {
         // roomId生成（メールアドレスベース）
-        const roomId = generateDirectRoomId(currentUserEmail, targetUser.email);
+        const roomId = generateDirectRoomId(currentUserEmail, targetEmail);
         console.log('[Direct Chat] 生成されたroomId:', roomId);
 
         // 既存のDMルームをチェック
@@ -1382,13 +1384,16 @@
     // Firestore roomsに個別チャットルーム作成
     async function createDirectChatRoom(roomId, targetUser) {
       try {
+        // Firestoreから取得したデータは userEmail フィールドを使用
+        const targetEmail = targetUser.userEmail || targetUser.email;
+
         // カスタムドキュメントIDでルーム作成
         await setDoc(doc(db, 'rooms', roomId), {
           name: '',  // 個別チャットは動的生成するため空欄
           type: 'direct',
           icon: '👤',
           members: [currentUserName, targetUser.userName],
-          memberEmails: [currentUserEmail, targetUser.email],  // メールアドレスも保存
+          memberEmails: [currentUserEmail, targetEmail],  // メールアドレスも保存
           createdBy: currentUserName,
           createdAt: serverTimestamp(),
           lastMessageAt: serverTimestamp(),
