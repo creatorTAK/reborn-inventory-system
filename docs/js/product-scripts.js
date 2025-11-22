@@ -5758,7 +5758,7 @@ window.updateLoadingProgress = function(percent, text) {
 
       // 📢 Webhook経由で通知送信（GAS版と同じ仕組み）
       try {
-        const userName = window.CACHED_CONFIG?.userName || '不明';
+        const userName = localStorage.getItem('reborn_user_name') || window.CACHED_CONFIG?.userName || '匿名ユーザー';
 
         const brandName = d['ブランド(英語)'] || d['ブランド(カナ)'] || '';
         const itemName = d['アイテム名'] || '';
