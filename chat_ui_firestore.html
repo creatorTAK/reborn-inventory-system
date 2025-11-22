@@ -219,19 +219,46 @@
 
     /* 入力エリア */
     .input-container {
-      padding: 16px;
+      padding: 12px 16px;
       background-color: white;
       border-top: 1px solid #e2e8f0;
       flex-shrink: 0;
     }
     .input-wrapper {
       display: flex;
-      gap: 8px;
-      align-items: flex-end;
+      gap: 12px;
+      align-items: center;
+    }
+    /* 添付メニューボタン（LINE風） */
+    .attach-buttons {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .attach-btn {
+      background: none;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      padding: 8px;
+      color: #718096;
+      transition: transform 0.2s, color 0.2s;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .attach-btn:hover {
+      transform: scale(1.1);
+      color: var(--reborn-primary);
+    }
+    .attach-btn:active {
+      transform: scale(0.95);
     }
     #messageInput {
       flex: 1;
-      padding: 12px;
+      padding: 12px 16px;
       border: 1px solid #cbd5e0;
       border-radius: 20px;
       font-size: 1rem;
@@ -263,18 +290,6 @@
     .send-button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
-    }
-    .char-counter {
-      text-align: right;
-      font-size: 0.75rem;
-      color: #718096;
-      margin-top: 4px;
-    }
-    .char-counter.warning {
-      color: #f59e0b;
-    }
-    .char-counter.error {
-      color: #ef4444;
     }
 
     /* ユーザー名選択（GAS版のみ） */
@@ -455,6 +470,19 @@
 
   <div class="input-container">
     <div class="input-wrapper">
+      <!-- 添付メニューボタン（LINE風） -->
+      <div class="attach-buttons">
+        <button class="attach-btn" onclick="triggerFileInput()" title="ファイルを選択">
+          ➕
+        </button>
+        <button class="attach-btn" onclick="triggerCameraInput()" title="カメラで撮影">
+          📷
+        </button>
+        <button class="attach-btn" onclick="triggerImageInput()" title="画像を選択">
+          🖼️
+        </button>
+      </div>
+
       <textarea
         id="messageInput"
         placeholder="メッセージを入力..."
@@ -464,7 +492,11 @@
         ➤
       </button>
     </div>
-    <div class="char-counter" id="charCounter">0 / 1000</div>
+
+    <!-- 非表示のファイル入力 -->
+    <input type="file" id="fileInput" style="display: none;" onchange="handleFileSelect(event)" />
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleFileSelect(event)" />
+    <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)" />
   </div>
 
   <!-- 長押しメニュー（LINEライクなポップアップ） -->
@@ -662,7 +694,6 @@
       messageInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-        updateCharCounter();
       });
 
       // Enterキーで送信
@@ -821,6 +852,15 @@
       }
     }
 
+    // ファイルサイズフォーマット関数
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
     // Firestoreメッセージをリアルタイムリスニング
     function startListening() {
       const q = query(
@@ -936,11 +976,94 @@
       const bubble = document.createElement('div');
       bubble.className = 'message-bubble';
 
-      // メッセージ本文
-      const text = document.createElement('div');
-      text.className = 'message-text';
-      text.textContent = msg.text || '';
-      bubble.appendChild(text);
+      // メッセージタイプに応じた表示
+      if (msg.type === 'image') {
+        // 画像メッセージ
+        const img = document.createElement('img');
+        img.src = msg.fileUrl;
+        img.alt = msg.fileName || 'image';
+        img.className = 'message-image';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '300px';
+        img.style.borderRadius = '8px';
+        img.style.cursor = 'pointer';
+
+        // 画像クリックで拡大表示
+        img.onclick = function() {
+          window.open(msg.fileUrl, '_blank');
+        };
+
+        bubble.appendChild(img);
+
+        // キャプションがある場合は表示
+        if (msg.text) {
+          const caption = document.createElement('div');
+          caption.className = 'message-text';
+          caption.textContent = msg.text;
+          caption.style.marginTop = '8px';
+          bubble.appendChild(caption);
+        }
+      } else if (msg.type === 'file') {
+        // ファイルメッセージ
+        const fileLink = document.createElement('a');
+        fileLink.href = msg.fileUrl;
+        fileLink.download = msg.fileName || 'file';
+        fileLink.target = '_blank';
+        fileLink.className = 'message-file-link';
+        fileLink.style.display = 'flex';
+        fileLink.style.alignItems = 'center';
+        fileLink.style.gap = '8px';
+        fileLink.style.padding = '12px';
+        fileLink.style.backgroundColor = '#f7fafc';
+        fileLink.style.borderRadius = '8px';
+        fileLink.style.textDecoration = 'none';
+        fileLink.style.color = '#2d3748';
+
+        // ファイルアイコン
+        const fileIcon = document.createElement('div');
+        fileIcon.innerHTML = `
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+            <polyline points="13 2 13 9 20 9"></polyline>
+          </svg>
+        `;
+
+        // ファイル情報
+        const fileInfo = document.createElement('div');
+        fileInfo.style.flex = '1';
+
+        const fileName = document.createElement('div');
+        fileName.textContent = msg.fileName || 'ファイル';
+        fileName.style.fontWeight = '500';
+        fileName.style.wordBreak = 'break-all';
+
+        const fileSize = document.createElement('div');
+        fileSize.textContent = formatFileSize(msg.fileSize || 0);
+        fileSize.style.fontSize = '0.85rem';
+        fileSize.style.color = '#718096';
+
+        fileInfo.appendChild(fileName);
+        fileInfo.appendChild(fileSize);
+
+        fileLink.appendChild(fileIcon);
+        fileLink.appendChild(fileInfo);
+        bubble.appendChild(fileLink);
+
+        // キャプションがある場合は表示
+        if (msg.text) {
+          const caption = document.createElement('div');
+          caption.className = 'message-text';
+          caption.textContent = msg.text;
+          caption.style.marginTop = '8px';
+          bubble.appendChild(caption);
+        }
+      } else {
+        // テキストメッセージ（デフォルト）
+        const text = document.createElement('div');
+        text.className = 'message-text';
+        text.textContent = msg.text || '';
+        bubble.appendChild(text);
+      }
 
       // 時間
       const time = document.createElement('span');
@@ -973,6 +1096,34 @@
 
       container.appendChild(item);
     }
+
+    // 添付ボタンのトリガー関数
+    window.triggerFileInput = function() {
+      document.getElementById('fileInput').click();
+    };
+
+    window.triggerCameraInput = function() {
+      document.getElementById('cameraInput').click();
+    };
+
+    window.triggerImageInput = function() {
+      document.getElementById('imageInput').click();
+    };
+
+    // ファイル選択ハンドラー
+    window.handleFileSelect = async function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      console.log('[File Upload] ファイル選択:', file.name, file.type, file.size);
+
+      // TODO: ファイルアップロード機能の実装
+      // 現在は仮実装（アラート表示のみ）
+      alert(`ファイルアップロード機能は準備中です\n\nファイル名: ${file.name}\nサイズ: ${(file.size / 1024).toFixed(2)} KB`);
+
+      // input要素をリセット（同じファイルを再選択できるように）
+      event.target.value = '';
+    };
 
     // メッセージ送信
     window.sendMessage = async function() {
@@ -1081,7 +1232,6 @@
         // 入力欄クリア
         input.value = '';
         input.style.height = 'auto';
-        updateCharCounter();
 
       } catch (error) {
         console.error('[Firestore] 送信エラー:', error);
@@ -1182,24 +1332,6 @@
       }
     }
 
-    // 文字数カウンター更新
-    function updateCharCounter() {
-      const input = document.getElementById('messageInput');
-      const counter = document.getElementById('charCounter');
-      const length = input.value.length;
-
-      counter.textContent = `${length} / 1000`;
-
-      if (length > 950) {
-        counter.classList.add('error');
-        counter.classList.remove('warning');
-      } else if (length > 900) {
-        counter.classList.add('warning');
-        counter.classList.remove('error');
-      } else {
-        counter.classList.remove('warning', 'error');
-      }
-    }
 
     // 選択削除モードの切り替え
     window.toggleSelectionMode = function() {
