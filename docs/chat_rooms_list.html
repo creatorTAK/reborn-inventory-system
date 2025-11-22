@@ -613,21 +613,24 @@
         // 直接Firestoreからユーザー一覧を取得
         console.log('[User Cache] Firestoreから直接ユーザー一覧取得開始');
 
-        // ユーザー一覧取得（アクティブユーザーのみ - firestore-api.jsと同じロジック）
-        const usersQuery = query(collection(db, 'users'), where('status', '==', 'アクティブ'));
-        getDocs(usersQuery)
+        // まず全ユーザーを取得してstatus確認（デバッグ用）
+        getDocs(collection(db, 'users'))
           .then(snapshot => {
-            console.log('[User Cache] snapshot.size:', snapshot.size);
-            console.log('[User Cache] snapshot.empty:', snapshot.empty);
+            console.log('[User Cache] 全ユーザー snapshot.size:', snapshot.size);
+            console.log('[User Cache] 全ユーザー snapshot.empty:', snapshot.empty);
 
-            const users = [];
+            const allUsers = [];
             snapshot.forEach(doc => {
-              const userData = { id: doc.id, ...doc.data() };
-              console.log('[User Cache] ユーザードキュメント:', doc.id, userData);
-              users.push(userData);
+              const data = doc.data();
+              console.log('[User Cache] ドキュメント:', doc.id, 'status:', data.status, 'data:', data);
+              allUsers.push({ id: doc.id, ...data });
             });
 
-            console.log('[User Cache] 取得したユーザー数:', users.length);
+            console.log('[User Cache] 全ユーザー数:', allUsers.length);
+
+            // アクティブユーザーのみフィルタ
+            const users = allUsers.filter(u => u.status === 'アクティブ');
+            console.log('[User Cache] アクティブユーザー数:', users.length);
 
             if (users.length > 0) {
               usersCache = users;
