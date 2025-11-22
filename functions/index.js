@@ -41,7 +41,7 @@ exports.onProductCreated = onDocumentCreated('products/{productId}', async (even
     console.log('📋 [onProductCreated] 通知データ作成完了:', notificationData);
 
     // 対象ユーザー取得（商品登録者以外の全ユーザー）
-    const targetUsers = await getTargetUsers(notificationData.userName);
+    const targetUsers = await getTargetUsers(notificationData.userEmail);
     console.log(`👥 [onProductCreated] 対象ユーザー: ${targetUsers.length}人`);
 
     // FCMプッシュ通知を最優先で送信（順次実行）
@@ -74,7 +74,8 @@ exports.onProductCreated = onDocumentCreated('products/{productId}', async (even
  * 通知データ作成
  */
 function createNotificationData(productData) {
-  const userName = productData.createdBy || 'unknown@example.com';
+  const userName = productData.createdBy || '匿名ユーザー';
+  const userEmail = productData.createdByEmail || 'unknown@example.com';
   const managementNumber = productData.managementNumber || productData.productId;
   const brandName = productData.brand?.nameEn || productData.brand?.nameKana || '';
   const itemName = productData.itemName || '';
@@ -87,6 +88,7 @@ function createNotificationData(productData) {
   return {
     type: 'PRODUCT_REGISTERED',
     userName: userName,
+    userEmail: userEmail,
     managementNumber: managementNumber,
     productName: productName,
     listingDestination: listingDestination,
@@ -109,25 +111,29 @@ async function getTargetUsers(excludeUser) {
 
     console.log(`🔍 [getTargetUsers] 全デバイス数: ${devicesSnapshot.size}`);
 
-    const userNameSet = new Set(); // 重複排除用
+    const userMap = new Map(); // 重複排除用（key: userEmail, value: userName）
 
     devicesSnapshot.forEach(deviceDoc => {
       const deviceData = deviceDoc.data();
       const userName = deviceData.userName;
+      const userEmail = deviceData.userEmail;
       const isActive = deviceData.active;
 
-      console.log(`🔍 [getTargetUsers] デバイス: ${deviceDoc.id}, userName: ${userName}, active: ${isActive}, email: ${deviceData.userEmail}`);
+      console.log(`🔍 [getTargetUsers] デバイス: ${deviceDoc.id}, userName: ${userName}, active: ${isActive}, email: ${userEmail}`);
 
       // アクティブなデバイスのみ対象
-      if (isActive && userName && userName !== excludeUser && userName !== 'システム') {
-        userNameSet.add(userName);
-        console.log(`✅ [getTargetUsers] 追加: ${userName}`);
+      if (isActive && userName && userEmail && userName !== excludeUser && userName !== 'システム') {
+        userMap.set(userEmail, userName);
+        console.log(`✅ [getTargetUsers] 追加: ${userName} (${userEmail})`);
       } else {
         console.log(`⏭️ [getTargetUsers] スキップ: ${userName} (active: ${isActive}, excludeUser: ${excludeUser})`);
       }
     });
 
-    const targetUsers = Array.from(userNameSet);
+    const targetUsers = Array.from(userMap.entries()).map(([userEmail, userName]) => ({
+      userName,
+      userEmail
+    }));
     console.log(`📊 [getTargetUsers] 対象ユーザー（重複排除後）: ${targetUsers.length}人`);
 
     return targetUsers;
@@ -229,22 +235,23 @@ async function sendFCMNotifications(notificationData, targetUsers) {
     console.log(`🔔 [sendFCMNotifications] FCM送信開始: ${targetUsers.length}人`);
 
     // ユーザーごとのアクティブデバイスからFCMトークンを取得
-    const tokensPromises = targetUsers.map(async (userName) => {
+    const tokensPromises = targetUsers.map(async (user) => {
       try {
-        console.log(`🔍 [sendFCMNotifications] デバイストークン取得試行: users/${userName}/devices`);
+        const { userName, userEmail } = user;
+        console.log(`🔍 [sendFCMNotifications] デバイストークン取得試行: users/${userEmail}/devices (${userName})`);
 
         // devicesサブコレクションからアクティブなデバイスを取得
         const devicesSnapshot = await Promise.race([
-          db.collection('users').doc(userName).collection('devices')
+          db.collection('users').doc(userEmail).collection('devices')
             .where('active', '==', true)
             .get(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error(`Firestore devices query timeout for ${userName}`)), 5000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`Firestore devices query timeout for ${userEmail}`)), 5000))
         ]);
 
-        console.log(`✅ [sendFCMNotifications] デバイスクエリ完了: users/${userName}/devices (${devicesSnapshot.size}件)`);
+        console.log(`✅ [sendFCMNotifications] デバイスクエリ完了: users/${userEmail}/devices (${devicesSnapshot.size}件)`);
 
         if (devicesSnapshot.empty) {
-          console.log(`⚠️ [sendFCMNotifications] アクティブデバイスなし: ${userName}`);
+          console.log(`⚠️ [sendFCMNotifications] アクティブデバイスなし: ${userName} (${userEmail})`);
           return [];
         }
 
@@ -266,7 +273,7 @@ async function sendFCMNotifications(notificationData, targetUsers) {
 
         return userTokens;
       } catch (error) {
-        console.error(`❌ [sendFCMNotifications] ユーザー${userName}のデバイス取得エラー:`, error);
+        console.error(`❌ [sendFCMNotifications] ユーザー${user.userName} (${user.userEmail})のデバイス取得エラー:`, error);
         return [];
       }
     });
@@ -330,8 +337,10 @@ async function updateUnreadCounts(targetUsers) {
     const systemRoomId = 'system';
     const batch = db.batch();
 
-    targetUsers.forEach(userName => {
-      const unreadRef = db.collection('rooms').doc(systemRoomId).collection('unreadCounts').doc(userName);
+    targetUsers.forEach(user => {
+      const { userEmail } = user;
+      console.log(`📊 [updateUnreadCounts] カウント更新: ${userEmail}`);
+      const unreadRef = db.collection('rooms').doc(systemRoomId).collection('unreadCounts').doc(userEmail);
       batch.set(unreadRef, {
         unreadCount: FieldValue.increment(1), // PWA側と統一: count → unreadCount
         lastUpdated: new Date()
