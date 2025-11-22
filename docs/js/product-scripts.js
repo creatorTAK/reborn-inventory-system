@@ -8220,12 +8220,14 @@ function convertFormToFirestoreDoc(formData, productId, userEmail) {
     status: formData['ステータス'] || '登録済み',
 
     // 担当者
-    assignedTo: formData['担当者'] || userEmail,
+    assignedTo: formData['担当者'] || userName,
 
     // メタデータ
-    createdBy: userEmail,
+    createdBy: userName,
+    createdByEmail: userEmail,
     createdAt: now,
-    updatedBy: userEmail,
+    updatedBy: userName,
+    updatedByEmail: userEmail,
     updatedAt: now,
 
     // AI関連（将来使用）
@@ -8256,13 +8258,21 @@ async function saveProductToFirestore(formData) {
       throw new Error('Firestoreが初期化されていません');
     }
 
-    // ユーザーメールアドレス取得（Firebase Auth使用）
-    let userEmail = 'unknown@example.com';
-    if (firebase.auth && firebase.auth().currentUser) {
-      userEmail = firebase.auth().currentUser.email;
-      console.log('[saveProductToFirestore] ユーザーメール:', userEmail);
+    // ユーザー情報取得（localStorage優先、Firebase Auth代替）
+    let userEmail = localStorage.getItem('reborn_user_email') || 'unknown@example.com';
+    let userName = localStorage.getItem('reborn_user_name') || '匿名ユーザー';
+    
+    if (!userEmail || userEmail === 'unknown@example.com') {
+      // localStorageにない場合のみFirebase Authを確認
+      if (firebase.auth && firebase.auth().currentUser) {
+        userEmail = firebase.auth().currentUser.email;
+        userName = firebase.auth().currentUser.displayName || userEmail;
+        console.log('[saveProductToFirestore] Firebase Authからユーザー情報取得:', { userEmail, userName });
+      } else {
+        console.warn('[saveProductToFirestore] ユーザー情報なし、デフォルト値使用');
+      }
     } else {
-      console.warn('[saveProductToFirestore] ユーザー未認証、デフォルトメール使用');
+      console.log('[saveProductToFirestore] localStorageからユーザー情報取得:', { userEmail, userName });
     }
 
     // 商品番号生成
