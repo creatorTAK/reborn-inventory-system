@@ -354,3 +354,171 @@ async function updateUnreadCounts(targetUsers) {
     console.error('❌ [updateUnreadCounts] エラー:', error);
   }
 }
+
+/**
+ * 個別チャットメッセージ送信時の通知処理
+ * Firestoreトリガー: rooms/{roomId}/messages/{messageId} 作成時
+ */
+exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messageId}', async (event) => {
+  const startTime = Date.now();
+  const roomId = event.params.roomId;
+  const messageId = event.params.messageId;
+
+  console.log('💬 [onChatMessageCreated] メッセージ検知:', roomId, messageId);
+
+  try {
+    const messageData = event.data.data();
+
+    if (!messageData) {
+      console.error('❌ [onChatMessageCreated] メッセージデータが空');
+      return;
+    }
+
+    // システムメッセージはスキップ
+    if (messageData.type === 'system') {
+      console.log('⏭️ [onChatMessageCreated] システムメッセージ、スキップ');
+      return;
+    }
+
+    const senderName = messageData.userName || '匿名';
+    const messageText = messageData.text || '(ファイル)';
+
+    console.log('📋 [onChatMessageCreated] 送信者:', senderName, '内容:', messageText);
+
+    // ルーム情報を取得
+    const roomRef = db.collection('rooms').doc(roomId);
+    const roomSnap = await roomRef.get();
+
+    if (!roomSnap.exists()) {
+      console.error('❌ [onChatMessageCreated] ルームが見つかりません:', roomId);
+      return;
+    }
+
+    const roomData = roomSnap.data();
+    const roomType = roomData.type || 'group';
+    const members = roomData.members || [];
+
+    console.log('📋 [onChatMessageCreated] ルーム:', roomData.name, 'タイプ:', roomType, 'メンバー:', members);
+
+    // 送信者以外のメンバーに通知
+    const targetMembers = members.filter(member => member !== senderName);
+
+    if (targetMembers.length === 0) {
+      console.log('⏭️ [onChatMessageCreated] 通知対象なし');
+      return;
+    }
+
+    console.log('👥 [onChatMessageCreated] 通知対象:', targetMembers);
+
+    // 対象メンバーのメールアドレスを取得
+    const usersSnapshot = await db.collection('users').get();
+    const memberEmails = [];
+
+    usersSnapshot.forEach(userDoc => {
+      const userData = userDoc.data();
+      if (targetMembers.includes(userData.userName)) {
+        memberEmails.push({
+          userName: userData.userName,
+          userEmail: userDoc.id
+        });
+      }
+    });
+
+    console.log('📧 [onChatMessageCreated] メールアドレス取得:', memberEmails);
+
+    // FCM通知送信
+    await sendChatNotifications(senderName, messageText, roomData.name || '個別チャット', memberEmails);
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [onChatMessageCreated] 通知完了: ${duration}ms`);
+
+  } catch (error) {
+    console.error('❌ [onChatMessageCreated] エラー:', error);
+  }
+});
+
+/**
+ * チャットメッセージのFCM通知送信
+ */
+async function sendChatNotifications(senderName, messageText, roomName, targetUsers) {
+  console.log('💬 [sendChatNotifications] 関数開始');
+  try {
+    if (targetUsers.length === 0) {
+      console.log('⏭️ [sendChatNotifications] 対象ユーザーなし、スキップ');
+      return;
+    }
+
+    console.log(`💬 [sendChatNotifications] FCM送信開始: ${targetUsers.length}人`);
+
+    // 各ユーザーのFCMトークンを取得
+    const tokensPromises = targetUsers.map(async (user) => {
+      try {
+        const { userName, userEmail } = user;
+        console.log(`🔍 [sendChatNotifications] トークン取得: ${userName} (${userEmail})`);
+
+        const devicesSnapshot = await db.collection('users').doc(userEmail).collection('devices')
+          .where('active', '==', true)
+          .get();
+
+        if (devicesSnapshot.empty) {
+          console.log(`⚠️ [sendChatNotifications] アクティブデバイスなし: ${userName}`);
+          return [];
+        }
+
+        const userTokens = [];
+        devicesSnapshot.forEach(deviceDoc => {
+          const deviceData = deviceDoc.data();
+          const fcmToken = deviceData?.fcmToken;
+
+          if (fcmToken) {
+            console.log(`✅ [sendChatNotifications] トークン取得成功: ${userName}`);
+            userTokens.push(fcmToken);
+          }
+        });
+
+        return userTokens;
+      } catch (error) {
+        console.error(`❌ [sendChatNotifications] ユーザー${user.userName}のトークン取得エラー:`, error);
+        return [];
+      }
+    });
+
+    const tokens = (await Promise.all(tokensPromises)).flat().filter(token => token);
+
+    if (tokens.length === 0) {
+      console.log('⏭️ [sendChatNotifications] FCMトークンなし、スキップ');
+      return;
+    }
+
+    console.log(`📨 [sendChatNotifications] 送信先トークン数: ${tokens.length}`);
+
+    // FCM通知メッセージ作成
+    const message = {
+      notification: {
+        title: `${senderName} - ${roomName}`,
+        body: messageText
+      },
+      data: {
+        type: 'CHAT_MESSAGE',
+        roomName: roomName,
+        senderName: senderName
+      },
+      tokens: tokens
+    };
+
+    // FCM送信
+    const response = await messaging.sendEachForMulticast(message);
+    console.log(`✅ [sendChatNotifications] FCM送信完了: 成功=${response.successCount}, 失敗=${response.failureCount}`);
+
+    if (response.failureCount > 0) {
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          console.error(`❌ [sendChatNotifications] 送信失敗 [${idx}]:`, resp.error);
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ [sendChatNotifications] エラー:', error);
+  }
+}
