@@ -1051,13 +1051,24 @@
       container.innerHTML = '<div class="loading">ユーザー一覧を読み込んでいます...</div>';
 
       try {
-        // GAS APIからユーザー一覧取得
-        const users = await new Promise((resolve, reject) => {
-          google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler(reject)
-            .getUserListForUI();
-        });
+        let users;
+
+        // PWA版：キャッシュから取得
+        if (usersCache && usersCache.length > 0) {
+          users = usersCache;
+          console.log('[Direct Chat] キャッシュからユーザー一覧取得:', users.length + '件');
+        } else if (typeof google !== 'undefined' && google.script && google.script.run) {
+          // GAS版：google.script.runで呼び出し
+          users = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getUserListForUI();
+          });
+          console.log('[Direct Chat] GAS版 ユーザー一覧取得成功:', users.length + '件');
+        } else {
+          throw new Error('ユーザー一覧が利用できません');
+        }
 
         console.log('[Direct Chat] ユーザー一覧取得成功:', users.length + '件');
 
