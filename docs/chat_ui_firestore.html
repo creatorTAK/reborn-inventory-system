@@ -508,6 +508,7 @@
 
     // グローバル変数（JSON.stringifyで安全に受け取る）
     let currentUserName = '';
+    let currentUserEmail = '';
     let currentRoomId = '';
     let currentRoomName = '';
     let usersCache = []; // ユーザー一覧キャッシュ（アイコン表示用）
@@ -515,6 +516,7 @@
     // PWA版：URLパラメータから取得（GASテンプレート変数は使用しない）
     const isPWAFlag        = true;  // PWA版として動作
     const pwaUserNameParam = getQueryParam('userName') || '';
+    const pwaUserEmailParam = getQueryParam('userEmail') || '';
     const pwaRoomIdParam   = getQueryParam('roomId') || '';
     const gasUserNameParam = '';
     const gasRoomIdParam   = '';
@@ -597,8 +599,16 @@
           currentUserName = pwaUserNameParam;
         }
 
+        try {
+          currentUserEmail = JSON.parse(pwaUserEmailParam);
+        } catch (e) {
+          currentUserEmail = pwaUserEmailParam;
+        }
+
         console.log('[PWA] pwaUserNameParam受信:', pwaUserNameParam);
+        console.log('[PWA] pwaUserEmailParam受信:', pwaUserEmailParam);
         console.log('[PWA] currentUserName設定:', currentUserName);
+        console.log('[PWA] currentUserEmail設定:', currentUserEmail);
         console.log('[PWA] currentUserName length:', currentUserName.length);
 
         if (currentUserName && currentUserName.trim() !== '') {
@@ -680,15 +690,15 @@
 
       // 未読カウントリセット（このルームを開いたので既読にする）
       try {
-        if (currentRoomId && currentUserName) {
-          const unreadRef = doc(db, `rooms/${currentRoomId}/unreadCounts/${currentUserName}`);
+        if (currentRoomId && currentUserEmail) {
+          const unreadRef = doc(db, `rooms/${currentRoomId}/unreadCounts/${currentUserEmail}`);
           await setDoc(unreadRef, {
-            userId: currentUserName,
+            userId: currentUserEmail,
             unreadCount: 0,
             lastReadAt: serverTimestamp()
           }, { merge: true });
 
-          console.log('[Firestore] 未読カウントリセット完了:', currentUserName);
+          console.log('[Firestore] 未読カウントリセット完了:', currentUserEmail);
         }
       } catch (error) {
         console.error('[Firestore] 未読カウントリセットエラー:', error);
