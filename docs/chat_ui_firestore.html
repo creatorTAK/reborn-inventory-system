@@ -574,43 +574,7 @@
     document.addEventListener('DOMContentLoaded', async function() {
       console.log('[Chat UI] 初期化開始');
 
-      // roomId設定
-      if (isGAS) {
-        currentRoomId = gasRoomIdParam || 'room_all';
-      } else {
-        currentRoomId = pwaRoomIdParam || 'room_all';
-      }
-      console.log('[Room] roomId設定:', currentRoomId);
-
-      // ルーム情報を取得してヘッダーに表示
-      try {
-        const roomRef = doc(db, 'rooms', currentRoomId);
-        const roomDoc = await getDoc(roomRef);
-
-        if (roomDoc.exists()) {
-          const roomData = roomDoc.data();
-
-          // 個別チャット（type: 'direct'）の場合は相手のユーザー名を動的生成
-          if (roomData.type === 'direct' && roomData.members && Array.isArray(roomData.members)) {
-            const otherMember = roomData.members.find(m => m !== currentUserName);
-            currentRoomName = otherMember || '不明なユーザー';
-          } else {
-            currentRoomName = roomData.name || '不明なルーム';
-          }
-
-          const roomIcon = roomData.icon || '💬';
-          document.getElementById('channelName').textContent = `${roomIcon} ${currentRoomName}`;
-          console.log('[Room] ルーム名表示完了:', currentRoomName);
-        } else {
-          console.error('[Room] ルームが見つかりません:', currentRoomId);
-          document.getElementById('channelName').textContent = '⚠️ ルームが見つかりません';
-        }
-      } catch (error) {
-        console.error('[Room] ルーム情報取得エラー:', error);
-        document.getElementById('channelName').textContent = '⚠️ エラー';
-      }
-
-      // ユーザー名設定
+      // ユーザー名設定（ルーム情報取得より前に設定）
       if (isGAS) {
         // GAS版：FCM通知登録シートから自動取得
         if (gasUserNameParam && gasUserNameParam.trim() !== '') {
@@ -657,6 +621,42 @@
             console.error('[PWA] userNameInputContainer が見つかりません');
           }
         }
+      }
+
+      // roomId設定（ユーザー名設定後）
+      if (isGAS) {
+        currentRoomId = gasRoomIdParam || 'room_all';
+      } else {
+        currentRoomId = pwaRoomIdParam || 'room_all';
+      }
+      console.log('[Room] roomId設定:', currentRoomId);
+
+      // ルーム情報を取得してヘッダーに表示
+      try {
+        const roomRef = doc(db, 'rooms', currentRoomId);
+        const roomDoc = await getDoc(roomRef);
+
+        if (roomDoc.exists()) {
+          const roomData = roomDoc.data();
+
+          // 個別チャット（type: 'direct'）の場合は相手のユーザー名を動的生成
+          if (roomData.type === 'direct' && roomData.members && Array.isArray(roomData.members)) {
+            const otherMember = roomData.members.find(m => m !== currentUserName);
+            currentRoomName = otherMember || '不明なユーザー';
+          } else {
+            currentRoomName = roomData.name || '不明なルーム';
+          }
+
+          const roomIcon = roomData.icon || '💬';
+          document.getElementById('channelName').textContent = `${roomIcon} ${currentRoomName}`;
+          console.log('[Room] ルーム名表示完了:', currentRoomName);
+        } else {
+          console.error('[Room] ルームが見つかりません:', currentRoomId);
+          document.getElementById('channelName').textContent = '⚠️ ルームが見つかりません';
+        }
+      } catch (error) {
+        console.error('[Room] ルーム情報取得エラー:', error);
+        document.getElementById('channelName').textContent = '⚠️ エラー';
       }
 
       // ユーザー一覧を取得してキャッシュ（アイコン表示用）
