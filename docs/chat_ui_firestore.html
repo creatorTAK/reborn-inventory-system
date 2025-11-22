@@ -1033,65 +1033,8 @@
 
         console.log('[Firestore] ルーム情報更新完了');
 
-        // 未読カウント更新（送信者以外の全メンバー）
-        try {
-          // ルーム情報を取得してメンバーリストを確認
-          const roomSnap = await getDoc(roomRef);
-          if (roomSnap.exists()) {
-            const roomData = roomSnap.data();
-            const members = roomData.members || [];
-
-            console.log('[Firestore] 未読カウント更新開始:', {
-              members: members,
-              currentUser: currentUserName
-            });
-
-            // 送信者以外の全メンバーの未読カウントを+1
-            for (const member of members) {
-              if (member !== currentUserName) {
-                const unreadRef = doc(db, `rooms/${currentRoomId}/unreadCounts/${member}`);
-
-                // 未読カウント更新前に現在の値を取得
-                const unreadSnap = await getDoc(unreadRef);
-                const currentUnreadCount = unreadSnap.exists() ? (unreadSnap.data().unreadCount || 0) : 0;
-
-                // 未読カウント更新
-                await setDoc(unreadRef, {
-                  userId: member,
-                  unreadCount: increment(1),
-                  lastUpdatedAt: serverTimestamp()
-                }, { merge: true });
-
-                // 新しい未読数（このルームのみ）
-                const newUnreadCount = currentUnreadCount + 1;
-
-                console.log('[Firestore] 未読カウント更新:', member, newUnreadCount);
-
-                // FCM通知送信（GAS/PWA共通: google.script.runを使用）
-                const notificationTitle = `💬 ${currentRoomName}`;
-                const notificationBody = `${currentUserName}: ${message}`;
-
-                if (typeof google !== 'undefined' && google.script && google.script.run) {
-                  google.script.run
-                    .withSuccessHandler(function(result) {
-                      console.log('[FCM通知] 送信成功:', member, result);
-                    })
-                    .withFailureHandler(function(error) {
-                      console.error('[FCM通知] 送信エラー:', member, error);
-                    })
-                    .sendFCMNotificationToUser(notificationTitle, notificationBody, member, newUnreadCount);
-
-                  console.log('[FCM通知] 送信リクエスト:', member, 'バッジ:', newUnreadCount);
-                } else {
-                  console.error('[FCM通知] google.script.run が利用できません');
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error('[Firestore] 未読カウント更新エラー:', error);
-          // エラーがあってもメッセージ送信は成功しているので続行
-        }
+        // 未読カウント処理は削除（PWA版のみ使用のため）
+        console.log('[GAS版] 未読カウント処理スキップ（PWA版使用のため）');
 
         // 入力欄クリア
         input.value = '';
