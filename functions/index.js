@@ -359,6 +359,8 @@ async function updateUnreadCounts(targetUsers) {
  * 個別チャットメッセージ送信時の通知処理
  * Firestoreトリガー: rooms/{roomId}/messages/{messageId} 作成時
  */
+console.log('🔧 [onChatMessageCreated] 関数初期化完了');
+
 exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messageId}', async (event) => {
   const startTime = Date.now();
   const roomId = event.params.roomId;
@@ -389,7 +391,7 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
     const roomRef = db.collection('rooms').doc(roomId);
     const roomSnap = await roomRef.get();
 
-    if (!roomSnap.exists()) {
+    if (!roomSnap.exists) {
       console.error('❌ [onChatMessageCreated] ルームが見つかりません:', roomId);
       return;
     }
@@ -426,8 +428,11 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
 
     console.log('📧 [onChatMessageCreated] メールアドレス取得:', memberEmails);
 
-    // FCM通知送信
-    await sendChatNotifications(senderName, messageText, roomData.name || '個別チャット', memberEmails);
+    // FCM通知送信と未読カウント更新を並列実行
+    await Promise.allSettled([
+      sendChatNotifications(senderName, messageText, roomData.name || '個別チャット', memberEmails),
+      updateChatUnreadCounts(roomId, memberEmails)
+    ]);
 
     const duration = Date.now() - startTime;
     console.log(`✅ [onChatMessageCreated] 通知完了: ${duration}ms`);
@@ -436,6 +441,31 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
     console.error('❌ [onChatMessageCreated] エラー:', error);
   }
 });
+
+/**
+ * 個別チャット未読カウント更新
+ */
+async function updateChatUnreadCounts(roomId, targetUsers) {
+  console.log('📊 [updateChatUnreadCounts] 関数開始');
+  try {
+    const batch = db.batch();
+
+    targetUsers.forEach(user => {
+      const { userEmail } = user;
+      console.log(`📊 [updateChatUnreadCounts] カウント更新: ${userEmail}`);
+      const unreadRef = db.collection('rooms').doc(roomId).collection('unreadCounts').doc(userEmail);
+      batch.set(unreadRef, {
+        unreadCount: FieldValue.increment(1),
+        lastUpdated: new Date()
+      }, { merge: true });
+    });
+
+    await batch.commit();
+    console.log('📊 [updateChatUnreadCounts] 未読カウント更新完了');
+  } catch (error) {
+    console.error('❌ [updateChatUnreadCounts] エラー:', error);
+  }
+}
 
 /**
  * チャットメッセージのFCM通知送信
