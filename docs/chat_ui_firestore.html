@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-11-13 12:45 -->
+  <!-- Cache Bust: 2025-11-23 17:00 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <base target="_top">
@@ -554,6 +554,7 @@
     let currentRoomId = '';
     let currentRoomName = '';
     let usersCache = []; // ユーザー一覧キャッシュ（アイコン表示用）
+    let unsubscribeListener = null; // Firestoreリスナー解除用
 
     // URLパラメータを取得（PWA版で使用）
     const urlParams = new URLSearchParams(window.location.search);
@@ -877,13 +878,21 @@
 
     // Firestoreメッセージをリアルタイムリスニング
     function startListening() {
+      // 既にリスナーが登録されている場合は何もしない（重複防止）
+      if (unsubscribeListener) {
+        console.log('[Firestore] リスナーは既に登録されています');
+        return;
+      }
+
+      console.log('[Firestore] メッセージリスニング開始:', currentRoomId);
+
       const q = query(
         collection(db, `rooms/${currentRoomId}/messages`),
         orderBy('timestamp', 'desc'),
         limit(50)
       );
 
-      onSnapshot(q, (snapshot) => {
+      unsubscribeListener = onSnapshot(q, (snapshot) => {
         console.log('[Firestore] メッセージ更新:', snapshot.size + '件');
 
         const container = document.getElementById('messagesContainer');
