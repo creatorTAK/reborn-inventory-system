@@ -535,12 +535,14 @@
 
     // グローバル変数
     let currentUserName = '';
+    let currentUserEmail = '';
     let usersCache = []; // ユーザーアイコン表示用キャッシュ
     let unsubscribeRooms = null; // Firestoreリスナーの解除用
 
     // PWA版：URLパラメータから取得（GASテンプレート変数は使用しない）
     const isPWAFlag        = true;  // PWA版として動作
     const pwaUserNameParam = getQueryParam('userName') || '';
+    const pwaUserEmailParam = getQueryParam('userEmail') || '';
     const gasUserNameParam = '';
     const pwaParentOriginParam = window.location.origin;  // PWA版のorigin
     const pwaPmTokenParam = '';
@@ -586,8 +588,14 @@
         } catch (e) {
           currentUserName = pwaUserNameParam;
         }
+        try {
+          currentUserEmail = JSON.parse(pwaUserEmailParam);
+        } catch (e) {
+          currentUserEmail = pwaUserEmailParam;
+        }
         document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
         console.log('[PWA] ユーザー名設定:', currentUserName);
+        console.log('[PWA] ユーザーEmail設定:', currentUserEmail);
       }
 
       // ユーザー一覧を取得してキャッシュ（アイコン表示用）
@@ -916,8 +924,8 @@
       container.appendChild(wrapper);
 
       // 未読カウントをリアルタイムで取得・更新
-      if (currentUserName) {
-        const unreadRef = doc(db, `rooms/${room.id}/unreadCounts/${currentUserName}`);
+      if (currentUserEmail) {
+        const unreadRef = doc(db, `rooms/${room.id}/unreadCounts/${currentUserEmail}`);
         onSnapshot(unreadRef, (unreadDoc) => {
           const badgeEl = document.getElementById(`unread-badge-${room.id}`);
           if (badgeEl) {
