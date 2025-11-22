@@ -8112,9 +8112,10 @@ async function generateProductId() {
  * @param {Object} formData - フォームデータ
  * @param {String} productId - 商品番号
  * @param {String} userEmail - ユーザーメールアドレス
+ * @param {String} userName - ユーザー名
  * @returns {Object} Firestoreドキュメント
  */
-function convertFormToFirestoreDoc(formData, productId, userEmail) {
+function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
   const now = new Date();
 
   // 基本情報
@@ -8291,7 +8292,7 @@ async function saveProductToFirestore(formData) {
     }
 
     // Firestoreドキュメント作成
-    const doc = convertFormToFirestoreDoc(formData, productId, userEmail);
+    const doc = convertFormToFirestoreDoc(formData, productId, userEmail, userName);
     console.log(`[saveProductToFirestore] ドキュメント作成完了`);
 
     // Firestoreに保存（ドキュメントIDは商品番号）
