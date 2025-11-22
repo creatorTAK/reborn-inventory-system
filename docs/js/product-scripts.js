@@ -8260,20 +8260,24 @@ async function saveProductToFirestore(formData) {
     }
 
     // ユーザー情報取得（localStorage優先、Firebase Auth代替）
-    let userEmail = localStorage.getItem('reborn_user_email') || 'unknown@example.com';
-    let userName = localStorage.getItem('reborn_user_name') || '匿名ユーザー';
-    
-    if (!userEmail || userEmail === 'unknown@example.com') {
-      // localStorageにない場合のみFirebase Authを確認
+    let userEmail = localStorage.getItem('reborn_user_email');
+    let userName = localStorage.getItem('reborn_user_name');
+
+    if (userEmail && userName) {
+      // localStorageから正常取得
+      console.log('[saveProductToFirestore] localStorageからユーザー情報取得:', { userEmail, userName });
+    } else {
+      // localStorageにない場合、Firebase Authを確認
       if (firebase.auth && firebase.auth().currentUser) {
         userEmail = firebase.auth().currentUser.email;
         userName = firebase.auth().currentUser.displayName || userEmail;
         console.log('[saveProductToFirestore] Firebase Authからユーザー情報取得:', { userEmail, userName });
       } else {
-        console.warn('[saveProductToFirestore] ユーザー情報なし、デフォルト値使用');
+        // どちらもない場合のデフォルト
+        userEmail = userEmail || 'unknown@example.com';
+        userName = userName || '匿名ユーザー';
+        console.warn('[saveProductToFirestore] ユーザー情報なし、デフォルト値使用:', { userEmail, userName });
       }
-    } else {
-      console.log('[saveProductToFirestore] localStorageからユーザー情報取得:', { userEmail, userName });
     }
 
     // 商品番号生成
