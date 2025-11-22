@@ -8259,21 +8259,23 @@ async function saveProductToFirestore(formData) {
       throw new Error('Firestoreが初期化されていません');
     }
 
-    // ユーザー情報取得（localStorage優先、Firebase Auth代替）
-    let userEmail = localStorage.getItem('reborn_user_email');
-    let userName = localStorage.getItem('reborn_user_name');
+    // ユーザー情報取得（URLパラメータ優先、localStorage代替、Firebase Auth最終手段）
+    const urlParams = new URLSearchParams(window.location.search);
+    let userEmail = urlParams.get('userEmail') || localStorage.getItem('reborn_user_email');
+    let userName = urlParams.get('userName') || localStorage.getItem('reborn_user_name');
 
     if (userEmail && userName) {
-      // localStorageから正常取得
-      console.log('[saveProductToFirestore] localStorageからユーザー情報取得:', { userEmail, userName });
+      // URLパラメータまたはlocalStorageから正常取得
+      const source = urlParams.get('userName') ? 'URLパラメータ' : 'localStorage';
+      console.log(`[saveProductToFirestore] ${source}からユーザー情報取得:`, { userEmail, userName });
     } else {
-      // localStorageにない場合、Firebase Authを確認
+      // URLパラメータとlocalStorageにない場合、Firebase Authを確認
       if (firebase.auth && firebase.auth().currentUser) {
         userEmail = firebase.auth().currentUser.email;
         userName = firebase.auth().currentUser.displayName || userEmail;
         console.log('[saveProductToFirestore] Firebase Authからユーザー情報取得:', { userEmail, userName });
       } else {
-        // どちらもない場合のデフォルト
+        // どれもない場合のデフォルト
         userEmail = userEmail || 'unknown@example.com';
         userName = userName || '匿名ユーザー';
         console.warn('[saveProductToFirestore] ユーザー情報なし、デフォルト値使用:', { userEmail, userName });
