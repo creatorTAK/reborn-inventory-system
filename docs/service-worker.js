@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v29-rollback'; // ロールバック：添付アイコン調整前の安定版に戻す
+const CACHE_NAME = 'reborn-v30-emergency'; // 緊急ロールバック：11/22 18:33 完全解決版に戻す
 const urlsToCache = [
   '/',
   '/index.html',
