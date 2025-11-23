@@ -1627,26 +1627,28 @@
         }
       }
 
-      // ✅ オーナー権限の場合、サーバー側でオーナー重複チェック
+      // ✅ オーナー権限の場合、Firestoreで既存ユーザー数をチェック
       if (permissionId === 'owner') {
         try {
-          const baseUrl = '/gas-proxy';
-          const response = await fetch(baseUrl + '?action=getExistingUserCount');
-          const data = await response.json();
+          const db = firebase.firestore();
+          const usersSnapshot = await db.collection('users').get();
+          const userCount = usersSnapshot.size;
 
-          if (data.success && data.count > 0) {
+          console.log('[saveUserInfo] 既存ユーザー数:', userCount);
+
+          if (userCount > 0) {
             // 既にユーザーが存在する場合、オーナー登録を拒否
             resultDiv.textContent = '❌ 既にユーザーが登録されています。スタッフまたは外注で登録してください。';
             resultDiv.className = 'step-result error';
             resultDiv.style.display = 'block';
-            console.log('[saveUserInfo] ❌ オーナー重複登録を拒否（既存ユーザー数: ' + data.count + '）');
+            console.log('[saveUserInfo] ❌ オーナー重複登録を拒否（既存ユーザー数: ' + userCount + '）');
             return;
           }
 
           console.log('[saveUserInfo] ✅ 初回登録者のためオーナー権限を許可');
         } catch (error) {
           console.error('❌ オーナー重複チェックエラー:', error);
-          resultDiv.textContent = '❌ サーバーとの通信に失敗しました。もう一度お試しください。';
+          resultDiv.textContent = '❌ ユーザー数の確認に失敗しました。もう一度お試しください。';
           resultDiv.className = 'step-result error';
           resultDiv.style.display = 'block';
           return;
@@ -1680,20 +1682,8 @@
           console.error('❌ IndexedDB保存エラー');
         };
 
-        // GAS側のPropertiesServiceにも保存
-        const baseUrl = '/gas-proxy';
-        fetch(baseUrl + '?action=setOperatorName&name=' + encodeURIComponent(userName))
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              console.log('✅ 担当者名をGASに保存成功');
-            } else {
-              console.warn('⚠️ 担当者名のGAS保存失敗:', data.message);
-            }
-          })
-          .catch(error => {
-            console.warn('⚠️ 担当者名のGAS保存エラー:', error);
-          });
+        // PWA版ではFirestoreのみに保存（GAS Proxyは不要）
+        console.log('✅ PWA版：Firestoreに保存予定（端末登録時に自動保存）');
 
         resultDiv.textContent = '✅ ユーザー情報を保存しました！\n次に「① 通知を許可」ボタンを押してください。';
         resultDiv.className = 'step-result success';
