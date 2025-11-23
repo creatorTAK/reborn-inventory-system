@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v31-speedup'; // 個別チャット通知高速化：userEmail追加
+const CACHE_NAME = 'reborn-v32-nolog'; // コンソールクラッシュ修正：大量ログ削除
 const urlsToCache = [
   '/',
   '/index.html',
