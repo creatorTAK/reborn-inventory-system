@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-11-23 17:00 -->
+  <!-- Cache Bust: 2025-11-13 12:45 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <base target="_top">
@@ -550,50 +550,30 @@
 
     // グローバル変数（JSON.stringifyで安全に受け取る）
     let currentUserName = '';
-    let currentUserEmail = '';
     let currentRoomId = '';
     let currentRoomName = '';
     let usersCache = []; // ユーザー一覧キャッシュ（アイコン表示用）
-    let unsubscribeListener = null; // Firestoreリスナー解除用
 
-    // URLパラメータを取得（PWA版で使用）
-    const urlParams = new URLSearchParams(window.location.search);
+    // GASテンプレート変数をJavaScript変数に変換（変数名の衝突を避ける）
+    const isPWAFlag        = <?= JSON.stringify(!!isPWA) ?>;
+    const pwaUserNameParam = <?= JSON.stringify(typeof pwaUserName !== 'undefined' ? pwaUserName : "") ?>;
+    // roomId はシングルクォートで直接展開（JSON.stringify不要）
+    const pwaRoomIdParam   = '<?= typeof pwaRoomId !== "undefined" ? pwaRoomId : "" ?>';
+    const gasUserNameParam = <?= JSON.stringify(typeof gasUserName !== 'undefined' ? gasUserName : "") ?>;
+    const gasRoomIdParam   = '<?= typeof gasRoomId !== "undefined" ? gasRoomId : "" ?>';
+    const fcmTokenParam    = <?= JSON.stringify(typeof fcmToken !== 'undefined' ? fcmToken : "") ?>;
+    const gasBaseUrlParam  = '<?= typeof gasBaseUrl !== "undefined" ? gasBaseUrl : "" ?>';  // ✅ API呼び出し用URL
+    const sessionIdParam   = '<?= typeof sessionId !== "undefined" ? sessionId : "unknown" ?>';  // セッションID
 
-    // PWA版: URLパラメータから取得
-    const pwaUserNameParam = urlParams.get('userName') || '';
-    const pwaRoomIdParam   = urlParams.get('roomId') || '';
-    const pwaUserEmailParam = urlParams.get('userEmail') || '';
-    const sessionIdParam   = urlParams.get('sessionId') || 'unknown';
-
-    // GAS版の変数（PWA版では未使用だが互換性のため定義）
-    const gasUserNameParam = '';
-    const gasRoomIdParam   = '';
-    const fcmTokenParam    = '';
-    const gasBaseUrlParam  = '';
-
-    // 判定ロジック：iframe内かどうかで判定
+    // 判定ロジック：明示フラグ優先、補助として iframe 内かつ userName/fcmToken のどちらかが非空
     const isEmbedded = (window.top !== window); // iframe内ならtrue
-    const isPWA = isEmbedded; // PWA版は常にiframe内で動作
+    const looksLikePWA = isEmbedded && (pwaUserNameParam !== "" || fcmTokenParam !== "");
+    const isPWA = isPWAFlag || looksLikePWA;
     const isGAS = !isPWA;
-
-    console.log('[Chat UI] 初期化情報:', {
-      isPWA: isPWA,
-      isEmbedded: isEmbedded,
-      userName: pwaUserNameParam,
-      roomId: pwaRoomIdParam,
-      userEmail: pwaUserEmailParam,
-      sessionId: sessionIdParam
-    });
 
     // 初期化
     document.addEventListener('DOMContentLoaded', async function() {
-      console.log('='.repeat(80));
-      console.log('[Chat UI] 🚀 初期化開始');
-      console.log('[Chat UI] isPWA:', isPWA, 'isGAS:', isGAS);
-      console.log('[Chat UI] currentUserName:', currentUserName);
-      console.log('[Chat UI] currentRoomId:', currentRoomId);
-      console.log('[Chat UI] unsubscribeListener:', unsubscribeListener);
-      console.log('='.repeat(80));
+      console.log('[Chat UI] 初期化開始');
 
       // ユーザー名設定（ルーム情報取得より前に設定）
       if (isGAS) {
@@ -615,20 +595,32 @@
           showUserSelect();
         }
       } else {
-        // PWA版：URLパラメータから取得（デコード済みの文字列）
-        currentUserName = pwaUserNameParam;
-        currentUserEmail = pwaUserEmailParam;
+        // PWA版：URLパラメータから取得（親ページのlocalStorageから渡される）
+        // JSON.parse()でダブルクォーテーションを削除
+        try {
+          currentUserName = JSON.parse(pwaUserNameParam);
+        } catch (e) {
+          // パースできない場合はそのまま使用
+          currentUserName = pwaUserNameParam;
+        }
 
-        console.log('[PWA] URLパラメータから設定:', {
-          userName: currentUserName,
-          userEmail: currentUserEmail
-        });
+        console.log('[PWA] pwaUserNameParam受信:', pwaUserNameParam);
+        console.log('[PWA] currentUserName設定:', currentUserName);
+        console.log('[PWA] currentUserName length:', currentUserName.length);
 
         if (currentUserName && currentUserName.trim() !== '') {
           document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
           console.log('[PWA] ユーザー名表示完了:', currentUserName);
         } else {
-          console.error('[PWA] ユーザー名が取得できませんでした');
+          // ユーザー名が未設定の場合、入力UIを表示
+          console.log('[PWA] ユーザー名未設定 - 入力UIを表示');
+          const container = document.getElementById('userNameInputContainer');
+          if (container) {
+            container.style.display = 'block';
+            console.log('[PWA] ユーザー名入力UI表示完了');
+          } else {
+            console.error('[PWA] userNameInputContainer が見つかりません');
+          }
         }
       }
 
@@ -640,43 +632,32 @@
       }
       console.log('[Room] roomId設定:', currentRoomId);
 
-      // roomIdの検証
-      if (!currentRoomId || currentRoomId.trim() === '') {
-        console.error('[Room] ❌ roomIdが空です');
-        document.getElementById('channelName').textContent = '⚠️ ルームIDエラー';
-        return; // 処理を中断
-      }
-
       // ルーム情報を取得してヘッダーに表示
       try {
-        console.log('[Room] Firestore検索開始:', currentRoomId);
         const roomRef = doc(db, 'rooms', currentRoomId);
         const roomDoc = await getDoc(roomRef);
-        console.log('[Room] Firestore検索完了 exists:', roomDoc.exists());
 
         if (roomDoc.exists()) {
           const roomData = roomDoc.data();
-          console.log('[Room] ルームデータ:', roomData);
 
           // 個別チャット（type: 'direct'）の場合は相手のユーザー名を動的生成
           if (roomData.type === 'direct' && roomData.members && Array.isArray(roomData.members)) {
             const otherMember = roomData.members.find(m => m !== currentUserName);
             currentRoomName = otherMember || '不明なユーザー';
-            console.log('[Room] 個別チャット 相手:', otherMember);
           } else {
             currentRoomName = roomData.name || '不明なルーム';
           }
 
           const roomIcon = roomData.icon || '💬';
           document.getElementById('channelName').textContent = `${roomIcon} ${currentRoomName}`;
-          console.log('[Room] ✅ ルーム名表示完了:', currentRoomName);
+          console.log('[Room] ルーム名表示完了:', currentRoomName);
         } else {
-          console.error('[Room] ❌ ルームが見つかりません:', currentRoomId);
-          document.getElementById('channelName').textContent = `⚠️ ルーム未作成 (${currentRoomId.substring(0, 20)}...)`;
+          console.error('[Room] ルームが見つかりません:', currentRoomId);
+          document.getElementById('channelName').textContent = '⚠️ ルームが見つかりません';
         }
       } catch (error) {
-        console.error('[Room] ❌ ルーム情報取得エラー:', error);
-        document.getElementById('channelName').textContent = '⚠️ 接続エラー';
+        console.error('[Room] ルーム情報取得エラー:', error);
+        document.getElementById('channelName').textContent = '⚠️ エラー';
       }
 
       // ユーザー一覧を取得してキャッシュ（アイコン表示用）
@@ -865,12 +846,23 @@
 
     // ユーザーアイコンURLを取得
     function getUserIconUrl(userName) {
+      console.log('[Icon] アイコンURL取得:', { userName, cacheSize: usersCache?.length || 0 });
+
       if (!userName || !usersCache || usersCache.length === 0) {
+        console.warn('[Icon] キャッシュが空またはユーザー名なし');
         return null;
       }
 
       const user = usersCache.find(u => u.userName === userName);
-      return (user && user.userIconUrl) ? user.userIconUrl : null;
+      console.log('[Icon] 検索結果:', user);
+
+      if (user && user.userIconUrl) {
+        console.log('[Icon] アイコンURL返却:', user.userIconUrl);
+        return user.userIconUrl;
+      } else {
+        console.warn('[Icon] アイコンURLなし:', userName);
+        return null;
+      }
     }
 
     // ファイルサイズフォーマット関数
@@ -884,60 +876,33 @@
 
     // Firestoreメッセージをリアルタイムリスニング
     function startListening() {
-      console.log('='.repeat(80));
-      console.log('[Firestore] 🎧 startListening() 呼び出し');
-      console.log('[Firestore] unsubscribeListener:', unsubscribeListener);
-      console.log('[Firestore] currentRoomId:', currentRoomId);
-      console.log('='.repeat(80));
-
-      // 既にリスナーが登録されている場合は何もしない（重複防止）
-      if (unsubscribeListener) {
-        console.warn('[Firestore] ⚠️ リスナーは既に登録されています - 重複呼び出しをブロック');
-        return;
-      }
-
-      console.log('[Firestore] ✅ メッセージリスニング開始:', currentRoomId);
-
       const q = query(
         collection(db, `rooms/${currentRoomId}/messages`),
         orderBy('timestamp', 'desc'),
         limit(50)
       );
 
-      unsubscribeListener = onSnapshot(q, (snapshot) => {
-        console.log('[Firestore] 📨 メッセージ更新:', snapshot.size + '件');
+      onSnapshot(q, (snapshot) => {
+        console.log('[Firestore] メッセージ更新:', snapshot.size + '件');
 
-        try {
-          const container = document.getElementById('messagesContainer');
-          if (!container) {
-            console.error('[Firestore] messagesContainer が見つかりません');
-            return;
-          }
+        const container = document.getElementById('messagesContainer');
+        container.innerHTML = '';
 
-          container.innerHTML = '';
+        // 新しい順で取得したので、逆順で表示
+        const messages = [];
+        snapshot.forEach((doc) => {
+          messages.unshift({ id: doc.id, ...doc.data() });
+        });
 
-          // 新しい順で取得したので、逆順で表示
-          const messages = [];
-          snapshot.forEach((doc) => {
-            messages.unshift({ id: doc.id, ...doc.data() });
-          });
+        messages.forEach((msg) => {
+          appendMessage(msg);
+        });
 
-          messages.forEach((msg) => {
-            try {
-              appendMessage(msg);
-            } catch (err) {
-              console.error('[Firestore] appendMessage エラー:', err, 'msg:', msg);
-            }
-          });
-
-          // 最下部にスクロール
-          container.scrollTop = container.scrollHeight;
-        } catch (err) {
-          console.error('[Firestore] スナップショット処理エラー:', err);
-        }
+        // 最下部にスクロール
+        container.scrollTop = container.scrollHeight;
       }, (error) => {
         console.error('[Firestore] リスニングエラー:', error);
-        // アラートは出さない（無限ループ防止）
+        alert('メッセージの受信に失敗しました: ' + error.message);
       });
     }
 
@@ -979,6 +944,9 @@
 
       // 自分のメッセージか他人のメッセージかで分岐
       const isMine = messageUserName === currentUserName;
+
+      // デバッグログ
+      console.log('[AppendMessage] msg.userName:', msg.userName, 'normalized:', messageUserName, 'currentUserName:', currentUserName, 'isMine:', isMine);
 
       item.className = isMine ? 'message-item message-item-mine' : 'message-item message-item-other';
       item.dataset.messageId = msg.id;
