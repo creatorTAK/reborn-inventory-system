@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v32-nolog'; // コンソールクラッシュ修正：大量ログ削除
+const CACHE_NAME = 'reborn-v33-noconsole'; // 緊急対応：全console無効化（Safari）
 const urlsToCache = [
   '/',
   '/index.html',
