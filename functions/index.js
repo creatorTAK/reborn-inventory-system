@@ -413,20 +413,42 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
     console.log('👥 [onChatMessageCreated] 通知対象:', targetMembers);
 
     // 対象メンバーのメールアドレスを取得
-    const usersSnapshot = await db.collection('users').get();
-    const memberEmails = [];
+    // roomData.memberEmails を優先使用（高速化）
+    let memberEmails = [];
 
-    usersSnapshot.forEach(userDoc => {
-      const userData = userDoc.data();
-      if (targetMembers.includes(userData.userName)) {
-        memberEmails.push({
-          userName: userData.userName,
-          userEmail: userDoc.id
-        });
-      }
-    });
+    if (roomData.memberEmails && roomData.memberEmails.length > 0) {
+      // memberEmails フィールドがある場合（個別チャット等）
+      console.log('📧 [onChatMessageCreated] memberEmails フィールドから取得（高速）');
 
-    console.log('📧 [onChatMessageCreated] メールアドレス取得:', memberEmails);
+      // 送信者のメールアドレスを特定
+      const senderEmail = messageData.userEmail || null;
+
+      // 送信者以外のメールアドレスを抽出
+      memberEmails = roomData.memberEmails
+        .filter(email => email !== senderEmail)
+        .map((email, index) => ({
+          userName: targetMembers[index] || 'Unknown',
+          userEmail: email
+        }));
+
+      console.log('📧 [onChatMessageCreated] memberEmails から取得:', memberEmails);
+    } else {
+      // memberEmails フィールドがない場合（旧データ、全体チャット等）
+      console.log('📧 [onChatMessageCreated] users コレクションから取得（低速）');
+      const usersSnapshot = await db.collection('users').get();
+
+      usersSnapshot.forEach(userDoc => {
+        const userData = userDoc.data();
+        if (targetMembers.includes(userData.userName)) {
+          memberEmails.push({
+            userName: userData.userName,
+            userEmail: userDoc.id
+          });
+        }
+      });
+
+      console.log('📧 [onChatMessageCreated] users スキャン完了:', memberEmails);
+    }
 
     // FCM通知送信と未読カウント更新を並列実行
     await Promise.allSettled([
@@ -552,3 +574,67 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
     console.error('❌ [sendChatNotifications] エラー:', error);
   }
 }
+
+/**
+ * デバイス登録時のユーザー自動作成
+ * Firestoreトリガー: users/{userEmail}/devices/{deviceId} 作成時
+ *
+ * 目的: 新規デバイス登録時に、usersコレクションにユーザードキュメントを自動作成
+ * これにより、手動でのユーザー登録作業が不要になる
+ */
+console.log('🔧 [onDeviceCreated] 関数初期化完了');
+
+exports.onDeviceCreated = onDocumentCreated('users/{userEmail}/devices/{deviceId}', async (event) => {
+  const userEmail = event.params.userEmail;
+  const deviceId = event.params.deviceId;
+
+  console.log('📱 [onDeviceCreated] デバイス登録検知:', { userEmail, deviceId });
+
+  try {
+    const deviceData = event.data.data();
+
+    if (!deviceData) {
+      console.error('❌ [onDeviceCreated] デバイスデータが空');
+      return;
+    }
+
+    const { userName, permissionId, permissionDisplay } = deviceData;
+    console.log('📋 [onDeviceCreated] デバイス情報:', { userName, permissionId, permissionDisplay });
+
+    // usersコレクションのドキュメント参照
+    const userDocRef = db.collection('users').doc(userEmail);
+    const userDoc = await userDocRef.get();
+
+    if (userDoc.exists) {
+      console.log('✅ [onDeviceCreated] ユーザードキュメント既存、更新のみ実行');
+
+      // 最終使用日時のみ更新
+      await userDocRef.update({
+        lastUsedAt: new Date(),
+        userName: userName // ユーザー名が変更された場合に備えて更新
+      });
+
+      console.log('✅ [onDeviceCreated] ユーザー情報更新完了:', userEmail);
+    } else {
+      console.log('🆕 [onDeviceCreated] 新規ユーザー、ドキュメント作成');
+
+      // 新規ユーザードキュメント作成
+      const newUserData = {
+        userName: userName,
+        userEmail: userEmail,
+        permissionId: permissionId,
+        permissionDisplay: permissionDisplay,
+        status: 'アクティブ', // チャットユーザー選択画面で表示されるために必要
+        createdAt: new Date(),
+        lastUsedAt: new Date()
+      };
+
+      await userDocRef.set(newUserData);
+
+      console.log('✅ [onDeviceCreated] 新規ユーザー作成完了:', newUserData);
+    }
+
+  } catch (error) {
+    console.error('❌ [onDeviceCreated] エラー:', error);
+  }
+});
