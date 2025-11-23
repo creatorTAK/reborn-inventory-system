@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v27'; // PWA版：個別チャット修正（getUserList削除）
+const CACHE_NAME = 'reborn-v28'; // PWA版：チャット無限ループ修正（Firestoreリスナー重複防止）
 const urlsToCache = [
   '/',
   '/index.html',
