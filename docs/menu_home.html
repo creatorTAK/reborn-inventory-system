@@ -117,28 +117,6 @@
       transition: transform 0.2s;
     }
 
-    .menu-item-badge {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      min-width: 20px;
-      height: 20px;
-      background: #ef4444;
-      color: white;
-      border-radius: 10px;
-      font-size: 12px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 6px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-
-    .menu-item {
-      position: relative;
-    }
-
     /* アコーディオンメニュー */
     .accordion-menu {
       background: white;
@@ -269,6 +247,7 @@
           <span class="menu-item-icon">📝</span>
           <span>商品登録</span>
         </div>
+        <span class="menu-item-arrow">›</span>
       </a>
 
       <!-- 在庫管理 -->
@@ -277,6 +256,7 @@
           <span class="menu-item-icon">📦</span>
           <span>在庫管理</span>
         </div>
+        <span class="menu-item-arrow">›</span>
       </a>
 
       <!-- 入出庫履歴 -->
@@ -285,6 +265,7 @@
           <span class="menu-item-icon">📊</span>
           <span>入出庫履歴</span>
         </div>
+        <span class="menu-item-arrow">›</span>
       </a>
 
       <!-- 棚卸 -->
@@ -293,6 +274,7 @@
           <span class="menu-item-icon">📋</span>
           <span>棚卸</span>
         </div>
+        <span class="menu-item-arrow">›</span>
       </a>
 
       <!-- 仕入／買掛 -->
@@ -301,6 +283,7 @@
           <span class="menu-item-icon">💰</span>
           <span>仕入／買掛</span>
         </div>
+        <span class="menu-item-arrow">›</span>
       </a>
 
       <!-- 売上／売掛 -->
@@ -309,6 +292,7 @@
           <span class="menu-item-icon">💵</span>
           <span>売上／売掛</span>
         </div>
+        <span class="menu-item-arrow">›</span>
       </a>
 
       <!-- 売上分析 -->
@@ -317,6 +301,7 @@
           <span class="menu-item-icon">📈</span>
           <span>売上分析</span>
         </div>
+        <span class="menu-item-arrow">›</span>
       </a>
 
       <!-- チャット -->
@@ -325,7 +310,7 @@
           <span class="menu-item-icon">💬</span>
           <span>チャット</span>
         </div>
-        <span class="menu-item-badge" id="menu-chat-badge" style="display: none;"></span>
+        <span class="menu-item-arrow">›</span>
       </a>
 
       <!-- マスタ管理（アコーディオン） -->
@@ -478,89 +463,6 @@
         alert('エラー: ページ遷移に失敗しました - ' + error.message);
       }
     };
-
-    // チャットバッジの未読数を監視
-    function listenToChatBadge() {
-      if (!firestoreReady || !db) {
-        console.warn('[menu_home] Firestoreが初期化されていないため、バッジ監視をスキップ');
-        return;
-      }
-
-      // URLパラメータからuserEmailを取得（iframe内でlocalStorageが使えない場合の対策）
-      const urlParams = new URLSearchParams(window.location.search);
-      const userEmail = urlParams.get('userEmail') || localStorage.getItem('reborn_user_email');
-
-      if (!userEmail) {
-        console.warn('[menu_home] ユーザーメールが取得できないため、バッジ監視をスキップ');
-        return;
-      }
-
-      console.log('[menu_home] チャットバッジ監視開始:', userEmail);
-
-      // roomsコレクション全体を監視
-      db.collection('rooms').onSnapshot(async (snapshot) => {
-        let totalUnreadCount = 0;
-        const promises = [];
-
-        console.log('[menu_home] ルーム数:', snapshot.size);
-
-        snapshot.forEach((doc) => {
-          const roomData = doc.data();
-
-          // 自分が削除したルームはスキップ
-          if (roomData.deleted && Array.isArray(roomData.deleted) && roomData.deleted.includes(userEmail)) {
-            return;
-          }
-
-          // 各ルームの未読数を取得
-          const promise = db.collection('rooms').doc(doc.id).collection('unreadCounts').doc(userEmail).get()
-            .then((unreadDoc) => {
-              if (unreadDoc.exists) {
-                const count = unreadDoc.data().count || 0;
-                console.log('[menu_home] ルーム未読数:', doc.id, count);
-                return count;
-              }
-              return 0;
-            })
-            .catch((error) => {
-              console.error('[menu_home] 未読数取得エラー:', doc.id, error);
-              return 0;
-            });
-
-          promises.push(promise);
-        });
-
-        // 全ての未読数を集計
-        const counts = await Promise.all(promises);
-        totalUnreadCount = counts.reduce((sum, count) => sum + count, 0);
-
-        console.log('[menu_home] 合計未読数:', totalUnreadCount);
-        updateChatBadge(totalUnreadCount);
-      }, (error) => {
-        console.error('[menu_home] チャットバッジ監視エラー:', error);
-      });
-    }
-
-    // バッジ表示を更新
-    function updateChatBadge(count) {
-      const badge = document.getElementById('menu-chat-badge');
-      if (!badge) return;
-
-      if (count > 0) {
-        badge.textContent = count > 99 ? '99+' : count;
-        badge.style.display = 'flex';
-        console.log('[menu_home] チャットバッジ更新:', count);
-      } else {
-        badge.style.display = 'none';
-        console.log('[menu_home] チャットバッジ非表示');
-      }
-    }
-
-    // ページ読み込み時にバッジ監視を開始
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('[menu_home] DOMContentLoaded - バッジ監視開始');
-      listenToChatBadge();
-    });
 
     console.log('[menu_home] ========== スクリプト読み込み完了 ==========');
   </script>
