@@ -6838,55 +6838,53 @@ ${prompt || '（未設定）'}
     }
 
     /**
-     * 基本設定を読み込む
+     * 基本設定を読み込む（フォールバック方式）
      */
     function loadBasicSettings() {
-      // PWA版では Firestore から読み込み（暫定: localStorage使用）
       try {
         const config = JSON.parse(localStorage.getItem('config') || '{}');
-        
-        // ユーザー名
-        if (config.userName) {
-          const userNameInput = document.getElementById('basicUserName');
-          if (userNameInput) {
-            userNameInput.value = config.userName;
-          }
-          
+
+        // 🔧 優先順位: config > reborn_user_* > デフォルト値
+        const userName = config.userName || localStorage.getItem('reborn_user_name') || '';
+        const userEmail = config.email || localStorage.getItem('reborn_user_email') || '';
+
+        // ユーザー名を設定
+        const userNameInput = document.getElementById('basicUserName');
+        if (userNameInput) {
+          userNameInput.value = userName;
+
           // クリアボタンの表示制御
           const clearBtn = document.getElementById('clearUserNameBtn');
           if (clearBtn) {
-            clearBtn.style.display = 'block';
+            clearBtn.style.display = userName ? 'block' : 'none';
           }
         }
-        
-        // メールアドレス
-        if (config.email) {
-          const emailInput = document.getElementById('basicUserEmail');
-          if (emailInput) {
-            emailInput.value = config.email;
-          }
+
+        // メールアドレスを設定
+        const emailInput = document.getElementById('basicUserEmail');
+        if (emailInput) {
+          emailInput.value = userEmail;
         }
-        
-        // 通知設定
-        if (config.notificationEnabled !== undefined) {
-          const notifCheckbox = document.getElementById('basicNotificationEnabled');
-          if (notifCheckbox) {
-            notifCheckbox.checked = config.notificationEnabled;
-          }
+
+        // 通知設定（デフォルトtrue）
+        const notificationEnabled = config.notificationEnabled !== undefined ? config.notificationEnabled : true;
+        const notificationSound = config.notificationSound !== undefined ? config.notificationSound : true;
+
+        const notifCheckbox = document.getElementById('basicNotificationEnabled');
+        if (notifCheckbox) {
+          notifCheckbox.checked = notificationEnabled;
         }
-        
-        if (config.notificationSound !== undefined) {
-          const soundCheckbox = document.getElementById('basicNotificationSound');
-          if (soundCheckbox) {
-            soundCheckbox.checked = config.notificationSound;
-          }
+
+        const soundCheckbox = document.getElementById('basicNotificationSound');
+        if (soundCheckbox) {
+          soundCheckbox.checked = notificationSound;
         }
-        
-        console.log('✅ 基本設定を読み込みました (localStorage)');
+
+        console.log('✅ 基本設定を読み込みました (フォールバック方式):', { userName, userEmail, notificationEnabled, notificationSound });
       } catch (e) {
         console.error('❌ 基本設定読み込みエラー:', e);
       }
-      
+
       // ローディング非表示、コンテンツ表示
       document.getElementById('basicSettingsLoading').style.display = 'none';
       document.getElementById('basicSettingsContent').style.display = 'block';
