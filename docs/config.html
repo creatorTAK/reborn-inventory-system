@@ -4492,34 +4492,19 @@ ${descFormattedNumber}`;
     /**
      * 設定を保存
      */
-    window.saveConfig = function() {
+    window.saveConfig = async function() {
       try {
         console.log('=== saveConfig 開始 ===');
         const managementConfig = collectManagementConfig();
         console.log('管理番号設定:', managementConfig);
 
         // 基本設定を保存
-        const userName = document.getElementById('basicUserName');
-        const userEmail = document.getElementById('basicUserEmail');
-        const notificationEnabled = document.getElementById('basicNotificationEnabled');
-        const notificationSound = document.getElementById('basicNotificationSound');
-
-        if (userName && userName.value.trim()) {
-          const basicSettings = {
-            userName: userName.value.trim(),
-            email: userEmail ? userEmail.value.trim() : '',
-            notificationEnabled: notificationEnabled ? notificationEnabled.checked : true,
-            notificationSound: notificationSound ? notificationSound.checked : true
-          };
-
-        console.log('基本設定を保存:', basicSettings);
-
-        // 基本設定をサーバーに保存
-        // PWA版では不要（Firestoreを使用）
-        }
+        await saveBasicSettings();
 
         // アイコン画像をアップロード（選択されている場合）
-        // PWA版では画像アップロードは別実装（Firebaseを使用）
+        if (pendingUserIconData) {
+          await uploadUserIcon();
+        }
 
       // 画像管理設定をLocalStorageに保存
       const imageCheckbox = document.getElementById('enableProductImageSave');
@@ -6910,9 +6895,9 @@ ${prompt || '（未設定）'}
     /**
      * 基本設定を保存する
      */
-    function saveBasicSettings() {
+    async function saveBasicSettings() {
       const userName = document.getElementById('basicUserName').value.trim();
-      
+
       if (!userName) {
         alert('ユーザー名を入力してください');
         return;
@@ -6924,27 +6909,46 @@ ${prompt || '（未設定）'}
         notificationSound: document.getElementById('basicNotificationSound').checked
       };
 
-      // PWA版では Firestore に保存（暫定: localStorage使用）
       try {
-        // 既存設定を読み込み
+        // 1. localStorageに保存（即時反映用）
         const config = JSON.parse(localStorage.getItem('config') || '{}');
-        
-        // 基本設定を更新
         config.userName = settings.userName;
         config.notificationEnabled = settings.notificationEnabled;
         config.notificationSound = settings.notificationSound;
-        
-        // localStorage に保存
         localStorage.setItem('config', JSON.stringify(config));
-        
+
+        // 2. FCMトークンを取得
+        const fcmToken = localStorage.getItem('fcm_token');
+        if (!fcmToken) {
+          throw new Error('FCMトークンが見つかりません。再ログインしてください。');
+        }
+
+        // 3. GAS APIを呼び出してスプレッドシートに保存
+        const GAS_API_URL = '/gas-proxy';
+        const response = await fetch(GAS_API_URL + '?action=saveUserBasicSettingsByToken', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fcmToken: fcmToken,
+            settings: settings
+          })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.message || '保存に失敗しました');
+        }
+
         // クリアボタンの表示制御
         const clearBtn = document.getElementById('clearUserNameBtn');
         if (clearBtn) {
           clearBtn.style.display = settings.userName ? 'block' : 'none';
         }
-        
+
         alert('✅ 基本設定を保存しました');
-        console.log('✅ 基本設定を保存しました (localStorage):', settings);
+        console.log('✅ 基本設定を保存しました (localStorage + FCM通知登録シート):', settings);
+
       } catch (e) {
         console.error('❌ 基本設定保存エラー:', e);
         alert('❌ 保存に失敗しました: ' + e.message);
@@ -7058,6 +7062,53 @@ ${prompt || '（未設定）'}
         reader.readAsDataURL(file);
       }
     });
+
+    /**
+     * ユーザーアイコンをアップロード
+     */
+    async function uploadUserIcon() {
+      if (!pendingUserIconData) {
+        console.log('アップロードする画像データがありません');
+        return;
+      }
+
+      try {
+        // 1. FCMトークンを取得
+        const fcmToken = localStorage.getItem('fcm_token');
+        if (!fcmToken) {
+          throw new Error('FCMトークンが見つかりません。再ログインしてください。');
+        }
+
+        // 2. GAS APIを呼び出してアイコンをアップロード
+        const GAS_API_URL = '/gas-proxy';
+        const response = await fetch(GAS_API_URL + '?action=uploadUserIconByToken', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fcmToken: fcmToken,
+            base64Data: pendingUserIconData
+          })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.message || 'アップロードに失敗しました');
+        }
+
+        // 3. localStorageにも保存（即時反映用）
+        localStorage.setItem('user_icon_url', pendingUserIconData);
+
+        console.log('✅ アイコンを保存しました (localStorage + FCM通知登録シート)');
+
+        // プレビューをクリア
+        pendingUserIconData = null;
+
+      } catch (e) {
+        console.error('❌ アイコンアップロードエラー:', e);
+        throw e; // saveConfig()でキャッチされるようにthrow
+      }
+    }
   </script>
 
   <!-- 戻るボタン処理 -->

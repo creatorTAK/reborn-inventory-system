@@ -516,7 +516,7 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
 
     console.log(`💬 [sendChatNotifications] FCM送信開始: ${unmutedUsers.length}人 (ミュート除外後)`);
 
-    // 各ユーザーのFCMトークンを取得（activeDevices から高速取得）
+    // 🔧 修正: 各ユーザーの通知設定をチェックしてトークンを取得
     const tokensPromises = unmutedUsers.map(async (user) => {
       try {
         const { userName, userEmail } = user;
@@ -527,58 +527,124 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
 
         if (!activeDeviceDoc.exists) {
           console.log(`⚠️ [sendChatNotifications] activeDevices未登録: ${userName}`);
-          return [];
+          return { tokens: [], soundEnabled: true };
         }
 
         const data = activeDeviceDoc.data();
+
+        // 🔧 通知が無効になっている場合はスキップ
+        if (data.notificationEnabled === false) {
+          console.log(`🔕 [sendChatNotifications] 通知無効: ${userName}`);
+          return { tokens: [], soundEnabled: false };
+        }
+
         const tokens = Array.isArray(data?.fcmTokens) ? data.fcmTokens.filter(Boolean) : [];
 
         if (tokens.length === 0) {
           console.log(`⚠️ [sendChatNotifications] アクティブトークンなし: ${userName}`);
-          return [];
+          return { tokens: [], soundEnabled: data.notificationSound !== false };
         }
 
         console.log(`✅ [sendChatNotifications] トークン取得成功: ${userName} (${tokens.length}件)`);
-        return tokens;
+        return {
+          tokens: tokens,
+          soundEnabled: data.notificationSound !== false // デフォルトtrue
+        };
       } catch (error) {
         console.error(`❌ [sendChatNotifications] ユーザー${user.userName}のトークン取得エラー:`, error);
-        return [];
+        return { tokens: [], soundEnabled: true };
       }
     });
 
-    const tokens = (await Promise.all(tokensPromises)).flat().filter(token => token);
+    const results = await Promise.all(tokensPromises);
 
-    if (tokens.length === 0) {
-      console.log('⏭️ [sendChatNotifications] FCMトークンなし、スキップ');
+    // 通知音有効/無効でトークンを分離
+    const tokensWithSound = [];
+    const tokensWithoutSound = [];
+
+    results.forEach(result => {
+      if (result.tokens.length > 0) {
+        if (result.soundEnabled) {
+          tokensWithSound.push(...result.tokens);
+        } else {
+          tokensWithoutSound.push(...result.tokens);
+        }
+      }
+    });
+
+    const totalTokens = tokensWithSound.length + tokensWithoutSound.length;
+
+    if (totalTokens === 0) {
+      console.log('⏭️ [sendChatNotifications] 通知対象トークンなし、スキップ');
       return;
     }
 
-    console.log(`📨 [sendChatNotifications] 送信先トークン数: ${tokens.length}`);
+    console.log(`📨 [sendChatNotifications] 送信先トークン数: ${totalTokens} (音あり: ${tokensWithSound.length}, 音なし: ${tokensWithoutSound.length})`);
 
-    // FCM通知メッセージ作成
-    const message = {
-      notification: {
-        title: `${senderName} - ${roomName}`,
-        body: messageText
-      },
-      data: {
-        type: 'CHAT_MESSAGE',
-        roomName: roomName,
-        senderName: senderName
-      },
-      tokens: tokens
-    };
+    // 🔧 通知音ありのトークンに送信
+    if (tokensWithSound.length > 0) {
+      const messageWithSound = {
+        notification: {
+          title: `${senderName} - ${roomName}`,
+          body: messageText
+        },
+        data: {
+          type: 'CHAT_MESSAGE',
+          roomName: roomName,
+          senderName: senderName
+        },
+        android: {
+          notification: {
+            sound: 'default'
+          }
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default'
+            }
+          }
+        },
+        tokens: tokensWithSound
+      };
 
-    // FCM送信
-    const response = await messaging.sendEachForMulticast(message);
-    console.log(`✅ [sendChatNotifications] FCM送信完了: 成功=${response.successCount}, 失敗=${response.failureCount}`);
+      const response = await messaging.sendEachForMulticast(messageWithSound);
+      console.log(`✅ [sendChatNotifications] 音あり送信完了: 成功=${response.successCount}, 失敗=${response.failureCount}`);
 
-    if (response.failureCount > 0) {
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          console.error(`❌ [sendChatNotifications] 送信失敗 [${idx}]:`, resp.error);
-        }
-      });
+      if (response.failureCount > 0) {
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            console.error(`❌ [sendChatNotifications] 音あり送信失敗 [${idx}]:`, resp.error);
+          }
+        });
+      }
+    }
+
+    // 🔧 通知音なしのトークンに送信
+    if (tokensWithoutSound.length > 0) {
+      const messageWithoutSound = {
+        notification: {
+          title: `${senderName} - ${roomName}`,
+          body: messageText
+        },
+        data: {
+          type: 'CHAT_MESSAGE',
+          roomName: roomName,
+          senderName: senderName
+        },
+        tokens: tokensWithoutSound
+      };
+
+      const response = await messaging.sendEachForMulticast(messageWithoutSound);
+      console.log(`✅ [sendChatNotifications] 音なし送信完了: 成功=${response.successCount}, 失敗=${response.failureCount}`);
+
+      if (response.failureCount > 0) {
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            console.error(`❌ [sendChatNotifications] 音なし送信失敗 [${idx}]:`, resp.error);
+          }
+        });
+      }
     }
 
   } catch (error) {
