@@ -494,34 +494,25 @@
 
       console.log('[menu_home] チャットバッジ監視開始:', userEmail);
 
-      // roomsコレクション全体を監視して未読数を集計
-      db.collection('rooms').onSnapshot((snapshot) => {
-        let totalUnreadCount = 0;
+      // Collection Group Queryで全unreadCountsサブコレクションから自分のドキュメントを監視
+      db.collectionGroup('unreadCounts')
+        .where(firebase.firestore.FieldPath.documentId(), '==', userEmail)
+        .onSnapshot((snapshot) => {
+          let totalUnreadCount = 0;
 
-        snapshot.forEach((doc) => {
-          const roomData = doc.data();
+          console.log('[menu_home] 未読数ドキュメント数:', snapshot.size);
 
-          // 自分が削除したルームはスキップ
-          if (roomData.deleted && Array.isArray(roomData.deleted) && roomData.deleted.includes(userEmail)) {
-            return;
-          }
+          snapshot.forEach((doc) => {
+            const count = doc.data().count || 0;
+            console.log('[menu_home] ルーム未読数:', doc.ref.parent.parent.id, count);
+            totalUnreadCount += count;
+          });
 
-          // unreadCountsサブコレクションから自分の未読数を取得
-          db.collection('rooms').doc(doc.id).collection('unreadCounts').doc(userEmail).get()
-            .then((unreadDoc) => {
-              if (unreadDoc.exists) {
-                const count = unreadDoc.data().count || 0;
-                totalUnreadCount += count;
-                updateChatBadge(totalUnreadCount);
-              }
-            })
-            .catch((error) => {
-              console.error('[menu_home] 未読数取得エラー:', error);
-            });
+          console.log('[menu_home] 合計未読数:', totalUnreadCount);
+          updateChatBadge(totalUnreadCount);
+        }, (error) => {
+          console.error('[menu_home] チャットバッジ監視エラー:', error);
         });
-      }, (error) => {
-        console.error('[menu_home] チャットバッジ監視エラー:', error);
-      });
     }
 
     // バッジ表示を更新
