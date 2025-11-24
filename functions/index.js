@@ -3,6 +3,8 @@
  *
  * 商品登録時の即時通知システム
  * Firestoreトリガーで自動実行、100-200msで通知配信
+ *
+ * v2.1: 個別チャット通知高速化（memberEmails優先使用）
  */
 
 const {onDocumentCreated} = require('firebase-functions/v2/firestore');
@@ -452,7 +454,7 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
 
     // FCM通知送信と未読カウント更新を並列実行
     await Promise.allSettled([
-      sendChatNotifications(senderName, messageText, roomData.name || '個別チャット', memberEmails),
+      sendChatNotifications(senderName, messageText, roomData.name || '個別チャット', memberEmails, roomData.mutedBy || []),
       updateChatUnreadCounts(roomId, memberEmails)
     ]);
 
@@ -492,7 +494,7 @@ async function updateChatUnreadCounts(roomId, targetUsers) {
 /**
  * チャットメッセージのFCM通知送信
  */
-async function sendChatNotifications(senderName, messageText, roomName, targetUsers) {
+async function sendChatNotifications(senderName, messageText, roomName, targetUsers, mutedBy = []) {
   console.log('💬 [sendChatNotifications] 関数開始');
   try {
     if (targetUsers.length === 0) {
@@ -500,35 +502,44 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
       return;
     }
 
-    console.log(`💬 [sendChatNotifications] FCM送信開始: ${targetUsers.length}人`);
+    // ミュートユーザーを除外
+    const unmutedUsers = targetUsers.filter(user => !mutedBy.includes(user.userName));
 
-    // 各ユーザーのFCMトークンを取得
-    const tokensPromises = targetUsers.map(async (user) => {
+    if (unmutedUsers.length === 0) {
+      console.log('⏭️ [sendChatNotifications] 全員ミュート中、通知スキップ');
+      return;
+    }
+
+    if (mutedBy.length > 0) {
+      console.log(`🔕 [sendChatNotifications] ミュート中ユーザー: ${mutedBy.join(', ')}`);
+    }
+
+    console.log(`💬 [sendChatNotifications] FCM送信開始: ${unmutedUsers.length}人 (ミュート除外後)`);
+
+    // 各ユーザーのFCMトークンを取得（activeDevices から高速取得）
+    const tokensPromises = unmutedUsers.map(async (user) => {
       try {
         const { userName, userEmail } = user;
         console.log(`🔍 [sendChatNotifications] トークン取得: ${userName} (${userEmail})`);
 
-        const devicesSnapshot = await db.collection('users').doc(userEmail).collection('devices')
-          .where('active', '==', true)
-          .get();
+        // activeDevices/{userEmail} から直接取得（高速化）
+        const activeDeviceDoc = await db.collection('activeDevices').doc(userEmail).get();
 
-        if (devicesSnapshot.empty) {
-          console.log(`⚠️ [sendChatNotifications] アクティブデバイスなし: ${userName}`);
+        if (!activeDeviceDoc.exists) {
+          console.log(`⚠️ [sendChatNotifications] activeDevices未登録: ${userName}`);
           return [];
         }
 
-        const userTokens = [];
-        devicesSnapshot.forEach(deviceDoc => {
-          const deviceData = deviceDoc.data();
-          const fcmToken = deviceData?.fcmToken;
+        const data = activeDeviceDoc.data();
+        const tokens = Array.isArray(data?.fcmTokens) ? data.fcmTokens.filter(Boolean) : [];
 
-          if (fcmToken) {
-            console.log(`✅ [sendChatNotifications] トークン取得成功: ${userName}`);
-            userTokens.push(fcmToken);
-          }
-        });
+        if (tokens.length === 0) {
+          console.log(`⚠️ [sendChatNotifications] アクティブトークンなし: ${userName}`);
+          return [];
+        }
 
-        return userTokens;
+        console.log(`✅ [sendChatNotifications] トークン取得成功: ${userName} (${tokens.length}件)`);
+        return tokens;
       } catch (error) {
         console.error(`❌ [sendChatNotifications] ユーザー${user.userName}のトークン取得エラー:`, error);
         return [];
@@ -638,3 +649,9 @@ exports.onDeviceCreated = onDocumentCreated('users/{userEmail}/devices/{deviceId
     console.error('❌ [onDeviceCreated] エラー:', error);
   }
 });
+
+// ========================================
+// デバイス同期トリガー（通知高速化 - 方法2）
+// ========================================
+const deviceSync = require('./deviceSync');
+exports.syncActiveDevices = deviceSync.syncActiveDevices;
