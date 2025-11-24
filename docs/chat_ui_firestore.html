@@ -407,9 +407,15 @@
       flex-shrink: 0;
       align-self: center;
       accent-color: var(--reborn-primary);
+      order: -1; /* 常に左端に配置 */
     }
     .selection-mode .message-checkbox {
       display: block;
+    }
+
+    /* チェックボックスを左端に配置するためにcontentのorderを調整 */
+    .message-item .message-content {
+      order: 0;
     }
     .toggle-selection-btn {
       background-color: rgba(255,255,255,0.2);
@@ -1693,15 +1699,33 @@
       closeContextMenu();
     };
 
-    // 削除機能（メニューから）
+    // 削除機能（メニューから）→ 選択モード開始に変更
     window.deleteMessageFromMenu = function() {
       if (!contextMenuData.messageId) return;
 
-      // closeContextMenu()でcontextMenuDataがリセットされる前にIDを保存
+      // closeContextMenu()でcontextMenuDataがリセットされる前にIDとitemを保存
       const messageId = contextMenuData.messageId;
+      const messageItem = contextMenuData.item;
 
       closeContextMenu();
-      deleteMessage(messageId);
+
+      // 選択モード開始
+      const container = document.getElementById('messagesContainer');
+      const bar = document.getElementById('selectionModeBar');
+
+      if (!container.classList.contains('selection-mode')) {
+        container.classList.add('selection-mode');
+        bar.classList.add('active');
+      }
+
+      // 選択したメッセージを自動選択
+      if (messageItem) {
+        const checkbox = messageItem.querySelector('.message-checkbox');
+        if (checkbox) {
+          checkbox.checked = true;
+          updateSelectionCount();
+        }
+      }
     };
 
     // メッセージアイテムに長押しイベントを追加
@@ -1718,23 +1742,8 @@
         longPressTimer = setTimeout(() => {
           console.log('[LongPress] Timer fired, touchMoved:', touchMoved);
           if (!touchMoved) {
-            console.log('[LongPress] Entering selection mode');
-            // 選択モード開始
-            const container = document.getElementById('messagesContainer');
-            const bar = document.getElementById('selectionModeBar');
-
-            if (!container.classList.contains('selection-mode')) {
-              container.classList.add('selection-mode');
-              bar.classList.add('active');
-            }
-
-            // 長押ししたメッセージを自動選択
-            const checkbox = item.querySelector('.message-checkbox');
-            if (checkbox) {
-              checkbox.checked = true;
-              updateSelectionCount();
-            }
-
+            console.log('[LongPress] Opening context menu');
+            openContextMenu(messageId, messageText, item);
             // 振動フィードバック（対応ブラウザのみ）
             if ('vibrate' in navigator) {
               navigator.vibrate(50);
