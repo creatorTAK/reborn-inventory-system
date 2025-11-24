@@ -6891,7 +6891,7 @@ ${prompt || '（未設定）'}
     }
 
     /**
-     * 基本設定を保存する
+     * 基本設定を保存する（Firestore直接保存）
      */
     async function saveBasicSettings() {
       const userName = document.getElementById('basicUserName').value.trim();
@@ -6915,28 +6915,30 @@ ${prompt || '（未設定）'}
         config.notificationSound = settings.notificationSound;
         localStorage.setItem('config', JSON.stringify(config));
 
-        // 2. FCMトークンを取得
-        const fcmToken = localStorage.getItem('reborn_fcm_token');
-        if (!fcmToken) {
-          throw new Error('FCMトークンが見つかりません。再ログインしてください。');
+        // 2. ユーザーメールアドレスを取得
+        const userEmail = localStorage.getItem('reborn_user_email');
+        if (!userEmail) {
+          throw new Error('ユーザーメールアドレスが見つかりません。再ログインしてください。');
         }
 
-        // 3. GAS APIを呼び出してスプレッドシートに保存
-        const GAS_API_URL = '/gas-proxy';
-        const response = await fetch(GAS_API_URL + '?action=saveUserBasicSettingsByToken', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fcmToken: fcmToken,
-            settings: settings
-          })
-        });
-
-        const result = await response.json();
-
-        if (!result.success) {
-          throw new Error(result.message || '保存に失敗しました');
+        // 3. Firestoreに保存
+        if (!window.db) {
+          throw new Error('Firestoreが初期化されていません');
         }
+
+        await window.db.collection('users').doc(userEmail).set({
+          userName: settings.userName,
+          notificationEnabled: settings.notificationEnabled,
+          notificationSound: settings.notificationSound,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // 4. activeDevicesにも通知設定を同期
+        await window.db.collection('activeDevices').doc(userEmail).set({
+          notificationEnabled: settings.notificationEnabled,
+          notificationSound: settings.notificationSound,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
 
         // クリアボタンの表示制御
         const clearBtn = document.getElementById('clearUserNameBtn');
@@ -6945,7 +6947,7 @@ ${prompt || '（未設定）'}
         }
 
         alert('✅ 基本設定を保存しました');
-        console.log('✅ 基本設定を保存しました (localStorage + FCM通知登録シート):', settings);
+        console.log('✅ 基本設定を保存しました (localStorage + Firestore):', settings);
 
       } catch (e) {
         console.error('❌ 基本設定保存エラー:', e);
@@ -7062,7 +7064,7 @@ ${prompt || '（未設定）'}
     });
 
     /**
-     * ユーザーアイコンをアップロード
+     * ユーザーアイコンをアップロード（Firestore直接保存）
      */
     async function uploadUserIcon() {
       if (!pendingUserIconData) {
@@ -7071,33 +7073,26 @@ ${prompt || '（未設定）'}
       }
 
       try {
-        // 1. FCMトークンを取得
-        const fcmToken = localStorage.getItem('reborn_fcm_token');
-        if (!fcmToken) {
-          throw new Error('FCMトークンが見つかりません。再ログインしてください。');
+        // 1. ユーザーメールアドレスを取得
+        const userEmail = localStorage.getItem('reborn_user_email');
+        if (!userEmail) {
+          throw new Error('ユーザーメールアドレスが見つかりません。再ログインしてください。');
         }
 
-        // 2. GAS APIを呼び出してアイコンをアップロード
-        const GAS_API_URL = '/gas-proxy';
-        const response = await fetch(GAS_API_URL + '?action=uploadUserIconByToken', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fcmToken: fcmToken,
-            base64Data: pendingUserIconData
-          })
-        });
-
-        const result = await response.json();
-
-        if (!result.success) {
-          throw new Error(result.message || 'アップロードに失敗しました');
+        // 2. Firestoreに保存
+        if (!window.db) {
+          throw new Error('Firestoreが初期化されていません');
         }
+
+        await window.db.collection('users').doc(userEmail).set({
+          iconUrl: pendingUserIconData,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
 
         // 3. localStorageにも保存（即時反映用）
         localStorage.setItem('user_icon_url', pendingUserIconData);
 
-        console.log('✅ アイコンを保存しました (localStorage + FCM通知登録シート)');
+        console.log('✅ アイコンを保存しました (localStorage + Firestore users)');
 
         // プレビューをクリア
         pendingUserIconData = null;
