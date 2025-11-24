@@ -427,6 +427,32 @@
     .user-list-item:active {
       transform: scale(0.98);
     }
+    .user-list-item-checkbox {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .user-list-item-checkbox:hover {
+      border-color: var(--reborn-primary);
+      background: #f7fafc;
+    }
+    .user-list-item-checkbox.selected {
+      border-color: var(--reborn-primary);
+      background: #ebf4ff;
+    }
+    .user-checkbox {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
     .user-icon {
       width: 40px;
       height: 40px;
@@ -569,6 +595,18 @@
             <option value="⭐">⭐ 重要</option>
           </select>
         </div>
+
+        <!-- メンバー選択 -->
+        <div class="form-group">
+          <label class="form-label">メンバー選択 *</label>
+          <div style="margin-bottom: 8px; font-size: 14px; color: #718096;">
+            グループに参加するメンバーを選択してください（複数選択可）
+          </div>
+          <div id="groupMemberListContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px;">
+            <div class="loading">メンバー一覧を読み込んでいます...</div>
+          </div>
+        </div>
+
         <div class="modal-buttons">
           <button type="button" class="modal-button secondary" onclick="closeCreateRoomModal()">
             キャンセル
@@ -792,8 +830,10 @@
         container.innerHTML = '<div style="padding:20px;text-align:center;color:#667eea;">トークルームを読み込んでいます...</div>';
       }
 
+      // 自分がメンバーに含まれているルームのみ取得
       const q = query(
         collection(db, 'rooms'),
+        where('members', 'array-contains', currentUserName),
         orderBy('lastMessageAt', 'desc')
       );
 
@@ -1112,10 +1152,13 @@
     };
 
     // トークルーム作成モーダルを開く
-    window.createRoom = function() {
+    window.createRoom = async function() {
       console.log('[Rooms List] ルーム作成モーダルを開く');
       document.getElementById('createRoomModal').classList.add('active');
       document.getElementById('roomNameInput').focus();
+
+      // メンバー一覧を読み込む
+      await loadGroupMemberList();
     };
 
     // トークルーム作成モーダルを閉じる
@@ -1123,7 +1166,154 @@
       console.log('[Rooms List] ルーム作成モーダルを閉じる');
       document.getElementById('createRoomModal').classList.remove('active');
       document.getElementById('createRoomForm').reset();
+      // 選択されたメンバーをクリア
+      selectedGroupMembers = [];
     };
+
+    // グループメンバー選択用の配列
+    let selectedGroupMembers = [];
+
+    // グループメンバーリストを読み込む
+    async function loadGroupMemberList() {
+      console.log('[Group Room] メンバー一覧を読み込み中...');
+      const container = document.getElementById('groupMemberListContainer');
+      container.innerHTML = '<div class="loading">メンバー一覧を読み込んでいます...</div>';
+
+      try {
+        let users;
+
+        // PWA版：キャッシュから取得
+        if (usersCache && usersCache.length > 0) {
+          users = usersCache;
+          console.log('[Group Room] キャッシュからユーザー一覧取得:', users.length + '件');
+        } else if (typeof google !== 'undefined' && google.script && google.script.run) {
+          // GAS版：google.script.runで呼び出し
+          users = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getUserListForUI();
+          });
+          console.log('[Group Room] GAS版 ユーザー一覧取得成功:', users.length + '件');
+        } else {
+          throw new Error('ユーザー一覧が利用できません');
+        }
+
+        console.log('[Group Room] ユーザー一覧取得成功:', users.length + '件');
+
+        if (!users || users.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">👥</div>
+              <div class="empty-state-text">ユーザーが見つかりません</div>
+            </div>
+          `;
+          return;
+        }
+
+        // 自分自身を除外
+        const filteredUsers = users.filter(u => u.userName !== currentUserName);
+
+        if (filteredUsers.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">👥</div>
+              <div class="empty-state-text">他のユーザーが見つかりません</div>
+            </div>
+          `;
+          return;
+        }
+
+        // メンバー一覧を表示（チェックボックス付き）
+        container.innerHTML = '';
+        filteredUsers.forEach(user => {
+          const item = document.createElement('div');
+          item.className = 'user-list-item-checkbox';
+          item.onclick = () => toggleGroupMember(user.userName, item);
+
+          // チェックボックス
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.className = 'user-checkbox';
+          checkbox.onclick = (e) => {
+            e.stopPropagation();
+            toggleGroupMember(user.userName, item);
+          };
+
+          // ユーザーアイコン表示
+          let iconElement;
+          if (user.userIconUrl) {
+            iconElement = document.createElement('div');
+            iconElement.className = 'user-icon';
+
+            const img = document.createElement('img');
+            img.src = user.userIconUrl;
+            img.alt = user.userName;
+            img.onerror = function() {
+              const placeholder = document.createElement('div');
+              placeholder.className = 'user-icon-placeholder';
+              placeholder.textContent = user.userName.charAt(0);
+              this.parentElement.replaceWith(placeholder);
+            };
+
+            iconElement.appendChild(img);
+          } else {
+            iconElement = document.createElement('div');
+            iconElement.className = 'user-icon-placeholder';
+            iconElement.textContent = user.userName.charAt(0);
+          }
+
+          const info = document.createElement('div');
+          info.className = 'user-info';
+
+          const name = document.createElement('div');
+          name.className = 'user-name';
+          name.textContent = user.userName;
+
+          const permission = document.createElement('div');
+          permission.className = 'user-permission';
+          permission.textContent = user.permission || 'スタッフ';
+
+          info.appendChild(name);
+          info.appendChild(permission);
+
+          item.appendChild(checkbox);
+          item.appendChild(iconElement);
+          item.appendChild(info);
+
+          container.appendChild(item);
+        });
+
+      } catch (error) {
+        console.error('[Group Room] ユーザー一覧取得エラー:', error);
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⚠️</div>
+            <div class="empty-state-text">ユーザー一覧の取得に失敗しました</div>
+          </div>
+        `;
+      }
+    }
+
+    // グループメンバーの選択切り替え
+    function toggleGroupMember(userName, itemElement) {
+      const checkbox = itemElement.querySelector('.user-checkbox');
+      const index = selectedGroupMembers.indexOf(userName);
+
+      if (index === -1) {
+        // 選択
+        selectedGroupMembers.push(userName);
+        checkbox.checked = true;
+        itemElement.classList.add('selected');
+      } else {
+        // 選択解除
+        selectedGroupMembers.splice(index, 1);
+        checkbox.checked = false;
+        itemElement.classList.remove('selected');
+      }
+
+      console.log('[Group Room] 選択メンバー:', selectedGroupMembers);
+    }
 
     // トークルーム作成実行
     window.submitCreateRoom = async function() {
@@ -1135,6 +1325,12 @@
       // バリデーション: ルーム名必須
       if (!roomName) {
         alert('ルーム名を入力してください');
+        return;
+      }
+
+      // バリデーション: メンバー選択必須
+      if (selectedGroupMembers.length === 0) {
+        alert('メンバーを1人以上選択してください');
         return;
       }
 
@@ -1151,8 +1347,12 @@
           return;
         }
 
+        // メンバー配列を作成（作成者 + 選択されたメンバー）
+        const members = [currentUserName || '不明', ...selectedGroupMembers];
+        console.log('[Rooms List] グループメンバー:', members);
+
         // Firestoreにルーム作成
-        console.log('[Rooms List] Firestoreにルーム作成:', { roomName, roomIcon });
+        console.log('[Rooms List] Firestoreにルーム作成:', { roomName, roomIcon, members });
 
         const newRoom = await addDoc(collection(db, 'rooms'), {
           name: roomName,
@@ -1162,7 +1362,8 @@
           lastMessageAt: serverTimestamp(),
           lastMessageText: '',
           lastMessageSender: '',
-          members: [currentUserName || '不明']
+          members: members,
+          type: 'group' // グループチャットであることを明示
         });
 
         console.log('[Rooms List] ルーム作成成功:', newRoom.id);
