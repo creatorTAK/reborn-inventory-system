@@ -675,11 +675,51 @@
       <div class="setup-title">🔔 通知設定</div>
       <div class="setup-subtitle">初回のみ - 商品登録の通知を受け取るための設定です</div>
 
-      <!-- ⓪ ユーザー情報入力 -->
-      <div class="step-section">
+      <!-- ⓪-1 メールアドレス認証 -->
+      <div class="step-section" id="email-auth-section">
         <div>
           <span class="step-number">⓪</span>
-          <span class="step-title">ユーザー情報登録</span>
+          <span class="step-title">ユーザー認証</span>
+        </div>
+        <div style="margin-top: 8px;">
+          <label style="display: block; font-size: 13px; color: #6b7280; margin-bottom: 4px;">メールアドレス</label>
+          <input type="email" id="auth-email-input" placeholder="your-email@example.com"
+                 style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px;">
+        </div>
+        <button class="step-button" onclick="checkEmailAndProceed()" style="margin-top: 12px;">次へ →</button>
+        <div id="auth-result" class="step-result"></div>
+      </div>
+
+      <!-- ⓪-2 既存ユーザー確認 -->
+      <div class="step-section" id="existing-user-section" style="display: none;">
+        <div>
+          <span class="step-number">⓪</span>
+          <span class="step-title">ユーザー確認</span>
+        </div>
+        <div style="margin-top: 16px; padding: 16px; background: #f0fdf4; border: 2px solid #86efac; border-radius: 8px;">
+          <div style="font-size: 14px; color: #166534; margin-bottom: 12px;">✅ 以下のアカウントでログインします：</div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
+            <div style="font-size: 32px;">👤</div>
+            <div>
+              <div style="font-size: 16px; font-weight: 600; color: #1f2937;" id="existing-user-name">ユーザー名</div>
+              <div style="font-size: 14px; color: #6b7280;" id="existing-user-permission">権限</div>
+              <div style="font-size: 12px; color: #9ca3af; margin-top: 2px;" id="existing-user-email">メール</div>
+            </div>
+          </div>
+          <div style="font-size: 13px; color: #166534; margin-top: 12px;">このデバイスを登録しますか？</div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button class="step-button" onclick="cancelEmailAuth()" style="background: #9ca3af; flex: 1;">← 戻る</button>
+          <button class="step-button" onclick="registerExistingUserDevice()" style="flex: 2;">このデバイスを登録</button>
+        </div>
+        <div id="existing-user-result" class="step-result"></div>
+      </div>
+
+      <!-- ⓪-3 新規ユーザー登録 -->
+      <div class="step-section" id="new-user-section" style="display: none;">
+        <div>
+          <span class="step-number">⓪</span>
+          <span class="step-title">新規ユーザー登録</span>
         </div>
         <div style="margin-top: 8px;">
           <label style="display: block; font-size: 13px; color: #6b7280; margin-bottom: 4px;">ユーザー名（担当者名）</label>
@@ -688,40 +728,42 @@
         </div>
         <div style="margin-top: 12px;">
           <label style="display: block; font-size: 13px; color: #6b7280; margin-bottom: 4px;">メールアドレス</label>
-          <input type="email" id="user-email-input" placeholder="your-email@example.com"
-                 style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px;">
+          <input type="email" id="user-email-input" placeholder="your-email@example.com" disabled
+                 style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px; background: #f9fafb; color: #6b7280;">
         </div>
-        <div style="margin-top: 12px;">
+        <div style="margin-top: 12px;" id="permission-selection-area">
           <label style="display: block; font-size: 13px; color: #6b7280; margin-bottom: 8px;">権限</label>
           <div id="permission-options" style="display: flex; flex-direction: column; gap: 8px;">
             <!-- 初回登録者向け（JavaScript で動的に表示制御） -->
             <label id="owner-option" style="display: none; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-              <input type="radio" name="user-permission" value="オーナー" style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
+              <input type="radio" name="user-permission" value="owner" data-display="オーナー" style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
               <div>
-                <div style="font-size: 15px; font-weight: 600; color: #dc2626;">📕 オーナー</div>
-                <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">全機能利用可能（初回登録者のみ）</div>
+                <div style="font-size: 15px; font-weight: 600; color: #dc2626;">🔑 オーナー</div>
+                <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">全機能利用可能</div>
               </div>
             </label>
             <label id="staff-option" style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-              <input type="radio" name="user-permission" value="スタッフ" checked style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
+              <input type="radio" name="user-permission" value="staff" data-display="スタッフ" checked style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
               <div>
-                <div style="font-size: 15px; font-weight: 600; color: #1e40af;">📘 スタッフ</div>
-                <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">商品登録・在庫管理など通常業務</div>
+                <div style="font-size: 15px; font-weight: 600; color: #1e40af;">📋 スタッフ</div>
+                <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">通常の従業員</div>
               </div>
             </label>
             <label id="outsource-option" style="display: flex; align-items: center; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-              <input type="radio" name="user-permission" value="外注" style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
+              <input type="radio" name="user-permission" value="outsource" data-display="外注" style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
               <div>
-                <div style="font-size: 15px; font-weight: 600; color: #4338ca;">📙 外注</div>
-                <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">商品登録のみ（限定的な権限）</div>
+                <div style="font-size: 15px; font-weight: 600; color: #4338ca;">🔧 外注パートナー</div>
+                <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">外部パートナー</div>
               </div>
             </label>
           </div>
-          <div id="permission-info" style="font-size: 12px; color: #9ca3af; margin-top: 8px; padding: 8px; background: #f9fafb; border-radius: 6px;">
-            ⏳ 権限設定を確認中...
+          <div id="permission-info" style="font-size: 12px; color: #9ca3af; margin-top: 8px; padding: 8px; background: #f9fafb; border-radius: 6px; display: none;">
           </div>
         </div>
-        <button class="step-button" onclick="saveUserInfo()" style="margin-top: 12px;">保存</button>
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button class="step-button" onclick="cancelEmailAuth()" style="background: #9ca3af; flex: 1;">← 戻る</button>
+          <button class="step-button" onclick="saveNewUserInfo()" style="flex: 2;">登録</button>
+        </div>
         <div id="step0-result" class="step-result"></div>
       </div>
 
@@ -1582,6 +1624,252 @@
     }
 
 
+    // ========================================
+    // 新しいメールアドレス認証フロー
+    // ========================================
+
+    // グローバル変数で認証済みメールアドレスと既存ユーザー情報を保持
+    let authenticatedEmail = '';
+    let existingUserData = null;
+
+    // ⓪-1 メールアドレスチェックと画面遷移
+    async function checkEmailAndProceed() {
+      const emailInput = document.getElementById('auth-email-input');
+      const resultDiv = document.getElementById('auth-result');
+      const email = emailInput.value.trim();
+
+      // バリデーション
+      if (!email) {
+        resultDiv.textContent = '❌ メールアドレスを入力してください';
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        resultDiv.textContent = '❌ 有効なメールアドレスを入力してください';
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+        return;
+      }
+
+      // 確認中表示
+      resultDiv.textContent = '⏳ メールアドレスを確認中...';
+      resultDiv.className = 'step-result';
+      resultDiv.style.display = 'block';
+
+      try {
+        // Firestoreで既存ユーザーをチェック
+        const db = window.firebaseDB;
+        if (!db) {
+          throw new Error('Firestore が初期化されていません');
+        }
+
+        const { getDocs, collection, query, where } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const usersCollection = collection(db, 'users');
+        const q = query(usersCollection, where('email', '==', email));
+        const querySnapshot = await getDocs(q);
+
+        authenticatedEmail = email;
+
+        if (!querySnapshot.empty) {
+          // 既存ユーザーが見つかった
+          const userDoc = querySnapshot.docs[0];
+          existingUserData = { id: userDoc.id, ...userDoc.data() };
+
+          console.log('[checkEmailAndProceed] 既存ユーザー発見:', existingUserData);
+
+          // 既存ユーザー確認画面を表示
+          document.getElementById('existing-user-name').textContent = existingUserData.name || '名前未設定';
+          document.getElementById('existing-user-permission').textContent = getPermissionDisplayName(existingUserData.permission || 'staff');
+          document.getElementById('existing-user-email').textContent = email;
+
+          // 画面切り替え
+          document.getElementById('email-auth-section').style.display = 'none';
+          document.getElementById('existing-user-section').style.display = 'block';
+        } else {
+          // 新規ユーザー
+          console.log('[checkEmailAndProceed] 新規ユーザー');
+
+          // 新規登録画面を表示
+          document.getElementById('user-email-input').value = email;
+
+          // オーナー権限の表示判定（全ユーザー数をチェック）
+          const allUsersSnapshot = await getDocs(usersCollection);
+          const isFirstUser = allUsersSnapshot.size === 0;
+
+          const ownerOption = document.getElementById('owner-option');
+          const permissionInfo = document.getElementById('permission-info');
+
+          if (isFirstUser) {
+            ownerOption.style.display = 'flex';
+            ownerOption.querySelector('input').checked = true;
+            permissionInfo.textContent = '✨ あなたが初回登録者です。オーナー権限で登録されます。';
+            permissionInfo.style.background = '#fef3c7';
+            permissionInfo.style.color = '#92400e';
+            permissionInfo.style.display = 'block';
+          } else {
+            ownerOption.style.display = 'none';
+            document.getElementById('staff-option').querySelector('input').checked = true;
+            permissionInfo.textContent = 'ℹ️ オーナーは既に登録済みです。';
+            permissionInfo.style.background = '#e0f2fe';
+            permissionInfo.style.color = '#075985';
+            permissionInfo.style.display = 'block';
+          }
+
+          // 画面切り替え
+          document.getElementById('email-auth-section').style.display = 'none';
+          document.getElementById('new-user-section').style.display = 'block';
+        }
+      } catch (error) {
+        console.error('❌ メールアドレスチェックエラー:', error);
+        resultDiv.textContent = '❌ エラーが発生しました: ' + error.message;
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+      }
+    }
+
+    // 権限の表示名を取得
+    function getPermissionDisplayName(permissionId) {
+      const permissionMap = {
+        'owner': '🔑 オーナー',
+        'staff': '📋 スタッフ',
+        'outsource': '🔧 外注パートナー'
+      };
+      return permissionMap[permissionId] || '📋 スタッフ';
+    }
+
+    // 認証キャンセル（最初の画面に戻る）
+    function cancelEmailAuth() {
+      document.getElementById('email-auth-section').style.display = 'block';
+      document.getElementById('existing-user-section').style.display = 'none';
+      document.getElementById('new-user-section').style.display = 'none';
+      document.getElementById('auth-result').style.display = 'none';
+      authenticatedEmail = '';
+      existingUserData = null;
+    }
+
+    // ⓪-2 既存ユーザーのデバイス登録
+    async function registerExistingUserDevice() {
+      const resultDiv = document.getElementById('existing-user-result');
+
+      if (!existingUserData || !authenticatedEmail) {
+        resultDiv.textContent = '❌ ユーザー情報が取得できませんでした';
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+        return;
+      }
+
+      // LocalStorageに保存
+      try {
+        localStorage.setItem('reborn_user_name', existingUserData.name);
+        localStorage.setItem('reborn_user_email', authenticatedEmail);
+        localStorage.setItem('reborn_user_permission_id', existingUserData.permission || 'staff');
+        localStorage.setItem('reborn_user_permission_display', getPermissionDisplayName(existingUserData.permission || 'staff'));
+
+        console.log('✅ 既存ユーザー情報保存:', existingUserData);
+
+        // IndexedDBにも保存
+        const request = indexedDB.open('RebornUserDB', 1);
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains('user')) {
+            db.createObjectStore('user');
+          }
+        };
+        request.onsuccess = () => {
+          const db = request.result;
+          const transaction = db.transaction(['user'], 'readwrite');
+          const store = transaction.objectStore('user');
+          store.put(existingUserData.name, 'userName');
+          console.log('✅ ユーザー名をIndexedDBに保存:', existingUserData.name);
+        };
+
+        resultDiv.textContent = '✅ デバイスを登録しました！\n次に「① 通知を許可」ボタンを押してください。';
+        resultDiv.className = 'step-result success';
+        resultDiv.style.display = 'block';
+
+        // ボタンを無効化
+        document.querySelector('#existing-user-section button[onclick="registerExistingUserDevice()"]').disabled = true;
+      } catch (error) {
+        console.error('❌ デバイス登録エラー:', error);
+        resultDiv.textContent = '❌ デバイス登録に失敗しました: ' + error.message;
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+      }
+    }
+
+    // ⓪-3 新規ユーザー登録
+    async function saveNewUserInfo() {
+      const nameInput = document.getElementById('user-name-input');
+      const emailInput = document.getElementById('user-email-input');
+      const resultDiv = document.getElementById('step0-result');
+
+      const userName = nameInput.value.trim();
+      const email = emailInput.value.trim();
+
+      // 権限を取得
+      const permissionRadio = document.querySelector('input[name="user-permission"]:checked');
+      const permissionId = permissionRadio ? permissionRadio.value : 'staff';
+      const permissionDisplay = permissionRadio ? permissionRadio.dataset.display : 'スタッフ';
+
+      // バリデーション
+      if (!userName) {
+        resultDiv.textContent = '❌ ユーザー名を入力してください';
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+        return;
+      }
+
+      // 保存中の表示
+      resultDiv.textContent = '⏳ 保存中...';
+      resultDiv.className = 'step-result';
+      resultDiv.style.display = 'block';
+
+      // LocalStorageに保存
+      try {
+        localStorage.setItem('reborn_user_name', userName);
+        localStorage.setItem('reborn_user_email', email);
+        localStorage.setItem('reborn_user_permission_id', permissionId);
+        localStorage.setItem('reborn_user_permission_display', permissionDisplay);
+        console.log('✅ 新規ユーザー情報保存:', { name: userName, email: email, permissionId: permissionId });
+
+        // IndexedDBにも保存
+        const request = indexedDB.open('RebornUserDB', 1);
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains('user')) {
+            db.createObjectStore('user');
+          }
+        };
+        request.onsuccess = () => {
+          const db = request.result;
+          const transaction = db.transaction(['user'], 'readwrite');
+          const store = transaction.objectStore('user');
+          store.put(userName, 'userName');
+          console.log('✅ ユーザー名をIndexedDBに保存:', userName);
+        };
+
+        resultDiv.textContent = '✅ ユーザー情報を保存しました！\n次に「① 通知を許可」ボタンを押してください。';
+        resultDiv.className = 'step-result success';
+        resultDiv.style.display = 'block';
+
+        // 入力フィールドを無効化
+        nameInput.disabled = true;
+        emailInput.disabled = true;
+        document.querySelectorAll('input[name="user-permission"]').forEach(radio => radio.disabled = true);
+      } catch (error) {
+        console.error('❌ LocalStorage保存エラー:', error);
+        resultDiv.textContent = '❌ 保存に失敗しました: ' + error.message;
+        resultDiv.className = 'step-result error';
+        resultDiv.style.display = 'block';
+      }
+    }
+
+    // ========================================
+    // 旧版の saveUserInfo（互換性のため残す）
+    // ========================================
     // ⓪ ユーザー情報を保存
     async function saveUserInfo() {
       const nameInput = document.getElementById('user-name-input');
