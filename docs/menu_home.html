@@ -497,25 +497,48 @@
 
       console.log('[menu_home] チャットバッジ監視開始:', userEmail);
 
-      // Collection Group Queryで全unreadCountsサブコレクションから自分のドキュメントを監視
-      db.collectionGroup('unreadCounts')
-        .where(firebase.firestore.FieldPath.documentId(), '==', userEmail)
-        .onSnapshot((snapshot) => {
-          let totalUnreadCount = 0;
+      // roomsコレクション全体を監視
+      db.collection('rooms').onSnapshot(async (snapshot) => {
+        let totalUnreadCount = 0;
+        const promises = [];
 
-          console.log('[menu_home] 未読数ドキュメント数:', snapshot.size);
+        console.log('[menu_home] ルーム数:', snapshot.size);
 
-          snapshot.forEach((doc) => {
-            const count = doc.data().count || 0;
-            console.log('[menu_home] ルーム未読数:', doc.ref.parent.parent.id, count);
-            totalUnreadCount += count;
-          });
+        snapshot.forEach((doc) => {
+          const roomData = doc.data();
 
-          console.log('[menu_home] 合計未読数:', totalUnreadCount);
-          updateChatBadge(totalUnreadCount);
-        }, (error) => {
-          console.error('[menu_home] チャットバッジ監視エラー:', error);
+          // 自分が削除したルームはスキップ
+          if (roomData.deleted && Array.isArray(roomData.deleted) && roomData.deleted.includes(userEmail)) {
+            return;
+          }
+
+          // 各ルームの未読数を取得
+          const promise = db.collection('rooms').doc(doc.id).collection('unreadCounts').doc(userEmail).get()
+            .then((unreadDoc) => {
+              if (unreadDoc.exists) {
+                const count = unreadDoc.data().count || 0;
+                console.log('[menu_home] ルーム未読数:', doc.id, count);
+                return count;
+              }
+              return 0;
+            })
+            .catch((error) => {
+              console.error('[menu_home] 未読数取得エラー:', doc.id, error);
+              return 0;
+            });
+
+          promises.push(promise);
         });
+
+        // 全ての未読数を集計
+        const counts = await Promise.all(promises);
+        totalUnreadCount = counts.reduce((sum, count) => sum + count, 0);
+
+        console.log('[menu_home] 合計未読数:', totalUnreadCount);
+        updateChatBadge(totalUnreadCount);
+      }, (error) => {
+        console.error('[menu_home] チャットバッジ監視エラー:', error);
+      });
     }
 
     // バッジ表示を更新
