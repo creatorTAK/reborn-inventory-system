@@ -690,32 +690,7 @@
         <div id="auth-result" class="step-result"></div>
       </div>
 
-      <!-- ⓪-2 既存ユーザー確認 -->
-      <div class="step-section" id="existing-user-section" style="display: none;">
-        <div>
-          <span class="step-number">⓪</span>
-          <span class="step-title">ユーザー確認</span>
-        </div>
-        <div style="margin-top: 16px; padding: 16px; background: #f0fdf4; border: 2px solid #86efac; border-radius: 8px;">
-          <div style="font-size: 14px; color: #166534; margin-bottom: 12px;">✅ 以下のアカウントでログインします：</div>
-          <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
-            <div style="font-size: 32px;">👤</div>
-            <div>
-              <div style="font-size: 16px; font-weight: 600; color: #1f2937;" id="existing-user-name">ユーザー名</div>
-              <div style="font-size: 14px; color: #6b7280;" id="existing-user-permission">権限</div>
-              <div style="font-size: 12px; color: #9ca3af; margin-top: 2px;" id="existing-user-email">メール</div>
-            </div>
-          </div>
-          <div style="font-size: 13px; color: #166534; margin-top: 12px;">このデバイスを登録しますか？</div>
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 12px;">
-          <button class="step-button" onclick="cancelEmailAuth()" style="background: #9ca3af; flex: 1;">← 戻る</button>
-          <button class="step-button" onclick="registerExistingUserDevice()" style="flex: 2;">このデバイスを登録</button>
-        </div>
-        <div id="existing-user-result" class="step-result"></div>
-      </div>
-
-      <!-- ⓪-3 新規ユーザー登録 -->
+      <!-- ⓪-2 新規ユーザー登録 -->
       <div class="step-section" id="new-user-section" style="display: none;">
         <div>
           <span class="step-number">⓪</span>
@@ -1715,25 +1690,41 @@
         authenticatedEmail = email;
 
         if (!querySnapshot.empty) {
-          // 既存ユーザーが見つかった
+          // 既存ユーザーが見つかった → 直接LocalStorageに保存してステップ①へ
           const userDoc = querySnapshot.docs[0];
           existingUserData = { id: userDoc.id, ...userDoc.data() };
 
-          // 🚨 デバッグ: 取得したデータを表示
-          resultDiv.textContent = `🔍 既存ユーザーデータ:\n${JSON.stringify(existingUserData, null, 2)}`;
-          resultDiv.className = 'step-result';
+          const userName = existingUserData.userName || existingUserData.name;
+          const permissionId = existingUserData.permissionId || existingUserData.permission || 'staff';
+
+          // LocalStorageに保存
+          localStorage.setItem('reborn_user_name', userName);
+          localStorage.setItem('reborn_user_email', email);
+          localStorage.setItem('reborn_user_permission_id', permissionId);
+          localStorage.setItem('reborn_user_permission_display', getPermissionDisplayName(permissionId));
+
+          // IndexedDBにも保存
+          const request = indexedDB.open('RebornUserDB', 1);
+          request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains('user')) {
+              db.createObjectStore('user');
+            }
+          };
+          request.onsuccess = () => {
+            const db = request.result;
+            const transaction = db.transaction(['user'], 'readwrite');
+            const store = transaction.objectStore('user');
+            store.put(userName, 'userName');
+          };
+
+          // 成功メッセージを表示
+          resultDiv.textContent = `✅ 認証成功！\n${userName}さん（${getPermissionDisplayName(permissionId)}）としてログインしました。\n\n次に「① 通知を許可」ボタンを押してください。`;
+          resultDiv.className = 'step-result success';
           resultDiv.style.display = 'block';
-          await new Promise(resolve => setTimeout(resolve, 3000));
 
-          // 既存ユーザー確認画面を表示
-          document.getElementById('existing-user-name').textContent = existingUserData.userName || existingUserData.name || '名前未設定';
-          document.getElementById('existing-user-permission').textContent = getPermissionDisplayName(existingUserData.permission || 'staff');
-          document.getElementById('existing-user-email').textContent = email;
-
-          // 画面切り替え
-          resultDiv.style.display = 'none';
+          // メールアドレス入力欄を非表示
           document.getElementById('email-auth-section').style.display = 'none';
-          document.getElementById('existing-user-section').style.display = 'block';
         } else {
           // 新規ユーザー
           // 新規登録画面を表示
@@ -1789,65 +1780,14 @@
     // 認証キャンセル（最初の画面に戻る）
     window.cancelEmailAuth = function cancelEmailAuth() {
       document.getElementById('email-auth-section').style.display = 'block';
-      document.getElementById('existing-user-section').style.display = 'none';
       document.getElementById('new-user-section').style.display = 'none';
       document.getElementById('auth-result').style.display = 'none';
+      document.getElementById('step0-result').style.display = 'none';
       authenticatedEmail = '';
       existingUserData = null;
     }
 
-    // ⓪-2 既存ユーザーのデバイス登録
-    window.registerExistingUserDevice = async function registerExistingUserDevice() {
-      const resultDiv = document.getElementById('existing-user-result');
-
-      if (!existingUserData || !authenticatedEmail) {
-        resultDiv.textContent = '❌ ユーザー情報が取得できませんでした';
-        resultDiv.className = 'step-result error';
-        resultDiv.style.display = 'block';
-        return;
-      }
-
-      // LocalStorageに保存
-      try {
-        const userName = existingUserData.userName || existingUserData.name;
-        localStorage.setItem('reborn_user_name', userName);
-        localStorage.setItem('reborn_user_email', authenticatedEmail);
-        localStorage.setItem('reborn_user_permission_id', existingUserData.permission || 'staff');
-        localStorage.setItem('reborn_user_permission_display', getPermissionDisplayName(existingUserData.permission || 'staff'));
-
-        console.log('✅ 既存ユーザー情報保存:', existingUserData);
-
-        // IndexedDBにも保存
-        const request = indexedDB.open('RebornUserDB', 1);
-        request.onupgradeneeded = (event) => {
-          const db = event.target.result;
-          if (!db.objectStoreNames.contains('user')) {
-            db.createObjectStore('user');
-          }
-        };
-        request.onsuccess = () => {
-          const db = request.result;
-          const transaction = db.transaction(['user'], 'readwrite');
-          const store = transaction.objectStore('user');
-          store.put(userName, 'userName');
-          console.log('✅ ユーザー名をIndexedDBに保存:', userName);
-        };
-
-        resultDiv.textContent = '✅ デバイスを登録しました！\n次に「① 通知を許可」ボタンを押してください。';
-        resultDiv.className = 'step-result success';
-        resultDiv.style.display = 'block';
-
-        // ボタンを無効化
-        document.querySelector('#existing-user-section button[onclick="registerExistingUserDevice()"]').disabled = true;
-      } catch (error) {
-        console.error('❌ デバイス登録エラー:', error);
-        resultDiv.textContent = '❌ デバイス登録に失敗しました: ' + error.message;
-        resultDiv.className = 'step-result error';
-        resultDiv.style.display = 'block';
-      }
-    }
-
-    // ⓪-3 新規ユーザー登録
+    // ⓪-2 新規ユーザー登録
     window.saveNewUserInfo = async function saveNewUserInfo() {
       const nameInput = document.getElementById('user-name-input');
       const emailInput = document.getElementById('user-email-input');
@@ -1926,7 +1866,8 @@
         const newUserDoc = await addDoc(usersCollection, {
           userName: userName,
           userEmail: email,
-          permission: permissionId,
+          permissionId: permissionId,
+          permissionDisplay: getPermissionDisplayName(permissionId),
           createdAt: new Date().toISOString(),
           deviceId: null  // 通知許可後に設定される
         });
