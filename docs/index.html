@@ -1676,13 +1676,15 @@
       resultDiv.style.display = 'block';
 
       try {
-        console.log('[checkEmailAndProceed] Firestoreアクセス開始');
+        // 🚨 デバッグ: 画面表示用（console.logは無効化されているため）
+        resultDiv.textContent = '🔍 Firestoreアクセス開始...';
+
         // Firestoreで既存ユーザーをチェック
         let db = window.firebaseDB;
 
         // window.firebaseDBが未初期化の場合、ここで初期化
         if (!db) {
-          console.log('[checkEmailAndProceed] window.firebaseDB未初期化 → 手動初期化');
+          resultDiv.textContent = '🔍 Firebase初期化中...';
           const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
           const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
@@ -1700,29 +1702,40 @@
           window.firebaseDB = db;
         }
 
+        resultDiv.textContent = '🔍 ユーザー情報取得中...';
         const { getDocs, collection, query, where } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
         const usersCollection = collection(db, 'users');
 
-        // デバッグ: 全ユーザーを表示
+        // デバッグ: 全ユーザーを表示（画面上に）
         const allUsersSnapshot = await getDocs(usersCollection);
-        console.log('[checkEmailAndProceed] 全ユーザー数:', allUsersSnapshot.size);
+        resultDiv.textContent = `🔍 Firestore全ユーザー数: ${allUsersSnapshot.size}件\n検索メール: ${email}`;
+
+        // デバッグ: 全ユーザーのメールアドレスを表示
+        let debugInfo = `\n\n📋 登録ユーザー:\n`;
         allUsersSnapshot.forEach(doc => {
-          console.log('[checkEmailAndProceed] ユーザー:', doc.id, doc.data());
+          const data = doc.data();
+          debugInfo += `- ${data.name || '名前なし'} (${data.email || 'メールなし'})\n`;
         });
+        resultDiv.textContent += debugInfo;
 
         const q = query(usersCollection, where('email', '==', email));
         const querySnapshot = await getDocs(q);
 
-        console.log('[checkEmailAndProceed] クエリ結果:', querySnapshot.size, '件');
+        resultDiv.textContent += `\n\n🔍 クエリ結果: ${querySnapshot.size}件`;
 
         authenticatedEmail = email;
+
+        // 🚨 デバッグ情報を2秒間表示してから画面遷移
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         if (!querySnapshot.empty) {
           // 既存ユーザーが見つかった
           const userDoc = querySnapshot.docs[0];
           existingUserData = { id: userDoc.id, ...userDoc.data() };
 
-          console.log('[checkEmailAndProceed] 既存ユーザー発見:', existingUserData);
+          // デバッグ情報追加
+          resultDiv.textContent += `\n\n✅ 既存ユーザー発見！\n名前: ${existingUserData.name}\n権限: ${existingUserData.permission}`;
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
           // 既存ユーザー確認画面を表示
           document.getElementById('existing-user-name').textContent = existingUserData.name || '名前未設定';
@@ -1734,13 +1747,13 @@
           document.getElementById('existing-user-section').style.display = 'block';
         } else {
           // 新規ユーザー
-          console.log('[checkEmailAndProceed] 新規ユーザー');
+          resultDiv.textContent += `\n\n➕ 新規ユーザー → 登録画面へ`;
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
           // 新規登録画面を表示
           document.getElementById('user-email-input').value = email;
 
           // オーナー権限の表示判定（全ユーザー数をチェック）
-          const allUsersSnapshot = await getDocs(usersCollection);
           const isFirstUser = allUsersSnapshot.size === 0;
 
           const ownerOption = document.getElementById('owner-option');
