@@ -1702,59 +1702,34 @@
           window.firebaseDB = db;
         }
 
-        resultDiv.textContent = '🔍 ユーザー情報取得中...';
         const { getDocs, collection, query, where } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
         const usersCollection = collection(db, 'users');
 
-        // デバッグ: 全ユーザーを表示（画面上に）
+        // 全ユーザーを取得（初回登録判定用）
         const allUsersSnapshot = await getDocs(usersCollection);
-        resultDiv.textContent = `🔍 Firestore全ユーザー数: ${allUsersSnapshot.size}件\n検索メール: ${email}`;
 
-        // デバッグ: 全ユーザーのデータ構造を表示
-        let debugInfo = `\n\n📋 登録ユーザー:\n`;
-        allUsersSnapshot.forEach(doc => {
-          const data = doc.data();
-          debugInfo += `\nID: ${doc.id}\n`;
-          debugInfo += `全フィールド: ${JSON.stringify(data, null, 2)}\n`;
-          debugInfo += `- 名前: ${data.name || data.userName || 'なし'}\n`;
-          debugInfo += `- メール: ${data.email || data.userEmail || data.mail || 'なし'}\n`;
-          debugInfo += `- 権限: ${data.permission || data.role || 'なし'}\n`;
-          debugInfo += `---\n`;
-        });
-        resultDiv.textContent += debugInfo;
-
-        const q = query(usersCollection, where('email', '==', email));
+        // userEmailフィールドで既存ユーザーを検索
+        const q = query(usersCollection, where('userEmail', '==', email));
         const querySnapshot = await getDocs(q);
 
-        resultDiv.textContent += `\n\n🔍 クエリ結果: ${querySnapshot.size}件`;
-
         authenticatedEmail = email;
-
-        // 🚨 デバッグ情報を2秒間表示してから画面遷移
-        await new Promise(resolve => setTimeout(resolve, 2000));
 
         if (!querySnapshot.empty) {
           // 既存ユーザーが見つかった
           const userDoc = querySnapshot.docs[0];
           existingUserData = { id: userDoc.id, ...userDoc.data() };
 
-          // デバッグ情報追加
-          resultDiv.textContent += `\n\n✅ 既存ユーザー発見！\n名前: ${existingUserData.name}\n権限: ${existingUserData.permission}`;
-          await new Promise(resolve => setTimeout(resolve, 1000));
-
           // 既存ユーザー確認画面を表示
-          document.getElementById('existing-user-name').textContent = existingUserData.name || '名前未設定';
+          document.getElementById('existing-user-name').textContent = existingUserData.userName || existingUserData.name || '名前未設定';
           document.getElementById('existing-user-permission').textContent = getPermissionDisplayName(existingUserData.permission || 'staff');
           document.getElementById('existing-user-email').textContent = email;
 
           // 画面切り替え
+          resultDiv.style.display = 'none';
           document.getElementById('email-auth-section').style.display = 'none';
           document.getElementById('existing-user-section').style.display = 'block';
         } else {
           // 新規ユーザー
-          resultDiv.textContent += `\n\n➕ 新規ユーザー → 登録画面へ`;
-          await new Promise(resolve => setTimeout(resolve, 1000));
-
           // 新規登録画面を表示
           document.getElementById('user-email-input').value = email;
 
@@ -1781,6 +1756,7 @@
           }
 
           // 画面切り替え
+          resultDiv.style.display = 'none';
           document.getElementById('email-auth-section').style.display = 'none';
           document.getElementById('new-user-section').style.display = 'block';
         }
@@ -1827,7 +1803,8 @@
 
       // LocalStorageに保存
       try {
-        localStorage.setItem('reborn_user_name', existingUserData.name);
+        const userName = existingUserData.userName || existingUserData.name;
+        localStorage.setItem('reborn_user_name', userName);
         localStorage.setItem('reborn_user_email', authenticatedEmail);
         localStorage.setItem('reborn_user_permission_id', existingUserData.permission || 'staff');
         localStorage.setItem('reborn_user_permission_display', getPermissionDisplayName(existingUserData.permission || 'staff'));
@@ -1846,8 +1823,8 @@
           const db = request.result;
           const transaction = db.transaction(['user'], 'readwrite');
           const store = transaction.objectStore('user');
-          store.put(existingUserData.name, 'userName');
-          console.log('✅ ユーザー名をIndexedDBに保存:', existingUserData.name);
+          store.put(userName, 'userName');
+          console.log('✅ ユーザー名をIndexedDBに保存:', userName);
         };
 
         resultDiv.textContent = '✅ デバイスを登録しました！\n次に「① 通知を許可」ボタンを押してください。';
@@ -1915,6 +1892,41 @@
           console.log('✅ ユーザー名をIndexedDBに保存:', userName);
         };
 
+        // 🆕 Firestoreにも保存（userEmailフィールドを使用）
+        resultDiv.textContent = '⏳ Firestoreに保存中...';
+
+        let db = window.firebaseDB;
+        if (!db) {
+          const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+          const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+          const firebaseConfig = {
+            apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+            authDomain: "reborn-chat.firebaseapp.com",
+            projectId: "reborn-chat",
+            storageBucket: "reborn-chat.firebasestorage.app",
+            messagingSenderId: "345706548795",
+            appId: "1:345706548795:web:058a553da6b4b74db5161e"
+          };
+
+          const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+          db = getFirestore(app);
+          window.firebaseDB = db;
+        }
+
+        const { addDoc, collection } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const usersCollection = collection(db, 'users');
+
+        const newUserDoc = await addDoc(usersCollection, {
+          userName: userName,
+          userEmail: email,
+          permission: permissionId,
+          createdAt: new Date().toISOString(),
+          deviceId: null  // 通知許可後に設定される
+        });
+
+        console.log('✅ Firestoreにユーザー登録完了:', newUserDoc.id);
+
         resultDiv.textContent = '✅ ユーザー情報を保存しました！\n次に「① 通知を許可」ボタンを押してください。';
         resultDiv.className = 'step-result success';
         resultDiv.style.display = 'block';
@@ -1924,7 +1936,7 @@
         emailInput.disabled = true;
         document.querySelectorAll('input[name="user-permission"]').forEach(radio => radio.disabled = true);
       } catch (error) {
-        console.error('❌ LocalStorage保存エラー:', error);
+        console.error('❌ 保存エラー:', error);
         resultDiv.textContent = '❌ 保存に失敗しました: ' + error.message;
         resultDiv.className = 'step-result error';
         resultDiv.style.display = 'block';
