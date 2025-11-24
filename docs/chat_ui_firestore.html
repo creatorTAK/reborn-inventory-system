@@ -652,13 +652,78 @@
       }
       console.log('[Room] roomId設定:', currentRoomId);
 
+      // ⚠️ 重要: ユーザー名を先に設定してから、ルーム情報を取得する
+      // （個別チャットで相手の名前を判定するため、currentUserNameが必要）
+
+      // ユーザー名設定
+      if (isGAS) {
+        // GAS版：FCM通知登録シートから自動取得
+        if (gasUserNameParam && gasUserNameParam.trim() !== '') {
+          // JSON.parse()でダブルクォーテーションを削除
+          try {
+            currentUserName = JSON.parse(gasUserNameParam);
+          } catch (e) {
+            // パースできない場合はそのまま使用
+            currentUserName = gasUserNameParam;
+          }
+          document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
+          console.log('[GAS] ユーザー名自動設定:', currentUserName);
+          console.log('[GAS] currentUserName length:', currentUserName.length);
+        } else {
+          // ユーザー名が取得できなかった場合、ドロップダウン表示
+          console.log('[GAS] ユーザー名が取得できませんでした。ドロップダウンを表示');
+          showUserSelect();
+        }
+      } else {
+        // PWA版：URLパラメータから取得（親ページのlocalStorageから渡される）
+        // JSON.parse()でダブルクォーテーションを削除
+        try {
+          currentUserName = JSON.parse(pwaUserNameParam);
+        } catch (e) {
+          // パースできない場合はそのまま使用
+          currentUserName = pwaUserNameParam;
+        }
+
+        try {
+          currentUserEmail = JSON.parse(pwaUserEmailParam);
+        } catch (e) {
+          currentUserEmail = pwaUserEmailParam;
+        }
+
+        console.log('[PWA] pwaUserNameParam受信:', pwaUserNameParam);
+        console.log('[PWA] pwaUserEmailParam受信:', pwaUserEmailParam);
+        console.log('[PWA] currentUserName設定:', currentUserName);
+        console.log('[PWA] currentUserEmail設定:', currentUserEmail);
+        console.log('[PWA] currentUserName length:', currentUserName.length);
+
+        if (currentUserName && currentUserName.trim() !== '') {
+          document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
+          console.log('[PWA] ユーザー名表示完了:', currentUserName);
+        } else {
+          // ユーザー名が未設定の場合、入力UIを表示
+          console.log('[PWA] ユーザー名未設定 - 入力UIを表示');
+          const container = document.getElementById('userNameInputContainer');
+          if (container) {
+            container.style.display = 'block';
+            console.log('[PWA] ユーザー名入力UI表示完了');
+          } else {
+            console.error('[PWA] userNameInputContainer が見つかりません');
+          }
+        }
+      }
+
       // ルーム情報を取得してヘッダーに表示
+      console.log('[Room] ルーム情報取得開始 - roomId:', currentRoomId);
+      console.log('[Room] currentUserName:', currentUserName);
       try {
         const roomRef = doc(db, 'rooms', currentRoomId);
+        console.log('[Room] roomRef作成完了');
         const roomDoc = await getDoc(roomRef);
+        console.log('[Room] getDoc完了 - exists:', roomDoc.exists());
 
         if (roomDoc.exists()) {
           const roomData = roomDoc.data();
+          console.log('[Room] roomData取得:', roomData);
 
           // 個別チャット（type: 'direct'）の場合は相手のユーザー名を動的生成
           if (roomData.type === 'direct' && roomData.members && Array.isArray(roomData.members)) {
