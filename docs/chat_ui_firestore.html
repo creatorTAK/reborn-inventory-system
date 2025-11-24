@@ -350,54 +350,66 @@
       margin-bottom: 8px;
     }
 
-    /* 選択削除モード */
+    /* 選択削除モード（LINE風） */
     .selection-mode-bar {
       display: none;
-      background-color: #fff3cd;
+      background-color: #ffffff;
       padding: 12px 16px;
-      border-bottom: 1px solid #ffeaa7;
+      border-bottom: 1px solid #e5e7eb;
       align-items: center;
       justify-content: space-between;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     .selection-mode-bar.active {
       display: flex;
     }
     .selection-mode-info {
-      font-size: 0.875rem;
-      color: #856404;
+      font-size: 0.9rem;
+      color: #2d3748;
+      font-weight: 500;
     }
     .selection-mode-buttons {
       display: flex;
-      gap: 8px;
+      gap: 12px;
     }
     .selection-mode-buttons button {
-      padding: 6px 12px;
+      padding: 8px 16px;
       border: none;
       border-radius: 6px;
       cursor: pointer;
       font-size: 0.875rem;
-      transition: transform 0.1s;
+      transition: all 0.2s;
+      font-weight: 500;
     }
-    .selection-mode-buttons button:hover {
-      transform: scale(1.05);
+    .selection-mode-buttons button:active {
+      transform: scale(0.95);
     }
     .btn-delete-selected {
       background-color: #ef4444;
       color: white;
     }
+    .btn-delete-selected:hover {
+      background-color: #dc2626;
+    }
     .btn-cancel-selection {
-      background-color: #6c757d;
-      color: white;
+      background-color: #f3f4f6;
+      color: #4b5563;
+    }
+    .btn-cancel-selection:hover {
+      background-color: #e5e7eb;
     }
     .message-checkbox {
       display: none;
-      margin-right: 8px;
-      width: 20px;
-      height: 20px;
+      margin-right: 12px;
+      width: 22px;
+      height: 22px;
       cursor: pointer;
+      flex-shrink: 0;
+      align-self: center;
+      accent-color: var(--reborn-primary);
     }
     .selection-mode .message-checkbox {
-      display: inline-block;
+      display: block;
     }
     .toggle-selection-btn {
       background-color: rgba(255,255,255,0.2);
@@ -485,10 +497,9 @@
   </div>
 
   <!-- チャンネル情報バー -->
-  <div style="background: #f8f9fa; padding: 8px 16px; border-bottom: 1px solid #e5e7eb;">
-    <div style="font-size: 13px; color: #6b7280;">
-      <button class="toggle-selection-btn" onclick="toggleSelectionMode()" style="background: #fff; border: 1px solid #d1d5db; color: #374151; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;">🗑️ 選択削除</button>
-    </div>
+  <div style="background: #f8f9fa; padding: 8px 16px; border-bottom: 1px solid #e5e7eb; display: none;">
+    <!-- 選択削除ボタンは削除（長押しで選択モード開始） -->
+  </div>
 
     <!-- GAS版：ユーザー名選択ドロップダウン -->
     <div id="userSelectContainer" style="display: none; margin-top: 8px;">
@@ -1075,6 +1086,14 @@
 
       item.className = isMine ? 'message-item message-item-mine' : 'message-item message-item-other';
       item.dataset.messageId = msg.id;
+
+      // チェックボックス（選択モード用）
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'message-checkbox';
+      checkbox.dataset.messageId = msg.id;
+      checkbox.addEventListener('change', updateSelectionCount);
+      item.appendChild(checkbox);
 
       // メッセージコンテント（アイコン + ラッパー）
       const content = document.createElement('div');
@@ -1699,8 +1718,23 @@
         longPressTimer = setTimeout(() => {
           console.log('[LongPress] Timer fired, touchMoved:', touchMoved);
           if (!touchMoved) {
-            console.log('[LongPress] Opening context menu');
-            openContextMenu(messageId, messageText, item);
+            console.log('[LongPress] Entering selection mode');
+            // 選択モード開始
+            const container = document.getElementById('messagesContainer');
+            const bar = document.getElementById('selectionModeBar');
+
+            if (!container.classList.contains('selection-mode')) {
+              container.classList.add('selection-mode');
+              bar.classList.add('active');
+            }
+
+            // 長押ししたメッセージを自動選択
+            const checkbox = item.querySelector('.message-checkbox');
+            if (checkbox) {
+              checkbox.checked = true;
+              updateSelectionCount();
+            }
+
             // 振動フィードバック（対応ブラウザのみ）
             if ('vibrate' in navigator) {
               navigator.vibrate(50);
