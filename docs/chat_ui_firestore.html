@@ -628,6 +628,53 @@
       width: 32px;
       height: 32px;
     }
+
+    /* 画像ビューアー（LINE風） */
+    .image-viewer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.95);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .image-viewer.active {
+      opacity: 1;
+    }
+    .image-viewer-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
+      z-index: 10000;
+    }
+    .image-viewer-close:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    .image-viewer-close svg {
+      color: white;
+    }
+    #imageViewerImg {
+      max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+      border-radius: 0;
+    }
   </style>
 </head>
 <body>
@@ -1316,9 +1363,9 @@
         img.src = msg.fileUrl;
         img.alt = msg.fileName || '画像';
         img.loading = 'lazy';
-        // 画像クリックで拡大表示（将来的に実装）
+        // 画像クリックで画像ビューアーを表示
         img.onclick = function() {
-          window.open(msg.fileUrl, '_blank');
+          openImageViewer(msg.fileUrl);
         };
         bubble.appendChild(img);
 
@@ -2092,6 +2139,72 @@
         openContextMenu(messageId, messageText, item);
       });
     }
+
+    // ========================================
+    // 画像ビューアー機能
+    // ========================================
+
+    // 画像ビューアーを開く
+    function openImageViewer(imageUrl) {
+      console.log('[ImageViewer] 画像ビューアーを開く:', imageUrl);
+      const viewer = document.getElementById('imageViewer');
+      const viewerImg = document.getElementById('imageViewerImg');
+
+      viewerImg.src = imageUrl;
+      viewer.style.display = 'flex';
+
+      // フェードイン用のクラスを追加（少し遅延させて適用）
+      setTimeout(() => {
+        viewer.classList.add('active');
+      }, 10);
+    }
+
+    // 画像ビューアーを閉じる
+    function closeImageViewer() {
+      console.log('[ImageViewer] 画像ビューアーを閉じる');
+      const viewer = document.getElementById('imageViewer');
+      const viewerImg = document.getElementById('imageViewerImg');
+
+      // フェードアウト
+      viewer.classList.remove('active');
+
+      // アニメーション完了後に非表示
+      setTimeout(() => {
+        viewer.style.display = 'none';
+        viewerImg.src = ''; // メモリ解放
+      }, 300); // CSSのtransition時間と合わせる
+    }
+
+    // 画像ビューアーのイベントリスナー設定
+    document.addEventListener('DOMContentLoaded', () => {
+      const viewer = document.getElementById('imageViewer');
+      const closeButton = document.getElementById('imageViewerClose');
+      const viewerImg = document.getElementById('imageViewerImg');
+
+      // ×ボタンクリックで閉じる
+      if (closeButton) {
+        closeButton.addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeImageViewer();
+        });
+      }
+
+      // 背景クリックで閉じる（画像自体のクリックでは閉じない）
+      if (viewer) {
+        viewer.addEventListener('click', (e) => {
+          if (e.target === viewer) {
+            closeImageViewer();
+          }
+        });
+      }
+
+      // 画像クリックでは閉じない（拡大表示維持）
+      if (viewerImg) {
+        viewerImg.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
+      }
+    });
   </script>
 
   <!-- 戻るボタン処理 -->
@@ -2195,6 +2308,17 @@
     }
   });
 </script>
+
+<!-- 画像ビューアー（LINE風） -->
+<div class="image-viewer" id="imageViewer" style="display: none;">
+  <button class="image-viewer-close" id="imageViewerClose">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="18" y1="6" x2="6" y2="18"></line>
+      <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+  </button>
+  <img id="imageViewerImg" src="" alt="画像">
+</div>
 
 </body>
 </html>
