@@ -102,6 +102,113 @@
       margin-left: 2px;
     }
 
+    /* 検索ボタン */
+    .search-button {
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: white;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      color: #374151;
+      font-size: 18px;
+    }
+    .search-button:hover {
+      background: #f3f4f6;
+    }
+    .search-button:active {
+      background: #e5e7eb;
+    }
+
+    /* 検索モード */
+    .header-search-mode {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .search-input-container {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-input {
+      width: 100%;
+      height: 36px;
+      border: none;
+      border-radius: 8px;
+      padding: 0 36px 0 12px;
+      font-size: 14px;
+      background: white;
+      color: #1f2937;
+    }
+    .search-input:focus {
+      outline: none;
+    }
+    .search-input::placeholder {
+      color: #9ca3af;
+    }
+    .search-clear-btn {
+      position: absolute;
+      right: 8px;
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: #e5e7eb;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #6b7280;
+      font-size: 14px;
+    }
+    .search-nav-buttons {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .search-count {
+      font-size: 12px;
+      color: #6b7280;
+      min-width: 40px;
+      text-align: center;
+    }
+    .search-nav-btn {
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: white;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #374151;
+      font-size: 14px;
+    }
+    .search-nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* 検索ハイライト */
+    .search-highlight {
+      background: #fef08a;
+      padding: 1px 2px;
+      border-radius: 2px;
+    }
+    .search-highlight-current {
+      background: #fb923c;
+      color: white;
+      padding: 1px 2px;
+      border-radius: 2px;
+    }
+
     /* メッセージリスト */
     .messages-container {
       flex: 1;
@@ -760,7 +867,8 @@
 <body>
   <!-- 統一ヘッダー -->
   <div class="header">
-    <div class="header-content">
+    <!-- 通常モード -->
+    <div class="header-content" id="headerNormal">
       <button class="back-button" id="back-button">
         <i class="bi bi-chevron-left"></i><span class="back-unread-count" id="backUnreadCount"></span>
       </button>
@@ -768,7 +876,26 @@
         <i class="bi bi-chat-dots" id="headerRoomIcon"></i>
         <span id="headerRoomName">チャット</span>
       </div>
-      <div style="width: 40px;"></div>
+      <button class="search-button" id="searchButton" onclick="openSearchMode()">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+    <!-- 検索モード -->
+    <div class="header-content header-search-mode" id="headerSearch" style="display: none;">
+      <button class="back-button" onclick="closeSearchMode()">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="search-input-container">
+        <input type="text" id="searchInput" class="search-input" placeholder="メッセージを検索..." oninput="searchMessages()">
+        <button class="search-clear-btn" id="searchClearBtn" onclick="clearSearch()" style="display: none;">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+      <div class="search-nav-buttons" id="searchNavButtons" style="display: none;">
+        <span class="search-count" id="searchCount">0/0</span>
+        <button class="search-nav-btn" onclick="navigateSearch('prev')"><i class="bi bi-chevron-up"></i></button>
+        <button class="search-nav-btn" onclick="navigateSearch('next')"><i class="bi bi-chevron-down"></i></button>
+      </div>
     </div>
   </div>
 
@@ -1940,6 +2067,171 @@
         console.error('[Back Unread] エラー:', error);
       }
     }
+
+    // ================================================================================
+    // メッセージ検索機能
+    // ================================================================================
+    let searchResults = [];
+    let currentSearchIndex = -1;
+    let originalMessages = new Map(); // 元のメッセージを保存
+
+    // 検索モードを開く
+    window.openSearchMode = function() {
+      document.getElementById('headerNormal').style.display = 'none';
+      document.getElementById('headerSearch').style.display = 'flex';
+      document.getElementById('searchInput').focus();
+    };
+
+    // 検索モードを閉じる
+    window.closeSearchMode = function() {
+      document.getElementById('headerNormal').style.display = 'flex';
+      document.getElementById('headerSearch').style.display = 'none';
+      clearSearch();
+    };
+
+    // 検索をクリア
+    window.clearSearch = function() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('searchClearBtn').style.display = 'none';
+      document.getElementById('searchNavButtons').style.display = 'none';
+
+      // ハイライトを削除
+      removeAllHighlights();
+      searchResults = [];
+      currentSearchIndex = -1;
+    };
+
+    // ハイライトを全て削除
+    function removeAllHighlights() {
+      const container = document.getElementById('messages');
+      const highlights = container.querySelectorAll('.search-highlight, .search-highlight-current');
+      highlights.forEach(el => {
+        const parent = el.parentNode;
+        parent.replaceChild(document.createTextNode(el.textContent), el);
+        parent.normalize();
+      });
+    }
+
+    // メッセージを検索
+    window.searchMessages = function() {
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+
+      // クリアボタンの表示切替
+      document.getElementById('searchClearBtn').style.display = query ? 'flex' : 'none';
+
+      // 以前のハイライトを削除
+      removeAllHighlights();
+      searchResults = [];
+      currentSearchIndex = -1;
+
+      if (!query) {
+        document.getElementById('searchNavButtons').style.display = 'none';
+        return;
+      }
+
+      // メッセージ要素を検索
+      const container = document.getElementById('messages');
+      const messageElements = container.querySelectorAll('.message-bubble');
+
+      messageElements.forEach((msgEl, index) => {
+        const textContent = msgEl.textContent.toLowerCase();
+        if (textContent.includes(query)) {
+          // テキストをハイライト
+          highlightText(msgEl, query);
+          searchResults.push(msgEl);
+        }
+      });
+
+      // 検索結果の表示
+      const navButtons = document.getElementById('searchNavButtons');
+      const countEl = document.getElementById('searchCount');
+
+      if (searchResults.length > 0) {
+        navButtons.style.display = 'flex';
+        currentSearchIndex = 0;
+        updateSearchNavigation();
+        scrollToCurrentResult();
+      } else {
+        navButtons.style.display = 'flex';
+        countEl.textContent = '0/0';
+      }
+    };
+
+    // テキストをハイライト
+    function highlightText(element, query) {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
+      const textNodes = [];
+
+      while (walker.nextNode()) {
+        textNodes.push(walker.currentNode);
+      }
+
+      textNodes.forEach(node => {
+        const text = node.textContent;
+        const lowerText = text.toLowerCase();
+        const index = lowerText.indexOf(query);
+
+        if (index !== -1) {
+          const before = text.substring(0, index);
+          const match = text.substring(index, index + query.length);
+          const after = text.substring(index + query.length);
+
+          const span = document.createElement('span');
+          span.className = 'search-highlight';
+          span.textContent = match;
+
+          const fragment = document.createDocumentFragment();
+          if (before) fragment.appendChild(document.createTextNode(before));
+          fragment.appendChild(span);
+          if (after) fragment.appendChild(document.createTextNode(after));
+
+          node.parentNode.replaceChild(fragment, node);
+        }
+      });
+    }
+
+    // 検索ナビゲーションを更新
+    function updateSearchNavigation() {
+      const countEl = document.getElementById('searchCount');
+      countEl.textContent = `${currentSearchIndex + 1}/${searchResults.length}`;
+
+      // 全てのハイライトをリセット
+      document.querySelectorAll('.search-highlight-current').forEach(el => {
+        el.className = 'search-highlight';
+      });
+
+      // 現在の結果をハイライト
+      if (searchResults[currentSearchIndex]) {
+        const currentHighlight = searchResults[currentSearchIndex].querySelector('.search-highlight');
+        if (currentHighlight) {
+          currentHighlight.className = 'search-highlight-current';
+        }
+      }
+    }
+
+    // 現在の検索結果にスクロール
+    function scrollToCurrentResult() {
+      if (searchResults[currentSearchIndex]) {
+        searchResults[currentSearchIndex].scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+      }
+    }
+
+    // 検索結果をナビゲート
+    window.navigateSearch = function(direction) {
+      if (searchResults.length === 0) return;
+
+      if (direction === 'next') {
+        currentSearchIndex = (currentSearchIndex + 1) % searchResults.length;
+      } else {
+        currentSearchIndex = (currentSearchIndex - 1 + searchResults.length) % searchResults.length;
+      }
+
+      updateSearchNavigation();
+      scrollToCurrentResult();
+    };
 
     // チャット一覧に戻る（LINE風）
     window.goBackToList = async function() {
