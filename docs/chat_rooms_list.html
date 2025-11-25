@@ -1506,7 +1506,10 @@
         }
 
         // 自分自身を除外
+        console.log('[Direct Chat] currentUserName:', currentUserName);
+        console.log('[Direct Chat] 全ユーザー:', users.map(u => u.userName));
         let filteredUsers = users.filter(u => u.userName !== currentUserName);
+        console.log('[Direct Chat] 自分除外後:', filteredUsers.length + '件', filteredUsers.map(u => u.userName));
 
         // 既存のDMルームがあるユーザーを除外
         if (isPWA && db && currentUserEmail) {
@@ -1516,9 +1519,12 @@
               query(collection(db, 'rooms'), where('type', '==', 'direct'))
             );
 
+            console.log('[Direct Chat] DMルーム数:', dmRoomsSnapshot.size);
+
             const existingDmUserEmails = new Set();
             dmRoomsSnapshot.forEach(doc => {
               const data = doc.data();
+              console.log('[Direct Chat] DMルーム:', doc.id, 'memberEmails:', data.memberEmails);
               // memberEmailsから自分以外のユーザーを取得
               if (data.memberEmails && Array.isArray(data.memberEmails)) {
                 data.memberEmails.forEach(email => {
@@ -1529,12 +1535,14 @@
               }
             });
 
-            console.log('[Direct Chat] 既存DMユーザー:', existingDmUserEmails.size + '件');
+            console.log('[Direct Chat] 既存DMユーザー:', existingDmUserEmails.size + '件', Array.from(existingDmUserEmails));
 
             // 既存DMユーザーを除外
             filteredUsers = filteredUsers.filter(u => {
               const userEmail = u.userEmail || u.email || u.id;
-              return !existingDmUserEmails.has(userEmail);
+              const shouldKeep = !existingDmUserEmails.has(userEmail);
+              console.log('[Direct Chat] ユーザー:', u.userName, 'email:', userEmail, 'keep:', shouldKeep);
+              return shouldKeep;
             });
 
             console.log('[Direct Chat] 除外後ユーザー:', filteredUsers.length + '件');
