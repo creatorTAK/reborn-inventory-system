@@ -94,6 +94,13 @@
     .back-btn:active {
       opacity: 0.6;
     }
+    /* 戻るボタン未読数（LINE風） */
+    .back-unread-count {
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+      margin-left: 2px;
+    }
 
     /* メッセージリスト */
     .messages-container {
@@ -755,7 +762,7 @@
   <div class="header">
     <div class="header-content">
       <button class="back-button" id="back-button">
-        <i class="bi bi-chevron-left"></i>
+        <i class="bi bi-chevron-left"></i><span class="back-unread-count" id="backUnreadCount"></span>
       </button>
       <div class="header-title">
         <i class="bi bi-chat-dots" id="headerRoomIcon"></i>
@@ -880,7 +887,7 @@
   <!-- Firebase SDK: 直接CDNから読み込み（外部JSファイル不要） -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, addDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc, getDoc, setDoc, increment, getDocs, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, addDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc, getDoc, setDoc, increment, getDocs, arrayUnion, collectionGroup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
     import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
     // Firebase設定
@@ -1179,6 +1186,9 @@
       } catch (error) {
         console.error('[Firestore] 未読カウントリセットエラー:', error);
       }
+
+      // 戻るボタンに他のルームの未読数を表示
+      loadOtherRoomsUnreadCount();
 
       // ルームのmembersに自分を追加（未追加の場合）
       try {
@@ -1882,6 +1892,52 @@
         console.log('[Unread] 未読カウント更新完了');
       } catch (error) {
         console.error('[Unread] 未読カウント更新エラー:', error);
+      }
+    }
+
+    // 他のルームの未読数合計を取得して戻るボタンに表示
+    async function loadOtherRoomsUnreadCount() {
+      if (!currentUserEmail) {
+        console.log('[Back Unread] ユーザーメールがないためスキップ');
+        return;
+      }
+
+      try {
+        console.log('[Back Unread] 他のルームの未読数取得開始');
+
+        // 全ルームを取得
+        const roomsSnapshot = await getDocs(collection(db, 'rooms'));
+        let totalUnread = 0;
+
+        // 各ルームの未読数を取得（現在のルームを除く）
+        for (const roomDoc of roomsSnapshot.docs) {
+          if (roomDoc.id === currentRoomId) continue; // 現在のルームはスキップ
+
+          const unreadRef = doc(db, `rooms/${roomDoc.id}/unreadCounts/${currentUserEmail}`);
+          const unreadDoc = await getDoc(unreadRef);
+
+          if (unreadDoc.exists()) {
+            const unreadData = unreadDoc.data();
+            const count = unreadData.unreadCount || 0;
+            if (count > 0) {
+              totalUnread += count;
+            }
+          }
+        }
+
+        console.log('[Back Unread] 合計未読数:', totalUnread);
+
+        // 戻るボタンに表示
+        const backUnreadEl = document.getElementById('backUnreadCount');
+        if (backUnreadEl) {
+          if (totalUnread > 0) {
+            backUnreadEl.textContent = totalUnread > 99 ? '99+' : totalUnread.toString();
+          } else {
+            backUnreadEl.textContent = '';
+          }
+        }
+      } catch (error) {
+        console.error('[Back Unread] エラー:', error);
       }
     }
 
