@@ -302,6 +302,48 @@
       opacity: 1;
     }
 
+    /* 画像プレビューエリア（LINE風） */
+    .image-preview-container {
+      background-color: white;
+      border-top: 1px solid #e2e8f0;
+      padding: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .image-preview-content {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+    }
+    .image-preview-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0, 0, 0, 0.6);
+      border: none;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
+      z-index: 10;
+    }
+    .image-preview-close:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+    .image-preview-close svg {
+      color: white;
+    }
+    #imagePreview {
+      max-width: 100%;
+      max-height: 180px;
+      border-radius: 8px;
+      display: block;
+    }
+
     /* 入力エリア */
     .input-container {
       padding: 12px 16px;
@@ -631,6 +673,19 @@
   </div>
 
   <div class="messages-container" id="messagesContainer"></div>
+
+  <!-- 画像プレビューエリア（LINE風） -->
+  <div class="image-preview-container" id="imagePreviewContainer" style="display: none;">
+    <div class="image-preview-content">
+      <button class="image-preview-close" id="imagePreviewClose">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <img id="imagePreview" src="" alt="プレビュー">
+    </div>
+  </div>
 
   <div class="input-container">
     <!-- 添付メニュー（+ボタンで展開） -->
@@ -1355,10 +1410,6 @@
       const input = document.getElementById('messageInput');
       const message = input.value.trim();
 
-      if (!message) {
-        return;
-      }
-
       // ユーザー名チェック
       if (!currentUserName) {
         alert('ユーザー名を選択してください');
@@ -1368,6 +1419,28 @@
       // roomIdチェック
       if (!currentRoomId) {
         alert('ルームIDが設定されていません');
+        return;
+      }
+
+      // 画像が選択されている場合は画像送信
+      if (selectedImageFile) {
+        console.log('[Send] 画像送信モード');
+        await uploadAndSendFile(selectedImageFile, 'image', message);
+
+        // プレビューをクリア
+        document.getElementById('imagePreviewContainer').style.display = 'none';
+        document.getElementById('imagePreview').src = '';
+        selectedImageFile = null;
+
+        // 入力欄クリア
+        input.value = '';
+        input.style.height = 'auto';
+
+        return;
+      }
+
+      // テキストのみの場合
+      if (!message) {
         return;
       }
 
@@ -1441,14 +1514,40 @@
     };
 
     // 画像選択時の処理
-    window.handleImageSelect = async function(event) {
+    // 選択中の画像ファイルを保持
+    let selectedImageFile = null;
+
+    window.handleImageSelect = function(event) {
       const file = event.target.files[0];
       if (!file) return;
 
       console.log('[Image] 画像選択:', file.name, file.size, 'bytes');
-      await uploadAndSendFile(file, 'image');
 
-      // input をリセット
+      // ファイルサイズチェック（10MB制限）
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        alert('ファイルサイズは10MB以下にしてください');
+        event.target.value = '';
+        return;
+      }
+
+      // 選択した画像を保持
+      selectedImageFile = file;
+
+      // プレビュー表示
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const preview = document.getElementById('imagePreview');
+        const container = document.getElementById('imagePreviewContainer');
+
+        preview.src = e.target.result;
+        container.style.display = 'block';
+
+        console.log('[Image] プレビュー表示完了');
+      };
+      reader.readAsDataURL(file);
+
+      // input をリセット（同じファイルを再選択可能にする）
       event.target.value = '';
     };
 
@@ -1477,7 +1576,7 @@
     };
 
     // ファイルアップロード＆送信（共通関数）
-    async function uploadAndSendFile(file, type) {
+    async function uploadAndSendFile(file, type, caption = '') {
       try {
         // ファイルサイズチェック（10MB制限）
         const maxSize = 10 * 1024 * 1024; // 10MB
@@ -1499,7 +1598,7 @@
 
         // Firestoreにメッセージを保存
         const messageData = {
-          text: '', // キャプションは空（将来的に追加可能）
+          text: caption || '', // キャプション（テキスト）
           userName: currentUserName,
           userEmail: currentUserEmail, // Firebase Functions 高速化用
           timestamp: serverTimestamp(),
@@ -2029,6 +2128,36 @@
       expandButton.style.display = 'none';
       messageInput.blur();
     });
+
+    // 画像プレビュー削除ボタン
+    const imagePreviewClose = document.getElementById('imagePreviewClose');
+    if (imagePreviewClose) {
+      imagePreviewClose.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Image Preview] Close button clicked');
+
+        // プレビューを非表示
+        document.getElementById('imagePreviewContainer').style.display = 'none';
+        document.getElementById('imagePreview').src = '';
+
+        // 選択した画像をクリア
+        selectedImageFile = null;
+
+        console.log('[Image Preview] プレビュー削除完了');
+      });
+
+      // タッチイベント対応
+      imagePreviewClose.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('[Image Preview] Close button touched');
+
+        document.getElementById('imagePreviewContainer').style.display = 'none';
+        document.getElementById('imagePreview').src = '';
+        selectedImageFile = null;
+      });
+    }
   });
 </script>
 
