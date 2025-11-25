@@ -306,8 +306,8 @@
     .image-preview-container {
       background-color: white;
       border-top: 1px solid #e2e8f0;
-      padding: 12px;
-      max-height: 200px;
+      padding: 8px 12px;
+      max-height: 140px;
       overflow-y: auto;
     }
     .image-preview-content {
@@ -317,13 +317,13 @@
     }
     .image-preview-close {
       position: absolute;
-      top: 8px;
-      right: 8px;
+      top: 4px;
+      right: 4px;
       background: rgba(0, 0, 0, 0.6);
       border: none;
       border-radius: 50%;
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -336,10 +336,12 @@
     }
     .image-preview-close svg {
       color: white;
+      width: 18px;
+      height: 18px;
     }
     #imagePreview {
       max-width: 100%;
-      max-height: 180px;
+      max-height: 120px;
       border-radius: 8px;
       display: block;
     }
@@ -1407,25 +1409,41 @@
 
     // メッセージ送信
     window.sendMessage = async function() {
+      console.log('[sendMessage] 関数呼び出し開始');
+
       const input = document.getElementById('messageInput');
       const message = input.value.trim();
 
+      console.log('[sendMessage] message:', message);
+      console.log('[sendMessage] selectedImageFile:', selectedImageFile);
+      console.log('[sendMessage] currentUserName:', currentUserName);
+      console.log('[sendMessage] currentRoomId:', currentRoomId);
+
       // ユーザー名チェック
       if (!currentUserName) {
+        console.error('[sendMessage] ユーザー名未設定');
         alert('ユーザー名を選択してください');
         return;
       }
 
       // roomIdチェック
       if (!currentRoomId) {
+        console.error('[sendMessage] ルームID未設定');
         alert('ルームIDが設定されていません');
         return;
       }
 
       // 画像が選択されている場合は画像送信
       if (selectedImageFile) {
-        console.log('[Send] 画像送信モード');
-        await uploadAndSendFile(selectedImageFile, 'image', message);
+        console.log('[Send] 画像送信モード開始');
+        try {
+          await uploadAndSendFile(selectedImageFile, 'image', message);
+          console.log('[Send] 画像送信完了');
+        } catch (error) {
+          console.error('[Send] 画像送信エラー:', error);
+          alert('画像の送信に失敗しました: ' + error.message);
+          return;
+        }
 
         // プレビューをクリア
         document.getElementById('imagePreviewContainer').style.display = 'none';
@@ -1577,15 +1595,20 @@
 
     // ファイルアップロード＆送信（共通関数）
     async function uploadAndSendFile(file, type, caption = '') {
+      console.log('[uploadAndSendFile] 関数呼び出し:', { file, type, caption });
+      console.log('[uploadAndSendFile] storage:', storage);
+      console.log('[uploadAndSendFile] currentRoomId:', currentRoomId);
+
       try {
         // ファイルサイズチェック（10MB制限）
         const maxSize = 10 * 1024 * 1024; // 10MB
         if (file.size > maxSize) {
+          console.error('[uploadAndSendFile] ファイルサイズ超過:', file.size);
           alert('ファイルサイズは10MB以下にしてください');
           return;
         }
 
-        console.log('[Upload] アップロード開始:', file.name);
+        console.log('[Upload] アップロード開始:', file.name, 'size:', file.size);
 
         // Firebase Storageにアップロード
         const storageRef = ref(storage, `chat/${currentRoomId}/${Date.now()}_${file.name}`);
