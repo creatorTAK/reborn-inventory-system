@@ -676,40 +676,28 @@
       border-radius: 0;
     }
 
-    /* 画像保存メニュー（LINE風） */
-    .image-save-menu {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background-color: white;
-      border-radius: 16px 16px 0 0;
-      padding: 16px;
-      z-index: 10001;
-      transform: translateY(100%);
-      transition: transform 0.3s ease;
-    }
-    .image-save-menu.active {
-      transform: translateY(0);
-    }
-    .image-save-menu-item {
-      padding: 16px;
-      border-radius: 8px;
-      background: white;
+    /* ダウンロードボタン（LINE風） */
+    .image-viewer-download {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(0, 0, 0, 0.6);
       border: none;
-      width: 100%;
-      text-align: center;
-      font-size: 16px;
-      color: #007AFF;
+      border-radius: 50%;
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
       transition: background 0.2s;
+      z-index: 10000;
     }
-    .image-save-menu-item:active {
-      background: #f0f0f0;
+    .image-viewer-download:active {
+      background: rgba(0, 0, 0, 0.8);
     }
-    .image-save-menu-cancel {
-      margin-top: 8px;
-      color: #666;
+    .image-viewer-download svg {
+      color: white;
     }
   </style>
 </head>
@@ -2239,72 +2227,89 @@
         viewerImg.addEventListener('click', (e) => {
           e.stopPropagation();
         });
-
-        // 長押しで保存メニュー表示
-        let longPressTimer;
-        viewerImg.addEventListener('touchstart', (e) => {
-          longPressTimer = setTimeout(() => {
-            showImageSaveMenu();
-          }, 500); // 500ms長押し
-        });
-
-        viewerImg.addEventListener('touchend', () => {
-          clearTimeout(longPressTimer);
-        });
-
-        viewerImg.addEventListener('touchmove', () => {
-          clearTimeout(longPressTimer);
-        });
       }
 
-      // 保存メニューのボタンイベント
-      const saveButton = document.getElementById('imageSaveButton');
-      const saveCancel = document.getElementById('imageSaveCancel');
-
-      if (saveButton) {
-        saveButton.addEventListener('click', () => {
+      // ダウンロードボタンのイベント
+      const downloadButton = document.getElementById('imageViewerDownload');
+      if (downloadButton) {
+        downloadButton.addEventListener('click', (e) => {
+          e.stopPropagation();
           downloadImage();
-        });
-      }
-
-      if (saveCancel) {
-        saveCancel.addEventListener('click', () => {
-          hideImageSaveMenu();
         });
       }
     });
 
-    // 画像保存メニューを表示
-    function showImageSaveMenu() {
-      console.log('[ImageViewer] 保存メニュー表示');
-      const menu = document.getElementById('imageSaveMenu');
-      menu.style.display = 'block';
-      setTimeout(() => {
-        menu.classList.add('active');
-      }, 10);
-    }
-
-    // 画像保存メニューを非表示
-    function hideImageSaveMenu() {
-      console.log('[ImageViewer] 保存メニュー非表示');
-      const menu = document.getElementById('imageSaveMenu');
-      menu.classList.remove('active');
-      setTimeout(() => {
-        menu.style.display = 'none';
-      }, 300);
-    }
-
     // 画像をダウンロード
-    function downloadImage() {
+    async function downloadImage() {
       console.log('[ImageViewer] 画像ダウンロード開始');
       const viewerImg = document.getElementById('imageViewerImg');
       const imageUrl = viewerImg.src;
 
-      // モバイルブラウザでは新しいタブで開く（長押しで保存可能）
-      window.open(imageUrl, '_blank');
+      try {
+        // Firebase StorageのURLから画像をフェッチ
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
 
-      console.log('[ImageViewer] 画像を新しいタブで開きました');
-      hideImageSaveMenu();
+        // ダウンロード用のリンクを作成
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chat_image_${Date.now()}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        console.log('[ImageViewer] ダウンロード完了');
+
+        // 「保存しました」トースト表示
+        showToast('保存しました');
+      } catch (error) {
+        console.error('[ImageViewer] ダウンロードエラー:', error);
+        showToast('保存に失敗しました');
+      }
+    }
+
+    // トースト通知を表示
+    function showToast(message) {
+      // 既存のトーストがあれば削除
+      const existingToast = document.getElementById('downloadToast');
+      if (existingToast) {
+        existingToast.remove();
+      }
+
+      // トーストを作成
+      const toast = document.createElement('div');
+      toast.id = 'downloadToast';
+      toast.textContent = message;
+      toast.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 16px;
+        z-index: 10002;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      `;
+      document.body.appendChild(toast);
+
+      // フェードイン
+      setTimeout(() => {
+        toast.style.opacity = '1';
+      }, 10);
+
+      // 1秒後にフェードアウトして削除
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => {
+          toast.remove();
+        }, 300);
+      }, 1000);
     }
   </script>
 
@@ -2419,15 +2424,13 @@
     </svg>
   </button>
   <img id="imageViewerImg" src="" alt="画像">
-</div>
-
-<!-- 画像保存メニュー（LINE風） -->
-<div class="image-save-menu" id="imageSaveMenu" style="display: none;">
-  <button class="image-save-menu-item" id="imageSaveButton">
-    画像を保存
-  </button>
-  <button class="image-save-menu-item image-save-menu-cancel" id="imageSaveCancel">
-    キャンセル
+  <!-- ダウンロードボタン -->
+  <button class="image-viewer-download" id="imageViewerDownload">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+      <polyline points="7 10 12 15 17 10"></polyline>
+      <line x1="12" y1="15" x2="12" y2="3"></line>
+    </svg>
   </button>
 </div>
 
