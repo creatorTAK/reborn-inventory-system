@@ -2239,64 +2239,14 @@
       }
     });
 
-    // 画像をダウンロード（Web Share API優先 + 新規タブフォールバック）
-    async function downloadImage() {
-      console.log('[ImageViewer] 画像ダウンロード開始');
-      console.log('[ImageViewer] UA:', navigator.userAgent);
-      console.log('[ImageViewer] canShareFiles?', navigator.canShare && navigator.canShare({ files: [] }));
-
+    // 画像をダウンロード（シンプル版：新規タブで直接開く）
+    function downloadImage() {
       const viewerImg = document.getElementById('imageViewerImg');
       const imageUrl = viewerImg.src;
 
-      // 1) Web Share API（files対応）を試す（最良のUX）
-      if (navigator.canShare && navigator.canShare({ files: [] })) {
-        try {
-          console.log('[ImageViewer] Web Share API を試行');
-          const response = await fetch(imageUrl, { mode: 'cors' });
-          if (!response.ok) throw new Error('fetch failed: ' + response.status);
-          const blob = await response.blob();
-          const file = new File([blob], `chat_image_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
-          await navigator.share({ files: [file] });
-          console.log('[ImageViewer] Web Share 成功');
-          showToast('共有メニューを開きました');
-          return;
-        } catch (err) {
-          console.warn('[ImageViewer] Web Share 失敗、フォールバックへ', err);
-          // フォールバックへ続く
-        }
-      }
-
-      // 2) 同期的に新規タブを開く（ユーザージェスチャを維持）
-      console.log('[ImageViewer] 新規タブ方式へフォールバック');
-      const newWin = window.open('about:blank', '_blank', 'noopener');
-
-      try {
-        // fetchでblobを取得してBlob URLで開く
-        const response = await fetch(imageUrl, { mode: 'cors' });
-        if (response.ok) {
-          const blob = await response.blob();
-          const blobUrl = URL.createObjectURL(blob);
-          newWin.location.href = blobUrl;
-          // 60秒後にBlob URLを解放
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-          console.log('[ImageViewer] Blob URL で新規タブを開きました');
-          showToast('画像を開きました。長押しで保存できます');
-          return;
-        } else {
-          // fetchは成功したがステータスがエラーの場合、元URLで開く
-          newWin.location.href = imageUrl;
-          console.log('[ImageViewer] 元URLで新規タブを開きました');
-          showToast('画像を開きました。長押しで保存してください');
-          return;
-        }
-      } catch (err) {
-        console.error('[ImageViewer] fetch失敗、元URLで開く', err);
-        // fetchが完全に失敗した場合、元URLで開く
-        if (newWin && !newWin.closed) {
-          newWin.location.href = imageUrl;
-        }
-        showToast('画像を開きました。長押しで保存してください');
-      }
+      // 新規タブで画像URLを直接開く（最もシンプルで確実）
+      window.open(imageUrl, '_blank');
+      showToast('画像を長押しで保存できます');
     }
 
     // トースト通知を表示
