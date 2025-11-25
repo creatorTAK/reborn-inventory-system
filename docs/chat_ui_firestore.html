@@ -168,6 +168,71 @@
       display: none; /* ヘッダーは非表示 */
     }
 
+    /* 画像メッセージ */
+    .message-image {
+      max-width: 280px;
+      max-height: 400px;
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
+      display: block;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .message-image:hover {
+      opacity: 0.9;
+    }
+    .message-image:active {
+      opacity: 0.8;
+    }
+
+    /* 画像メッセージのバブルは余白を調整 */
+    .message-bubble:has(.message-image) {
+      padding: 4px;
+    }
+
+    /* 画像 + キャプションの場合 */
+    .message-bubble .message-image + .message-text {
+      margin-top: 8px;
+      padding: 0 10px 6px 10px;
+    }
+
+    /* ファイルメッセージ */
+    .message-file-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px;
+      border-radius: 8px;
+      background-color: rgba(0, 0, 0, 0.05);
+      text-decoration: none;
+      color: inherit;
+      transition: background-color 0.2s;
+    }
+    .message-file-link:hover {
+      background-color: rgba(0, 0, 0, 0.1);
+    }
+    .message-file-icon {
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    .message-file-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .message-file-name {
+      font-weight: 500;
+      font-size: 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .message-file-size {
+      font-size: 12px;
+      color: #718096;
+      margin-top: 2px;
+    }
+
     /* ユーザーアイコン（LINE風） */
     .user-icon {
       width: 36px;
@@ -279,7 +344,7 @@
     }
     .action-button.active {
       color: var(--reborn-primary);
-      background-color: #dbeafe;
+      background-color: white; /* 背景は白のまま */
     }
     .attachment-menu {
       position: absolute;
@@ -1087,6 +1152,15 @@
       });
     }
 
+    // ファイルサイズをフォーマット
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
     // メッセージをUIに追加
     function appendMessage(msg) {
       const container = document.getElementById('messagesContainer');
@@ -1175,11 +1249,74 @@
       const bubble = document.createElement('div');
       bubble.className = 'message-bubble';
 
-      // メッセージ本文
-      const text = document.createElement('div');
-      text.className = 'message-text';
-      text.textContent = msg.text || '';
-      bubble.appendChild(text);
+      // 画像メッセージの場合
+      if (msg.type === 'image' && msg.fileUrl) {
+        const img = document.createElement('img');
+        img.className = 'message-image';
+        img.src = msg.fileUrl;
+        img.alt = msg.fileName || '画像';
+        img.loading = 'lazy';
+        // 画像クリックで拡大表示（将来的に実装）
+        img.onclick = function() {
+          window.open(msg.fileUrl, '_blank');
+        };
+        bubble.appendChild(img);
+
+        // キャプション（テキストがある場合）
+        if (msg.text && msg.text.trim()) {
+          const caption = document.createElement('div');
+          caption.className = 'message-text';
+          caption.textContent = msg.text;
+          bubble.appendChild(caption);
+        }
+      }
+      // ファイルメッセージの場合
+      else if (msg.type === 'file' && msg.fileUrl) {
+        const fileLink = document.createElement('a');
+        fileLink.className = 'message-file-link';
+        fileLink.href = msg.fileUrl;
+        fileLink.target = '_blank';
+        fileLink.download = msg.fileName || 'file';
+
+        // ファイルアイコン
+        const fileIcon = document.createElement('div');
+        fileIcon.className = 'message-file-icon';
+        fileIcon.innerHTML = '📎';
+
+        // ファイル情報
+        const fileInfo = document.createElement('div');
+        fileInfo.className = 'message-file-info';
+
+        const fileName = document.createElement('div');
+        fileName.className = 'message-file-name';
+        fileName.textContent = msg.fileName || 'ファイル';
+
+        const fileSize = document.createElement('div');
+        fileSize.className = 'message-file-size';
+        fileSize.textContent = formatFileSize(msg.fileSize || 0);
+
+        fileInfo.appendChild(fileName);
+        fileInfo.appendChild(fileSize);
+
+        fileLink.appendChild(fileIcon);
+        fileLink.appendChild(fileInfo);
+        bubble.appendChild(fileLink);
+
+        // キャプション（テキストがある場合）
+        if (msg.text && msg.text.trim()) {
+          const caption = document.createElement('div');
+          caption.className = 'message-text';
+          caption.textContent = msg.text;
+          bubble.appendChild(caption);
+        }
+      }
+      // テキストメッセージの場合
+      else {
+        const text = document.createElement('div');
+        text.className = 'message-text';
+        text.textContent = msg.text || '';
+        bubble.appendChild(text);
+      }
 
       // 時間
       const time = document.createElement('span');
