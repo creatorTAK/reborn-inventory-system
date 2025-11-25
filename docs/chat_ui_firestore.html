@@ -309,8 +309,57 @@
       background-color: white;
       border-top: 1px solid #e2e8f0;
       padding: 8px 12px;
-      max-height: 140px;
-      overflow-y: auto;
+      max-height: 160px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      white-space: nowrap;
+    }
+    .image-preview-list {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .image-preview-item {
+      position: relative;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .image-preview-item img {
+      max-width: 100px;
+      max-height: 100px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+    .image-preview-item .remove-btn {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: rgba(0, 0, 0, 0.7);
+      border: none;
+      border-radius: 50%;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+    }
+    .image-preview-item .remove-btn svg {
+      width: 14px;
+      height: 14px;
+      stroke: white;
+    }
+    .image-preview-count {
+      display: inline-flex;
+      align-items: center;
+      background: #06c755;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-left: 8px;
     }
     .image-preview-content {
       position: relative;
@@ -750,17 +799,12 @@
 
   <div class="messages-container" id="messagesContainer"></div>
 
-  <!-- 画像プレビューエリア（LINE風） -->
+  <!-- 画像プレビューエリア（複数対応） -->
   <div class="image-preview-container" id="imagePreviewContainer" style="display: none;">
-    <div class="image-preview-content">
-      <button class="image-preview-close" id="imagePreviewClose">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-      <img id="imagePreview" src="" alt="プレビュー">
+    <div class="image-preview-list" id="imagePreviewList">
+      <!-- 選択された画像がここに追加される -->
     </div>
+    <span class="image-preview-count" id="imagePreviewCount" style="display: none;">0枚</span>
   </div>
 
   <div class="input-container">
@@ -818,7 +862,7 @@
     </div>
 
     <!-- 隠しファイル入力 -->
-    <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageSelect(event)">
+    <input type="file" id="imageInput" accept="image/*" multiple style="display: none;" onchange="handleImageSelect(event)">
     <input type="file" id="fileInput" accept="*/*" style="display: none;" onchange="handleFileSelect(event)">
     <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleCameraCapture(event)">
   </div>
@@ -1489,7 +1533,7 @@
       const message = input.value.trim();
 
       console.log('[sendMessage] message:', message);
-      console.log('[sendMessage] selectedImageFile:', selectedImageFile);
+      console.log('[sendMessage] selectedImageFiles:', selectedImageFiles.length, '枚');
       console.log('[sendMessage] currentUserName:', currentUserName);
       console.log('[sendMessage] currentRoomId:', currentRoomId);
 
@@ -1507,26 +1551,37 @@
         return;
       }
 
-      // 画像が選択されている場合は画像送信
-      if (selectedImageFile) {
-        console.log('[Send] 画像送信モード開始');
+      // 画像が選択されている場合は画像送信（複数対応）
+      if (selectedImageFiles.length > 0) {
+        console.log('[Send] 画像送信モード開始 -', selectedImageFiles.length, '枚');
+        const sendButton = document.getElementById('sendButton');
+        sendButton.disabled = true;
+
         try {
-          await uploadAndSendFile(selectedImageFile, 'image', message);
-          console.log('[Send] 画像送信完了');
+          // 最初の画像にはキャプション（テキスト）を付ける
+          // 2枚目以降はキャプションなし
+          for (let i = 0; i < selectedImageFiles.length; i++) {
+            const file = selectedImageFiles[i];
+            const caption = (i === 0) ? message : '';
+            console.log('[Send] 画像送信中:', i + 1, '/', selectedImageFiles.length, file.name);
+            await uploadAndSendFile(file, 'image', caption);
+          }
+          console.log('[Send] 全画像送信完了');
         } catch (error) {
           console.error('[Send] 画像送信エラー:', error);
           alert('画像の送信に失敗しました: ' + error.message);
+          sendButton.disabled = false;
           return;
         }
 
         // プレビューをクリア
-        document.getElementById('imagePreviewContainer').style.display = 'none';
-        document.getElementById('imagePreview').src = '';
-        selectedImageFile = null;
+        selectedImageFiles = [];
+        updateImagePreview();
 
         // 入力欄クリア
         input.value = '';
         input.style.height = 'auto';
+        sendButton.disabled = false;
 
         return;
       }
@@ -1607,41 +1662,113 @@
 
     // 画像選択時の処理
     // 選択中の画像ファイルを保持
-    let selectedImageFile = null;
+    // 複数画像対応
+    let selectedImageFiles = [];
+    const MAX_IMAGES = 10; // 最大10枚まで
 
     window.handleImageSelect = function(event) {
-      const file = event.target.files[0];
-      if (!file) return;
+      const files = Array.from(event.target.files);
+      if (!files.length) return;
 
-      console.log('[Image] 画像選択:', file.name, file.size, 'bytes');
+      console.log('[Image] 画像選択:', files.length, '枚');
 
       // ファイルサイズチェック（10MB制限）
       const maxSize = 10 * 1024 * 1024; // 10MB
-      if (file.size > maxSize) {
-        alert('ファイルサイズは10MB以下にしてください');
+      const validFiles = [];
+
+      for (const file of files) {
+        if (file.size > maxSize) {
+          alert(`${file.name} は10MBを超えています。スキップします。`);
+          continue;
+        }
+        validFiles.push(file);
+      }
+
+      if (!validFiles.length) {
         event.target.value = '';
         return;
       }
 
-      // 選択した画像を保持
-      selectedImageFile = file;
+      // 最大枚数チェック
+      const totalCount = selectedImageFiles.length + validFiles.length;
+      if (totalCount > MAX_IMAGES) {
+        alert(`画像は最大${MAX_IMAGES}枚までです。現在${selectedImageFiles.length}枚選択中です。`);
+        const allowedCount = MAX_IMAGES - selectedImageFiles.length;
+        validFiles.splice(allowedCount);
+      }
 
-      // プレビュー表示
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const preview = document.getElementById('imagePreview');
-        const container = document.getElementById('imagePreviewContainer');
+      // 選択した画像を追加
+      selectedImageFiles = [...selectedImageFiles, ...validFiles];
+      console.log('[Image] 合計選択枚数:', selectedImageFiles.length);
 
-        preview.src = e.target.result;
-        container.style.display = 'block';
-
-        console.log('[Image] プレビュー表示完了');
-      };
-      reader.readAsDataURL(file);
+      // プレビュー表示を更新
+      updateImagePreview();
 
       // input をリセット（同じファイルを再選択可能にする）
       event.target.value = '';
     };
+
+    // プレビュー表示を更新する関数
+    function updateImagePreview() {
+      const container = document.getElementById('imagePreviewContainer');
+      const list = document.getElementById('imagePreviewList');
+      const countBadge = document.getElementById('imagePreviewCount');
+
+      // リストをクリア
+      list.innerHTML = '';
+
+      if (selectedImageFiles.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+
+      // 各画像のプレビューを作成
+      selectedImageFiles.forEach((file, index) => {
+        const item = document.createElement('div');
+        item.className = 'image-preview-item';
+        item.dataset.index = index;
+
+        const img = document.createElement('img');
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+        removeBtn.onclick = function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          removeImageAtIndex(index);
+        };
+
+        item.appendChild(img);
+        item.appendChild(removeBtn);
+        list.appendChild(item);
+      });
+
+      // 枚数バッジを更新
+      countBadge.textContent = `${selectedImageFiles.length}枚`;
+      countBadge.style.display = selectedImageFiles.length > 1 ? 'inline-flex' : 'none';
+
+      container.style.display = 'block';
+      console.log('[Image] プレビュー表示更新完了');
+    }
+
+    // 指定インデックスの画像を削除
+    function removeImageAtIndex(index) {
+      console.log('[Image] 画像削除:', index);
+      selectedImageFiles.splice(index, 1);
+      updateImagePreview();
+    }
+
+    // すべての画像をクリア
+    function clearAllImages() {
+      selectedImageFiles = [];
+      updateImagePreview();
+    }
 
     // ファイル選択時の処理
     window.handleFileSelect = async function(event) {
@@ -2362,35 +2489,8 @@
       messageInput.blur();
     });
 
-    // 画像プレビュー削除ボタン
-    const imagePreviewClose = document.getElementById('imagePreviewClose');
-    if (imagePreviewClose) {
-      imagePreviewClose.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[Image Preview] Close button clicked');
-
-        // プレビューを非表示
-        document.getElementById('imagePreviewContainer').style.display = 'none';
-        document.getElementById('imagePreview').src = '';
-
-        // 選択した画像をクリア
-        selectedImageFile = null;
-
-        console.log('[Image Preview] プレビュー削除完了');
-      });
-
-      // タッチイベント対応
-      imagePreviewClose.addEventListener('touchend', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[Image Preview] Close button touched');
-
-        document.getElementById('imagePreviewContainer').style.display = 'none';
-        document.getElementById('imagePreview').src = '';
-        selectedImageFile = null;
-      });
-    }
+    // 画像プレビューは各アイテムの×ボタンで個別削除
+    // clearAllImages()で全削除も可能
   });
 </script>
 
