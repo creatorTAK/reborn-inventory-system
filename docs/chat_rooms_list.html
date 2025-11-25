@@ -1460,10 +1460,26 @@
       try {
         let users;
 
-        // PWA版：キャッシュから取得
+        // PWA版：キャッシュから取得、なければFirestoreから直接取得
         if (usersCache && usersCache.length > 0) {
           users = usersCache;
           console.log('[Direct Chat] キャッシュからユーザー一覧取得:', users.length + '件');
+        } else if (isPWA && db) {
+          // PWA版：キャッシュが空の場合、Firestoreから直接取得
+          console.log('[Direct Chat] キャッシュが空のためFirestoreから直接取得');
+          const snapshot = await getDocs(collection(db, 'users'));
+          const allUsers = [];
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            allUsers.push({ id: doc.id, userEmail: doc.id, ...data });
+          });
+          // アクティブユーザーのみフィルタ
+          users = allUsers.filter(u => u.status === 'アクティブ');
+          // キャッシュに保存
+          if (users.length > 0) {
+            usersCache = users;
+          }
+          console.log('[Direct Chat] Firestoreからユーザー一覧取得成功:', users.length + '件');
         } else if (typeof google !== 'undefined' && google.script && google.script.run) {
           // GAS版：google.script.runで呼び出し
           users = await new Promise((resolve, reject) => {
