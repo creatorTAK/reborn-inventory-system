@@ -1451,7 +1451,10 @@
       document.getElementById('directChatModal').classList.remove('active');
     };
 
-    // ユーザー一覧を読み込む
+    // ユーザー一覧を読み込む（リトライ機能付き）
+    let loadUserListRetryCount = 0;
+    const MAX_RETRY = 3;
+
     async function loadUserList() {
       console.log('[Direct Chat] ユーザー一覧を読み込み中...');
       const container = document.getElementById('userListContainer');
@@ -1460,13 +1463,9 @@
       try {
         let users;
 
-        // PWA版：キャッシュから取得、なければFirestoreから直接取得
-        if (usersCache && usersCache.length > 0) {
-          users = usersCache;
-          console.log('[Direct Chat] キャッシュからユーザー一覧取得:', users.length + '件');
-        } else if (isPWA && db) {
-          // PWA版：キャッシュが空の場合、Firestoreから直接取得
-          console.log('[Direct Chat] キャッシュが空のためFirestoreから直接取得');
+        // PWA版：常にFirestoreから最新を取得（キャッシュは使わない）
+        if (isPWA && db) {
+          console.log('[Direct Chat] Firestoreから直接取得');
           const snapshot = await getDocs(collection(db, 'users'));
           const allUsers = [];
           snapshot.forEach(doc => {
@@ -1496,6 +1495,15 @@
         console.log('[Direct Chat] ユーザー一覧取得成功:', users.length + '件');
 
         if (!users || users.length === 0) {
+          // リトライ（最大3回、1秒間隔）
+          if (loadUserListRetryCount < MAX_RETRY) {
+            loadUserListRetryCount++;
+            console.log('[Direct Chat] ユーザー0件のためリトライ:', loadUserListRetryCount + '/' + MAX_RETRY);
+            container.innerHTML = '<div class="loading">ユーザー情報を同期中...</div>';
+            setTimeout(() => loadUserList(), 1000);
+            return;
+          }
+          loadUserListRetryCount = 0; // リセット
           container.innerHTML = `
             <div class="empty-state">
               <div class="empty-state-icon">👥</div>
@@ -1504,12 +1512,10 @@
           `;
           return;
         }
+        loadUserListRetryCount = 0; // 成功したらリセット
 
         // 自分自身を除外
-        console.log('[Direct Chat] currentUserName:', currentUserName);
-        console.log('[Direct Chat] 全ユーザー:', users.map(u => u.userName));
         let filteredUsers = users.filter(u => u.userName !== currentUserName);
-        console.log('[Direct Chat] 自分除外後:', filteredUsers.length + '件', filteredUsers.map(u => u.userName));
 
         // 既存のDMルームがあるユーザーを除外
         if (isPWA && db && currentUserEmail) {
@@ -1519,12 +1525,9 @@
               query(collection(db, 'rooms'), where('type', '==', 'direct'))
             );
 
-            console.log('[Direct Chat] DMルーム数:', dmRoomsSnapshot.size);
-
             const existingDmUserEmails = new Set();
             dmRoomsSnapshot.forEach(doc => {
               const data = doc.data();
-              console.log('[Direct Chat] DMルーム:', doc.id, 'memberEmails:', data.memberEmails);
               // memberEmailsから自分以外のユーザーを取得
               if (data.memberEmails && Array.isArray(data.memberEmails)) {
                 data.memberEmails.forEach(email => {
@@ -1535,17 +1538,11 @@
               }
             });
 
-            console.log('[Direct Chat] 既存DMユーザー:', existingDmUserEmails.size + '件', Array.from(existingDmUserEmails));
-
             // 既存DMユーザーを除外
             filteredUsers = filteredUsers.filter(u => {
               const userEmail = u.userEmail || u.email || u.id;
-              const shouldKeep = !existingDmUserEmails.has(userEmail);
-              console.log('[Direct Chat] ユーザー:', u.userName, 'email:', userEmail, 'keep:', shouldKeep);
-              return shouldKeep;
+              return !existingDmUserEmails.has(userEmail);
             });
-
-            console.log('[Direct Chat] 除外後ユーザー:', filteredUsers.length + '件');
           } catch (error) {
             console.error('[Direct Chat] 既存DMチェックエラー:', error);
             // エラーの場合は除外せずに続行
