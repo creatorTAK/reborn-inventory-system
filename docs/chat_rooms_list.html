@@ -1506,13 +1506,49 @@
         }
 
         // 自分自身を除外
-        const filteredUsers = users.filter(u => u.userName !== currentUserName);
+        let filteredUsers = users.filter(u => u.userName !== currentUserName);
+
+        // 既存のDMルームがあるユーザーを除外
+        if (isPWA && db && currentUserEmail) {
+          try {
+            // DMルーム（type: 'direct'）を取得
+            const dmRoomsSnapshot = await getDocs(
+              query(collection(db, 'rooms'), where('type', '==', 'direct'))
+            );
+
+            const existingDmUserEmails = new Set();
+            dmRoomsSnapshot.forEach(doc => {
+              const data = doc.data();
+              // membersから自分以外のユーザーを取得
+              if (data.members && Array.isArray(data.members)) {
+                data.members.forEach(email => {
+                  if (email !== currentUserEmail) {
+                    existingDmUserEmails.add(email);
+                  }
+                });
+              }
+            });
+
+            console.log('[Direct Chat] 既存DMユーザー:', existingDmUserEmails.size + '件');
+
+            // 既存DMユーザーを除外
+            filteredUsers = filteredUsers.filter(u => {
+              const userEmail = u.userEmail || u.email || u.id;
+              return !existingDmUserEmails.has(userEmail);
+            });
+
+            console.log('[Direct Chat] 除外後ユーザー:', filteredUsers.length + '件');
+          } catch (error) {
+            console.error('[Direct Chat] 既存DMチェックエラー:', error);
+            // エラーの場合は除外せずに続行
+          }
+        }
 
         if (filteredUsers.length === 0) {
           container.innerHTML = `
             <div class="empty-state">
               <div class="empty-state-icon">👥</div>
-              <div class="empty-state-text">他のユーザーが見つかりません</div>
+              <div class="empty-state-text">新しく個別チャットを作成できるユーザーがいません</div>
             </div>
           `;
           return;
