@@ -675,6 +675,42 @@
       object-fit: contain;
       border-radius: 0;
     }
+
+    /* 画像保存メニュー（LINE風） */
+    .image-save-menu {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background-color: white;
+      border-radius: 16px 16px 0 0;
+      padding: 16px;
+      z-index: 10001;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+    }
+    .image-save-menu.active {
+      transform: translateY(0);
+    }
+    .image-save-menu-item {
+      padding: 16px;
+      border-radius: 8px;
+      background: white;
+      border: none;
+      width: 100%;
+      text-align: center;
+      font-size: 16px;
+      color: #007AFF;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .image-save-menu-item:active {
+      background: #f0f0f0;
+    }
+    .image-save-menu-cancel {
+      margin-top: 8px;
+      color: #666;
+    }
   </style>
 </head>
 <body>
@@ -2203,8 +2239,89 @@
         viewerImg.addEventListener('click', (e) => {
           e.stopPropagation();
         });
+
+        // 長押しで保存メニュー表示
+        let longPressTimer;
+        viewerImg.addEventListener('touchstart', (e) => {
+          longPressTimer = setTimeout(() => {
+            showImageSaveMenu();
+          }, 500); // 500ms長押し
+        });
+
+        viewerImg.addEventListener('touchend', () => {
+          clearTimeout(longPressTimer);
+        });
+
+        viewerImg.addEventListener('touchmove', () => {
+          clearTimeout(longPressTimer);
+        });
+      }
+
+      // 保存メニューのボタンイベント
+      const saveButton = document.getElementById('imageSaveButton');
+      const saveCancel = document.getElementById('imageSaveCancel');
+
+      if (saveButton) {
+        saveButton.addEventListener('click', () => {
+          downloadImage();
+        });
+      }
+
+      if (saveCancel) {
+        saveCancel.addEventListener('click', () => {
+          hideImageSaveMenu();
+        });
       }
     });
+
+    // 画像保存メニューを表示
+    function showImageSaveMenu() {
+      console.log('[ImageViewer] 保存メニュー表示');
+      const menu = document.getElementById('imageSaveMenu');
+      menu.style.display = 'block';
+      setTimeout(() => {
+        menu.classList.add('active');
+      }, 10);
+    }
+
+    // 画像保存メニューを非表示
+    function hideImageSaveMenu() {
+      console.log('[ImageViewer] 保存メニュー非表示');
+      const menu = document.getElementById('imageSaveMenu');
+      menu.classList.remove('active');
+      setTimeout(() => {
+        menu.style.display = 'none';
+      }, 300);
+    }
+
+    // 画像をダウンロード
+    async function downloadImage() {
+      console.log('[ImageViewer] 画像ダウンロード開始');
+      const viewerImg = document.getElementById('imageViewerImg');
+      const imageUrl = viewerImg.src;
+
+      try {
+        // Firebase StorageのURLから画像をフェッチ
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+
+        // ダウンロード用のリンクを作成
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chat_image_${Date.now()}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        console.log('[ImageViewer] ダウンロード完了');
+        hideImageSaveMenu();
+      } catch (error) {
+        console.error('[ImageViewer] ダウンロードエラー:', error);
+        alert('画像の保存に失敗しました');
+      }
+    }
   </script>
 
   <!-- 戻るボタン処理 -->
@@ -2318,6 +2435,16 @@
     </svg>
   </button>
   <img id="imageViewerImg" src="" alt="画像">
+</div>
+
+<!-- 画像保存メニュー（LINE風） -->
+<div class="image-save-menu" id="imageSaveMenu" style="display: none;">
+  <button class="image-save-menu-item" id="imageSaveButton">
+    画像を保存
+  </button>
+  <button class="image-save-menu-item image-save-menu-cancel" id="imageSaveCancel">
+    キャンセル
+  </button>
 </div>
 
 </body>
