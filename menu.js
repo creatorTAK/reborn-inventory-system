@@ -1121,140 +1121,103 @@ function doGet(e) {
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     }
 
-    let template;
-    let title;
+    // ========================================
+    // GAS版UI廃止: PWA版へリダイレクト
+    // ========================================
+    const PWA_URL = 'https://reborn-inventory.com/';
 
-    if (menuType === 'home') {
-      template = HtmlService.createTemplateFromFile('menu_home');
-      title = 'REBORN - メニュー';
-      // セッションIDをテンプレート変数として渡す
-      template.sessionId = (e && e.parameter && e.parameter.sessionId) || 'unknown';
-    } else if (menuType === 'config') {
-      template = HtmlService.createTemplateFromFile('sidebar_config');
-      title = 'REBORN';
-      // activeTabパラメータを取得（PWAからのリンク用）
-      template.activeTab = (e && e.parameter && e.parameter.activeTab) || 'basic';
-    } else if (menuType === 'product') {
-      template = HtmlService.createTemplateFromFile('sidebar_product');
-      title = 'REBORN';
-    } else if (menuType === 'inventory') {
-      template = HtmlService.createTemplateFromFile('sidebar_inventory_firestore');
-      title = 'REBORN - 在庫管理';
-    } else if (menuType === 'shipping-master') {
-      template = HtmlService.createTemplateFromFile('shipping_method_master_ui');
-      title = 'REBORN - 発送方法マスタ管理';
-    } else if (menuType === 'packaging-master') {
-      template = HtmlService.createTemplateFromFile('packaging_materials_ui');
-      title = 'REBORN - 梱包資材マスタ管理';
-    } else if (menuType === 'inventory_history') {
-      template = HtmlService.createTemplateFromFile('inventory_history_viewer');
-      title = 'REBORN - 入出庫履歴';
-    } else if (menuType === 'inventory_alert_settings') {
-      template = HtmlService.createTemplateFromFile('inventory_alert_settings_ui');
-      title = 'REBORN - 在庫アラート設定';
-    } else if (menuType === 'user_migration_test') {
-      template = HtmlService.createTemplateFromFile('test_user_migration');
-      title = 'REBORN - ユーザー権限管理 Phase 1';
-    } else if (menuType === 'user_management') {
-      // オーナー権限チェック（PWA対応）
-      try {
-        const hasOwnerPermission = isOwner(fcmToken);
-        if (!hasOwnerPermission) {
-          return HtmlService.createHtmlOutput('<h2>権限エラー</h2><p>ユーザー権限管理はオーナーのみがアクセスできます。</p>');
-        }
-      } catch (error) {
-        Logger.log('[doGet] user_management 権限チェックエラー: ' + error);
-        // エラーが発生した場合は一時的にアクセスを許可（デバッグ用）
-      }
-      template = HtmlService.createTemplateFromFile('user_management_ui');
-      title = 'REBORN - ユーザー権限管理';
-    } else if (menuType === 'chat' || menuType === 'chat_rooms') {
-      // roomIdパラメータがある場合はチャット画面、ない場合はルーム一覧
-      const roomId = e.parameter.roomId || '';
-      const gasBaseUrl = e.parameter.gasBaseUrl || '';  // ✅ API呼び出し用URL
+    // メニュータイプに応じたPWA版URLマッピング
+    const pwaUrls = {
+      'home': PWA_URL + 'menu_home.html',
+      'product': PWA_URL + 'product.html',
+      'inventory': PWA_URL + 'inventory.html',
+      'inventory_history': PWA_URL + 'inventory_history.html',
+      'chat': PWA_URL + 'chat_rooms_list.html',
+      'chat_rooms': PWA_URL + 'chat_rooms_list.html',
+      'config': PWA_URL + 'config.html',
+      'master': PWA_URL + 'master-management.html',
+      'user_management': PWA_URL + 'master-management.html'
+    };
 
-      if (roomId) {
-        // チャット画面を開く
-        Logger.log('[doGet] チャット画面を読み込みます (roomId: ' + roomId + ')');
-        template = HtmlService.createTemplateFromFile('chat_ui_firestore');
-        template.gasRoomId = roomId;
-        template.gasBaseUrl = gasBaseUrl;  // ✅ テンプレート変数に設定
-        template.sessionId = (e && e.parameter && e.parameter.sessionId) || 'unknown';  // セッションID追加
-        title = 'REBORN - チーム チャット';
-        Logger.log('[doGet] chat_ui_firestoreテンプレート作成完了');
-      } else {
-        // トークルーム一覧を表示
-        Logger.log('[doGet] トークルーム一覧を読み込みます');
-        template = HtmlService.createTemplateFromFile('chat_rooms_list');
-        template.gasBaseUrl = gasBaseUrl;  // ✅ テンプレート変数に設定
-        template.sessionId = (e && e.parameter && e.parameter.sessionId) || 'unknown';  // セッションID追加
-        title = 'REBORN - チーム チャット';
-        Logger.log('[doGet] chat_rooms_listテンプレート作成完了');
-      }
-    } else {
-      // 不明なメニューの場合はデフォルトで商品登録
-      template = HtmlService.createTemplateFromFile('sidebar_product');
-      title = 'REBORN';
-    }
+    const targetUrl = pwaUrls[menuType] || PWA_URL;
 
-    // Web Appとして開かれていることを示すフラグ（戻るボタン表示用）
-    template.showBackButton = true;
+    Logger.log('[doGet] GAS版UI廃止 - PWA版にリダイレクト: ' + targetUrl);
 
-    // GAS自身のURL（Web App /exec）をテンプレート変数として渡す（クロスオリジン対策）
-    const gasBaseUrl = ScriptApp.getService().getUrl();
-    template.GAS_BASE_URL = gasBaseUrl;
-    Logger.log('[doGet] GAS_BASE_URL設定: ' + gasBaseUrl);
-
-    // PWA版判定フラグ（app=pwaパラメータで明示的に判定）
-    template.isPWA = e && e.parameter && e.parameter.app === 'pwa';
-
-    // FCMトークンをテンプレート変数として渡す（マルチユーザー対応）
-    template.fcmToken = (e && e.parameter && e.parameter.fcmToken) || '';
-
-    // PWA版：ユーザー名、roomId、parentOrigin、pmTokenをテンプレート変数として渡す
-    template.pwaUserName = (e && e.parameter && e.parameter.userName) || '';
-    template.pwaRoomId = (e && e.parameter && e.parameter.roomId) || '';
-    template.pwaParentOrigin = (e && e.parameter && e.parameter.parentOrigin) || '';
-    template.pwaPmToken = (e && e.parameter && e.parameter.pmToken) || '';
-
-    // GAS版：ユーザー名を取得（メールアドレスから）
-    if (!template.isPWA) {
-      try {
-        let userEmail = '';
-        try {
-          userEmail = Session.getEffectiveUser().getEmail();
-        } catch (emailError) {
-          try {
-            userEmail = Session.getActiveUser().getEmail();
-          } catch (emailError2) {
-            Logger.log('[doGet] メールアドレス取得失敗');
+    return HtmlService.createHtmlOutput(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>PWA版に移動中...</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+            color: white;
           }
-        }
+          .container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+          }
+          h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+          }
+          p {
+            font-size: 16px;
+            margin-bottom: 30px;
+          }
+          .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+          }
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+          a {
+            color: white;
+            text-decoration: underline;
+            font-size: 14px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="spinner"></div>
+          <h1>PWA版に移動中...</h1>
+          <p>新しいタブでPWA版が開きます</p>
+          <p><a href="${targetUrl}" target="_blank">自動的に開かない場合はこちらをクリック</a></p>
+        </div>
+        <script>
+          // PWA版を新しいタブで開く
+          window.open('${targetUrl}', '_blank');
 
-        if (userEmail) {
-          const userName = getUserNameByEmail(userEmail);
-          template.gasUserName = userName || '';
-          Logger.log('[doGet] GAS版ユーザー名設定: ' + userName);
-        } else {
-          template.gasUserName = '';
-        }
-      } catch (error) {
-        Logger.log('[doGet] ユーザー名取得エラー: ' + error);
-        template.gasUserName = '';
-      }
-    } else {
-      template.gasUserName = '';
-    }
-
-    Logger.log('[doGet] app=%s userName=%s roomId=%s fcmToken=%s', e?.parameter?.app, e?.parameter?.userName, e?.parameter?.roomId, e?.parameter?.fcmToken ? e.parameter.fcmToken.substring(0, 20) + '...' : 'なし');
-    Logger.log('[doGet] テンプレート変数: isPWA=%s pwaUserName=%s pwaRoomId=%s gasUserName=%s', template.isPWA, template.pwaUserName, template.pwaRoomId, template.gasUserName);
-
-    // Web Appとして開く場合はwidthを指定しない（画面幅いっぱいに表示）
-    return template.evaluate()
-      .setTitle(title)
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-      .setSandboxMode(HtmlService.SandboxMode.IFRAME);
+          // 3秒後にこのタブを閉じる
+          setTimeout(function() {
+            document.querySelector('.container').innerHTML =
+              '<h1>PWA版を開きました</h1><p>このタブは閉じて構いません</p>';
+          }, 1000);
+        </script>
+      </body>
+      </html>
+    `)
+    .setTitle('PWA版に移動中...')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   } catch (error) {
     // JSON APIリクエストのエラー時はJSONで返す
     if (e && e.parameter && e.parameter.action) {
@@ -1391,35 +1354,41 @@ function testInventoryAPI() {
   }
 }
 
+// ========================================
+// GAS版UI廃止: すべての show* 関数をPWA版リダイレクトに変更
+// ========================================
+const PWA_BASE_URL = 'https://furira.jp/docs/';
+
+/**
+ * PWA版を新しいタブで開くヘルパー関数
+ * @param {string} url PWA版のURL
+ * @param {string} title 画面タイトル
+ */
+function openPWAInNewTab(url, title) {
+  const ui = SpreadsheetApp.getUi();
+  const result = ui.alert(
+    '🚀 PWA版に移動',
+    `「${title}」をブラウザで開きます。\n\n以下のURLをブラウザで開いてください:\n${url}\n\n※ このダイアログを閉じた後、ブラウザで上記URLにアクセスしてください。`,
+    ui.ButtonSet.OK
+  );
+
+  Logger.log(`[openPWAInNewTab] User opened: ${url}`);
+}
+
 function showProductSidebar() {
-  const t = HtmlService.createTemplateFromFile('sidebar_product');
-  t.isSidebar = true;  // スプレッドシートのサイドバーフラグ
-  t.fcmToken = '';  // スプレッドシートから開く場合はFCMトークンなし
-  const html = t.evaluate().setTitle('商品登録').setWidth(360);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'product.html', '商品登録');
 }
 
 function showInventorySidebar() {
-  const t = HtmlService.createTemplateFromFile('sidebar_inventory');
-  t.fcmToken = '';  // スプレッドシートから開く場合はFCMトークンなし
-  const html = t.evaluate()
-    .setTitle('📦 在庫管理')
-    .setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'inventory.html', '在庫管理');
 }
 
-/**
- * 入出庫履歴を表示
- */
 function showInventoryHistoryViewer() {
-  const html = HtmlService.createHtmlOutputFromFile('inventory_history_viewer')
-    .setTitle('📊 入出庫履歴')
-    .setWidth(800);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'inventory_history.html', '入出庫履歴');
 }
 
 function showMasterDataManager() {
-  SpreadsheetApp.getUi().alert('情報', 'マスタデータ管理機能は準備中です', SpreadsheetApp.getUi().ButtonSet.OK);
+  openPWAInNewTab(PWA_BASE_URL + 'master-management.html', 'マスタデータ管理');
 }
 
 function showSalesAnalysis() {
@@ -1427,119 +1396,58 @@ function showSalesAnalysis() {
 }
 
 function showConfigManager() {
-  const t = HtmlService.createTemplateFromFile('sidebar_config');
-  t.isSidebar = true;  // スプレッドシートのサイドバーフラグ
-  t.fcmToken = '';  // スプレッドシートから開く場合はFCMトークンなし
-  t.activeTab = 'basic';  // デフォルトタブ
-  const html = t.evaluate().setTitle('設定管理').setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'config.html', '設定管理');
 }
 
-// 設定管理サブメニュー用関数
+// 設定管理サブメニュー用関数（すべてPWA版の設定画面を開く）
 function showConfigManagerBasic() {
-  const t = HtmlService.createTemplateFromFile('sidebar_config');
-  t.isSidebar = true;
-  t.fcmToken = '';
-  t.activeTab = 'basic';
-  const html = t.evaluate().setTitle('基本設定').setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'config.html', '基本設定');
 }
 
 function showConfigManagerManagement() {
-  const t = HtmlService.createTemplateFromFile('sidebar_config');
-  t.isSidebar = true;
-  t.fcmToken = '';
-  t.activeTab = 'management';
-  const html = t.evaluate().setTitle('管理番号設定').setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'config.html', '管理番号設定');
 }
 
 function showConfigManagerProduct() {
-  const t = HtmlService.createTemplateFromFile('sidebar_config');
-  t.isSidebar = true;
-  t.fcmToken = '';
-  t.activeTab = 'product';
-  const html = t.evaluate().setTitle('商品登録設定').setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'config.html', '商品登録設定');
 }
 
 function showConfigManagerShipping() {
-  const t = HtmlService.createTemplateFromFile('sidebar_config');
-  t.isSidebar = true;
-  t.fcmToken = '';
-  t.activeTab = 'shipping';
-  const html = t.evaluate().setTitle('配送設定').setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'config.html', '配送設定');
 }
 
 function showConfigManagerProcure() {
-  const t = HtmlService.createTemplateFromFile('sidebar_config');
-  t.isSidebar = true;
-  t.fcmToken = '';
-  t.activeTab = 'procure-listing';
-  const html = t.evaluate().setTitle('仕入・出品設定').setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'config.html', '仕入・出品設定');
 }
 
 function showConfigManagerAI() {
-  const t = HtmlService.createTemplateFromFile('sidebar_config');
-  t.isSidebar = true;
-  t.fcmToken = '';
-  t.activeTab = 'ai';
-  const html = t.evaluate().setTitle('AI生成設定').setWidth(400);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'config.html', 'AI生成設定');
 }
 
 /**
- * ユーザー権限管理画面を表示（サイドバー）
+ * ユーザー権限管理画面を表示（PWA版にリダイレクト）
  */
 function showUserManagement() {
-  // オーナー権限チェック（一時的に無効化 - デバッグ用）
-  try {
-    const hasOwnerPermission = isOwner();
-    if (!hasOwnerPermission) {
-      const ui = SpreadsheetApp.getUi();
-      ui.alert(
-        '権限エラー',
-        'ユーザー権限管理はオーナーのみがアクセスできます。',
-        ui.ButtonSet.OK
-      );
-      return;
-    }
-  } catch (error) {
-    Logger.log('[showUserManagement] 権限チェックエラー: ' + error);
-    // エラーが発生した場合は一時的にアクセスを許可（デバッグ用）
-  }
-
-  const t = HtmlService.createTemplateFromFile('user_management_ui');
-  t.showBackButton = false; // スプレッドシートから開く場合は戻るボタン不要
-  t.GAS_BASE_URL = ScriptApp.getService().getUrl() || '';
-  t.fcmToken = '';
-  t.isSidebar = true; // サイドバーフラグ
-  const html = t.evaluate()
-    .setTitle('ユーザー権限管理')
-    .setWidth(600); // テーブル5カラム表示のため幅を拡大
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'master-management.html', 'ユーザー権限管理');
 }
 
 /**
- * 在庫アラート設定画面を表示（サイドバー）
+ * 在庫アラート設定画面を表示（PWA版にリダイレクト）
  */
 function showInventoryAlertSettings() {
-  const t = HtmlService.createTemplateFromFile('inventory_alert_settings_ui');
-  t.GAS_BASE_URL = ScriptApp.getService().getUrl() || '';
-  t.isSidebar = true; // サイドバーフラグ
-  const html = t.evaluate()
-    .setTitle('⚠️ 在庫アラート設定')
-    .setWidth(600);
-  SpreadsheetApp.getUi().showSidebar(html);
+  openPWAInNewTab(PWA_BASE_URL + 'inventory.html', '在庫アラート設定');
 }
 
 /**
- * チャット画面を表示（サイドバー）
+ * チャット画面を表示（PWA版にリダイレクト）
  */
+function showChatSidebar() {
+  openPWAInNewTab(PWA_BASE_URL + 'chat_rooms_list.html', 'チャット');
+}
+
 /**
  * メールアドレスからユーザー名を取得
+ * （旧GAS版チャット用のヘルパー関数 - 現在は未使用）
  */
 function getUserNameByEmail(email) {
   try {
@@ -1581,48 +1489,6 @@ function getUserNameByEmail(email) {
   } catch (error) {
     Logger.log('[getUserNameByEmail] エラー: ' + error);
     return '';
-  }
-}
-
-function showChatSidebar() {
-  try {
-    let userEmail = '';
-
-    try {
-      // 共有スプレッドシートでも正確に取得できるSession.getEffectiveUser()を優先
-      userEmail = Session.getEffectiveUser().getEmail();
-      Logger.log('[showChatSidebar] Session.getEffectiveUser(): ' + userEmail);
-    } catch (e) {
-      Logger.log('[showChatSidebar] Session.getEffectiveUser()失敗、Session.getActiveUser()を試行');
-      try {
-        userEmail = Session.getActiveUser().getEmail();
-        Logger.log('[showChatSidebar] Session.getActiveUser(): ' + userEmail);
-      } catch (e2) {
-        Logger.log('[showChatSidebar] Session.getActiveUser()も失敗: ' + e2);
-      }
-    }
-
-    Logger.log('[showChatSidebar] ユーザー: ' + userEmail);
-
-    // メールアドレスからユーザー名を取得
-    const userName = getUserNameByEmail(userEmail);
-    Logger.log('[showChatSidebar] ユーザー名: ' + userName);
-
-    // トークルーム一覧を表示
-    const template = HtmlService.createTemplateFromFile('chat_rooms_list');
-    template.isPWA = false;  // GAS版なので常にfalse
-    template.pwaUserName = '';  // GAS版では使わない
-    template.gasUserName = userName || '';  // GAS版用のユーザー名
-    Logger.log('[showChatSidebar] ユーザー名設定: ' + userName);
-
-    const html = template.evaluate()
-      .setTitle('💬 チーム チャット')
-      .setWidth(400);
-
-    SpreadsheetApp.getUi().showSidebar(html);
-  } catch (error) {
-    Logger.log('[showChatSidebar] エラー: ' + error);
-    SpreadsheetApp.getUi().alert('チャット画面を開けませんでした: ' + error.message);
   }
 }
 
@@ -1968,5 +1834,116 @@ function getAllUserNames() {
   } catch (error) {
     Logger.log('[getAllUserNames] エラー:', error);
     return [];
+  }
+}
+
+/**
+ * getUserListForUIのテスト実行（デバッグ用）
+ */
+function testGetUserListForUI() {
+  Logger.log('[Test] ========== getUserListForUI テスト ==========');
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    Logger.log('[Test] スプレッドシート取得:', ss ? 'OK' : 'NG');
+
+    const sheet = ss.getSheetByName('FCM通知登録');
+    Logger.log('[Test] シート取得:', sheet ? 'OK' : 'NG');
+
+    if (!sheet) {
+      Logger.log('[Test] エラー: FCM通知登録シートが見つかりません');
+      return;
+    }
+
+    const data = sheet.getDataRange().getValues();
+    Logger.log('[Test] データ行数:', data.length);
+    Logger.log('[Test] ヘッダー:', data[0]);
+
+    if (data.length > 1) {
+      Logger.log('[Test] 1行目のデータ:', data[1]);
+    }
+
+    // getUserListForUI()を実行
+    const users = getUserListForUI();
+    Logger.log('[Test] getUserListForUI() 結果:', users.length, '件');
+
+    if (users.length > 0) {
+      Logger.log('[Test] 最初のユーザー:', users[0]);
+    }
+
+  } catch (error) {
+    Logger.log('[Test] エラー:', error.message);
+    Logger.log('[Test] スタックトレース:', error.stack);
+  }
+
+  Logger.log('[Test] ========== テスト完了 ==========');
+}
+
+/**
+ * スプレッドシートからFirestoreのusersコレクションにユーザー情報を同期
+ * @return {Object} 同期結果
+ */
+function syncUsersToFirestore() {
+  Logger.log('[syncUsersToFirestore] ========== 開始 ==========');
+
+  try {
+    // getUserListForUI()でスプレッドシートからユーザー情報を取得
+    const users = getUserListForUI();
+    Logger.log('[syncUsersToFirestore] 取得ユーザー数:', users.length);
+
+    if (users.length === 0) {
+      Logger.log('[syncUsersToFirestore] ユーザーが見つかりません');
+      return { success: false, message: 'ユーザーが見つかりません' };
+    }
+
+    const firestore = FirestoreApp.getFirestore();
+    let successCount = 0;
+    let errorCount = 0;
+
+    // 各ユーザーをFirestoreに保存
+    users.forEach(function(user) {
+      try {
+        if (!user.email) {
+          Logger.log('[syncUsersToFirestore] メールアドレスなし、スキップ:', user.userName);
+          errorCount++;
+          return;
+        }
+
+        // Firestoreドキュメント作成（emailをドキュメントIDとして使用）
+        const userDoc = {
+          userName: user.userName,
+          email: user.email,
+          permission: user.permission || 'スタッフ',
+          status: user.status || 'アクティブ',
+          registeredAt: user.registeredAt || '',
+          userIconUrl: user.userIconUrl || '',
+          updatedAt: new Date().toISOString()
+        };
+
+        firestore.createDocument('users/' + user.email, userDoc);
+        Logger.log('[syncUsersToFirestore] ✅ 同期成功:', user.email);
+        successCount++;
+
+      } catch (error) {
+        Logger.log('[syncUsersToFirestore] ❌ エラー:', user.email, error.message);
+        errorCount++;
+      }
+    });
+
+    Logger.log('[syncUsersToFirestore] ========== 完了 ==========');
+    Logger.log('[syncUsersToFirestore] 成功:', successCount, '件');
+    Logger.log('[syncUsersToFirestore] エラー:', errorCount, '件');
+
+    return {
+      success: true,
+      message: `同期完了: 成功 ${successCount}件, エラー ${errorCount}件`,
+      successCount: successCount,
+      errorCount: errorCount
+    };
+
+  } catch (error) {
+    Logger.log('[syncUsersToFirestore] ========== エラー ==========');
+    Logger.log('[syncUsersToFirestore]', error.message);
+    return { success: false, message: 'エラー: ' + error.message };
   }
 }
