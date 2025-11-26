@@ -717,40 +717,15 @@
       height: 24px;
       color: #718096;
     }
-    /* メッセージ入力エリア - textarea パターン（iOS対応） */
+    /* メッセージ入力エリア - シンプルtextarea（iOS対応） */
     .message-input-wrapper {
       flex: 1;
       position: relative;
       margin-right: 4px;
     }
 
-    /* 表示用div（メンションハイライト表示用 - 入力中は非表示） */
-    .message-input-display {
-      display: none; /* 通常は非表示、メンションがある場合のみ表示 */
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      padding: 12px;
-      border: 1px solid transparent;
-      border-radius: 20px;
-      font-size: 1rem;
-      background: #f5f5f5;
-      overflow-y: auto;
-      word-wrap: break-word;
-      white-space: pre-wrap;
-      line-height: 1.4;
-      pointer-events: none;
-      z-index: 2;
-    }
-
-    .message-input-display.has-mention {
-      display: block; /* メンションがある場合のみ表示 */
-    }
-
-    /* textarea（実際の入力を受け付ける） */
-    .message-input-hidden {
+    /* textarea（シンプルな入力欄） */
+    .message-input {
       width: 100%;
       padding: 12px;
       border: 1px solid #cbd5e0;
@@ -770,22 +745,13 @@
       line-height: 1.4;
     }
 
-    .message-input-hidden:focus {
+    .message-input:focus {
       outline: none;
       border-color: var(--reborn-primary);
     }
 
-    .message-input-hidden::placeholder {
+    .message-input::placeholder {
       color: #9ca3af;
-    }
-
-    /* 入力フィールド内のメンションハイライト（表示用div内） */
-    .message-input-display .mention-in-input {
-      color: var(--reborn-primary);
-      font-weight: 500;
-      background: rgba(11, 105, 255, 0.06);
-      border-radius: 4px;
-      padding: 0 2px;
     }
 
     /* メンション候補リスト */
@@ -1732,7 +1698,7 @@
       <div class="message-input-wrapper">
         <textarea
           id="messageInput"
-          class="message-input-hidden"
+          class="message-input"
           placeholder="メッセージを入力..."
           inputmode="text"
           autocapitalize="off"
@@ -1740,10 +1706,6 @@
           autocorrect="off"
           spellcheck="false"
           rows="1"></textarea>
-        <div
-          id="messageInputDisplay"
-          class="message-input-display"
-          aria-hidden="true"></div>
       </div>
 
       <button class="send-button" id="sendButton" onclick="sendMessage()">
@@ -2106,7 +2068,6 @@
 
       // メッセージ入力（hidden textarea パターン）
       const messageInput = document.getElementById('messageInput'); // textarea
-      const messageInputDisplay = document.getElementById('messageInputDisplay'); // 表示用div
 
       // IME変換状態の監視
       messageInput.addEventListener('compositionstart', function() {
@@ -2116,10 +2077,6 @@
       messageInput.addEventListener('compositionend', function() {
         isComposing = false;
         console.log('[IME] compositionend - 変換終了');
-        // IME確定後に表示を同期（少し遅延させてvalueが確定してから）
-        setTimeout(function() {
-          syncInputToDisplay();
-        }, 10);
       });
 
       // 入力イベント
@@ -2128,8 +2085,6 @@
         justInsertedMention = false;
         // メンション検知（textarea用）
         checkMentionInput(this);
-        // 表示を同期
-        syncInputToDisplay();
       });
 
       // Enterキーで送信（メンション選択中は候補選択）
@@ -2167,28 +2122,19 @@
             insertLineBreak();
             return;
           }
-          
+
           // Shift+Enterは改行
           if (e.shiftKey) {
             e.preventDefault();
             insertLineBreak();
             return;
           }
-          
+
           // 通常のEnterは送信
           e.preventDefault();
           sendMessage();
         }
       });
-
-      // 表示用divをタップしたらtextareaにフォーカス
-      messageInputDisplay.addEventListener('click', function() {
-        messageInput.focus();
-      });
-      messageInputDisplay.addEventListener('touchstart', function(e) {
-        e.preventDefault();
-        messageInput.focus();
-      }, { passive: false });
 
       // 未読カウントリセット（このルームを開いたので既読にする）
       try {
@@ -2531,87 +2477,6 @@
     // 形式: [{ start: number, end: number, userName: string }, ...]
     let insertedMentions = [];
 
-    // textarea → 表示用div に内容を同期
-    function syncInputToDisplay() {
-      const textarea = document.getElementById('messageInput');
-      const display = document.getElementById('messageInputDisplay');
-      if (!textarea || !display) return;
-
-      // IME変換中は同期しない（変換中の文字が消えるのを防ぐ）
-      if (isComposing) {
-        return;
-      }
-
-      const text = textarea.value || '';
-
-      // ゼロ幅スペースを除去
-      const cleaned = text.replace(/\u200B/g, '');
-
-      // 表示用divの高さをtextareaに合わせる
-      display.style.height = textarea.offsetHeight + 'px';
-
-      // メンション（@username）を検出
-      const mentionRegex = /@([^\s@]+)/g;
-      let match;
-      let hasMention = false;
-      const parts = [];
-      let lastIndex = 0;
-
-      while ((match = mentionRegex.exec(cleaned)) !== null) {
-        const userName = match[1];
-        // 実在するユーザーかチェック
-        const isValidMention = currentRoomMembers.includes(userName) ||
-                               (usersCache && usersCache[userName]) ||
-                               insertedMentions.some(m => m.userName === userName);
-
-        if (isValidMention) {
-          hasMention = true;
-          if (match.index > lastIndex) {
-            parts.push({ type: 'text', content: cleaned.substring(lastIndex, match.index) });
-          }
-          parts.push({ type: 'mention', content: match[0], userName: userName });
-          lastIndex = match.index + match[0].length;
-        }
-      }
-
-      // 残りのテキスト（メンション後の文字列）を必ず追加
-      if (lastIndex < cleaned.length) {
-        parts.push({ type: 'text', content: cleaned.substring(lastIndex) });
-      }
-
-      // メンションがある場合のみ表示用divを表示してtextareaのテキストを透明に
-      if (hasMention) {
-        display.classList.add('has-mention');
-        textarea.style.color = 'transparent';
-
-        display.innerHTML = '';
-        parts.forEach(part => {
-          if (part.type === 'mention') {
-            const span = document.createElement('span');
-            span.className = 'mention-in-input';
-            span.textContent = part.content;
-            span.dataset.mention = part.userName;
-            display.appendChild(span);
-          } else {
-            // テキスト部分（メンション後の文字を含む）
-            const lines = part.content.split('\n');
-            lines.forEach((line, i) => {
-              // 空行でもスペースを追加（カーソル位置表示のため）
-              display.appendChild(document.createTextNode(line || ''));
-              if (i < lines.length - 1) {
-                display.appendChild(document.createElement('br'));
-              }
-            });
-          }
-        });
-      } else {
-        // メンションがない場合は表示用divを非表示、textareaのテキストを見えるように
-        display.classList.remove('has-mention');
-        display.innerHTML = '';
-        textarea.style.color = '#1a202c';
-      }
-    }
-
     // メンション入力を検知（textarea用）
     function checkMentionInput(textarea) {
       const text = textarea.value;
@@ -2656,7 +2521,7 @@
       return element.textContent || '';
     }
 
-    // メンションを挿入（hidden textarea パターン）
+    // メンションを挿入（シンプルtextarea）
     function insertMentionViaTextarea(userName) {
       const textarea = document.getElementById('messageInput');
       if (!textarea) return;
@@ -2677,7 +2542,7 @@
 
       const mentionText = '@' + userName + ' '; // 後ろに半角スペースを付与
       const start = textarea.selectionStart;
-      
+
       // 置換範囲: mentionStartIndex から現在のカーソル位置まで
       const replaceStart = mentionStartIndex >= 0 ? mentionStartIndex : start;
       const replaceEnd = start;
@@ -2685,7 +2550,7 @@
       console.log('[Mention] 挿入:', userName, 'replaceStart:', replaceStart, 'replaceEnd:', replaceEnd);
 
       try {
-        // setRangeText を使うと composition の確定と同時に安全に置換される
+        // setRangeText を使うと安全に置換される
         if (typeof textarea.setRangeText === 'function') {
           textarea.setRangeText(mentionText, replaceStart, replaceEnd, 'end');
         } else {
@@ -2707,25 +2572,20 @@
         console.error('[Mention] 挿入エラー:', err);
       }
 
-      // 表示を同期
-      syncInputToDisplay();
-
       // リセット
       mentionStartIndex = -1;
       mentionQuery = '';
       hideMentionSuggestions();
-      
+
       // フォーカスを維持
       textarea.focus();
-      
+
       justInsertedMention = true;
     }
 
-    // 入力フィールド内のメンションをハイライト表示（ハイライト処理は送信後のみに変更）
-    // 入力フィールド内のメンションをハイライト（syncInputToDisplayで処理）
+    // 入力フィールド内のメンションをハイライト表示（送信後の表示時のみ - 入力中はプレーンテキスト）
     function highlightMentionsInInput(element) {
-      // hidden textarea パターンでは syncInputToDisplay() で自動的にハイライトされる
-      syncInputToDisplay();
+      // シンプルtextareaではハイライトなし（送信後のメッセージ表示時のみハイライト）
     }
 
     // textarea用：改行を挿入
@@ -2739,13 +2599,10 @@
       
       // 改行を挿入
       textarea.value = value.substring(0, start) + '\n' + value.substring(end);
-      
+
       // カーソルを改行の後ろに移動
       const newPos = start + 1;
       textarea.setSelectionRange(newPos, newPos);
-      
-      // 表示を同期
-      syncInputToDisplay();
     }
 
     // メンション候補をフィルタリングして表示
@@ -3571,9 +3428,8 @@
         selectedImageFiles = [];
         updateImagePreview();
 
-        // 入力欄クリア（textarea + 表示用div）
+        // 入力欄クリア
         input.value = '';
-        syncInputToDisplay();
         insertedMentions = []; // 挿入済みメンションもリセット
         sendButton.disabled = false;
 
@@ -3623,9 +3479,8 @@
         // 未読カウント処理は削除（PWA版のみ使用のため）
         console.log('[GAS版] 未読カウント処理スキップ（PWA版使用のため）');
 
-        // 入力欄クリア（textarea + 表示用div）
+        // 入力欄クリア
         input.value = '';
-        syncInputToDisplay();
         insertedMentions = []; // 挿入済みメンションもリセット
 
       } catch (error) {
