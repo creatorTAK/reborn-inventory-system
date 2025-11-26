@@ -2759,23 +2759,27 @@
       const afterTextNode = document.createTextNode(afterText);
       input.appendChild(afterTextNode);
 
-      // カーソルをスペースの後（afterTextNodeの先頭の1文字目の後）に設定
-      input.focus();
+      // iOS対応：blur→focusでIMEをリセットしてからカーソル設定
+      input.blur();
 
-      // iOS対応：少し遅延させてカーソル位置を設定
       setTimeout(function() {
-        try {
-          const selection = window.getSelection();
-          const range = document.createRange();
-          // afterTextNodeの1文字目（スペース）の後にカーソルを置く
-          range.setStart(afterTextNode, 1);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        } catch (e) {
-          console.error('[Mention] カーソル設定エラー:', e);
-        }
-      }, 10);
+        input.focus();
+
+        // さらに遅延させてカーソル位置を設定
+        setTimeout(function() {
+          try {
+            const selection = window.getSelection();
+            const range = document.createRange();
+            // afterTextNodeの1文字目（スペース）の後にカーソルを置く
+            range.setStart(afterTextNode, 1);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } catch (e) {
+            console.error('[Mention] カーソル設定エラー:', e);
+          }
+        }, 10);
+      }, 50);
 
       hideMentionSuggestions();
     }
