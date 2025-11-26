@@ -724,6 +724,64 @@
       margin-right: 4px;
     }
 
+    /* メンションタグ表示エリア（入力欄の上部） */
+    .mention-tags {
+      display: none;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px 12px;
+      background-color: #f5f5f5;
+      border: 1px solid #cbd5e0;
+      border-bottom: none;
+      border-radius: 20px 20px 0 0;
+    }
+
+    .mention-tags.has-tags {
+      display: flex;
+    }
+
+    .mention-tags + .message-input {
+      border-radius: 0 0 20px 20px;
+    }
+
+    .mention-tags:not(.has-tags) + .message-input {
+      border-radius: 20px;
+    }
+
+    /* メンションタグ（チップスタイル） */
+    .mention-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      background: linear-gradient(135deg, var(--reborn-primary), #0056cc);
+      color: white;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border-radius: 16px;
+      white-space: nowrap;
+    }
+
+    .mention-tag-remove {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      background: rgba(255, 255, 255, 0.3);
+      border: none;
+      border-radius: 50%;
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .mention-tag-remove:hover {
+      background: rgba(255, 255, 255, 0.5);
+    }
+
     /* textarea（シンプルな入力欄） */
     .message-input {
       width: 100%;
@@ -1696,6 +1754,8 @@
       </button>
 
       <div class="message-input-wrapper">
+        <!-- メンションタグ表示エリア -->
+        <div id="mentionTags" class="mention-tags"></div>
         <textarea
           id="messageInput"
           class="message-input"
@@ -2523,7 +2583,71 @@
       return element.textContent || '';
     }
 
-    // メンションを挿入（シンプルtextarea）
+    // メンションタグを追加（タグ方式）
+    function addMentionTag(userName) {
+      const tagsContainer = document.getElementById('mentionTags');
+      if (!tagsContainer) return;
+
+      // 既に同じユーザーのタグがあれば追加しない
+      if (insertedMentions.some(m => m.userName === userName)) {
+        console.log('[Mention] 既に追加済み:', userName);
+        return;
+      }
+
+      // タグ要素を作成
+      const tag = document.createElement('span');
+      tag.className = 'mention-tag';
+      tag.dataset.userName = userName;
+      tag.innerHTML = '@' + userName + '<button class="mention-tag-remove" type="button">×</button>';
+
+      // 削除ボタンのイベント
+      tag.querySelector('.mention-tag-remove').addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        removeMentionTag(userName);
+      });
+
+      tagsContainer.appendChild(tag);
+      tagsContainer.classList.add('has-tags');
+
+      // 挿入済みメンションを記録
+      insertedMentions.push({ userName: userName });
+
+      console.log('[Mention] タグ追加:', userName);
+    }
+
+    // メンションタグを削除
+    function removeMentionTag(userName) {
+      const tagsContainer = document.getElementById('mentionTags');
+      if (!tagsContainer) return;
+
+      const tag = tagsContainer.querySelector('[data-user-name="' + userName + '"]');
+      if (tag) {
+        tag.remove();
+      }
+
+      // 挿入済みメンションから削除
+      insertedMentions = insertedMentions.filter(m => m.userName !== userName);
+
+      // タグがなくなったらコンテナを非表示
+      if (insertedMentions.length === 0) {
+        tagsContainer.classList.remove('has-tags');
+      }
+
+      console.log('[Mention] タグ削除:', userName);
+    }
+
+    // 全てのメンションタグをクリア
+    function clearMentionTags() {
+      const tagsContainer = document.getElementById('mentionTags');
+      if (!tagsContainer) return;
+
+      tagsContainer.innerHTML = '';
+      tagsContainer.classList.remove('has-tags');
+      insertedMentions = [];
+    }
+
+    // メンションを挿入（タグ方式 + textareaの@を削除）
     function insertMentionViaTextarea(userName) {
       const textarea = document.getElementById('messageInput');
       if (!textarea) return;
@@ -2542,37 +2666,28 @@
         return;
       }
 
-      const mentionText = '@' + userName + ' '; // 後ろに半角スペースを付与
+      // textareaから@と入力中のクエリを削除
       const start = textarea.selectionStart;
-
-      // 置換範囲: mentionStartIndex から現在のカーソル位置まで
       const replaceStart = mentionStartIndex >= 0 ? mentionStartIndex : start;
       const replaceEnd = start;
 
       console.log('[Mention] 挿入:', userName, 'replaceStart:', replaceStart, 'replaceEnd:', replaceEnd);
 
       try {
-        // setRangeText を使うと安全に置換される
+        // @と入力中テキストを削除（空文字で置換）
         if (typeof textarea.setRangeText === 'function') {
-          textarea.setRangeText(mentionText, replaceStart, replaceEnd, 'end');
+          textarea.setRangeText('', replaceStart, replaceEnd, 'end');
         } else {
-          // フォールバック
           const val = textarea.value;
-          textarea.value = val.slice(0, replaceStart) + mentionText + val.slice(replaceEnd);
-          const caret = replaceStart + mentionText.length;
-          textarea.setSelectionRange(caret, caret);
+          textarea.value = val.slice(0, replaceStart) + val.slice(replaceEnd);
+          textarea.setSelectionRange(replaceStart, replaceStart);
         }
-
-        // 挿入済みメンションを記録
-        insertedMentions.push({
-          start: replaceStart,
-          end: replaceStart + mentionText.length - 1, // スペースの前まで
-          userName: userName
-        });
-
       } catch (err) {
-        console.error('[Mention] 挿入エラー:', err);
+        console.error('[Mention] テキスト削除エラー:', err);
       }
+
+      // タグとして追加
+      addMentionTag(userName);
 
       // リセット
       mentionStartIndex = -1;
@@ -3382,8 +3497,14 @@
       console.log('[sendMessage] 関数呼び出し開始');
 
       const input = document.getElementById('messageInput');
-      const message = getPlainText(input).trim();
+      const textMessage = getPlainText(input).trim();
 
+      // タグからメンションを取得してテキストに結合
+      const mentionTexts = insertedMentions.map(m => '@' + m.userName).join(' ');
+      const message = mentionTexts ? (mentionTexts + ' ' + textMessage).trim() : textMessage;
+
+      console.log('[sendMessage] textMessage:', textMessage);
+      console.log('[sendMessage] mentionTexts:', mentionTexts);
       console.log('[sendMessage] message:', message);
       console.log('[sendMessage] selectedImageFiles:', selectedImageFiles.length, '枚');
       console.log('[sendMessage] currentUserName:', currentUserName);
@@ -3433,6 +3554,7 @@
         // 入力欄クリア
         input.value = '';
         insertedMentions = []; // 挿入済みメンションもリセット
+        clearMentionTags(); // メンションタグもクリア
         sendButton.disabled = false;
 
         return;
@@ -3484,6 +3606,7 @@
         // 入力欄クリア
         input.value = '';
         insertedMentions = []; // 挿入済みメンションもリセット
+        clearMentionTags(); // メンションタグもクリア
 
       } catch (error) {
         console.error('[Firestore] 送信エラー:', error);
