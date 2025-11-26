@@ -2718,27 +2718,30 @@
 
       const input = document.getElementById('messageInput');
 
-      // IMEをキャンセルするためblur（これが✖️ボタンと同じ効果）
-      input.blur();
+      // iOS対策: まずフォーカスを確保してからIMEをリセット
+      // これによりキーボードが閉じないようにする
+      input.focus();
 
-      // 少し待ってから挿入処理を実行
-      setTimeout(function() {
-        // 保存した値を復元
-        mentionRange = savedMentionRange;
-        mentionStartIndex = savedMentionStartIndex;
-        mentionQuery = savedMentionQuery;
+      // 保存した値を復元
+      mentionRange = savedMentionRange;
+      mentionStartIndex = savedMentionStartIndex;
+      mentionQuery = savedMentionQuery;
 
-        console.log('[Mention] 挿入実行:', capturedUserName, 'mentionRange:', !!mentionRange, 'startIndex:', mentionStartIndex);
+      console.log('[Mention] 挿入実行:', capturedUserName, 'mentionRange:', !!mentionRange, 'startIndex:', mentionStartIndex);
 
-        // フォーカスを戻す
-        input.focus();
+      // フォールバック処理を直接呼ぶ（Range APIはIME影響を受けやすいため）
+      insertSelectedMentionFallback(capturedUserName, input);
+      justInsertedMention = true;
 
-        // さらに少し待ってから挿入（フォーカスが安定するのを待つ）
-        setTimeout(function() {
-          insertSelectedMentionByName(capturedUserName);
-          justInsertedMention = true;
-        }, 30);
-      }, 10);
+      // カーソルを末尾に設定（フォーカスは既にあるのでfocus()不要）
+      requestAnimationFrame(function() {
+        const newSel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        range.collapse(false); // 末尾
+        newSel.removeAllRanges();
+        newSel.addRange(range);
+      });
     }
 
     // メンション候補リストを描画
@@ -2786,9 +2789,18 @@
           // iOS: touchstartで即座に処理（IMEがアクティブでもタップを検知できる）
           item.addEventListener('touchstart', function(e) {
             e.preventDefault(); // デフォルト動作を防ぐ
+            e.stopPropagation(); // イベント伝播を止める
             touchHandled = true;
             console.log('[Mention] touchstart発火:', capturedUserName);
-            processMentionSelection(capturedUserName);
+            
+            // iOS対策: タッチ直後にフォーカスを確保してキーボードを維持
+            const input = document.getElementById('messageInput');
+            input.focus();
+            
+            // 少し遅延させて挿入処理を実行（フォーカスが確定するのを待つ）
+            setTimeout(function() {
+              processMentionSelection(capturedUserName);
+            }, 10);
           }, { passive: false });
 
           // PC: click（touchstartで処理済みならスキップ）
