@@ -2728,26 +2728,35 @@
       const userName = filteredMentionUsers[selectedMentionIndex];
       const input = document.getElementById('messageInput');
       const text = getPlainText(input);
-      const cursorPos = getCaretPosition(input);
 
-      // @とクエリ部分を含めて置き換え（mentionStartIndexから現在のカーソルまで）
+      // @とクエリ部分の長さを計算（@1文字 + クエリ文字列）
+      const mentionQueryLength = 1 + mentionQuery.length; // @(1) + クエリ
+
+      // @より前のテキスト
       const beforeMention = text.substring(0, mentionStartIndex);
-      const afterCursor = text.substring(cursorPos); // カーソル以降のテキスト
+      // @とクエリより後のテキスト（mentionStartIndex + @1文字 + クエリ長さ）
+      const afterMention = text.substring(mentionStartIndex + mentionQueryLength);
 
       // メンションをハイライト付きで挿入
       const mentionText = '@' + userName;
-      
+
       // HTMLとしてメンションをハイライト表示
       const escapedBefore = escapeHtml(beforeMention);
-      const escapedAfter = escapeHtml(afterCursor);
-      input.innerHTML = escapedBefore + 
-        '<span class="mention-in-input">' + escapeHtml(mentionText) + '</span>' + 
+      const escapedAfter = escapeHtml(afterMention);
+      input.innerHTML = escapedBefore +
+        '<span class="mention-in-input">' + escapeHtml(mentionText) + '</span>' +
         ' ' + escapedAfter;
 
       // カーソル位置を調整（メンション + スペースの後）
       const newCursorPos = beforeMention.length + mentionText.length + 1; // beforeMention, mentionText, スペース
-      setCaretPosition(input, newCursorPos);
+
+      // iOS対応：先にfocusしてからカーソル設定
       input.focus();
+
+      // 少し遅延させてカーソル位置を設定（iOS対応）
+      setTimeout(function() {
+        setCaretPosition(input, newCursorPos);
+      }, 10);
 
       hideMentionSuggestions();
     }
