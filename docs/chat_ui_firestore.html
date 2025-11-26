@@ -2116,8 +2116,10 @@
       messageInput.addEventListener('compositionend', function() {
         isComposing = false;
         console.log('[IME] compositionend - 変換終了');
-        // IME確定後に表示を同期
-        syncInputToDisplay();
+        // IME確定後に表示を同期（少し遅延させてvalueが確定してから）
+        setTimeout(function() {
+          syncInputToDisplay();
+        }, 10);
       });
 
       // 入力イベント
@@ -2535,10 +2537,18 @@
       const display = document.getElementById('messageInputDisplay');
       if (!textarea || !display) return;
 
+      // IME変換中は同期しない（変換中の文字が消えるのを防ぐ）
+      if (isComposing) {
+        return;
+      }
+
       const text = textarea.value || '';
-      
+
       // ゼロ幅スペースを除去
       const cleaned = text.replace(/\u200B/g, '');
+
+      // 表示用divの高さをtextareaに合わせる
+      display.style.height = textarea.offsetHeight + 'px';
 
       // メンション（@username）を検出
       const mentionRegex = /@([^\s@]+)/g;
@@ -2546,14 +2556,14 @@
       let hasMention = false;
       const parts = [];
       let lastIndex = 0;
-      
+
       while ((match = mentionRegex.exec(cleaned)) !== null) {
         const userName = match[1];
         // 実在するユーザーかチェック
-        const isValidMention = currentRoomMembers.includes(userName) || 
+        const isValidMention = currentRoomMembers.includes(userName) ||
                                (usersCache && usersCache[userName]) ||
                                insertedMentions.some(m => m.userName === userName);
-        
+
         if (isValidMention) {
           hasMention = true;
           if (match.index > lastIndex) {
@@ -2563,7 +2573,8 @@
           lastIndex = match.index + match[0].length;
         }
       }
-      
+
+      // 残りのテキスト（メンション後の文字列）を必ず追加
       if (lastIndex < cleaned.length) {
         parts.push({ type: 'text', content: cleaned.substring(lastIndex) });
       }
@@ -2572,7 +2583,7 @@
       if (hasMention) {
         display.classList.add('has-mention');
         textarea.style.color = 'transparent';
-        
+
         display.innerHTML = '';
         parts.forEach(part => {
           if (part.type === 'mention') {
@@ -2582,11 +2593,11 @@
             span.dataset.mention = part.userName;
             display.appendChild(span);
           } else {
+            // テキスト部分（メンション後の文字を含む）
             const lines = part.content.split('\n');
             lines.forEach((line, i) => {
-              if (line) {
-                display.appendChild(document.createTextNode(line));
-              }
+              // 空行でもスペースを追加（カーソル位置表示のため）
+              display.appendChild(document.createTextNode(line || ''));
               if (i < lines.length - 1) {
                 display.appendChild(document.createElement('br'));
               }
