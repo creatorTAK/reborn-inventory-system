@@ -2705,6 +2705,42 @@
       renderMentionSuggestions();
     }
 
+    // メンション選択処理（タップ/クリック共通）
+    function processMentionSelection(capturedUserName) {
+      // 選択前にmentionRangeとmentionStartIndexを保存
+      const savedMentionRange = mentionRange ? mentionRange.cloneRange() : null;
+      const savedMentionStartIndex = mentionStartIndex;
+      const savedMentionQuery = mentionQuery;
+
+      // メンション候補を非表示
+      const suggestionsContainer = document.getElementById('mentionSuggestions');
+      suggestionsContainer.classList.remove('show');
+
+      const input = document.getElementById('messageInput');
+
+      // IMEをキャンセルするためblur（これが✖️ボタンと同じ効果）
+      input.blur();
+
+      // 少し待ってから挿入処理を実行
+      setTimeout(function() {
+        // 保存した値を復元
+        mentionRange = savedMentionRange;
+        mentionStartIndex = savedMentionStartIndex;
+        mentionQuery = savedMentionQuery;
+
+        console.log('[Mention] 挿入実行:', capturedUserName, 'mentionRange:', !!mentionRange, 'startIndex:', mentionStartIndex);
+
+        // フォーカスを戻す
+        input.focus();
+
+        // さらに少し待ってから挿入（フォーカスが安定するのを待つ）
+        setTimeout(function() {
+          insertSelectedMentionByName(capturedUserName);
+          justInsertedMention = true;
+        }, 30);
+      }, 10);
+    }
+
     // メンション候補リストを描画
     function renderMentionSuggestions() {
       const container = document.getElementById('mentionSuggestions');
@@ -2742,34 +2778,27 @@
         name.textContent = userName;
         item.appendChild(name);
 
-        // タップ/クリックで選択
+        // タップ/クリックで選択（iOS対応：touchstartで処理開始）
         // 重要：クロージャでuserNameをキャプチャ
         (function(capturedUserName) {
+          let touchHandled = false;
+
+          // iOS: touchstartで即座に処理（IMEがアクティブでもタップを検知できる）
+          item.addEventListener('touchstart', function(e) {
+            e.preventDefault(); // デフォルト動作を防ぐ
+            touchHandled = true;
+            console.log('[Mention] touchstart発火:', capturedUserName);
+            processMentionSelection(capturedUserName);
+          }, { passive: false });
+
+          // PC: click（touchstartで処理済みならスキップ）
           item.addEventListener('click', function(e) {
+            if (touchHandled) {
+              touchHandled = false;
+              return;
+            }
             console.log('[Mention] click発火:', capturedUserName);
-
-            // 選択前にmentionRangeとmentionStartIndexを保存
-            const savedMentionRange = mentionRange ? mentionRange.cloneRange() : null;
-            const savedMentionStartIndex = mentionStartIndex;
-            const savedMentionQuery = mentionQuery;
-
-            // メンション候補を先に非表示（クリック後にUIが消えるように）
-            const container = document.getElementById('mentionSuggestions');
-            container.classList.remove('show');
-
-            // 挿入処理（setTimeoutなしで即座に実行）
-            mentionRange = savedMentionRange;
-            mentionStartIndex = savedMentionStartIndex;
-            mentionQuery = savedMentionQuery;
-
-            console.log('[Mention] 挿入実行:', capturedUserName, 'mentionRange:', !!mentionRange, 'startIndex:', mentionStartIndex);
-
-            const input = document.getElementById('messageInput');
-            insertSelectedMentionByName(capturedUserName);
-            justInsertedMention = true;
-
-            // 挿入後にフォーカスを設定
-            input.focus();
+            processMentionSelection(capturedUserName);
           });
         })(userName);
 
