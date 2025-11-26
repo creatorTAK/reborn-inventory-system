@@ -240,11 +240,10 @@
       -webkit-touch-callout: none;
     }
 
-    /* 日付セパレータ（LINE風：背景透明、バッジのみ） */
+    /* 日付セパレータ（インライン表示用） */
     .date-separator {
       text-align: center;
       padding: 8px 0;
-      /* 背景なし：LINEと同様にメッセージが後ろを通過 */
     }
     .date-separator-badge {
       display: inline-block;
@@ -253,6 +252,24 @@
       font-size: 0.7rem;
       padding: 4px 12px;
       border-radius: 12px;
+    }
+    /* 固定日付バッジ（LINE風：ヘッダー直下に固定） */
+    .sticky-date-badge {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.15);
+      color: #555;
+      font-size: 0.7rem;
+      padding: 4px 12px;
+      border-radius: 12px;
+      z-index: 50;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .sticky-date-badge.hidden {
+      opacity: 0;
     }
 
     .message-item {
@@ -1601,7 +1618,11 @@
     </div>
   </div>
 
-  <div class="messages-container" id="messagesContainer"></div>
+  <!-- メッセージエリア（固定日付バッジ付き） -->
+  <div class="messages-wrapper" style="position: relative; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+    <div class="sticky-date-badge hidden" id="stickyDateBadge">今日</div>
+    <div class="messages-container" id="messagesContainer"></div>
+  </div>
 
   <!-- 画像プレビューエリア（複数対応） -->
   <div class="image-preview-container" id="imagePreviewContainer" style="display: none;">
@@ -2099,6 +2120,48 @@
         startListening();
       }
       // PWA版はfetch完了後またはタイムアウト後にstartListeningを呼び出す
+
+      // LINE風スティッキー日付バッジのスクロール監視
+      const messagesContainer = document.getElementById('messagesContainer');
+      const stickyDateBadge = document.getElementById('stickyDateBadge');
+      
+      messagesContainer.addEventListener('scroll', function() {
+        updateStickyDateBadge();
+      });
+
+      function updateStickyDateBadge() {
+        const container = document.getElementById('messagesContainer');
+        const dateSeparators = container.querySelectorAll('.date-separator');
+        
+        if (dateSeparators.length === 0) {
+          stickyDateBadge.classList.add('hidden');
+          return;
+        }
+
+        // コンテナの上端を基準
+        const containerRect = container.getBoundingClientRect();
+        const containerTop = containerRect.top;
+
+        // 現在表示されている日付を検出
+        let currentDate = null;
+        
+        for (const sep of dateSeparators) {
+          const sepRect = sep.getBoundingClientRect();
+          // 日付区切りがコンテナ上端より下にある場合、その前の日付が現在の日付
+          if (sepRect.top > containerTop + 10) {
+            break;
+          }
+          currentDate = sep.dataset.date;
+        }
+
+        if (currentDate) {
+          stickyDateBadge.textContent = currentDate;
+          stickyDateBadge.classList.remove('hidden');
+        } else {
+          // 最初の日付区切りより上にスクロールしている場合は非表示
+          stickyDateBadge.classList.add('hidden');
+        }
+      }
     });
 
     // GAS版：ユーザー選択ドロップダウン表示
@@ -2750,6 +2813,11 @@
         // 最下部にスクロール
         container.scrollTop = container.scrollHeight;
 
+        // 固定日付バッジを更新（スクロールイベントをトリガー）
+        setTimeout(() => {
+          container.dispatchEvent(new Event('scroll'));
+        }, 100);
+
         // 未読メッセージがあれば既読にする
         if (unreadMessageIds.length > 0) {
           markMessagesAsRead(unreadMessageIds);
@@ -2798,6 +2866,7 @@
       const container = document.getElementById('messagesContainer');
       const separator = document.createElement('div');
       separator.className = 'date-separator';
+      separator.dataset.date = dateStr; // スクロール監視用
       
       const badge = document.createElement('span');
       badge.className = 'date-separator-badge';
