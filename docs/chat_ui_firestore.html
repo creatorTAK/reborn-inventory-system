@@ -2060,7 +2060,17 @@
 
       // メッセージ入力（contenteditable）
       const messageInput = document.getElementById('messageInput');
-      
+
+      // IME変換状態の監視（iOS対応）
+      messageInput.addEventListener('compositionstart', function() {
+        isComposing = true;
+        console.log('[IME] compositionstart - 変換開始');
+      });
+      messageInput.addEventListener('compositionend', function() {
+        isComposing = false;
+        console.log('[IME] compositionend - 変換終了');
+      });
+
       // 入力イベント
       messageInput.addEventListener('input', function() {
         // メンション挿入直後フラグをリセット（他の文字入力があった場合）
@@ -2452,6 +2462,8 @@
     let selectedMentionIndex = 0;
     let filteredMentionUsers = [];
     let justInsertedMention = false; // メンション挿入直後フラグ（改行許可用）
+    let mentionRange = null; // @入力時のRangeを保存（iOS対応）
+    let isComposing = false; // IME変換中フラグ
 
     // メンション入力を検知（textarea用 - 後方互換性）
     function checkMentionInput(input) {
@@ -2574,8 +2586,62 @@
       mentionStartIndex = lastAtIndex;
       mentionQuery = queryText.toLowerCase();
 
+      // @の位置でRangeを保存（iOS対応：初回のみ保存）
+      if (!mentionRange) {
+        saveMentionStartRange(element, lastAtIndex);
+      }
+
       // メンバーをフィルタリング
       filterAndShowMentionSuggestions();
+    }
+
+    // @入力位置のRangeを保存する（iOS対応）
+    function saveMentionStartRange(element, atIndex) {
+      try {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+
+        // 現在のカーソル位置からRangeを取得
+        const currentRange = sel.getRangeAt(0).cloneRange();
+
+        // @の位置を見つけてRangeのstartを設定
+        // テキストノードを走査して@の位置を特定
+        let currentPos = 0;
+        let found = false;
+
+        function findAtPosition(node) {
+          if (found) return;
+
+          if (node.nodeType === Node.TEXT_NODE) {
+            const nodeLength = node.textContent.length;
+            if (currentPos + nodeLength > atIndex) {
+              // @はこのノード内にある
+              const offsetInNode = atIndex - currentPos;
+              mentionRange = document.createRange();
+              mentionRange.setStart(node, offsetInNode);
+              mentionRange.setEnd(currentRange.endContainer, currentRange.endOffset);
+              found = true;
+              return;
+            }
+            currentPos += nodeLength;
+          } else {
+            for (const child of node.childNodes) {
+              findAtPosition(child);
+              if (found) return;
+            }
+          }
+        }
+
+        findAtPosition(element);
+
+        if (!found) {
+          // フォールバック：現在のRangeをそのまま使用
+          mentionRange = currentRange.cloneRange();
+        }
+      } catch (e) {
+        console.error('[Mention] Range保存エラー:', e);
+        mentionRange = null;
+      }
     }
 
     // 入力フィールド内のメンションをハイライト表示（ハイライト処理は送信後のみに変更）
@@ -2705,6 +2771,7 @@
       mentionStartIndex = -1;
       mentionQuery = '';
       filteredMentionUsers = [];
+      mentionRange = null; // Rangeもリセット
     }
 
     // 次の候補を選択
@@ -2721,67 +2788,114 @@
       renderMentionSuggestions();
     }
 
-    // 選択されたメンションを挿入（contenteditable対応）
+    // 選択されたメンションを挿入（contenteditable対応 - Range API版）
     function insertSelectedMention() {
-      if (filteredMentionUsers.length === 0 || mentionStartIndex === -1) return;
+      if (filteredMentionUsers.length === 0) return;
+
+      // IME変換中は挿入を延期
+      if (isComposing) {
+        const retryInsert = function() {
+          if (!isComposing) {
+            insertSelectedMention();
+          } else {
+            setTimeout(retryInsert, 20);
+          }
+        };
+        setTimeout(retryInsert, 20);
+        return;
+      }
 
       const userName = filteredMentionUsers[selectedMentionIndex];
       const input = document.getElementById('messageInput');
-      const text = getPlainText(input);
+      const sel = window.getSelection();
 
-      // @とクエリ部分の長さを計算（@1文字 + クエリ文字列）
-      const mentionQueryLength = 1 + mentionQuery.length; // @(1) + クエリ
+      if (!sel) return;
 
-      // @より前のテキスト
-      const beforeMention = text.substring(0, mentionStartIndex);
-      // @とクエリより後のテキスト（mentionStartIndex + @1文字 + クエリ長さ）
-      const afterMention = text.substring(mentionStartIndex + mentionQueryLength);
-
-      // メンションをハイライト付きで挿入
-      const mentionText = '@' + userName;
-
-      // input.innerHTMLを直接操作せず、DOMノードを構築
-      input.innerHTML = ''; // クリア
-
-      // beforeMentionテキストノード
-      if (beforeMention) {
-        input.appendChild(document.createTextNode(beforeMention));
+      // mentionRangeがない場合はフォールバック
+      if (!mentionRange) {
+        console.warn('[Mention] mentionRangeが未設定、フォールバック処理');
+        insertSelectedMentionFallback(userName, input);
+        return;
       }
 
-      // メンションspan
-      const mentionSpan = document.createElement('span');
-      mentionSpan.className = 'mention-in-input';
-      mentionSpan.textContent = mentionText;
-      input.appendChild(mentionSpan);
+      try {
+        // 現在のカーソル位置を取得
+        let currentRange;
+        if (sel.rangeCount > 0) {
+          currentRange = sel.getRangeAt(0).cloneRange();
+        } else {
+          currentRange = document.createRange();
+          currentRange.selectNodeContents(input);
+          currentRange.collapse(false);
+        }
 
-      // スペース + afterMention のテキストノード
-      const afterText = ' ' + afterMention;
-      const afterTextNode = document.createTextNode(afterText);
-      input.appendChild(afterTextNode);
+        // 置換範囲を設定（mentionRangeのstart〜現在のカーソル位置）
+        const replaceRange = mentionRange.cloneRange();
+        replaceRange.setEnd(currentRange.endContainer, currentRange.endOffset);
 
-      // iOS対応：blur→focusでIMEをリセットしてからカーソル設定
-      input.blur();
+        // メンションspanを作成
+        const mentionText = '@' + userName;
+        const mentionSpan = document.createElement('span');
+        mentionSpan.className = 'mention-in-input';
+        mentionSpan.textContent = mentionText;
+        mentionSpan.setAttribute('data-mention', userName);
+        mentionSpan.setAttribute('contenteditable', 'false'); // span内に編集カーソルが入らないように
 
-      setTimeout(function() {
-        input.focus();
+        // スペースのテキストノード
+        const spaceNode = document.createTextNode(' ');
 
-        // さらに遅延させてカーソル位置を設定
-        setTimeout(function() {
-          try {
-            const selection = window.getSelection();
-            const range = document.createRange();
-            // afterTextNodeの1文字目（スペース）の後にカーソルを置く
-            range.setStart(afterTextNode, 1);
-            range.collapse(true);
-            selection.removeAllRanges();
-            selection.addRange(range);
-          } catch (e) {
-            console.error('[Mention] カーソル設定エラー:', e);
-          }
-        }, 10);
-      }, 50);
+        // 古い内容を削除
+        replaceRange.deleteContents();
 
+        // mentionSpanとspaceNodeを挿入（insertNodeは逆順で挿入されるので注意）
+        replaceRange.insertNode(spaceNode);
+        replaceRange.insertNode(mentionSpan);
+
+        // カーソルをspaceNodeの後ろに設定
+        const newRange = document.createRange();
+        newRange.setStartAfter(spaceNode);
+        newRange.collapse(true);
+
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+
+        // mentionRangeをリセット（次の@入力に備える）
+        mentionRange = null;
+        mentionStartIndex = -1;
+
+      } catch (e) {
+        console.error('[Mention] Range挿入エラー:', e);
+        // エラー時はフォールバック
+        insertSelectedMentionFallback(userName, input);
+      }
+
+      justInsertedMention = true;
       hideMentionSuggestions();
+    }
+
+    // フォールバック：従来方式（mentionRangeがない場合）
+    function insertSelectedMentionFallback(userName, input) {
+      const text = getPlainText(input);
+      const mentionQueryLength = 1 + mentionQuery.length;
+
+      const beforeMention = text.substring(0, mentionStartIndex);
+      const afterMention = text.substring(mentionStartIndex + mentionQueryLength);
+
+      const mentionText = '@' + userName;
+
+      // シンプルにtextContentで置換（ハイライトなし）
+      input.textContent = beforeMention + mentionText + ' ' + afterMention;
+
+      // カーソルを末尾に移動
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(input);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      mentionRange = null;
+      mentionStartIndex = -1;
     }
 
     // メンションを解析してユーザー名リストを返す
