@@ -2143,18 +2143,14 @@
         checkMentionInput(this);
       });
 
-      // 入力イベント（IME変換中も含む）
+      // 入力イベント（IME変換中は候補表示しない）
       messageInput.addEventListener('input', function() {
         // メンション挿入直後フラグをリセット（他の文字入力があった場合）
         justInsertedMention = false;
-        // メンション検知（IME変換中でもチェック - @が含まれていれば候補表示）
-        checkMentionInput(this);
-      });
-
-      // keyupイベント（iOS日本語キーボードで@入力時の即時検知用）
-      messageInput.addEventListener('keyup', function() {
-        // IME変換中でも@が含まれていればチェック
-        checkMentionInput(this);
+        // IME変換中でなければメンションチェック
+        if (!isComposing) {
+          checkMentionInput(this);
+        }
       });
 
       // Enterキーで送信（メンション選択中は候補選択）
@@ -2704,15 +2700,8 @@
       mentionQuery = '';
       hideMentionSuggestions();
 
-      // IME変換状態をリセット（blur→focusでIMEの未確定状態をクリア）
-      textarea.blur();
-      // 少し遅延してからfocusを戻す（IMEリセットを確実にするため）
-      setTimeout(function() {
-        textarea.focus();
-        // カーソルを末尾に移動
-        const len = textarea.value.length;
-        textarea.setSelectionRange(len, len);
-      }, 50);
+      // フォーカスを維持
+      textarea.focus();
 
       justInsertedMention = true;
     }
