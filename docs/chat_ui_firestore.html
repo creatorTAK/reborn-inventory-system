@@ -2332,6 +2332,24 @@
       }
     }
 
+    // リアルタイムで未読カウントをリセット（チャットルームを開いている間）
+    async function resetUnreadCountRealtime() {
+      if (!currentUserEmail || !currentRoomId) return;
+
+      try {
+        const unreadRef = doc(db, `rooms/${currentRoomId}/unreadCounts/${currentUserEmail}`);
+        await setDoc(unreadRef, {
+          userId: currentUserEmail,
+          unreadCount: 0,
+          lastReadAt: serverTimestamp()
+        }, { merge: true });
+
+        console.log('[未読] リアルタイム未読カウントリセット完了');
+      } catch (error) {
+        console.error('[未読] リアルタイム未読カウントリセットエラー:', error);
+      }
+    }
+
     // 既読数を計算（自分を除く）
     function getReadCount(readBy) {
       if (!readBy || !Array.isArray(readBy)) return 0;
@@ -3008,6 +3026,9 @@
         // 未読メッセージがあれば既読にする
         if (unreadMessageIds.length > 0) {
           markMessagesAsRead(unreadMessageIds);
+          
+          // リアルタイムで未読カウントもリセット（チャットルームを開いている間は常に0）
+          resetUnreadCountRealtime();
         }
       }, (error) => {
         console.error('[Firestore] リスニングエラー:', error);
