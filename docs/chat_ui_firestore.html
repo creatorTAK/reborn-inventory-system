@@ -749,17 +749,19 @@
       background-color: rgba(255,255,255,0.3);
     }
 
-    /* 長押しメニュー（LINEライクなポップアップ） */
+    /* 長押しメニュー（LINE風グリッドポップアップ） */
     #contextMenu {
       position: absolute;
       background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
       z-index: 3000;
       display: none;
       opacity: 0;
       transform: scale(0.9);
-      transition: opacity 0.2s ease, transform 0.2s ease;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      padding: 12px 8px;
+      min-width: 200px;
     }
     #contextMenu.active {
       display: block;
@@ -767,28 +769,40 @@
       transform: scale(1);
     }
     .context-menu-items {
-      display: flex;
-      gap: 0;
-      padding: 8px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
     }
     .context-menu-item {
       display: flex;
-      padding: 10px 16px;
-      background: white;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 4px;
+      background: transparent;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.15s;
       border: none;
+      border-radius: 8px;
       font-family: inherit;
-      font-size: 14px;
-      color: #374151;
-      border-right: 1px solid #e5e7eb;
+      font-size: 10px;
+      color: #6b7280;
       white-space: nowrap;
+      min-width: 48px;
     }
-    .context-menu-item:last-child {
-      border-right: none;
+    .context-menu-item i {
+      font-size: 20px;
+      color: #374151;
+      margin-bottom: 4px;
     }
     .context-menu-item:active {
       background: #f3f4f6;
+    }
+    .context-menu-item.danger {
+      color: #ef4444;
+    }
+    .context-menu-item.danger i {
+      color: #ef4444;
     }
     #contextMenuOverlay {
       position: fixed;
@@ -796,7 +810,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: transparent;
+      background: rgba(0,0,0,0.1);
       z-index: 2999;
       display: none;
     }
@@ -1040,8 +1054,22 @@
   <div id="contextMenuOverlay" onclick="closeContextMenu()"></div>
   <div id="contextMenu">
     <div class="context-menu-items">
-      <button class="context-menu-item" id="contextMenuCopy">コピー</button>
-      <button class="context-menu-item" id="contextMenuUnsend" style="display: none; color: #ef4444;">送信取り消し</button>
+      <button class="context-menu-item" id="contextMenuCopy">
+        <i class="bi bi-clipboard"></i>
+        <span>コピー</span>
+      </button>
+      <button class="context-menu-item" id="contextMenuReply">
+        <i class="bi bi-reply"></i>
+        <span>リプライ</span>
+      </button>
+      <button class="context-menu-item" id="contextMenuDelete">
+        <i class="bi bi-trash"></i>
+        <span>削除</span>
+      </button>
+      <button class="context-menu-item danger" id="contextMenuUnsend" style="display: none;">
+        <i class="bi bi-x-circle"></i>
+        <span>取り消し</span>
+      </button>
     </div>
   </div>
 
@@ -2542,12 +2570,22 @@
     };
 
     // コンテキストメニューボタンのイベントリスナー設定
+    // タッチ用
     document.getElementById('contextMenuCopy').addEventListener('touchend', function(e) {
       e.preventDefault();
       e.stopPropagation();
       copyMessage();
     });
-
+    document.getElementById('contextMenuReply').addEventListener('touchend', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      replyMessage();
+    });
+    document.getElementById('contextMenuDelete').addEventListener('touchend', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      deleteMessageFromMenu();
+    });
     document.getElementById('contextMenuUnsend').addEventListener('touchend', function(e) {
       e.preventDefault();
       e.stopPropagation();
@@ -2560,7 +2598,16 @@
       e.stopPropagation();
       copyMessage();
     });
-
+    document.getElementById('contextMenuReply').addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      replyMessage();
+    });
+    document.getElementById('contextMenuDelete').addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      deleteMessageFromMenu();
+    });
     document.getElementById('contextMenuUnsend').addEventListener('click', function(e) {
       e.preventDefault();
       e.stopPropagation();
@@ -2625,7 +2672,7 @@
       closeContextMenu();
 
       // 確認ダイアログ
-      if (!confirm('このメッセージを取り消しますか？\n相手側には「メッセージが取り消されました」と表示されます。')) {
+      if (!confirm('このメッセージを取り消しますか？')) {
         return;
       }
 
