@@ -717,39 +717,16 @@
       height: 24px;
       color: #718096;
     }
-    /* メッセージ入力エリア - hidden textarea パターン */
+    /* メッセージ入力エリア - textarea パターン（iOS対応） */
     .message-input-wrapper {
       flex: 1;
       position: relative;
       margin-right: 4px;
     }
 
-    /* 表示用div（contenteditableではない） */
+    /* 表示用div（メンションハイライト表示用 - 入力中は非表示） */
     .message-input-display {
-      padding: 12px;
-      border: 1px solid #cbd5e0;
-      border-radius: 20px;
-      font-size: 1rem;
-      min-height: 44px;
-      max-height: 120px;
-      background-color: #f5f5f5;
-      overflow-y: auto;
-      word-wrap: break-word;
-      white-space: pre-wrap;
-      line-height: 1.4;
-      /* テキスト選択を無効化（textareaで操作） */
-      -webkit-user-select: none;
-      user-select: none;
-      pointer-events: none;
-    }
-
-    .message-input-display:empty::before {
-      content: attr(data-placeholder);
-      color: #9ca3af;
-    }
-
-    /* 隠しtextarea（実際の入力を受け付ける） */
-    .message-input-hidden {
+      display: none; /* 通常は非表示、メンションがある場合のみ表示 */
       position: absolute;
       top: 0;
       left: 0;
@@ -759,12 +736,33 @@
       border: 1px solid transparent;
       border-radius: 20px;
       font-size: 1rem;
-      background: transparent;
-      color: transparent;
+      background: #f5f5f5;
+      overflow-y: auto;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      line-height: 1.4;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .message-input-display.has-mention {
+      display: block; /* メンションがある場合のみ表示 */
+    }
+
+    /* textarea（実際の入力を受け付ける） */
+    .message-input-hidden {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #cbd5e0;
+      border-radius: 20px;
+      font-size: 1rem;
+      min-height: 44px;
+      max-height: 120px;
+      background-color: #f5f5f5;
+      color: #1a202c;
       caret-color: var(--reborn-primary);
       resize: none;
-      overflow: hidden;
-      z-index: 1;
+      overflow-y: auto;
       /* iOS対策 */
       -webkit-appearance: none;
       appearance: none;
@@ -774,15 +772,14 @@
 
     .message-input-hidden:focus {
       outline: none;
-    }
-
-    /* textareaにフォーカス時、表示用divのボーダーを変更 */
-    .message-input-hidden:focus + .message-input-display,
-    .message-input-wrapper:focus-within .message-input-display {
       border-color: var(--reborn-primary);
     }
 
-    /* 入力フィールド内のメンションハイライト */
+    .message-input-hidden::placeholder {
+      color: #9ca3af;
+    }
+
+    /* 入力フィールド内のメンションハイライト（表示用div内） */
     .message-input-display .mention-in-input {
       color: var(--reborn-primary);
       font-weight: 500;
@@ -1733,20 +1730,20 @@
       </button>
 
       <div class="message-input-wrapper">
-        <div
-          id="messageInputDisplay"
-          class="message-input-display"
-          data-placeholder="メッセージを入力..."
-          aria-hidden="true"></div>
         <textarea
           id="messageInput"
           class="message-input-hidden"
+          placeholder="メッセージを入力..."
           inputmode="text"
           autocapitalize="off"
           autocomplete="off"
           autocorrect="off"
           spellcheck="false"
           rows="1"></textarea>
+        <div
+          id="messageInputDisplay"
+          class="message-input-display"
+          aria-hidden="true"></div>
       </div>
 
       <button class="send-button" id="sendButton" onclick="sendMessage()">
@@ -2543,66 +2540,65 @@
       // ゼロ幅スペースを除去
       const cleaned = text.replace(/\u200B/g, '');
 
-      // メンション（@username）を検出してspanに変換
-      // 既に挿入済みのメンションと、新たに入力されたメンションを両方ハイライト
+      // メンション（@username）を検出
+      const mentionRegex = /@([^\s@]+)/g;
+      let match;
+      let hasMention = false;
       const parts = [];
       let lastIndex = 0;
       
-      // @username パターンを検出（スペースまたは文字列終端まで）
-      const mentionRegex = /@([^\s@]+)/g;
-      let match;
-      
       while ((match = mentionRegex.exec(cleaned)) !== null) {
         const userName = match[1];
-        // 実在するユーザーかチェック（または挿入済みメンションに含まれるか）
+        // 実在するユーザーかチェック
         const isValidMention = currentRoomMembers.includes(userName) || 
                                (usersCache && usersCache[userName]) ||
                                insertedMentions.some(m => m.userName === userName);
         
         if (isValidMention) {
-          // @の前のテキスト
+          hasMention = true;
           if (match.index > lastIndex) {
             parts.push({ type: 'text', content: cleaned.substring(lastIndex, match.index) });
           }
-          // メンション
           parts.push({ type: 'mention', content: match[0], userName: userName });
           lastIndex = match.index + match[0].length;
         }
       }
       
-      // 残りのテキスト
       if (lastIndex < cleaned.length) {
         parts.push({ type: 'text', content: cleaned.substring(lastIndex) });
       }
 
-      // DOM構築
-      display.innerHTML = '';
-      
-      if (parts.length === 0 && cleaned.length === 0) {
-        // 空の場合はプレースホルダーが表示される（CSSで処理）
-        return;
+      // メンションがある場合のみ表示用divを表示してtextareaのテキストを透明に
+      if (hasMention) {
+        display.classList.add('has-mention');
+        textarea.style.color = 'transparent';
+        
+        display.innerHTML = '';
+        parts.forEach(part => {
+          if (part.type === 'mention') {
+            const span = document.createElement('span');
+            span.className = 'mention-in-input';
+            span.textContent = part.content;
+            span.dataset.mention = part.userName;
+            display.appendChild(span);
+          } else {
+            const lines = part.content.split('\n');
+            lines.forEach((line, i) => {
+              if (line) {
+                display.appendChild(document.createTextNode(line));
+              }
+              if (i < lines.length - 1) {
+                display.appendChild(document.createElement('br'));
+              }
+            });
+          }
+        });
+      } else {
+        // メンションがない場合は表示用divを非表示、textareaのテキストを見えるように
+        display.classList.remove('has-mention');
+        display.innerHTML = '';
+        textarea.style.color = '#1a202c';
       }
-
-      parts.forEach(part => {
-        if (part.type === 'mention') {
-          const span = document.createElement('span');
-          span.className = 'mention-in-input';
-          span.textContent = part.content;
-          span.dataset.mention = part.userName;
-          display.appendChild(span);
-        } else {
-          // テキスト（改行を<br>に変換）
-          const lines = part.content.split('\n');
-          lines.forEach((line, i) => {
-            if (line) {
-              display.appendChild(document.createTextNode(line));
-            }
-            if (i < lines.length - 1) {
-              display.appendChild(document.createElement('br'));
-            }
-          });
-        }
-      });
     }
 
     // メンション入力を検知（textarea用）
