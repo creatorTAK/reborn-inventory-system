@@ -423,8 +423,26 @@
       flex-shrink: 0;
     }
 
+    /* バブルコンテナ（ユーザー名 + バブル を縦に配置） */
+    .bubble-container {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .message-item-mine .bubble-container {
+      align-items: flex-end;
+    }
+
+    /* グループチャット時の送信者名（相手のメッセージのみ） */
     .message-sender {
-      display: none; /* LINE風：名前を非表示 */
+      display: none; /* デフォルトは非表示 */
+    }
+    .message-sender.show-in-group {
+      display: block;
+      font-size: 0.7rem;
+      color: #666;
+      margin-bottom: 2px;
+      margin-left: 2px;
     }
 
     /* メッセージラッパー（バブル + 時間） */
@@ -1886,6 +1904,18 @@
       const wrapper = document.createElement('div');
       wrapper.className = 'message-wrapper';
 
+      // バブルコンテナ（ユーザー名 + バブル を縦に配置）
+      const bubbleContainer = document.createElement('div');
+      bubbleContainer.className = 'bubble-container';
+
+      // グループチャット時、相手のメッセージにはユーザー名を表示
+      if (!isMine && currentRoomType !== 'direct') {
+        const sender = document.createElement('div');
+        sender.className = 'message-sender show-in-group';
+        sender.textContent = messageUserName || '匿名';
+        bubbleContainer.appendChild(sender);
+      }
+
       // メッセージバブル
       const bubble = document.createElement('div');
       bubble.className = 'message-bubble';
@@ -2004,13 +2034,16 @@
 
       meta.appendChild(time);
       
-      // 自分のメッセージ: メタ情報→バブル（左から右）
-      // 相手のメッセージ: バブル→メタ情報（左から右）
+      // バブルをバブルコンテナに追加
+      bubbleContainer.appendChild(bubble);
+      
+      // 自分のメッセージ: メタ情報→バブルコンテナ（左から右）
+      // 相手のメッセージ: バブルコンテナ→メタ情報（左から右）
       if (isMine) {
         wrapper.appendChild(meta);
-        wrapper.appendChild(bubble);
+        wrapper.appendChild(bubbleContainer);
       } else {
-        wrapper.appendChild(bubble);
+        wrapper.appendChild(bubbleContainer);
         wrapper.appendChild(meta);
       }
 
