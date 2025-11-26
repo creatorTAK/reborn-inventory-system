@@ -2151,6 +2151,12 @@
         checkMentionInput(this);
       });
 
+      // keyupイベント（iOS日本語キーボードで@入力時の即時検知用）
+      messageInput.addEventListener('keyup', function() {
+        // IME変換中でも@が含まれていればチェック
+        checkMentionInput(this);
+      });
+
       // Enterキーで送信（メンション選択中は候補選択）
       messageInput.addEventListener('keydown', function(e) {
         // メンション候補が表示されている場合
@@ -2546,23 +2552,25 @@
       const text = textarea.value;
       const cursorPos = textarea.selectionStart;
 
-      // カーソル位置より前のテキストで最後の@を探す
+      // カーソル位置より前のテキストで最後の@を探す（半角・全角両対応）
       const textBeforeCursor = text.substring(0, cursorPos);
-      const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+      // 全角@を半角@に変換して検索
+      const normalizedText = textBeforeCursor.replace(/＠/g, '@');
+      const lastAtIndex = normalizedText.lastIndexOf('@');
 
       if (lastAtIndex === -1) {
         hideMentionSuggestions();
         return;
       }
 
-      // @の前が空白か先頭かチェック
-      if (lastAtIndex > 0 && !/\s/.test(text[lastAtIndex - 1])) {
+      // @の前が空白か先頭かチェック（正規化前のテキストで確認）
+      if (lastAtIndex > 0 && !/\s/.test(normalizedText[lastAtIndex - 1])) {
         hideMentionSuggestions();
         return;
       }
 
       // @以降のテキスト（スペースが含まれていたら無効）
-      const queryText = textBeforeCursor.substring(lastAtIndex + 1);
+      const queryText = normalizedText.substring(lastAtIndex + 1);
       if (/\s/.test(queryText)) {
         hideMentionSuggestions();
         return;
