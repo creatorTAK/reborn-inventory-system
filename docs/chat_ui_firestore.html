@@ -2742,42 +2742,36 @@
         name.textContent = userName;
         item.appendChild(name);
 
-        // タップ/クリックで選択（iOS対応：touchendを使用）
-        const handleSelect = function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          const clickedUserName = userName; // クロージャで確実にキャプチャ
-          console.log('[Mention] 選択イベント:', e.type, clickedUserName);
+        // タップ/クリックで選択
+        // 重要：クロージャでuserNameをキャプチャ
+        (function(capturedUserName) {
+          item.addEventListener('click', function(e) {
+            console.log('[Mention] click発火:', capturedUserName);
 
-          // focus前にmentionRangeとmentionStartIndexを保存
-          const savedMentionRange = mentionRange ? mentionRange.cloneRange() : null;
-          const savedMentionStartIndex = mentionStartIndex;
-          const savedMentionQuery = mentionQuery;
+            // 選択前にmentionRangeとmentionStartIndexを保存
+            const savedMentionRange = mentionRange ? mentionRange.cloneRange() : null;
+            const savedMentionStartIndex = mentionStartIndex;
+            const savedMentionQuery = mentionQuery;
 
-          // 入力フィールドにフォーカスを戻す
-          const input = document.getElementById('messageInput');
-          input.focus();
+            // メンション候補を先に非表示（クリック後にUIが消えるように）
+            const container = document.getElementById('mentionSuggestions');
+            container.classList.remove('show');
 
-          // 少し遅延させて挿入（iOSでフォーカスが安定するのを待つ）
-          setTimeout(function() {
-            // 保存した値を復元
+            // 挿入処理（setTimeoutなしで即座に実行）
             mentionRange = savedMentionRange;
             mentionStartIndex = savedMentionStartIndex;
             mentionQuery = savedMentionQuery;
 
-            console.log('[Mention] 挿入実行:', clickedUserName, 'mentionRange:', !!mentionRange, 'startIndex:', mentionStartIndex);
-            insertSelectedMentionByName(clickedUserName);
-            justInsertedMention = true;
-          }, 50);
-        };
+            console.log('[Mention] 挿入実行:', capturedUserName, 'mentionRange:', !!mentionRange, 'startIndex:', mentionStartIndex);
 
-        // iOS: touchend、PC: click
-        item.addEventListener('touchend', handleSelect);
-        item.addEventListener('click', function(e) {
-          // touchendで処理済みの場合はスキップ
-          if (e.defaultPrevented) return;
-          handleSelect(e);
-        });
+            const input = document.getElementById('messageInput');
+            insertSelectedMentionByName(capturedUserName);
+            justInsertedMention = true;
+
+            // 挿入後にフォーカスを設定
+            input.focus();
+          });
+        })(userName);
 
         container.appendChild(item);
       });
