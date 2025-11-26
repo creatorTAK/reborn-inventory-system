@@ -2742,12 +2742,14 @@
         name.textContent = userName;
         item.appendChild(name);
 
-        // クリックで選択
-        item.addEventListener('click', function() {
-          selectedMentionIndex = index;
-          insertSelectedMention();
-          justInsertedMention = true; // メンション挿入直後フラグを立てる（改行許可用）
-          console.log('[Mention] クリックでメンション挿入完了、改行フラグON');
+        // クリックで選択（mousedownでフォーカス喪失を防ぐ）
+        item.addEventListener('mousedown', function(e) {
+          e.preventDefault(); // フォーカスが外れるのを防ぐ
+          e.stopPropagation();
+          const clickedUserName = userName; // クロージャで確実にキャプチャ
+          console.log('[Mention] クリック選択:', clickedUserName);
+          insertSelectedMentionByName(clickedUserName);
+          justInsertedMention = true;
         });
 
         container.appendChild(item);
@@ -2788,15 +2790,28 @@
       renderMentionSuggestions();
     }
 
+    // ユーザー名を直接指定してメンションを挿入（クリック用）
+    function insertSelectedMentionByName(userName) {
+      insertMentionCore(userName);
+    }
+
     // 選択されたメンションを挿入（contenteditable対応 - Range API版）
     function insertSelectedMention() {
       if (filteredMentionUsers.length === 0) return;
+      const userName = filteredMentionUsers[selectedMentionIndex];
+      insertMentionCore(userName);
+    }
+
+    // メンション挿入のコア処理
+    function insertMentionCore(userName) {
+      if (!userName) return;
 
       // IME変換中は挿入を延期
       if (isComposing) {
+        const capturedUserName = userName; // クロージャでキャプチャ
         const retryInsert = function() {
           if (!isComposing) {
-            insertSelectedMention();
+            insertMentionCore(capturedUserName);
           } else {
             setTimeout(retryInsert, 20);
           }
@@ -2805,7 +2820,6 @@
         return;
       }
 
-      const userName = filteredMentionUsers[selectedMentionIndex];
       const input = document.getElementById('messageInput');
       const sel = window.getSelection();
 
