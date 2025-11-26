@@ -723,7 +723,6 @@
       border: 1px solid #cbd5e0;
       border-radius: 20px;
       font-size: 1rem;
-      resize: none;
       min-height: 44px;
       max-height: 120px;
       background-color: #f5f5f5;
@@ -732,10 +731,25 @@
       -webkit-user-select: text;
       user-select: text;
       -webkit-touch-callout: default;
+      /* contenteditable用 */
+      overflow-y: auto;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      line-height: 1.4;
     }
     #messageInput:focus {
       outline: none;
       border-color: var(--reborn-primary);
+    }
+    #messageInput:empty::before {
+      content: attr(data-placeholder);
+      color: #9ca3af;
+      pointer-events: none;
+    }
+    /* 入力フィールド内のメンションハイライト */
+    #messageInput .mention-in-input {
+      color: var(--reborn-primary);
+      font-weight: 500;
     }
 
     /* メンション候補リスト */
@@ -808,7 +822,8 @@
       font-weight: 500;
     }
     .message-item-mine .mention-highlight {
-      color: #bfefff;
+      color: #1565c0; /* 濃い青（LINE風） */
+      font-weight: 600;
     }
 
     .send-button {
@@ -1678,11 +1693,12 @@
         </svg>
       </button>
 
-      <textarea
+      <div
         id="messageInput"
-        placeholder="メッセージを入力..."
-        rows="1"
-        maxlength="1000"></textarea>
+        contenteditable="true"
+        data-placeholder="メッセージを入力..."
+        role="textbox"
+        aria-multiline="true"></div>
 
       <button class="send-button" id="sendButton" onclick="sendMessage()">
         ➤
@@ -2042,15 +2058,17 @@
           .getUserListForUI();
       }
 
-      // メッセージ入力の自動リサイズ
+      // メッセージ入力（contenteditable）
       const messageInput = document.getElementById('messageInput');
+      
+      // 入力イベント
       messageInput.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         // メンション挿入直後フラグをリセット（他の文字入力があった場合）
         justInsertedMention = false;
         // メンション検知
-        checkMentionInput(this);
+        checkMentionInputContentEditable(this);
+        // 入力内容のメンションをハイライト
+        highlightMentionsInInput(this);
       });
 
       // Enterキーで送信（メンション選択中は候補選択）
@@ -2069,6 +2087,7 @@
             e.preventDefault();
             insertSelectedMention();
             justInsertedMention = true; // メンション挿入直後フラグを立てる
+            console.log('[Mention] メンション挿入完了、改行フラグON');
             return;
           } else if (e.key === 'Escape') {
             e.preventDefault();
@@ -2077,14 +2096,22 @@
           }
         }
 
-        // メンション挿入直後のEnterは改行として処理（送信しない）
-        if (e.key === 'Enter' && justInsertedMention) {
-          justInsertedMention = false; // フラグをリセット
-          // デフォルトの改行動作を許可（preventDefaultしない）
-          return;
-        }
-
-        if (e.key === 'Enter' && !e.shiftKey) {
+        // Enterキーの処理
+        if (e.key === 'Enter') {
+          // メンション挿入直後のEnterは改行として処理（送信しない）
+          if (justInsertedMention) {
+            console.log('[Mention] メンション直後のEnter → 改行として処理');
+            justInsertedMention = false; // フラグをリセット
+            // デフォルトの改行動作を許可（preventDefaultしない）
+            return;
+          }
+          
+          // Shift+Enterは改行
+          if (e.shiftKey) {
+            return; // デフォルト動作（改行）を許可
+          }
+          
+          // 通常のEnterは送信
           e.preventDefault();
           sendMessage();
         }
@@ -2393,7 +2420,7 @@
     let filteredMentionUsers = [];
     let justInsertedMention = false; // メンション挿入直後フラグ（改行許可用）
 
-    // メンション入力を検知
+    // メンション入力を検知（textarea用 - 後方互換性）
     function checkMentionInput(input) {
       const text = input.value;
       const cursorPos = input.selectionStart;
@@ -2425,6 +2452,105 @@
 
       // メンバーをフィルタリング
       filterAndShowMentionSuggestions();
+    }
+
+    // contenteditable用：カーソル位置を取得
+    function getCaretPosition(element) {
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return 0;
+      
+      const range = selection.getRangeAt(0);
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(element);
+      preCaretRange.setEnd(range.endContainer, range.endOffset);
+      return preCaretRange.toString().length;
+    }
+
+    // contenteditable用：カーソル位置を設定
+    function setCaretPosition(element, position) {
+      const range = document.createRange();
+      const selection = window.getSelection();
+      
+      let currentPos = 0;
+      let found = false;
+      
+      function traverseNodes(node) {
+        if (found) return;
+        
+        if (node.nodeType === Node.TEXT_NODE) {
+          const nodeLength = node.textContent.length;
+          if (currentPos + nodeLength >= position) {
+            range.setStart(node, position - currentPos);
+            range.collapse(true);
+            found = true;
+            return;
+          }
+          currentPos += nodeLength;
+        } else {
+          for (const child of node.childNodes) {
+            traverseNodes(child);
+            if (found) return;
+          }
+        }
+      }
+      
+      traverseNodes(element);
+      
+      if (!found) {
+        // 位置が見つからない場合は末尾に設定
+        range.selectNodeContents(element);
+        range.collapse(false);
+      }
+      
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    // contenteditable用：プレーンテキストを取得
+    function getPlainText(element) {
+      return element.textContent || '';
+    }
+
+    // contenteditable用：メンション入力を検知
+    function checkMentionInputContentEditable(element) {
+      const text = getPlainText(element);
+      const cursorPos = getCaretPosition(element);
+
+      // カーソル位置より前のテキストで最後の@を探す
+      const textBeforeCursor = text.substring(0, cursorPos);
+      const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+      if (lastAtIndex === -1) {
+        hideMentionSuggestions();
+        return;
+      }
+
+      // @の前が空白か先頭かチェック
+      if (lastAtIndex > 0 && !/\s/.test(text[lastAtIndex - 1])) {
+        hideMentionSuggestions();
+        return;
+      }
+
+      // @以降のテキスト（スペースが含まれていたら無効）
+      const queryText = textBeforeCursor.substring(lastAtIndex + 1);
+      if (/\s/.test(queryText)) {
+        hideMentionSuggestions();
+        return;
+      }
+
+      mentionStartIndex = lastAtIndex;
+      mentionQuery = queryText.toLowerCase();
+
+      // メンバーをフィルタリング
+      filterAndShowMentionSuggestions();
+    }
+
+    // 入力フィールド内のメンションをハイライト表示（ハイライト処理は送信後のみに変更）
+    let isHighlighting = false;
+    function highlightMentionsInInput(element) {
+      // 注意：リアルタイムハイライトは複雑なため、
+      // 現在はメンション選択時のみハイライトを適用
+      // 詳細なリアルタイムハイライトは将来の改善として保留
     }
 
     // メンション候補をフィルタリングして表示
@@ -2533,23 +2659,33 @@
       renderMentionSuggestions();
     }
 
-    // 選択されたメンションを挿入
+    // 選択されたメンションを挿入（contenteditable対応）
     function insertSelectedMention() {
       if (filteredMentionUsers.length === 0 || mentionStartIndex === -1) return;
 
       const userName = filteredMentionUsers[selectedMentionIndex];
       const input = document.getElementById('messageInput');
-      const text = input.value;
+      const text = getPlainText(input);
+      const cursorPos = getCaretPosition(input);
 
       // @以降を選択したユーザー名に置き換え
       const beforeMention = text.substring(0, mentionStartIndex);
-      const afterCursor = text.substring(input.selectionStart);
+      const afterCursor = text.substring(cursorPos);
 
-      input.value = beforeMention + '@' + userName + ' ' + afterCursor;
+      // メンションをハイライト付きで挿入
+      const mentionText = '@' + userName;
+      const newText = beforeMention + mentionText + ' ' + afterCursor;
+      
+      // HTMLとしてメンションをハイライト表示
+      const escapedBefore = escapeHtml(beforeMention);
+      const escapedAfter = escapeHtml(afterCursor);
+      input.innerHTML = escapedBefore + 
+        '<span class="mention-in-input">' + escapeHtml(mentionText) + '</span>' + 
+        ' ' + escapedAfter;
 
       // カーソル位置を調整
       const newCursorPos = mentionStartIndex + userName.length + 2; // @, userName, スペース
-      input.setSelectionRange(newCursorPos, newCursorPos);
+      setCaretPosition(input, newCursorPos);
       input.focus();
 
       hideMentionSuggestions();
@@ -3175,7 +3311,7 @@
       console.log('[sendMessage] 関数呼び出し開始');
 
       const input = document.getElementById('messageInput');
-      const message = input.value.trim();
+      const message = getPlainText(input).trim();
 
       console.log('[sendMessage] message:', message);
       console.log('[sendMessage] selectedImageFiles:', selectedImageFiles.length, '枚');
@@ -3224,8 +3360,7 @@
         updateImagePreview();
 
         // 入力欄クリア
-        input.value = '';
-        input.style.height = 'auto';
+        input.innerHTML = '';
         sendButton.disabled = false;
 
         return;
@@ -3275,8 +3410,7 @@
         console.log('[GAS版] 未読カウント処理スキップ（PWA版使用のため）');
 
         // 入力欄クリア
-        input.value = '';
-        input.style.height = 'auto';
+        input.innerHTML = '';
 
       } catch (error) {
         console.error('[Firestore] 送信エラー:', error);
