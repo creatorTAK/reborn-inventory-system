@@ -2796,20 +2796,19 @@
             
             const input = document.getElementById('messageInput');
             
-            // フォーカスを維持したままIMEをキャンセルする試み
-            // inputModeを一時的に変更してIME状態をリセット
-            const originalInputMode = input.getAttribute('inputmode') || '';
-            input.setAttribute('inputmode', 'none');
+            // キーボードのクリアボタン（✖️）と同じ効果を再現
+            // blur()でIME変換をキャンセルしてから挿入を実行
+            input.blur();
             
+            // blur後に少し待ってから挿入処理を実行
             setTimeout(function() {
-              input.setAttribute('inputmode', originalInputMode || 'text');
-              input.focus();
+              processMentionSelection(capturedUserName);
               
-              // 挿入処理を実行
+              // 挿入後にフォーカスを戻す
               setTimeout(function() {
-                processMentionSelection(capturedUserName);
-              }, 10);
-            }, 10);
+                input.focus();
+              }, 50);
+            }, 100);
           }, { passive: false });
 
           // PC: click（touchstartで処理済みならスキップ）
@@ -2984,16 +2983,14 @@
       mentionSpan.setAttribute('contenteditable', 'false');
       input.appendChild(mentionSpan);
 
-      // iOS対策: contenteditable=falseのspan直後にカーソルを置くため
-      // ゼロ幅スペース + 通常スペース + 残りテキストを追加
-      // ゼロ幅スペースがあることでiOSでもカーソルが正しく配置される
-      const spaceNode = document.createTextNode('\u200B ' + afterMention);
+      // 半角スペース + 残りテキスト
+      const spaceNode = document.createTextNode(' ' + afterMention);
       input.appendChild(spaceNode);
 
-      // カーソルをゼロ幅スペースの後（通常スペースの前）に移動
+      // カーソルをスペースの後に移動
       const sel = window.getSelection();
       const range = document.createRange();
-      range.setStart(spaceNode, 1); // ゼロ幅スペースの後
+      range.setStart(spaceNode, 1); // スペースの後
       range.collapse(true);
       sel.removeAllRanges();
       sel.addRange(range);
