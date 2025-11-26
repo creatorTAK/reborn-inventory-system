@@ -2742,14 +2742,41 @@
         name.textContent = userName;
         item.appendChild(name);
 
-        // クリックで選択（mousedownでフォーカス喪失を防ぐ）
-        item.addEventListener('mousedown', function(e) {
-          e.preventDefault(); // フォーカスが外れるのを防ぐ
+        // タップ/クリックで選択（iOS対応：touchendを使用）
+        const handleSelect = function(e) {
+          e.preventDefault();
           e.stopPropagation();
           const clickedUserName = userName; // クロージャで確実にキャプチャ
-          console.log('[Mention] クリック選択:', clickedUserName);
-          insertSelectedMentionByName(clickedUserName);
-          justInsertedMention = true;
+          console.log('[Mention] 選択イベント:', e.type, clickedUserName);
+
+          // focus前にmentionRangeとmentionStartIndexを保存
+          const savedMentionRange = mentionRange ? mentionRange.cloneRange() : null;
+          const savedMentionStartIndex = mentionStartIndex;
+          const savedMentionQuery = mentionQuery;
+
+          // 入力フィールドにフォーカスを戻す
+          const input = document.getElementById('messageInput');
+          input.focus();
+
+          // 少し遅延させて挿入（iOSでフォーカスが安定するのを待つ）
+          setTimeout(function() {
+            // 保存した値を復元
+            mentionRange = savedMentionRange;
+            mentionStartIndex = savedMentionStartIndex;
+            mentionQuery = savedMentionQuery;
+
+            console.log('[Mention] 挿入実行:', clickedUserName, 'mentionRange:', !!mentionRange, 'startIndex:', mentionStartIndex);
+            insertSelectedMentionByName(clickedUserName);
+            justInsertedMention = true;
+          }, 50);
+        };
+
+        // iOS: touchend、PC: click
+        item.addEventListener('touchend', handleSelect);
+        item.addEventListener('click', function(e) {
+          // touchendで処理済みの場合はスキップ
+          if (e.defaultPrevented) return;
+          handleSelect(e);
         });
 
         container.appendChild(item);
@@ -2889,6 +2916,7 @@
 
     // フォールバック：従来方式（mentionRangeがない場合）
     function insertSelectedMentionFallback(userName, input) {
+      console.log('[Mention] フォールバック処理実行:', userName);
       const text = getPlainText(input);
       const mentionQueryLength = 1 + mentionQuery.length;
 
@@ -2897,14 +2925,30 @@
 
       const mentionText = '@' + userName;
 
-      // シンプルにtextContentで置換（ハイライトなし）
-      input.textContent = beforeMention + mentionText + ' ' + afterMention;
+      // DOM構築でハイライト付きで挿入
+      input.innerHTML = '';
 
-      // カーソルを末尾に移動
+      if (beforeMention) {
+        input.appendChild(document.createTextNode(beforeMention));
+      }
+
+      // メンションspan（青色ハイライト）
+      const mentionSpan = document.createElement('span');
+      mentionSpan.className = 'mention-in-input';
+      mentionSpan.textContent = mentionText;
+      mentionSpan.setAttribute('data-mention', userName);
+      mentionSpan.setAttribute('contenteditable', 'false');
+      input.appendChild(mentionSpan);
+
+      // スペース + 残りテキスト
+      const spaceNode = document.createTextNode(' ' + afterMention);
+      input.appendChild(spaceNode);
+
+      // カーソルをスペースの後に移動
       const sel = window.getSelection();
       const range = document.createRange();
-      range.selectNodeContents(input);
-      range.collapse(false);
+      range.setStart(spaceNode, 1); // スペースの後
+      range.collapse(true);
       sel.removeAllRanges();
       sel.addRange(range);
 
