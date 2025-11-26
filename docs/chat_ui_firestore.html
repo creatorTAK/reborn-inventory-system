@@ -770,8 +770,8 @@
     }
     .context-menu-items {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 4px;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 2px;
     }
     .context-menu-item {
       display: flex;
@@ -816,6 +816,111 @@
     }
     #contextMenuOverlay.active {
       display: block;
+    }
+
+    /* 転送先選択モーダル */
+    .forward-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 4000;
+      display: none;
+    }
+    .forward-modal-overlay.active {
+      display: block;
+    }
+    .forward-modal {
+      position: fixed;
+      bottom: -100%;
+      left: 0;
+      right: 0;
+      max-height: 70vh;
+      background: white;
+      border-radius: 16px 16px 0 0;
+      z-index: 4001;
+      transition: bottom 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    .forward-modal.active {
+      bottom: 0;
+    }
+    .forward-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      border-bottom: 1px solid #e5e7eb;
+      font-weight: 600;
+      font-size: 16px;
+    }
+    .forward-modal-close {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: #6b7280;
+    }
+    .forward-modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .forward-room-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .forward-room-item:hover {
+      background: #f3f4f6;
+    }
+    .forward-room-item:active {
+      background: #e5e7eb;
+    }
+    .forward-room-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 12px;
+      color: white;
+      font-size: 18px;
+    }
+    .forward-room-info {
+      flex: 1;
+    }
+    .forward-room-name {
+      font-weight: 500;
+      font-size: 15px;
+      color: #1f2937;
+    }
+    .forward-room-members {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 2px;
+    }
+    .forward-loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 32px;
+      color: #9ca3af;
+    }
+    .forward-loading .spin {
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
 
     /* アコーディオン収納用のトランジション */
@@ -1062,14 +1167,32 @@
         <i class="bi bi-reply"></i>
         <span>リプライ</span>
       </button>
+      <button class="context-menu-item" id="contextMenuForward">
+        <i class="bi bi-box-arrow-up-right"></i>
+        <span>転送</span>
+      </button>
       <button class="context-menu-item" id="contextMenuDelete">
         <i class="bi bi-trash"></i>
         <span>削除</span>
       </button>
       <button class="context-menu-item danger" id="contextMenuUnsend" style="display: none;">
-        <i class="bi bi-x-circle"></i>
-        <span>取り消し</span>
+        <i class="bi bi-arrow-counterclockwise"></i>
+        <span>送信取消</span>
       </button>
+    </div>
+  </div>
+
+  <!-- 転送先選択モーダル -->
+  <div id="forwardModalOverlay" class="forward-modal-overlay" onclick="closeForwardModal()"></div>
+  <div id="forwardModal" class="forward-modal">
+    <div class="forward-modal-header">
+      <span>転送先を選択</span>
+      <button class="forward-modal-close" onclick="closeForwardModal()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div class="forward-modal-body" id="forwardRoomList">
+      <!-- ルーム一覧がここに動的に追加される -->
     </div>
   </div>
 
@@ -1727,7 +1850,7 @@
 
       // 長押しイベントリスナーを追加
       console.log('[Message] Adding long press listener for message:', msg.id);
-      addLongPressListener(item, msg.id, msg.text || '', isMine);
+      addLongPressListener(item, msg.id, msg.text || '', isMine, msg.fileUrl || null, msg.fileName || null, msg.senderName || '');
 
       container.appendChild(item);
     }
@@ -2484,18 +2607,24 @@
       messageId: null,
       messageText: null,
       isMine: false,
-      item: null
+      item: null,
+      fileUrl: null,
+      fileName: null,
+      senderName: null
     };
     let longPressTimer = null;
     const LONG_PRESS_DURATION = 500; // 500ms
 
     // 長押しメニューを開く（メッセージの近くに表示）
-    function openContextMenu(messageId, messageText, targetElement, isMine = false) {
+    function openContextMenu(messageId, messageText, targetElement, isMine = false, fileUrl = null, fileName = null, senderName = null) {
       console.log('[ContextMenu] Opening menu for message:', messageId, 'isMine:', isMine);
       contextMenuData.messageId = messageId;
       contextMenuData.messageText = messageText;
       contextMenuData.isMine = isMine;
       contextMenuData.item = targetElement;
+      contextMenuData.fileUrl = fileUrl;
+      contextMenuData.fileName = fileName;
+      contextMenuData.senderName = senderName;
 
       // 送信取り消しボタンの表示/非表示（自分のメッセージのみ表示）
       const unsendBtn = document.getElementById('contextMenuUnsend');
@@ -2566,7 +2695,7 @@
         menu.style.opacity = '0';
       }, 200); // transitionの時間（0.2s）後に実行
 
-      contextMenuData = { messageId: null, messageText: null, item: null };
+      contextMenuData = { messageId: null, messageText: null, item: null, fileUrl: null, fileName: null, senderName: null };
     };
 
     // コンテキストメニューボタンのイベントリスナー設定
@@ -2580,6 +2709,11 @@
       e.preventDefault();
       e.stopPropagation();
       replyMessage();
+    });
+    document.getElementById('contextMenuForward').addEventListener('touchend', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      forwardMessage();
     });
     document.getElementById('contextMenuDelete').addEventListener('touchend', function(e) {
       e.preventDefault();
@@ -2602,6 +2736,11 @@
       e.preventDefault();
       e.stopPropagation();
       replyMessage();
+    });
+    document.getElementById('contextMenuForward').addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      forwardMessage();
     });
     document.getElementById('contextMenuDelete').addEventListener('click', function(e) {
       e.preventDefault();
@@ -2708,6 +2847,136 @@
       }
     };
 
+    // 転送機能
+    let forwardMessageData = null;
+
+    window.forwardMessage = async function() {
+      if (!contextMenuData.messageText && !contextMenuData.fileUrl) return;
+
+      // データを保存
+      forwardMessageData = {
+        text: contextMenuData.messageText,
+        fileUrl: contextMenuData.fileUrl || null,
+        fileName: contextMenuData.fileName || null,
+        originalSender: contextMenuData.senderName || ''
+      };
+
+      closeContextMenu();
+      openForwardModal();
+    };
+
+    async function openForwardModal() {
+      const overlay = document.getElementById('forwardModalOverlay');
+      const modal = document.getElementById('forwardModal');
+      const roomList = document.getElementById('forwardRoomList');
+
+      // ローディング表示
+      roomList.innerHTML = '<div class="forward-loading"><i class="bi bi-arrow-repeat spin"></i> 読み込み中...</div>';
+
+      overlay.classList.add('active');
+      setTimeout(() => modal.classList.add('active'), 10);
+
+      try {
+        // 全ルームを取得
+        const roomsSnapshot = await getDocs(collection(db, 'rooms'));
+        const rooms = [];
+
+        roomsSnapshot.forEach(roomDoc => {
+          // 現在のルームは除外
+          if (roomDoc.id === currentRoomId) return;
+
+          const data = roomDoc.data();
+          rooms.push({
+            id: roomDoc.id,
+            name: data.name || 'チャットルーム',
+            members: data.members || []
+          });
+        });
+
+        // ルーム一覧を表示
+        if (rooms.length === 0) {
+          roomList.innerHTML = '<div class="forward-loading">転送先がありません</div>';
+          return;
+        }
+
+        roomList.innerHTML = rooms.map(room => `
+          <div class="forward-room-item" onclick="executeForward('${room.id}', '${room.name.replace(/'/g, "\\'")}')">
+            <div class="forward-room-icon">
+              <i class="bi bi-chat-dots"></i>
+            </div>
+            <div class="forward-room-info">
+              <div class="forward-room-name">${room.name}</div>
+              <div class="forward-room-members">${room.members.length}人のメンバー</div>
+            </div>
+          </div>
+        `).join('');
+
+      } catch (error) {
+        console.error('[Forward] ルーム取得エラー:', error);
+        roomList.innerHTML = '<div class="forward-loading">エラーが発生しました</div>';
+      }
+    }
+
+    window.closeForwardModal = function() {
+      const overlay = document.getElementById('forwardModalOverlay');
+      const modal = document.getElementById('forwardModal');
+
+      modal.classList.remove('active');
+      setTimeout(() => {
+        overlay.classList.remove('active');
+      }, 300);
+    };
+
+    window.executeForward = async function(targetRoomId, targetRoomName) {
+      if (!forwardMessageData) return;
+
+      closeForwardModal();
+
+      try {
+        console.log('[Forward] 転送開始:', targetRoomId);
+
+        // 転送メッセージを作成
+        const forwardedText = forwardMessageData.text
+          ? `[転送]\n${forwardMessageData.text}`
+          : '[転送] 画像';
+
+        const messageData = {
+          text: forwardedText,
+          sender: currentUserEmail,
+          senderName: currentUserName,
+          timestamp: serverTimestamp(),
+          forwarded: true,
+          originalSender: forwardMessageData.originalSender
+        };
+
+        // 画像の場合はfileUrlも追加
+        if (forwardMessageData.fileUrl) {
+          messageData.fileUrl = forwardMessageData.fileUrl;
+          messageData.fileName = forwardMessageData.fileName;
+          messageData.type = 'image';
+        }
+
+        // 転送先にメッセージを追加
+        await addDoc(collection(db, `rooms/${targetRoomId}/messages`), messageData);
+
+        // 転送先のlastMessageを更新
+        const roomRef = doc(db, 'rooms', targetRoomId);
+        await updateDoc(roomRef, {
+          lastMessage: forwardedText.substring(0, 50),
+          lastMessageAt: serverTimestamp()
+        });
+
+        console.log('[Forward] 転送完了');
+        alert(`「${targetRoomName}」に転送しました`);
+
+      } catch (error) {
+        console.error('[Forward] 転送エラー:', error);
+        alert('転送に失敗しました: ' + error.message);
+      }
+
+      forwardMessageData = null;
+    };
+
     // 削除機能（メニューから）→ 選択モード開始に変更（現在は未使用）
     window.deleteMessageFromMenu = function() {
       if (!contextMenuData.messageId) return;
@@ -2738,7 +3007,7 @@
     };
 
     // メッセージアイテムに長押しイベントを追加
-    function addLongPressListener(item, messageId, messageText, isMine = false) {
+    function addLongPressListener(item, messageId, messageText, isMine = false, fileUrl = null, fileName = null, senderName = null) {
       let touchStartTime = 0;
       let touchMoved = false;
 
@@ -2752,7 +3021,7 @@
           console.log('[LongPress] Timer fired, touchMoved:', touchMoved);
           if (!touchMoved) {
             console.log('[LongPress] Opening context menu, isMine:', isMine);
-            openContextMenu(messageId, messageText, item, isMine);
+            openContextMenu(messageId, messageText, item, isMine, fileUrl, fileName, senderName);
             // 振動フィードバック（対応ブラウザのみ）
             if ('vibrate' in navigator) {
               navigator.vibrate(50);
@@ -2790,7 +3059,7 @@
       // PC用: 右クリック
       item.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        openContextMenu(messageId, messageText, item, isMine);
+        openContextMenu(messageId, messageText, item, isMine, fileUrl, fileName, senderName);
       });
     }
 
