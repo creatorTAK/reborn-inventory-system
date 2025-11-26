@@ -426,6 +426,14 @@
       opacity: 0.8;
       padding: 0 4px;
     }
+    .message-read-status {
+      font-size: 0.65rem;
+      color: #718096;
+      opacity: 0.9;
+      padding: 0 4px;
+      display: block;
+      text-align: right;
+    }
     .message-text {
       white-space: pre-wrap;
       word-wrap: break-word;
@@ -1205,7 +1213,7 @@
   <!-- Firebase SDK: 直接CDNから読み込み（外部JSファイル不要） -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, addDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc, getDoc, setDoc, increment, getDocs, arrayUnion, collectionGroup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, addDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc, getDoc, setDoc, increment, getDocs, arrayUnion, collectionGroup, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
     import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
     // Firebase設定
@@ -1238,6 +1246,8 @@
     let currentUserEmail = '';
     let currentRoomId = '';
     let currentRoomName = '';
+    let currentRoomType = '';      // ルームタイプ（'direct' or 'group'）
+    let currentRoomMemberCount = 0; // ルームのメンバー数
     let usersCache = []; // ユーザー一覧キャッシュ（アイコン表示用）
 
     // PWA版：URLパラメータから取得（GASテンプレート変数は使用しない）
@@ -1351,6 +1361,11 @@
           }
 
           const roomIcon = roomData.icon || '💬';
+
+          // ルームタイプとメンバー数を保存（既読機能用）
+          currentRoomType = roomData.type || 'group';
+          currentRoomMemberCount = (roomData.members && Array.isArray(roomData.members)) ? roomData.members.length : 0;
+          console.log('[Room] ルームタイプ:', currentRoomType, 'メンバー数:', currentRoomMemberCount);
 
           // ヘッダーのルーム名を更新（個別チャットは相手の名前のみ、それ以外はアイコン付き）
           if (roomData.type === 'direct') {
@@ -1623,6 +1638,38 @@
       return (user && user.userIconUrl) ? user.userIconUrl : null;
     }
 
+    // 既読状態を更新（メッセージを閲覧したことをFirestoreに記録）
+    async function markMessagesAsRead(messageIds) {
+      if (!currentUserEmail || !currentRoomId || messageIds.length === 0) return;
+
+      console.log('[既読] 既読更新開始:', messageIds.length, '件');
+
+      try {
+        // バッチ更新で効率化
+        const batch = writeBatch(db);
+
+        for (const msgId of messageIds) {
+          const msgRef = doc(db, `rooms/${currentRoomId}/messages/${msgId}`);
+          // arrayUnion で重複なく追加
+          batch.update(msgRef, {
+            readBy: arrayUnion(currentUserEmail)
+          });
+        }
+
+        await batch.commit();
+        console.log('[既読] 既読更新完了:', messageIds.length, '件');
+      } catch (error) {
+        console.error('[既読] 既読更新エラー:', error);
+      }
+    }
+
+    // 既読数を計算（自分を除く）
+    function getReadCount(readBy) {
+      if (!readBy || !Array.isArray(readBy)) return 0;
+      // 自分を除いた既読者数
+      return readBy.filter(email => email !== currentUserEmail).length;
+    }
+
     // Firestoreメッセージをリアルタイムリスニング
     function startListening() {
       const q = query(
@@ -1639,8 +1686,18 @@
 
         // 新しい順で取得したので、逆順で表示
         const messages = [];
+        const unreadMessageIds = []; // 未読メッセージIDを収集
         snapshot.forEach((doc) => {
-          messages.unshift({ id: doc.id, ...doc.data() });
+          const msgData = { id: doc.id, ...doc.data() };
+          messages.unshift(msgData);
+          
+          // 自分以外のメッセージで、まだ自分が既読にしていないもの
+          if (msgData.userEmail !== currentUserEmail) {
+            const readBy = msgData.readBy || [];
+            if (!readBy.includes(currentUserEmail)) {
+              unreadMessageIds.push(doc.id);
+            }
+          }
         });
 
         messages.forEach((msg) => {
@@ -1649,6 +1706,11 @@
 
         // 最下部にスクロール
         container.scrollTop = container.scrollHeight;
+
+        // 未読メッセージがあれば既読にする
+        if (unreadMessageIds.length > 0) {
+          markMessagesAsRead(unreadMessageIds);
+        }
       }, (error) => {
         console.error('[Firestore] リスニングエラー:', error);
         alert('メッセージの受信に失敗しました: ' + error.message);
@@ -1851,6 +1913,23 @@
 
       wrapper.appendChild(bubble);
       wrapper.appendChild(time);
+
+      // 既読表示（自分のメッセージのみ）
+      if (isMine && msg.readBy) {
+        const readCount = getReadCount(msg.readBy);
+        if (readCount > 0) {
+          const readStatus = document.createElement('span');
+          readStatus.className = 'message-read-status';
+          // ダイレクトチャットは「既読」、グループは「既読 N」
+          if (currentRoomType === 'direct') {
+            readStatus.textContent = '既読';
+          } else {
+            readStatus.textContent = `既読 ${readCount}`;
+          }
+          wrapper.appendChild(readStatus);
+        }
+      }
+
       content.appendChild(wrapper);
       item.appendChild(content);
 
