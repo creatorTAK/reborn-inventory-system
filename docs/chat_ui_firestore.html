@@ -2105,24 +2105,23 @@
 
       // 最大5人まで表示
       const displayMembers = currentRoomMembers.slice(0, 5);
-      displayMembers.forEach(email => {
-        // usersCache内のフィールド名: id(=email), userName, userIconUrl
-        const user = usersCache.find(u => u.id === email);
-        const name = user ? user.userName : email.split('@')[0];
+      displayMembers.forEach(memberName => {
+        // currentRoomMembersには名前が入っているので、userNameでマッチング
+        const user = usersCache.find(u => u.userName === memberName);
         const iconUrl = user ? user.userIconUrl : null;
 
-        console.log('[MemberIcon] email:', email, 'user:', user, 'name:', name, 'iconUrl:', iconUrl);
+        console.log('[MemberIcon] memberName:', memberName, 'user:', user, 'iconUrl:', iconUrl);
 
         if (iconUrl) {
           const img = document.createElement('img');
           img.className = 'member-icon';
           img.src = iconUrl;
-          img.alt = name;
+          img.alt = memberName;
           iconsContainer.appendChild(img);
         } else {
           const placeholder = document.createElement('div');
           placeholder.className = 'member-icon-placeholder';
-          placeholder.textContent = (name || '?').charAt(0);
+          placeholder.textContent = (memberName || '?').charAt(0);
           iconsContainer.appendChild(placeholder);
         }
       });
@@ -2162,14 +2161,13 @@
     function renderMemberList() {
       const container = document.getElementById('memberList');
       const countEl = document.getElementById('memberCount');
-      
+
       countEl.textContent = `メンバー ${currentRoomMembers.length}`;
       container.innerHTML = '';
-      
-      currentRoomMembers.forEach(email => {
-        // usersCache内のフィールド名: id(=email), userName, userIconUrl
-        const user = usersCache.find(u => u.id === email);
-        const name = user ? user.userName : email.split('@')[0];
+
+      currentRoomMembers.forEach(memberName => {
+        // currentRoomMembersには名前が入っているので、userNameでマッチング
+        const user = usersCache.find(u => u.userName === memberName);
         const iconUrl = user ? user.userIconUrl : null;
 
         const item = document.createElement('div');
@@ -2179,28 +2177,28 @@
           const img = document.createElement('img');
           img.className = 'avatar';
           img.src = iconUrl;
-          img.alt = name;
+          img.alt = memberName;
           item.appendChild(img);
         } else {
           const placeholder = document.createElement('div');
           placeholder.className = 'avatar-placeholder';
-          placeholder.textContent = (name || '?').charAt(0);
+          placeholder.textContent = (memberName || '?').charAt(0);
           item.appendChild(placeholder);
         }
 
         const info = document.createElement('div');
         info.className = 'info';
-        info.innerHTML = `<div class="name">${name}</div><div class="email">${email}</div>`;
+        info.innerHTML = `<div class="name">${memberName}</div>`;
         item.appendChild(info);
 
         // 削除ボタン（編集モード時のみ表示、自分以外のみ削除可能）
-        if (email !== currentUserEmail) {
+        if (memberName !== currentUserName) {
           const deleteBtn = document.createElement('button');
           deleteBtn.className = 'delete-btn';
           deleteBtn.textContent = '−';
           deleteBtn.onclick = (e) => {
             e.stopPropagation();
-            removeMember(email, name);
+            removeMember(memberName);
           };
           item.appendChild(deleteBtn);
         }
@@ -2228,11 +2226,10 @@
       container.innerHTML = '';
 
       usersCache.forEach(user => {
-        // usersCache内のフィールド名: id(=email), userName, userIconUrl
-        const userEmail = user.id;
-        const userName = user.userName || userEmail.split('@')[0];
+        // currentRoomMembersには名前が入っているので、userNameでマッチング
+        const userName = user.userName;
         const userIconUrl = user.userIconUrl;
-        const isMember = currentRoomMembers.includes(userEmail);
+        const isMember = currentRoomMembers.includes(userName);
 
         const item = document.createElement('div');
         item.className = 'invite-user-item' + (isMember ? ' disabled' : '');
@@ -2261,76 +2258,76 @@
         item.appendChild(info);
 
         if (!isMember) {
-          item.onclick = () => addMember(userEmail, userName);
+          item.onclick = () => addMember(userName);
         }
 
         container.appendChild(item);
       });
     }
 
-    // メンバーを追加
-    async function addMember(email, name) {
-      if (!currentRoomId || currentRoomMembers.includes(email)) return;
-      
+    // メンバーを追加（名前ベース）
+    async function addMember(memberName) {
+      if (!currentRoomId || currentRoomMembers.includes(memberName)) return;
+
       try {
         const roomRef = doc(db, 'rooms', currentRoomId);
         await updateDoc(roomRef, {
-          members: arrayUnion(email)
+          members: arrayUnion(memberName)
         });
-        
+
         // システムメッセージを送信
         await addDoc(collection(db, `rooms/${currentRoomId}/messages`), {
-          text: `${currentUserName} が ${name} をグループに追加しました。`,
+          text: `${currentUserName} が ${memberName} をグループに追加しました。`,
           userName: 'システム',
           userEmail: 'system@furira.com',
           timestamp: serverTimestamp(),
           type: 'system'
         });
-        
+
         // ローカル状態を更新
-        currentRoomMembers.push(email);
+        currentRoomMembers.push(memberName);
         currentRoomMemberCount = currentRoomMembers.length;
-        
+
         closeInviteModal();
         renderMemberList();
         updateMemberIconsBar();
-        
-        console.log('[Member] メンバー追加完了:', email);
+
+        console.log('[Member] メンバー追加完了:', memberName);
       } catch (error) {
         console.error('[Member] メンバー追加エラー:', error);
         alert('メンバーの追加に失敗しました');
       }
     }
 
-    // メンバーを削除
-    async function removeMember(email, name) {
-      if (!currentRoomId || !currentRoomMembers.includes(email)) return;
-      
-      if (!confirm(`${name} をグループから削除しますか？`)) return;
-      
+    // メンバーを削除（名前ベース）
+    async function removeMember(memberName) {
+      if (!currentRoomId || !currentRoomMembers.includes(memberName)) return;
+
+      if (!confirm(`${memberName} をグループから削除しますか？`)) return;
+
       try {
         const roomRef = doc(db, 'rooms', currentRoomId);
         await updateDoc(roomRef, {
-          members: arrayRemove(email)
+          members: arrayRemove(memberName)
         });
-        
+
         // システムメッセージを送信
         await addDoc(collection(db, `rooms/${currentRoomId}/messages`), {
-          text: `${currentUserName} が ${name} をグループから削除しました。`,
+          text: `${currentUserName} が ${memberName} をグループから削除しました。`,
           userName: 'システム',
           userEmail: 'system@furira.com',
           timestamp: serverTimestamp(),
           type: 'system'
         });
-        
+
         // ローカル状態を更新
-        currentRoomMembers = currentRoomMembers.filter(e => e !== email);
+        currentRoomMembers = currentRoomMembers.filter(name => name !== memberName);
         currentRoomMemberCount = currentRoomMembers.length;
-        
+
         renderMemberList();
         updateMemberIconsBar();
-        
-        console.log('[Member] メンバー削除完了:', email);
+
+        console.log('[Member] メンバー削除完了:', memberName);
       } catch (error) {
         console.error('[Member] メンバー削除エラー:', error);
         alert('メンバーの削除に失敗しました');
