@@ -632,6 +632,7 @@
       background-color: white;
       border-top: 1px solid #e2e8f0;
       flex-shrink: 0;
+      position: relative; /* メンション候補リスト用 */
     }
     .input-wrapper {
       display: flex;
@@ -722,6 +723,80 @@
       outline: none;
       border-color: var(--reborn-primary);
     }
+
+    /* メンション候補リスト */
+    .mention-suggestions {
+      display: none;
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      margin-bottom: 8px;
+    }
+    .mention-suggestions.show {
+      display: block;
+    }
+    .mention-suggestion-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+    .mention-suggestion-item:hover,
+    .mention-suggestion-item.selected {
+      background-color: #f3f4f6;
+    }
+    .mention-suggestion-item:first-child {
+      border-radius: 12px 12px 0 0;
+    }
+    .mention-suggestion-item:last-child {
+      border-radius: 0 0 12px 12px;
+    }
+    .mention-suggestion-item:only-child {
+      border-radius: 12px;
+    }
+    .mention-suggestion-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      margin-right: 10px;
+      object-fit: cover;
+    }
+    .mention-suggestion-icon-placeholder {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    .mention-suggestion-name {
+      font-size: 15px;
+      color: #1f2937;
+    }
+
+    /* メンションハイライト（メッセージ表示時） */
+    .mention-highlight {
+      color: var(--reborn-primary);
+      font-weight: 500;
+    }
+    .message-item-mine .mention-highlight {
+      color: #bfefff;
+    }
+
     .send-button {
       background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
       color: white;
@@ -1538,6 +1613,9 @@
   </div>
 
   <div class="input-container">
+    <!-- メンション候補リスト -->
+    <div class="mention-suggestions" id="mentionSuggestions"></div>
+
     <!-- 添付メニュー（+ボタンで展開） -->
     <div class="attachment-menu" id="attachmentMenu" style="display: none;">
       <button class="attachment-menu-item" onclick="selectFile()">
@@ -1949,10 +2027,33 @@
       messageInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        // メンション検知
+        checkMentionInput(this);
       });
 
-      // Enterキーで送信
+      // Enterキーで送信（メンション選択中は候補選択）
       messageInput.addEventListener('keydown', function(e) {
+        // メンション候補が表示されている場合
+        if (isMentionSuggestionsVisible()) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectNextMentionSuggestion();
+            return;
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectPrevMentionSuggestion();
+            return;
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            insertSelectedMention();
+            return;
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            hideMentionSuggestions();
+            return;
+          }
+        }
+
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           sendMessage();
@@ -2199,6 +2300,224 @@
       memberIconsBarExpanded = false;
       document.getElementById('memberIconsBar').classList.remove('show');
     };
+
+    // ========================================
+    // メンション機能
+    // ========================================
+    let mentionStartIndex = -1;
+    let mentionQuery = '';
+    let selectedMentionIndex = 0;
+    let filteredMentionUsers = [];
+
+    // メンション入力を検知
+    function checkMentionInput(input) {
+      const text = input.value;
+      const cursorPos = input.selectionStart;
+
+      // カーソル位置より前のテキストで最後の@を探す
+      const textBeforeCursor = text.substring(0, cursorPos);
+      const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+      if (lastAtIndex === -1) {
+        hideMentionSuggestions();
+        return;
+      }
+
+      // @の前が空白か先頭かチェック
+      if (lastAtIndex > 0 && !/\s/.test(text[lastAtIndex - 1])) {
+        hideMentionSuggestions();
+        return;
+      }
+
+      // @以降のテキスト（スペースが含まれていたら無効）
+      const queryText = textBeforeCursor.substring(lastAtIndex + 1);
+      if (/\s/.test(queryText)) {
+        hideMentionSuggestions();
+        return;
+      }
+
+      mentionStartIndex = lastAtIndex;
+      mentionQuery = queryText.toLowerCase();
+
+      // メンバーをフィルタリング
+      filterAndShowMentionSuggestions();
+    }
+
+    // メンション候補をフィルタリングして表示
+    function filterAndShowMentionSuggestions() {
+      // 現在のルームメンバーまたは全ユーザーからフィルタリング
+      const users = currentRoomMembers.length > 0 ? currentRoomMembers : Object.keys(usersCache);
+
+      if (users.length === 0) {
+        hideMentionSuggestions();
+        return;
+      }
+
+      // 自分を除外し、クエリでフィルタリング
+      filteredMentionUsers = users.filter(userName => {
+        if (userName === currentUserName) return false;
+        if (mentionQuery === '') return true;
+        return userName.toLowerCase().includes(mentionQuery);
+      });
+
+      if (filteredMentionUsers.length === 0) {
+        hideMentionSuggestions();
+        return;
+      }
+
+      selectedMentionIndex = 0;
+      renderMentionSuggestions();
+    }
+
+    // メンション候補リストを描画
+    function renderMentionSuggestions() {
+      const container = document.getElementById('mentionSuggestions');
+      container.innerHTML = '';
+
+      filteredMentionUsers.forEach((userName, index) => {
+        const item = document.createElement('div');
+        item.className = 'mention-suggestion-item' + (index === selectedMentionIndex ? ' selected' : '');
+        item.dataset.userName = userName;
+
+        // アイコン
+        const iconUrl = getUserIconUrl(userName);
+        if (iconUrl) {
+          const icon = document.createElement('img');
+          icon.className = 'mention-suggestion-icon';
+          icon.src = iconUrl;
+          icon.alt = userName;
+          icon.onerror = function() {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'mention-suggestion-icon-placeholder';
+            placeholder.textContent = userName.charAt(0);
+            this.replaceWith(placeholder);
+          };
+          item.appendChild(icon);
+        } else {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'mention-suggestion-icon-placeholder';
+          placeholder.textContent = userName.charAt(0);
+          item.appendChild(placeholder);
+        }
+
+        // 名前
+        const name = document.createElement('span');
+        name.className = 'mention-suggestion-name';
+        name.textContent = userName;
+        item.appendChild(name);
+
+        // クリックで選択
+        item.addEventListener('click', function() {
+          selectedMentionIndex = index;
+          insertSelectedMention();
+        });
+
+        container.appendChild(item);
+      });
+
+      container.classList.add('show');
+    }
+
+    // メンション候補が表示されているか
+    function isMentionSuggestionsVisible() {
+      const container = document.getElementById('mentionSuggestions');
+      return container && container.classList.contains('show');
+    }
+
+    // メンション候補を非表示
+    function hideMentionSuggestions() {
+      const container = document.getElementById('mentionSuggestions');
+      if (container) {
+        container.classList.remove('show');
+      }
+      mentionStartIndex = -1;
+      mentionQuery = '';
+      filteredMentionUsers = [];
+    }
+
+    // 次の候補を選択
+    function selectNextMentionSuggestion() {
+      if (filteredMentionUsers.length === 0) return;
+      selectedMentionIndex = (selectedMentionIndex + 1) % filteredMentionUsers.length;
+      renderMentionSuggestions();
+    }
+
+    // 前の候補を選択
+    function selectPrevMentionSuggestion() {
+      if (filteredMentionUsers.length === 0) return;
+      selectedMentionIndex = (selectedMentionIndex - 1 + filteredMentionUsers.length) % filteredMentionUsers.length;
+      renderMentionSuggestions();
+    }
+
+    // 選択されたメンションを挿入
+    function insertSelectedMention() {
+      if (filteredMentionUsers.length === 0 || mentionStartIndex === -1) return;
+
+      const userName = filteredMentionUsers[selectedMentionIndex];
+      const input = document.getElementById('messageInput');
+      const text = input.value;
+
+      // @以降を選択したユーザー名に置き換え
+      const beforeMention = text.substring(0, mentionStartIndex);
+      const afterCursor = text.substring(input.selectionStart);
+
+      input.value = beforeMention + '@' + userName + ' ' + afterCursor;
+
+      // カーソル位置を調整
+      const newCursorPos = mentionStartIndex + userName.length + 2; // @, userName, スペース
+      input.setSelectionRange(newCursorPos, newCursorPos);
+      input.focus();
+
+      hideMentionSuggestions();
+    }
+
+    // メンションを解析してユーザー名リストを返す
+    function parseMentions(text) {
+      const mentionRegex = /@([^\s@]+)/g;
+      const mentions = [];
+      let match;
+
+      while ((match = mentionRegex.exec(text)) !== null) {
+        const userName = match[1];
+        // 実在するユーザーかチェック
+        if (currentRoomMembers.includes(userName) || usersCache[userName]) {
+          mentions.push(userName);
+        }
+      }
+
+      return [...new Set(mentions)]; // 重複排除
+    }
+
+    // メンションをハイライト表示用HTMLに変換
+    function highlightMentions(text, mentions) {
+      if (!text || !mentions || mentions.length === 0) {
+        return escapeHtml(text);
+      }
+
+      let result = escapeHtml(text);
+
+      // 各メンションをハイライト
+      mentions.forEach(userName => {
+        const escapedUserName = escapeHtml(userName);
+        const regex = new RegExp(`@${escapeRegExp(escapedUserName)}(?=\\s|$)`, 'g');
+        result = result.replace(regex, `<span class="mention-highlight">@${escapedUserName}</span>`);
+      });
+
+      return result;
+    }
+
+    // HTML特殊文字をエスケープ
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // 正規表現の特殊文字をエスケープ
+    function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
 
     // メンバー編集モード切替
     window.toggleMemberEditMode = function() {
@@ -2692,7 +3011,12 @@
       else {
         const text = document.createElement('div');
         text.className = 'message-text';
-        text.textContent = msg.text || '';
+        // メンションがある場合はハイライト表示
+        if (msg.mentions && msg.mentions.length > 0) {
+          text.innerHTML = highlightMentions(msg.text || '', msg.mentions);
+        } else {
+          text.textContent = msg.text || '';
+        }
         bubble.appendChild(text);
       }
 
@@ -2825,14 +3149,25 @@
       try {
         console.log('[Firestore] メッセージ送信中...');
 
+        // メンションを解析
+        const mentions = parseMentions(message);
+        console.log('[Mention] 検出されたメンション:', mentions);
+
         // メッセージを送信（サブコレクション）
-        await addDoc(collection(db, `rooms/${currentRoomId}/messages`), {
+        const messageData = {
           text: message,
           userName: currentUserName,
           userEmail: currentUserEmail, // Firebase Functions 高速化用
           timestamp: serverTimestamp(),
           deleted: []
-        });
+        };
+
+        // メンションがある場合は追加
+        if (mentions.length > 0) {
+          messageData.mentions = mentions;
+        }
+
+        await addDoc(collection(db, `rooms/${currentRoomId}/messages`), messageData);
 
         console.log('[Firestore] メッセージ送信完了');
 

@@ -386,8 +386,9 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
 
     const senderName = messageData.userName || '匿名';
     const messageText = messageData.text || '(ファイル)';
+    const mentions = messageData.mentions || []; // メンションされたユーザー名の配列
 
-    console.log('📋 [onChatMessageCreated] 送信者:', senderName, '内容:', messageText);
+    console.log('📋 [onChatMessageCreated] 送信者:', senderName, '内容:', messageText, 'メンション:', mentions);
 
     // ルーム情報を取得
     const roomRef = db.collection('rooms').doc(roomId);
@@ -452,11 +453,43 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
       console.log('📧 [onChatMessageCreated] users スキャン完了:', memberEmails);
     }
 
+    // メンション通知と通常通知を分離
+    let mentionedUsers = [];
+    let normalUsers = memberEmails;
+
+    if (mentions.length > 0) {
+      console.log('📢 [onChatMessageCreated] メンション検出:', mentions);
+      
+      // メンションされたユーザーを特定（ユーザー名で照合）
+      mentionedUsers = memberEmails.filter(user => mentions.includes(user.userName));
+      // 通常通知対象はメンションされていないユーザーのみ
+      normalUsers = memberEmails.filter(user => !mentions.includes(user.userName));
+      
+      console.log('📢 [onChatMessageCreated] メンション通知対象:', mentionedUsers.map(u => u.userName));
+      console.log('📢 [onChatMessageCreated] 通常通知対象:', normalUsers.map(u => u.userName));
+    }
+
     // FCM通知送信と未読カウント更新を並列実行
-    await Promise.allSettled([
-      sendChatNotifications(senderName, messageText, roomData.name || '個別チャット', memberEmails, roomData.mutedBy || []),
+    const notificationPromises = [
       updateChatUnreadCounts(roomId, memberEmails)
-    ]);
+    ];
+
+    // 通常の通知（メンションされていないユーザー）
+    if (normalUsers.length > 0) {
+      notificationPromises.push(
+        sendChatNotifications(senderName, messageText, roomData.name || '個別チャット', normalUsers, roomData.mutedBy || [])
+      );
+    }
+
+    // メンション通知（メンションされたユーザー、ミュート無視）
+    if (mentionedUsers.length > 0) {
+      const mentionNotificationText = `${senderName}があなたをメンションしました: ${messageText}`;
+      notificationPromises.push(
+        sendMentionNotifications(senderName, messageText, roomData.name || '個別チャット', mentionedUsers)
+      );
+    }
+
+    await Promise.allSettled(notificationPromises);
 
     const duration = Date.now() - startTime;
     console.log(`✅ [onChatMessageCreated] 通知完了: ${duration}ms`);
@@ -649,6 +682,111 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
 
   } catch (error) {
     console.error('❌ [sendChatNotifications] エラー:', error);
+  }
+}
+
+/**
+ * メンション通知のFCM送信（ミュート設定を無視）
+ */
+async function sendMentionNotifications(senderName, messageText, roomName, mentionedUsers) {
+  console.log('📢 [sendMentionNotifications] 関数開始');
+  try {
+    if (mentionedUsers.length === 0) {
+      console.log('⏭️ [sendMentionNotifications] 対象ユーザーなし、スキップ');
+      return;
+    }
+
+    console.log(`📢 [sendMentionNotifications] FCM送信開始: ${mentionedUsers.length}人`);
+
+    // 各ユーザーのトークンを取得（ミュートは無視）
+    const tokensPromises = mentionedUsers.map(async (user) => {
+      try {
+        const { userName, userEmail } = user;
+        console.log(`🔍 [sendMentionNotifications] トークン取得: ${userName} (${userEmail})`);
+
+        const activeDeviceDoc = await db.collection('activeDevices').doc(userEmail).get();
+
+        if (!activeDeviceDoc.exists) {
+          console.log(`⚠️ [sendMentionNotifications] activeDevices未登録: ${userName}`);
+          return [];
+        }
+
+        const data = activeDeviceDoc.data();
+
+        // 通知が無効でもメンションは送信（重要な通知のため）
+        // ただし、notificationEnabled が明示的に false の場合はスキップ
+        if (data.notificationEnabled === false) {
+          console.log(`🔕 [sendMentionNotifications] 通知完全無効: ${userName}（メンションもスキップ）`);
+          return [];
+        }
+
+        const tokens = Array.isArray(data?.fcmTokens) ? data.fcmTokens.filter(Boolean) : [];
+
+        if (tokens.length === 0) {
+          console.log(`⚠️ [sendMentionNotifications] アクティブトークンなし: ${userName}`);
+          return [];
+        }
+
+        console.log(`✅ [sendMentionNotifications] トークン取得成功: ${userName} (${tokens.length}件)`);
+        return tokens;
+      } catch (error) {
+        console.error(`❌ [sendMentionNotifications] ユーザー${user.userName}のトークン取得エラー:`, error);
+        return [];
+      }
+    });
+
+    const results = await Promise.all(tokensPromises);
+    const allTokens = results.flat();
+
+    if (allTokens.length === 0) {
+      console.log('⏭️ [sendMentionNotifications] 通知対象トークンなし、スキップ');
+      return;
+    }
+
+    console.log(`📨 [sendMentionNotifications] 送信先トークン数: ${allTokens.length}`);
+
+    // メンション専用の通知メッセージ
+    const mentionMessage = {
+      notification: {
+        title: `📢 ${roomName}`,
+        body: `${senderName}があなたをメンションしました`
+      },
+      data: {
+        type: 'CHAT_MENTION',
+        roomName: roomName,
+        senderName: senderName,
+        messageText: messageText
+      },
+      android: {
+        notification: {
+          sound: 'default',
+          priority: 'high'
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1
+          }
+        }
+      },
+      tokens: allTokens
+    };
+
+    const response = await messaging.sendEachForMulticast(mentionMessage);
+    console.log(`✅ [sendMentionNotifications] 送信完了: 成功=${response.successCount}, 失敗=${response.failureCount}`);
+
+    if (response.failureCount > 0) {
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          console.error(`❌ [sendMentionNotifications] 送信失敗 [${idx}]:`, resp.error);
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ [sendMentionNotifications] エラー:', error);
   }
 }
 
