@@ -1378,9 +1378,10 @@
       <button class="back-button" id="back-button">
         <i class="bi bi-chevron-left"></i><span class="back-unread-count" id="backUnreadCount"></span>
       </button>
-      <div class="header-title">
+      <div class="header-title" id="headerTitle" onclick="toggleMemberIconsBar()" style="cursor: pointer;">
         <i class="bi bi-chat-dots" id="headerRoomIcon"></i>
         <span id="headerRoomName">チャット</span>
+        <i class="bi bi-chevron-down" id="headerToggleIcon" style="display: none; font-size: 12px; margin-left: 4px; transition: transform 0.2s;"></i>
       </div>
       <button class="search-button" id="searchButton" onclick="openSearchMode()">
         <i class="bi bi-search"></i>
@@ -1626,6 +1627,7 @@
     let currentRoomMembers = [];   // ルームのメンバーリスト
     let usersCache = []; // ユーザー一覧キャッシュ（アイコン表示用）
     let memberEditMode = false; // メンバー編集モード
+    let memberIconsBarExpanded = false; // メンバーアイコン行の展開状態
 
     // PWA版：URLパラメータから取得（GASテンプレート変数は使用しない）
     const isPWAFlag        = true;  // PWA版として動作
@@ -1753,9 +1755,11 @@
             document.getElementById('memberIconsBar').classList.remove('show');
             console.log('[Room] 個別チャットヘッダー更新（名前のみ）:', currentRoomName);
           } else {
-            // グループチャット：アイコン表示、アイコン+名前、メンバーアイコン行表示
+            // グループチャット：アイコン表示、アイコン+名前
+            // メンバーアイコン行は最初は非表示（タップで開閉）
             document.getElementById('headerRoomIcon').style.display = 'inline';
             document.getElementById('headerRoomName').textContent = `${roomIcon} ${currentRoomName}`;
+            memberIconsBarExpanded = false; // ルーム切り替え時は閉じた状態でスタート
             updateMemberIconsBar();
             console.log('[Room] グループチャットヘッダー更新（アイコン付き）:', `${roomIcon} ${currentRoomName}`);
           }
@@ -2050,26 +2054,45 @@
       return readBy.filter(email => email !== currentUserEmail).length;
     }
 
-    // メンバーアイコン行を更新
-    function updateMemberIconsBar() {
+    // メンバーアイコン行を更新（展開状態に応じて表示）
+    function updateMemberIconsBar(forceShow = null) {
       const bar = document.getElementById('memberIconsBar');
       const iconsContainer = document.getElementById('memberIcons');
-      
+      const toggleIcon = document.getElementById('headerToggleIcon');
+
+      // 個別チャットの場合は非表示、トグルアイコンも非表示
       if (currentRoomType === 'direct' || currentRoomMembers.length === 0) {
         bar.classList.remove('show');
+        if (toggleIcon) toggleIcon.style.display = 'none';
         return;
       }
-      
-      bar.classList.add('show');
+
+      // グループチャットの場合はトグルアイコンを表示
+      if (toggleIcon) toggleIcon.style.display = 'inline';
+
+      // 展開状態に応じてバーを表示/非表示
+      if (forceShow !== null) {
+        memberIconsBarExpanded = forceShow;
+      }
+
+      if (memberIconsBarExpanded) {
+        bar.classList.add('show');
+        if (toggleIcon) toggleIcon.style.transform = 'rotate(180deg)';
+      } else {
+        bar.classList.remove('show');
+        if (toggleIcon) toggleIcon.style.transform = 'rotate(0deg)';
+      }
+
+      // アイコンを描画
       iconsContainer.innerHTML = '';
-      
+
       // 最大5人まで表示
       const displayMembers = currentRoomMembers.slice(0, 5);
       displayMembers.forEach(email => {
         const user = usersCache.find(u => u.email === email);
         const name = user ? user.name : email.split('@')[0];
         const iconUrl = user ? user.iconUrl : null;
-        
+
         if (iconUrl) {
           const img = document.createElement('img');
           img.className = 'member-icon';
@@ -2085,27 +2108,34 @@
       });
     }
 
+    // メンバーアイコン行の開閉トグル
+    window.toggleMemberIconsBar = function() {
+      if (currentRoomType === 'direct') return; // 個別チャットでは無効
+      memberIconsBarExpanded = !memberIconsBarExpanded;
+      updateMemberIconsBar();
+    };
+
     // メンバー管理モーダルを開く
-    function openMemberModal() {
+    window.openMemberModal = function() {
       document.getElementById('memberModalOverlay').classList.add('active');
       document.getElementById('memberModal').classList.add('active');
       renderMemberList();
-    }
+    };
 
     // メンバー管理モーダルを閉じる
-    function closeMemberModal() {
+    window.closeMemberModal = function() {
       document.getElementById('memberModalOverlay').classList.remove('active');
       document.getElementById('memberModal').classList.remove('active');
       memberEditMode = false;
       document.getElementById('memberEditBtn').textContent = '編集';
-    }
+    };
 
     // メンバー編集モード切替
-    function toggleMemberEditMode() {
+    window.toggleMemberEditMode = function() {
       memberEditMode = !memberEditMode;
       document.getElementById('memberEditBtn').textContent = memberEditMode ? '完了' : '編集';
       renderMemberList();
-    }
+    };
 
     // メンバーリストを描画
     function renderMemberList() {
@@ -2158,17 +2188,17 @@
     }
 
     // 招待モーダルを開く
-    function openInviteModal() {
+    window.openInviteModal = function() {
       document.getElementById('inviteModalOverlay').classList.add('active');
       document.getElementById('inviteModal').classList.add('active');
       renderInviteList();
-    }
+    };
 
     // 招待モーダルを閉じる
-    function closeInviteModal() {
+    window.closeInviteModal = function() {
       document.getElementById('inviteModalOverlay').classList.remove('active');
       document.getElementById('inviteModal').classList.remove('active');
-    }
+    };
 
     // 招待可能ユーザーリストを描画
     function renderInviteList() {
