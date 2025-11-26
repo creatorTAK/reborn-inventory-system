@@ -295,6 +295,21 @@
       max-width: 100%;
     }
 
+    /* 取り消し済みメッセージ */
+    .message-bubble.deleted {
+      background: transparent !important;
+      box-shadow: none !important;
+      padding: 8px 0 !important;
+    }
+    .message-bubble.deleted .message-text {
+      color: #9ca3af;
+      font-style: italic;
+      font-size: 13px;
+    }
+    .message-item-mine .message-bubble.deleted .message-text {
+      color: #9ca3af;
+    }
+
     .message-header {
       display: none; /* ヘッダーは非表示 */
     }
@@ -1026,8 +1041,7 @@
   <div id="contextMenu">
     <div class="context-menu-items">
       <button class="context-menu-item" id="contextMenuCopy">コピー</button>
-      <button class="context-menu-item" id="contextMenuReply">リプライ</button>
-      <button class="context-menu-item" id="contextMenuDelete">削除</button>
+      <button class="context-menu-item" id="contextMenuUnsend" style="display: none; color: #ef4444;">送信取り消し</button>
     </div>
   </div>
 
@@ -1581,8 +1595,16 @@
       const bubble = document.createElement('div');
       bubble.className = 'message-bubble';
 
+      // 取り消し済みメッセージの場合
+      if (msg.deleted || msg.type === 'deleted') {
+        bubble.classList.add('deleted');
+        const text = document.createElement('div');
+        text.className = 'message-text';
+        text.textContent = 'メッセージが取り消されました';
+        bubble.appendChild(text);
+      }
       // 画像メッセージの場合
-      if (msg.type === 'image' && msg.fileUrl) {
+      else if (msg.type === 'image' && msg.fileUrl) {
         const img = document.createElement('img');
         img.className = 'message-image';
         img.src = msg.fileUrl;
@@ -1677,7 +1699,7 @@
 
       // 長押しイベントリスナーを追加
       console.log('[Message] Adding long press listener for message:', msg.id);
-      addLongPressListener(item, msg.id, msg.text || '');
+      addLongPressListener(item, msg.id, msg.text || '', isMine);
 
       container.appendChild(item);
     }
@@ -2432,16 +2454,24 @@
     // 長押しメニュー関連
     let contextMenuData = {
       messageId: null,
-      messageText: null
+      messageText: null,
+      isMine: false,
+      item: null
     };
     let longPressTimer = null;
     const LONG_PRESS_DURATION = 500; // 500ms
 
     // 長押しメニューを開く（メッセージの近くに表示）
-    function openContextMenu(messageId, messageText, targetElement) {
-      console.log('[ContextMenu] Opening menu for message:', messageId);
+    function openContextMenu(messageId, messageText, targetElement, isMine = false) {
+      console.log('[ContextMenu] Opening menu for message:', messageId, 'isMine:', isMine);
       contextMenuData.messageId = messageId;
       contextMenuData.messageText = messageText;
+      contextMenuData.isMine = isMine;
+      contextMenuData.item = targetElement;
+
+      // 送信取り消しボタンの表示/非表示（自分のメッセージのみ表示）
+      const unsendBtn = document.getElementById('contextMenuUnsend');
+      unsendBtn.style.display = isMine ? 'block' : 'none';
 
       const menu = document.getElementById('contextMenu');
       const overlay = document.getElementById('contextMenuOverlay');
@@ -2518,16 +2548,23 @@
       copyMessage();
     });
 
-    document.getElementById('contextMenuReply').addEventListener('touchend', function(e) {
+    document.getElementById('contextMenuUnsend').addEventListener('touchend', function(e) {
       e.preventDefault();
       e.stopPropagation();
-      replyMessage();
+      unsendMessage();
     });
 
-    document.getElementById('contextMenuDelete').addEventListener('touchend', function(e) {
+    // PC用: クリックイベントも追加
+    document.getElementById('contextMenuCopy').addEventListener('click', function(e) {
       e.preventDefault();
       e.stopPropagation();
-      deleteMessageFromMenu();
+      copyMessage();
+    });
+
+    document.getElementById('contextMenuUnsend').addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      unsendMessage();
     });
 
     // コピー機能
@@ -2573,7 +2610,58 @@
       messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
     };
 
-    // 削除機能（メニューから）→ 選択モード開始に変更
+    // 送信取り消し機能（LINE方式）
+    window.unsendMessage = async function() {
+      if (!contextMenuData.messageId) return;
+      if (!contextMenuData.isMine) {
+        alert('自分のメッセージのみ取り消しできます');
+        return;
+      }
+
+      // closeContextMenu()の前にデータを保存
+      const messageId = contextMenuData.messageId;
+      const messageItem = contextMenuData.item;
+
+      closeContextMenu();
+
+      // 確認ダイアログ
+      if (!confirm('このメッセージを取り消しますか？\n相手側には「メッセージが取り消されました」と表示されます。')) {
+        return;
+      }
+
+      try {
+        console.log('[Unsend] 送信取り消し開始:', messageId);
+
+        // Firestoreのメッセージを更新（deleted: trueフラグを追加）
+        const messageRef = doc(db, 'rooms', currentRoomId, 'messages', messageId);
+        await updateDoc(messageRef, {
+          deleted: true,
+          deletedAt: serverTimestamp(),
+          originalText: contextMenuData.messageText || '', // 元のテキストを保存（管理用）
+          text: null,
+          type: 'deleted',
+          fileUrl: null,
+          fileName: null
+        });
+
+        console.log('[Unsend] 送信取り消し完了');
+
+        // UIを即座に更新（onSnapshotで自動更新されるが、念のため）
+        if (messageItem) {
+          const bubble = messageItem.querySelector('.message-bubble');
+          if (bubble) {
+            bubble.classList.add('deleted');
+            bubble.innerHTML = '<div class="message-text">メッセージが取り消されました</div>';
+          }
+        }
+
+      } catch (error) {
+        console.error('[Unsend] 送信取り消しエラー:', error);
+        alert('送信取り消しに失敗しました: ' + error.message);
+      }
+    };
+
+    // 削除機能（メニューから）→ 選択モード開始に変更（現在は未使用）
     window.deleteMessageFromMenu = function() {
       if (!contextMenuData.messageId) return;
 
@@ -2603,7 +2691,7 @@
     };
 
     // メッセージアイテムに長押しイベントを追加
-    function addLongPressListener(item, messageId, messageText) {
+    function addLongPressListener(item, messageId, messageText, isMine = false) {
       let touchStartTime = 0;
       let touchMoved = false;
 
@@ -2616,8 +2704,8 @@
         longPressTimer = setTimeout(() => {
           console.log('[LongPress] Timer fired, touchMoved:', touchMoved);
           if (!touchMoved) {
-            console.log('[LongPress] Opening context menu');
-            openContextMenu(messageId, messageText, item);
+            console.log('[LongPress] Opening context menu, isMine:', isMine);
+            openContextMenu(messageId, messageText, item, isMine);
             // 振動フィードバック（対応ブラウザのみ）
             if ('vibrate' in navigator) {
               navigator.vibrate(50);
@@ -2655,7 +2743,7 @@
       // PC用: 右クリック
       item.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        openContextMenu(messageId, messageText, item);
+        openContextMenu(messageId, messageText, item, isMine);
       });
     }
 
