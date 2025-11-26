@@ -2740,22 +2740,41 @@
       // メンションをハイライト付きで挿入
       const mentionText = '@' + userName;
 
-      // HTMLとしてメンションをハイライト表示
-      const escapedBefore = escapeHtml(beforeMention);
-      const escapedAfter = escapeHtml(afterMention);
-      input.innerHTML = escapedBefore +
-        '<span class="mention-in-input">' + escapeHtml(mentionText) + '</span>' +
-        ' ' + escapedAfter;
+      // input.innerHTMLを直接操作せず、DOMノードを構築
+      input.innerHTML = ''; // クリア
 
-      // カーソル位置を調整（メンション + スペースの後）
-      const newCursorPos = beforeMention.length + mentionText.length + 1; // beforeMention, mentionText, スペース
+      // beforeMentionテキストノード
+      if (beforeMention) {
+        input.appendChild(document.createTextNode(beforeMention));
+      }
 
-      // iOS対応：先にfocusしてからカーソル設定
+      // メンションspan
+      const mentionSpan = document.createElement('span');
+      mentionSpan.className = 'mention-in-input';
+      mentionSpan.textContent = mentionText;
+      input.appendChild(mentionSpan);
+
+      // スペース + afterMention のテキストノード
+      const afterText = ' ' + afterMention;
+      const afterTextNode = document.createTextNode(afterText);
+      input.appendChild(afterTextNode);
+
+      // カーソルをスペースの後（afterTextNodeの先頭の1文字目の後）に設定
       input.focus();
 
-      // 少し遅延させてカーソル位置を設定（iOS対応）
+      // iOS対応：少し遅延させてカーソル位置を設定
       setTimeout(function() {
-        setCaretPosition(input, newCursorPos);
+        try {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          // afterTextNodeの1文字目（スペース）の後にカーソルを置く
+          range.setStart(afterTextNode, 1);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } catch (e) {
+          console.error('[Mention] カーソル設定エラー:', e);
+        }
       }, 10);
 
       hideMentionSuggestions();
