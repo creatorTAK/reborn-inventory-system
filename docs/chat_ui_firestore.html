@@ -238,6 +238,24 @@
       -webkit-touch-callout: none;
     }
 
+    /* 日付セパレータ（LINE風スティッキーヘッダー） */
+    .date-separator {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      text-align: center;
+      padding: 8px 0;
+      background: linear-gradient(to bottom, #f8f9fa 0%, #f8f9fa 70%, transparent 100%);
+    }
+    .date-separator-badge {
+      display: inline-block;
+      background-color: rgba(0, 0, 0, 0.15);
+      color: #555;
+      font-size: 0.7rem;
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
+
     .message-item {
       margin-bottom: 16px;
       animation: fadeIn 0.3s ease-in;
@@ -1707,7 +1725,18 @@
           }
         });
 
+        // 日付セパレータを挿入しながらメッセージを表示
+        let lastDateStr = null;
         messages.forEach((msg) => {
+          // 日付セパレータの挿入
+          if (msg.timestamp && msg.timestamp.toDate) {
+            const msgDate = msg.timestamp.toDate();
+            const dateStr = formatDateForSeparator(msgDate);
+            if (dateStr !== lastDateStr) {
+              appendDateSeparator(dateStr);
+              lastDateStr = dateStr;
+            }
+          }
           appendMessage(msg);
         });
 
@@ -1731,6 +1760,44 @@
       const sizes = ['B', 'KB', 'MB', 'GB'];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    // 日付セパレータ用のフォーマット（LINE風: 11/26(火)）
+    function formatDateForSeparator(date) {
+      const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const dow = dayOfWeek[date.getDay()];
+      
+      // 今日・昨日の判定
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      const isToday = date.toDateString() === today.toDateString();
+      const isYesterday = date.toDateString() === yesterday.toDateString();
+      
+      if (isToday) {
+        return '今日';
+      } else if (isYesterday) {
+        return '昨日';
+      } else {
+        return `${month}/${day}(${dow})`;
+      }
+    }
+
+    // 日付セパレータをUIに追加
+    function appendDateSeparator(dateStr) {
+      const container = document.getElementById('messagesContainer');
+      const separator = document.createElement('div');
+      separator.className = 'date-separator';
+      
+      const badge = document.createElement('span');
+      badge.className = 'date-separator-badge';
+      badge.textContent = dateStr;
+      
+      separator.appendChild(badge);
+      container.appendChild(separator);
     }
 
     // メッセージをUIに追加
@@ -1898,24 +1965,19 @@
         bubble.appendChild(text);
       }
 
-      // 時間
+      // 時間（LINE風：時:分のみ）
       const time = document.createElement('span');
       time.className = 'message-time';
       if (msg.timestamp && msg.timestamp.toDate) {
         const date = msg.timestamp.toDate();
-        // 日付と時間のみ表示（月/日 時:分）
-        const month = date.getMonth() + 1;
-        const day = date.getDate();
         const hours = String(date.getHours()).padStart(2, '0');
         const minutes = String(date.getMinutes()).padStart(2, '0');
-        time.textContent = `${month}/${day} ${hours}:${minutes}`;
+        time.textContent = `${hours}:${minutes}`;
       } else {
         const date = new Date();
-        const month = date.getMonth() + 1;
-        const day = date.getDate();
         const hours = String(date.getHours()).padStart(2, '0');
         const minutes = String(date.getMinutes()).padStart(2, '0');
-        time.textContent = `${month}/${day} ${hours}:${minutes}`;
+        time.textContent = `${hours}:${minutes}`;
       }
 
       // メタ情報コンテナ（既読 + 時間）
