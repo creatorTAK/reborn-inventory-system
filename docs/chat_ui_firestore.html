@@ -2733,14 +2733,12 @@
       insertSelectedMentionFallback(capturedUserName, input);
       justInsertedMention = true;
 
-      // カーソルを末尾に設定（フォーカスは既にあるのでfocus()不要）
+      // iOS対策: 挿入後にIME状態をリセットするため、一度blur/focusを実行
+      // ただしキーボードは閉じないようにrequestAnimationFrame内で行う
       requestAnimationFrame(function() {
-        const newSel = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(input);
-        range.collapse(false); // 末尾
-        newSel.removeAllRanges();
-        newSel.addRange(range);
+        // カーソル位置はinsertSelectedMentionFallback内で設定済み
+        // ここでは追加のカーソル操作は行わない（iOS IMEの状態を壊さないため）
+        console.log('[Mention] 挿入完了');
       });
     }
 
@@ -2793,13 +2791,24 @@
             touchHandled = true;
             console.log('[Mention] touchstart発火:', capturedUserName);
             
-            // iOS対策: タッチ直後にフォーカスを確保してキーボードを維持
-            const input = document.getElementById('messageInput');
-            input.focus();
+            // iOS対策: IME変換中フラグを強制的にリセット
+            isComposing = false;
             
-            // 少し遅延させて挿入処理を実行（フォーカスが確定するのを待つ）
+            const input = document.getElementById('messageInput');
+            
+            // フォーカスを維持したままIMEをキャンセルする試み
+            // inputModeを一時的に変更してIME状態をリセット
+            const originalInputMode = input.getAttribute('inputmode') || '';
+            input.setAttribute('inputmode', 'none');
+            
             setTimeout(function() {
-              processMentionSelection(capturedUserName);
+              input.setAttribute('inputmode', originalInputMode || 'text');
+              input.focus();
+              
+              // 挿入処理を実行
+              setTimeout(function() {
+                processMentionSelection(capturedUserName);
+              }, 10);
             }, 10);
           }, { passive: false });
 
@@ -2975,14 +2984,16 @@
       mentionSpan.setAttribute('contenteditable', 'false');
       input.appendChild(mentionSpan);
 
-      // スペース + 残りテキスト
-      const spaceNode = document.createTextNode(' ' + afterMention);
+      // iOS対策: contenteditable=falseのspan直後にカーソルを置くため
+      // ゼロ幅スペース + 通常スペース + 残りテキストを追加
+      // ゼロ幅スペースがあることでiOSでもカーソルが正しく配置される
+      const spaceNode = document.createTextNode('\u200B ' + afterMention);
       input.appendChild(spaceNode);
 
-      // カーソルをスペースの後に移動
+      // カーソルをゼロ幅スペースの後（通常スペースの前）に移動
       const sel = window.getSelection();
       const range = document.createRange();
-      range.setStart(spaceNode, 1); // スペースの後
+      range.setStart(spaceNode, 1); // ゼロ幅スペースの後
       range.collapse(true);
       sel.removeAllRanges();
       sel.addRange(range);
