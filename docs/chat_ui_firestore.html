@@ -2102,13 +2102,16 @@
           if (justInsertedMention) {
             console.log('[Mention] メンション直後のEnter → 改行として処理');
             justInsertedMention = false; // フラグをリセット
-            // デフォルトの改行動作を許可（preventDefaultしない）
+            e.preventDefault();
+            insertLineBreak();
             return;
           }
           
-          // Shift+Enterは改行
+          // Shift+Enterは改行（contenteditableでは明示的に挿入）
           if (e.shiftKey) {
-            return; // デフォルト動作（改行）を許可
+            e.preventDefault();
+            insertLineBreak();
+            return;
           }
           
           // 通常のEnterは送信
@@ -2553,6 +2556,33 @@
       // 詳細なリアルタイムハイライトは将来の改善として保留
     }
 
+    // contenteditable用：改行を挿入
+    function insertLineBreak() {
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
+      
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      
+      // <br>を挿入
+      const br = document.createElement('br');
+      range.insertNode(br);
+      
+      // カーソルを<br>の後ろに移動
+      range.setStartAfter(br);
+      range.setEndAfter(br);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      
+      // 末尾の場合は追加の<br>が必要（カーソルが見えるようにするため）
+      const input = document.getElementById('messageInput');
+      const lastChild = input.lastChild;
+      if (lastChild === br || (lastChild && lastChild.nodeName === 'BR')) {
+        const extraBr = document.createElement('br');
+        input.appendChild(extraBr);
+      }
+    }
+
     // メンション候補をフィルタリングして表示
     function filterAndShowMentionSuggestions() {
       // 現在のルームメンバーまたは全ユーザーからフィルタリング
@@ -2668,13 +2698,12 @@
       const text = getPlainText(input);
       const cursorPos = getCaretPosition(input);
 
-      // @以降を選択したユーザー名に置き換え
+      // @とクエリ部分を含めて置き換え（mentionStartIndexから現在のカーソルまで）
       const beforeMention = text.substring(0, mentionStartIndex);
-      const afterCursor = text.substring(cursorPos);
+      const afterCursor = text.substring(cursorPos); // カーソル以降のテキスト
 
       // メンションをハイライト付きで挿入
       const mentionText = '@' + userName;
-      const newText = beforeMention + mentionText + ' ' + afterCursor;
       
       // HTMLとしてメンションをハイライト表示
       const escapedBefore = escapeHtml(beforeMention);
@@ -2683,8 +2712,8 @@
         '<span class="mention-in-input">' + escapeHtml(mentionText) + '</span>' + 
         ' ' + escapedAfter;
 
-      // カーソル位置を調整
-      const newCursorPos = mentionStartIndex + userName.length + 2; // @, userName, スペース
+      // カーソル位置を調整（メンション + スペースの後）
+      const newCursorPos = beforeMention.length + mentionText.length + 1; // beforeMention, mentionText, スペース
       setCaretPosition(input, newCursorPos);
       input.focus();
 
