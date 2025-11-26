@@ -2047,6 +2047,8 @@
       messageInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        // メンション挿入直後フラグをリセット（他の文字入力があった場合）
+        justInsertedMention = false;
         // メンション検知
         checkMentionInput(this);
       });
@@ -2066,12 +2068,20 @@
           } else if (e.key === 'Enter') {
             e.preventDefault();
             insertSelectedMention();
+            justInsertedMention = true; // メンション挿入直後フラグを立てる
             return;
           } else if (e.key === 'Escape') {
             e.preventDefault();
             hideMentionSuggestions();
             return;
           }
+        }
+
+        // メンション挿入直後のEnterは改行として処理（送信しない）
+        if (e.key === 'Enter' && justInsertedMention) {
+          justInsertedMention = false; // フラグをリセット
+          // デフォルトの改行動作を許可（preventDefaultしない）
+          return;
         }
 
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -2381,6 +2391,7 @@
     let mentionQuery = '';
     let selectedMentionIndex = 0;
     let filteredMentionUsers = [];
+    let justInsertedMention = false; // メンション挿入直後フラグ（改行許可用）
 
     // メンション入力を検知
     function checkMentionInput(input) {
