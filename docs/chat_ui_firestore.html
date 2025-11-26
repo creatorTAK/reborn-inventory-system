@@ -1076,9 +1076,8 @@
     /* メンバーアイコン行（グループチャット用） */
     .member-icons-bar {
       display: none;
-      background: #f8f9fa;
+      background: white;
       padding: 10px 16px;
-      border-bottom: 1px solid #e5e7eb;
       align-items: center;
       gap: 8px;
     }
@@ -1381,7 +1380,6 @@
       <div class="header-title" id="headerTitle" onclick="toggleMemberIconsBar()" style="cursor: pointer;">
         <i class="bi bi-chat-dots" id="headerRoomIcon"></i>
         <span id="headerRoomName">チャット</span>
-        <i class="bi bi-chevron-down" id="headerToggleIcon" style="display: none; font-size: 12px; margin-left: 4px; transition: transform 0.2s;"></i>
       </div>
       <button class="search-button" id="searchButton" onclick="openSearchMode()">
         <i class="bi bi-search"></i>
@@ -2058,17 +2056,12 @@
     function updateMemberIconsBar(forceShow = null) {
       const bar = document.getElementById('memberIconsBar');
       const iconsContainer = document.getElementById('memberIcons');
-      const toggleIcon = document.getElementById('headerToggleIcon');
 
-      // 個別チャットの場合は非表示、トグルアイコンも非表示
+      // 個別チャットの場合は非表示
       if (currentRoomType === 'direct' || currentRoomMembers.length === 0) {
         bar.classList.remove('show');
-        if (toggleIcon) toggleIcon.style.display = 'none';
         return;
       }
-
-      // グループチャットの場合はトグルアイコンを表示
-      if (toggleIcon) toggleIcon.style.display = 'inline';
 
       // 展開状態に応じてバーを表示/非表示
       if (forceShow !== null) {
@@ -2077,10 +2070,8 @@
 
       if (memberIconsBarExpanded) {
         bar.classList.add('show');
-        if (toggleIcon) toggleIcon.style.transform = 'rotate(180deg)';
       } else {
         bar.classList.remove('show');
-        if (toggleIcon) toggleIcon.style.transform = 'rotate(0deg)';
       }
 
       // アイコンを描画
@@ -2089,9 +2080,12 @@
       // 最大5人まで表示
       const displayMembers = currentRoomMembers.slice(0, 5);
       displayMembers.forEach(email => {
-        const user = usersCache.find(u => u.email === email);
-        const name = user ? user.name : email.split('@')[0];
-        const iconUrl = user ? user.iconUrl : null;
+        // usersCache内のフィールド名: id(=email), userName, userIconUrl
+        const user = usersCache.find(u => u.id === email);
+        const name = user ? user.userName : email.split('@')[0];
+        const iconUrl = user ? user.userIconUrl : null;
+
+        console.log('[MemberIcon] email:', email, 'user:', user, 'name:', name, 'iconUrl:', iconUrl);
 
         if (iconUrl) {
           const img = document.createElement('img');
@@ -2146,13 +2140,14 @@
       container.innerHTML = '';
       
       currentRoomMembers.forEach(email => {
-        const user = usersCache.find(u => u.email === email);
-        const name = user ? user.name : email.split('@')[0];
-        const iconUrl = user ? user.iconUrl : null;
-        
+        // usersCache内のフィールド名: id(=email), userName, userIconUrl
+        const user = usersCache.find(u => u.id === email);
+        const name = user ? user.userName : email.split('@')[0];
+        const iconUrl = user ? user.userIconUrl : null;
+
         const item = document.createElement('div');
         item.className = 'member-list-item' + (memberEditMode ? ' edit-mode' : '');
-        
+
         if (iconUrl) {
           const img = document.createElement('img');
           img.className = 'avatar';
@@ -2165,12 +2160,12 @@
           placeholder.textContent = (name || '?').charAt(0);
           item.appendChild(placeholder);
         }
-        
+
         const info = document.createElement('div');
         info.className = 'info';
         info.innerHTML = `<div class="name">${name}</div><div class="email">${email}</div>`;
         item.appendChild(info);
-        
+
         // 削除ボタン（編集モード時のみ表示、自分以外のみ削除可能）
         if (email !== currentUserEmail) {
           const deleteBtn = document.createElement('button');
@@ -2182,7 +2177,7 @@
           };
           item.appendChild(deleteBtn);
         }
-        
+
         container.appendChild(item);
       });
     }
@@ -2204,31 +2199,44 @@
     function renderInviteList() {
       const container = document.getElementById('inviteUserList');
       container.innerHTML = '';
-      
+
       usersCache.forEach(user => {
-        const isMember = currentRoomMembers.includes(user.email);
-        
+        // usersCache内のフィールド名: id(=email), userName, userIconUrl
+        const userEmail = user.id;
+        const userName = user.userName || userEmail.split('@')[0];
+        const userIconUrl = user.userIconUrl;
+        const isMember = currentRoomMembers.includes(userEmail);
+
         const item = document.createElement('div');
         item.className = 'invite-user-item' + (isMember ? ' disabled' : '');
-        
-        const placeholder = document.createElement('div');
-        placeholder.className = 'avatar-placeholder';
-        placeholder.textContent = (user.name || '?').charAt(0);
-        item.appendChild(placeholder);
-        
+
+        if (userIconUrl) {
+          const img = document.createElement('img');
+          img.className = 'avatar';
+          img.src = userIconUrl;
+          img.alt = userName;
+          img.style.cssText = 'width: 40px; height: 40px; border-radius: 50%; object-fit: cover;';
+          item.appendChild(img);
+        } else {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'avatar-placeholder';
+          placeholder.textContent = (userName || '?').charAt(0);
+          item.appendChild(placeholder);
+        }
+
         const info = document.createElement('div');
         info.className = 'info';
         if (isMember) {
-          info.innerHTML = `<div class="name">${user.name}</div><div class="already-member">すでにメンバーです</div>`;
+          info.innerHTML = `<div class="name">${userName}</div><div class="already-member">すでにメンバーです</div>`;
         } else {
-          info.innerHTML = `<div class="name">${user.name}</div>`;
+          info.innerHTML = `<div class="name">${userName}</div>`;
         }
         item.appendChild(info);
-        
+
         if (!isMember) {
-          item.onclick = () => addMember(user.email, user.name);
+          item.onclick = () => addMember(userEmail, userName);
         }
-        
+
         container.appendChild(item);
       });
     }
