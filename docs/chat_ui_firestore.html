@@ -2907,8 +2907,12 @@
 
       while ((match = mentionRegex.exec(text)) !== null) {
         const userName = match[1];
+        // @All は特別扱い
+        if (userName === 'All') {
+          mentions.push('All');
+        }
         // 実在するユーザーかチェック
-        if (currentRoomMembers.includes(userName) || usersCache[userName]) {
+        else if (currentRoomMembers.includes(userName) || usersCache[userName]) {
           mentions.push(userName);
         }
       }
@@ -3594,8 +3598,17 @@
         console.log('[Firestore] メッセージ送信中...');
 
         // メンションを解析
-        const mentions = parseMentions(message);
+        let mentions = parseMentions(message);
         console.log('[Mention] 検出されたメンション:', mentions);
+
+        // @Allが含まれる場合、全メンバーを通知対象に展開
+        if (mentions.includes('All')) {
+          // 自分以外の全メンバーをmentionsに追加
+          const allMembers = currentRoomMembers.filter(m => m !== currentUserName);
+          // 'All'は残しつつ、全メンバーも追加（重複排除）
+          mentions = [...new Set([...mentions, ...allMembers])];
+          console.log('[Mention] @All展開後:', mentions);
+        }
 
         // メッセージを送信（サブコレクション）
         const messageData = {
