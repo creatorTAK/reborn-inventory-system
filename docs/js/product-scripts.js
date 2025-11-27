@@ -2634,6 +2634,20 @@ window.updateLoadingProgress = function(percent, text) {
       previewSection.style.display = 'block';
       console.log('✅ managementNumberPreview を表示しました');
     }
+
+    // ★ イベントリスナーをUI生成後に設定
+    const p1 = document.getElementById('prefix1');
+    const shelf = document.getElementById('棚番号');
+
+    if (p1) {
+      p1.addEventListener('change', buildShelf);
+      console.log('✅ [レガシーUI] prefix1 イベントリスナー設定完了');
+    }
+
+    if (shelf) {
+      shelf.addEventListener('change', requestNextManagementNumber);
+      console.log('✅ [レガシーUI] 棚番号 イベントリスナー設定完了');
+    }
   }
 
   // ========== 旧システム（後方互換用） ==========
