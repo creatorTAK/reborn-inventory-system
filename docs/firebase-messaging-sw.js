@@ -279,13 +279,13 @@ self.addEventListener('message', (event) => {
   const data = event.data || {};
   
   if (data.type === 'VIEWING_ROOM') {
-    const clientId = event.source?.id || 'unknown';
     if (data.roomId) {
-      viewingRoomByClient.set(clientId, data.roomId);
-      console.log('[SW v39] Client viewing room:', clientId, '->', data.roomId);
+      // グローバル変数として保持（シンプルに1つだけ）
+      self._currentViewingRoomId = data.roomId;
+      console.log('[SW v39] Client viewing room:', data.roomId);
     } else {
-      viewingRoomByClient.delete(clientId);
-      console.log('[SW v39] Client left room:', clientId);
+      self._currentViewingRoomId = null;
+      console.log('[SW v39] Client left room');
     }
   }
 });
@@ -293,12 +293,20 @@ self.addEventListener('message', (event) => {
 // 閲覧中かどうかをチェック（push受信時に使用）
 async function isAnyClientViewingChat() {
   try {
+    // 方法1: postMessageで受け取ったフラグをチェック
+    if (self._currentViewingRoomId) {
+      console.log('[SW v39] Client is viewing room (flag):', self._currentViewingRoomId);
+      return true;
+    }
+
+    // 方法2: フォアグラウンドでチャットページを開いているクライアントを探す
     const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     
     for (const client of clientsList) {
-      const roomId = viewingRoomByClient.get(client.id);
-      if (roomId) {
-        console.log('[SW v39] Found client viewing room:', client.id, roomId);
+      // URLにchat_ui_firestore.htmlが含まれていればチャット閲覧中と判定
+      if (client.url && client.url.includes('chat_ui_firestore.html')) {
+        // visibilityStateがvisibleかどうかも確認（可能なら）
+        console.log('[SW v39] Found client viewing chat (URL):', client.url);
         return true;
       }
     }
