@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-11-13 12:45 -->
+  <!-- Cache Bust: 2025-11-27 16:00 - 検索キーワード引き継ぎ機能追加 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -2072,6 +2072,7 @@
     const fcmTokenParam    = '';
     const gasBaseUrlParam  = '';
     const sessionIdParam   = getQueryParam('sessionId') || 'unknown';
+    const searchQueryParam = getQueryParam('searchQuery') || '';  // 検索キーワード引き継ぎ用
 
     // 判定ロジック：PWA版として動作
     const isEmbedded = (window.top !== window);
@@ -3471,6 +3472,9 @@
       }
     }
 
+    // 初回メッセージ読み込み完了フラグ（検索キーワード引き継ぎ用）
+    let isFirstMessageLoad = true;
+
     // Firestoreメッセージをリアルタイムリスニング
     function startListening() {
       const q = query(
@@ -3534,6 +3538,25 @@
 
         // チャットルームを開いている間は常にバッジをクリア（通知で増えた分をリセット）
         clearAppBadge();
+
+        // 初回読み込み時、検索キーワードが引き継がれていたら自動検索を実行
+        if (isFirstMessageLoad && searchQueryParam) {
+          isFirstMessageLoad = false;
+          console.log('[Search] 検索キーワード引き継ぎ:', searchQueryParam);
+          setTimeout(() => {
+            // 検索モードを開く
+            openSearchMode();
+            // 検索キーワードをセット
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+              searchInput.value = searchQueryParam;
+              // 検索を実行
+              searchMessages();
+            }
+          }, 300);  // メッセージ描画完了を待つ
+        } else if (isFirstMessageLoad) {
+          isFirstMessageLoad = false;
+        }
       }, (error) => {
         console.error('[Firestore] リスニングエラー:', error);
         alert('メッセージの受信に失敗しました: ' + error.message);
