@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-11-27 16:45 - 既読表示のレイアウトシフト修正 -->
+  <!-- Cache Bust: 2025-11-27 17:00 - 既読更新時の差分更新でレイアウトシフト完全修正 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -3488,6 +3488,27 @@
 
     // 初回メッセージ読み込み完了フラグ（検索キーワード引き継ぎ用）
     let isFirstMessageLoad = true;
+    // 初回読み込みフラグ（全体描画 vs 差分更新の判定用）
+    let isInitialLoad = true;
+
+    // 既読ラベルだけを更新する関数（レイアウトシフト防止）
+    function updateReadStatusOnly(msgId, readBy) {
+      const msgElement = document.querySelector(`[data-message-id="${msgId}"]`);
+      if (!msgElement) return;
+      
+      const readStatusEl = msgElement.querySelector('.message-read-status');
+      if (!readStatusEl) return;
+      
+      const readCount = getReadCount(readBy);
+      if (readCount > 0) {
+        if (currentRoomType === 'direct') {
+          readStatusEl.textContent = '既読';
+        } else {
+          readStatusEl.textContent = `既読 ${readCount}`;
+        }
+        readStatusEl.style.visibility = 'visible';
+      }
+    }
 
     // Firestoreメッセージをリアルタイムリスニング
     function startListening() {
@@ -3501,6 +3522,29 @@
         console.log('[Firestore] メッセージ更新:', snapshot.size + '件');
 
         const container = document.getElementById('messagesContainer');
+
+        // 変更タイプを分析（既読更新のみかどうか判定）
+        const changes = snapshot.docChanges();
+        const isReadOnlyUpdate = !isInitialLoad && changes.length > 0 && changes.every(change => {
+          // 'modified' で、かつ readBy のみが変更された場合
+          return change.type === 'modified';
+        });
+
+        // 既読更新のみの場合は差分更新（レイアウトシフト防止）
+        if (isReadOnlyUpdate) {
+          console.log('[Firestore] 既読更新のみ - 差分更新');
+          changes.forEach(change => {
+            if (change.type === 'modified') {
+              const msgData = { id: change.doc.id, ...change.doc.data() };
+              updateReadStatusOnly(msgData.id, msgData.readBy);
+            }
+          });
+          return;
+        }
+
+        // 初回または新規メッセージがある場合は全体を再描画
+        console.log('[Firestore] 全体再描画');
+        isInitialLoad = false;
         container.innerHTML = '';
 
         // 新しい順で取得したので、逆順で表示
