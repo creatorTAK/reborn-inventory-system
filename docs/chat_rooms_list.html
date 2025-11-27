@@ -515,6 +515,75 @@
       font-size: 12px;
       color: #718096;
     }
+    /* 検索ボタン */
+    .search-button {
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.2s ease;
+    }
+    .search-button:active {
+      opacity: 0.7;
+    }
+    /* 検索バー */
+    .search-bar {
+      display: none;
+      padding: 0 16px 12px 16px;
+      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
+    }
+    .search-bar.active {
+      display: block;
+    }
+    .search-input-container {
+      display: flex;
+      align-items: center;
+      background: white;
+      border-radius: 20px;
+      padding: 8px 16px;
+      gap: 8px;
+    }
+    .search-icon {
+      color: #a0aec0;
+      font-size: 16px;
+    }
+    .search-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 15px;
+      background: transparent;
+    }
+    .search-input::placeholder {
+      color: #a0aec0;
+    }
+    .search-clear-button {
+      background: transparent;
+      border: none;
+      color: #a0aec0;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .search-clear-button:active {
+      color: #718096;
+    }
+    /* 検索結果ハイライト */
+    .room-item.search-hidden {
+      display: none !important;
+    }
+    .search-highlight {
+      background: #fef3c7;
+      border-radius: 2px;
+    }
   </style>
 </head>
 <body>
@@ -538,7 +607,20 @@
       <div class="header-title">
         💬 チャットルーム
       </div>
-      <div style="width: 40px;"></div>
+      <button class="search-button" id="search-button" onclick="toggleSearchBar()">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- 検索バー -->
+  <div class="search-bar" id="searchBar">
+    <div class="search-input-container">
+      <i class="bi bi-search search-icon"></i>
+      <input type="text" id="searchInput" class="search-input" placeholder="ルーム名・メンバー・メッセージで検索" oninput="performSearch()" />
+      <button class="search-clear-button" id="searchClearButton" onclick="clearSearch()" style="display: none;">
+        <i class="bi bi-x-circle-fill"></i>
+      </button>
     </div>
   </div>
 
@@ -1889,6 +1971,85 @@
         loadUserList();
       }
     }
+  </script>
+
+  <!-- 検索機能 -->
+  <script>
+    // 検索バー表示/非表示切り替え
+    window.toggleSearchBar = function() {
+      const searchBar = document.getElementById('searchBar');
+      const searchInput = document.getElementById('searchInput');
+
+      if (searchBar.classList.contains('active')) {
+        // 閉じる
+        searchBar.classList.remove('active');
+        searchInput.value = '';
+        clearSearch();
+      } else {
+        // 開く
+        searchBar.classList.add('active');
+        searchInput.focus();
+      }
+    };
+
+    // 検索クリア
+    window.clearSearch = function() {
+      const searchInput = document.getElementById('searchInput');
+      const clearButton = document.getElementById('searchClearButton');
+
+      searchInput.value = '';
+      clearButton.style.display = 'none';
+
+      // 全ルームを表示
+      const roomWrappers = document.querySelectorAll('.room-item-wrapper');
+      roomWrappers.forEach(wrapper => {
+        wrapper.style.display = '';
+      });
+    };
+
+    // 検索実行
+    window.performSearch = function() {
+      const searchInput = document.getElementById('searchInput');
+      const clearButton = document.getElementById('searchClearButton');
+      const query = searchInput.value.trim().toLowerCase();
+
+      // クリアボタン表示/非表示
+      clearButton.style.display = query ? 'flex' : 'none';
+
+      // 検索クエリがない場合は全て表示
+      if (!query) {
+        const roomWrappers = document.querySelectorAll('.room-item-wrapper');
+        roomWrappers.forEach(wrapper => {
+          wrapper.style.display = '';
+        });
+        return;
+      }
+
+      // ルーム一覧を検索
+      const roomWrappers = document.querySelectorAll('.room-item-wrapper');
+      let matchCount = 0;
+
+      roomWrappers.forEach(wrapper => {
+        const roomItem = wrapper.querySelector('.room-item');
+        if (!roomItem) return;
+
+        // 検索対象テキストを収集
+        const roomName = roomItem.querySelector('.room-name')?.textContent || '';
+        const lastMessage = roomItem.querySelector('.room-last-message')?.textContent || '';
+
+        // ルーム名、最終メッセージ（送信者含む）で検索
+        const searchText = `${roomName} ${lastMessage}`.toLowerCase();
+
+        if (searchText.includes(query)) {
+          wrapper.style.display = '';
+          matchCount++;
+        } else {
+          wrapper.style.display = 'none';
+        }
+      });
+
+      console.log('[Search] Query:', query, 'Matches:', matchCount);
+    };
   </script>
 
   <!-- 戻るボタン処理 -->
