@@ -2065,7 +2065,7 @@ window.updateLoadingProgress = function(percent, text) {
                 <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
                   棚番号
                 </label>
-                <select id="mgmt_shelf_second" class="tight" style="width: 100%; min-width: 0; box-sizing: border-box;">
+                <select id="mgmt_shelf_second" class="tight" style="width: 100%; min-width: 0; box-sizing: border-box;" disabled>
                   <option value="">--選択--</option>
                 </select>
               </div>
@@ -2073,16 +2073,23 @@ window.updateLoadingProgress = function(percent, text) {
           `;
           container.appendChild(shelfDiv);
 
+          // DOM追加後に要素を取得（shelfDiv内から直接取得）
+          const shelfFirstSelect = shelfDiv.querySelector('#mgmt_shelf_first');
+          const shelfSecondSelect = shelfDiv.querySelector('#mgmt_shelf_second');
+
+          console.log('[管理番号] 頭文字select要素:', shelfFirstSelect);
+          console.log('[管理番号] 棚番号select要素:', shelfSecondSelect);
+
           // 2文字目のイベントリスナーを先に設定
-          const shelfSecondSelect = document.getElementById('mgmt_shelf_second');
           const updateShelfHandler = function() {
             updateManagementNumberPreview();
           };
           shelfSecondSelect.addEventListener('change', updateShelfHandler);
 
           // 頭文字選択時に2文字目を更新
-          document.getElementById('mgmt_shelf_first').addEventListener('change', function() {
+          shelfFirstSelect.addEventListener('change', function() {
             const firstChar = this.value;
+            console.log('[管理番号] 頭文字が変更されました:', firstChar);
 
             // イベントリスナーを一時的に削除
             shelfSecondSelect.removeEventListener('change', updateShelfHandler);
@@ -2093,6 +2100,7 @@ window.updateLoadingProgress = function(percent, text) {
               shelfSecondSelect.value = '';
               // 頭文字が空の場合は管理番号をクリア
               setManagementNumber('', '未選択');
+              console.log('[管理番号] 棚番号をリセット（disabled）');
             } else {
               let secondOptions = '<option value="">--選択--</option>';
               for (let i = 65; i <= 90; i++) {
@@ -2104,6 +2112,7 @@ window.updateLoadingProgress = function(percent, text) {
               shelfSecondSelect.disabled = false;
               // 頭文字選択時はプレビュー更新しない（2文字目選択まで待つ）
               setManagementNumber('', '');
+              console.log('[管理番号] 棚番号オプション生成完了:', secondOptions.substring(0, 100) + '...');
             }
 
             // イベントリスナーを再設定
