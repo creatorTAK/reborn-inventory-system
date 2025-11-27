@@ -2052,20 +2052,20 @@ window.updateLoadingProgress = function(percent, text) {
           }
 
           shelfDiv.innerHTML = `
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-              <div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%;">
+              <div style="min-width: 0;">
                 <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
                   頭文字
                 </label>
-                <select id="mgmt_shelf_first" class="tight" style="width: 100%;">
+                <select id="mgmt_shelf_first" class="tight" style="width: 100%; min-width: 0; box-sizing: border-box;">
                   ${shelfFirstCharOptions}
                 </select>
               </div>
-              <div>
+              <div style="min-width: 0;">
                 <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
                   棚番号
                 </label>
-                <select id="mgmt_shelf_second" class="tight" style="width: 100%;">
+                <select id="mgmt_shelf_second" class="tight" style="width: 100%; min-width: 0; box-sizing: border-box;">
                   <option value="">--選択--</option>
                 </select>
               </div>
@@ -2234,20 +2234,20 @@ window.updateLoadingProgress = function(percent, text) {
           }
 
           customDiv.innerHTML = `
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-              <div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%;">
+              <div style="min-width: 0;">
                 <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
                   頭文字
                 </label>
-                <select id="mgmt_custom_first" class="tight" style="width: 100%;">
+                <select id="mgmt_custom_first" class="tight" style="width: 100%; min-width: 0; box-sizing: border-box;">
                   ${firstCharOptions}
                 </select>
               </div>
-              <div>
+              <div style="min-width: 0;">
                 <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">
                   棚番号
                 </label>
-                <select id="mgmt_custom_second" class="tight" style="width: 100%;">
+                <select id="mgmt_custom_second" class="tight" style="width: 100%; min-width: 0; box-sizing: border-box;">
                   <option value="">--選択--</option>
                 </select>
               </div>
