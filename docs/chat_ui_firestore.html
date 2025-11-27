@@ -4979,23 +4979,30 @@
       const targetMessage = document.querySelector(`.message-item[data-message-id="${messageId}"]`);
       
       if (targetMessage) {
-        // 即座にスクロール（アニメーションとの競合を避ける）
-        targetMessage.scrollIntoView({ behavior: 'auto', block: 'center' });
+        // チャットコンテナを取得
+        const chatContainer = document.getElementById('chatContainer');
+        
+        // 手動でスクロール位置を計算（scrollIntoViewを使わない）
+        const containerRect = chatContainer.getBoundingClientRect();
+        const targetRect = targetMessage.getBoundingClientRect();
+        const currentScrollTop = chatContainer.scrollTop;
+        
+        // ターゲットを中央に配置するスクロール位置を計算
+        const targetCenter = targetRect.top - containerRect.top + currentScrollTop - (containerRect.height / 2) + (targetRect.height / 2);
+        
+        // 即座にスクロール
+        chatContainer.scrollTop = targetCenter;
 
-        // 少し待ってから揺れアニメーション
-        setTimeout(() => {
-          // 既存のクラスを削除
+        // 揺れアニメーション
+        requestAnimationFrame(() => {
           targetMessage.classList.remove('highlight-shake');
-          // 強制的に再描画
           void targetMessage.offsetWidth;
-          // 揺れアニメーションを追加
           targetMessage.classList.add('highlight-shake');
 
-          // アニメーション終了後にクラスを削除
           setTimeout(() => {
             targetMessage.classList.remove('highlight-shake');
           }, 600);
-        }, 50);
+        });
       } else {
         console.log('[Reply Jump] メッセージが見つかりません:', messageId);
       }
