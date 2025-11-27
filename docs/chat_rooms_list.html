@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-11-27 14:30 - 検索機能追加 -->
+  <!-- Cache Bust: 2025-11-27 15:00 - 検索UI改善（ヘッダー内検索モード） -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -527,30 +527,34 @@
       align-items: center;
       justify-content: center;
       transition: opacity 0.2s ease;
+      width: 40px;
     }
     .search-button:active {
       opacity: 0.7;
     }
-    /* 検索バー */
-    .search-bar {
+    /* 検索モード用ヘッダー */
+    .header-search-mode {
       display: none;
-      padding: 0 16px 12px 16px;
-      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
     }
-    .search-bar.active {
-      display: block;
+    .header-search-mode.active {
+      display: flex;
+    }
+    .header-content.hidden {
+      display: none;
     }
     .search-input-container {
+      flex: 1;
       display: flex;
       align-items: center;
       background: white;
       border-radius: 20px;
-      padding: 8px 16px;
+      padding: 6px 12px;
       gap: 8px;
     }
     .search-icon {
       color: #a0aec0;
       font-size: 16px;
+      flex-shrink: 0;
     }
     .search-input {
       flex: 1;
@@ -558,31 +562,29 @@
       outline: none;
       font-size: 15px;
       background: transparent;
+      min-width: 0;
     }
     .search-input::placeholder {
       color: #a0aec0;
     }
-    .search-clear-button {
+    .search-close-btn {
       background: transparent;
       border: none;
-      color: #a0aec0;
-      font-size: 18px;
+      color: white;
+      font-size: 20px;
       cursor: pointer;
-      padding: 0;
+      padding: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
+      width: 40px;
     }
-    .search-clear-button:active {
-      color: #718096;
+    .search-close-btn:active {
+      opacity: 0.7;
     }
     /* 検索結果ハイライト */
-    .room-item.search-hidden {
+    .room-item-wrapper.search-hidden {
       display: none !important;
-    }
-    .search-highlight {
-      background: #fef3c7;
-      border-radius: 2px;
     }
   </style>
 </head>
@@ -600,26 +602,29 @@
 
   <!-- 統一ヘッダー -->
   <div class="header">
-    <div class="header-content">
+    <!-- 通常モード -->
+    <div class="header-content" id="headerNormal">
       <button class="back-button" id="back-button">
         <i class="bi bi-chevron-left"></i>
       </button>
       <div class="header-title">
         💬 チャットルーム
       </div>
-      <button class="search-button" id="search-button" onclick="toggleSearchBar()">
+      <button class="search-button" id="search-button" onclick="openSearchMode()">
         <i class="bi bi-search"></i>
       </button>
     </div>
-  </div>
-
-  <!-- 検索バー -->
-  <div class="search-bar" id="searchBar">
-    <div class="search-input-container">
-      <i class="bi bi-search search-icon"></i>
-      <input type="text" id="searchInput" class="search-input" placeholder="ルーム名・メンバー・メッセージで検索" oninput="performSearch()" />
-      <button class="search-clear-button" id="searchClearButton" onclick="clearSearch()" style="display: none;">
-        <i class="bi bi-x-circle-fill"></i>
+    <!-- 検索モード -->
+    <div class="header-content header-search-mode" id="headerSearch">
+      <button class="back-button" onclick="goBack()">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="search-input-container">
+        <i class="bi bi-search search-icon"></i>
+        <input type="text" id="searchInput" class="search-input" placeholder="ルーム名・メンバー・メッセージで検索" oninput="performSearch()" />
+      </div>
+      <button class="search-close-btn" onclick="closeSearchMode()">
+        <i class="bi bi-x-lg"></i>
       </button>
     </div>
   </div>
@@ -1975,52 +1980,44 @@
 
   <!-- 検索機能 -->
   <script>
-    // 検索バー表示/非表示切り替え
-    window.toggleSearchBar = function() {
-      const searchBar = document.getElementById('searchBar');
+    // 検索モードを開く
+    window.openSearchMode = function() {
+      const headerNormal = document.getElementById('headerNormal');
+      const headerSearch = document.getElementById('headerSearch');
       const searchInput = document.getElementById('searchInput');
 
-      if (searchBar.classList.contains('active')) {
-        // 閉じる
-        searchBar.classList.remove('active');
-        searchInput.value = '';
-        clearSearch();
-      } else {
-        // 開く
-        searchBar.classList.add('active');
-        searchInput.focus();
-      }
+      headerNormal.classList.add('hidden');
+      headerSearch.classList.add('active');
+      searchInput.focus();
     };
 
-    // 検索クリア
-    window.clearSearch = function() {
+    // 検索モードを閉じる
+    window.closeSearchMode = function() {
+      const headerNormal = document.getElementById('headerNormal');
+      const headerSearch = document.getElementById('headerSearch');
       const searchInput = document.getElementById('searchInput');
-      const clearButton = document.getElementById('searchClearButton');
 
+      headerNormal.classList.remove('hidden');
+      headerSearch.classList.remove('active');
       searchInput.value = '';
-      clearButton.style.display = 'none';
 
       // 全ルームを表示
       const roomWrappers = document.querySelectorAll('.room-item-wrapper');
       roomWrappers.forEach(wrapper => {
-        wrapper.style.display = '';
+        wrapper.classList.remove('search-hidden');
       });
     };
 
     // 検索実行
     window.performSearch = function() {
       const searchInput = document.getElementById('searchInput');
-      const clearButton = document.getElementById('searchClearButton');
       const query = searchInput.value.trim().toLowerCase();
-
-      // クリアボタン表示/非表示
-      clearButton.style.display = query ? 'flex' : 'none';
 
       // 検索クエリがない場合は全て表示
       if (!query) {
         const roomWrappers = document.querySelectorAll('.room-item-wrapper');
         roomWrappers.forEach(wrapper => {
-          wrapper.style.display = '';
+          wrapper.classList.remove('search-hidden');
         });
         return;
       }
@@ -2041,10 +2038,10 @@
         const searchText = `${roomName} ${lastMessage}`.toLowerCase();
 
         if (searchText.includes(query)) {
-          wrapper.style.display = '';
+          wrapper.classList.remove('search-hidden');
           matchCount++;
         } else {
-          wrapper.style.display = 'none';
+          wrapper.classList.add('search-hidden');
         }
       });
 
