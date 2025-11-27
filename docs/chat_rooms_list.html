@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-11-27 15:30 - 検索ボタンCSS修正（白背景上で見えるように） -->
+  <!-- Cache Bust: 2025-11-27 15:45 - 検索結果ハイライト機能追加（黄色） -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -597,6 +597,12 @@
     /* 検索結果フィルタ */
     .room-item-wrapper.search-hidden {
       display: none !important;
+    }
+    /* 検索ハイライト - chat_ui_firestore.htmlと統一（黄色） */
+    .search-highlight {
+      background: #fef08a;
+      padding: 1px 2px;
+      border-radius: 2px;
     }
   </style>
 </head>
@@ -2012,23 +2018,57 @@
       headerSearch.classList.remove('active');
       searchInput.value = '';
 
-      // 全ルームを表示
+      // 全ルームを表示してハイライトを削除
       const roomWrappers = document.querySelectorAll('.room-item-wrapper');
       roomWrappers.forEach(wrapper => {
         wrapper.classList.remove('search-hidden');
+        // ハイライトを削除
+        const roomNameEl = wrapper.querySelector('.room-name');
+        const lastMessageEl = wrapper.querySelector('.room-last-message');
+        removeHighlights(roomNameEl);
+        removeHighlights(lastMessageEl);
       });
     };
+
+    // テキストをハイライト表示するヘルパー関数
+    function highlightText(text, query) {
+      if (!text || !query) return text;
+      const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+      return text.replace(regex, '<span class="search-highlight">$1</span>');
+    }
+
+    // 正規表現用エスケープ
+    function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    // ハイライトを削除
+    function removeHighlights(element) {
+      if (!element) return;
+      const highlights = element.querySelectorAll('.search-highlight');
+      highlights.forEach(el => {
+        const parent = el.parentNode;
+        parent.replaceChild(document.createTextNode(el.textContent), el);
+        parent.normalize();
+      });
+    }
 
     // 検索実行
     window.performSearch = function() {
       const searchInput = document.getElementById('searchInput');
-      const query = searchInput.value.trim().toLowerCase();
+      const query = searchInput.value.trim();
+      const queryLower = query.toLowerCase();
 
-      // 検索クエリがない場合は全て表示
+      // 検索クエリがない場合は全て表示してハイライト削除
       if (!query) {
         const roomWrappers = document.querySelectorAll('.room-item-wrapper');
         roomWrappers.forEach(wrapper => {
           wrapper.classList.remove('search-hidden');
+          // ハイライトを削除して元のテキストに戻す
+          const roomNameEl = wrapper.querySelector('.room-name');
+          const lastMessageEl = wrapper.querySelector('.room-last-message');
+          removeHighlights(roomNameEl);
+          removeHighlights(lastMessageEl);
         });
         return;
       }
@@ -2041,22 +2081,36 @@
         const roomItem = wrapper.querySelector('.room-item');
         if (!roomItem) return;
 
-        // 検索対象テキストを収集
-        const roomName = roomItem.querySelector('.room-name')?.textContent || '';
-        const lastMessage = roomItem.querySelector('.room-last-message')?.textContent || '';
+        // 検索対象要素を取得
+        const roomNameEl = roomItem.querySelector('.room-name');
+        const lastMessageEl = roomItem.querySelector('.room-last-message');
+
+        // まずハイライトを削除
+        removeHighlights(roomNameEl);
+        removeHighlights(lastMessageEl);
+
+        // 元のテキストを取得
+        const roomName = roomNameEl?.textContent || '';
+        const lastMessage = lastMessageEl?.textContent || '';
 
         // ルーム名、最終メッセージ（送信者含む）で検索
         const searchText = `${roomName} ${lastMessage}`.toLowerCase();
 
-        if (searchText.includes(query)) {
+        if (searchText.includes(queryLower)) {
           wrapper.classList.remove('search-hidden');
           matchCount++;
+
+          // マッチした箇所をハイライト
+          if (roomNameEl && roomName.toLowerCase().includes(queryLower)) {
+            roomNameEl.innerHTML = highlightText(roomName, query);
+          }
+          if (lastMessageEl && lastMessage.toLowerCase().includes(queryLower)) {
+            lastMessageEl.innerHTML = highlightText(lastMessage, query);
+          }
         } else {
           wrapper.classList.add('search-hidden');
         }
       });
-
-      console.log('[Search] Query:', query, 'Matches:', matchCount);
     };
   </script>
 
