@@ -933,6 +933,28 @@
       color: rgba(255, 255, 255, 0.7);
     }
 
+    /* リプライヘッダーのクリック可能スタイル */
+    .message-reply-header {
+      cursor: pointer;
+    }
+
+    .message-reply-header:active {
+      opacity: 0.7;
+    }
+
+    /* メッセージハイライトアニメーション（リプライジャンプ時） */
+    @keyframes message-highlight-shake {
+      0%, 100% { transform: translateX(0); background-color: transparent; }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+      20%, 40%, 60%, 80% { transform: translateX(4px); }
+    }
+
+    .message-item.highlight-shake {
+      animation: message-highlight-shake 0.6s ease-in-out;
+      background-color: rgba(0, 122, 255, 0.1);
+      border-radius: 12px;
+    }
+
     /* textarea（シンプルな入力欄） */
     .message-input {
       width: 100%;
@@ -3729,6 +3751,12 @@
         replyContent.appendChild(replyText);
         replyHeader.appendChild(replyContent);
 
+        // リプライヘッダーをタップでリプライ元メッセージにジャンプ
+        replyHeader.addEventListener('click', function(e) {
+          e.stopPropagation(); // 長押しメニューが開かないように
+          scrollToMessage(msg.replyTo.messageId);
+        });
+
         bubble.appendChild(replyHeader);
       }
 
@@ -4942,6 +4970,37 @@
         messageInput.style.borderRadius = '0 0 20px 20px';
       } else {
         messageInput.style.borderRadius = '20px';
+      }
+    }
+
+    // リプライ元メッセージにジャンプ（揺れるアニメーション付き）
+    function scrollToMessage(messageId) {
+      if (!messageId) return;
+
+      // メッセージ要素を検索
+      const targetMessage = document.querySelector(`.message-item[data-message-id="${messageId}"]`);
+      
+      if (targetMessage) {
+        // スムーズスクロールでジャンプ
+        targetMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // 少し待ってからハイライトアニメーション
+        setTimeout(() => {
+          // 既存のハイライトクラスを削除
+          targetMessage.classList.remove('highlight-shake');
+          // 強制的に再描画
+          void targetMessage.offsetWidth;
+          // ハイライトクラスを追加
+          targetMessage.classList.add('highlight-shake');
+
+          // アニメーション終了後にクラスを削除
+          setTimeout(() => {
+            targetMessage.classList.remove('highlight-shake');
+          }, 700);
+        }, 300);
+      } else {
+        console.log('[Reply Jump] メッセージが見つかりません:', messageId);
+        // メッセージが読み込まれていない場合の処理（将来的に古いメッセージ読み込みが必要）
       }
     }
 
