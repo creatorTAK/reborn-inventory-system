@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v60';  // 戻るボタン背景白に変更
+const CACHE_VERSION = 'v61';  // 閲覧中バッジスキップ対応
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -26,7 +26,10 @@ const PRECACHE_RESOURCES = [
 // Firebase Messaging SDKは使用しない（2重通知を防ぐため）
 // pushイベントを手動でハンドリングする
 
-console.log('[SW v38] Service Worker initialized - manual push handling only');
+// 閲覧中のルームID管理（クライアントからpostMessageで受け取る）
+const viewingRoomByClient = new Map(); // clientId -> roomId
+
+console.log('[SW v39] Service Worker initialized - manual push handling only');
 
 // ================================================================================
 // キャッシュクリーンアップ（軽量化）
@@ -201,8 +204,12 @@ self.addEventListener('push', (event) => {
       }
       notificationCache.set(cacheKey, Date.now());
 
-      // 2. バッジ更新（最小化されたIndexedDB操作）
-      if (notificationType === 'system') {
+      // 2. バッジ更新（閲覧中ならスキップ）
+      const isViewing = await isAnyClientViewingChat();
+      
+      if (isViewing) {
+        console.log('[Badge] Client is viewing chat, skipping badge increment');
+      } else if (notificationType === 'system') {
         console.log('[Badge] System notification: SystemNotificationDB + Firestore');
         await incrementBadge('SystemNotificationDB');
         await updateFirestoreUnreadCount(userName);
@@ -264,6 +271,42 @@ self.addEventListener('push', (event) => {
   // 🎯 CRITICAL: ブラウザにSWの実行完了を保証
   event.waitUntil(promiseChain);
 });
+
+// ================================================================================
+// クライアントからのメッセージ受信（閲覧中ルームID管理）
+// ================================================================================
+self.addEventListener('message', (event) => {
+  const data = event.data || {};
+  
+  if (data.type === 'VIEWING_ROOM') {
+    const clientId = event.source?.id || 'unknown';
+    if (data.roomId) {
+      viewingRoomByClient.set(clientId, data.roomId);
+      console.log('[SW v39] Client viewing room:', clientId, '->', data.roomId);
+    } else {
+      viewingRoomByClient.delete(clientId);
+      console.log('[SW v39] Client left room:', clientId);
+    }
+  }
+});
+
+// 閲覧中かどうかをチェック（push受信時に使用）
+async function isAnyClientViewingChat() {
+  try {
+    const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    
+    for (const client of clientsList) {
+      const roomId = viewingRoomByClient.get(client.id);
+      if (roomId) {
+        console.log('[SW v39] Found client viewing room:', client.id, roomId);
+        return true;
+      }
+    }
+  } catch (err) {
+    console.error('[SW v39] Error checking clients:', err);
+  }
+  return false;
+}
 
 // ================================================================================
 // 通知クリックイベント

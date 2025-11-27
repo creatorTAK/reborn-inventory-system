@@ -2228,6 +2228,21 @@
       // 戻るボタンに他のルームの未読数を表示
       loadOtherRoomsUnreadCount();
 
+      // Service Workerに閲覧中であることを通知（バッジ制御用）
+      notifySwViewingRoom(currentRoomId);
+
+      // ページ離脱時にSWへ通知（バッジ制御用）
+      window.addEventListener('pagehide', () => {
+        notifySwLeftRoom();
+      });
+      window.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          notifySwLeftRoom();
+        } else if (document.visibilityState === 'visible') {
+          notifySwViewingRoom(currentRoomId);
+        }
+      });
+
       // ルームのmembersに自分を追加（未追加の場合）
       try {
         if (currentRoomId && currentUserName) {
@@ -2430,6 +2445,30 @@
         console.log('[既読] 既読更新完了:', messageIds.length, '件');
       } catch (error) {
         console.error('[既読] 既読更新エラー:', error);
+      }
+    }
+
+    // Service Workerに閲覧中のルームを通知
+    function notifySwViewingRoom(roomId) {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'VIEWING_ROOM',
+          roomId: roomId
+        });
+        console.log('[SW通知] 閲覧中ルームを通知:', roomId);
+      } else {
+        console.log('[SW通知] Service Workerが利用できません');
+      }
+    }
+
+    // Service Workerにルーム閲覧終了を通知
+    function notifySwLeftRoom() {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'VIEWING_ROOM',
+          roomId: null
+        });
+        console.log('[SW通知] ルーム閲覧終了を通知');
       }
     }
 
