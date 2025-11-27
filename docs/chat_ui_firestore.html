@@ -783,6 +783,159 @@
       background: rgba(255, 255, 255, 0.5);
     }
 
+    /* リプライプレビュー（入力欄の上部、LINE風） */
+    .reply-preview {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background-color: #f0f4f8;
+      border: 1px solid #cbd5e0;
+      border-bottom: none;
+      border-radius: 16px 16px 0 0;
+    }
+
+    .reply-preview.active {
+      display: flex;
+    }
+
+    .reply-preview + .mention-tags + .message-input,
+    .reply-preview.active + .mention-tags:not(.has-tags) + .message-input {
+      border-radius: 0 0 20px 20px;
+    }
+
+    .reply-preview-icon {
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      background-color: #e2e8f0;
+    }
+
+    .reply-preview-icon-placeholder {
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--reborn-primary), #0056cc);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .reply-preview-content {
+      flex: 1;
+      min-width: 0;
+      border-left: 2px solid var(--reborn-primary);
+      padding-left: 10px;
+    }
+
+    .reply-preview-user {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #718096;
+      margin-bottom: 2px;
+    }
+
+    .reply-preview-text {
+      font-size: 0.85rem;
+      color: #4a5568;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .reply-preview-close {
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
+      border: none;
+      background: #cbd5e0;
+      border-radius: 50%;
+      color: #4a5568;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .reply-preview-close:hover {
+      background: #a0aec0;
+    }
+
+    /* メッセージバブル内のリプライ表示（LINE風） */
+    .message-reply-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background-color: rgba(0, 0, 0, 0.04);
+      border-radius: 8px 8px 0 0;
+      margin: -10px -10px 8px -10px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .message-item-mine .message-reply-header {
+      background-color: rgba(255, 255, 255, 0.15);
+      border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .reply-header-icon {
+      width: 20px;
+      height: 20px;
+      min-width: 20px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .reply-header-icon-placeholder {
+      width: 20px;
+      height: 20px;
+      min-width: 20px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #718096, #4a5568);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      font-weight: 600;
+    }
+
+    .reply-header-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .reply-header-user {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #718096;
+    }
+
+    .message-item-mine .reply-header-user {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .reply-header-text {
+      font-size: 0.75rem;
+      color: #718096;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+
+    .message-item-mine .reply-header-text {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
     /* textarea（シンプルな入力欄） */
     .message-input {
       width: 100%;
@@ -1760,6 +1913,15 @@
       </button>
 
       <div class="message-input-wrapper">
+        <!-- リプライプレビュー（LINE風） -->
+        <div id="replyPreview" class="reply-preview">
+          <div id="replyPreviewIcon"></div>
+          <div class="reply-preview-content">
+            <div id="replyPreviewUser" class="reply-preview-user"></div>
+            <div id="replyPreviewText" class="reply-preview-text"></div>
+          </div>
+          <button class="reply-preview-close" onclick="cancelReply()">✕</button>
+        </div>
         <!-- メンションタグ表示エリア -->
         <div id="mentionTags" class="mention-tags"></div>
         <textarea
@@ -1868,6 +2030,9 @@
     let usersCache = []; // ユーザー一覧キャッシュ（アイコン表示用）
     let memberEditMode = false; // メンバー編集モード
     let memberIconsBarExpanded = false; // メンバーアイコン行の展開状態
+
+    // リプライ機能用（LINE風）
+    let currentReplyTo = null; // { messageId, userName, text, userIcon }
 
     // PWA版：URLパラメータから取得（GASテンプレート変数は使用しない）
     const isPWAFlag        = true;  // PWA版として動作
@@ -3525,6 +3690,51 @@
       const bubble = document.createElement('div');
       bubble.className = 'message-bubble';
 
+      // リプライヘッダー（LINE風）
+      if (msg.replyTo && msg.replyTo.userName) {
+        const replyHeader = document.createElement('div');
+        replyHeader.className = 'message-reply-header';
+
+        // リプライ先のアイコン
+        const replyIconUrl = msg.replyTo.userIcon || getUserIconUrl(msg.replyTo.userName);
+        if (replyIconUrl) {
+          const replyIcon = document.createElement('img');
+          replyIcon.className = 'reply-header-icon';
+          replyIcon.src = replyIconUrl;
+          replyIcon.alt = msg.replyTo.userName;
+          replyIcon.onerror = function() {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'reply-header-icon-placeholder';
+            placeholder.textContent = (msg.replyTo.userName || '?').charAt(0);
+            this.replaceWith(placeholder);
+          };
+          replyHeader.appendChild(replyIcon);
+        } else {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'reply-header-icon-placeholder';
+          placeholder.textContent = (msg.replyTo.userName || '?').charAt(0);
+          replyHeader.appendChild(placeholder);
+        }
+
+        // リプライ先のコンテンツ
+        const replyContent = document.createElement('div');
+        replyContent.className = 'reply-header-content';
+
+        const replyUser = document.createElement('div');
+        replyUser.className = 'reply-header-user';
+        replyUser.textContent = msg.replyTo.userName;
+
+        const replyText = document.createElement('div');
+        replyText.className = 'reply-header-text';
+        replyText.textContent = msg.replyTo.text || '';
+
+        replyContent.appendChild(replyUser);
+        replyContent.appendChild(replyText);
+        replyHeader.appendChild(replyContent);
+
+        bubble.appendChild(replyHeader);
+      }
+
       // 取り消し済みメッセージの場合
       if (msg.deleted === true) {
         bubble.classList.add('deleted');
@@ -3770,6 +3980,19 @@
           messageData.mentions = mentions;
         }
 
+        // リプライ情報がある場合は追加（LINE風）
+        if (currentReplyTo) {
+          messageData.replyTo = {
+            messageId: currentReplyTo.messageId,
+            userName: currentReplyTo.userName,
+            text: currentReplyTo.text.length > 100 
+              ? currentReplyTo.text.substring(0, 100) + '...' 
+              : currentReplyTo.text,
+            userIcon: currentReplyTo.userIcon || null
+          };
+          console.log('[Reply] リプライ情報を追加:', messageData.replyTo);
+        }
+
         await addDoc(collection(db, `rooms/${currentRoomId}/messages`), messageData);
 
         console.log('[Firestore] メッセージ送信完了');
@@ -3791,6 +4014,9 @@
         input.value = '';
         insertedMentions = []; // 挿入済みメンションもリセット
         clearMentionTags(); // メンションタグもクリア
+
+        // リプライプレビューをクリア
+        cancelReply();
 
       } catch (error) {
         console.error('[Firestore] 送信エラー:', error);
@@ -4618,23 +4844,109 @@
         });
     };
 
-    // リプライ機能
+    // リプライ機能（LINE風）
     window.replyMessage = function() {
-      if (!contextMenuData.messageText) return;
+      if (!contextMenuData.messageText && !contextMenuData.fileUrl) return;
 
       // closeContextMenu()の前にデータを保存
-      const messageText = contextMenuData.messageText;
+      const messageId = contextMenuData.messageId;
+      const messageText = contextMenuData.messageText || '（画像）';
+      const senderName = contextMenuData.senderName || '不明';
+
+      // 送信者のアイコンURLを取得
+      const senderIcon = getUserIconUrl(senderName);
+
       closeContextMenu();
 
-      const messageInput = document.getElementById('messageInput');
-      const replyText = `> ${messageText}\n\n`;
-      messageInput.value = replyText;
-      messageInput.focus();
+      // リプライ情報を保存
+      currentReplyTo = {
+        messageId: messageId,
+        userName: senderName,
+        text: messageText,
+        userIcon: senderIcon
+      };
 
-      // 自動リサイズ
-      messageInput.style.height = 'auto';
-      messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+      // リプライプレビューを表示
+      showReplyPreview();
+
+      // 入力欄にフォーカス
+      const messageInput = document.getElementById('messageInput');
+      messageInput.focus();
     };
+
+    // リプライプレビュー表示
+    function showReplyPreview() {
+      if (!currentReplyTo) return;
+
+      const preview = document.getElementById('replyPreview');
+      const iconContainer = document.getElementById('replyPreviewIcon');
+      const userElement = document.getElementById('replyPreviewUser');
+      const textElement = document.getElementById('replyPreviewText');
+
+      // アイコン設定
+      iconContainer.innerHTML = '';
+      if (currentReplyTo.userIcon) {
+        const img = document.createElement('img');
+        img.className = 'reply-preview-icon';
+        img.src = currentReplyTo.userIcon;
+        img.alt = currentReplyTo.userName;
+        img.onerror = function() {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'reply-preview-icon-placeholder';
+          placeholder.textContent = (currentReplyTo.userName || '?').charAt(0);
+          this.replaceWith(placeholder);
+        };
+        iconContainer.appendChild(img);
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'reply-preview-icon-placeholder';
+        placeholder.textContent = (currentReplyTo.userName || '?').charAt(0);
+        iconContainer.appendChild(placeholder);
+      }
+
+      // ユーザー名とテキスト設定
+      userElement.textContent = currentReplyTo.userName;
+      textElement.textContent = currentReplyTo.text.length > 50
+        ? currentReplyTo.text.substring(0, 50) + '...'
+        : currentReplyTo.text;
+
+      // プレビュー表示
+      preview.classList.add('active');
+
+      // 入力エリアのborder-radius調整
+      adjustInputBorderRadius();
+    }
+
+    // リプライキャンセル
+    window.cancelReply = function() {
+      currentReplyTo = null;
+      const preview = document.getElementById('replyPreview');
+      preview.classList.remove('active');
+
+      // 入力エリアのborder-radius調整
+      adjustInputBorderRadius();
+    };
+
+    // 入力エリアのborder-radius調整
+    function adjustInputBorderRadius() {
+      const replyPreview = document.getElementById('replyPreview');
+      const mentionTags = document.getElementById('mentionTags');
+      const messageInput = document.getElementById('messageInput');
+
+      const hasReply = replyPreview.classList.contains('active');
+      const hasMentions = mentionTags.classList.contains('has-tags');
+
+      if (hasReply && hasMentions) {
+        messageInput.style.borderRadius = '0 0 20px 20px';
+        mentionTags.style.borderRadius = '0';
+      } else if (hasReply) {
+        messageInput.style.borderRadius = '0 0 20px 20px';
+      } else if (hasMentions) {
+        messageInput.style.borderRadius = '0 0 20px 20px';
+      } else {
+        messageInput.style.borderRadius = '20px';
+      }
+    }
 
     // 送信取り消し機能（LINE方式）
     window.unsendMessage = async function() {
