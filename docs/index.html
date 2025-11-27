@@ -1236,13 +1236,25 @@
       const skeleton = document.getElementById('skeleton-loader');
 
       if (iframe && skeleton) {
-        iframe.addEventListener('load', () => {
-                  skeleton.classList.add('hidden');
-          // 0.3秒後に完全に削除（transitionと同期）
-          setTimeout(() => {
-            skeleton.style.display = 'none';
-          }, 300);
-        });
+        // スケルトン非表示の共通関数
+        const hideSkeleton = () => {
+          if (!skeleton.classList.contains('hidden')) {
+            skeleton.classList.add('hidden');
+            setTimeout(() => {
+              skeleton.style.display = 'none';
+            }, 300);
+          }
+        };
+
+        iframe.addEventListener('load', hideSkeleton);
+
+        // フォールバック: 5秒後に強制的にスケルトンを非表示（iframeロードがハングした場合）
+        setTimeout(() => {
+          if (!skeleton.classList.contains('hidden')) {
+            console.warn('⚠️ iframe読み込みタイムアウト（5秒）- スケルトンを強制非表示');
+            hideSkeleton();
+          }
+        }, 5000);
 
         // 🚀 iframe遅延ロード: 初期表示を高速化
         // DOM構築完了後、少し待ってからiframeを読み込み開始

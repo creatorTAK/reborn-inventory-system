@@ -2744,13 +2744,13 @@ window.updateLoadingProgress = function(percent, text) {
           console.log('📋 管理番号セグメント設定:', segments);
         }
 
-        // セグメントが未設定の場合、デフォルト（棚-連番）
+        // セグメントが未設定の場合、デフォルト（棚番号-4桁連番、1001開始）
         if (segments.length === 0) {
           segments = [
             { type: 'shelf', config: { format: 'AA' }, separator: '-' },
-            { type: 'sequence', config: { digits: '5', start: '1' }, separator: '' }
+            { type: 'sequence', config: { digits: '4', start: '1001' }, separator: '' }
           ];
-          console.log('⚠️ セグメント未設定、デフォルト使用:', segments);
+          console.log('⚠️ セグメント未設定、デフォルト使用（AA-1001形式）:', segments);
         }
 
         // 管理番号を生成
