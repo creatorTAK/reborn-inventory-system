@@ -2217,6 +2217,9 @@
           }, { merge: true });
 
           console.log('[Firestore] 未読カウントリセット完了:', currentUserEmail);
+
+          // アプリバッジもクリア（チャットルームを開いたので既読）
+          clearAppBadge();
         }
       } catch (error) {
         console.error('[Firestore] 未読カウントリセットエラー:', error);
@@ -2430,6 +2433,41 @@
       }
     }
 
+    // アプリバッジをクリア（チャットルーム閲覧中）
+    function clearAppBadge() {
+      // Navigator Badge API
+      if ('clearAppBadge' in navigator) {
+        navigator.clearAppBadge().catch(err => {
+          console.error('[Badge] clearAppBadge エラー:', err);
+        });
+        console.log('[Badge] アプリバッジクリア');
+      }
+
+      // IndexedDBのバッジカウントもリセット
+      try {
+        const req = indexedDB.open('badgeDB', 1);
+        req.onsuccess = () => {
+          const db = req.result;
+          if (db.objectStoreNames.contains('badge')) {
+            const tx = db.transaction('badge', 'readwrite');
+            const store = tx.objectStore('badge');
+            store.put(0, 'count');
+            tx.oncomplete = () => {
+              db.close();
+              console.log('[Badge] IndexedDB バッジカウントリセット');
+            };
+          } else {
+            db.close();
+          }
+        };
+        req.onerror = () => {
+          console.error('[Badge] IndexedDB open エラー:', req.error);
+        };
+      } catch (error) {
+        console.error('[Badge] IndexedDB エラー:', error);
+      }
+    }
+
     // リアルタイムで未読カウントをリセット（チャットルームを開いている間）
     async function resetUnreadCountRealtime() {
       if (!currentUserEmail || !currentRoomId) return;
@@ -2443,6 +2481,9 @@
         }, { merge: true });
 
         console.log('[未読] リアルタイム未読カウントリセット完了');
+
+        // アプリバッジもクリア（チャットルームを開いている間は常にクリア）
+        clearAppBadge();
       } catch (error) {
         console.error('[未読] リアルタイム未読カウントリセットエラー:', error);
       }
