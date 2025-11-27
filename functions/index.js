@@ -459,14 +459,26 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
 
     if (mentions.length > 0) {
       console.log('📢 [onChatMessageCreated] メンション検出:', mentions);
-      
+
       // メンションされたユーザーを特定（ユーザー名で照合）
       mentionedUsers = memberEmails.filter(user => mentions.includes(user.userName));
       // 通常通知対象はメンションされていないユーザーのみ
       normalUsers = memberEmails.filter(user => !mentions.includes(user.userName));
-      
+
       console.log('📢 [onChatMessageCreated] メンション通知対象:', mentionedUsers.map(u => u.userName));
       console.log('📢 [onChatMessageCreated] 通常通知対象:', normalUsers.map(u => u.userName));
+    }
+
+    // 🎯 閲覧中ユーザーを通知対象から除外（バッジ問題対策）
+    const viewingUsers = await getViewingUsers(roomId);
+    console.log('👀 [onChatMessageCreated] 閲覧中ユーザー:', viewingUsers);
+
+    if (viewingUsers.length > 0) {
+      const beforeCount = normalUsers.length + mentionedUsers.length;
+      normalUsers = normalUsers.filter(user => !viewingUsers.includes(user.userEmail));
+      mentionedUsers = mentionedUsers.filter(user => !viewingUsers.includes(user.userEmail));
+      const afterCount = normalUsers.length + mentionedUsers.length;
+      console.log(`👀 [onChatMessageCreated] 閲覧中ユーザー除外: ${beforeCount} -> ${afterCount}`);
     }
 
     // FCM通知送信と未読カウント更新を並列実行
@@ -498,6 +510,29 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
     console.error('❌ [onChatMessageCreated] エラー:', error);
   }
 });
+
+/**
+ * 🎯 指定ルームを閲覧中のユーザーのメールアドレスを取得
+ * viewingStatus コレクションをクエリして、roomId が一致するユーザーを返す
+ */
+async function getViewingUsers(roomId) {
+  try {
+    const viewingSnapshot = await db.collection('viewingStatus')
+      .where('roomId', '==', roomId)
+      .get();
+
+    const viewingUsers = [];
+    viewingSnapshot.forEach(doc => {
+      // ドキュメントIDがユーザーのメールアドレス
+      viewingUsers.push(doc.id);
+    });
+
+    return viewingUsers;
+  } catch (error) {
+    console.error('❌ [getViewingUsers] エラー:', error);
+    return []; // エラー時は空配列を返す（通知は送る）
+  }
+}
 
 /**
  * 個別チャット未読カウント更新

@@ -2231,16 +2231,27 @@
       // Service Workerに閲覧中であることを通知（バッジ制御用）
       notifySwViewingRoom(currentRoomId);
 
-      // ページ離脱時にSWへ通知（バッジ制御用）
+      // 🎯 Firestoreに閲覧中状態を書き込み（サーバー側で通知除外に使用）
+      setViewingStatus(currentRoomId);
+
+      // ページ離脱時にSWへ通知 + Firestore更新
       window.addEventListener('pagehide', () => {
         notifySwLeftRoom();
+        clearViewingStatus();
       });
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
           notifySwLeftRoom();
+          clearViewingStatus();
         } else if (document.visibilityState === 'visible') {
           notifySwViewingRoom(currentRoomId);
+          setViewingStatus(currentRoomId);
         }
+      });
+
+      // beforeunload でも閲覧終了を記録（pagehideが発火しない場合の保険）
+      window.addEventListener('beforeunload', () => {
+        clearViewingStatus();
       });
 
       // ルームのmembersに自分を追加（未追加の場合）
@@ -2524,6 +2535,38 @@
         };
       } catch (error) {
         console.error(`[Badge] ${dbName} エラー:`, error);
+      }
+    }
+
+    // 🎯 Firestoreに閲覧中状態を書き込み（サーバー側で通知除外に使用）
+    async function setViewingStatus(roomId) {
+      if (!currentUserEmail || !roomId) return;
+
+      try {
+        const viewingRef = doc(db, 'viewingStatus', currentUserEmail);
+        await setDoc(viewingRef, {
+          roomId: roomId,
+          lastUpdated: serverTimestamp()
+        });
+        console.log('[閲覧状態] Firestore更新: 閲覧中 -', roomId);
+      } catch (error) {
+        console.error('[閲覧状態] Firestore書き込みエラー:', error);
+      }
+    }
+
+    // 🎯 Firestoreから閲覧中状態をクリア
+    async function clearViewingStatus() {
+      if (!currentUserEmail) return;
+
+      try {
+        const viewingRef = doc(db, 'viewingStatus', currentUserEmail);
+        await setDoc(viewingRef, {
+          roomId: null,
+          lastUpdated: serverTimestamp()
+        });
+        console.log('[閲覧状態] Firestore更新: 閲覧終了');
+      } catch (error) {
+        console.error('[閲覧状態] Firestoreクリアエラー:', error);
       }
     }
 

@@ -10,8 +10,9 @@ service cloud.firestore {
       // 全員が読み取り可能（チャット用）
       allow read: if true;
 
-      // 書き込みは認証済みユーザーのみ
-      allow write: if request.auth != null;
+      // 【MVP暫定】書き込みを全員許可（基本設定・アイコンアップロード機能のため）
+      // TODO: 本番環境では認証必須に変更すること
+      allow write: if true;
 
       // サブコレクション: デバイス（FCMトークン管理）(PROD-002)
       match /devices/{deviceId} {
@@ -270,6 +271,31 @@ service cloud.firestore {
 
       // 書き込み: 全員許可（自動初期化のため）
       // TODO: 本番環境では管理者のみに制限すること
+      allow write: if true;
+    }
+
+    // ========================================
+    // 閲覧中状態コレクション（バッジ問題対策）
+    // ========================================
+    match /viewingStatus/{userEmail} {
+      // 読み取り: 全員許可（Firebase Functionsで閲覧中チェック用）
+      allow read: if true;
+
+      // 書き込み: 全員許可（PWAクライアントから閲覧状態を書き込む）
+      // TODO: 本番環境では自分のドキュメントのみ書き込み可能に変更
+      allow write: if true;
+    }
+
+    // ========================================
+    // activeDevicesコレクション（通知高速化 - 方法2）
+    // ========================================
+    match /activeDevices/{userEmail} {
+      // 読み取り: 全員許可（基本設定画面での通知設定保存のため）
+      allow read: if true;
+
+      // 【MVP暫定】書き込みを全員許可（基本設定画面での通知設定保存のため）
+      // Cloud Functions はサービスアカウントで実行されるため、このルールは適用されない
+      // TODO: 本番環境では認証必須に変更すること
       allow write: if true;
     }
 
