@@ -2618,7 +2618,6 @@ window.updateLoadingProgress = function(percent, text) {
             <option value="">--</option>
           </select>
         </div>
-        <div></div>
       </div>
     `;
 
