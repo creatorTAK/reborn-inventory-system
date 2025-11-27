@@ -872,6 +872,10 @@
       font-size: 14px;
       margin-right: 10px;
     }
+    .mention-all-icon {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+      font-size: 18px;
+    }
     .mention-suggestion-name {
       font-size: 15px;
       color: #1f2937;
@@ -2739,11 +2743,19 @@
       }
 
       // 自分を除外し、クエリでフィルタリング
-      filteredMentionUsers = users.filter(userName => {
+      let filtered = users.filter(userName => {
         if (userName === currentUserName) return false;
         if (mentionQuery === '') return true;
         return userName.toLowerCase().includes(mentionQuery);
       });
+
+      // @All（全員）を先頭に追加（クエリが空または"all"を含む場合）
+      const allLabel = 'All';
+      if (mentionQuery === '' || allLabel.toLowerCase().includes(mentionQuery)) {
+        filtered = [allLabel, ...filtered];
+      }
+
+      filteredMentionUsers = filtered;
 
       if (filteredMentionUsers.length === 0) {
         hideMentionSuggestions();
@@ -2772,31 +2784,38 @@
         item.className = 'mention-suggestion-item' + (index === selectedMentionIndex ? ' selected' : '');
         item.dataset.userName = userName;
 
-        // アイコン
-        const iconUrl = getUserIconUrl(userName);
-        if (iconUrl) {
-          const icon = document.createElement('img');
-          icon.className = 'mention-suggestion-icon';
-          icon.src = iconUrl;
-          icon.alt = userName;
-          icon.onerror = function() {
+        // アイコン（@Allの場合は特別なアイコン）
+        if (userName === 'All') {
+          const allIcon = document.createElement('div');
+          allIcon.className = 'mention-suggestion-icon-placeholder mention-all-icon';
+          allIcon.innerHTML = '👥';
+          item.appendChild(allIcon);
+        } else {
+          const iconUrl = getUserIconUrl(userName);
+          if (iconUrl) {
+            const icon = document.createElement('img');
+            icon.className = 'mention-suggestion-icon';
+            icon.src = iconUrl;
+            icon.alt = userName;
+            icon.onerror = function() {
+              const placeholder = document.createElement('div');
+              placeholder.className = 'mention-suggestion-icon-placeholder';
+              placeholder.textContent = userName.charAt(0);
+              this.replaceWith(placeholder);
+            };
+            item.appendChild(icon);
+          } else {
             const placeholder = document.createElement('div');
             placeholder.className = 'mention-suggestion-icon-placeholder';
             placeholder.textContent = userName.charAt(0);
-            this.replaceWith(placeholder);
-          };
-          item.appendChild(icon);
-        } else {
-          const placeholder = document.createElement('div');
-          placeholder.className = 'mention-suggestion-icon-placeholder';
-          placeholder.textContent = userName.charAt(0);
-          item.appendChild(placeholder);
+            item.appendChild(placeholder);
+          }
         }
 
-        // 名前
+        // 名前（@Allの場合は「全員」と表示）
         const name = document.createElement('span');
         name.className = 'mention-suggestion-name';
-        name.textContent = userName;
+        name.textContent = userName === 'All' ? '全員 (All)' : userName;
         item.appendChild(name);
 
         // タップ/クリックで選択（hidden textarea パターン）
