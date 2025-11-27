@@ -481,9 +481,13 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
       console.log(`👀 [onChatMessageCreated] 閲覧中ユーザー除外: ${beforeCount} -> ${afterCount}`);
     }
 
+    // 🎯 閲覧中ユーザーを未読カウント更新からも除外（バッジ問題対策）
+    const memberEmailsForUnread = memberEmails.filter(user => !viewingUsers.includes(user.userEmail));
+    console.log(`📊 [onChatMessageCreated] 未読カウント更新対象: ${memberEmailsForUnread.length}人 (閲覧中${viewingUsers.length}人除外)`);
+
     // FCM通知送信と未読カウント更新を並列実行
     const notificationPromises = [
-      updateChatUnreadCounts(roomId, memberEmails)
+      updateChatUnreadCounts(roomId, memberEmailsForUnread)
     ];
 
     // 通常の通知（メンションされていないユーザー）
