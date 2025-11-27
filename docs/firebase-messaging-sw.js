@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v61';  // 閲覧中バッジスキップ対応
+const CACHE_VERSION = 'v62';  // バッジクリア命令対応
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -273,22 +273,72 @@ self.addEventListener('push', (event) => {
 });
 
 // ================================================================================
-// クライアントからのメッセージ受信（閲覧中ルームID管理）
+// クライアントからのメッセージ受信（閲覧中ルームID管理 + バッジクリア）
 // ================================================================================
 self.addEventListener('message', (event) => {
   const data = event.data || {};
-  
+
   if (data.type === 'VIEWING_ROOM') {
     if (data.roomId) {
       // グローバル変数として保持（シンプルに1つだけ）
       self._currentViewingRoomId = data.roomId;
-      console.log('[SW v39] Client viewing room:', data.roomId);
+      console.log('[SW v62] Client viewing room:', data.roomId);
     } else {
       self._currentViewingRoomId = null;
-      console.log('[SW v39] Client left room');
+      console.log('[SW v62] Client left room');
     }
   }
+
+  // 🎯 バッジクリア命令（クライアントからの要求）
+  if (data.type === 'CLEAR_BADGE') {
+    console.log('[SW v62] Received CLEAR_BADGE command');
+    clearAllBadges();
+  }
 });
+
+// ================================================================================
+// バッジクリア処理（SW側で実行）
+// ================================================================================
+async function clearAllBadges() {
+  try {
+    // 1. Navigator Badge API（アプリアイコンバッジ）
+    if (navigator.clearAppBadge) {
+      await navigator.clearAppBadge();
+      console.log('[SW v62] App badge cleared via Navigator API');
+    }
+
+    // 2. IndexedDB のカウントをリセット（RebornBadgeDB）
+    await resetBadgeInDB('RebornBadgeDB');
+
+    // 3. IndexedDB のカウントをリセット（SystemNotificationDB）
+    await resetBadgeInDB('SystemNotificationDB');
+
+    console.log('[SW v62] All badges cleared successfully');
+  } catch (err) {
+    console.error('[SW v62] Error clearing badges:', err);
+  }
+}
+
+// IndexedDBのバッジカウントをリセット
+function resetBadgeInDB(dbName) {
+  return openDB(dbName).then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('badge', 'readwrite');
+    const store = tx.objectStore('badge');
+    store.put(0, 'count');
+
+    tx.oncomplete = () => {
+      db.close();
+      console.log(`[SW v62] ${dbName} count reset to 0`);
+      resolve(true);
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  })).catch(err => {
+    console.error(`[SW v62] Error resetting ${dbName}:`, err);
+  });
+}
 
 // 閲覧中かどうかをチェック（push受信時に使用）
 async function isAnyClientViewingChat() {

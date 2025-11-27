@@ -2472,19 +2472,39 @@
       }
     }
 
-    // アプリバッジをクリア（チャットルーム閲覧中）
+    // 🎯 アプリバッジをクリア（Service Worker経由 + クライアント両方）
     function clearAppBadge() {
-      // Navigator Badge API
+      // 1. Service Workerにバッジクリア命令を送信（最重要）
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'CLEAR_BADGE'
+        });
+        console.log('[Badge] SW へバッジクリア命令送信');
+      }
+
+      // 2. クライアント側でもNavigator Badge APIを呼ぶ（フォールバック）
       if ('clearAppBadge' in navigator) {
         navigator.clearAppBadge().catch(err => {
           console.error('[Badge] clearAppBadge エラー:', err);
         });
-        console.log('[Badge] アプリバッジクリア');
+        console.log('[Badge] アプリバッジクリア（クライアント側）');
       }
 
-      // IndexedDBのバッジカウントもリセット
+      // 3. IndexedDBのバッジカウントもリセット（クライアント側フォールバック）
+      resetBadgeDB('RebornBadgeDB');
+      resetBadgeDB('SystemNotificationDB');
+    }
+
+    // IndexedDBのバッジカウントをリセット
+    function resetBadgeDB(dbName) {
       try {
-        const req = indexedDB.open('badgeDB', 1);
+        const req = indexedDB.open(dbName, 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('badge')) {
+            db.createObjectStore('badge');
+          }
+        };
         req.onsuccess = () => {
           const db = req.result;
           if (db.objectStoreNames.contains('badge')) {
@@ -2493,17 +2513,17 @@
             store.put(0, 'count');
             tx.oncomplete = () => {
               db.close();
-              console.log('[Badge] IndexedDB バッジカウントリセット');
+              console.log(`[Badge] ${dbName} カウントリセット`);
             };
           } else {
             db.close();
           }
         };
         req.onerror = () => {
-          console.error('[Badge] IndexedDB open エラー:', req.error);
+          console.error(`[Badge] ${dbName} open エラー:`, req.error);
         };
       } catch (error) {
-        console.error('[Badge] IndexedDB エラー:', error);
+        console.error(`[Badge] ${dbName} エラー:`, error);
       }
     }
 
