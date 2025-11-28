@@ -6632,14 +6632,15 @@ ${prompt || '（未設定）'}
      */
     async function checkUserPermissionAndUpdateUI() {
       try {
-        // ユーザー名を取得
+        // ユーザーのメールアドレスを取得（FirestoreのドキュメントIDはメールアドレス）
+        const userEmail = localStorage.getItem('reborn_user_email');
         const userName = localStorage.getItem('reborn_user_name');
-        if (!userName) {
-          console.warn('⚠️ [権限チェック] ユーザー名が見つかりません');
+        if (!userEmail) {
+          console.warn('⚠️ [権限チェック] ユーザーメールが見つかりません');
           return;
         }
 
-        console.log('🔐 [権限チェック] ユーザー:', userName);
+        console.log('🔐 [権限チェック] ユーザー:', userName, '(', userEmail, ')');
 
         // Firestoreからユーザー情報を取得
         if (!window.db) {
@@ -6647,7 +6648,7 @@ ${prompt || '（未設定）'}
           return;
         }
 
-        const userDoc = await window.db.collection('users').doc(userName).get();
+        const userDoc = await window.db.collection('users').doc(userEmail).get();
 
         if (!userDoc.exists) {
           console.warn('⚠️ [権限チェック] ユーザードキュメントが見つかりません');
@@ -6655,15 +6656,16 @@ ${prompt || '（未設定）'}
         }
 
         const userData = userDoc.data();
-        const permission = userData.permission || 'スタッフ';
+        const permissionId = userData.permissionId || 'staff';
+        const permissionDisplay = userData.permissionDisplay || 'スタッフ';
 
-        console.log('🔐 [権限チェック] 権限:', permission);
+        console.log('🔐 [権限チェック] 権限:', permissionDisplay, '(ID:', permissionId + ')');
 
         // 権限をlocalStorageにキャッシュ（他の画面でも使えるように）
-        localStorage.setItem('reborn_user_permission', permission);
+        localStorage.setItem('reborn_user_permission', permissionId);
 
         // オーナー以外の場合、特定のタブを非表示
-        if (permission !== 'オーナー') {
+        if (permissionId !== 'owner') {
           hideOwnerOnlyTabs();
           console.log('🔒 [権限チェック] オーナー専用タブを非表示にしました');
         } else {
