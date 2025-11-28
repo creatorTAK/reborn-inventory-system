@@ -6623,6 +6623,134 @@ ${prompt || '（未設定）'}
         console.error('❌ 梱包資材読み込みエラー:', error);
       }
     }
+
+    // ================= 権限チェック機能（PERM-001） =================
+
+    /**
+     * ユーザー権限をチェックしてUIを制御
+     * オーナー以外の場合、基本設定以外のタブを非表示にする
+     */
+    async function checkUserPermissionAndUpdateUI() {
+      try {
+        // ユーザー名を取得
+        const userName = localStorage.getItem('reborn_user_name');
+        if (!userName) {
+          console.warn('⚠️ [権限チェック] ユーザー名が見つかりません');
+          return;
+        }
+
+        console.log('🔐 [権限チェック] ユーザー:', userName);
+
+        // Firestoreからユーザー情報を取得
+        if (!window.db) {
+          console.warn('⚠️ [権限チェック] Firestoreが初期化されていません');
+          return;
+        }
+
+        const userDoc = await window.db.collection('users').doc(userName).get();
+
+        if (!userDoc.exists) {
+          console.warn('⚠️ [権限チェック] ユーザードキュメントが見つかりません');
+          return;
+        }
+
+        const userData = userDoc.data();
+        const permission = userData.permission || 'スタッフ';
+
+        console.log('🔐 [権限チェック] 権限:', permission);
+
+        // 権限をlocalStorageにキャッシュ（他の画面でも使えるように）
+        localStorage.setItem('reborn_user_permission', permission);
+
+        // オーナー以外の場合、特定のタブを非表示
+        if (permission !== 'オーナー') {
+          hideOwnerOnlyTabs();
+          console.log('🔒 [権限チェック] オーナー専用タブを非表示にしました');
+        } else {
+          console.log('✅ [権限チェック] オーナー権限 - 全タブ表示');
+        }
+
+      } catch (error) {
+        console.error('❌ [権限チェック] エラー:', error);
+      }
+    }
+
+    /**
+     * オーナー専用タブを非表示にする
+     */
+    function hideOwnerOnlyTabs() {
+      // システム設定のサブタブ（基本設定以外）
+      const systemOwnerOnlyTabs = [
+        'system-management-tab',  // 管理番号設定
+        'system-shipping-tab',    // 配送設定
+        'system-procure-tab'      // 仕入・出品設定
+      ];
+
+      // 商品登録設定のサブタブ（全て）
+      const productOwnerOnlyTabs = [
+        'product-salesword-tab',  // セールスワード設定
+        'product-condition-tab',  // 商品状態設定
+        'product-hashtag-tab',    // ハッシュタグ設定
+        'product-discount-tab',   // 割引設定
+        'product-ai-tab'          // AI生成設定
+      ];
+
+      // システム設定のオーナー専用タブを非表示
+      systemOwnerOnlyTabs.forEach(tabId => {
+        const tab = document.getElementById(tabId);
+        if (tab) {
+          tab.closest('.nav-item').style.display = 'none';
+        }
+      });
+
+      // 商品登録設定タブ全体を非表示（メインタブ）
+      // 商品登録設定のサブタブコンテナを非表示
+      const productConfigTabs = document.getElementById('productConfigTabs');
+      if (productConfigTabs) {
+        productConfigTabs.style.display = 'none';
+      }
+
+      // 商品登録設定の全サブタブを非表示
+      productOwnerOnlyTabs.forEach(tabId => {
+        const tab = document.getElementById(tabId);
+        if (tab) {
+          tab.closest('.nav-item').style.display = 'none';
+        }
+      });
+
+      // 商品登録設定エリアにメッセージを表示
+      const productPane = document.getElementById('product');
+      if (productPane) {
+        const sectionTitle = productPane.querySelector('.section-title');
+        if (sectionTitle) {
+          sectionTitle.innerHTML = '📝 商品登録設定 <span style="font-size: 12px; color: #6b7280; font-weight: normal;">(オーナーのみ編集可能)</span>';
+        }
+        // サブタブコンテンツを非表示にしてメッセージを表示
+        const tabContent = productPane.querySelector('.tab-content');
+        if (tabContent) {
+          tabContent.innerHTML = '<div style="padding: 40px; text-align: center; color: #6b7280;"><i class="bi bi-lock" style="font-size: 48px; display: block; margin-bottom: 16px;"></i>この設定はオーナーのみ編集できます。<br>設定の変更が必要な場合はオーナーにお問い合わせください。</div>';
+        }
+      }
+
+      // システム設定のオーナー専用タブコンテンツも非表示
+      const systemOwnerOnlyPanes = [
+        'system-management',
+        'system-shipping',
+        'system-procure'
+      ];
+
+      systemOwnerOnlyPanes.forEach(paneId => {
+        const pane = document.getElementById(paneId);
+        if (pane) {
+          pane.style.display = 'none';
+        }
+      });
+    }
+
+    // Firebase初期化後に権限チェックを実行
+    if (window.firestoreReady) {
+      checkUserPermissionAndUpdateUI();
+    }
   </script>
 
   <!-- 以下、他の初期化スクリプト -->
