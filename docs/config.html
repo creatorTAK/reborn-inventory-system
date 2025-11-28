@@ -866,6 +866,9 @@
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="system-procure-tab" data-bs-toggle="tab" data-bs-target="#system-procure" type="button" role="tab" style="font-size: 13px; padding: 8px 12px;">💼仕入・出品設定</button>
           </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="system-permission-tab" data-bs-toggle="tab" data-bs-target="#system-permission" type="button" role="tab" style="font-size: 13px; padding: 8px 12px;">🔐権限設定</button>
+          </li>
         </ul>
 
         <!-- システム設定内のタブコンテンツ -->
@@ -2841,6 +2844,59 @@ ${descFormattedNumber}`;
         <button type="button" onclick="clearProcureListingDefaults()" style="width: 100%; padding: 10px; background: white; border: 2px solid #ef4444; border-radius: 8px; color: #ef4444; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 16px; transition: all 0.2s;" onmouseover="this.style.background='#fef2f2';" onmouseout="this.style.background='white';">
           🗑️ すべてクリア
         </button>
+          </div>
+
+          <!-- 権限設定タブ (PERM-001 Phase 2) -->
+          <div class="tab-pane fade" id="system-permission" role="tabpanel">
+            <!-- ローディング表示 -->
+            <div id="permissionSettingsLoading" style="display: flex; justify-content: center; align-items: center; padding: 40px;">
+              <div style="text-align: center;">
+                <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f4f6; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                <div style="margin-top: 12px; color: #6b7280; font-size: 14px;">読み込み中...</div>
+              </div>
+            </div>
+
+            <!-- 権限設定コンテンツ（初期非表示） -->
+            <div id="permissionSettingsContent" style="display: none;">
+
+              <!-- ヒント -->
+              <div style="font-size: 11px; color: #6b7280; padding: 10px 12px; background: #fef3c7; border-radius: 6px; border-left: 3px solid #f59e0b; margin-bottom: 16px; line-height: 1.6;">
+                <div style="color: #b45309; font-weight: 600; margin-bottom: 4px;">
+                  <span>🔐 オーナー専用機能</span>
+                </div>
+                <div>
+                  ユーザーの権限レベルを変更したり、各メニューの表示/非表示を権限ごとに設定できます。
+                </div>
+              </div>
+
+              <!-- ユーザー権限管理セクション -->
+              <div style="margin-bottom: 24px; padding: 16px; background: white; border-radius: 8px; border: 2px solid #e5e7eb;">
+                <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px;">
+                  👥 ユーザー権限管理
+                </div>
+                <div id="userPermissionList" style="display: flex; flex-direction: column; gap: 12px;">
+                  <!-- ユーザーリストがここに動的に追加される -->
+                </div>
+              </div>
+
+              <!-- メニュー表示設定セクション -->
+              <div style="margin-bottom: 24px; padding: 16px; background: white; border-radius: 8px; border: 2px solid #e5e7eb;">
+                <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px;">
+                  📋 メニュー表示設定
+                </div>
+                <div style="font-size: 12px; color: #6b7280; margin-bottom: 12px;">
+                  各メニューをどの権限に表示するか設定します。オーナーは常にすべて表示されます。
+                </div>
+                <div id="menuPermissionList" style="display: flex; flex-direction: column; gap: 12px;">
+                  <!-- メニュー設定リストがここに動的に追加される -->
+                </div>
+              </div>
+
+              <!-- 保存ボタン -->
+              <button type="button" id="savePermissionSettingsBtn" onclick="savePermissionSettings()" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border: none; border-radius: 8px; color: white; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(59, 130, 246, 0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(59, 130, 246, 0.3)';">
+                💾 設定を保存
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -6493,7 +6549,7 @@ ${prompt || '（未設定）'}
       const systemTabContent = document.getElementById('systemConfigTabContent');
       if (!systemTabContent) return;
 
-      const tabIds = ['system-basic', 'system-management', 'system-shipping', 'system-procure'];
+      const tabIds = ['system-basic', 'system-management', 'system-shipping', 'system-procure', 'system-permission'];
       let touchStartX = 0;
       let touchStartY = 0;
       let touchEndX = 0;
@@ -6685,7 +6741,8 @@ ${prompt || '（未設定）'}
       const systemOwnerOnlyTabs = [
         'system-management-tab',  // 管理番号設定
         'system-shipping-tab',    // 配送設定
-        'system-procure-tab'      // 仕入・出品設定
+        'system-procure-tab',     // 仕入・出品設定
+        'system-permission-tab'   // 権限設定
       ];
 
       // 商品登録設定のサブタブ（全て）
@@ -7270,14 +7327,259 @@ ${prompt || '（未設定）'}
     console.log('[sidebar_config] DOMContentLoaded fired');
     const backButton = document.getElementById('back-button');
     console.log('[sidebar_config] backButton element:', backButton);
-    
+
     if (backButton) {
       backButton.addEventListener('click', goBack);
       console.log('[sidebar_config] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
     } else {
       console.error('[sidebar_config] ❌ 戻るボタンが見つかりません');
     }
+
+    // 権限設定タブのクリックイベント
+    const permissionTab = document.getElementById('system-permission-tab');
+    if (permissionTab) {
+      permissionTab.addEventListener('shown.bs.tab', loadPermissionSettings);
+    }
   });
+
+  // ================= 権限設定機能 (PERM-001 Phase 2) =================
+
+  // メニュー定義（メニューIDとラベル）
+  const MENU_DEFINITIONS = [
+    { id: 'config-product', label: '📝 商品登録設定', defaultOwnerOnly: true },
+    { id: 'master-product', label: '🗂️ マスタ管理（商品）', defaultOwnerOnly: false },
+    { id: 'master-business', label: '🗂️ マスタ管理（業務）', defaultOwnerOnly: false },
+    { id: 'inventory', label: '📦 在庫管理', defaultOwnerOnly: false },
+    { id: 'inventory_history', label: '📋 入出庫履歴', defaultOwnerOnly: false },
+    { id: 'chat', label: '💬 チャット', defaultOwnerOnly: false }
+  ];
+
+  let permissionSettingsLoaded = false;
+  let usersData = [];
+  let menuPermissions = {};
+
+  /**
+   * 権限設定を読み込む
+   */
+  async function loadPermissionSettings() {
+    if (permissionSettingsLoaded) {
+      console.log('[PERM] 権限設定は既に読み込み済み');
+      return;
+    }
+
+    console.log('[PERM] 権限設定を読み込み中...');
+
+    try {
+      if (!window.db) {
+        throw new Error('Firestoreが初期化されていません');
+      }
+
+      // 1. ユーザー一覧を取得
+      const usersSnapshot = await window.db.collection('users').get();
+      usersData = [];
+      usersSnapshot.forEach(doc => {
+        const data = doc.data();
+        usersData.push({
+          email: doc.id,
+          userName: data.userName || doc.id,
+          permissionId: data.permissionId || 'staff',
+          permissionDisplay: data.permissionDisplay || '📋 スタッフ'
+        });
+      });
+      console.log('[PERM] ユーザー数:', usersData.length);
+
+      // 2. メニュー権限設定を取得
+      const menuPermDoc = await window.db.collection('settings').doc('menuPermissions').get();
+      if (menuPermDoc.exists) {
+        menuPermissions = menuPermDoc.data();
+      } else {
+        // デフォルト設定を作成
+        menuPermissions = {};
+        MENU_DEFINITIONS.forEach(menu => {
+          menuPermissions[menu.id] = {
+            label: menu.label,
+            visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', 'staff', 'contractor']
+          };
+        });
+      }
+      console.log('[PERM] メニュー権限設定:', menuPermissions);
+
+      // 3. UIを描画
+      renderUserPermissionList();
+      renderMenuPermissionList();
+
+      // ローディング非表示、コンテンツ表示
+      document.getElementById('permissionSettingsLoading').style.display = 'none';
+      document.getElementById('permissionSettingsContent').style.display = 'block';
+
+      permissionSettingsLoaded = true;
+      console.log('[PERM] ✅ 権限設定の読み込み完了');
+
+    } catch (error) {
+      console.error('[PERM] ❌ 権限設定読み込みエラー:', error);
+      alert('権限設定の読み込みに失敗しました: ' + error.message);
+    }
+  }
+
+  /**
+   * ユーザー権限リストを描画
+   */
+  function renderUserPermissionList() {
+    const container = document.getElementById('userPermissionList');
+    if (!container) return;
+
+    if (usersData.length === 0) {
+      container.innerHTML = '<div style="color: #6b7280; font-size: 13px;">ユーザーが登録されていません</div>';
+      return;
+    }
+
+    // 現在のユーザーのメールアドレス
+    const currentUserEmail = localStorage.getItem('reborn_user_email');
+
+    container.innerHTML = usersData.map(user => {
+      const isCurrentUser = user.email === currentUserEmail;
+      const isOwner = user.permissionId === 'owner';
+
+      return `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: ${isCurrentUser ? '#f0f9ff' : '#f9fafb'}; border-radius: 8px; border: 1px solid ${isCurrentUser ? '#bfdbfe' : '#e5e7eb'};">
+          <div style="flex: 1;">
+            <div style="font-size: 14px; font-weight: 600; color: #374151;">${user.userName}</div>
+            <div style="font-size: 11px; color: #6b7280;">${user.email}</div>
+          </div>
+          <select
+            data-email="${user.email}"
+            onchange="updateUserPermission(this)"
+            style="padding: 8px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white; min-width: 140px;"
+            ${isCurrentUser && isOwner ? 'disabled title="自分自身の権限は変更できません"' : ''}
+          >
+            <option value="owner" ${user.permissionId === 'owner' ? 'selected' : ''}>🔑 オーナー</option>
+            <option value="staff" ${user.permissionId === 'staff' ? 'selected' : ''}>📋 スタッフ</option>
+            <option value="contractor" ${user.permissionId === 'contractor' ? 'selected' : ''}>🔧 外注</option>
+          </select>
+        </div>
+      `;
+    }).join('');
+  }
+
+  /**
+   * メニュー権限リストを描画
+   */
+  function renderMenuPermissionList() {
+    const container = document.getElementById('menuPermissionList');
+    if (!container) return;
+
+    container.innerHTML = MENU_DEFINITIONS.map(menu => {
+      const perm = menuPermissions[menu.id] || { visibleTo: ['owner', 'staff', 'contractor'] };
+      const staffChecked = perm.visibleTo.includes('staff') ? 'checked' : '';
+      const contractorChecked = perm.visibleTo.includes('contractor') ? 'checked' : '';
+
+      return `
+        <div style="padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+          <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">${menu.label}</div>
+          <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" checked disabled style="width: 16px; height: 16px;">
+              <span style="font-size: 12px; color: #6b7280;">🔑 オーナー（常時表示）</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" data-menu="${menu.id}" data-role="staff" ${staffChecked} onchange="updateMenuPermission(this)" style="width: 16px; height: 16px; cursor: pointer;">
+              <span style="font-size: 12px; color: #374151;">📋 スタッフ</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="checkbox" data-menu="${menu.id}" data-role="contractor" ${contractorChecked} onchange="updateMenuPermission(this)" style="width: 16px; height: 16px; cursor: pointer;">
+              <span style="font-size: 12px; color: #374151;">🔧 外注</span>
+            </label>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  /**
+   * ユーザー権限を更新（メモリ上）
+   */
+  function updateUserPermission(selectElement) {
+    const email = selectElement.dataset.email;
+    const newPermissionId = selectElement.value;
+    const permissionMap = {
+      'owner': '🔑 オーナー',
+      'staff': '📋 スタッフ',
+      'contractor': '🔧 外注'
+    };
+
+    const user = usersData.find(u => u.email === email);
+    if (user) {
+      user.permissionId = newPermissionId;
+      user.permissionDisplay = permissionMap[newPermissionId];
+      console.log('[PERM] ユーザー権限を変更:', email, '->', newPermissionId);
+    }
+  }
+
+  /**
+   * メニュー権限を更新（メモリ上）
+   */
+  function updateMenuPermission(checkbox) {
+    const menuId = checkbox.dataset.menu;
+    const role = checkbox.dataset.role;
+    const isChecked = checkbox.checked;
+
+    if (!menuPermissions[menuId]) {
+      menuPermissions[menuId] = { visibleTo: ['owner'] };
+    }
+
+    const visibleTo = menuPermissions[menuId].visibleTo;
+    if (isChecked && !visibleTo.includes(role)) {
+      visibleTo.push(role);
+    } else if (!isChecked && visibleTo.includes(role)) {
+      const index = visibleTo.indexOf(role);
+      visibleTo.splice(index, 1);
+    }
+
+    console.log('[PERM] メニュー権限を変更:', menuId, '->', visibleTo);
+  }
+
+  /**
+   * 権限設定を保存
+   */
+  async function savePermissionSettings() {
+    const saveBtn = document.getElementById('savePermissionSettingsBtn');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '保存中...';
+    saveBtn.disabled = true;
+
+    try {
+      if (!window.db) {
+        throw new Error('Firestoreが初期化されていません');
+      }
+
+      // 1. ユーザー権限を更新
+      const batch = window.db.batch();
+      usersData.forEach(user => {
+        const userRef = window.db.collection('users').doc(user.email);
+        batch.update(userRef, {
+          permissionId: user.permissionId,
+          permissionDisplay: user.permissionDisplay,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+
+      // 2. メニュー権限設定を保存
+      const menuPermRef = window.db.collection('settings').doc('menuPermissions');
+      batch.set(menuPermRef, menuPermissions);
+
+      await batch.commit();
+
+      alert('✅ 権限設定を保存しました');
+      console.log('[PERM] ✅ 権限設定を保存しました');
+
+    } catch (error) {
+      console.error('[PERM] ❌ 権限設定保存エラー:', error);
+      alert('権限設定の保存に失敗しました: ' + error.message);
+    } finally {
+      saveBtn.innerHTML = originalText;
+      saveBtn.disabled = false;
+    }
+  }
 </script>
 
 </body>
