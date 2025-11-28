@@ -28,7 +28,7 @@ function setupSheetProtection() {
       Logger.log('[setupSheetProtection] WARNING: オーナーが見つかりません。保護設定をスキップします。');
       return {
         success: false,
-        message: 'オーナーが見つかりません。先にオーナーを設定してください。'
+        message: '管理者が見つかりません。先に管理者を設定してください。'
       };
     }
 
@@ -53,7 +53,7 @@ function setupSheetProtection() {
 
       // 新しい保護を設定
       const protection = sheet.protect();
-      protection.setDescription('オーナー専用（SEC-001: 権限変更保護）');
+      protection.setDescription('管理者専用（SEC-001: 権限変更保護）');
       protection.setWarningOnly(false); // 編集禁止
 
       // オーナーのみ編集可能

@@ -375,7 +375,7 @@ function sendProductRegistrationWebhook(form, managementNumber) {
       try {
         const tantoshaValue = form['担当者'].toString().trim();
         // "スタッフの山田太郎" → "山田太郎"（プレフィックス除去）
-        userName = tantoshaValue.replace(/^(スタッフの|オーナーの|外注の)/, '');
+        userName = tantoshaValue.replace(/^(スタッフの|オーナーの|管理者の|外注の)/, '');
         debugLog('[sendProductRegistrationWebhook] [Phase1] 担当者フィールドから取得: ' + userName);
       } catch (tantoshaError) {
         debugLog('[sendProductRegistrationWebhook] [Phase1] 担当者フィールド取得エラー: ' + tantoshaError);

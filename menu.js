@@ -187,7 +187,7 @@ function updateUserPermission(userName, permission) {
       if (currentOwnerName && currentOwnerName !== userName) {
         return {
           success: false,
-          message: `既に ${currentOwnerName} がオーナーです。オーナーは1人のみ設定可能です。`
+          message: `既に ${currentOwnerName} が管理者です。管理者は1人のみ設定可能です。`
         };
       }
     }
@@ -1530,7 +1530,7 @@ function setupSheetProtectionMenu() {
   // 確認ダイアログ
   const response = ui.alert(
     '🔒 シート保護設定',
-    '以下のシートをオーナーのみ編集可能に保護します：\n\n' +
+    '以下のシートを管理者のみ編集可能に保護します：\n\n' +
     '・FCM通知登録\n・ユーザー権限管理\n\n' +
     'スタッフ・外注は閲覧のみ可能になります。\n\n実行しますか？',
     ui.ButtonSet.YES_NO
