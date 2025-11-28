@@ -6679,7 +6679,7 @@ ${prompt || '（未設定）'}
 
     /**
      * ユーザー権限をチェックしてUIを制御
-     * オーナー以外の場合、基本設定以外のタブを非表示にする
+     * Firestoreのメニュー権限設定に基づいて表示/非表示を制御
      */
     async function checkUserPermissionAndUpdateUI() {
       try {
@@ -6715,12 +6715,34 @@ ${prompt || '（未設定）'}
         // 権限をlocalStorageにキャッシュ（他の画面でも使えるように）
         localStorage.setItem('reborn_user_permission', permissionId);
 
-        // オーナー以外の場合、特定のタブを非表示
-        if (permissionId !== 'owner') {
-          hideOwnerOnlyTabs();
-          console.log('🔒 [権限チェック] 管理者専用タブを非表示にしました');
+        // 管理者は全タブ表示
+        if (permissionId === 'owner') {
+          console.log('✅ [権限チェック] 管理者権限 - 全タブ表示');
+          return;
+        }
+
+        // スタッフ・外注の場合、Firestoreの設定に基づいて表示制御
+        const menuPermDoc = await window.db.collection('settings').doc('menuPermissions').get();
+        const menuPerms = menuPermDoc.exists ? menuPermDoc.data() : {};
+
+        console.log('📋 [権限チェック] メニュー権限設定:', menuPerms);
+
+        // 商品登録設定の表示制御
+        const productPerm = menuPerms['config-product'] || { visibleTo: ['owner'] };
+        if (!productPerm.visibleTo.includes(permissionId)) {
+          hideProductConfigTabs();
+          console.log('🔒 [権限チェック] 商品登録設定を非表示');
+        }
+
+        // システム設定の表示制御
+        const systemPerm = menuPerms['config-system'] || { visibleTo: ['owner'] };
+        if (!systemPerm.visibleTo.includes(permissionId)) {
+          hideSystemConfigTabs();
+          console.log('🔒 [権限チェック] システム設定を非表示');
         } else {
-          console.log('✅ [権限チェック] オーナー権限 - 全タブ表示');
+          // システム設定が表示される場合でも、権限設定タブは常に管理者専用
+          hidePermissionTabOnly();
+          console.log('🔒 [権限チェック] 権限設定タブのみ非表示（セキュリティ）');
         }
 
       } catch (error) {
@@ -6729,17 +6751,9 @@ ${prompt || '（未設定）'}
     }
 
     /**
-     * 管理者専用タブを非表示にする
+     * 商品登録設定タブを非表示にする
      */
-    function hideOwnerOnlyTabs() {
-      // システム設定のサブタブ（基本設定以外）
-      const systemOwnerOnlyTabs = [
-        'system-management-tab',  // 管理番号設定
-        'system-shipping-tab',    // 配送設定
-        'system-procure-tab',     // 仕入・出品設定
-        'system-permission-tab'   // 権限設定
-      ];
-
+    function hideProductConfigTabs() {
       // 商品登録設定のサブタブ（全て）
       const productOwnerOnlyTabs = [
         'product-salesword-tab',  // セールスワード設定
@@ -6749,15 +6763,6 @@ ${prompt || '（未設定）'}
         'product-ai-tab'          // AI生成設定
       ];
 
-      // システム設定の管理者専用タブを非表示
-      systemOwnerOnlyTabs.forEach(tabId => {
-        const tab = document.getElementById(tabId);
-        if (tab) {
-          tab.closest('.nav-item').style.display = 'none';
-        }
-      });
-
-      // 商品登録設定タブ全体を非表示（メインタブ）
       // 商品登録設定のサブタブコンテナを非表示
       const productConfigTabs = document.getElementById('productConfigTabs');
       if (productConfigTabs) {
@@ -6785,12 +6790,34 @@ ${prompt || '（未設定）'}
           tabContent.innerHTML = '<div style="padding: 40px; text-align: center; color: #6b7280;"><i class="bi bi-lock" style="font-size: 48px; display: block; margin-bottom: 16px;"></i>この設定は管理者のみ編集できます。<br>設定の変更が必要な場合は管理者にお問い合わせください。</div>';
         }
       }
+    }
+
+    /**
+     * システム設定タブを非表示にする
+     */
+    function hideSystemConfigTabs() {
+      // システム設定のサブタブ（全て）
+      const systemOwnerOnlyTabs = [
+        'system-management-tab',  // 管理番号設定
+        'system-shipping-tab',    // 配送設定
+        'system-procure-tab',     // 仕入・出品設定
+        'system-permission-tab'   // 権限設定
+      ];
+
+      // システム設定のサブタブを非表示
+      systemOwnerOnlyTabs.forEach(tabId => {
+        const tab = document.getElementById(tabId);
+        if (tab) {
+          tab.closest('.nav-item').style.display = 'none';
+        }
+      });
 
       // システム設定の管理者専用タブコンテンツも非表示
       const systemOwnerOnlyPanes = [
         'system-management',
         'system-shipping',
-        'system-procure'
+        'system-procure',
+        'system-permission'
       ];
 
       systemOwnerOnlyPanes.forEach(paneId => {
@@ -6799,6 +6826,32 @@ ${prompt || '（未設定）'}
           pane.style.display = 'none';
         }
       });
+
+      // システム設定エリアにメッセージを表示
+      const systemPane = document.getElementById('system');
+      if (systemPane) {
+        const tabContent = systemPane.querySelector('.tab-content');
+        if (tabContent) {
+          tabContent.innerHTML = '<div style="padding: 40px; text-align: center; color: #6b7280;"><i class="bi bi-lock" style="font-size: 48px; display: block; margin-bottom: 16px;"></i>この設定は管理者のみ編集できます。<br>設定の変更が必要な場合は管理者にお問い合わせください。</div>';
+        }
+      }
+    }
+
+    /**
+     * 権限設定タブのみ非表示にする（セキュリティ上常に管理者専用）
+     */
+    function hidePermissionTabOnly() {
+      // 権限設定タブは常に管理者専用
+      const permissionTab = document.getElementById('system-permission-tab');
+      if (permissionTab) {
+        permissionTab.closest('.nav-item').style.display = 'none';
+      }
+
+      // 権限設定ペインも非表示
+      const permissionPane = document.getElementById('system-permission');
+      if (permissionPane) {
+        permissionPane.style.display = 'none';
+      }
     }
 
     // Firebase初期化後に権限チェックを実行
@@ -7354,6 +7407,7 @@ ${prompt || '（未設定）'}
   // メニュー定義（メニューIDとラベル）
   const MENU_DEFINITIONS = [
     { id: 'config-product', label: '📝 商品登録設定', defaultOwnerOnly: true },
+    { id: 'config-system', label: '⚙️ システム設定', defaultOwnerOnly: true },
     { id: 'master-product', label: '🗂️ マスタ管理（商品）', defaultOwnerOnly: false },
     { id: 'master-business', label: '🗂️ マスタ管理（業務）', defaultOwnerOnly: false },
     { id: 'inventory', label: '📦 在庫管理', defaultOwnerOnly: false },
