@@ -337,7 +337,7 @@
           <a href="#" onclick="navigateToPage('config-system'); return false;" class="accordion-item">
             <span>⚙️ システム設定</span>
           </a>
-          <a href="#" onclick="navigateToPage('config-product'); return false;" class="accordion-item">
+          <a href="#" onclick="navigateToPage('config-product'); return false;" class="accordion-item" id="menu-config-product">
             <span>📝 商品登録設定</span>
           </a>
         </div>
@@ -383,10 +383,63 @@
       console.log('[menu_home] firebase.apps.length:', firebase.apps.length);
       console.log('[menu_home] db:', db);
 
+      // 権限チェックを実行
+      checkUserPermissionAndUpdateMenu();
+
     } catch (error) {
       console.error('[menu_home] ❌ Firebase初期化エラー:', error);
       console.error('[menu_home] error.message:', error.message);
       console.error('[menu_home] error.stack:', error.stack);
+    }
+
+    // ================= 権限チェック機能（PERM-001） =================
+    async function checkUserPermissionAndUpdateMenu() {
+      try {
+        const userEmail = localStorage.getItem('reborn_user_email');
+        const userName = localStorage.getItem('reborn_user_name');
+
+        if (!userEmail) {
+          console.warn('[menu_home] ⚠️ 権限チェック: ユーザーメールが見つかりません');
+          return;
+        }
+
+        console.log('[menu_home] 🔐 権限チェック開始:', userName, '(', userEmail, ')');
+
+        if (!db) {
+          console.warn('[menu_home] ⚠️ 権限チェック: Firestoreが初期化されていません');
+          return;
+        }
+
+        const userDoc = await db.collection('users').doc(userEmail).get();
+
+        if (!userDoc.exists) {
+          console.warn('[menu_home] ⚠️ 権限チェック: ユーザードキュメントが見つかりません');
+          return;
+        }
+
+        const userData = userDoc.data();
+        const permissionId = userData.permissionId || 'staff';
+        const permissionDisplay = userData.permissionDisplay || 'スタッフ';
+
+        console.log('[menu_home] 🔐 権限:', permissionDisplay, '(ID:', permissionId + ')');
+
+        // 権限をlocalStorageにキャッシュ
+        localStorage.setItem('reborn_user_permission', permissionId);
+
+        // オーナー以外の場合、商品登録設定メニューを非表示
+        if (permissionId !== 'owner') {
+          const productConfigMenu = document.getElementById('menu-config-product');
+          if (productConfigMenu) {
+            productConfigMenu.style.display = 'none';
+            console.log('[menu_home] 🔒 商品登録設定メニューを非表示にしました');
+          }
+        } else {
+          console.log('[menu_home] ✅ オーナー権限 - 全メニュー表示');
+        }
+
+      } catch (error) {
+        console.error('[menu_home] ❌ 権限チェックエラー:', error);
+      }
     }
 
     // アコーディオンの開閉
