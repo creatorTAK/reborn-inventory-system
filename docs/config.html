@@ -7733,7 +7733,7 @@ ${prompt || '（未設定）'}
       `;
     };
 
-    // ブロック用の一括操作バーを生成
+    // ブロック用の一括操作バーを生成（トグルスイッチ版）
     const renderBulkControlBar = (blockId, menuIds) => {
       if (activePermissions.length === 0) return '';
 
@@ -7741,13 +7741,24 @@ ${prompt || '（未設定）'}
 
       return `
         <div style="background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; margin-bottom: 10px;">
+          <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">🔄 一括設定（下の全項目をまとめて変更）</div>
           ${activePermissions.map(permId => {
             const perm = PERMISSION_DEFINITIONS[permId];
+            // 全メニューがONかチェック（初期状態を判定）
+            const allOn = menuIds.every(menuId => {
+              const p = menuPermissions[menuId];
+              return p && p.visibleTo && p.visibleTo.includes(permId);
+            });
+            const bgColor = allOn ? '#3b82f6' : '#d1d5db';
+            const circlePos = allOn ? 'translateX(20px)' : 'translateX(2px)';
             return `
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${permId === activePermissions[activePermissions.length - 1] ? '0' : '6px'};">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: ${permId === activePermissions[activePermissions.length - 1] ? '0' : '8px'};">
                 <span style="font-size: 12px; color: #4b5563; min-width: 60px;">${perm.label}:</span>
-                <button onclick="bulkSetPermission('${blockId}', '${permId}', true, ${menuIdsJson})" style="padding: 4px 10px; font-size: 11px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">全ON</button>
-                <button onclick="bulkSetPermission('${blockId}', '${permId}', false, ${menuIdsJson})" style="padding: 4px 10px; font-size: 11px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;" onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#6b7280'">全OFF</button>
+                <div onclick="bulkTogglePermissionSwitch('${blockId}', '${permId}', ${menuIdsJson}, this)"
+                     data-block="${blockId}" data-perm="${permId}" data-on="${allOn}"
+                     style="width: 44px; height: 24px; background: ${bgColor}; border-radius: 12px; position: relative; transition: background 0.2s; cursor: pointer;">
+                  <div style="width: 20px; height: 20px; background: white; border-radius: 50%; position: absolute; top: 2px; transform: ${circlePos}; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);"></div>
+                </div>
               </div>
             `;
           }).join('')}
@@ -7930,6 +7941,22 @@ ${prompt || '（未設定）'}
     });
 
     console.log('[PERM] 一括設定完了:', blockId, permissionId, '->', newState ? '全ON' : '全OFF');
+  }
+
+  /**
+   * 一括トグルスイッチ（クリックでON/OFF切り替え）
+   */
+  function bulkTogglePermissionSwitch(blockId, permissionId, menuIds, element) {
+    const isOn = element.dataset.on === 'true';
+    const newState = !isOn;
+
+    // トグルの見た目を更新
+    element.dataset.on = newState.toString();
+    element.style.background = newState ? '#3b82f6' : '#d1d5db';
+    element.querySelector('div').style.transform = newState ? 'translateX(20px)' : 'translateX(2px)';
+
+    // 実際の一括設定を実行
+    bulkSetPermission(blockId, permissionId, newState, menuIds);
   }
 
   /**
