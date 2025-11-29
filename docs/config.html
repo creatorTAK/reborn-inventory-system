@@ -7412,36 +7412,72 @@ ${prompt || '（未設定）'}
     { id: 'sales', label: '💵 売上／売掛', defaultOwnerOnly: false, isComingSoon: true },
     { id: 'sales-analysis', label: '📈 売上分析', defaultOwnerOnly: false, isComingSoon: true },
     { id: 'chat', label: '💬 チャット', defaultOwnerOnly: false },
-    // マスタ管理
-    { id: 'master-product', label: '📦 マスタ管理（商品）', defaultOwnerOnly: false },
-    { id: 'master-business', label: '🏢 マスタ管理（業務）', defaultOwnerOnly: false },
-    // 商品登録設定（サブタブあり）
+    // マスタ管理（2段式アコーディオン）
     {
-      id: 'config-product',
-      label: '📝 商品登録設定',
-      isGroup: true,
+      id: 'master',
+      label: '🗂️ マスタ管理',
+      isTopGroup: true,
       children: [
-        { id: 'product-salesword', label: 'セールスワード設定', defaultOwnerOnly: true },
-        { id: 'product-condition', label: '商品状態設定', defaultOwnerOnly: true },
-        { id: 'product-hashtag', label: 'ハッシュタグ設定', defaultOwnerOnly: true },
-        { id: 'product-discount', label: '割引設定', defaultOwnerOnly: true },
-        { id: 'product-ai', label: 'AI生成設定', defaultOwnerOnly: true }
+        {
+          id: 'master-product',
+          label: '📦 商品関連マスタ管理',
+          isGroup: true,
+          children: [
+            { id: 'master-brand', label: 'ブランド', defaultOwnerOnly: false },
+            { id: 'master-category', label: 'カテゴリ', defaultOwnerOnly: false },
+            { id: 'master-material', label: '素材', defaultOwnerOnly: false },
+            { id: 'master-fabric', label: '生地', defaultOwnerOnly: false },
+            { id: 'master-color', label: 'カラー', defaultOwnerOnly: false },
+            { id: 'master-attributeCategory', label: '属性カテゴリ', defaultOwnerOnly: false },
+            { id: 'master-attributeValue', label: '属性値', defaultOwnerOnly: false }
+          ]
+        },
+        {
+          id: 'master-business',
+          label: '🏢 業務関連マスタ管理',
+          isGroup: true,
+          children: [
+            { id: 'master-shipping', label: '発送方法', defaultOwnerOnly: false },
+            { id: 'master-packaging', label: '梱包資材', defaultOwnerOnly: false },
+            { id: 'master-supplier', label: '仕入先', defaultOwnerOnly: false },
+            { id: 'master-marketplace', label: '出品先', defaultOwnerOnly: false }
+          ]
+        }
       ]
     },
-    // システム設定（サブタブあり）
+    // 設定管理（2段式アコーディオン）
     {
-      id: 'config-system',
-      label: '⚙️ システム設定',
-      isGroup: true,
+      id: 'config',
+      label: '⚙️ 設定管理',
+      isTopGroup: true,
       children: [
-        { id: 'system-basic', label: '基本設定', defaultOwnerOnly: false },
-        { id: 'system-management', label: '管理番号設定', defaultOwnerOnly: true },
-        { id: 'system-shipping', label: '配送設定', defaultOwnerOnly: true },
-        { id: 'system-procure', label: '仕入・出品設定', defaultOwnerOnly: true },
-        { id: 'system-permission', label: '権限設定', defaultOwnerOnly: true, alwaysOwnerOnly: true }
+        {
+          id: 'config-product',
+          label: '📝 商品登録設定',
+          isGroup: true,
+          children: [
+            { id: 'product-salesword', label: 'セールスワード設定', defaultOwnerOnly: true },
+            { id: 'product-condition', label: '商品状態設定', defaultOwnerOnly: true },
+            { id: 'product-hashtag', label: 'ハッシュタグ設定', defaultOwnerOnly: true },
+            { id: 'product-discount', label: '割引設定', defaultOwnerOnly: true },
+            { id: 'product-ai', label: 'AI生成設定', defaultOwnerOnly: true }
+          ]
+        },
+        {
+          id: 'config-system',
+          label: '⚙️ システム設定',
+          isGroup: true,
+          children: [
+            { id: 'system-basic', label: '基本設定', defaultOwnerOnly: false },
+            { id: 'system-management', label: '管理番号設定', defaultOwnerOnly: true },
+            { id: 'system-shipping', label: '配送設定', defaultOwnerOnly: true },
+            { id: 'system-procure', label: '仕入・出品設定', defaultOwnerOnly: true },
+            { id: 'system-permission', label: '権限設定', defaultOwnerOnly: true, alwaysOwnerOnly: true }
+          ]
+        }
       ]
-    },
-    ];
+    }
+  ];
 
   let permissionSettingsLoaded = false;
   let usersData = [];
@@ -7513,12 +7549,54 @@ ${prompt || '（未設定）'}
         // デフォルト設定を作成（チーム内で使用中の権限のみ）
         const activePerms = getActivePermissions();
         menuPermissions = {};
-        MENU_DEFINITIONS.forEach(menu => {
-          menuPermissions[menu.id] = {
-            label: menu.label,
-            visibleTo: menu.defaultOwnerOnly ? ['owner'] : activePerms
-          };
-        });
+
+        // 再帰的にメニュー項目を処理
+        const processMenu = (menu) => {
+          if (menu.isTopGroup && menu.children) {
+            // 2段式アコーディオンの親（master, config）- 子を処理
+            menu.children.forEach(child => {
+              if (child.isGroup && child.children) {
+                // 子グループ（master-product, config-system等）
+                menuPermissions[child.id] = {
+                  label: child.label,
+                  visibleTo: child.defaultOwnerOnly ? ['owner'] : activePerms
+                };
+                // 孫（個別タブ）
+                child.children.forEach(grandchild => {
+                  menuPermissions[grandchild.id] = {
+                    label: grandchild.label,
+                    visibleTo: grandchild.defaultOwnerOnly ? ['owner'] : activePerms
+                  };
+                });
+              } else {
+                menuPermissions[child.id] = {
+                  label: child.label,
+                  visibleTo: child.defaultOwnerOnly ? ['owner'] : activePerms
+                };
+              }
+            });
+          } else if (menu.isGroup && menu.children) {
+            // 1段式アコーディオン
+            menuPermissions[menu.id] = {
+              label: menu.label,
+              visibleTo: menu.defaultOwnerOnly ? ['owner'] : activePerms
+            };
+            menu.children.forEach(child => {
+              menuPermissions[child.id] = {
+                label: child.label,
+                visibleTo: child.defaultOwnerOnly ? ['owner'] : activePerms
+              };
+            });
+          } else {
+            // 単独メニュー
+            menuPermissions[menu.id] = {
+              label: menu.label,
+              visibleTo: menu.defaultOwnerOnly ? ['owner'] : activePerms
+            };
+          }
+        };
+
+        MENU_DEFINITIONS.forEach(processMenu);
       }
       console.log('[PERM] メニュー権限設定:', menuPermissions);
 
@@ -7610,33 +7688,75 @@ ${prompt || '（未設定）'}
       }).join('');
     };
 
+    // 3段目（最下層）のアイテムをレンダリング
+    const renderLeafItem = (item) => {
+      const perm = menuPermissions[item.id] || {
+        visibleTo: item.defaultOwnerOnly ? ['owner'] : ['owner', ...activePermissions]
+      };
+
+      // 権限設定タブは常に管理者のみ（トグル非表示）
+      if (item.alwaysOwnerOnly) {
+        return `
+          <div style="padding: 10px 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 13px; color: #374151;">${item.label}</span>
+            <span style="font-size: 11px; color: #6b7280; background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">🔒 管理者のみ</span>
+          </div>
+        `;
+      }
+
+      return `
+        <div style="padding: 10px 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
+          <div style="font-size: 13px; color: #374151; margin-bottom: 8px;">${item.label}</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            ${generateToggles(item.id, perm.visibleTo)}
+          </div>
+        </div>
+      `;
+    };
+
+    // 2段目（子グループ）をレンダリング
+    const renderChildGroup = (child, parentIndex, childIndex) => {
+      const childrenHtml = child.children.map(item => renderLeafItem(item)).join('');
+      const accordionId = `accordion-content-menu-${parentIndex}-${childIndex}`;
+      const iconId = `accordion-icon-menu-${parentIndex}-${childIndex}`;
+
+      return `
+        <div style="border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; margin-bottom: 6px;">
+          <div onclick="toggleMenuAccordion('${parentIndex}-${childIndex}')" style="padding: 10px 14px; background: #f3f4f6; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
+            <span style="font-size: 13px; font-weight: 600; color: #4b5563;">${child.label}</span>
+            <span id="${iconId}" style="font-size: 11px; color: #6b7280; transition: transform 0.2s;">▼</span>
+          </div>
+          <div id="${accordionId}" class="accordion-content" style="display: none; padding: 10px; background: #fafafa; flex-direction: column; gap: 6px;">
+            ${childrenHtml}
+          </div>
+        </div>
+      `;
+    };
+
     container.innerHTML = MENU_DEFINITIONS.map((menu, index) => {
-      if (menu.isGroup && menu.children) {
-        // アコーディオングループ（サブタブあり）
-        const childrenHtml = menu.children.map(child => {
-          const perm = menuPermissions[child.id] || {
-            visibleTo: child.defaultOwnerOnly ? ['owner'] : ['owner', ...activePermissions]
-          };
-
-          // 権限設定タブは常に管理者のみ（トグル非表示）
-          if (child.alwaysOwnerOnly) {
-            return `
-              <div style="padding: 10px 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 13px; color: #374151;">${child.label}</span>
-                <span style="font-size: 11px; color: #6b7280; background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">🔒 管理者のみ</span>
-              </div>
-            `;
+      if (menu.isTopGroup && menu.children) {
+        // 2段式アコーディオン（マスタ管理、設定管理）
+        const childrenHtml = menu.children.map((child, childIndex) => {
+          if (child.isGroup && child.children) {
+            return renderChildGroup(child, index, childIndex);
           }
-
-          return `
-            <div style="padding: 10px 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
-              <div style="font-size: 13px; color: #374151; margin-bottom: 8px;">${child.label}</div>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                ${generateToggles(child.id, perm.visibleTo)}
-              </div>
-            </div>
-          `;
+          return renderLeafItem(child);
         }).join('');
+
+        return `
+          <div style="border: 2px solid #3b82f6; border-radius: 10px; overflow: hidden; margin-bottom: 12px;">
+            <div onclick="toggleMenuAccordion(${index})" style="padding: 14px 18px; background: #eff6ff; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
+              <span style="font-size: 15px; font-weight: 700; color: #1e40af;">${menu.label}</span>
+              <span id="accordion-icon-menu-${index}" style="font-size: 12px; color: #3b82f6; transition: transform 0.2s;">▼</span>
+            </div>
+            <div id="accordion-content-menu-${index}" class="accordion-content" style="display: none; padding: 12px; background: #f8fafc; flex-direction: column; gap: 8px;">
+              ${childrenHtml}
+            </div>
+          </div>
+        `;
+      } else if (menu.isGroup && menu.children) {
+        // 1段式アコーディオン（従来）
+        const childrenHtml = menu.children.map(child => renderLeafItem(child)).join('');
 
         return `
           <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 8px;">
@@ -7665,14 +7785,6 @@ ${prompt || '（未設定）'}
         `;
       }
     }).join('');
-
-    // アコーディオンを初期状態で閉じる
-    MENU_DEFINITIONS.forEach((menu, index) => {
-      if (menu.isGroup) {
-        const content = document.getElementById(`accordion-content-menu-${index}`);
-        if (content) content.style.display = 'none';
-      }
-    });
   }
 
   /**
