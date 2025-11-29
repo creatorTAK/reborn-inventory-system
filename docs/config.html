@@ -2886,11 +2886,6 @@ ${descFormattedNumber}`;
                   <!-- メニュー設定リストがここに動的に追加される -->
                 </div>
               </div>
-
-              <!-- 保存ボタン -->
-              <button type="button" id="savePermissionSettingsBtn" onclick="savePermissionSettings()" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border: none; border-radius: 8px; color: white; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 8px rgba(59, 130, 246, 0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 4px rgba(59, 130, 246, 0.3)';">
-                💾 設定を保存
-              </button>
             </div>
           </div>
         </div>
@@ -4630,8 +4625,13 @@ ${descFormattedNumber}`;
         console.log('Step 12: postMessage通知中...');
         notifyConfigChange();
 
-        // 4. PWA版では PropertiesService 保存不要（Firestore + localStorage で完結）
-        console.log('Step 13: PWA版では PropertiesService 保存不要');
+        // 4. 権限設定を保存（権限設定タブが読み込まれている場合のみ）
+        console.log('Step 13: 権限設定を保存中...');
+        const permissionSaved = await savePermissionSettings(false);
+        console.log('Step 13 結果:', permissionSaved ? '成功' : '失敗またはスキップ');
+
+        // 5. PWA版では PropertiesService 保存不要（Firestore + localStorage で完結）
+        console.log('Step 14: PWA版では PropertiesService 保存不要');
         if (localStorageSaved) {
           alert('✅ 設定完了しました');
         } else {
@@ -7598,18 +7598,23 @@ ${prompt || '（未設定）'}
   }
 
   /**
-   * 権限設定を保存
+   * 権限設定を保存（saveConfig()から呼び出される）
+   * @param {boolean} showAlert - 完了アラートを表示するか（統合時はfalse）
+   * @returns {Promise<boolean>} 保存成功したかどうか
    */
-  async function savePermissionSettings() {
-    const saveBtn = document.getElementById('savePermissionSettingsBtn');
-    const originalText = saveBtn.innerHTML;
-    saveBtn.innerHTML = '保存中...';
-    saveBtn.disabled = true;
+  async function savePermissionSettings(showAlert = true) {
+    // 権限設定が読み込まれていない場合はスキップ
+    if (!permissionSettingsLoaded) {
+      console.log('[PERM] 権限設定が読み込まれていないためスキップ');
+      return true; // エラーではないのでtrueを返す
+    }
 
     try {
       if (!window.db) {
         throw new Error('Firestoreが初期化されていません');
       }
+
+      console.log('[PERM] 権限設定を保存中...');
 
       // 1. ユーザー権限を更新
       const batch = window.db.batch();
@@ -7628,15 +7633,15 @@ ${prompt || '（未設定）'}
 
       await batch.commit();
 
-      alert('✅ 権限設定を保存しました');
       console.log('[PERM] ✅ 権限設定を保存しました');
+      return true;
 
     } catch (error) {
       console.error('[PERM] ❌ 権限設定保存エラー:', error);
-      alert('権限設定の保存に失敗しました: ' + error.message);
-    } finally {
-      saveBtn.innerHTML = originalText;
-      saveBtn.disabled = false;
+      if (showAlert) {
+        alert('権限設定の保存に失敗しました: ' + error.message);
+      }
+      return false;
     }
   }
 </script>
