@@ -1125,8 +1125,35 @@
       window.firebaseSignOut = signOut;
       window.firebaseOnAuthStateChanged = onAuthStateChanged;
 
-      // リダイレクト認証結果はDOMContentLoaded後にチェック（タイミング問題修正）
-      // → 下のDOMContentLoadedイベント内で処理
+      // ★ リダイレクト認証結果をチェック（モバイル用 - タイミング問題修正）
+      // DOM要素の準備を待ってから処理
+      const checkRedirectResult = async () => {
+        try {
+          console.log('[Auth] リダイレクト認証結果をチェック中...');
+          const result = await getRedirectResult(auth);
+          if (result && result.user) {
+            console.log('[Auth] リダイレクト認証成功:', result.user.email);
+            // DOM要素が準備されるまで待つ
+            const waitForDOM = () => {
+              const authSection = document.getElementById('google-auth-section');
+              const authResult = document.getElementById('auth-result');
+              if (authSection && authResult) {
+                console.log('[Auth] DOM準備完了 - handleGoogleAuthResult呼び出し');
+                window.handleGoogleAuthResult(result.user);
+              } else {
+                console.log('[Auth] DOM未準備 - 100ms後に再試行');
+                setTimeout(waitForDOM, 100);
+              }
+            };
+            waitForDOM();
+          } else {
+            console.log('[Auth] リダイレクト認証結果なし');
+          }
+        } catch (error) {
+          console.error('[Auth] リダイレクト結果エラー:', error);
+        }
+      };
+      checkRedirectResult();
 
       // ★ フォアグラウンド通知対応 ★
       // アプリを開いている状態で通知を受信した時の処理
@@ -1359,30 +1386,7 @@
         document.getElementById('app-screen').style.display = 'none';
         // 権限選択肢を動的ロード（Firestoreから取得して生成）
         await loadAndRenderPermissions();
-
-        // ★ リダイレクト認証後の処理（モバイル用 - タイミング問題修正）
-        // セットアップ画面表示後にチェックすることで、UIが正しく更新される
-        if (window.firebaseAuth && window.firebaseGetRedirectResult) {
-          try {
-            console.log('[Auth] リダイレクト認証結果をチェック中...');
-            const result = await window.firebaseGetRedirectResult(window.firebaseAuth);
-            if (result && result.user) {
-              console.log('[Auth] リダイレクト認証成功:', result.user.email);
-              await window.handleGoogleAuthResult(result.user);
-            } else {
-              console.log('[Auth] リダイレクト認証結果なし（新規またはポップアップ認証）');
-              // 既存のログイン状態をチェック（ページリロード対応）
-              const currentUser = window.firebaseAuth.currentUser;
-              if (currentUser) {
-                console.log('[Auth] 既存のログインセッションを検出:', currentUser.email);
-                await window.handleGoogleAuthResult(currentUser);
-              }
-            }
-          } catch (error) {
-            console.error('[Auth] リダイレクト結果エラー:', error);
-            localStorage.removeItem('reborn_auth_pending');
-          }
-        }
+        // リダイレクト認証結果はmoduleスクリプト内で処理済み（DOM待機あり）
       } else {
         // セットアップ完了済み → FCMトークンをチェック（Phase 2: NOTIF-003）
         await checkAndUpdateFCMToken();
