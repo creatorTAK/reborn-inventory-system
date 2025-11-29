@@ -7719,25 +7719,12 @@ ${prompt || '（未設定）'}
       const childrenHtml = child.children.map(item => renderLeafItem(item)).join('');
       const accordionId = `accordion-content-menu-${parentIndex}-${childIndex}`;
       const iconId = `accordion-icon-menu-${parentIndex}-${childIndex}`;
-      const groupId = child.id; // master-product, master-business, config-product, config-system
-
-      // 子メニューIDのリストをJSON形式で保持
-      const childMenuIds = JSON.stringify(child.children.map(c => c.id));
-
-      // 権限ごとの一括トグルボタンを生成
-      const bulkToggleButtons = activePermissions.length > 0 ? activePermissions.map(permId => {
-        const perm = PERMISSION_DEFINITIONS[permId];
-        return `<button onclick="event.stopPropagation(); bulkTogglePermission('${groupId}', '${permId}', ${childMenuIds.replace(/"/g, '&quot;')})" style="padding: 2px 8px; font-size: 10px; background: #e5e7eb; border: none; border-radius: 4px; cursor: pointer; color: #4b5563;" onmouseover="this.style.background='#d1d5db'" onmouseout="this.style.background='#e5e7eb'">${perm.label}</button>`;
-      }).join('') : '';
 
       return `
         <div style="border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; margin-bottom: 6px;">
           <div onclick="toggleMenuAccordion('${parentIndex}-${childIndex}')" style="padding: 10px 14px; background: #f3f4f6; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
             <span style="font-size: 13px; font-weight: 600; color: #4b5563;">${child.label}</span>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              ${bulkToggleButtons ? `<span style="display: flex; gap: 4px;">${bulkToggleButtons}</span>` : ''}
-              <span id="${iconId}" style="font-size: 11px; color: #6b7280; transition: transform 0.2s;">▼</span>
-            </div>
+            <span id="${iconId}" style="font-size: 11px; color: #6b7280; transition: transform 0.2s;">▼</span>
           </div>
           <div id="${accordionId}" class="accordion-content" style="display: none; padding: 10px; background: #fafafa; flex-direction: column; gap: 6px;">
             ${childrenHtml}
@@ -7746,58 +7733,101 @@ ${prompt || '（未設定）'}
       `;
     };
 
-    container.innerHTML = MENU_DEFINITIONS.map((menu, index) => {
-      if (menu.isTopGroup && menu.children) {
-        // セクションヘッダー + 子アコーディオン（マスタ管理、設定管理）
-        // 親は常に開いた状態（開閉ボタンなし）でコンパクトに
-        const childrenHtml = menu.children.map((child, childIndex) => {
-          if (child.isGroup && child.children) {
-            return renderChildGroup(child, index, childIndex);
-          }
-          return renderLeafItem(child);
-        }).join('');
+    // ブロック用の一括操作バーを生成
+    const renderBulkControlBar = (blockId, menuIds) => {
+      if (activePermissions.length === 0) return '';
 
-        return `
-          <div style="margin-bottom: 16px;">
-            <div style="padding: 8px 4px; border-bottom: 2px solid #d1d5db; margin-bottom: 8px;">
-              <span style="font-size: 14px; font-weight: 700; color: #374151;">${menu.label}</span>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-              ${childrenHtml}
-            </div>
-          </div>
-        `;
-      } else if (menu.isGroup && menu.children) {
-        // 1段式アコーディオン（従来）
-        const childrenHtml = menu.children.map(child => renderLeafItem(child)).join('');
+      const menuIdsJson = JSON.stringify(menuIds).replace(/"/g, '&quot;');
 
-        return `
-          <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 8px;">
-            <div onclick="toggleMenuAccordion(${index})" style="padding: 12px 16px; background: #f9fafb; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
-              <span style="font-size: 14px; font-weight: 600; color: #374151;">${menu.label}</span>
-              <span id="accordion-icon-menu-${index}" style="font-size: 12px; color: #6b7280; transition: transform 0.2s;">▼</span>
-            </div>
-            <div id="accordion-content-menu-${index}" class="accordion-content" style="display: none; padding: 12px; background: #fafafa; flex-direction: column; gap: 8px;">
-              ${childrenHtml}
-            </div>
-          </div>
-        `;
-      } else {
-        // 単独メニュー（サブタブなし）
-        const perm = menuPermissions[menu.id] || {
-          visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', ...activePermissions]
-        };
+      return `
+        <div style="background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; margin-bottom: 10px;">
+          ${activePermissions.map(permId => {
+            const perm = PERMISSION_DEFINITIONS[permId];
+            return `
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${permId === activePermissions[activePermissions.length - 1] ? '0' : '6px'};">
+                <span style="font-size: 12px; color: #4b5563; min-width: 60px;">${perm.label}:</span>
+                <button onclick="bulkSetPermission('${blockId}', '${permId}', true, ${menuIdsJson})" style="padding: 4px 10px; font-size: 11px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">全ON</button>
+                <button onclick="bulkSetPermission('${blockId}', '${permId}', false, ${menuIdsJson})" style="padding: 4px 10px; font-size: 11px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;" onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#6b7280'">全OFF</button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    };
 
-        return `
-          <div style="padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 8px;">
-            <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">${menu.label}</div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              ${generateToggles(menu.id, perm.visibleTo)}
-            </div>
+    // 3ブロック構造でレンダリング
+    // 1. メインメニュー（単独メニュー: 商品登録〜チャット）
+    // 2. マスタ管理（isTopGroup）
+    // 3. 設定管理（isTopGroup）
+
+    const mainMenus = MENU_DEFINITIONS.filter(m => !m.isTopGroup && !m.isGroup);
+    const topGroups = MENU_DEFINITIONS.filter(m => m.isTopGroup);
+
+    // メインメニューのIDリストを収集
+    const mainMenuIds = mainMenus.map(m => m.id);
+
+    // メインメニューブロック
+    const mainMenuHtml = mainMenus.length > 0 ? `
+      <div style="margin-bottom: 20px;">
+        <div style="padding: 8px 4px; border-bottom: 2px solid #374151; margin-bottom: 10px;">
+          <span style="font-size: 14px; font-weight: 700; color: #374151;">📋 メインメニュー</span>
+        </div>
+        ${renderBulkControlBar('main', mainMenuIds)}
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          ${mainMenus.map(menu => {
+            const perm = menuPermissions[menu.id] || {
+              visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', ...activePermissions]
+            };
+            return `
+              <div style="padding: 10px 12px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb;">
+                <div style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">${menu.label}</div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  ${generateToggles(menu.id, perm.visibleTo)}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    // トップグループ（マスタ管理、設定管理）ブロック
+    const topGroupsHtml = topGroups.map((menu, topIndex) => {
+      // このグループ内の全メニューIDを収集
+      const groupMenuIds = [];
+      menu.children.forEach(child => {
+        if (child.isGroup && child.children) {
+          child.children.forEach(grandchild => {
+            if (!grandchild.alwaysOwnerOnly) {
+              groupMenuIds.push(grandchild.id);
+            }
+          });
+        } else if (!child.alwaysOwnerOnly) {
+          groupMenuIds.push(child.id);
+        }
+      });
+
+      const childrenHtml = menu.children.map((child, childIndex) => {
+        if (child.isGroup && child.children) {
+          return renderChildGroup(child, MENU_DEFINITIONS.indexOf(menu), childIndex);
+        }
+        return renderLeafItem(child);
+      }).join('');
+
+      return `
+        <div style="margin-bottom: 20px;">
+          <div style="padding: 8px 4px; border-bottom: 2px solid #374151; margin-bottom: 10px;">
+            <span style="font-size: 14px; font-weight: 700; color: #374151;">${menu.label}</span>
           </div>
-        `;
-      }
+          ${renderBulkControlBar(menu.id, groupMenuIds)}
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            ${childrenHtml}
+          </div>
+        </div>
+      `;
     }).join('');
+
+    container.innerHTML = mainMenuHtml + topGroupsHtml;
   }
 
   /**
@@ -7864,23 +7894,14 @@ ${prompt || '（未設定）'}
   }
 
   /**
-   * 一括トグル（グループ内の全メニューを指定権限でオン/オフ）
-   * 現在の状態を見て、1つでもOFFがあればONに、全てONならOFFにする
+   * 一括設定（ブロック内の全メニューを指定権限でON/OFFに設定）
+   * @param {string} blockId - ブロックID（main, master, config）
+   * @param {string} permissionId - 権限ID
+   * @param {boolean} newState - true=ON, false=OFF
+   * @param {Array} menuIds - 対象メニューIDリスト
    */
-  function bulkTogglePermission(groupId, permissionId, menuIds) {
-    console.log('[PERM] 一括トグル:', groupId, permissionId, menuIds);
-
-    // 現在の状態をチェック（1つでもOFFがあるか）
-    let hasAnyOff = false;
-    menuIds.forEach(menuId => {
-      const perm = menuPermissions[menuId];
-      if (!perm || !perm.visibleTo.includes(permissionId)) {
-        hasAnyOff = true;
-      }
-    });
-
-    // 1つでもOFFがあればすべてON、すべてONならすべてOFF
-    const newState = hasAnyOff;
+  function bulkSetPermission(blockId, permissionId, newState, menuIds) {
+    console.log('[PERM] 一括設定:', blockId, permissionId, newState ? 'ON' : 'OFF', menuIds);
 
     // 各メニューの権限を更新
     menuIds.forEach(menuId => {
@@ -7908,7 +7929,7 @@ ${prompt || '（未設定）'}
       }
     });
 
-    console.log('[PERM] 一括トグル完了:', permissionId, '->', newState ? '全てON' : '全てOFF');
+    console.log('[PERM] 一括設定完了:', blockId, permissionId, '->', newState ? '全ON' : '全OFF');
   }
 
   /**
