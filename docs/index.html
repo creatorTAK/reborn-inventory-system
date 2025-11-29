@@ -1486,69 +1486,80 @@
         return null;
       }
 
+      // 最新の権限設定（version: 2 = 5つの権限）
+      const latestPermissions = {
+        roles: [
+          {
+            id: 'owner',
+            display: '管理者',
+            description: 'システム全体の管理者',
+            order: 1,
+            isSystem: true,
+            canModify: false
+          },
+          {
+            id: 'employee',
+            display: '社員',
+            description: '正社員',
+            order: 2,
+            isSystem: true,
+            canModify: false
+          },
+          {
+            id: 'staff',
+            display: 'スタッフ',
+            description: 'パート・アルバイト',
+            order: 3,
+            isSystem: true,
+            canModify: false
+          },
+          {
+            id: 'leader',
+            display: 'リーダー',
+            description: 'チームリーダー',
+            order: 4,
+            isSystem: true,
+            canModify: false
+          },
+          {
+            id: 'contractor',
+            display: '外注',
+            description: '外部パートナー',
+            order: 5,
+            isSystem: true,
+            canModify: false
+          }
+        ],
+        lastUpdated: serverTimestampFunc(),
+        version: 2
+      };
+
       try {
         const permissionsDocRef = docFunc(db, 'settings', 'permissions');
         const permissionsDoc = await getDocFunc(permissionsDocRef);
 
         if (permissionsDoc.exists()) {
-          console.log('[initPermissions] ✅ 権限設定が既に存在します');
-          return permissionsDoc.data();
+          const existingData = permissionsDoc.data();
+          const existingVersion = existingData.version || 1;
+
+          // バージョンチェック：古いバージョンの場合はマイグレーション
+          if (existingVersion < 2) {
+            console.log('[initPermissions] 🔄 権限設定をv1からv2にマイグレーション中...');
+            await setDocFunc(permissionsDocRef, latestPermissions);
+            console.log('[initPermissions] ✅ マイグレーション完了（5つの権限に更新）');
+            return latestPermissions;
+          }
+
+          console.log('[initPermissions] ✅ 権限設定が既に最新です (version:', existingVersion, ')');
+          return existingData;
         }
 
-        // 存在しない場合、デフォルトデータを作成
+        // 存在しない場合、新規作成
         console.log('[initPermissions] 🔄 デフォルト権限設定を作成中...');
-
-        const defaultPermissions = {
-          roles: [
-            {
-              id: 'owner',
-              display: '管理者',
-              description: 'システム全体の管理者',
-              order: 1,
-              isSystem: true,
-              canModify: false
-            },
-            {
-              id: 'employee',
-              display: '社員',
-              description: '正社員',
-              order: 2,
-              isSystem: true,
-              canModify: false
-            },
-            {
-              id: 'staff',
-              display: 'スタッフ',
-              description: 'パート・アルバイト',
-              order: 3,
-              isSystem: true,
-              canModify: false
-            },
-            {
-              id: 'leader',
-              display: 'リーダー',
-              description: 'チームリーダー',
-              order: 4,
-              isSystem: true,
-              canModify: false
-            },
-            {
-              id: 'contractor',
-              display: '外注',
-              description: '外部パートナー',
-              order: 5,
-              isSystem: true,
-              canModify: false
-            }
-          ],
-          lastUpdated: serverTimestampFunc(),
-          version: 2
-        };
-
-        await setDocFunc(permissionsDocRef, defaultPermissions);
+        await setDocFunc(permissionsDocRef, latestPermissions);
         console.log('[initPermissions] ✅ デフォルト権限設定を作成しました');
 
-        return defaultPermissions;
+        return latestPermissions;
       } catch (error) {
         console.error('[initPermissions] ❌ エラー:', error);
         return null;
@@ -1909,6 +1920,16 @@
         resultDiv.textContent = '❌ ユーザー名を入力してください';
         resultDiv.className = 'step-result error';
         resultDiv.style.display = 'block';
+        // 入力欄をハイライトしてフォーカス
+        nameInput.style.border = '2px solid #dc2626';
+        nameInput.style.background = '#fef2f2';
+        nameInput.focus();
+        // 入力時にスタイルをリセット
+        nameInput.addEventListener('input', function resetStyle() {
+          nameInput.style.border = '2px solid #e5e7eb';
+          nameInput.style.background = '#f9fafb';
+          nameInput.removeEventListener('input', resetStyle);
+        });
         return;
       }
 
@@ -2017,6 +2038,16 @@
         resultDiv.textContent = '❌ ユーザー名を入力してください';
         resultDiv.className = 'step-result error';
         resultDiv.style.display = 'block';
+        // 入力欄をハイライトしてフォーカス
+        nameInput.style.border = '2px solid #dc2626';
+        nameInput.style.background = '#fef2f2';
+        nameInput.focus();
+        // 入力時にスタイルをリセット
+        nameInput.addEventListener('input', function resetStyle() {
+          nameInput.style.border = '2px solid #e5e7eb';
+          nameInput.style.background = '#f9fafb';
+          nameInput.removeEventListener('input', resetStyle);
+        });
         return;
       }
 
