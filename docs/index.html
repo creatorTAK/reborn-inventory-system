@@ -1125,35 +1125,37 @@
       window.firebaseSignOut = signOut;
       window.firebaseOnAuthStateChanged = onAuthStateChanged;
 
-      // ★ リダイレクト認証結果をチェック（モバイル用 - タイミング問題修正）
-      // DOM要素の準備を待ってから処理
-      const checkRedirectResult = async () => {
-        try {
-          console.log('[Auth] リダイレクト認証結果をチェック中...');
-          const result = await getRedirectResult(auth);
-          if (result && result.user) {
-            console.log('[Auth] リダイレクト認証成功:', result.user.email);
-            // DOM要素が準備されるまで待つ
-            const waitForDOM = () => {
-              const authSection = document.getElementById('google-auth-section');
-              const authResult = document.getElementById('auth-result');
-              if (authSection && authResult) {
-                console.log('[Auth] DOM準備完了 - handleGoogleAuthResult呼び出し');
-                window.handleGoogleAuthResult(result.user);
-              } else {
-                console.log('[Auth] DOM未準備 - 100ms後に再試行');
-                setTimeout(waitForDOM, 100);
-              }
-            };
-            waitForDOM();
-          } else {
-            console.log('[Auth] リダイレクト認証結果なし');
-          }
-        } catch (error) {
-          console.error('[Auth] リダイレクト結果エラー:', error);
+      // ★ 認証状態の監視（リダイレクト認証対応 - 最も確実な方法）
+      // onAuthStateChangedはページ読み込み時に既存の認証状態を検出
+      console.log('[Auth] 🔄 onAuthStateChanged リスナー登録開始');
+      let authHandled = false; // 二重処理防止フラグ
+      onAuthStateChanged(auth, (user) => {
+        console.log('[Auth] 🔔 onAuthStateChanged発火:', user ? user.email : 'null');
+        if (user && !authHandled) {
+          authHandled = true;
+          console.log('[Auth] ✅ ログイン済みユーザー検出:', user.email);
+          // DOM要素が準備されるまで待つ
+          const waitForDOM = () => {
+            const authSection = document.getElementById('google-auth-section');
+            const authResult = document.getElementById('auth-result');
+            const setupScreen = document.getElementById('setup-screen');
+            console.log('[Auth] DOM確認: authSection=', !!authSection, 'authResult=', !!authResult, 'setupScreen=', !!setupScreen);
+            if (authSection && authResult && setupScreen && setupScreen.style.display !== 'none') {
+              console.log('[Auth] ✅ DOM準備完了 - handleGoogleAuthResult呼び出し');
+              window.handleGoogleAuthResult(user);
+            } else {
+              console.log('[Auth] ⏳ DOM未準備または非表示 - 200ms後に再試行');
+              setTimeout(waitForDOM, 200);
+            }
+          };
+          // 少し待ってからDOM確認を開始（セットアップ画面表示を待つ）
+          setTimeout(waitForDOM, 500);
+        } else if (!user) {
+          console.log('[Auth] 👤 未ログイン状態');
+          authHandled = false; // ログアウト時にフラグリセット
         }
-      };
-      checkRedirectResult();
+      });
+      console.log('[Auth] ✅ onAuthStateChanged リスナー登録完了');
 
       // ★ フォアグラウンド通知対応 ★
       // アプリを開いている状態で通知を受信した時の処理
