@@ -6679,7 +6679,7 @@ ${prompt || '（未設定）'}
 
     /**
      * ユーザー権限をチェックしてUIを制御
-     * Firestoreのメニュー権限設定に基づいて表示/非表示を制御
+     * Firestoreのメニュー権限設定に基づいてサブタブ単位で表示/非表示を制御
      */
     async function checkUserPermissionAndUpdateUI() {
       try {
@@ -6721,29 +6721,29 @@ ${prompt || '（未設定）'}
           return;
         }
 
-        // スタッフ・外注の場合、Firestoreの設定に基づいて表示制御
+        // スタッフ・外注の場合、Firestoreの設定に基づいてサブタブ単位で表示制御
         const menuPermDoc = await window.db.collection('settings').doc('menuPermissions').get();
         const menuPerms = menuPermDoc.exists ? menuPermDoc.data() : {};
 
         console.log('📋 [権限チェック] メニュー権限設定:', menuPerms);
 
-        // 商品登録設定の表示制御
-        const productPerm = menuPerms['config-product'] || { visibleTo: ['owner'] };
-        if (!productPerm.visibleTo.includes(permissionId)) {
-          hideProductConfigTabs();
-          console.log('🔒 [権限チェック] 商品登録設定を非表示');
-        }
+        // 商品登録設定のサブタブを制御
+        applySubTabPermissions('product', [
+          { id: 'product-salesword', tabId: 'product-salesword-tab', paneId: 'product-salesword' },
+          { id: 'product-condition', tabId: 'product-condition-tab', paneId: 'product-condition' },
+          { id: 'product-hashtag', tabId: 'product-hashtag-tab', paneId: 'product-hashtag' },
+          { id: 'product-discount', tabId: 'product-discount-tab', paneId: 'product-discount' },
+          { id: 'product-ai', tabId: 'product-ai-tab', paneId: 'product-ai' }
+        ], menuPerms, permissionId, 'productConfigTabs');
 
-        // システム設定の表示制御
-        const systemPerm = menuPerms['config-system'] || { visibleTo: ['owner'] };
-        if (!systemPerm.visibleTo.includes(permissionId)) {
-          hideSystemConfigTabs();
-          console.log('🔒 [権限チェック] システム設定を非表示');
-        } else {
-          // システム設定が表示される場合でも、権限設定タブは常に管理者専用
-          hidePermissionTabOnly();
-          console.log('🔒 [権限チェック] 権限設定タブのみ非表示（セキュリティ）');
-        }
+        // システム設定のサブタブを制御
+        applySubTabPermissions('system', [
+          { id: 'system-basic', tabId: 'system-basic-tab', paneId: 'system-basic' },
+          { id: 'system-management', tabId: 'system-management-tab', paneId: 'system-management' },
+          { id: 'system-shipping', tabId: 'system-shipping-tab', paneId: 'system-shipping' },
+          { id: 'system-procure', tabId: 'system-procure-tab', paneId: 'system-procure' },
+          { id: 'system-permission', tabId: 'system-permission-tab', paneId: 'system-permission', alwaysOwnerOnly: true }
+        ], menuPerms, permissionId, 'systemConfigTabs');
 
       } catch (error) {
         console.error('❌ [権限チェック] エラー:', error);
@@ -6751,106 +6751,103 @@ ${prompt || '（未設定）'}
     }
 
     /**
-     * 商品登録設定タブを非表示にする
+     * サブタブ単位で権限を適用
+     * @param {string} parentPaneId - 親ペインのID（'product' or 'system'）
+     * @param {Array} subTabs - サブタブ情報の配列
+     * @param {Object} menuPerms - メニュー権限設定
+     * @param {string} permissionId - ユーザーの権限ID
+     * @param {string} tabsContainerId - タブコンテナのID
      */
-    function hideProductConfigTabs() {
-      // 商品登録設定のサブタブ（全て）
-      const productOwnerOnlyTabs = [
-        'product-salesword-tab',  // セールスワード設定
-        'product-condition-tab',  // 商品状態設定
-        'product-hashtag-tab',    // ハッシュタグ設定
-        'product-discount-tab',   // 割引設定
-        'product-ai-tab'          // AI生成設定
-      ];
+    function applySubTabPermissions(parentPaneId, subTabs, menuPerms, permissionId, tabsContainerId) {
+      let visibleCount = 0;
+      let firstVisibleTabId = null;
 
-      // 商品登録設定のサブタブコンテナを非表示
-      const productConfigTabs = document.getElementById('productConfigTabs');
-      if (productConfigTabs) {
-        productConfigTabs.style.display = 'none';
-      }
+      subTabs.forEach(subTab => {
+        // 権限設定タブは常に管理者のみ
+        if (subTab.alwaysOwnerOnly) {
+          hideTab(subTab.tabId, subTab.paneId);
+          console.log(`🔒 [権限チェック] ${subTab.id} を非表示（管理者のみ固定）`);
+          return;
+        }
 
-      // 商品登録設定の全サブタブを非表示
-      productOwnerOnlyTabs.forEach(tabId => {
-        const tab = document.getElementById(tabId);
-        if (tab) {
-          tab.closest('.nav-item').style.display = 'none';
+        const perm = menuPerms[subTab.id] || { visibleTo: ['owner'] };
+        const isVisible = perm.visibleTo.includes(permissionId);
+
+        if (isVisible) {
+          visibleCount++;
+          if (!firstVisibleTabId) firstVisibleTabId = subTab.tabId;
+          console.log(`✅ [権限チェック] ${subTab.id} を表示`);
+        } else {
+          hideTab(subTab.tabId, subTab.paneId);
+          console.log(`🔒 [権限チェック] ${subTab.id} を非表示`);
         }
       });
 
-      // 商品登録設定エリアにメッセージを表示
-      const productPane = document.getElementById('product');
-      if (productPane) {
-        const sectionTitle = productPane.querySelector('.section-title');
-        if (sectionTitle) {
-          sectionTitle.innerHTML = '📝 商品登録設定 <span style="font-size: 12px; color: #6b7280; font-weight: normal;">(管理者のみ編集可能)</span>';
+      // すべてのサブタブが非表示の場合、親ペイン全体にメッセージを表示
+      if (visibleCount === 0) {
+        const parentPane = document.getElementById(parentPaneId);
+        if (parentPane) {
+          const tabContent = parentPane.querySelector('.tab-content');
+          if (tabContent) {
+            tabContent.innerHTML = `
+              <div style="padding: 40px; text-align: center; color: #6b7280;">
+                <i class="bi bi-lock" style="font-size: 48px; display: block; margin-bottom: 16px;"></i>
+                この設定は管理者のみ編集できます。<br>
+                設定の変更が必要な場合は管理者にお問い合わせください。
+              </div>
+            `;
+          }
+          // タブコンテナも非表示
+          const tabsContainer = document.getElementById(tabsContainerId);
+          if (tabsContainer) {
+            tabsContainer.style.display = 'none';
+          }
         }
-        // サブタブコンテンツを非表示にしてメッセージを表示
-        const tabContent = productPane.querySelector('.tab-content');
-        if (tabContent) {
-          tabContent.innerHTML = '<div style="padding: 40px; text-align: center; color: #6b7280;"><i class="bi bi-lock" style="font-size: 48px; display: block; margin-bottom: 16px;"></i>この設定は管理者のみ編集できます。<br>設定の変更が必要な場合は管理者にお問い合わせください。</div>';
-        }
+        console.log(`🔒 [権限チェック] ${parentPaneId} 全体を非表示`);
+      } else if (firstVisibleTabId) {
+        // 最初の表示可能なタブをアクティブにする
+        activateFirstVisibleTab(firstVisibleTabId, subTabs);
       }
     }
 
     /**
-     * システム設定タブを非表示にする
+     * タブとペインを非表示にする
      */
-    function hideSystemConfigTabs() {
-      // システム設定のサブタブ（全て）
-      const systemOwnerOnlyTabs = [
-        'system-management-tab',  // 管理番号設定
-        'system-shipping-tab',    // 配送設定
-        'system-procure-tab',     // 仕入・出品設定
-        'system-permission-tab'   // 権限設定
-      ];
+    function hideTab(tabId, paneId) {
+      const tab = document.getElementById(tabId);
+      if (tab) {
+        const navItem = tab.closest('.nav-item');
+        if (navItem) navItem.style.display = 'none';
+      }
 
-      // システム設定のサブタブを非表示
-      systemOwnerOnlyTabs.forEach(tabId => {
-        const tab = document.getElementById(tabId);
-        if (tab) {
-          tab.closest('.nav-item').style.display = 'none';
-        }
-      });
-
-      // システム設定の管理者専用タブコンテンツも非表示
-      const systemOwnerOnlyPanes = [
-        'system-management',
-        'system-shipping',
-        'system-procure',
-        'system-permission'
-      ];
-
-      systemOwnerOnlyPanes.forEach(paneId => {
-        const pane = document.getElementById(paneId);
-        if (pane) {
-          pane.style.display = 'none';
-        }
-      });
-
-      // システム設定エリアにメッセージを表示
-      const systemPane = document.getElementById('system');
-      if (systemPane) {
-        const tabContent = systemPane.querySelector('.tab-content');
-        if (tabContent) {
-          tabContent.innerHTML = '<div style="padding: 40px; text-align: center; color: #6b7280;"><i class="bi bi-lock" style="font-size: 48px; display: block; margin-bottom: 16px;"></i>この設定は管理者のみ編集できます。<br>設定の変更が必要な場合は管理者にお問い合わせください。</div>';
-        }
+      const pane = document.getElementById(paneId);
+      if (pane) {
+        pane.style.display = 'none';
+        pane.classList.remove('show', 'active');
       }
     }
 
     /**
-     * 権限設定タブのみ非表示にする（セキュリティ上常に管理者専用）
+     * 最初の表示可能なタブをアクティブにする
      */
-    function hidePermissionTabOnly() {
-      // 権限設定タブは常に管理者専用
-      const permissionTab = document.getElementById('system-permission-tab');
-      if (permissionTab) {
-        permissionTab.closest('.nav-item').style.display = 'none';
-      }
+    function activateFirstVisibleTab(firstVisibleTabId, subTabs) {
+      // 現在アクティブなタブが非表示になっている場合、最初の表示タブをアクティブに
+      const currentActive = subTabs.find(st => {
+        const pane = document.getElementById(st.paneId);
+        return pane && pane.classList.contains('active');
+      });
 
-      // 権限設定ペインも非表示
-      const permissionPane = document.getElementById('system-permission');
-      if (permissionPane) {
-        permissionPane.style.display = 'none';
+      if (currentActive) {
+        const currentPane = document.getElementById(currentActive.paneId);
+        if (currentPane && currentPane.style.display === 'none') {
+          // 現在アクティブなタブが非表示なので、最初の表示タブをアクティブに
+          const firstTab = document.getElementById(firstVisibleTabId);
+          if (firstTab) {
+            // Bootstrap のタブAPIを使用
+            const bsTab = new bootstrap.Tab(firstTab);
+            bsTab.show();
+          }
+        }
       }
     }
 
@@ -7406,8 +7403,33 @@ ${prompt || '（未設定）'}
 
   // メニュー定義（メニューIDとラベル）
   const MENU_DEFINITIONS = [
-    { id: 'config-product', label: '📝 商品登録設定', defaultOwnerOnly: true },
-    { id: 'config-system', label: '⚙️ システム設定', defaultOwnerOnly: true },
+    // 商品登録設定（サブタブあり）
+    {
+      id: 'config-product',
+      label: '📝 商品登録設定',
+      isGroup: true,
+      children: [
+        { id: 'product-salesword', label: 'セールスワード設定', defaultOwnerOnly: true },
+        { id: 'product-condition', label: '商品状態設定', defaultOwnerOnly: true },
+        { id: 'product-hashtag', label: 'ハッシュタグ設定', defaultOwnerOnly: true },
+        { id: 'product-discount', label: '割引設定', defaultOwnerOnly: true },
+        { id: 'product-ai', label: 'AI生成設定', defaultOwnerOnly: true }
+      ]
+    },
+    // システム設定（サブタブあり）
+    {
+      id: 'config-system',
+      label: '⚙️ システム設定',
+      isGroup: true,
+      children: [
+        { id: 'system-basic', label: '基本設定', defaultOwnerOnly: false },
+        { id: 'system-management', label: '管理番号設定', defaultOwnerOnly: true },
+        { id: 'system-shipping', label: '配送設定', defaultOwnerOnly: true },
+        { id: 'system-procure', label: '仕入・出品設定', defaultOwnerOnly: true },
+        { id: 'system-permission', label: '権限設定', defaultOwnerOnly: true, alwaysOwnerOnly: true }
+      ]
+    },
+    // その他のメニュー（サブタブなし）
     { id: 'master-product', label: '🗂️ マスタ管理（商品）', defaultOwnerOnly: false },
     { id: 'master-business', label: '🗂️ マスタ管理（業務）', defaultOwnerOnly: false },
     { id: 'inventory', label: '📦 在庫管理', defaultOwnerOnly: false },
@@ -7527,31 +7549,138 @@ ${prompt || '（未設定）'}
     const container = document.getElementById('menuPermissionList');
     if (!container) return;
 
-    container.innerHTML = MENU_DEFINITIONS.map(menu => {
-      const perm = menuPermissions[menu.id] || { visibleTo: ['owner', 'staff', 'contractor'] };
-      const staffChecked = perm.visibleTo.includes('staff') ? 'checked' : '';
-      const contractorChecked = perm.visibleTo.includes('contractor') ? 'checked' : '';
+    container.innerHTML = MENU_DEFINITIONS.map((menu, index) => {
+      if (menu.isGroup && menu.children) {
+        // アコーディオングループ（サブタブあり）
+        const childrenHtml = menu.children.map(child => {
+          const perm = menuPermissions[child.id] || {
+            visibleTo: child.defaultOwnerOnly ? ['owner'] : ['owner', 'staff', 'contractor']
+          };
+          const staffOn = perm.visibleTo.includes('staff');
+          const contractorOn = perm.visibleTo.includes('contractor');
 
-      return `
-        <div style="padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
-          <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">${menu.label}</div>
-          <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-              <input type="checkbox" checked disabled style="width: 16px; height: 16px;">
-              <span style="font-size: 12px; color: #6b7280;">👑 管理者（常時表示）</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-              <input type="checkbox" data-menu="${menu.id}" data-role="staff" ${staffChecked} onchange="updateMenuPermission(this)" style="width: 16px; height: 16px; cursor: pointer;">
-              <span style="font-size: 12px; color: #374151;">📋 スタッフ</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-              <input type="checkbox" data-menu="${menu.id}" data-role="contractor" ${contractorChecked} onchange="updateMenuPermission(this)" style="width: 16px; height: 16px; cursor: pointer;">
-              <span style="font-size: 12px; color: #374151;">🔧 外注</span>
-            </label>
+          // 権限設定タブは常に管理者のみ（トグル非表示）
+          if (child.alwaysOwnerOnly) {
+            return `
+              <div style="padding: 10px 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 13px; color: #374151;">${child.label}</span>
+                <span style="font-size: 11px; color: #6b7280; background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">🔒 管理者のみ</span>
+              </div>
+            `;
+          }
+
+          return `
+            <div style="padding: 10px 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
+              <div style="font-size: 13px; color: #374151; margin-bottom: 8px;">${child.label}</div>
+              <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                ${renderToggle(child.id, 'staff', 'スタッフ', staffOn)}
+                ${renderToggle(child.id, 'contractor', '外注', contractorOn)}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 8px;">
+            <div onclick="toggleAccordion(${index})" style="padding: 12px 16px; background: #f9fafb; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
+              <span style="font-size: 14px; font-weight: 600; color: #374151;">${menu.label}</span>
+              <span id="accordion-icon-${index}" style="font-size: 12px; color: #6b7280; transition: transform 0.2s;">▼</span>
+            </div>
+            <div id="accordion-content-${index}" style="display: none; padding: 12px; background: #fafafa; display: flex; flex-direction: column; gap: 8px;">
+              ${childrenHtml}
+            </div>
           </div>
-        </div>
-      `;
+        `;
+      } else {
+        // 単独メニュー（サブタブなし）
+        const perm = menuPermissions[menu.id] || {
+          visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', 'staff', 'contractor']
+        };
+        const staffOn = perm.visibleTo.includes('staff');
+        const contractorOn = perm.visibleTo.includes('contractor');
+
+        return `
+          <div style="padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 8px;">
+            <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">${menu.label}</div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+              ${renderToggle(menu.id, 'staff', 'スタッフ', staffOn)}
+              ${renderToggle(menu.id, 'contractor', '外注', contractorOn)}
+            </div>
+          </div>
+        `;
+      }
     }).join('');
+
+    // アコーディオンを初期状態で閉じる
+    MENU_DEFINITIONS.forEach((menu, index) => {
+      if (menu.isGroup) {
+        const content = document.getElementById(`accordion-content-${index}`);
+        if (content) content.style.display = 'none';
+      }
+    });
+  }
+
+  /**
+   * トグルボタンをレンダリング
+   */
+  function renderToggle(menuId, role, label, isOn) {
+    const bgColor = isOn ? '#3b82f6' : '#d1d5db';
+    const circlePosition = isOn ? 'translateX(20px)' : 'translateX(2px)';
+
+    return `
+      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <div onclick="toggleMenuPermission('${menuId}', '${role}', this)"
+             data-menu="${menuId}" data-role="${role}" data-on="${isOn}"
+             style="width: 44px; height: 24px; background: ${bgColor}; border-radius: 12px; position: relative; transition: background 0.2s; cursor: pointer;">
+          <div style="width: 20px; height: 20px; background: white; border-radius: 50%; position: absolute; top: 2px; transform: ${circlePosition}; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);"></div>
+        </div>
+        <span style="font-size: 12px; color: #374151;">${label}</span>
+      </label>
+    `;
+  }
+
+  /**
+   * アコーディオンの開閉
+   */
+  function toggleAccordion(index) {
+    const content = document.getElementById(`accordion-content-${index}`);
+    const icon = document.getElementById(`accordion-icon-${index}`);
+
+    if (content.style.display === 'none') {
+      content.style.display = 'flex';
+      icon.style.transform = 'rotate(180deg)';
+    } else {
+      content.style.display = 'none';
+      icon.style.transform = 'rotate(0deg)';
+    }
+  }
+
+  /**
+   * トグルボタンでメニュー権限を切り替え
+   */
+  function toggleMenuPermission(menuId, role, element) {
+    const isOn = element.dataset.on === 'true';
+    const newState = !isOn;
+
+    // トグルの見た目を更新
+    element.dataset.on = newState.toString();
+    element.style.background = newState ? '#3b82f6' : '#d1d5db';
+    element.querySelector('div').style.transform = newState ? 'translateX(20px)' : 'translateX(2px)';
+
+    // menuPermissionsを更新
+    if (!menuPermissions[menuId]) {
+      menuPermissions[menuId] = { visibleTo: ['owner'] };
+    }
+
+    const visibleTo = menuPermissions[menuId].visibleTo;
+    if (newState && !visibleTo.includes(role)) {
+      visibleTo.push(role);
+    } else if (!newState && visibleTo.includes(role)) {
+      const index = visibleTo.indexOf(role);
+      visibleTo.splice(index, 1);
+    }
+
+    console.log('[PERM] メニュー権限を変更:', menuId, role, '->', newState ? 'ON' : 'OFF');
   }
 
   /**
@@ -7572,29 +7701,6 @@ ${prompt || '（未設定）'}
       user.permissionDisplay = permissionMap[newPermissionId];
       console.log('[PERM] ユーザー権限を変更:', email, '->', newPermissionId);
     }
-  }
-
-  /**
-   * メニュー権限を更新（メモリ上）
-   */
-  function updateMenuPermission(checkbox) {
-    const menuId = checkbox.dataset.menu;
-    const role = checkbox.dataset.role;
-    const isChecked = checkbox.checked;
-
-    if (!menuPermissions[menuId]) {
-      menuPermissions[menuId] = { visibleTo: ['owner'] };
-    }
-
-    const visibleTo = menuPermissions[menuId].visibleTo;
-    if (isChecked && !visibleTo.includes(role)) {
-      visibleTo.push(role);
-    } else if (!isChecked && visibleTo.includes(role)) {
-      const index = visibleTo.indexOf(role);
-      visibleTo.splice(index, 1);
-    }
-
-    console.log('[PERM] メニュー権限を変更:', menuId, '->', visibleTo);
   }
 
   /**
