@@ -1072,7 +1072,7 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getMessaging, onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
     import { getFirestore, doc, getDoc, setDoc, collection, collectionGroup, addDoc, query, where, orderBy, getDocs, updateDoc, Timestamp, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
     // Firebase 設定（reborn-chat に統一）
     const firebaseConfig = {
@@ -1120,8 +1120,20 @@
       window.firebaseAuth = auth;
       window.firebaseGoogleProvider = googleProvider;
       window.firebaseSignInWithPopup = signInWithPopup;
+      window.firebaseSignInWithRedirect = signInWithRedirect;
+      window.firebaseGetRedirectResult = getRedirectResult;
       window.firebaseSignOut = signOut;
       window.firebaseOnAuthStateChanged = onAuthStateChanged;
+
+      // ページ読み込み時にリダイレクト結果をチェック（モバイル用）
+      getRedirectResult(auth).then((result) => {
+        if (result && result.user) {
+          console.log('[Auth] リダイレクト認証成功:', result.user.email);
+          window.handleGoogleAuthResult(result.user);
+        }
+      }).catch((error) => {
+        console.error('[Auth] リダイレクト結果エラー:', error);
+      });
 
       // ★ フォアグラウンド通知対応 ★
       // アプリを開いている状態で通知を受信した時の処理
@@ -1840,6 +1852,11 @@
     let existingUserData = null;
     let googleUser = null;
 
+    // モバイルデバイス判定
+    function isMobileDevice() {
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+
     // Google でサインイン
     window.signInWithGoogle = async function signInWithGoogle() {
       const resultDiv = document.getElementById('auth-result');
@@ -1857,14 +1874,53 @@
           throw new Error('Firebase Auth が初期化されていません。ページを再読み込みしてください。');
         }
 
-        const result = await window.firebaseSignInWithPopup(auth, provider);
-        googleUser = result.user;
+        // モバイルはリダイレクト、PCはポップアップ
+        if (isMobileDevice()) {
+          console.log('[Auth] モバイルデバイス検出 - リダイレクト認証を使用');
+          // リダイレクト前にローディング状態を保存
+          localStorage.setItem('reborn_auth_pending', 'true');
+          await window.firebaseSignInWithRedirect(auth, provider);
+          // リダイレクトするのでここには戻らない
+          return;
+        }
 
-        const email = googleUser.email;
-        const displayName = googleUser.displayName || email.split('@')[0];
-        const photoURL = googleUser.photoURL;
+        // PCはポップアップ
+        console.log('[Auth] デスクトップ検出 - ポップアップ認証を使用');
+        const result = await window.firebaseSignInWithPopup(auth, provider);
+        await handleGoogleAuthResult(result.user);
+
+      } catch (error) {
+        console.error('❌ [signInWithGoogle] エラー:', error);
+        if (error.code === 'auth/popup-closed-by-user') {
+          resultDiv.textContent = 'ログインがキャンセルされました。';
+          resultDiv.className = 'step-result';
+        } else if (error.code === 'auth/popup-blocked') {
+          resultDiv.textContent = 'ポップアップがブロックされました。ブラウザの設定を確認してください。';
+          resultDiv.className = 'step-result error';
+        } else {
+          resultDiv.textContent = '❌ エラー: ' + error.message;
+          resultDiv.className = 'step-result error';
+        }
+        resultDiv.style.display = 'block';
+      }
+    }
+
+    // Google認証結果を処理（ポップアップ/リダイレクト共通）
+    window.handleGoogleAuthResult = async function handleGoogleAuthResult(user) {
+      const resultDiv = document.getElementById('auth-result');
+
+      try {
+        googleUser = user;
+        const email = user.email;
+        const displayName = user.displayName || email.split('@')[0];
+        const photoURL = user.photoURL;
 
         resultDiv.textContent = '🔍 ユーザー情報を確認中...';
+        resultDiv.className = 'step-result';
+        resultDiv.style.display = 'block';
+
+        // 認証ペンディングフラグをクリア
+        localStorage.removeItem('reborn_auth_pending');
 
         // Firestoreでユーザー検索
         let db = window.firebaseDB;
@@ -2053,17 +2109,9 @@
         }
 
       } catch (error) {
-        console.error('❌ [signInWithGoogle] エラー:', error);
-        if (error.code === 'auth/popup-closed-by-user') {
-          resultDiv.textContent = 'ログインがキャンセルされました。';
-          resultDiv.className = 'step-result';
-        } else if (error.code === 'auth/popup-blocked') {
-          resultDiv.textContent = 'ポップアップがブロックされました。ブラウザの設定を確認してください。';
-          resultDiv.className = 'step-result error';
-        } else {
-          resultDiv.textContent = '❌ エラー: ' + error.message;
-          resultDiv.className = 'step-result error';
-        }
+        console.error('❌ [handleGoogleAuthResult] エラー:', error);
+        resultDiv.textContent = '❌ エラー: ' + error.message;
+        resultDiv.className = 'step-result error';
         resultDiv.style.display = 'block';
       }
     }
