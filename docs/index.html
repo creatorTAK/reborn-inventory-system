@@ -828,19 +828,19 @@
       <a href="#" onclick="navigateToPage('inventory_history'); return false;" class="drawer-item" id="drawer-inventory-history">
         📊 入出庫履歴
       </a>
-      <a href="#" class="drawer-item disabled">
+      <a href="#" class="drawer-item disabled" id="drawer-stocktaking">
         📋 棚卸
       </a>
       <a href="#" onclick="navigateToPage('chat'); return false;" class="drawer-item" id="drawer-chat">
         💬 チャット
       </a>
-      <a href="#" class="drawer-item disabled">
+      <a href="#" class="drawer-item disabled" id="drawer-purchase">
         💰 仕入／買掛
       </a>
-      <a href="#" class="drawer-item disabled">
+      <a href="#" class="drawer-item disabled" id="drawer-sales">
         💵 売上／売掛
       </a>
-      <a href="#" class="drawer-item disabled">
+      <a href="#" class="drawer-item disabled" id="drawer-sales-analysis">
         📈 売上分析
       </a>
       
@@ -1165,7 +1165,23 @@
       }
     });
 
-    // ================= 権限チェック機能（PERM-001） =================
+    // ================= 権限チェック機能（PERM-001 v4） =================
+    // ドロワーメニューIDマッピング
+    const DRAWER_MENU_ID_MAP = {
+      'product': 'drawer-product',
+      'inventory': 'drawer-inventory',
+      'inventory_history': 'drawer-inventory-history',
+      'stocktaking': 'drawer-stocktaking',
+      'purchase': 'drawer-purchase',
+      'sales': 'drawer-sales',
+      'sales-analysis': 'drawer-sales-analysis',
+      'chat': 'drawer-chat',
+      'master-product': 'drawer-master-product',
+      'master-business': 'drawer-master-business',
+      'config-product': 'drawer-config-product',
+      'config-system': 'drawer-config-system'
+    };
+
     async function checkUserPermissionForSidebar() {
       try {
         const userEmail = localStorage.getItem('reborn_user_email');
@@ -1183,6 +1199,7 @@
           return;
         }
 
+        // 1. ユーザーの権限IDを取得
         const userDoc = await window.db.collection('users').doc(userEmail).get();
 
         if (!userDoc.exists) {
@@ -1194,21 +1211,47 @@
         const permissionId = userData.permissionId || 'staff';
         const permissionDisplay = userData.permissionDisplay || 'スタッフ';
 
-        console.log('[index.html] 🔐 権限:', permissionDisplay, '(ID:', permissionId + ')');
+        console.log('[index.html] 🔐 ユーザー権限:', permissionDisplay, '(ID:', permissionId + ')');
 
         // 権限をlocalStorageにキャッシュ
         localStorage.setItem('reborn_user_permission', permissionId);
 
-        // オーナー以外の場合、商品登録設定メニューを非表示
-        if (permissionId !== 'owner') {
-          const drawerConfigProduct = document.getElementById('drawer-config-product');
-          if (drawerConfigProduct) {
-            drawerConfigProduct.style.display = 'none';
-            console.log('[index.html] 🔒 サイドバーの商品登録設定メニューを非表示にしました');
-          }
-        } else {
+        // オーナーは全メニュー表示
+        if (permissionId === 'owner') {
           console.log('[index.html] ✅ オーナー権限 - 全メニュー表示');
+          return;
         }
+
+        // 2. メニュー権限設定を取得
+        const menuPermDoc = await window.db.collection('settings').doc('menuPermissions').get();
+
+        if (!menuPermDoc.exists) {
+          console.log('[index.html] ℹ️ メニュー権限設定なし - デフォルト表示');
+          return;
+        }
+
+        const menuPermissions = menuPermDoc.data();
+        console.log('[index.html] 📋 メニュー権限設定:', menuPermissions);
+
+        // 3. 各メニューの表示/非表示を制御
+        let hiddenCount = 0;
+        for (const [menuId, elementId] of Object.entries(DRAWER_MENU_ID_MAP)) {
+          const menuPerm = menuPermissions[menuId];
+          const element = document.getElementById(elementId);
+
+          if (!element) continue;
+
+          // visibleToに権限IDが含まれているかチェック
+          const isVisible = !menuPerm || !menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId);
+
+          if (!isVisible) {
+            element.style.display = 'none';
+            hiddenCount++;
+            console.log('[index.html] 🔒 ドロワーメニュー非表示:', menuId);
+          }
+        }
+
+        console.log('[index.html] ✅ 権限チェック完了 - 非表示メニュー数:', hiddenCount);
 
       } catch (error) {
         console.error('[index.html] ❌ 権限チェックエラー:', error);

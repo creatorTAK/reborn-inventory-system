@@ -242,7 +242,7 @@
 
     <div class="menu-items">
       <!-- 商品登録 -->
-      <a href="#" onclick="navigateToPage('product'); return false;" class="menu-item">
+      <a href="#" onclick="navigateToPage('product'); return false;" class="menu-item" id="menu-product">
         <div class="menu-item-content">
           <span class="menu-item-icon">📝</span>
           <span>商品登録</span>
@@ -250,7 +250,7 @@
       </a>
 
       <!-- 在庫管理 -->
-      <a href="#" onclick="navigateToPage('inventory'); return false;" class="menu-item">
+      <a href="#" onclick="navigateToPage('inventory'); return false;" class="menu-item" id="menu-inventory">
         <div class="menu-item-content">
           <span class="menu-item-icon">📦</span>
           <span>在庫管理</span>
@@ -258,7 +258,7 @@
       </a>
 
       <!-- 入出庫履歴 -->
-      <a href="#" onclick="navigateToPage('inventory_history'); return false;" class="menu-item">
+      <a href="#" onclick="navigateToPage('inventory_history'); return false;" class="menu-item" id="menu-inventory_history">
         <div class="menu-item-content">
           <span class="menu-item-icon">📊</span>
           <span>入出庫履歴</span>
@@ -266,7 +266,7 @@
       </a>
 
       <!-- 棚卸 -->
-      <a href="#" class="menu-item disabled">
+      <a href="#" class="menu-item disabled" id="menu-stocktaking">
         <div class="menu-item-content">
           <span class="menu-item-icon">📋</span>
           <span>棚卸</span>
@@ -274,7 +274,7 @@
       </a>
 
       <!-- 仕入／買掛 -->
-      <a href="#" class="menu-item disabled">
+      <a href="#" class="menu-item disabled" id="menu-purchase">
         <div class="menu-item-content">
           <span class="menu-item-icon">💰</span>
           <span>仕入／買掛</span>
@@ -282,7 +282,7 @@
       </a>
 
       <!-- 売上／売掛 -->
-      <a href="#" class="menu-item disabled">
+      <a href="#" class="menu-item disabled" id="menu-sales">
         <div class="menu-item-content">
           <span class="menu-item-icon">💵</span>
           <span>売上／売掛</span>
@@ -290,7 +290,7 @@
       </a>
 
       <!-- 売上分析 -->
-      <a href="#" class="menu-item disabled">
+      <a href="#" class="menu-item disabled" id="menu-sales-analysis">
         <div class="menu-item-content">
           <span class="menu-item-icon">📈</span>
           <span>売上分析</span>
@@ -298,7 +298,7 @@
       </a>
 
       <!-- チャット -->
-      <a href="#" onclick="navigateToPage('chat'); return false;" class="menu-item">
+      <a href="#" onclick="navigateToPage('chat'); return false;" class="menu-item" id="menu-chat">
         <div class="menu-item-content">
           <span class="menu-item-icon">💬</span>
           <span>チャット</span>
@@ -315,10 +315,10 @@
           <span class="accordion-arrow" id="master-arrow">▼</span>
         </div>
         <div class="accordion-content" id="master-content">
-          <a href="#" onclick="navigateToPage('master-product'); return false;" class="accordion-item">
+          <a href="#" onclick="navigateToPage('master-product'); return false;" class="accordion-item" id="menu-master-product">
             <span>📦 商品関連マスタ管理</span>
           </a>
-          <a href="#" onclick="navigateToPage('master-business'); return false;" class="accordion-item">
+          <a href="#" onclick="navigateToPage('master-business'); return false;" class="accordion-item" id="menu-master-business">
             <span>🏢 業務関連マスタ管理</span>
           </a>
         </div>
@@ -411,7 +411,23 @@
       console.error('[menu_home] error.stack:', error.stack);
     }
 
-    // ================= 権限チェック機能（PERM-001） =================
+    // ================= 権限チェック機能（PERM-001 v4） =================
+    // メニューIDと要素IDのマッピング
+    const MENU_ID_MAP = {
+      'product': 'menu-product',
+      'inventory': 'menu-inventory',
+      'inventory_history': 'menu-inventory_history',
+      'stocktaking': 'menu-stocktaking',
+      'purchase': 'menu-purchase',
+      'sales': 'menu-sales',
+      'sales-analysis': 'menu-sales-analysis',
+      'chat': 'menu-chat',
+      'master-product': 'menu-master-product',
+      'master-business': 'menu-master-business',
+      'config-product': 'menu-config-product',
+      'config-system': 'menu-config-system'
+    };
+
     async function checkUserPermissionAndUpdateMenu() {
       try {
         const userEmail = localStorage.getItem('reborn_user_email');
@@ -429,6 +445,7 @@
           return;
         }
 
+        // 1. ユーザーの権限IDを取得
         const userDoc = await db.collection('users').doc(userEmail).get();
 
         if (!userDoc.exists) {
@@ -440,21 +457,47 @@
         const permissionId = userData.permissionId || 'staff';
         const permissionDisplay = userData.permissionDisplay || 'スタッフ';
 
-        console.log('[menu_home] 🔐 権限:', permissionDisplay, '(ID:', permissionId + ')');
+        console.log('[menu_home] 🔐 ユーザー権限:', permissionDisplay, '(ID:', permissionId + ')');
 
         // 権限をlocalStorageにキャッシュ
         localStorage.setItem('reborn_user_permission', permissionId);
 
-        // オーナー以外の場合、商品登録設定メニューを非表示
-        if (permissionId !== 'owner') {
-          const productConfigMenu = document.getElementById('menu-config-product');
-          if (productConfigMenu) {
-            productConfigMenu.style.display = 'none';
-            console.log('[menu_home] 🔒 商品登録設定メニューを非表示にしました');
-          }
-        } else {
+        // オーナーは全メニュー表示
+        if (permissionId === 'owner') {
           console.log('[menu_home] ✅ オーナー権限 - 全メニュー表示');
+          return;
         }
+
+        // 2. メニュー権限設定を取得
+        const menuPermDoc = await db.collection('settings').doc('menuPermissions').get();
+
+        if (!menuPermDoc.exists) {
+          console.log('[menu_home] ℹ️ メニュー権限設定なし - デフォルト表示');
+          return;
+        }
+
+        const menuPermissions = menuPermDoc.data();
+        console.log('[menu_home] 📋 メニュー権限設定:', menuPermissions);
+
+        // 3. 各メニューの表示/非表示を制御
+        let hiddenCount = 0;
+        for (const [menuId, elementId] of Object.entries(MENU_ID_MAP)) {
+          const menuPerm = menuPermissions[menuId];
+          const element = document.getElementById(elementId);
+
+          if (!element) continue;
+
+          // visibleToに権限IDが含まれているかチェック
+          const isVisible = !menuPerm || !menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId);
+
+          if (!isVisible) {
+            element.style.display = 'none';
+            hiddenCount++;
+            console.log('[menu_home] 🔒 メニュー非表示:', menuId);
+          }
+        }
+
+        console.log('[menu_home] ✅ 権限チェック完了 - 非表示メニュー数:', hiddenCount);
 
       } catch (error) {
         console.error('[menu_home] ❌ 権限チェックエラー:', error);
