@@ -7719,12 +7719,25 @@ ${prompt || '（未設定）'}
       const childrenHtml = child.children.map(item => renderLeafItem(item)).join('');
       const accordionId = `accordion-content-menu-${parentIndex}-${childIndex}`;
       const iconId = `accordion-icon-menu-${parentIndex}-${childIndex}`;
+      const groupId = child.id; // master-product, master-business, config-product, config-system
+
+      // 子メニューIDのリストをJSON形式で保持
+      const childMenuIds = JSON.stringify(child.children.map(c => c.id));
+
+      // 権限ごとの一括トグルボタンを生成
+      const bulkToggleButtons = activePermissions.length > 0 ? activePermissions.map(permId => {
+        const perm = PERMISSION_DEFINITIONS[permId];
+        return `<button onclick="event.stopPropagation(); bulkTogglePermission('${groupId}', '${permId}', ${childMenuIds.replace(/"/g, '&quot;')})" style="padding: 2px 8px; font-size: 10px; background: #e5e7eb; border: none; border-radius: 4px; cursor: pointer; color: #4b5563;" onmouseover="this.style.background='#d1d5db'" onmouseout="this.style.background='#e5e7eb'">${perm.label}</button>`;
+      }).join('') : '';
 
       return `
         <div style="border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; margin-bottom: 6px;">
           <div onclick="toggleMenuAccordion('${parentIndex}-${childIndex}')" style="padding: 10px 14px; background: #f3f4f6; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
             <span style="font-size: 13px; font-weight: 600; color: #4b5563;">${child.label}</span>
-            <span id="${iconId}" style="font-size: 11px; color: #6b7280; transition: transform 0.2s;">▼</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${bulkToggleButtons ? `<span style="display: flex; gap: 4px;">${bulkToggleButtons}</span>` : ''}
+              <span id="${iconId}" style="font-size: 11px; color: #6b7280; transition: transform 0.2s;">▼</span>
+            </div>
           </div>
           <div id="${accordionId}" class="accordion-content" style="display: none; padding: 10px; background: #fafafa; flex-direction: column; gap: 6px;">
             ${childrenHtml}
@@ -7848,6 +7861,54 @@ ${prompt || '（未設定）'}
     }
 
     console.log('[PERM] メニュー権限を変更:', menuId, role, '->', newState ? 'ON' : 'OFF');
+  }
+
+  /**
+   * 一括トグル（グループ内の全メニューを指定権限でオン/オフ）
+   * 現在の状態を見て、1つでもOFFがあればONに、全てONならOFFにする
+   */
+  function bulkTogglePermission(groupId, permissionId, menuIds) {
+    console.log('[PERM] 一括トグル:', groupId, permissionId, menuIds);
+
+    // 現在の状態をチェック（1つでもOFFがあるか）
+    let hasAnyOff = false;
+    menuIds.forEach(menuId => {
+      const perm = menuPermissions[menuId];
+      if (!perm || !perm.visibleTo.includes(permissionId)) {
+        hasAnyOff = true;
+      }
+    });
+
+    // 1つでもOFFがあればすべてON、すべてONならすべてOFF
+    const newState = hasAnyOff;
+
+    // 各メニューの権限を更新
+    menuIds.forEach(menuId => {
+      if (!menuPermissions[menuId]) {
+        menuPermissions[menuId] = { visibleTo: ['owner'] };
+      }
+
+      const visibleTo = menuPermissions[menuId].visibleTo;
+      if (newState && !visibleTo.includes(permissionId)) {
+        visibleTo.push(permissionId);
+      } else if (!newState && visibleTo.includes(permissionId)) {
+        const index = visibleTo.indexOf(permissionId);
+        visibleTo.splice(index, 1);
+      }
+
+      // UIのトグルも更新
+      const toggleElement = document.querySelector(`[data-menu="${menuId}"][data-role="${permissionId}"]`);
+      if (toggleElement) {
+        toggleElement.dataset.on = newState.toString();
+        toggleElement.style.background = newState ? '#3b82f6' : '#d1d5db';
+        const circle = toggleElement.querySelector('div');
+        if (circle) {
+          circle.style.transform = newState ? 'translateX(20px)' : 'translateX(2px)';
+        }
+      }
+    });
+
+    console.log('[PERM] 一括トグル完了:', permissionId, '->', newState ? '全てON' : '全てOFF');
   }
 
   /**
