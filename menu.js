@@ -136,12 +136,13 @@ function getUserListForUI() {
 /**
  * ユーザー権限を更新（ユーザー権限管理UI用）
  * @param {String} userName - ユーザー名
- * @param {String} permission - 権限レベル (オーナー/スタッフ/外注)
+ * @param {String} permission - 権限レベル (管理者/オーナー/社員/スタッフ/リーダー/外注)
  * @return {Object} 更新結果
  */
 function updateUserPermission(userName, permission) {
   try {
-    const validPermissions = ['オーナー', 'スタッフ', '外注'];
+    // 有効な権限レベル（管理者=オーナーは互換性のため両方サポート）
+    const validPermissions = ['管理者', 'オーナー', '社員', 'スタッフ', 'リーダー', '外注'];
     if (!validPermissions.includes(permission)) {
       return {
         success: false,
@@ -172,18 +173,20 @@ function updateUserPermission(userName, permission) {
       };
     }
 
-    // ✅ オーナー権限に変更する場合、既存のオーナーをチェック
-    if (permission === 'オーナー') {
+    // ✅ 管理者/オーナー権限に変更する場合、既存の管理者をチェック
+    const isOwnerPermission = permission === 'オーナー' || permission === '管理者';
+    if (isOwnerPermission) {
       let currentOwnerName = null;
-      
+
       for (let i = 1; i < data.length; i++) {
-        if (data[i][permissionCol] === 'オーナー') {
+        // 管理者とオーナーの両方をチェック（互換性のため）
+        if (data[i][permissionCol] === 'オーナー' || data[i][permissionCol] === '管理者') {
           currentOwnerName = data[i][userNameCol];
           break;
         }
       }
 
-      // 既に別のユーザーがオーナーの場合、エラー
+      // 既に別のユーザーが管理者の場合、エラー
       if (currentOwnerName && currentOwnerName !== userName) {
         return {
           success: false,
@@ -1532,7 +1535,7 @@ function setupSheetProtectionMenu() {
     '🔒 シート保護設定',
     '以下のシートを管理者のみ編集可能に保護します：\n\n' +
     '・FCM通知登録\n・ユーザー権限管理\n\n' +
-    'スタッフ・外注は閲覧のみ可能になります。\n\n実行しますか？',
+    '社員・スタッフ・リーダー・外注は閲覧のみ可能になります。\n\n実行しますか？',
     ui.ButtonSet.YES_NO
   );
   

@@ -6721,7 +6721,7 @@ ${prompt || '（未設定）'}
           return;
         }
 
-        // スタッフ・外注の場合、Firestoreの設定に基づいてサブタブ単位で表示制御
+        // 管理者以外の場合（社員・スタッフ・リーダー・外注）、Firestoreの設定に基づいてサブタブ単位で表示制御
         const menuPermDoc = await window.db.collection('settings').doc('menuPermissions').get();
         const menuPerms = menuPermDoc.exists ? menuPermDoc.data() : {};
 
@@ -7481,7 +7481,7 @@ ${prompt || '（未設定）'}
         MENU_DEFINITIONS.forEach(menu => {
           menuPermissions[menu.id] = {
             label: menu.label,
-            visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', 'staff', 'contractor']
+            visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', 'employee', 'staff', 'leader', 'contractor']
           };
         });
       }
@@ -7534,7 +7534,9 @@ ${prompt || '（未設定）'}
             ${isCurrentUser && isOwner ? 'disabled title="自分自身の権限は変更できません"' : ''}
           >
             <option value="owner" ${user.permissionId === 'owner' ? 'selected' : ''}>👑 管理者</option>
+            <option value="employee" ${user.permissionId === 'employee' ? 'selected' : ''}>👔 社員</option>
             <option value="staff" ${user.permissionId === 'staff' ? 'selected' : ''}>📋 スタッフ</option>
+            <option value="leader" ${user.permissionId === 'leader' ? 'selected' : ''}>🎖️ リーダー</option>
             <option value="contractor" ${user.permissionId === 'contractor' ? 'selected' : ''}>🔧 外注</option>
           </select>
         </div>
@@ -7554,9 +7556,11 @@ ${prompt || '（未設定）'}
         // アコーディオングループ（サブタブあり）
         const childrenHtml = menu.children.map(child => {
           const perm = menuPermissions[child.id] || {
-            visibleTo: child.defaultOwnerOnly ? ['owner'] : ['owner', 'staff', 'contractor']
+            visibleTo: child.defaultOwnerOnly ? ['owner'] : ['owner', 'employee', 'staff', 'leader', 'contractor']
           };
+          const employeeOn = perm.visibleTo.includes('employee');
           const staffOn = perm.visibleTo.includes('staff');
+          const leaderOn = perm.visibleTo.includes('leader');
           const contractorOn = perm.visibleTo.includes('contractor');
 
           // 権限設定タブは常に管理者のみ（トグル非表示）
@@ -7572,8 +7576,10 @@ ${prompt || '（未設定）'}
           return `
             <div style="padding: 10px 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
               <div style="font-size: 13px; color: #374151; margin-bottom: 8px;">${child.label}</div>
-              <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                ${renderToggle(child.id, 'employee', '社員', employeeOn)}
                 ${renderToggle(child.id, 'staff', 'スタッフ', staffOn)}
+                ${renderToggle(child.id, 'leader', 'リーダー', leaderOn)}
                 ${renderToggle(child.id, 'contractor', '外注', contractorOn)}
               </div>
             </div>
@@ -7586,7 +7592,7 @@ ${prompt || '（未設定）'}
               <span style="font-size: 14px; font-weight: 600; color: #374151;">${menu.label}</span>
               <span id="accordion-icon-${index}" style="font-size: 12px; color: #6b7280; transition: transform 0.2s;">▼</span>
             </div>
-            <div id="accordion-content-${index}" style="display: none; padding: 12px; background: #fafafa; display: flex; flex-direction: column; gap: 8px;">
+            <div id="accordion-content-${index}" class="accordion-content" style="display: none; padding: 12px; background: #fafafa; flex-direction: column; gap: 8px;">
               ${childrenHtml}
             </div>
           </div>
@@ -7594,16 +7600,20 @@ ${prompt || '（未設定）'}
       } else {
         // 単独メニュー（サブタブなし）
         const perm = menuPermissions[menu.id] || {
-          visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', 'staff', 'contractor']
+          visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', 'employee', 'staff', 'leader', 'contractor']
         };
+        const employeeOn = perm.visibleTo.includes('employee');
         const staffOn = perm.visibleTo.includes('staff');
+        const leaderOn = perm.visibleTo.includes('leader');
         const contractorOn = perm.visibleTo.includes('contractor');
 
         return `
           <div style="padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 8px;">
             <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">${menu.label}</div>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              ${renderToggle(menu.id, 'employee', '社員', employeeOn)}
               ${renderToggle(menu.id, 'staff', 'スタッフ', staffOn)}
+              ${renderToggle(menu.id, 'leader', 'リーダー', leaderOn)}
               ${renderToggle(menu.id, 'contractor', '外注', contractorOn)}
             </div>
           </div>
@@ -7691,7 +7701,9 @@ ${prompt || '（未設定）'}
     const newPermissionId = selectElement.value;
     const permissionMap = {
       'owner': '👑 管理者',
+      'employee': '👔 社員',
       'staff': '📋 スタッフ',
+      'leader': '🎖️ リーダー',
       'contractor': '🔧 外注'
     };
 
