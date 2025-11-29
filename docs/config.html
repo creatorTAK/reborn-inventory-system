@@ -7441,6 +7441,34 @@ ${prompt || '（未設定）'}
   let usersData = [];
   let menuPermissions = {};
 
+  // 権限定義マップ（ID → 表示情報）
+  const PERMISSION_DEFINITIONS = {
+    owner: { id: 'owner', label: '管理者', icon: '👑', color: '#dc2626', order: 1 },
+    employee: { id: 'employee', label: '社員', icon: '👔', color: '#059669', order: 2 },
+    staff: { id: 'staff', label: 'スタッフ', icon: '📋', color: '#1e40af', order: 3 },
+    leader: { id: 'leader', label: 'リーダー', icon: '🎖️', color: '#d97706', order: 4 },
+    contractor: { id: 'contractor', label: '外注', icon: '🔧', color: '#4338ca', order: 5 }
+  };
+
+  /**
+   * チーム内で使用中の権限IDを取得（ownerは常に含む）
+   * @returns {Array<string>} 使用中の権限ID配列（order順）
+   */
+  function getActivePermissions() {
+    // usersDataから使用中の権限IDを抽出
+    const activeIds = new Set(['owner']); // ownerは常に含む
+    usersData.forEach(user => {
+      if (user.permissionId) {
+        activeIds.add(user.permissionId);
+      }
+    });
+
+    // order順でソートして返す
+    return Array.from(activeIds)
+      .filter(id => PERMISSION_DEFINITIONS[id])
+      .sort((a, b) => PERMISSION_DEFINITIONS[a].order - PERMISSION_DEFINITIONS[b].order);
+  }
+
   /**
    * 権限設定を読み込む
    */
@@ -7476,12 +7504,13 @@ ${prompt || '（未設定）'}
       if (menuPermDoc.exists) {
         menuPermissions = menuPermDoc.data();
       } else {
-        // デフォルト設定を作成
+        // デフォルト設定を作成（チーム内で使用中の権限のみ）
+        const activePerms = getActivePermissions();
         menuPermissions = {};
         MENU_DEFINITIONS.forEach(menu => {
           menuPermissions[menu.id] = {
             label: menu.label,
-            visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', 'employee', 'staff', 'leader', 'contractor']
+            visibleTo: menu.defaultOwnerOnly ? ['owner'] : activePerms
           };
         });
       }
@@ -7519,6 +7548,18 @@ ${prompt || '（未設定）'}
     // 現在のユーザーのメールアドレス
     const currentUserEmail = localStorage.getItem('reborn_user_email');
 
+    // チーム内で使用中の権限のみ取得
+    const activePermissions = getActivePermissions();
+
+    // 権限オプションHTMLを生成
+    const generatePermissionOptions = (selectedPermissionId) => {
+      return activePermissions.map(permId => {
+        const perm = PERMISSION_DEFINITIONS[permId];
+        const selected = selectedPermissionId === permId ? 'selected' : '';
+        return `<option value="${permId}" ${selected}>${perm.icon} ${perm.label}</option>`;
+      }).join('');
+    };
+
     container.innerHTML = usersData.map(user => {
       const isCurrentUser = user.email === currentUserEmail;
       const isOwner = user.permissionId === 'owner';
@@ -7533,11 +7574,7 @@ ${prompt || '（未設定）'}
             style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white;"
             ${isCurrentUser && isOwner ? 'disabled title="自分自身の権限は変更できません"' : ''}
           >
-            <option value="owner" ${user.permissionId === 'owner' ? 'selected' : ''}>👑 管理者</option>
-            <option value="employee" ${user.permissionId === 'employee' ? 'selected' : ''}>👔 社員</option>
-            <option value="staff" ${user.permissionId === 'staff' ? 'selected' : ''}>📋 スタッフ</option>
-            <option value="leader" ${user.permissionId === 'leader' ? 'selected' : ''}>🎖️ リーダー</option>
-            <option value="contractor" ${user.permissionId === 'contractor' ? 'selected' : ''}>🔧 外注</option>
+            ${generatePermissionOptions(user.permissionId)}
           </select>
         </div>
       `;
@@ -7551,17 +7588,28 @@ ${prompt || '（未設定）'}
     const container = document.getElementById('menuPermissionList');
     if (!container) return;
 
+    // チーム内で使用中の権限（owner以外）を取得
+    const activePermissions = getActivePermissions().filter(id => id !== 'owner');
+
+    // トグルHTMLを生成するヘルパー関数
+    const generateToggles = (menuId, visibleTo) => {
+      if (activePermissions.length === 0) {
+        return '<span style="font-size: 12px; color: #6b7280;">（管理者のみ）</span>';
+      }
+      return activePermissions.map(permId => {
+        const perm = PERMISSION_DEFINITIONS[permId];
+        const isOn = visibleTo.includes(permId);
+        return renderToggle(menuId, permId, perm.label, isOn);
+      }).join('');
+    };
+
     container.innerHTML = MENU_DEFINITIONS.map((menu, index) => {
       if (menu.isGroup && menu.children) {
         // アコーディオングループ（サブタブあり）
         const childrenHtml = menu.children.map(child => {
           const perm = menuPermissions[child.id] || {
-            visibleTo: child.defaultOwnerOnly ? ['owner'] : ['owner', 'employee', 'staff', 'leader', 'contractor']
+            visibleTo: child.defaultOwnerOnly ? ['owner'] : ['owner', ...activePermissions]
           };
-          const employeeOn = perm.visibleTo.includes('employee');
-          const staffOn = perm.visibleTo.includes('staff');
-          const leaderOn = perm.visibleTo.includes('leader');
-          const contractorOn = perm.visibleTo.includes('contractor');
 
           // 権限設定タブは常に管理者のみ（トグル非表示）
           if (child.alwaysOwnerOnly) {
@@ -7577,10 +7625,7 @@ ${prompt || '（未設定）'}
             <div style="padding: 10px 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
               <div style="font-size: 13px; color: #374151; margin-bottom: 8px;">${child.label}</div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                ${renderToggle(child.id, 'employee', '社員', employeeOn)}
-                ${renderToggle(child.id, 'staff', 'スタッフ', staffOn)}
-                ${renderToggle(child.id, 'leader', 'リーダー', leaderOn)}
-                ${renderToggle(child.id, 'contractor', '外注', contractorOn)}
+                ${generateToggles(child.id, perm.visibleTo)}
               </div>
             </div>
           `;
@@ -7600,21 +7645,14 @@ ${prompt || '（未設定）'}
       } else {
         // 単独メニュー（サブタブなし）
         const perm = menuPermissions[menu.id] || {
-          visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', 'employee', 'staff', 'leader', 'contractor']
+          visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', ...activePermissions]
         };
-        const employeeOn = perm.visibleTo.includes('employee');
-        const staffOn = perm.visibleTo.includes('staff');
-        const leaderOn = perm.visibleTo.includes('leader');
-        const contractorOn = perm.visibleTo.includes('contractor');
 
         return `
           <div style="padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 8px;">
             <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">${menu.label}</div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              ${renderToggle(menu.id, 'employee', '社員', employeeOn)}
-              ${renderToggle(menu.id, 'staff', 'スタッフ', staffOn)}
-              ${renderToggle(menu.id, 'leader', 'リーダー', leaderOn)}
-              ${renderToggle(menu.id, 'contractor', '外注', contractorOn)}
+              ${generateToggles(menu.id, perm.visibleTo)}
             </div>
           </div>
         `;
@@ -7699,18 +7737,15 @@ ${prompt || '（未設定）'}
   function updateUserPermission(selectElement) {
     const email = selectElement.dataset.email;
     const newPermissionId = selectElement.value;
-    const permissionMap = {
-      'owner': '👑 管理者',
-      'employee': '👔 社員',
-      'staff': '📋 スタッフ',
-      'leader': '🎖️ リーダー',
-      'contractor': '🔧 外注'
-    };
+
+    // PERMISSION_DEFINITIONSから表示名を取得
+    const permDef = PERMISSION_DEFINITIONS[newPermissionId];
+    const permissionDisplay = permDef ? `${permDef.icon} ${permDef.label}` : newPermissionId;
 
     const user = usersData.find(u => u.email === email);
     if (user) {
       user.permissionId = newPermissionId;
-      user.permissionDisplay = permissionMap[newPermissionId];
+      user.permissionDisplay = permissionDisplay;
       console.log('[PERM] ユーザー権限を変更:', email, '->', newPermissionId);
     }
   }
