@@ -676,18 +676,72 @@
       <div class="setup-title">🔔 通知設定</div>
       <div class="setup-subtitle">初回のみ - 商品登録の通知を受け取るための設定です</div>
 
-      <!-- ⓪-1 メールアドレス認証 -->
-      <div class="step-section" id="email-auth-section">
+      <!-- ⓪-1 Googleログイン -->
+      <div class="step-section" id="google-auth-section">
         <div>
           <span class="step-number">⓪</span>
           <span class="step-title">ユーザー認証</span>
         </div>
-        <div style="margin-top: 8px;">
-          <label style="display: block; font-size: 13px; color: #6b7280; margin-bottom: 4px;">メールアドレス</label>
-          <input type="email" id="auth-email-input" placeholder="your-email@example.com"
-                 style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px;">
+        <div style="margin-top: 12px; text-align: center;">
+          <p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
+            Googleアカウントでログインしてください
+          </p>
+          <button onclick="signInWithGoogle()"
+                  style="display: inline-flex; align-items: center; gap: 12px; padding: 12px 24px;
+                         background: white; border: 2px solid #e5e7eb; border-radius: 8px;
+                         font-size: 15px; font-weight: 500; color: #374151; cursor: pointer;
+                         transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"
+                  onmouseover="this.style.background='#f9fafb'; this.style.borderColor='#d1d5db';"
+                  onmouseout="this.style.background='white'; this.style.borderColor='#e5e7eb';">
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Google でログイン
+          </button>
         </div>
-        <button class="step-button" onclick="checkEmailAndProceed()" style="margin-top: 12px;">次へ →</button>
+      </div>
+
+      <!-- 承認待ち状態表示 -->
+      <div class="step-section" id="pending-approval-section" style="display: none;">
+        <div style="text-align: center; padding: 20px;">
+          <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+          <div style="font-size: 16px; font-weight: 600; color: #374151; margin-bottom: 8px;">
+            承認待ち
+          </div>
+          <p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
+            オーナーの承認をお待ちください。<br>
+            承認されると、このアプリを使用できるようになります。
+          </p>
+          <div id="pending-user-info" style="background: #f3f4f6; padding: 12px; border-radius: 8px; font-size: 13px; color: #4b5563;">
+          </div>
+          <button onclick="signOutAndRetry()"
+                  style="margin-top: 16px; padding: 10px 20px; background: #f3f4f6; border: none;
+                         border-radius: 6px; font-size: 13px; color: #6b7280; cursor: pointer;">
+            別のアカウントでログイン
+          </button>
+        </div>
+      </div>
+
+      <!-- アカウント無効状態表示 -->
+      <div class="step-section" id="disabled-account-section" style="display: none;">
+        <div style="text-align: center; padding: 20px;">
+          <div style="font-size: 48px; margin-bottom: 16px;">🚫</div>
+          <div style="font-size: 16px; font-weight: 600; color: #dc2626; margin-bottom: 8px;">
+            アカウント無効
+          </div>
+          <p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
+            このアカウントは無効化されています。<br>
+            オーナーにお問い合わせください。
+          </p>
+          <button onclick="signOutAndRetry()"
+                  style="margin-top: 16px; padding: 10px 20px; background: #f3f4f6; border: none;
+                         border-radius: 6px; font-size: 13px; color: #6b7280; cursor: pointer;">
+            別のアカウントでログイン
+          </button>
+        </div>
       </div>
 
       <!-- 認証結果表示エリア（独立） -->
@@ -1018,6 +1072,7 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getMessaging, onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
     import { getFirestore, doc, getDoc, setDoc, collection, collectionGroup, addDoc, query, where, orderBy, getDocs, updateDoc, Timestamp, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
     // Firebase 設定（reborn-chat に統一）
     const firebaseConfig = {
@@ -1035,6 +1090,8 @@
       const app = initializeApp(firebaseConfig);
       const messaging = getMessaging(app);
       const db = getFirestore(app);
+      const auth = getAuth(app);
+      const googleProvider = new GoogleAuthProvider();
 
       // Compat SDK初期化（firestore-api.js用）
       if (!firebase.apps.length) {
@@ -1058,6 +1115,13 @@
       window.firestoreUpdateDoc = updateDoc;
       window.firestoreTimestamp = Timestamp;
       window.firestoreServerTimestamp = serverTimestamp;
+
+      // Firebase Auth グローバル公開
+      window.firebaseAuth = auth;
+      window.firebaseGoogleProvider = googleProvider;
+      window.firebaseSignInWithPopup = signInWithPopup;
+      window.firebaseSignOut = signOut;
+      window.firebaseOnAuthStateChanged = onAuthStateChanged;
 
       // ★ フォアグラウンド通知対応 ★
       // アプリを開いている状態で通知を受信した時の処理
@@ -1768,12 +1832,274 @@
 
 
     // ========================================
-    // 新しいメールアドレス認証フロー
+    // Firebase Google認証フロー
     // ========================================
 
-    // グローバル変数で認証済みメールアドレスと既存ユーザー情報を保持
+    // グローバル変数で認証済みユーザー情報を保持
     let authenticatedEmail = '';
     let existingUserData = null;
+    let googleUser = null;
+
+    // Google でサインイン
+    window.signInWithGoogle = async function signInWithGoogle() {
+      const resultDiv = document.getElementById('auth-result');
+
+      try {
+        resultDiv.textContent = '⏳ Google認証中...';
+        resultDiv.className = 'step-result';
+        resultDiv.style.display = 'block';
+
+        // Firebase Auth でGoogle サインイン
+        const auth = window.firebaseAuth;
+        const provider = window.firebaseGoogleProvider;
+
+        if (!auth || !provider) {
+          throw new Error('Firebase Auth が初期化されていません。ページを再読み込みしてください。');
+        }
+
+        const result = await window.firebaseSignInWithPopup(auth, provider);
+        googleUser = result.user;
+
+        const email = googleUser.email;
+        const displayName = googleUser.displayName || email.split('@')[0];
+        const photoURL = googleUser.photoURL;
+
+        resultDiv.textContent = '🔍 ユーザー情報を確認中...';
+
+        // Firestoreでユーザー検索
+        let db = window.firebaseDB;
+        if (!db) {
+          const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+          const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+          const firebaseConfig = {
+            apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+            authDomain: "reborn-chat.firebaseapp.com",
+            projectId: "reborn-chat",
+            storageBucket: "reborn-chat.firebasestorage.app",
+            messagingSenderId: "345706548795",
+            appId: "1:345706548795:web:058a553da6b4b74db5161e"
+          };
+          const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+          db = getFirestore(app);
+          window.firebaseDB = db;
+        }
+
+        const { getDocs, collection, query, where, addDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const usersCollection = collection(db, 'users');
+
+        // 全ユーザーを取得（初回登録判定用）
+        const allUsersSnapshot = await getDocs(usersCollection);
+        const isFirstUser = allUsersSnapshot.size === 0;
+
+        // userEmailフィールドで既存ユーザーを検索
+        const q = query(usersCollection, where('userEmail', '==', email));
+        const querySnapshot = await getDocs(q);
+
+        authenticatedEmail = email;
+
+        if (!querySnapshot.empty) {
+          // 既存ユーザーが見つかった
+          const userDoc = querySnapshot.docs[0];
+          existingUserData = { id: userDoc.id, ...userDoc.data() };
+
+          const userName = existingUserData.userName || existingUserData.name || displayName;
+          const permissionId = existingUserData.permissionId || existingUserData.permission || 'staff';
+          const status = existingUserData.status || 'active'; // 旧ユーザーはactive扱い
+
+          // ステータスに応じた処理
+          if (status === 'inactive') {
+            // 無効化されたアカウント
+            document.getElementById('google-auth-section').style.display = 'none';
+            document.getElementById('disabled-account-section').style.display = 'block';
+            resultDiv.style.display = 'none';
+            return;
+          }
+
+          if (status === 'pending') {
+            // 承認待ち
+            document.getElementById('google-auth-section').style.display = 'none';
+            document.getElementById('pending-approval-section').style.display = 'block';
+            document.getElementById('pending-user-info').innerHTML = `
+              <div style="display: flex; align-items: center; gap: 10px; justify-content: center;">
+                ${photoURL ? `<img src="${photoURL}" style="width: 32px; height: 32px; border-radius: 50%;">` : ''}
+                <div>
+                  <div style="font-weight: 600;">${userName}</div>
+                  <div style="font-size: 12px; color: #6b7280;">${email}</div>
+                </div>
+              </div>
+            `;
+            resultDiv.style.display = 'none';
+            return;
+          }
+
+          // アクティブユーザー → ログイン成功
+          localStorage.setItem('reborn_user_name', userName);
+          localStorage.setItem('reborn_user_email', email);
+          localStorage.setItem('reborn_user_permission_id', permissionId);
+          localStorage.setItem('reborn_user_permission_display', getPermissionDisplayName(permissionId));
+          localStorage.setItem('reborn_user_photo_url', photoURL || '');
+          localStorage.setItem('reborn_firebase_uid', googleUser.uid);
+
+          // IndexedDBにも保存
+          const request = indexedDB.open('RebornUserDB', 1);
+          request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains('user')) {
+              db.createObjectStore('user');
+            }
+          };
+          request.onsuccess = () => {
+            const db = request.result;
+            const transaction = db.transaction(['user'], 'readwrite');
+            const store = transaction.objectStore('user');
+            store.put(userName, 'userName');
+          };
+
+          // ログイン画面を非表示
+          document.getElementById('google-auth-section').style.display = 'none';
+
+          // 成功メッセージを表示
+          resultDiv.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px;">
+              ${photoURL ? `<img src="${photoURL}" style="width: 40px; height: 40px; border-radius: 50%;">` : ''}
+              <div>
+                <div style="font-weight: 600; color: #059669;">✅ ログイン成功！</div>
+                <div>${userName}さん（${getPermissionDisplayName(permissionId)}）</div>
+              </div>
+            </div>
+            <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">
+              次に「① 通知を許可」ボタンを押してください。
+            </div>
+          `;
+          resultDiv.className = 'step-result success';
+          resultDiv.style.display = 'block';
+
+        } else {
+          // 新規ユーザー
+          if (isFirstUser) {
+            // 初回ユーザー → オーナーとして自動登録（active）
+            const newUserData = {
+              userName: displayName,
+              userEmail: email,
+              permissionId: 'owner',
+              permissionDisplay: '👑 管理者',
+              status: 'active',
+              photoURL: photoURL || '',
+              firebaseUid: googleUser.uid,
+              createdAt: new Date().toISOString(),
+              deviceId: null
+            };
+
+            await addDoc(usersCollection, newUserData);
+
+            // LocalStorageに保存
+            localStorage.setItem('reborn_user_name', displayName);
+            localStorage.setItem('reborn_user_email', email);
+            localStorage.setItem('reborn_user_permission_id', 'owner');
+            localStorage.setItem('reborn_user_permission_display', '👑 管理者');
+            localStorage.setItem('reborn_user_photo_url', photoURL || '');
+            localStorage.setItem('reborn_firebase_uid', googleUser.uid);
+
+            document.getElementById('google-auth-section').style.display = 'none';
+            resultDiv.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 12px;">
+                ${photoURL ? `<img src="${photoURL}" style="width: 40px; height: 40px; border-radius: 50%;">` : ''}
+                <div>
+                  <div style="font-weight: 600; color: #059669;">✅ 初回登録完了！</div>
+                  <div>${displayName}さん（👑 管理者）</div>
+                </div>
+              </div>
+              <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">
+                あなたが初回登録者のため、管理者として登録されました。<br>
+                次に「① 通知を許可」ボタンを押してください。
+              </div>
+            `;
+            resultDiv.className = 'step-result success';
+            resultDiv.style.display = 'block';
+
+          } else {
+            // 2人目以降 → pending状態で登録
+            const newUserData = {
+              userName: displayName,
+              userEmail: email,
+              permissionId: 'staff', // デフォルトはスタッフ（オーナーが後で変更可能）
+              permissionDisplay: '📋 スタッフ',
+              status: 'pending', // 承認待ち
+              photoURL: photoURL || '',
+              firebaseUid: googleUser.uid,
+              createdAt: new Date().toISOString(),
+              deviceId: null
+            };
+
+            await addDoc(usersCollection, newUserData);
+
+            // 承認待ち画面を表示
+            document.getElementById('google-auth-section').style.display = 'none';
+            document.getElementById('pending-approval-section').style.display = 'block';
+            document.getElementById('pending-user-info').innerHTML = `
+              <div style="display: flex; align-items: center; gap: 10px; justify-content: center;">
+                ${photoURL ? `<img src="${photoURL}" style="width: 32px; height: 32px; border-radius: 50%;">` : ''}
+                <div>
+                  <div style="font-weight: 600;">${displayName}</div>
+                  <div style="font-size: 12px; color: #6b7280;">${email}</div>
+                </div>
+              </div>
+              <div style="margin-top: 8px; font-size: 12px; color: #9ca3af;">
+                新規登録されました。オーナーの承認をお待ちください。
+              </div>
+            `;
+            resultDiv.style.display = 'none';
+          }
+        }
+
+      } catch (error) {
+        console.error('❌ [signInWithGoogle] エラー:', error);
+        if (error.code === 'auth/popup-closed-by-user') {
+          resultDiv.textContent = 'ログインがキャンセルされました。';
+          resultDiv.className = 'step-result';
+        } else if (error.code === 'auth/popup-blocked') {
+          resultDiv.textContent = 'ポップアップがブロックされました。ブラウザの設定を確認してください。';
+          resultDiv.className = 'step-result error';
+        } else {
+          resultDiv.textContent = '❌ エラー: ' + error.message;
+          resultDiv.className = 'step-result error';
+        }
+        resultDiv.style.display = 'block';
+      }
+    }
+
+    // サインアウトして別アカウントでログイン
+    window.signOutAndRetry = async function signOutAndRetry() {
+      try {
+        const auth = window.firebaseAuth;
+        if (auth) {
+          await window.firebaseSignOut(auth);
+        }
+        googleUser = null;
+        authenticatedEmail = '';
+        existingUserData = null;
+
+        // LocalStorageクリア
+        localStorage.removeItem('reborn_user_name');
+        localStorage.removeItem('reborn_user_email');
+        localStorage.removeItem('reborn_user_permission_id');
+        localStorage.removeItem('reborn_user_permission_display');
+        localStorage.removeItem('reborn_user_photo_url');
+        localStorage.removeItem('reborn_firebase_uid');
+
+        // 画面リセット
+        document.getElementById('google-auth-section').style.display = 'block';
+        document.getElementById('pending-approval-section').style.display = 'none';
+        document.getElementById('disabled-account-section').style.display = 'none';
+        document.getElementById('auth-result').style.display = 'none';
+      } catch (error) {
+        console.error('❌ [signOutAndRetry] エラー:', error);
+      }
+    }
+
+    // ========================================
+    // 旧メールアドレス認証フロー（後方互換用）
+    // ========================================
 
     // ⓪-1 メールアドレスチェックと画面遷移
     window.checkEmailAndProceed = async function checkEmailAndProceed() {
