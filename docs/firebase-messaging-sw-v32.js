@@ -30,7 +30,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-comp
 // Firebase設定
 const firebaseConfig = {
   apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
-  authDomain: "reborn-chat.firebaseapp.com",
+  authDomain: "furira.jp",
   projectId: "reborn-chat",
   storageBucket: "reborn-chat.firebasestorage.app",
   messagingSenderId: "345706548795",

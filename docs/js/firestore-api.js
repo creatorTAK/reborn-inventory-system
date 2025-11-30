@@ -16,7 +16,7 @@
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
-  authDomain: "reborn-chat.firebaseapp.com",
+  authDomain: "furira.jp",
   projectId: "reborn-chat",
   storageBucket: "reborn-chat.firebasestorage.app",
   messagingSenderId: "345706548795",
