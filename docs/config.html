@@ -907,6 +907,15 @@
             </div>
           </div>
 
+          <!-- 権限 -->
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label">権限</label>
+            <div id="basicUserPermissionBadge" style="padding: 8px 0;"></div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+              権限は管理者のみ変更できます
+            </div>
+          </div>
+
           <!-- ユーザー名 -->
           <div class="form-group" style="margin-bottom: 16px;">
             <label class="form-label">ユーザー名<span style="color: #ef4444; margin-left: 4px;">*</span></label>
@@ -922,9 +931,9 @@
           <!-- メールアドレス -->
           <div class="form-group">
             <label class="form-label">メールアドレス</label>
-            <input type="email" id="basicUserEmail" class="form-control" placeholder="例: example@example.com" maxlength="100">
+            <input type="email" id="basicUserEmail" class="form-control" placeholder="例: example@example.com" maxlength="100" readonly style="background: #f9fafb; cursor: not-allowed;">
             <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
-              通知や連絡先として使用されます
+              Googleアカウントのメールアドレス（変更不可）
             </div>
           </div>
         </div>
@@ -7152,13 +7161,35 @@ ${prompt || '（未設定）'}
     /**
      * 基本設定を読み込む（フォールバック方式）
      */
-    function loadBasicSettings() {
+    async function loadBasicSettings() {
       try {
         const config = JSON.parse(localStorage.getItem('config') || '{}');
 
         // 🔧 優先順位: config > reborn_user_* > デフォルト値
         const userName = config.userName || localStorage.getItem('reborn_user_name') || '';
         const userEmail = config.email || localStorage.getItem('reborn_user_email') || '';
+
+        // 権限をFirestoreから取得（管理者が変更した場合を反映）
+        let permissionId = localStorage.getItem('reborn_user_permission_id') || 'staff';
+        if (window.db && userEmail) {
+          try {
+            const userDoc = await window.db.collection('users').doc(userEmail).get();
+            if (userDoc.exists) {
+              const userData = userDoc.data();
+              permissionId = userData.permissionId || permissionId;
+              // localStorageも更新
+              localStorage.setItem('reborn_user_permission_id', permissionId);
+            }
+          } catch (e) {
+            console.warn('⚠️ Firestoreから権限取得失敗、localStorageを使用:', e);
+          }
+        }
+
+        // 権限バッジを表示
+        const permissionBadge = document.getElementById('basicUserPermissionBadge');
+        if (permissionBadge) {
+          permissionBadge.innerHTML = getPermissionBadgeHTML(permissionId);
+        }
 
         // ユーザー名を設定
         const userNameInput = document.getElementById('basicUserName');
@@ -7199,7 +7230,7 @@ ${prompt || '（未設定）'}
           iconPreview.innerHTML = '<img src="' + iconUrl + '" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">';
         }
 
-        console.log('✅ 基本設定を読み込みました (フォールバック方式):', { userName, userEmail, notificationEnabled, notificationSound, iconUrl: iconUrl ? '設定済み' : '未設定' });
+        console.log('✅ 基本設定を読み込みました (フォールバック方式):', { userName, userEmail, permissionId, notificationEnabled, notificationSound, iconUrl: iconUrl ? '設定済み' : '未設定' });
       } catch (e) {
         console.error('❌ 基本設定読み込みエラー:', e);
       }
@@ -7559,12 +7590,20 @@ ${prompt || '（未設定）'}
 
   // 権限定義マップ（ID → 表示情報）
   const PERMISSION_DEFINITIONS = {
-    owner: { id: 'owner', label: '管理者', icon: '👑', color: '#dc2626', order: 1 },
-    employee: { id: 'employee', label: '社員', icon: '👔', color: '#059669', order: 2 },
-    staff: { id: 'staff', label: 'スタッフ', icon: '📋', color: '#1e40af', order: 3 },
-    leader: { id: 'leader', label: 'リーダー', icon: '🎖️', color: '#d97706', order: 4 },
-    contractor: { id: 'contractor', label: '外注', icon: '🔧', color: '#4338ca', order: 5 }
+    owner: { id: 'owner', label: '管理者', icon: '👑', color: '#dc2626', bg: '#fef2f2', order: 1 },
+    employee: { id: 'employee', label: '社員', icon: '👔', color: '#059669', bg: '#ecfdf5', order: 2 },
+    staff: { id: 'staff', label: 'スタッフ', icon: '📋', color: '#1e40af', bg: '#eff6ff', order: 3 },
+    leader: { id: 'leader', label: 'リーダー', icon: '🎖️', color: '#d97706', bg: '#fffbeb', order: 4 },
+    contractor: { id: 'contractor', label: '外注', icon: '🔧', color: '#4338ca', bg: '#eef2ff', order: 5 }
   };
+
+  /**
+   * 権限バッジHTMLを生成
+   */
+  function getPermissionBadgeHTML(permissionId) {
+    const perm = PERMISSION_DEFINITIONS[permissionId] || PERMISSION_DEFINITIONS['staff'];
+    return `<span style="display: inline-block; padding: 4px 12px; background: ${perm.bg}; color: ${perm.color}; border: 1px solid ${perm.color}; border-radius: 20px; font-size: 13px; font-weight: 600;">${perm.icon} ${perm.label}</span>`;
+  }
 
   /**
    * チーム内で使用中の権限IDを取得（ownerは常に含む）
