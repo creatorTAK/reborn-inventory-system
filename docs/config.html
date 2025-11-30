@@ -8253,16 +8253,31 @@ ${prompt || '（未設定）'}
       let actionButtons = '';
 
       if (status === 'pending') {
+        // 権限選択オプションを生成（ownerは自分では選べない）
+        const permissionOptions = Object.values(PERMISSION_DEFINITIONS)
+          .filter(p => p.id !== 'owner') // 管理者権限は除外
+          .sort((a, b) => a.order - b.order)
+          .map(p => `<option value="${p.id}">${p.icon} ${p.label}</option>`)
+          .join('');
+
         actionButtons = `
-          <div style="display: flex; gap: 8px; margin-top: 8px;">
-            <button onclick="approveUser('${user.id}')"
-                    style="flex: 1; padding: 8px 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
-              ✅ 承認
-            </button>
-            <button onclick="rejectUser('${user.id}')"
-                    style="flex: 1; padding: 8px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
-              ❌ 却下
-            </button>
+          <div style="margin-top: 8px;">
+            <div style="margin-bottom: 8px;">
+              <label style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">権限を選択:</label>
+              <select id="permission-select-${user.id}" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background: white;">
+                ${permissionOptions}
+              </select>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button onclick="approveUser('${user.id}')"
+                      style="flex: 1; padding: 8px 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                ✅ 承認
+              </button>
+              <button onclick="rejectUser('${user.id}')"
+                      style="flex: 1; padding: 8px 12px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                ❌ 却下
+              </button>
+            </div>
           </div>
         `;
       } else if (status === 'active') {
@@ -8321,16 +8336,23 @@ ${prompt || '（未設定）'}
    * ユーザーを承認
    */
   window.approveUser = async function(userId) {
-    if (!confirm('このユーザーを承認しますか？')) return;
+    // 選択された権限を取得
+    const permissionSelect = document.getElementById(`permission-select-${userId}`);
+    const selectedPermissionId = permissionSelect ? permissionSelect.value : 'staff';
+    const permDef = PERMISSION_DEFINITIONS[selectedPermissionId] || PERMISSION_DEFINITIONS['staff'];
+
+    if (!confirm(`このユーザーを「${permDef.icon} ${permDef.label}」として承認しますか？`)) return;
 
     try {
       await window.db.collection('users').doc(userId).update({
         status: 'active',
+        permissionId: selectedPermissionId,
+        permissionDisplay: permDef.label,
         approvedAt: new Date().toISOString(),
         approvedBy: localStorage.getItem('reborn_user_email')
       });
-      console.log('[USER] ✅ ユーザーを承認:', userId);
-      alert('ユーザーを承認しました');
+      console.log('[USER] ✅ ユーザーを承認:', userId, '権限:', selectedPermissionId);
+      alert(`ユーザーを「${permDef.label}」として承認しました`);
       loadUserManagement(); // リスト再読み込み
     } catch (error) {
       console.error('[USER] ❌ 承認エラー:', error);
