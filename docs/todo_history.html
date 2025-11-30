@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-11-30 - やることリスト機能追加 -->
+  <!-- Cache Bust: 2025-12-01 - 完了タスク履歴ページ -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>やることリスト</title>
+  <title>完了した履歴</title>
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <!-- REBORN Brand Colors & Theme -->
@@ -54,7 +54,7 @@
     .section-title {
       font-size: 14px;
       font-weight: 600;
-      color: #6b7280;
+      color: rgba(255,255,255,0.8);
       margin-bottom: 12px;
       padding-left: 4px;
     }
@@ -64,17 +64,8 @@
       padding: 16px;
       margin-bottom: 12px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      border-left: 4px solid var(--reborn-primary);
-    }
-    .task-item:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-    }
-    .task-item.completed {
-      opacity: 0.6;
-      border-left-color: #9ca3af;
+      border-left: 4px solid #9ca3af;
+      opacity: 0.9;
     }
     .task-header {
       display: flex;
@@ -89,26 +80,9 @@
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      background: #fef3c7;
-      color: #92400e;
-      font-size: 12px;
-    }
-    .history-link {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 12px;
-      margin-top: 16px;
-      background: rgba(255,255,255,0.2);
-      border-radius: 12px;
-      color: white;
+      background: #d1fae5;
+      color: #059669;
       font-size: 14px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    .history-link:hover {
-      background: rgba(255,255,255,0.3);
     }
     .task-content {
       flex: 1;
@@ -116,12 +90,13 @@
     .task-title {
       font-size: 15px;
       font-weight: 600;
-      color: #1f2937;
+      color: #6b7280;
       margin-bottom: 4px;
+      text-decoration: line-through;
     }
     .task-description {
       font-size: 13px;
-      color: #6b7280;
+      color: #9ca3af;
       line-height: 1.4;
     }
     .task-meta {
@@ -132,22 +107,51 @@
       font-size: 12px;
       color: #9ca3af;
     }
-    .task-action {
+    .task-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #f3f4f6;
+    }
+    .delete-btn {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      padding: 4px 12px;
-      background: #eff6ff;
-      color: var(--reborn-primary);
-      border-radius: 20px;
+      padding: 6px 12px;
+      background: #fef2f2;
+      color: #dc2626;
+      border: none;
+      border-radius: 8px;
       font-size: 12px;
-      font-weight: 500;
-      margin-top: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .delete-btn:hover {
+      background: #fee2e2;
+    }
+    .delete-all-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      margin-top: 16px;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: 12px;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .delete-all-btn:hover {
+      background: rgba(239, 68, 68, 0.3);
     }
     .empty-state {
       text-align: center;
       padding: 60px 20px;
-      color: #9ca3af;
+      color: rgba(255,255,255,0.7);
     }
     .empty-state i {
       font-size: 48px;
@@ -160,7 +164,7 @@
     .loading {
       text-align: center;
       padding: 40px;
-      color: #6b7280;
+      color: rgba(255,255,255,0.7);
     }
     .type-badge {
       display: inline-block;
@@ -181,6 +185,13 @@
       background: #e0e7ff;
       color: #3730a3;
     }
+    .info-text {
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-top: 16px;
+      padding: 0 16px;
+    }
   </style>
 </head>
 <body>
@@ -188,7 +199,7 @@
     <button class="back-button" onclick="goBack()">
       <i class="bi bi-chevron-left"></i>
     </button>
-    <span class="header-title">✓ やることリスト</span>
+    <span class="header-title"><i class="bi bi-clock-history"></i> 完了した履歴</span>
   </div>
 
   <div class="tasks-container">
@@ -196,23 +207,25 @@
       <i class="bi bi-arrow-repeat"></i> 読み込み中...
     </div>
 
-    <div id="pending-tasks" style="display: none;">
-      <div class="section-title">未完了のタスク</div>
-      <div id="pending-tasks-list"></div>
+    <div id="completed-tasks" style="display: none;">
+      <div class="section-title">完了したタスク</div>
+      <div id="completed-tasks-list"></div>
+    </div>
+
+    <div id="delete-all-container" style="display: none;">
+      <button class="delete-all-btn" onclick="deleteAllTasks()">
+        <i class="bi bi-trash3"></i>
+        <span>すべての履歴を削除</span>
+      </button>
     </div>
 
     <div id="empty-state" class="empty-state" style="display: none;">
-      <i class="bi bi-check-circle"></i>
-      <p>やることはありません</p>
+      <i class="bi bi-inbox"></i>
+      <p>完了した履歴はありません</p>
     </div>
 
-    <!-- 完了履歴へのリンク -->
-    <div id="history-link-container" style="display: none;">
-      <div class="history-link" onclick="goToHistory()">
-        <i class="bi bi-clock-history"></i>
-        <span>完了した履歴を見る</span>
-        <span id="completed-count" style="background: rgba(255,255,255,0.3); padding: 2px 8px; border-radius: 10px; font-size: 12px;"></span>
-      </div>
+    <div class="info-text">
+      完了したタスクは30日後に自動的に削除されます
     </div>
   </div>
 
@@ -242,8 +255,10 @@
     }
     const db = firebase.firestore();
 
-    // タスク一覧を読み込み
-    async function loadTasks() {
+    let completedTaskIds = [];
+
+    // 完了タスク一覧を読み込み
+    async function loadCompletedTasks() {
       if (!userEmail) {
         document.getElementById('loading').style.display = 'none';
         document.getElementById('empty-state').style.display = 'block';
@@ -252,57 +267,29 @@
 
       try {
         const tasksRef = db.collection('userTasks').doc(userEmail).collection('tasks');
-        const snapshot = await tasksRef.orderBy('createdAt', 'desc').get();
+        const snapshot = await tasksRef
+          .where('completed', '==', true)
+          .orderBy('completedAt', 'desc')
+          .get();
 
-        const pendingTasks = [];
         const completedTasks = [];
-
         snapshot.forEach(doc => {
           const task = { id: doc.id, ...doc.data() };
-          if (task.completed) {
-            completedTasks.push(task);
-          } else {
-            pendingTasks.push(task);
-          }
+          completedTasks.push(task);
         });
+
+        completedTaskIds = completedTasks.map(t => t.id);
 
         document.getElementById('loading').style.display = 'none';
 
-        // 30日経過した完了タスクを自動削除
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        for (const task of completedTasks) {
-          if (task.completedAt) {
-            const completedDate = task.completedAt.toDate ? task.completedAt.toDate() : new Date(task.completedAt);
-            if (completedDate < thirtyDaysAgo) {
-              await db.collection('userTasks').doc(userEmail).collection('tasks').doc(task.id).delete();
-              console.log('30日経過タスクを削除:', task.id);
-            }
-          }
-        }
-
-        if (pendingTasks.length === 0) {
+        if (completedTasks.length === 0) {
           document.getElementById('empty-state').style.display = 'block';
+          return;
         }
 
-        // 未完了タスクを表示
-        if (pendingTasks.length > 0) {
-          document.getElementById('pending-tasks').style.display = 'block';
-          document.getElementById('pending-tasks-list').innerHTML = pendingTasks.map(task => renderTask(task)).join('');
-        }
-
-        // 完了タスクがある場合は履歴リンクを表示
-        // 30日以内のタスクのみカウント
-        const recentCompletedTasks = completedTasks.filter(task => {
-          if (!task.completedAt) return true;
-          const completedDate = task.completedAt.toDate ? task.completedAt.toDate() : new Date(task.completedAt);
-          return completedDate >= thirtyDaysAgo;
-        });
-
-        if (recentCompletedTasks.length > 0) {
-          document.getElementById('history-link-container').style.display = 'block';
-          document.getElementById('completed-count').textContent = `${recentCompletedTasks.length}件`;
-        }
+        document.getElementById('completed-tasks').style.display = 'block';
+        document.getElementById('completed-tasks-list').innerHTML = completedTasks.map(task => renderTask(task)).join('');
+        document.getElementById('delete-all-container').style.display = 'block';
 
       } catch (error) {
         console.error('タスク読み込みエラー:', error);
@@ -310,38 +297,32 @@
       }
     }
 
-    // タスクをレンダリング（未完了タスク用 - チェックボックスなし）
+    // タスクをレンダリング
     function renderTask(task) {
       const typeLabel = getTypeLabel(task.type);
       const typeBadgeClass = task.type || 'default';
-      const createdAt = task.createdAt ? formatDate(task.createdAt.toDate()) : '';
-      const typeIcon = getTypeIcon(task.type);
+      const completedAt = task.completedAt ? formatDate(task.completedAt.toDate ? task.completedAt.toDate() : new Date(task.completedAt)) : '';
 
       return `
-        <div class="task-item" data-task-id="${task.id}" onclick="handleTaskClick('${task.id}', '${task.link || ''}')">
+        <div class="task-item" data-task-id="${task.id}">
           <div class="task-header">
-            <div class="task-icon">${typeIcon}</div>
+            <div class="task-icon"><i class="bi bi-check"></i></div>
             <div class="task-content">
               <div class="task-title">${escapeHtml(task.title)}</div>
               <div class="task-description">${escapeHtml(task.description)}</div>
               <div class="task-meta">
                 <span class="type-badge ${typeBadgeClass}">${typeLabel}</span>
-                <span>${createdAt}</span>
+                <span>完了: ${completedAt}</span>
               </div>
-              ${task.link ? `<div class="task-action"><i class="bi bi-arrow-right-circle"></i> 対応する</div>` : ''}
             </div>
+          </div>
+          <div class="task-actions">
+            <button class="delete-btn" onclick="deleteTask('${task.id}')">
+              <i class="bi bi-trash3"></i> 削除
+            </button>
           </div>
         </div>
       `;
-    }
-
-    // タスクタイプのアイコンを取得
-    function getTypeIcon(type) {
-      const icons = {
-        'pending_user_approval': '👤',
-        'inventory_alert': '📦'
-      };
-      return icons[type] || '📋';
     }
 
     // タスクタイプのラベルを取得
@@ -376,30 +357,36 @@
       return div.innerHTML;
     }
 
-    // 履歴ページへ遷移
-    function goToHistory() {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({
-          type: 'navigateToPage',
-          page: 'todo-history',
-          pmToken: pmToken
-        }, parentOrigin);
-      } else {
-        window.location.href = `todo_history.html?userEmail=${encodeURIComponent(userEmail)}&parentOrigin=${encodeURIComponent(parentOrigin)}&pmToken=${encodeURIComponent(pmToken)}`;
+    // タスクを削除
+    async function deleteTask(taskId) {
+      if (!confirm('このタスクを削除しますか？')) return;
+
+      try {
+        await db.collection('userTasks').doc(userEmail).collection('tasks').doc(taskId).delete();
+        console.log('タスク削除:', taskId);
+        loadCompletedTasks(); // 再読み込み
+      } catch (error) {
+        console.error('タスク削除エラー:', error);
+        alert('タスクの削除に失敗しました');
       }
     }
 
-    // タスククリック時の処理
-    function handleTaskClick(taskId, link) {
-      if (!link) return;
+    // すべてのタスクを削除
+    async function deleteAllTasks() {
+      if (!confirm('すべての完了履歴を削除しますか？\nこの操作は取り消せません。')) return;
 
-      // 親ウィンドウにページ遷移を通知
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({
-          type: 'navigateToPage',
-          page: link,
-          pmToken: pmToken
-        }, parentOrigin);
+      try {
+        const batch = db.batch();
+        for (const taskId of completedTaskIds) {
+          const taskRef = db.collection('userTasks').doc(userEmail).collection('tasks').doc(taskId);
+          batch.delete(taskRef);
+        }
+        await batch.commit();
+        console.log('すべてのタスクを削除');
+        loadCompletedTasks(); // 再読み込み
+      } catch (error) {
+        console.error('一括削除エラー:', error);
+        alert('削除に失敗しました');
       }
     }
 
@@ -408,7 +395,7 @@
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({
           type: 'navigateToPage',
-          page: 'home',
+          page: 'todo-list',
           pmToken: pmToken
         }, parentOrigin);
       } else {
@@ -417,7 +404,7 @@
     }
 
     // 初期化
-    loadTasks();
+    loadCompletedTasks();
   </script>
 </body>
 </html>
