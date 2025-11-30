@@ -267,15 +267,22 @@
 
       try {
         const tasksRef = db.collection('userTasks').doc(userEmail).collection('tasks');
+        // インデックス不要のシンプルなクエリ（クライアント側でソート）
         const snapshot = await tasksRef
           .where('completed', '==', true)
-          .orderBy('completedAt', 'desc')
           .get();
 
         const completedTasks = [];
         snapshot.forEach(doc => {
           const task = { id: doc.id, ...doc.data() };
           completedTasks.push(task);
+        });
+
+        // クライアント側で completedAt の降順にソート
+        completedTasks.sort((a, b) => {
+          const dateA = a.completedAt ? (a.completedAt.toDate ? a.completedAt.toDate() : new Date(a.completedAt)) : new Date(0);
+          const dateB = b.completedAt ? (b.completedAt.toDate ? b.completedAt.toDate() : new Date(b.completedAt)) : new Date(0);
+          return dateB - dateA;
         });
 
         completedTaskIds = completedTasks.map(t => t.id);
