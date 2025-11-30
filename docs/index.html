@@ -687,6 +687,32 @@
         transform: scale(1.2);
       }
     }
+
+    /* 承認待ちローディングドット */
+    .loading-dot {
+      animation: loading-pulse 1.5s ease-in-out infinite;
+      color: #3b82f6;
+    }
+
+    @keyframes loading-pulse {
+      0%, 100% {
+        opacity: 0.3;
+      }
+      50% {
+        opacity: 1;
+      }
+    }
+
+    /* 承認完了アニメーション */
+    .approval-success {
+      animation: approval-bounce 0.5s ease;
+    }
+
+    @keyframes approval-bounce {
+      0% { transform: scale(0.8); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -727,17 +753,20 @@
       <!-- 承認待ち状態表示 -->
       <div class="step-section" id="pending-approval-section" style="display: none;">
         <div style="text-align: center; padding: 20px;">
-          <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
-          <div style="font-size: 16px; font-weight: 600; color: #374151; margin-bottom: 8px;">
+          <div id="pending-icon" style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+          <div id="pending-title" style="font-size: 16px; font-weight: 600; color: #374151; margin-bottom: 8px;">
             承認待ち
           </div>
-          <p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
+          <p id="pending-message" style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
             オーナーの承認をお待ちください。<br>
-            承認されると、このアプリを使用できるようになります。
+            承認されると、自動的にアプリが使えるようになります。
           </p>
           <div id="pending-user-info" style="background: #f3f4f6; padding: 12px; border-radius: 8px; font-size: 13px; color: #4b5563;">
           </div>
-          <button onclick="signOutAndRetry()"
+          <div id="pending-status" style="margin-top: 12px; font-size: 12px; color: #9ca3af;">
+            <span class="loading-dot">●</span> リアルタイムで承認状況を確認中...
+          </div>
+          <button id="pending-retry-btn" onclick="signOutAndRetry()"
                   style="margin-top: 16px; padding: 10px 20px; background: #f3f4f6; border: none;
                          border-radius: 6px; font-size: 13px; color: #6b7280; cursor: pointer;">
             別のアカウントでログイン
@@ -2024,6 +2053,9 @@
               </div>
             `;
             resultDiv.style.display = 'none';
+
+            // 承認状態をリアルタイム監視開始
+            startPendingApprovalListener(email, displayName, photoURL, googleUser.uid);
             return;
           }
 
@@ -2215,6 +2247,9 @@
               </div>
             `;
             resultDiv.style.display = 'none';
+
+            // 承認状態をリアルタイム監視開始
+            startPendingApprovalListener(email, displayName, photoURL, googleUser.uid);
           }
         }
 
@@ -3947,6 +3982,144 @@
       } catch (error) {
         console.error('[Todo] リスナー開始エラー:', error);
       }
+    }
+
+    // 承認待ちユーザーの状態監視リスナー
+    let pendingApprovalUnsubscribe = null;
+
+    async function startPendingApprovalListener(email, displayName, photoURL, firebaseUid) {
+      console.log('[PendingApproval] リスナー開始:', email);
+
+      try {
+        const db = await getFirebaseDb();
+        const { doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        const userDocRef = doc(db, 'users', email);
+
+        // 既存のリスナーがあれば解除
+        if (pendingApprovalUnsubscribe) {
+          pendingApprovalUnsubscribe();
+        }
+
+        pendingApprovalUnsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
+          if (!docSnapshot.exists()) {
+            console.log('[PendingApproval] ユーザードキュメントが存在しません');
+            return;
+          }
+
+          const userData = docSnapshot.data();
+          const status = userData.status;
+          console.log('[PendingApproval] ステータス変更検知:', status);
+
+          if (status === 'active') {
+            // 承認された！
+            console.log('[PendingApproval] ✅ 承認されました！');
+
+            // UIを更新（承認完了表示）
+            document.getElementById('pending-icon').textContent = '✅';
+            document.getElementById('pending-icon').classList.add('approval-success');
+            document.getElementById('pending-title').textContent = '承認されました！';
+            document.getElementById('pending-title').style.color = '#059669';
+            document.getElementById('pending-message').innerHTML = 'アプリを準備しています...';
+            document.getElementById('pending-status').style.display = 'none';
+            document.getElementById('pending-retry-btn').style.display = 'none';
+
+            // 少し待ってからログイン完了処理
+            setTimeout(() => {
+              completeLoginAfterApproval(userData, email, photoURL, firebaseUid);
+            }, 1500);
+
+            // リスナー解除
+            if (pendingApprovalUnsubscribe) {
+              pendingApprovalUnsubscribe();
+              pendingApprovalUnsubscribe = null;
+            }
+
+          } else if (status === 'inactive') {
+            // 却下された
+            console.log('[PendingApproval] ❌ 却下されました');
+
+            document.getElementById('pending-icon').textContent = '❌';
+            document.getElementById('pending-title').textContent = '承認されませんでした';
+            document.getElementById('pending-title').style.color = '#dc2626';
+            document.getElementById('pending-message').innerHTML = '管理者により却下されました。<br>別のアカウントでお試しください。';
+            document.getElementById('pending-status').style.display = 'none';
+
+            // リスナー解除
+            if (pendingApprovalUnsubscribe) {
+              pendingApprovalUnsubscribe();
+              pendingApprovalUnsubscribe = null;
+            }
+          }
+        }, (error) => {
+          console.error('[PendingApproval] リスナーエラー:', error);
+          document.getElementById('pending-status').innerHTML = '⚠️ 接続エラー - ページを再読み込みしてください';
+        });
+
+        console.log('[PendingApproval] リスナー登録完了');
+      } catch (error) {
+        console.error('[PendingApproval] リスナー開始エラー:', error);
+      }
+    }
+
+    // 承認後のログイン完了処理
+    async function completeLoginAfterApproval(userData, email, photoURL, firebaseUid) {
+      console.log('[PendingApproval] ログイン完了処理開始');
+
+      const userName = userData.userName || userData.name || email.split('@')[0];
+      const permissionId = userData.permissionId || 'staff';
+
+      // localStorageに保存
+      localStorage.setItem('reborn_user_name', userName);
+      localStorage.setItem('reborn_user_email', email);
+      localStorage.setItem('reborn_user_permission_id', permissionId);
+      localStorage.setItem('reborn_user_permission_display', getPermissionDisplayName(permissionId));
+      localStorage.setItem('reborn_user_photo_url', photoURL || '');
+      localStorage.setItem('reborn_firebase_uid', firebaseUid);
+
+      if (userData.userIconUrl) {
+        localStorage.setItem('reborn_user_icon_url', userData.userIconUrl);
+      } else if (photoURL) {
+        localStorage.setItem('reborn_user_icon_url', photoURL);
+      }
+
+      // ヘッダーのアイコンを更新
+      loadUserIcon();
+
+      // IndexedDBにも保存
+      try {
+        const request = indexedDB.open('RebornUserDB', 1);
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains('user')) {
+            db.createObjectStore('user');
+          }
+        };
+        request.onsuccess = () => {
+          const db = request.result;
+          const transaction = db.transaction(['user'], 'readwrite');
+          const store = transaction.objectStore('user');
+          store.put(userName, 'userName');
+        };
+      } catch (e) {
+        console.warn('[PendingApproval] IndexedDB保存エラー:', e);
+      }
+
+      // セッションID生成
+      const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      sessionStorage.setItem('device_session_id', sessionId);
+
+      // グローバル変数更新
+      window.userName = userName;
+      window.userEmail = email;
+
+      // アプリ画面へ遷移
+      console.log('[PendingApproval] ✅ アプリ画面へ遷移');
+      showAppScreen();
+      navigateToPage('home');
+
+      // やることリストのリスナー開始
+      startTodoListener();
     }
 
     // 管理者にタスクを追加（新規ユーザー承認待ち等）
