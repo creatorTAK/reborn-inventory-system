@@ -8333,6 +8333,49 @@ ${prompt || '（未設定）'}
   }
 
   /**
+   * 承認待ちユーザーに関連するタスクを完了にする
+   */
+  async function completePendingUserTask(pendingUserEmail) {
+    try {
+      // 管理者を取得
+      const ownersSnapshot = await window.db.collection('users')
+        .where('permissionId', '==', 'owner')
+        .get();
+
+      if (ownersSnapshot.empty) {
+        console.warn('[Todo] 管理者が見つかりません');
+        return;
+      }
+
+      // 各管理者のタスクを検索して完了にする
+      for (const ownerDoc of ownersSnapshot.docs) {
+        const ownerEmail = ownerDoc.data().userEmail;
+        const tasksRef = window.db.collection('userTasks').doc(ownerEmail).collection('tasks');
+
+        // pending_user_approval タイプで、該当ユーザーに関連するタスクを検索
+        const tasksSnapshot = await tasksRef
+          .where('type', '==', 'pending_user_approval')
+          .where('completed', '==', false)
+          .get();
+
+        for (const taskDoc of tasksSnapshot.docs) {
+          const taskData = taskDoc.data();
+          // relatedData.pendingUserEmail が一致するか確認
+          if (taskData.relatedData && taskData.relatedData.pendingUserEmail === pendingUserEmail) {
+            await taskDoc.ref.update({
+              completed: true,
+              completedAt: new Date().toISOString()
+            });
+            console.log('[Todo] ✅ タスク完了:', ownerEmail, pendingUserEmail);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[Todo] タスク完了エラー:', error);
+    }
+  }
+
+  /**
    * ユーザーを承認
    */
   window.approveUser = async function(userId) {
@@ -8352,6 +8395,10 @@ ${prompt || '（未設定）'}
         approvedBy: localStorage.getItem('reborn_user_email')
       });
       console.log('[USER] ✅ ユーザーを承認:', userId, '権限:', selectedPermissionId);
+
+      // 関連するタスクを完了にする（userIdはメールアドレス）
+      await completePendingUserTask(userId);
+
       alert(`ユーザーを「${permDef.label}」として承認しました`);
       loadUserManagement(); // リスト再読み込み
     } catch (error) {
@@ -8367,6 +8414,9 @@ ${prompt || '（未設定）'}
     if (!confirm('このユーザーを却下しますか？\\n却下するとアカウントが削除されます。')) return;
 
     try {
+      // 関連するタスクを完了にする（削除前に実行）
+      await completePendingUserTask(userId);
+
       await window.db.collection('users').doc(userId).delete();
       console.log('[USER] ✅ ユーザーを却下:', userId);
       alert('ユーザーを却下しました');
