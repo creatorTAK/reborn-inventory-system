@@ -144,7 +144,7 @@ async function handleSendEmail(request, env) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'REBORN <noreply@furira.jp>',
+        from: 'FURIRA <noreply@furira.jp>',
         to: [to],
         subject: subject,
         text: body,
@@ -157,23 +157,23 @@ async function handleSendEmail(request, env) {
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: linear-gradient(135deg, #8B4513, #A0522D); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .header { background: linear-gradient(135deg, #40B4E5, #1E8FBF); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
     .content { background: #fff; padding: 30px; border: 1px solid #ddd; border-top: none; }
     .footer { background: #f5f5f5; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 8px 8px; }
-    a { color: #8B4513; }
+    a { color: #1E8FBF; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1 style="margin:0;">REBORN</h1>
-      <p style="margin:5px 0 0 0; font-size: 14px;">在庫管理システム</p>
+      <img src="https://furira.jp/images/furira-text-logo.png" alt="FURIRA" style="max-width: 180px; height: auto; margin-bottom: 8px;">
+      <p style="margin:0; font-size: 14px;">物販管理システム</p>
     </div>
     <div class="content">
       ${body.split('\n').map(line => `<p style="margin: 10px 0;">${escapeHtml(line)}</p>`).join('')}
     </div>
     <div class="footer">
-      <p>このメールは <a href="https://furira.jp">REBORN在庫管理システム</a> から自動送信されています。</p>
+      <p>このメールは <a href="https://furira.jp">FURIRA物販管理システム</a> から自動送信されています。</p>
     </div>
   </div>
 </body>

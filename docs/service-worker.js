@@ -69,7 +69,7 @@ self.addEventListener('push', (event) => {
   console.log('[Service Worker] Push received:', event);
 
   let notificationData = {
-    title: 'REBORN',
+    title: 'FURIRA',
     body: 'テスト通知です',
     icon: '/icon-180.png',
     badge: '/icon-180.png',
@@ -83,7 +83,7 @@ self.addEventListener('push', (event) => {
     try {
       const data = event.data.json();
       notificationData = {
-        title: data.title || 'REBORN',
+        title: data.title || 'FURIRA',
         body: data.body || 'テスト通知です',
         icon: data.icon || '/icon-180.png',
         badge: data.badge || '/icon-180.png',
