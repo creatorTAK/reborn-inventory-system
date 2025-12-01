@@ -863,34 +863,37 @@
         <div id="step0-result" class="step-result"></div>
       </div>
 
-      <!-- ① 通知を許可 -->
-      <div class="step-section">
-        <div>
-          <span class="step-number">①</span>
-          <span class="step-title">通知を許可</span>
+      <!-- ①②③ 通知設定セクション（自動化により非表示） -->
+      <div id="manual-notification-setup" style="display: none;">
+        <!-- ① 通知を許可 -->
+        <div class="step-section">
+          <div>
+            <span class="step-number">①</span>
+            <span class="step-title">通知を許可</span>
+          </div>
+          <button class="step-button" onclick="requestNotificationPermission()">通知を許可</button>
+          <div id="step1-result" class="step-result"></div>
         </div>
-        <button class="step-button" onclick="requestNotificationPermission()">通知を許可</button>
-        <div id="step1-result" class="step-result"></div>
-      </div>
 
-      <!-- ② FCM登録 -->
-      <div class="step-section">
-        <div>
-          <span class="step-number">②</span>
-          <span class="step-title">FCM登録</span>
+        <!-- ② FCM登録 -->
+        <div class="step-section">
+          <div>
+            <span class="step-number">②</span>
+            <span class="step-title">FCM登録</span>
+          </div>
+          <button class="step-button" onclick="subscribeToFCM()" id="step2-button" disabled>FCM登録</button>
+          <div id="step2-result" class="step-result"></div>
         </div>
-        <button class="step-button" onclick="subscribeToFCM()" id="step2-button" disabled>FCM登録</button>
-        <div id="step2-result" class="step-result"></div>
-      </div>
 
-      <!-- ③ 通知テスト（任意） -->
-      <div class="step-section">
-        <div>
-          <span class="step-number">③</span>
-          <span class="step-title">通知テスト（任意）</span>
+        <!-- ③ 通知テスト（任意） -->
+        <div class="step-section">
+          <div>
+            <span class="step-number">③</span>
+            <span class="step-title">通知テスト（任意）</span>
+          </div>
+          <button class="step-button optional" onclick="triggerServerNotification()" id="step3-button" disabled>テスト通知を送信</button>
+          <div id="step3-result" class="step-result"></div>
         </div>
-        <button class="step-button optional" onclick="triggerServerNotification()" id="step3-button" disabled>テスト通知を送信</button>
-        <div id="step3-result" class="step-result"></div>
       </div>
 
       <!-- アプリを開く -->
@@ -2113,10 +2116,26 @@
               <button id="save-user-name-btn" onclick="updateUserName()" style="width: 100%; margin-top: 8px; padding: 10px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">保存</button>
               <div id="user-name-status" style="font-size: 13px; text-align: center; margin-top: 4px; min-height: 18px;"></div>
             </div>
-            <div style="text-align: center; font-size: 13px; color: #059669; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #86efac;">↓ 次は「① 通知を許可」へ進んでください</div>
+            <button onclick="openApp()" style="width: 100%; margin-top: 12px; padding: 14px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;">アプリへ移動 →</button>
+            <div id="auto-notification-status" style="font-size: 12px; color: #6b7280; text-align: center; margin-top: 8px;"></div>
           `;
           resultDiv.className = 'step-result success';
           resultDiv.style.cssText = 'display: block; padding: 14px;';
+
+          // 自動通知設定をバックグラウンドで実行
+          autoSetupNotifications().then(result => {
+            const statusDiv = document.getElementById('auto-notification-status');
+            if (statusDiv) {
+              if (result.success) {
+                statusDiv.textContent = '✅ 通知設定完了';
+                statusDiv.style.color = '#059669';
+              } else if (result.reason === 'denied' || result.reason === 'rejected') {
+                statusDiv.textContent = 'ℹ️ 通知はオフです（設定から変更可能）';
+              } else {
+                statusDiv.textContent = '';
+              }
+            }
+          });
 
         } else {
           // 新規ユーザー
@@ -2167,10 +2186,26 @@
                 <button id="save-user-name-btn" onclick="updateUserName()" style="width: 100%; margin-top: 8px; padding: 10px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">保存</button>
                 <div id="user-name-status" style="font-size: 13px; text-align: center; margin-top: 4px; min-height: 18px;"></div>
               </div>
-              <div style="text-align: center; font-size: 13px; color: #059669; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #86efac;">↓ 次は「① 通知を許可」へ進んでください</div>
+              <button onclick="openApp()" style="width: 100%; margin-top: 12px; padding: 14px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;">アプリへ移動 →</button>
+              <div id="auto-notification-status-new" style="font-size: 12px; color: #6b7280; text-align: center; margin-top: 8px;"></div>
             `;
             resultDiv.className = 'step-result success';
             resultDiv.style.cssText = 'display: block; padding: 14px;';
+
+            // 自動通知設定をバックグラウンドで実行
+            autoSetupNotifications().then(result => {
+              const statusDiv = document.getElementById('auto-notification-status-new');
+              if (statusDiv) {
+                if (result.success) {
+                  statusDiv.textContent = '✅ 通知設定完了';
+                  statusDiv.style.color = '#059669';
+                } else if (result.reason === 'denied' || result.reason === 'rejected') {
+                  statusDiv.textContent = 'ℹ️ 通知はオフです（設定から変更可能）';
+                } else {
+                  statusDiv.textContent = '';
+                }
+              }
+            });
 
           } else {
             // 2人目以降 → pending状態で登録
@@ -2473,9 +2508,29 @@
           document.getElementById('email-auth-section').style.display = 'none';
 
           // 成功メッセージを表示（独立した表示エリア）
-          resultDiv.textContent = `✅ 認証成功！\n\n${userName}さん（${getPermissionDisplayName(permissionId)}）としてログインしました。\n\n次に「① 通知を許可」ボタンを押してください。`;
+          resultDiv.innerHTML = `
+            <div style="text-align: center; line-height: 1.5;">
+              <div style="font-weight: 600; font-size: 16px; color: #059669;">✅ 認証成功！</div>
+              <div style="margin-top: 8px; font-size: 14px;">${userName}さん（${getPermissionDisplayName(permissionId)}）としてログインしました。</div>
+              <button onclick="openApp()" style="width: 100%; margin-top: 12px; padding: 14px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;">アプリへ移動 →</button>
+              <div id="auto-notification-status-email" style="font-size: 12px; color: #6b7280; margin-top: 8px;"></div>
+            </div>
+          `;
           resultDiv.className = 'step-result success';
           resultDiv.style.display = 'block';
+
+          // 自動通知設定をバックグラウンドで実行
+          autoSetupNotifications().then(result => {
+            const statusDiv = document.getElementById('auto-notification-status-email');
+            if (statusDiv) {
+              if (result.success) {
+                statusDiv.textContent = '✅ 通知設定完了';
+                statusDiv.style.color = '#059669';
+              } else if (result.reason === 'denied' || result.reason === 'rejected') {
+                statusDiv.textContent = 'ℹ️ 通知はオフです（設定から変更可能）';
+              }
+            }
+          });
         } else {
           // 新規ユーザー
           // 新規登録画面を表示
@@ -2652,9 +2707,28 @@
 
         console.log('✅ Firestoreにユーザー登録完了:', email);
 
-        resultDiv.textContent = '✅ ユーザー情報を保存しました！\n次に「① 通知を許可」ボタンを押してください。';
+        resultDiv.innerHTML = `
+          <div style="text-align: center; line-height: 1.5;">
+            <div style="font-weight: 600; font-size: 16px; color: #059669;">✅ ユーザー情報を保存しました！</div>
+            <button onclick="openApp()" style="width: 100%; margin-top: 12px; padding: 14px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;">アプリへ移動 →</button>
+            <div id="auto-notification-status-save1" style="font-size: 12px; color: #6b7280; margin-top: 8px;"></div>
+          </div>
+        `;
         resultDiv.className = 'step-result success';
         resultDiv.style.display = 'block';
+
+        // 自動通知設定をバックグラウンドで実行
+        autoSetupNotifications().then(result => {
+          const statusDiv = document.getElementById('auto-notification-status-save1');
+          if (statusDiv) {
+            if (result.success) {
+              statusDiv.textContent = '✅ 通知設定完了';
+              statusDiv.style.color = '#059669';
+            } else if (result.reason === 'denied' || result.reason === 'rejected') {
+              statusDiv.textContent = 'ℹ️ 通知はオフです（設定から変更可能）';
+            }
+          }
+        });
 
         // 入力フィールドを無効化
         nameInput.disabled = true;
@@ -2803,9 +2877,28 @@
         // PWA版ではFirestoreのみに保存（GAS Proxyは不要）
         console.log('✅ PWA版：Firestoreに保存予定（端末登録時に自動保存）');
 
-        resultDiv.textContent = '✅ ユーザー情報を保存しました！\n次に「① 通知を許可」ボタンを押してください。';
+        resultDiv.innerHTML = `
+          <div style="text-align: center; line-height: 1.5;">
+            <div style="font-weight: 600; font-size: 16px; color: #059669;">✅ ユーザー情報を保存しました！</div>
+            <button onclick="openApp()" style="width: 100%; margin-top: 12px; padding: 14px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;">アプリへ移動 →</button>
+            <div id="auto-notification-status-save2" style="font-size: 12px; color: #6b7280; margin-top: 8px;"></div>
+          </div>
+        `;
         resultDiv.className = 'step-result success';
         resultDiv.style.display = 'block';
+
+        // 自動通知設定をバックグラウンドで実行
+        autoSetupNotifications().then(result => {
+          const statusDiv = document.getElementById('auto-notification-status-save2');
+          if (statusDiv) {
+            if (result.success) {
+              statusDiv.textContent = '✅ 通知設定完了';
+              statusDiv.style.color = '#059669';
+            } else if (result.reason === 'denied' || result.reason === 'rejected') {
+              statusDiv.textContent = 'ℹ️ 通知はオフです（設定から変更可能）';
+            }
+          }
+        });
 
         // 入力フィールドを無効化
         nameInput.disabled = true;
@@ -2818,6 +2911,174 @@
         resultDiv.style.display = 'block';
       }
     }
+
+    // ===============================
+    // 自動通知設定（ログイン成功時に呼び出し）
+    // ===============================
+    async function autoSetupNotifications() {
+      console.log('🔔 [Auto] 通知設定を自動実行開始...');
+
+      // 1. 通知サポートチェック
+      if (!('Notification' in window)) {
+        console.log('ℹ️ [Auto] このブラウザは通知をサポートしていません');
+        return { success: false, reason: 'not_supported' };
+      }
+
+      // 2. 既に許可済みの場合
+      if (Notification.permission === 'granted') {
+        console.log('✅ [Auto] 通知は既に許可されています → FCM登録へ');
+        return await autoRegisterFCM();
+      }
+
+      // 3. 既に拒否済みの場合
+      if (Notification.permission === 'denied') {
+        console.log('❌ [Auto] 通知は拒否されています（設定から変更可能）');
+        return { success: false, reason: 'denied' };
+      }
+
+      // 4. 未設定の場合 → 許可をリクエスト
+      try {
+        console.log('🔔 [Auto] 通知許可をリクエスト中...');
+        const permission = await Notification.requestPermission();
+
+        if (permission === 'granted') {
+          console.log('✅ [Auto] 通知許可が付与されました → FCM登録へ');
+          return await autoRegisterFCM();
+        } else {
+          console.log('❌ [Auto] 通知許可が拒否されました');
+          return { success: false, reason: 'rejected' };
+        }
+      } catch (error) {
+        console.error('❌ [Auto] 通知許可リクエストエラー:', error);
+        return { success: false, reason: 'error', error: error.message };
+      }
+    }
+
+    // 自動FCM登録（通知許可後に呼び出し）
+    async function autoRegisterFCM() {
+      console.log('🔄 [Auto] FCM登録を自動実行開始...');
+
+      // Service Worker登録確認
+      if (!swRegistration) {
+        console.warn('⚠️ [Auto] Service Workerが未登録 → 待機...');
+        // Service Worker登録を待つ
+        try {
+          swRegistration = await navigator.serviceWorker.ready;
+          console.log('✅ [Auto] Service Worker準備完了');
+        } catch (error) {
+          console.error('❌ [Auto] Service Worker待機エラー:', error);
+          return { success: false, reason: 'sw_error', error: error.message };
+        }
+      }
+
+      // FCM非サポートブラウザチェック
+      if (!window.firebaseMessaging) {
+        console.log('ℹ️ [Auto] FCMは未サポート（Safari等）');
+        return { success: false, reason: 'fcm_not_supported' };
+      }
+
+      try {
+        // Firebase Messagingからトークンを取得
+        const { getToken } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
+
+        console.log('🔄 [Auto] FCMトークン取得中...');
+        const currentToken = await getToken(window.firebaseMessaging, {
+          vapidKey: VAPID_PUBLIC_KEY,
+          serviceWorkerRegistration: swRegistration
+        });
+
+        if (currentToken) {
+          console.log('✅ [Auto] FCMトークン取得成功');
+
+          // FCMトークンをlocalStorageに保存
+          localStorage.setItem('reborn_fcm_token', currentToken);
+
+          // Firestoreにデバイス登録
+          await autoSaveDeviceToFirestore(currentToken);
+
+          return { success: true, token: currentToken };
+        } else {
+          console.warn('⚠️ [Auto] FCMトークンがnull');
+          return { success: false, reason: 'token_null' };
+        }
+      } catch (error) {
+        console.error('❌ [Auto] FCMトークン取得エラー:', error);
+        return { success: false, reason: 'fcm_error', error: error.message };
+      }
+    }
+
+    // 自動デバイス登録（FCMトークン取得後に呼び出し）
+    async function autoSaveDeviceToFirestore(token) {
+      console.log('💾 [Auto] Firestoreにデバイス登録中...');
+
+      const userEmail = localStorage.getItem('reborn_user_email');
+      const userName = localStorage.getItem('reborn_user_name');
+      const userPermissionId = localStorage.getItem('reborn_user_permission_id') || 'staff';
+
+      if (!userEmail || !userName) {
+        console.warn('⚠️ [Auto] ユーザー情報が不足');
+        return;
+      }
+
+      const deviceInfo = {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+        screenSize: `${screen.width}x${screen.height}`,
+        timestamp: new Date().toISOString()
+      };
+
+      try {
+        // 既存デバイスの確認と古いデバイスの無効化（最大2台制限）
+        const devicesRef = collection(db, 'users', userEmail, 'devices');
+        const activeQuery = query(devicesRef, where('active', '==', true), orderBy('registeredAt', 'asc'));
+        const activeDevices = await getDocs(activeQuery);
+
+        console.log(`📱 [Auto] 現在のアクティブデバイス数: ${activeDevices.size}`);
+
+        // 同じトークンのデバイスが既にあるか確認
+        let existingDeviceDoc = null;
+        activeDevices.forEach((docSnap) => {
+          if (docSnap.data().fcmToken === token) {
+            existingDeviceDoc = docSnap;
+          }
+        });
+
+        if (existingDeviceDoc) {
+          // 既存デバイスのlastUsedAtを更新
+          await updateDoc(existingDeviceDoc.ref, { lastUsedAt: new Date() });
+          console.log('✅ [Auto] 既存デバイスのlastUsedAtを更新');
+          return;
+        }
+
+        // 2台以上ある場合、最も古いデバイスを非アクティブに
+        if (activeDevices.size >= 2) {
+          const oldestDevice = activeDevices.docs[0];
+          await updateDoc(oldestDevice.ref, { active: false });
+          console.log(`⏸️ [Auto] 最も古いデバイスを非アクティブ化: ${oldestDevice.id}`);
+        }
+
+        // 新しいデバイスを追加
+        const newDevice = {
+          fcmToken: token,
+          deviceInfo: deviceInfo,
+          active: true,
+          permission: userPermissionId,
+          registeredAt: new Date(),
+          lastUsedAt: new Date()
+        };
+
+        await addDoc(devicesRef, newDevice);
+        console.log('✅ [Auto] 新しいデバイスをFirestoreに登録完了');
+
+      } catch (error) {
+        console.error('❌ [Auto] デバイス登録エラー:', error);
+      }
+    }
+
+    // ===============================
+    // 手動通知設定（フォールバック用・通常は非表示）
+    // ===============================
 
     // ① 通知を許可
     async function requestNotificationPermission() {
