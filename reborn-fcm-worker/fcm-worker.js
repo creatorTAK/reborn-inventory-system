@@ -166,14 +166,14 @@ async function handleSendEmail(request, env) {
 <body>
   <div class="container">
     <div class="header">
-      <img src="https://furira.jp/images/furira-text-logo.png" alt="FURIRA" style="max-width: 180px; height: auto; margin-bottom: 8px;">
-      <p style="margin:0; font-size: 14px;">物販管理システム</p>
+      <h1 style="margin:0; font-size: 28px; font-weight: bold;">FURIRA</h1>
+      <p style="margin:5px 0 0 0; font-size: 14px;">物販管理システム</p>
     </div>
     <div class="content">
       ${body.split('\n').map(line => `<p style="margin: 10px 0;">${escapeHtml(line)}</p>`).join('')}
     </div>
     <div class="footer">
-      <p>このメールは <a href="https://furira.jp">FURIRA物販管理システム</a> から自動送信されています。</p>
+      <p>このメールは <a href="https://furira.jp">フリラ物販管理システム</a> から自動送信されています。</p>
     </div>
   </div>
 </body>

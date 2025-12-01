@@ -69,7 +69,7 @@ self.addEventListener('push', (event) => {
   console.log('[Service Worker] Push received:', event);
 
   let notificationData = {
-    title: 'FURIRA',
+    title: 'フリラ',
     body: 'テスト通知です',
     icon: '/icon-180.png',
     badge: '/icon-180.png',
