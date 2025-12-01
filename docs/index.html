@@ -4187,7 +4187,7 @@
     async function sendPushToOwners(notification) {
       try {
         const db = await getFirebaseDb();
-        const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { collection, doc, getDocs, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
         // 管理者のFCMトークンを取得
         const devicesRef = collection(db, 'activeDevices');
@@ -4196,9 +4196,10 @@
         const ownerTokens = [];
         for (const deviceDoc of devicesSnapshot.docs) {
           const deviceData = deviceDoc.data();
-          // 管理者のデバイスかチェック
-          const userDoc = await db.collection('users').doc(deviceDoc.id).get();
-          if (userDoc.exists && userDoc.data().permissionId === 'owner' && deviceData.fcmToken) {
+          // 管理者のデバイスかチェック（modular APIを使用）
+          const userDocRef = doc(db, 'users', deviceDoc.id);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists() && userDocSnap.data().permissionId === 'owner' && deviceData.fcmToken) {
             ownerTokens.push(deviceData.fcmToken);
           }
         }
@@ -4234,16 +4235,25 @@
     async function sendSystemChatMessage(message) {
       try {
         const db = await getFirebaseDb();
-        const { collection, addDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { collection, doc, addDoc, updateDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        const systemRoomId = 'system-notifications';
 
         // システム通知ルームにメッセージを追加
-        const messagesRef = collection(db, 'chatRooms', 'system-notifications', 'messages');
+        const messagesRef = collection(db, 'rooms', systemRoomId, 'messages');
         await addDoc(messagesRef, {
           text: message,
           senderName: 'システム通知',
           senderEmail: 'system@furira.jp',
           timestamp: serverTimestamp(),
           type: 'system'
+        });
+
+        // ルームのlastMessageとupdatedAtを更新
+        const roomRef = doc(db, 'rooms', systemRoomId);
+        await updateDoc(roomRef, {
+          lastMessage: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
+          updatedAt: serverTimestamp()
         });
 
         console.log('[SystemChat] メッセージ送信完了');
