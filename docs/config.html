@@ -8387,6 +8387,13 @@ ${prompt || '（未設定）'}
     if (!confirm(`このユーザーを「${permDef.icon} ${permDef.label}」として承認しますか？`)) return;
 
     try {
+      // まずユーザー情報を取得（FCMトークン、名前など）
+      const userDoc = await window.db.collection('users').doc(userId).get();
+      const userData = userDoc.exists ? userDoc.data() : {};
+      const userName = userData.userName || userId.split('@')[0];
+      const fcmToken = userData.fcmToken;
+
+      // ユーザーを承認
       await window.db.collection('users').doc(userId).update({
         status: 'active',
         permissionId: selectedPermissionId,
@@ -8399,11 +8406,60 @@ ${prompt || '（未設定）'}
       // 関連するタスクを完了にする（userIdはメールアドレス）
       await completePendingUserTask(userId);
 
+      // 承認されたユーザーにプッシュ通知を送信
+      if (fcmToken) {
+        try {
+          const response = await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tokens: [fcmToken],
+              title: '🎉 アカウントが承認されました！',
+              body: `${userName}さん、REBORNへようこそ！アプリを開いてご利用ください。`,
+              data: { type: 'user_approved' }
+            })
+          });
+          if (response.ok) {
+            console.log('[USER] ✅ 承認通知プッシュ送信完了');
+          }
+        } catch (pushError) {
+          console.error('[USER] プッシュ通知送信エラー:', pushError);
+        }
+      }
+
+      // 承認されたユーザーにメール通知を送信
+      try {
+        await sendApprovalEmail(userId, userName);
+        console.log('[USER] ✅ 承認メール送信完了');
+      } catch (emailError) {
+        console.error('[USER] メール送信エラー:', emailError);
+      }
+
       alert(`ユーザーを「${permDef.label}」として承認しました`);
       loadUserManagement(); // リスト再読み込み
     } catch (error) {
       console.error('[USER] ❌ 承認エラー:', error);
       alert('エラー: ' + error.message);
+    }
+  }
+
+  /**
+   * 承認メールを送信
+   */
+  async function sendApprovalEmail(userEmail, userName) {
+    // Cloudflare Worker経由でメール送信
+    const response = await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: userEmail,
+        subject: '🎉 REBORNアカウントが承認されました',
+        body: `${userName}さん\n\nREBORNへようこそ！\nあなたのアカウントが承認されました。\n\nアプリを開いてご利用ください。\nhttps://furira.jp\n\n---\nREBORN在庫管理システム`
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('メール送信失敗: ' + response.status);
     }
   }
 
