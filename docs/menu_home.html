@@ -28,6 +28,7 @@
     }
 
     .menu-container {
+      position: relative;
       width: 100%;
       max-width: 500px;
       background: white;
@@ -232,10 +233,136 @@
         font-size: 22px;
       }
     }
+
+    .menu-footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid #e5e7eb;
+      text-align: center;
+    }
+
+    .menu-footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .menu-footer-links a {
+      color: #6b7280;
+      font-size: 12px;
+      text-decoration: none;
+    }
+
+    .menu-footer-links a:hover {
+      color: var(--reborn-primary);
+      text-decoration: underline;
+    }
+
+    .menu-footer-copyright {
+      color: #9ca3af;
+      font-size: 11px;
+      margin-top: 8px;
+    }
+
+    /* ミニヘッダー（右上アイコン） */
+    .mini-header {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .mini-header-icon {
+      position: relative;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 50%;
+      transition: background 0.2s;
+    }
+
+    .mini-header-icon:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .mini-header-icon:active {
+      transform: scale(0.95);
+    }
+
+    .mini-header-icon .icon {
+      font-size: 22px;
+    }
+
+    .mini-header-icon .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    /* ミニヘッダー用バッジ */
+    .mini-badge {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: #ef4444;
+      color: white;
+      border-radius: 50%;
+      min-width: 16px;
+      height: 16px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    .mini-badge.active {
+      display: flex;
+    }
+
+    /* チャットメニュー用バッジ */
+    .menu-item-badge {
+      background: #ef4444;
+      color: white;
+      border-radius: 10px;
+      min-width: 20px;
+      height: 20px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 0 6px;
+      margin-left: 8px;
+    }
+
+    .menu-item-badge.active {
+      display: flex;
+    }
   </style>
 </head>
 <body>
   <div class="menu-container">
+    <!-- ミニヘッダー（右上アイコン） -->
+    <div class="mini-header">
+      <div class="mini-header-icon" onclick="navigateToPage('todo')" title="やることリスト">
+        <span class="icon">✔️</span>
+        <span class="mini-badge" id="mini-todo-badge">0</span>
+      </div>
+      <div class="mini-header-icon" onclick="navigateToPage('config-system')" title="ユーザー設定" id="mini-user-icon">
+        <span class="icon" id="user-icon-placeholder">👤</span>
+      </div>
+    </div>
+
     <div class="menu-header">
       <img src="https://reborn-inventory-system.pages.dev/images/furira-square-logo.png" alt="Furira" class="menu-logo">
       <div class="menu-subtitle">フリマ在庫管理システム</div>
@@ -303,6 +430,7 @@
         <div class="menu-item-content">
           <span class="menu-item-icon">💬</span>
           <span>チャット</span>
+          <span class="menu-item-badge" id="chat-menu-badge">0</span>
         </div>
       </a>
 
@@ -344,6 +472,15 @@
         </div>
       </div>
     </div>
+
+    <!-- フッター -->
+    <div class="menu-footer">
+      <div class="menu-footer-links">
+        <a href="/privacy-policy.html" target="_blank">プライバシーポリシー</a>
+        <a href="/terms-of-service.html" target="_blank">利用規約</a>
+      </div>
+      <div class="menu-footer-copyright">© 2025 フリラ</div>
+    </div>
   </div>
 
   <!-- 権限による即時メニュー制御（PERM-001 v3） -->
@@ -370,7 +507,7 @@
     // Firebase設定
     const firebaseConfig = {
       apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
-      authDomain: "reborn-chat.firebaseapp.com",
+      authDomain: "furira.jp",
       projectId: "reborn-chat",
       storageBucket: "reborn-chat.firebasestorage.app",
       messagingSenderId: "345706548795",
@@ -570,6 +707,152 @@
         alert('エラー: ページ遷移に失敗しました - ' + error.message);
       }
     };
+
+    // ================= バッジ更新機能 =================
+
+    // やることリストバッジ更新
+    function updateTodoBadge(count) {
+      console.log('[menu_home] Todo バッジ更新:', count);
+      const badge = document.getElementById('mini-todo-badge');
+      if (badge) {
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : count.toString();
+          badge.classList.add('active');
+        } else {
+          badge.textContent = '0';
+          badge.classList.remove('active');
+        }
+      }
+    }
+
+    // チャットバッジ更新
+    function updateChatBadge(count) {
+      console.log('[menu_home] Chat バッジ更新:', count);
+      const badge = document.getElementById('chat-menu-badge');
+      if (badge) {
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : count.toString();
+          badge.classList.add('active');
+        } else {
+          badge.textContent = '0';
+          badge.classList.remove('active');
+        }
+      }
+    }
+
+    // ユーザーアイコン設定
+    function setUserIcon() {
+      const photoUrl = localStorage.getItem('reborn_user_photo');
+      const placeholder = document.getElementById('user-icon-placeholder');
+      const iconContainer = document.getElementById('mini-user-icon');
+
+      if (photoUrl && placeholder && iconContainer) {
+        const img = document.createElement('img');
+        img.src = photoUrl;
+        img.alt = 'ユーザー';
+        img.className = 'user-avatar';
+        img.onerror = function() {
+          // 画像読み込み失敗時はデフォルトアイコンを維持
+          console.log('[menu_home] ユーザー画像読み込み失敗');
+        };
+        placeholder.replaceWith(img);
+        console.log('[menu_home] ✅ ユーザーアイコン設定完了');
+      }
+    }
+
+    // バッジリスナー開始
+    async function startBadgeListeners() {
+      if (!db) {
+        console.warn('[menu_home] ⚠️ バッジリスナー: Firestoreが初期化されていません');
+        return;
+      }
+
+      const userEmail = localStorage.getItem('reborn_user_email');
+      if (!userEmail) {
+        console.warn('[menu_home] ⚠️ バッジリスナー: ユーザーメールが見つかりません');
+        return;
+      }
+
+      console.log('[menu_home] 🔔 バッジリスナー開始:', userEmail);
+
+      try {
+        // 1. やることリスト未完了カウント
+        const todoQuery = db.collection('todos')
+          .where('userEmail', '==', userEmail)
+          .where('completed', '==', false);
+
+        todoQuery.onSnapshot((snapshot) => {
+          const count = snapshot.size;
+          console.log('[menu_home] Todo 未完了数:', count);
+          updateTodoBadge(count);
+        }, (error) => {
+          console.error('[menu_home] Todo リスナーエラー:', error);
+        });
+
+        // 2. チャット未読カウント（全ルーム合計）
+        window.chatUnreadByRoom = {};
+
+        function updateTotalChatUnread() {
+          const totalUnread = Object.values(window.chatUnreadByRoom).reduce((sum, count) => sum + count, 0);
+          console.log('[menu_home] Chat 未読合計:', totalUnread, window.chatUnreadByRoom);
+          updateChatBadge(totalUnread);
+        }
+
+        // ユーザーが参加しているルームを取得
+        const roomsQuery = db.collection('rooms').where('members', 'array-contains', userEmail);
+
+        roomsQuery.onSnapshot((roomsSnapshot) => {
+          console.log('[menu_home] ルーム数:', roomsSnapshot.size);
+
+          roomsSnapshot.forEach((roomDoc) => {
+            const roomId = roomDoc.id;
+            const unreadDocRef = db.collection('rooms').doc(roomId).collection('unreadCounts').doc(userEmail);
+
+            unreadDocRef.onSnapshot((unreadDoc) => {
+              const unreadData = unreadDoc.data();
+              const unreadCount = unreadData?.unreadCount || 0;
+              window.chatUnreadByRoom[roomId] = unreadCount;
+              updateTotalChatUnread();
+            }, (error) => {
+              console.log('[menu_home] ルーム', roomId, '未読取得エラー:', error.message);
+            });
+          });
+        }, (error) => {
+          console.error('[menu_home] ルームリスナーエラー:', error);
+        });
+
+        // デフォルトルーム（全体チャット、システム通知）
+        const defaultRoomIds = ['room_default_all', 'system'];
+        defaultRoomIds.forEach((roomId) => {
+          const unreadDocRef = db.collection('rooms').doc(roomId).collection('unreadCounts').doc(userEmail);
+
+          unreadDocRef.onSnapshot((unreadDoc) => {
+            const unreadData = unreadDoc.data();
+            const unreadCount = unreadData?.unreadCount || 0;
+            window.chatUnreadByRoom[roomId] = unreadCount;
+            updateTotalChatUnread();
+          }, (error) => {
+            console.log('[menu_home] デフォルトルーム', roomId, '未読取得:', error.message);
+          });
+        });
+
+        console.log('[menu_home] ✅ バッジリスナー設定完了');
+
+      } catch (error) {
+        console.error('[menu_home] ❌ バッジリスナー設定エラー:', error);
+      }
+    }
+
+    // DOMロード後にバッジリスナーとユーザーアイコン設定を開始
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setUserIcon();
+        startBadgeListeners();
+      });
+    } else {
+      setUserIcon();
+      startBadgeListeners();
+    }
 
     console.log('[menu_home] ========== スクリプト読み込み完了 ==========');
   </script>
