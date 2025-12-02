@@ -2303,7 +2303,29 @@
         }
 
         // アクティブユーザー → ログイン成功
-        localStorage.setItem('reborn_user_name', userName);
+        // Googleアカウント情報をFirestoreに自動同期（SaaS対応：名前・写真変更を反映）
+        const syncUpdates = {};
+        if (displayName && displayName !== userData.userName) {
+          syncUpdates.userName = displayName;
+          console.log('[PC Login] Googleアカウント名を同期:', userData.userName, '→', displayName);
+        }
+        if (photoURL && photoURL !== userData.photoURL) {
+          syncUpdates.photoURL = photoURL;
+          console.log('[PC Login] Googleアカウント写真を同期');
+        }
+        if (Object.keys(syncUpdates).length > 0) {
+          try {
+            const userRef = doc(db, 'users', email);
+            await updateDoc(userRef, syncUpdates);
+            console.log('[PC Login] Firestore同期完了:', syncUpdates);
+          } catch (syncError) {
+            console.error('[PC Login] Firestore同期エラー:', syncError);
+          }
+        }
+
+        // 同期後の最新名前を使用（Googleアカウント名を優先）
+        const finalUserName = displayName || userName;
+        localStorage.setItem('reborn_user_name', finalUserName);
         localStorage.setItem('reborn_user_email', email);
         localStorage.setItem('reborn_user_permission_id', permissionId);
         localStorage.setItem('reborn_user_permission_display', getPermissionDisplayName(permissionId));
@@ -2455,20 +2477,43 @@
           }
 
           // アクティブユーザー → ログイン成功
-          localStorage.setItem('reborn_user_name', userName);
+          // Googleアカウント情報をFirestoreに自動同期（SaaS対応：名前・写真変更を反映）
+          const syncUpdates = {};
+          if (displayName && displayName !== existingUserData.userName) {
+            syncUpdates.userName = displayName;
+            console.log('[Mobile Login] Googleアカウント名を同期:', existingUserData.userName, '→', displayName);
+          }
+          if (photoURL && photoURL !== existingUserData.photoURL) {
+            syncUpdates.photoURL = photoURL;
+            console.log('[Mobile Login] Googleアカウント写真を同期');
+          }
+          // userIconUrlが未設定の場合もphotoURLをセット
+          if (photoURL && !existingUserData.userIconUrl) {
+            syncUpdates.userIconUrl = photoURL;
+          }
+          if (Object.keys(syncUpdates).length > 0) {
+            try {
+              const userRef = doc(db, 'users', email);
+              await updateDoc(userRef, syncUpdates);
+              console.log('[Mobile Login] Firestore同期完了:', syncUpdates);
+            } catch (syncError) {
+              console.error('[Mobile Login] Firestore同期エラー:', syncError);
+            }
+          }
+
+          // 同期後の最新名前を使用（Googleアカウント名を優先）
+          const finalUserName = displayName || userName;
+          localStorage.setItem('reborn_user_name', finalUserName);
           localStorage.setItem('reborn_user_email', email);
           localStorage.setItem('reborn_user_permission_id', permissionId);
           localStorage.setItem('reborn_user_permission_display', getPermissionDisplayName(permissionId));
           localStorage.setItem('reborn_user_photo_url', photoURL || '');
           localStorage.setItem('reborn_firebase_uid', googleUser.uid);
-          // userIconUrlが未設定の場合、GoogleアカウントのphotoURLをセット
-          if (photoURL && !existingUserData.userIconUrl) {
-            localStorage.setItem('reborn_user_icon_url', photoURL);
-            // Firestoreも更新
-            const userRef = doc(db, 'users', email);
-            await updateDoc(userRef, { userIconUrl: photoURL });
-          } else if (existingUserData.userIconUrl) {
+          // userIconUrlの設定
+          if (existingUserData.userIconUrl) {
             localStorage.setItem('reborn_user_icon_url', existingUserData.userIconUrl);
+          } else if (photoURL) {
+            localStorage.setItem('reborn_user_icon_url', photoURL);
           }
 
           // ヘッダーのアイコンを更新
