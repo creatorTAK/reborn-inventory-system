@@ -2415,6 +2415,10 @@
         const displayName = googleProfile?.name || user.displayName || email.split('@')[0];
         const photoURL = googleProfile?.picture || user.photoURL;
         console.log('[handleGoogleAuthResult] displayName:', displayName, '(googleProfile:', googleProfile?.name, ', user.displayName:', user.displayName, ')');
+        console.log('[handleGoogleAuthResult] Googleプロフィール詳細:', googleProfile);
+
+        // Googleプロフィールをグローバルに保存（姓・名の分割取得用）
+        window.currentGoogleProfile = googleProfile;
 
         resultDiv.textContent = '🔍 ユーザー情報を確認中...';
         resultDiv.className = 'step-result';
@@ -2719,10 +2723,18 @@
     window.showNameInputScreen = function showNameInputScreen(email, photoURL, userType, firebaseUid, displayName) {
       const resultDiv = document.getElementById('auth-result');
 
-      // Googleアカウント名を姓と名に分割（スペース区切りの場合）
+      // Googleプロフィールから姓・名を取得（family_name/given_nameを優先）
+      const googleProfile = window.currentGoogleProfile;
       let defaultLastName = '';
       let defaultFirstName = '';
-      if (displayName) {
+
+      if (googleProfile?.family_name || googleProfile?.given_name) {
+        // Googleアカウントで姓・名が設定されている場合はそれを使用
+        defaultLastName = googleProfile.family_name || '';
+        defaultFirstName = googleProfile.given_name || '';
+        console.log('[showNameInputScreen] Googleプロフィールから姓名取得:', defaultLastName, defaultFirstName);
+      } else if (displayName) {
+        // フォールバック：スペース区切りで分割を試みる
         const nameParts = displayName.trim().split(/\s+/);
         if (nameParts.length >= 2) {
           // スペースで区切られている場合（日本語：姓 名、英語：First Last）
@@ -2732,6 +2744,7 @@
           // スペースがない場合は姓に全体を入れる
           defaultLastName = displayName;
         }
+        console.log('[showNameInputScreen] displayNameから分割:', defaultLastName, defaultFirstName);
       }
 
       resultDiv.innerHTML = `
