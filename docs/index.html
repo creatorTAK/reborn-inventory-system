@@ -1229,7 +1229,7 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getMessaging, onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
     import { getFirestore, doc, getDoc, setDoc, collection, collectionGroup, addDoc, query, where, orderBy, getDocs, updateDoc, Timestamp, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-    import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut, getAdditionalUserInfo } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
     // Firebase 設定（reborn-chat に統一）
     const firebaseConfig = {
@@ -2195,7 +2195,12 @@
         console.log('[Auth] ポップアップ認証を使用（全デバイス共通）');
         const result = await window.firebaseSignInWithPopup(auth, provider);
 
-        await handleGoogleAuthResult(result.user);
+        // Googleから直接最新プロフィールを取得（Firebase Authのキャッシュを回避）
+        const additionalInfo = getAdditionalUserInfo(result);
+        const googleProfile = additionalInfo?.profile || {};
+        console.log('[Auth] Googleプロフィール（最新）:', googleProfile);
+
+        await handleGoogleAuthResult(result.user, googleProfile);
 
       } catch (error) {
         console.error('❌ [signInWithGoogle] エラー:', error);
@@ -2245,8 +2250,15 @@
         const result = await window.firebaseSignInWithPopup(auth, provider);
         const user = result.user;
         const email = user.email;
-        const displayName = user.displayName || email.split('@')[0];
-        const photoURL = user.photoURL;
+
+        // Googleから直接最新プロフィールを取得（Firebase Authのキャッシュを回避）
+        const additionalInfo = getAdditionalUserInfo(result);
+        const googleProfile = additionalInfo?.profile || {};
+        console.log('[PC Auth] Googleプロフィール（最新）:', googleProfile);
+
+        const displayName = googleProfile.name || user.displayName || email.split('@')[0];
+        const photoURL = googleProfile.picture || user.photoURL;
+        console.log('[PC Auth] displayName:', displayName, '(googleProfile:', googleProfile.name, ', user.displayName:', user.displayName, ')');
 
         pcResultDiv.textContent = '🔍 ユーザー情報を確認中...';
 
@@ -2391,14 +2403,17 @@
     }
 
     // Google認証結果を処理（ポップアップ/リダイレクト共通）
-    window.handleGoogleAuthResult = async function handleGoogleAuthResult(user) {
+    // googleProfile: getAdditionalUserInfo()から取得したGoogleの最新プロフィール（オプション）
+    window.handleGoogleAuthResult = async function handleGoogleAuthResult(user, googleProfile = null) {
       const resultDiv = document.getElementById('auth-result');
 
       try {
         googleUser = user;
         const email = user.email;
-        const displayName = user.displayName || email.split('@')[0];
-        const photoURL = user.photoURL;
+        // Googleの最新プロフィールを優先（Firebase Authのキャッシュを回避）
+        const displayName = googleProfile?.name || user.displayName || email.split('@')[0];
+        const photoURL = googleProfile?.picture || user.photoURL;
+        console.log('[handleGoogleAuthResult] displayName:', displayName, '(googleProfile:', googleProfile?.name, ', user.displayName:', user.displayName, ')');
 
         resultDiv.textContent = '🔍 ユーザー情報を確認中...';
         resultDiv.className = 'step-result';
