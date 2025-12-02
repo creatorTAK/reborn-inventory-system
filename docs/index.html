@@ -2761,7 +2761,7 @@
             <div style="position: relative;">
               <input type="text" id="input-last-name" placeholder="例：山田" value="${defaultLastName.replace(/"/g, '&quot;')}"
                      style="width: 100%; padding: 14px 40px 14px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; box-sizing: border-box; -webkit-appearance: none;"
-                     oninput="toggleClearButton(this)">
+                     oninput="toggleClearButton(this); clearNameValidationError()">
               <button type="button" class="input-clear-btn" onclick="clearInput('input-last-name')"
                       style="${defaultLastName ? 'display: block;' : 'display: none;'} position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border: none; background: #9ca3af; border-radius: 50%; color: white; font-size: 16px; cursor: pointer; line-height: 1;">×</button>
             </div>
@@ -2771,7 +2771,7 @@
             <div style="position: relative;">
               <input type="text" id="input-first-name" placeholder="例：太郎" value="${defaultFirstName.replace(/"/g, '&quot;')}"
                      style="width: 100%; padding: 14px 40px 14px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; box-sizing: border-box; -webkit-appearance: none;"
-                     oninput="toggleClearButton(this)">
+                     oninput="toggleClearButton(this); clearNameValidationError()">
               <button type="button" class="input-clear-btn" onclick="clearInput('input-first-name')"
                       style="${defaultFirstName ? 'display: block;' : 'display: none;'} position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border: none; background: #9ca3af; border-radius: 50%; color: white; font-size: 16px; cursor: pointer; line-height: 1;">×</button>
             </div>
@@ -2808,6 +2808,35 @@
       }
     }
 
+    // 姓名バリデーションエラーをクリア
+    window.clearNameValidationError = function clearNameValidationError() {
+      const errorDiv = document.getElementById('name-validation-error');
+      if (errorDiv) {
+        errorDiv.style.display = 'none';
+      }
+    }
+
+    // 【画面3】プッシュ通知画面を表示
+    window.showNotificationScreen = function showNotificationScreen() {
+      // 画面2（auth-result）を非表示
+      const resultDiv = document.getElementById('auth-result');
+      resultDiv.style.display = 'none';
+
+      // 通知セクションを動的に追加して表示
+      const notificationContainer = document.getElementById('notification-section-container');
+      notificationContainer.innerHTML = `
+        <div class="step-section" id="notification-section">
+          <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <span style="font-size: 18px; font-weight: 600; color: #3b82f6;">③</span>
+            <span class="step-title" style="flex: 1;">プッシュ通知を受け取る</span>
+          </div>
+          <button class="step-button" onclick="enableNotifications()" id="enable-notifications-btn">通知を有効にする</button>
+          <div id="notification-result" class="step-result"></div>
+        </div>
+      `;
+      notificationContainer.style.display = 'block';
+    }
+
     // 新規ユーザーの姓・名を保存する関数
     window.saveNewUserName = async function saveNewUserName(email, photoURL, userType, firebaseUid) {
       const lastName = document.getElementById('input-last-name').value.trim();
@@ -2838,7 +2867,7 @@
         console.log('[saveNewUserName] ユーザー名を更新:', userName);
 
         if (userType === 'owner') {
-          // 【画面2】保存完了メッセージを表示（同じエリア内）
+          // 【画面2】保存完了メッセージを表示（次へボタン付き）
           resultDiv.innerHTML = `
             <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 24px;">
               <span style="font-size: 18px; font-weight: 600; color: #059669;">✓</span>
@@ -2850,37 +2879,14 @@
               <div style="font-size: 40px; margin-bottom: 12px;">✅</div>
               <div style="font-weight: 600; font-size: 18px; color: #059669;">保存しました</div>
               <div style="margin-top: 8px; font-size: 15px; color: #374151;">${userName} さん</div>
+              <div style="margin-top: 24px;">
+                <button onclick="showNotificationScreen()"
+                        style="width: 100%; padding: 16px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;">
+                  次へ
+                </button>
+              </div>
             </div>
           `;
-
-          // 1.5秒後に【画面3】通知セクションを表示
-          setTimeout(() => {
-            // 画面2を完了表示に変更
-            resultDiv.innerHTML = `
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 18px; font-weight: 600; color: #059669;">✓</span>
-                <div style="flex: 1;">
-                  <div style="font-size: 16px; font-weight: 600; color: #374151;">ユーザー名を設定</div>
-                  <div style="font-size: 14px; color: #059669; margin-top: 4px;">✅ ${userName} さん</div>
-                </div>
-              </div>
-            `;
-            resultDiv.style.cssText = 'display: block; padding: 14px;';
-
-            // 通知セクションを動的に追加して表示
-            const notificationContainer = document.getElementById('notification-section-container');
-            notificationContainer.innerHTML = `
-              <div class="step-section" id="notification-section">
-                <div style="display: flex; align-items: flex-start; gap: 10px;">
-                  <span style="font-size: 18px; font-weight: 600; color: #3b82f6;">③</span>
-                  <span class="step-title" style="flex: 1;">プッシュ通知を受け取る</span>
-                </div>
-                <button class="step-button" onclick="enableNotifications()" id="enable-notifications-btn">通知を有効にする</button>
-                <div id="notification-result" class="step-result"></div>
-              </div>
-            `;
-            notificationContainer.style.display = 'block';
-          }, 1500);
         } else {
           // pendingの場合：承認待ち画面を表示
           resultDiv.style.display = 'none';
