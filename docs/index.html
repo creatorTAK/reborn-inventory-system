@@ -2748,9 +2748,12 @@
       }
 
       resultDiv.innerHTML = `
-        <div style="text-align: center; margin-bottom: 24px;">
-          <div style="font-size: 18px; font-weight: 600; color: #374151;">ユーザー名を設定</div>
-          <div style="font-size: 13px; color: #6b7280; margin-top: 6px;">アプリ内で表示される名前を入力してください</div>
+        <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 24px;">
+          <span style="font-size: 18px; font-weight: 600; color: #3b82f6;">②</span>
+          <div style="flex: 1;">
+            <div style="font-size: 18px; font-weight: 600; color: #374151;">ユーザー名を設定</div>
+            <div style="font-size: 13px; color: #6b7280; margin-top: 6px;">アプリ内で表示される名前を入力してください</div>
+          </div>
         </div>
         <div style="width: 100%; box-sizing: border-box;">
           <div style="margin-bottom: 16px;">
@@ -2773,7 +2776,11 @@
                       style="${defaultFirstName ? 'display: block;' : 'display: none;'} position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border: none; background: #9ca3af; border-radius: 50%; color: white; font-size: 16px; cursor: pointer; line-height: 1;">×</button>
             </div>
           </div>
+          <div id="name-validation-error" style="display: none; margin-bottom: 12px; padding: 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #dc2626; font-size: 14px; text-align: center;">
+            姓と名の両方を入力してください
+          </div>
           <button onclick="saveNewUserName('${email}', '${photoURL}', '${userType}', '${firebaseUid}')"
+                  id="save-name-btn"
                   style="width: 100%; padding: 16px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;">
             保存して次へ
           </button>
@@ -2806,12 +2813,15 @@
       const lastName = document.getElementById('input-last-name').value.trim();
       const firstName = document.getElementById('input-first-name').value.trim();
       const resultDiv = document.getElementById('auth-result');
+      const errorDiv = document.getElementById('name-validation-error');
+      const saveBtn = document.getElementById('save-name-btn');
 
       // バリデーション
       if (!lastName || !firstName) {
-        alert('姓と名の両方を入力してください');
+        errorDiv.style.display = 'block';
         return;
       }
+      errorDiv.style.display = 'none';
 
       const userName = lastName + firstName; // 姓名を結合
 
@@ -2828,29 +2838,49 @@
         console.log('[saveNewUserName] ユーザー名を更新:', userName);
 
         if (userType === 'owner') {
-          // 【画面3】オーナーの場合：保存完了 → 通知設定へ案内
+          // 【画面2】保存完了メッセージを表示（同じエリア内）
           resultDiv.innerHTML = `
+            <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 24px;">
+              <span style="font-size: 18px; font-weight: 600; color: #059669;">✓</span>
+              <div style="flex: 1;">
+                <div style="font-size: 18px; font-weight: 600; color: #374151;">ユーザー名を設定</div>
+              </div>
+            </div>
             <div style="text-align: center; line-height: 1.6;">
               <div style="font-size: 40px; margin-bottom: 12px;">✅</div>
               <div style="font-weight: 600; font-size: 18px; color: #059669;">保存しました</div>
               <div style="margin-top: 8px; font-size: 15px; color: #374151;">${userName} さん</div>
-              <div style="margin-top: 24px; padding: 16px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
-                <div style="font-size: 14px; color: #0369a1;">次は「通知を有効にする」を<br>押してください</div>
-              </div>
             </div>
           `;
-          // 通知セクションを動的に追加して表示
-          const notificationContainer = document.getElementById('notification-section-container');
-          notificationContainer.innerHTML = `
-            <div class="step-section" id="notification-section">
-              <div>
-                <span class="step-title">プッシュ通知を受け取る</span>
+
+          // 1.5秒後に【画面3】通知セクションを表示
+          setTimeout(() => {
+            // 画面2を完了表示に変更
+            resultDiv.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 18px; font-weight: 600; color: #059669;">✓</span>
+                <div style="flex: 1;">
+                  <div style="font-size: 16px; font-weight: 600; color: #374151;">ユーザー名を設定</div>
+                  <div style="font-size: 14px; color: #059669; margin-top: 4px;">✅ ${userName} さん</div>
+                </div>
               </div>
-              <button class="step-button" onclick="enableNotifications()" id="enable-notifications-btn">通知を有効にする</button>
-              <div id="notification-result" class="step-result"></div>
-            </div>
-          `;
-          notificationContainer.style.display = 'block';
+            `;
+            resultDiv.style.cssText = 'display: block; padding: 14px;';
+
+            // 通知セクションを動的に追加して表示
+            const notificationContainer = document.getElementById('notification-section-container');
+            notificationContainer.innerHTML = `
+              <div class="step-section" id="notification-section">
+                <div style="display: flex; align-items: flex-start; gap: 10px;">
+                  <span style="font-size: 18px; font-weight: 600; color: #3b82f6;">③</span>
+                  <span class="step-title" style="flex: 1;">プッシュ通知を受け取る</span>
+                </div>
+                <button class="step-button" onclick="enableNotifications()" id="enable-notifications-btn">通知を有効にする</button>
+                <div id="notification-result" class="step-result"></div>
+              </div>
+            `;
+            notificationContainer.style.display = 'block';
+          }, 1500);
         } else {
           // pendingの場合：承認待ち画面を表示
           resultDiv.style.display = 'none';
