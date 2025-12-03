@@ -861,7 +861,7 @@
   <!-- セットアップ画面（初回のみ） -->
   <div id="setup-screen" style="display: none;">
     <div class="setup-container">
-      <div class="setup-title">初期設定 (v79-fix)</div>
+      <div class="setup-title">初期設定 (v80-gesture)</div>
       <div class="setup-subtitle">初回設定 - プッシュ通知を受け取れるようにします</div>
 
       <!-- ①-1 ユーザー認証（複数方法対応） -->
@@ -5399,19 +5399,27 @@
             // 承認された！
             console.log('[PendingApproval] ✅ 承認されました！');
 
-            // UIを更新（承認完了表示）
+            // UIを更新（承認完了表示 + 次へボタン）
             document.getElementById('pending-icon').textContent = '✅';
             document.getElementById('pending-icon').classList.add('approval-success');
             document.getElementById('pending-title').textContent = '承認されました！';
             document.getElementById('pending-title').style.color = '#059669';
-            document.getElementById('pending-message').innerHTML = 'アプリを準備しています...';
             document.getElementById('pending-status').style.display = 'none';
             document.getElementById('pending-retry-btn').style.display = 'none';
 
-            // 少し待ってからログイン完了処理
-            setTimeout(() => {
-              completeLoginAfterApproval(userData, email, photoURL, firebaseUid);
-            }, 1500);
+            // 🔧 修正: 自動遷移ではなく「次へ」ボタンを表示（ユーザージェスチャー確保）
+            document.getElementById('pending-message').innerHTML = `
+              <div style="margin-top: 16px;">
+                <p style="margin-bottom: 16px;">次に通知設定を行います</p>
+                <button onclick="proceedToNotificationAfterApproval('${email}', '${photoURL || ''}', '${firebaseUid}')"
+                        style="width: 100%; padding: 14px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+                  次へ（通知設定）
+                </button>
+              </div>
+            `;
+
+            // グローバルにuserDataを保存（ボタンクリック時に使用）
+            window._pendingApprovalUserData = userData;
 
             // リスナー解除
             if (pendingApprovalUnsubscribe) {
@@ -5507,6 +5515,45 @@
       // 通知設定画面を表示
       showNotificationScreen();
     }
+
+    // 🔧 承認後「次へ」ボタンクリック時の処理（ユーザージェスチャー確保）
+    window.proceedToNotificationAfterApproval = function(email, photoURL, firebaseUid) {
+      console.log('[PendingApproval] 次へボタンクリック → 通知設定画面へ');
+
+      // 保存されたuserDataを取得
+      const userData = window._pendingApprovalUserData || {};
+
+      // completeLoginAfterApprovalと同じ処理を実行
+      const userName = userData.userName || userData.name || email.split('@')[0];
+      const permissionId = userData.permissionId || 'staff';
+
+      // localStorageに保存
+      localStorage.setItem('reborn_user_name', userName);
+      localStorage.setItem('reborn_user_email', email);
+      localStorage.setItem('reborn_user_permission_id', permissionId);
+      localStorage.setItem('reborn_user_permission_display', getPermissionDisplayName(permissionId));
+      localStorage.setItem('reborn_user_photo_url', photoURL || '');
+      localStorage.setItem('reborn_firebase_uid', firebaseUid);
+
+      if (userData.userIconUrl) {
+        localStorage.setItem('reborn_user_icon_url', userData.userIconUrl);
+      } else if (photoURL) {
+        localStorage.setItem('reborn_user_icon_url', photoURL);
+      }
+
+      // ヘッダーのアイコンを更新
+      loadUserIcon();
+
+      // グローバル変数更新
+      window.userName = userName;
+      window.userEmail = email;
+
+      // 承認待ち画面を非表示
+      document.getElementById('pending-approval-section').style.display = 'none';
+
+      // 通知設定画面を表示
+      showNotificationScreen();
+    };
 
     // 承認待ちユーザー用の自動FCM登録
     async function autoRegisterFCMForPendingUser(email) {
