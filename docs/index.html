@@ -861,7 +861,7 @@
   <!-- セットアップ画面（初回のみ） -->
   <div id="setup-screen" style="display: none;">
     <div class="setup-container">
-      <div class="setup-title">初期設定 (v80-gesture)</div>
+      <div class="setup-title">初期設定 (v81)</div>
       <div class="setup-subtitle">初回設定 - プッシュ通知を受け取れるようにします</div>
 
       <!-- ①-1 ユーザー認証（複数方法対応） -->
@@ -4161,9 +4161,6 @@
 
     // 通知を有効にする（許可→FCM登録を自動実行）
     async function enableNotifications() {
-      // 🔍 デバッグ: 関数が呼ばれたことを確認
-      alert('enableNotifications() が呼ばれました');
-
       const resultDiv = document.getElementById('notification-result');
       const enableBtn = document.getElementById('enable-notifications-btn');
       const openAppButton = document.getElementById('open-app-button');
@@ -4202,8 +4199,7 @@
       debugInfo.push(`現在の許可状態: ${typeof Notification !== 'undefined' ? Notification.permission : 'N/A'}`);
       console.log('[通知設定] デバッグ情報:', debugInfo.join(', '));
 
-      // 🔍 デバッグ: alertで情報を表示
-      alert('デバッグ情報:\n' + debugInfo.join('\n'));
+      // デバッグ情報はコンソールに出力済み
 
       try {
         // ボタンを無効化して処理中表示
@@ -4223,15 +4219,17 @@
         console.log('[通知設定] 通知許可結果:', permission);
         resultDiv.textContent = `🔍 デバッグ情報:\n${debugInfo.join('\n')}`;
 
-        // 🔍 デバッグ: 許可結果をalertで表示
-        alert('通知許可結果: ' + permission);
-
+        // 🔧 iOS PWAでは初回denied後、アプリ画面で再度許可ダイアログが出ることがある
+        // deniedでもエラー表示せず、アプリに自動遷移する
         if (permission !== 'granted') {
-          resultDiv.textContent = '❌ 通知が拒否されました\n\n設定から許可するか、下の「アプリへ移動」ボタンを押してください。';
-          resultDiv.className = 'step-result error';
-          enableBtn.disabled = false;
-          enableBtn.textContent = '通知を有効にする';
-          openAppButton.style.display = 'block';
+          console.log('[通知設定] 初回denied - アプリ画面で再試行します');
+          resultDiv.textContent = '通知設定を続行中...';
+          resultDiv.className = 'step-result';
+
+          // 少し待ってからアプリに遷移（アプリ内で再度通知許可を取得できる）
+          setTimeout(() => {
+            openApp();
+          }, 1000);
           return;
         }
 
