@@ -1369,6 +1369,11 @@
                     if (userData.photoURL) localStorage.setItem('reborn_user_photo_url', userData.photoURL);
                     if (userData.userIconUrl) localStorage.setItem('reborn_user_icon_url', userData.userIconUrl);
                     localStorage.setItem('reborn_firebase_uid', user.uid);
+                    // セットアップ画面表示タイムアウトをキャンセル
+                    if (window._setupScreenTimeout) {
+                      clearTimeout(window._setupScreenTimeout);
+                      console.log('[Auth] セットアップ画面タイムアウトをキャンセル');
+                    }
                     // リロードして正常フローに戻す
                     console.log('[Auth] 🔄 ページリロード実行');
                     location.reload();
@@ -1762,12 +1767,26 @@
 
       // セットアップ完了済みかチェック
       if (setupCompleted !== '1') {
-        // 初回 → セットアップ画面を表示
-        document.getElementById('setup-screen').style.display = 'flex';
-        document.getElementById('app-screen').style.display = 'none';
-        // 権限選択肢を動的ロード（Firestoreから取得して生成）
-        await loadAndRenderPermissions();
-        // リダイレクト認証結果はmoduleスクリプト内で処理済み（DOM待機あり）
+        // 🔧 タスクキル後のlocalStorage喪失対策:
+        // 即座にセットアップ画面を表示せず、onAuthStateChangedの結果を待つ
+        // （認証済みユーザーならlocalStorageを復元してリロードする）
+        console.log('[Setup] localStorage未完了 - 認証状態確認を待機');
+
+        // 2秒後にまだ画面が表示されていなければセットアップ画面を表示（タイムアウト）
+        window._setupScreenTimeout = setTimeout(async () => {
+          // localStorageが復元されていたらスキップ（リロード済みのはず）
+          if (localStorage.getItem('fcm-setup-completed') === '1') {
+            console.log('[Setup] localStorage復元済み - セットアップ画面スキップ');
+            return;
+          }
+          console.log('[Setup] タイムアウト - セットアップ画面を表示');
+          document.getElementById('setup-screen').style.display = 'flex';
+          document.getElementById('app-screen').style.display = 'none';
+          await loadAndRenderPermissions();
+        }, 2000);
+
+        // 権限選択肢のプリロード（表示前に準備）
+        loadAndRenderPermissions();
       } else {
         // セットアップ完了済み → FCMトークンをチェック（Phase 2: NOTIF-003）
         await checkAndUpdateFCMToken();
