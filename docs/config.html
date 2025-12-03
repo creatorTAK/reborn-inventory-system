@@ -7117,8 +7117,17 @@ ${prompt || '（未設定）'}
             const activateUsersTab = () => {
               console.log('[config.html] ユーザー管理タブをアクティブ化中...');
               const usersTab = document.getElementById('system-users-tab');
+              const usersPane = document.getElementById('system-users');
               console.log('[config.html] usersTab要素:', usersTab);
-              if (usersTab) {
+              console.log('[config.html] usersPane要素:', usersPane);
+
+              if (usersTab && usersPane) {
+                // 基本設定タブを非アクティブにする
+                const basicTab = document.getElementById('system-basic-tab');
+                const basicPane = document.getElementById('system-basic');
+                if (basicTab) basicTab.classList.remove('active');
+                if (basicPane) basicPane.classList.remove('show', 'active');
+
                 // Bootstrap Tabが利用可能か確認
                 if (typeof bootstrap !== 'undefined' && bootstrap.Tab) {
                   const tab = new bootstrap.Tab(usersTab);
@@ -7130,11 +7139,23 @@ ${prompt || '（未設定）'}
                   document.querySelectorAll('#systemConfigTabs .nav-link').forEach(el => el.classList.remove('active'));
                   document.querySelectorAll('#systemConfigTabContent .tab-pane').forEach(el => el.classList.remove('show', 'active'));
                   usersTab.classList.add('active');
-                  document.getElementById('system-users').classList.add('show', 'active');
+                  usersPane.classList.add('show', 'active');
                 }
+
                 // フラッシュ防止: タブ切り替え完了後にコンテンツを表示
                 document.documentElement.classList.add('tab-ready');
                 console.log('[config.html] ✅ tab-readyクラスを追加（コンテンツ表示）');
+
+                // ユーザー管理データを読み込む（少し遅延させてタブ切り替え完了を待つ）
+                setTimeout(function() {
+                  if (typeof loadUserManagement === 'function') {
+                    console.log('[config.html] loadUserManagement()を呼び出し');
+                    loadUserManagement();
+                  } else {
+                    console.warn('[config.html] loadUserManagement()が未定義');
+                  }
+                }, 100);
+
                 return true;
               }
               return false;
@@ -7365,20 +7386,25 @@ ${prompt || '（未設定）'}
     // 基本設定タブが表示されたら設定を読み込む
     // システム設定タブ内の基本設定タブを正しく参照（system-basic-tab）
     const basicTab = document.getElementById('system-basic-tab');
+
+    // subtab=usersの場合は基本設定を読み込まない（ユーザー管理タブに直接遷移するため）
+    const subtabParamForBasic = new URLSearchParams(window.location.search).get('subtab');
+    const skipBasicSettings = (subtabParamForBasic === 'users');
+
     if (basicTab) {
       basicTab.addEventListener('shown.bs.tab', function() {
         loadBasicSettings();
       });
 
-      // 初回表示時も即座に読み込む
-      if (basicTab.classList.contains('active')) {
+      // 初回表示時も即座に読み込む（subtab=usersの場合はスキップ）
+      if (basicTab.classList.contains('active') && !skipBasicSettings) {
         loadBasicSettings();
       }
     }
 
     // システム設定タブ（#system）が最初から表示されている場合の対応
     const systemPane = document.getElementById('system');
-    if (systemPane && systemPane.classList.contains('active')) {
+    if (systemPane && systemPane.classList.contains('active') && !skipBasicSettings) {
       // システム設定タブが表示されていて、基本設定タブも表示されている場合
       const basicPane = document.getElementById('system-basic');
       if (basicPane && (basicPane.classList.contains('active') || basicPane.classList.contains('show'))) {
