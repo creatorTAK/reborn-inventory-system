@@ -1351,6 +1351,11 @@
           if (setupCompleted !== '1' && !window.localStorageRecoveryAttempted) {
             window.localStorageRecoveryAttempted = true;
             console.log('[Auth] ⚠️ localStorage喪失を検出 - Firestoreからユーザー状態を確認');
+
+            // 🔧 通知許可の状態を確認
+            const notificationPermission = typeof Notification !== 'undefined' ? Notification.permission : 'default';
+            console.log('[Auth] 🔔 Notification.permission:', notificationPermission);
+
             try {
               const db = window.firebaseDB;
               if (db && window.firestoreGetDoc && window.firestoreDoc) {
@@ -1359,25 +1364,43 @@
                   const userData = userDoc.data();
                   console.log('[Auth] Firestore user status:', userData.status);
                   if (userData.status === 'active') {
-                    console.log('[Auth] ✅ アクティブユーザー確認 - localStorageを復元してリロード');
-                    // localStorageを復元
-                    localStorage.setItem('fcm-setup-completed', '1');
-                    localStorage.setItem('reborn_user_name', userData.userName || user.displayName || '');
-                    localStorage.setItem('reborn_user_email', user.email);
-                    localStorage.setItem('reborn_user_permission_id', userData.permissionId || 'staff');
-                    localStorage.setItem('reborn_user_permission_display', userData.permissionDisplay || 'スタッフ');
-                    if (userData.photoURL) localStorage.setItem('reborn_user_photo_url', userData.photoURL);
-                    if (userData.userIconUrl) localStorage.setItem('reborn_user_icon_url', userData.userIconUrl);
-                    localStorage.setItem('reborn_firebase_uid', user.uid);
-                    // セットアップ画面表示タイムアウトをキャンセル
-                    if (window._setupScreenTimeout) {
-                      clearTimeout(window._setupScreenTimeout);
-                      console.log('[Auth] セットアップ画面タイムアウトをキャンセル');
+                    // 🔧 通知許可がない場合は、通知設定だけ再度行う必要がある
+                    if (notificationPermission !== 'granted') {
+                      console.log('[Auth] ⚠️ 通知許可なし - 通知再設定が必要');
+                      // ユーザー情報だけ復元し、fcm-setup-completedは設定しない
+                      localStorage.setItem('reborn_user_name', userData.userName || user.displayName || '');
+                      localStorage.setItem('reborn_user_email', user.email);
+                      localStorage.setItem('reborn_user_permission_id', userData.permissionId || 'staff');
+                      localStorage.setItem('reborn_user_permission_display', userData.permissionDisplay || 'スタッフ');
+                      if (userData.photoURL) localStorage.setItem('reborn_user_photo_url', userData.photoURL);
+                      if (userData.userIconUrl) localStorage.setItem('reborn_user_icon_url', userData.userIconUrl);
+                      localStorage.setItem('reborn_firebase_uid', user.uid);
+                      // 🔧 認証済みだが通知未許可のフラグを設定
+                      localStorage.setItem('reborn_auth_completed', '1');
+                      console.log('[Auth] ユーザー情報復元完了（通知再設定必要）');
+                      // セットアップ画面で通知設定から開始するためリロードしない
+                      // → DOMContentLoadedのsetupCompleted !== '1' で通知設定画面へ
+                    } else {
+                      console.log('[Auth] ✅ アクティブユーザー + 通知許可あり - 完全復元');
+                      // localStorageを完全復元
+                      localStorage.setItem('fcm-setup-completed', '1');
+                      localStorage.setItem('reborn_user_name', userData.userName || user.displayName || '');
+                      localStorage.setItem('reborn_user_email', user.email);
+                      localStorage.setItem('reborn_user_permission_id', userData.permissionId || 'staff');
+                      localStorage.setItem('reborn_user_permission_display', userData.permissionDisplay || 'スタッフ');
+                      if (userData.photoURL) localStorage.setItem('reborn_user_photo_url', userData.photoURL);
+                      if (userData.userIconUrl) localStorage.setItem('reborn_user_icon_url', userData.userIconUrl);
+                      localStorage.setItem('reborn_firebase_uid', user.uid);
+                      // セットアップ画面表示タイムアウトをキャンセル
+                      if (window._setupScreenTimeout) {
+                        clearTimeout(window._setupScreenTimeout);
+                        console.log('[Auth] セットアップ画面タイムアウトをキャンセル');
+                      }
+                      // リロードして正常フローに戻す
+                      console.log('[Auth] 🔄 ページリロード実行');
+                      location.reload();
+                      return;
                     }
-                    // リロードして正常フローに戻す
-                    console.log('[Auth] 🔄 ページリロード実行');
-                    location.reload();
-                    return;
                   }
                 }
               }
@@ -1783,6 +1806,29 @@
           document.getElementById('setup-screen').style.display = 'flex';
           document.getElementById('app-screen').style.display = 'none';
           await loadAndRenderPermissions();
+
+          // 🔧 認証済みだが通知未許可の場合、Googleログインをスキップして通知設定へ
+          if (localStorage.getItem('reborn_auth_completed') === '1') {
+            console.log('[Setup] 認証済み - Googleログインをスキップして通知設定へ');
+            document.getElementById('google-auth-section').style.display = 'none';
+            // 通知セクションを表示
+            const notifContainer = document.getElementById('notification-section-container');
+            if (notifContainer) {
+              notifContainer.innerHTML = `
+                <div class="step-section" id="notification-section">
+                  <div style="display: flex; align-items: flex-start; gap: 10px;">
+                    <span style="font-size: 18px; font-weight: 600; color: #3b82f6;">🔔</span>
+                    <span class="step-title" style="flex: 1;">通知を再度有効にする</span>
+                  </div>
+                  <p style="font-size: 14px; color: #666; margin: 10px 0;">通知許可が失われています。再度有効にしてください。</p>
+                  <button class="step-button" onclick="enableNotifications()" id="enable-notifications-btn">通知を有効にする</button>
+                  <div id="notification-result" class="step-result"></div>
+                </div>
+              `;
+              notifContainer.style.display = 'block';
+              console.log('[Setup] 通知再設定セクションを表示');
+            }
+          }
         }, 2000);
 
         // 権限選択肢のプリロード（表示前に準備）
