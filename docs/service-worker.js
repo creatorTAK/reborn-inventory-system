@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v34-auth-fix'; // 認証ループ修正
+const CACHE_NAME = 'reborn-v35-network-first'; // HTMLはネットワーク優先
 const urlsToCache = [
   '/',
   '/index.html',
@@ -54,11 +54,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 同一オリジンのリクエストはキャッシュ戦略を使う
+  // HTMLファイルはネットワーク優先（常に最新版を取得）
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          // 成功したらキャッシュを更新
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+          return response;
+        })
+        .catch(() => {
+          // オフライン時はキャッシュから返す
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // その他のリソースはキャッシュ優先
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // キャッシュにあればキャッシュを返す、なければネットワークから取得
         return response || fetch(event.request);
       })
   );
