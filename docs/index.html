@@ -1273,7 +1273,7 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getMessaging, onMessage } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js';
-    import { getFirestore, doc, getDoc, setDoc, collection, collectionGroup, addDoc, query, where, orderBy, getDocs, updateDoc, Timestamp, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, doc, getDoc, setDoc, collection, collectionGroup, addDoc, query, where, orderBy, getDocs, updateDoc, deleteDoc, Timestamp, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
     import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, OAuthProvider, onAuthStateChanged, signOut, getAdditionalUserInfo } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
     // Firebase 設定（reborn-chat に統一）
@@ -1320,6 +1320,7 @@
       window.firestoreOrderBy = orderBy;
       window.firestoreGetDocs = getDocs;
       window.firestoreUpdateDoc = updateDoc;
+      window.firestoreDeleteDoc = deleteDoc;
       window.firestoreTimestamp = Timestamp;
       window.firestoreServerTimestamp = serverTimestamp;
 
@@ -4164,19 +4165,49 @@
 
         // 2. このユーザーの既存デバイスを取得
         const userDevicesRef = collectionFunc(db, 'users', userEmail, 'devices');
-        const userActiveQuery = queryFunc(userDevicesRef, whereFunc('active', '==', true));
-        const userActiveDevices = await getDocsFunc(userActiveQuery);
+        const userAllDevices = await getDocsFunc(userDevicesRef);
 
-        // 3. 既存デバイスを非アクティブに
-        if (userActiveDevices.size > 0) {
-          for (const deviceDoc of userActiveDevices.docs) {
-            await updateDocFunc(deviceDoc.ref, { active: false });
-            console.log(`⏸️ 既存デバイスを非アクティブ化: ${deviceDoc.id}`);
+        // 3. 同じFCMトークンを持つデバイスを検索（複数デバイス対応）
+        let existingDeviceDoc = null;
+        const staleDevices = [];
+        const now = new Date();
+        const STALE_THRESHOLD_DAYS = 30; // 30日以上未使用は古いデバイス
+
+        for (const deviceDoc of userAllDevices.docs) {
+          const deviceData = deviceDoc.data();
+
+          // 同じFCMトークンを持つデバイスを検索
+          if (deviceData.fcmToken === currentToken) {
+            existingDeviceDoc = deviceDoc;
+            console.log(`🔄 既存デバイス発見（同一トークン）: ${deviceDoc.id}`);
+          }
+
+          // 30日以上未使用のデバイスを記録
+          if (deviceData.lastUsedAt) {
+            const lastUsed = deviceData.lastUsedAt.toDate ? deviceData.lastUsedAt.toDate() : new Date(deviceData.lastUsedAt);
+            const daysSinceLastUsed = (now - lastUsed) / (1000 * 60 * 60 * 24);
+            if (daysSinceLastUsed > STALE_THRESHOLD_DAYS) {
+              staleDevices.push(deviceDoc);
+            }
           }
         }
 
-        // 4. 新しいデバイスを追加
-        const newDevice = {
+        // 4. 古いデバイスをクリーンアップ（30日以上未使用）
+        if (staleDevices.length > 0) {
+          console.log(`🧹 古いデバイスをクリーンアップ: ${staleDevices.length}件`);
+          const deleteDocFunc = window.firestoreDeleteDoc;
+          for (const staleDoc of staleDevices) {
+            try {
+              await deleteDocFunc(staleDoc.ref);
+              console.log(`🗑️ 古いデバイス削除: ${staleDoc.id}`);
+            } catch (e) {
+              console.warn(`⚠️ デバイス削除失敗: ${staleDoc.id}`, e);
+            }
+          }
+        }
+
+        // 5. デバイス登録（既存更新 or 新規作成）
+        const deviceData = {
           fcmToken: currentToken,
           deviceInfo: deviceInfo,
           active: true,
@@ -4184,12 +4215,25 @@
           permissionDisplay: finalPermissionDisplay,
           userName: userName,
           userEmail: userEmail,
-          registeredAt: new Date(),
           lastUsedAt: new Date()
         };
 
-        const deviceDocRef = await addDocFunc(userDevicesRef, newDevice);
-        console.log('✅ FCMトークンをFirestoreに保存しました:', deviceDocRef.id);
+        let deviceDocRef;
+        if (existingDeviceDoc) {
+          // 既存デバイスを更新（registeredAtは保持）
+          await updateDocFunc(existingDeviceDoc.ref, deviceData);
+          deviceDocRef = existingDeviceDoc.ref;
+          console.log('✅ 既存デバイスを更新しました:', existingDeviceDoc.id);
+        } else {
+          // 新規デバイスを追加
+          deviceData.registeredAt = new Date();
+          deviceDocRef = await addDocFunc(userDevicesRef, deviceData);
+          console.log('✅ 新規デバイスを登録しました:', deviceDocRef.id);
+        }
+
+        // 6. このユーザーのアクティブデバイス数をログ
+        const activeCount = userAllDevices.docs.filter(d => d.data().active && d.id !== (existingDeviceDoc?.id)).length + 1;
+        console.log(`📱 アクティブデバイス数: ${activeCount}`);
 
         // 完了表示
         resultDiv.textContent = '✅ 通知設定が完了しました！';
@@ -5574,6 +5618,113 @@
       return _firestoreDb;
     }
 
+    // ========================================
+    // 🔄 デバイス自動同期機能（アプリ起動時）
+    // FCMトークンの自動更新と lastUsedAt の更新
+    // ========================================
+    async function refreshDeviceRegistration() {
+      console.log('[Device] 🔄 デバイス同期チェック開始');
+
+      try {
+        const userEmail = localStorage.getItem('reborn_user_email');
+        const userName = localStorage.getItem('reborn_user_name');
+        const storedToken = localStorage.getItem('reborn_fcm_token');
+
+        if (!userEmail || !userName) {
+          console.log('[Device] ユーザー情報なし - スキップ');
+          return;
+        }
+
+        // Firebase SDKを動的インポート
+        const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+        const { getFirestore, collection, query, where, getDocs, updateDoc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { getMessaging, getToken } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+          authDomain: "reborn-chat.firebaseapp.com",
+          projectId: "reborn-chat",
+          storageBucket: "reborn-chat.firebasestorage.app",
+          messagingSenderId: "345706548795",
+          appId: "1:345706548795:web:058a553da6b4b74db5161e"
+        };
+
+        const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // 現在のFCMトークンを取得（可能な場合）
+        let currentToken = storedToken;
+        try {
+          const messaging = getMessaging(app);
+          const vapidKey = 'BIiPYM_7rWJYqJl3sCQI9RGQsblY8eQTsZGz9rKRgAx2gKLk8jz1cT4tR8U5WvMqkHHHGrVnLv1QdqJ7rNvHtfY';
+          currentToken = await getToken(messaging, { vapidKey });
+
+          if (currentToken && currentToken !== storedToken) {
+            console.log('[Device] FCMトークン更新検出');
+            localStorage.setItem('reborn_fcm_token', currentToken);
+          }
+        } catch (tokenError) {
+          console.log('[Device] FCMトークン取得失敗（権限なし等）:', tokenError.message);
+          // トークン取得失敗でも続行（既存トークンを使用）
+        }
+
+        if (!currentToken) {
+          console.log('[Device] FCMトークンなし - スキップ');
+          return;
+        }
+
+        // デバイスコレクションを検索
+        const devicesRef = collection(db, 'users', userEmail, 'devices');
+        const devicesSnapshot = await getDocs(devicesRef);
+
+        let deviceFound = false;
+        const now = new Date();
+        const STALE_THRESHOLD_DAYS = 30;
+
+        for (const deviceDoc of devicesSnapshot.docs) {
+          const deviceData = deviceDoc.data();
+
+          // 同じトークンのデバイスを更新
+          if (deviceData.fcmToken === currentToken) {
+            await updateDoc(deviceDoc.ref, {
+              lastUsedAt: now,
+              active: true,
+              userName: userName // ユーザー名も更新
+            });
+            console.log('[Device] ✅ デバイス情報更新:', deviceDoc.id);
+            deviceFound = true;
+          }
+
+          // 古いデバイスをクリーンアップ
+          if (deviceData.lastUsedAt) {
+            const lastUsed = deviceData.lastUsedAt.toDate ? deviceData.lastUsedAt.toDate() : new Date(deviceData.lastUsedAt);
+            const daysSinceLastUsed = (now - lastUsed) / (1000 * 60 * 60 * 24);
+            if (daysSinceLastUsed > STALE_THRESHOLD_DAYS && deviceData.fcmToken !== currentToken) {
+              try {
+                await deleteDoc(deviceDoc.ref);
+                console.log('[Device] 🗑️ 古いデバイス削除:', deviceDoc.id);
+              } catch (e) {
+                console.warn('[Device] デバイス削除失敗:', e);
+              }
+            }
+          }
+        }
+
+        if (!deviceFound) {
+          console.log('[Device] ⚠️ このデバイスは未登録 - 通知設定が必要です');
+          // 通知設定を促すUI表示などを検討
+        }
+
+        console.log('[Device] ✅ デバイス同期完了');
+
+      } catch (error) {
+        console.error('[Device] デバイス同期エラー:', error);
+      }
+    }
+
+    // アプリ起動時にデバイス同期を実行
+    window.refreshDeviceRegistration = refreshDeviceRegistration;
+
     // Firestore未読カウントリスニング
     async function startChatUnreadListener() {
       console.log('[Chat FAB] 未読カウントリスニング開始');
@@ -5836,6 +5987,13 @@
       initializeSystemNotificationRoom(); // システム通知ルーム作成
       initializeDefaultRoom(); // 全体ルーム作成
       startChatUnreadListener();
+
+      // 🔄 デバイス自動同期（FCMトークン・lastUsedAt更新）
+      if (typeof refreshDeviceRegistration === 'function') {
+        setTimeout(() => {
+          refreshDeviceRegistration();
+        }, 2000); // 他の初期化完了後に実行
+      }
     });
 
     // ページ読み込み完了後も実行（念のため）
