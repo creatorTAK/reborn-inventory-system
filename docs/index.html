@@ -3117,6 +3117,17 @@
               console.error('[PendingUser] システムチャット送信エラー:', chatError);
             }
 
+            // 管理者にResendでメール送信
+            try {
+              await sendEmailToOwners({
+                subject: '🆕 新規ユーザー承認待ち - フリラ',
+                body: `新規ユーザーが登録しました。\n\n名前: ${displayName}\nメール: ${email}\n\nシステム設定 > ユーザー管理 から承認または却下してください。\n\nhttps://furira.jp`
+              });
+              console.log('[PendingUser] メール送信完了');
+            } catch (emailError) {
+              console.error('[PendingUser] メール送信エラー:', emailError);
+            }
+
             // 【画面1】ログイン成功画面（pending用）
             document.getElementById('google-auth-section').style.display = 'none';
             resultDiv.innerHTML = `
@@ -5358,23 +5369,38 @@
     async function sendPushToOwners(notification) {
       try {
         const db = await getFirebaseDb();
-        const { collectionGroup, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-        // 管理者のFCMトークンを取得（users/{email}/devices コレクショングループから検索）
-        const ownerDevicesQuery = query(
-          collectionGroup(db, 'devices'),
-          where('permissionId', '==', 'owner'),
-          where('active', '==', true)
-        );
-        const ownerDevicesSnapshot = await getDocs(ownerDevicesQuery);
+        // Step 1: usersコレクションから管理者を取得
+        const usersRef = collection(db, 'users');
+        const ownersQuery = query(usersRef, where('permissionId', '==', 'owner'));
+        const ownersSnapshot = await getDocs(ownersQuery);
 
+        if (ownersSnapshot.empty) {
+          console.warn('[Push] 管理者が見つかりません');
+          return;
+        }
+
+        console.log('[Push] 管理者を発見:', ownersSnapshot.size, '人');
+
+        // Step 2: 各管理者のdevicesサブコレクションからFCMトークンを取得
         const ownerTokens = [];
-        ownerDevicesSnapshot.forEach((deviceDoc) => {
-          const deviceData = deviceDoc.data();
-          if (deviceData.fcmToken) {
-            ownerTokens.push(deviceData.fcmToken);
-          }
-        });
+        for (const ownerDoc of ownersSnapshot.docs) {
+          const ownerEmail = ownerDoc.data().userEmail;
+          console.log('[Push] 管理者デバイス検索:', ownerEmail);
+
+          const devicesRef = collection(db, 'users', ownerEmail, 'devices');
+          const activeDevicesQuery = query(devicesRef, where('active', '==', true));
+          const devicesSnapshot = await getDocs(activeDevicesQuery);
+
+          devicesSnapshot.forEach((deviceDoc) => {
+            const deviceData = deviceDoc.data();
+            if (deviceData.fcmToken) {
+              ownerTokens.push(deviceData.fcmToken);
+              console.log('[Push] FCMトークン取得:', ownerEmail, deviceDoc.id);
+            }
+          });
+        }
 
         if (ownerTokens.length === 0) {
           console.warn('[Push] 管理者のFCMトークンが見つかりません');
@@ -5403,11 +5429,54 @@
       }
     }
 
+    // 管理者にメール送信（Resend経由）
+    async function sendEmailToOwners(emailData) {
+      try {
+        const db = await getFirebaseDb();
+        const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        // 管理者を取得
+        const usersRef = collection(db, 'users');
+        const ownersQuery = query(usersRef, where('permissionId', '==', 'owner'));
+        const ownersSnapshot = await getDocs(ownersQuery);
+
+        if (ownersSnapshot.empty) {
+          console.warn('[Email] 管理者が見つかりません');
+          return;
+        }
+
+        // 各管理者にメール送信
+        for (const ownerDoc of ownersSnapshot.docs) {
+          const ownerEmail = ownerDoc.data().userEmail;
+          console.log('[Email] 管理者にメール送信:', ownerEmail);
+
+          const response = await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: ownerEmail,
+              subject: emailData.subject,
+              body: emailData.body
+            })
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[Email] 送信失敗:', ownerEmail, errorText);
+          } else {
+            console.log('[Email] 送信成功:', ownerEmail);
+          }
+        }
+      } catch (error) {
+        console.error('[Email] 送信エラー:', error);
+      }
+    }
+
     // システム通知チャットにメッセージを送信
     async function sendSystemChatMessage(message) {
       try {
         const db = await getFirebaseDb();
-        const { collection, doc, addDoc, updateDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { collection, doc, addDoc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
         const systemRoomId = 'system-notifications';
 
@@ -5421,12 +5490,14 @@
           type: 'system'
         });
 
-        // ルームのlastMessageとupdatedAtを更新
+        // ルームのlastMessageとupdatedAtを更新（存在しない場合は作成）
         const roomRef = doc(db, 'rooms', systemRoomId);
-        await updateDoc(roomRef, {
+        await setDoc(roomRef, {
+          name: 'システム通知',
+          type: 'system',
           lastMessage: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
           updatedAt: serverTimestamp()
-        });
+        }, { merge: true });
 
         console.log('[SystemChat] メッセージ送信完了');
       } catch (error) {

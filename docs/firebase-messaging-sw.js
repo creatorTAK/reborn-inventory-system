@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v70';  // 通知セクション表示制御修正
+const CACHE_VERSION = 'v71';  // アプリアイコンバッジAPI追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -85,6 +85,53 @@ function incrementBadge(dbName) {
       reject(tx.error);
     };
   }));
+}
+
+// アプリアイコンバッジを更新（全DBの合計値を設定）
+async function updateAppIconBadge() {
+  try {
+    // 両方のDBからカウントを取得
+    const chatCount = await getBadgeCount('RebornBadgeDB');
+    const systemCount = await getBadgeCount('SystemNotificationDB');
+    const totalCount = chatCount + systemCount;
+
+    console.log(`[AppBadge] chat=${chatCount}, system=${systemCount}, total=${totalCount}`);
+
+    // Navigator Badge API でアプリアイコンにバッジを設定
+    if ('setAppBadge' in navigator) {
+      if (totalCount > 0) {
+        await navigator.setAppBadge(totalCount);
+        console.log('[AppBadge] Set app badge:', totalCount);
+      } else {
+        await navigator.clearAppBadge();
+        console.log('[AppBadge] Cleared app badge');
+      }
+    } else {
+      console.warn('[AppBadge] setAppBadge API not supported');
+    }
+  } catch (err) {
+    console.error('[AppBadge] Error updating app badge:', err);
+  }
+}
+
+// IndexedDBからバッジカウントを取得
+function getBadgeCount(dbName) {
+  return openDB(dbName).then(db => new Promise((resolve) => {
+    const tx = db.transaction('badge', 'readonly');
+    const store = tx.objectStore('badge');
+    const getReq = store.get('count');
+
+    getReq.onsuccess = () => {
+      const count = Number(getReq.result || 0);
+      db.close();
+      resolve(count);
+    };
+
+    getReq.onerror = () => {
+      db.close();
+      resolve(0);
+    };
+  })).catch(() => 0);
 }
 
 // ================================================================================
@@ -206,16 +253,20 @@ self.addEventListener('push', (event) => {
 
       // 2. バッジ更新（閲覧中ならスキップ）
       const isViewing = await isAnyClientViewingChat();
-      
+
       if (isViewing) {
         console.log('[Badge] Client is viewing chat, skipping badge increment');
       } else if (notificationType === 'system') {
         console.log('[Badge] System notification: SystemNotificationDB + Firestore');
         await incrementBadge('SystemNotificationDB');
         await updateFirestoreUnreadCount(userName);
+        // アプリアイコンバッジを更新
+        await updateAppIconBadge();
       } else {
         console.log('[Badge] Chat notification: RebornBadgeDB');
         await incrementBadge('RebornBadgeDB');
+        // アプリアイコンバッジを更新
+        await updateAppIconBadge();
       }
 
       // 3. ACK送信（並列実行、失敗しても続行）
