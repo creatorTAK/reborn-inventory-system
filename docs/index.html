@@ -1339,12 +1339,70 @@
       // onAuthStateChangedはページ読み込み時に既存の認証状態を検出
       console.log('[Auth] 🔄 onAuthStateChanged リスナー登録開始');
       window.authHandled = false; // 二重処理防止フラグ（グローバル化）
-      onAuthStateChanged(auth, (user) => {
+      onAuthStateChanged(auth, async (user) => {
         console.log('[Auth] 🔔 onAuthStateChanged発火:', user ? user.email : 'null');
         if (user && !window.authHandled) {
           window.authHandled = true;
           console.log('[Auth] ✅ ログイン済みユーザー検出:', user.email);
-          // DOM要素が準備されるまで待つ
+
+          // 🔧 タスクキル後のlocalStorage喪失対策: Firestoreでアクティブユーザーなら直接ホーム画面へ
+          const setupCompleted = localStorage.getItem('fcm-setup-completed');
+          if (setupCompleted !== '1') {
+            try {
+              const db = window.firebaseDB;
+              if (db && window.firestoreGetDoc && window.firestoreDoc) {
+                const userDoc = await window.firestoreGetDoc(window.firestoreDoc(db, 'users', user.email));
+                if (userDoc.exists()) {
+                  const userData = userDoc.data();
+                  console.log('[Auth] Firestore user status:', userData.status);
+                  if (userData.status === 'active') {
+                    console.log('[Auth] ✅ アクティブユーザー → セットアップ画面をスキップしてホームへ');
+
+                    // localStorageを復元
+                    localStorage.setItem('fcm-setup-completed', '1');
+                    localStorage.setItem('reborn_user_name', userData.userName || user.displayName || '');
+                    localStorage.setItem('reborn_user_email', user.email);
+                    localStorage.setItem('reborn_user_permission_id', userData.permissionId || 'staff');
+                    localStorage.setItem('reborn_user_permission_display', userData.permissionDisplay || 'スタッフ');
+                    if (userData.photoURL) localStorage.setItem('reborn_user_photo_url', userData.photoURL);
+                    if (userData.userIconUrl) localStorage.setItem('reborn_user_icon_url', userData.userIconUrl);
+                    localStorage.setItem('reborn_firebase_uid', user.uid);
+
+                    // セットアップ画面を非表示にしてホーム画面を表示
+                    document.getElementById('setup-screen').style.display = 'none';
+                    document.getElementById('app-screen').style.display = 'flex';
+                    const header = document.getElementById('app-header');
+                    if (header) header.style.display = 'none';
+
+                    // ホーム画面をロード
+                    if (!sessionStorage.getItem('device_session_id')) {
+                      sessionStorage.setItem('device_session_id', Date.now() + '_' + Math.random().toString(36).substring(2));
+                    }
+                    const iframe = document.getElementById('gas-iframe');
+                    if (iframe) {
+                      const params = new URLSearchParams({
+                        userName: localStorage.getItem('reborn_user_name') || '',
+                        sessionId: sessionStorage.getItem('device_session_id')
+                      });
+                      iframe.src = location.origin + '/menu_home.html?' + params.toString();
+                    }
+
+                    // FCMトークン更新
+                    if (typeof checkAndUpdateFCMToken === 'function') {
+                      checkAndUpdateFCMToken();
+                    }
+
+                    console.log('[Auth] ✅ ホーム画面への遷移完了');
+                    return; // 以降の処理をスキップ
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('[Auth] Firestoreチェックエラー:', e);
+            }
+          }
+
+          // 通常のフロー: DOM要素が準備されるまで待つ
           const waitForDOM = () => {
             const authSection = document.getElementById('google-auth-section');
             const authResult = document.getElementById('auth-result');
@@ -1725,12 +1783,72 @@
 
       // セットアップ完了済みかチェック
       if (setupCompleted !== '1') {
-        // 初回 → セットアップ画面を表示
-        document.getElementById('setup-screen').style.display = 'flex';
-        document.getElementById('app-screen').style.display = 'none';
-        // 権限選択肢を動的ロード（Firestoreから取得して生成）
-        await loadAndRenderPermissions();
-        // リダイレクト認証結果はmoduleスクリプト内で処理済み（DOM待機あり）
+        // 🔧 タスクキル後のlocalStorage喪失対策: Firebase Auth + Firestoreで認証済みかチェック
+        let shouldSkipSetup = false;
+        try {
+          const auth = window.firebaseAuth;
+          const currentUser = auth ? auth.currentUser : null;
+          console.log('[Setup Check] Firebase Auth currentUser:', currentUser ? currentUser.email : 'null');
+
+          if (currentUser) {
+            // Firebase Authに認証済みユーザーがいる → Firestoreでactiveかチェック
+            const db = window.firebaseDB;
+            if (db) {
+              const userDoc = await window.firestoreGetDoc(window.firestoreDoc(db, 'users', currentUser.email));
+              if (userDoc.exists()) {
+                const userData = userDoc.data();
+                console.log('[Setup Check] Firestore user status:', userData.status);
+                if (userData.status === 'active') {
+                  // 認証済み + アクティブユーザー → セットアップをスキップ
+                  console.log('[Setup Check] ✅ 認証済みアクティブユーザー検出 → セットアップスキップ');
+                  shouldSkipSetup = true;
+
+                  // localStorageを復元
+                  localStorage.setItem('fcm-setup-completed', '1');
+                  localStorage.setItem('reborn_user_name', userData.userName || currentUser.displayName || '');
+                  localStorage.setItem('reborn_user_email', currentUser.email);
+                  localStorage.setItem('reborn_user_permission_id', userData.permissionId || 'staff');
+                  localStorage.setItem('reborn_user_permission_display', userData.permissionDisplay || 'スタッフ');
+                  if (userData.photoURL) localStorage.setItem('reborn_user_photo_url', userData.photoURL);
+                  if (userData.userIconUrl) localStorage.setItem('reborn_user_icon_url', userData.userIconUrl);
+                  localStorage.setItem('reborn_firebase_uid', currentUser.uid);
+                  console.log('[Setup Check] ✅ localStorage復元完了');
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[Setup Check] 認証チェックエラー:', e);
+        }
+
+        if (shouldSkipSetup) {
+          // 認証済みユーザー → ホーム画面へ直接遷移
+          console.log('[Setup Check] 🏠 ホーム画面に直接遷移');
+          await checkAndUpdateFCMToken();
+          await checkUserPermissionForSidebar();
+          const header = document.getElementById('app-header');
+          if (header) header.style.display = 'none';
+
+          const iframe = document.getElementById('gas-iframe');
+          if (iframe) {
+            if (!sessionStorage.getItem('device_session_id')) {
+              const newSessionId = Date.now() + '_' + Math.random().toString(36).substring(2);
+              sessionStorage.setItem('device_session_id', newSessionId);
+            }
+            const sessionId = sessionStorage.getItem('device_session_id');
+            const userName = localStorage.getItem('reborn_user_name') || '';
+            const pwaBaseUrl = location.origin;
+            const params = new URLSearchParams({ userName: userName, sessionId: sessionId });
+            iframe.setAttribute('data-src', pwaBaseUrl + '/menu_home.html?' + params.toString());
+          }
+        } else {
+          // 初回 → セットアップ画面を表示
+          document.getElementById('setup-screen').style.display = 'flex';
+          document.getElementById('app-screen').style.display = 'none';
+          // 権限選択肢を動的ロード（Firestoreから取得して生成）
+          await loadAndRenderPermissions();
+          // リダイレクト認証結果はmoduleスクリプト内で処理済み（DOM待機あり）
+        }
       } else {
         // セットアップ完了済み → FCMトークンをチェック（Phase 2: NOTIF-003）
         await checkAndUpdateFCMToken();
