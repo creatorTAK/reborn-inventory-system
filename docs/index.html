@@ -5368,42 +5368,58 @@
     // 管理者にプッシュ通知を送信
     async function sendPushToOwners(notification) {
       try {
+        console.log('[Push] === sendPushToOwners開始 ===');
         const db = await getFirebaseDb();
         const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
         // Step 1: usersコレクションから管理者を取得
+        console.log('[Push] Step1: usersコレクションからpermissionId=ownerを検索');
         const usersRef = collection(db, 'users');
         const ownersQuery = query(usersRef, where('permissionId', '==', 'owner'));
         const ownersSnapshot = await getDocs(ownersQuery);
 
         if (ownersSnapshot.empty) {
-          console.warn('[Push] 管理者が見つかりません');
+          console.warn('[Push] ❌ 管理者が見つかりません（permissionId=ownerのユーザーが0件）');
           return;
         }
 
-        console.log('[Push] 管理者を発見:', ownersSnapshot.size, '人');
+        console.log('[Push] ✅ 管理者を発見:', ownersSnapshot.size, '人');
 
         // Step 2: 各管理者のdevicesサブコレクションからFCMトークンを取得
         const ownerTokens = [];
         for (const ownerDoc of ownersSnapshot.docs) {
-          const ownerEmail = ownerDoc.data().userEmail;
-          console.log('[Push] 管理者デバイス検索:', ownerEmail);
+          const ownerData = ownerDoc.data();
+          const ownerEmail = ownerData.userEmail;
+          console.log('[Push] Step2: 管理者デバイス検索:', ownerEmail, 'docId:', ownerDoc.id);
 
           const devicesRef = collection(db, 'users', ownerEmail, 'devices');
+
+          // まず全デバイスを取得してログ出力
+          const allDevicesSnapshot = await getDocs(devicesRef);
+          console.log('[Push] デバイス総数:', allDevicesSnapshot.size, '件');
+          allDevicesSnapshot.forEach(d => {
+            const dd = d.data();
+            console.log('[Push] デバイス詳細:', d.id, 'active=', dd.active, 'fcmToken=', dd.fcmToken ? '有' : '無');
+          });
+
+          // active=trueのデバイスをフィルタ
           const activeDevicesQuery = query(devicesRef, where('active', '==', true));
           const devicesSnapshot = await getDocs(activeDevicesQuery);
+          console.log('[Push] active=trueのデバイス:', devicesSnapshot.size, '件');
 
           devicesSnapshot.forEach((deviceDoc) => {
             const deviceData = deviceDoc.data();
             if (deviceData.fcmToken) {
               ownerTokens.push(deviceData.fcmToken);
-              console.log('[Push] FCMトークン取得:', ownerEmail, deviceDoc.id);
+              console.log('[Push] ✅ FCMトークン取得:', ownerEmail, deviceDoc.id);
+            } else {
+              console.warn('[Push] ⚠️ fcmTokenなし:', deviceDoc.id);
             }
           });
         }
 
         if (ownerTokens.length === 0) {
-          console.warn('[Push] 管理者のFCMトークンが見つかりません');
+          console.warn('[Push] ❌ 管理者のFCMトークンが見つかりません（active=trueのデバイスにfcmTokenがない）');
           return;
         }
 
@@ -5475,20 +5491,24 @@
     // システム通知チャットにメッセージを送信
     async function sendSystemChatMessage(message) {
       try {
+        console.log('[SystemChat] === sendSystemChatMessage開始 ===');
+        console.log('[SystemChat] メッセージ:', message.substring(0, 50) + '...');
         const db = await getFirebaseDb();
         const { collection, doc, addDoc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
         const systemRoomId = 'system-notifications';
+        console.log('[SystemChat] roomId:', systemRoomId);
 
         // システム通知ルームにメッセージを追加
         const messagesRef = collection(db, 'rooms', systemRoomId, 'messages');
-        await addDoc(messagesRef, {
+        const messageDoc = await addDoc(messagesRef, {
           text: message,
           senderName: 'システム通知',
           senderEmail: 'system@furira.jp',
           timestamp: serverTimestamp(),
           type: 'system'
         });
+        console.log('[SystemChat] ✅ メッセージ追加完了:', messageDoc.id);
 
         // ルームのlastMessageとupdatedAtを更新（存在しない場合は作成）
         const roomRef = doc(db, 'rooms', systemRoomId);
@@ -5498,10 +5518,12 @@
           lastMessage: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
           updatedAt: serverTimestamp()
         }, { merge: true });
+        console.log('[SystemChat] ✅ ルーム更新完了');
 
-        console.log('[SystemChat] メッセージ送信完了');
+        console.log('[SystemChat] === sendSystemChatMessage完了 ===');
       } catch (error) {
-        console.error('[SystemChat] 送信エラー:', error);
+        console.error('[SystemChat] ❌ 送信エラー:', error);
+        console.error('[SystemChat] エラー詳細:', error.message, error.stack);
       }
     }
 
