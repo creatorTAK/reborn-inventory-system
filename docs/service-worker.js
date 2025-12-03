@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v35-network-first'; // HTMLはネットワーク優先
+const CACHE_NAME = 'reborn-v36-force-update'; // 強制更新対応
 const urlsToCache = [
   '/',
   '/index.html',
@@ -15,6 +15,8 @@ const urlsToCache = [
 // Service Workerのインストール
 self.addEventListener('install', (event) => {
   console.log('[Service Worker] Installing...');
+  // 即座にアクティブ化（待機をスキップ）
+  self.skipWaiting();
 
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -39,6 +41,9 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
+    }).then(() => {
+      // 即座にこのService Workerでページを制御
+      return self.clients.claim();
     })
   );
 });
