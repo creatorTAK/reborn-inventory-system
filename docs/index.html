@@ -861,7 +861,7 @@
   <!-- セットアップ画面（初回のみ） -->
   <div id="setup-screen" style="display: none;">
     <div class="setup-container">
-      <div class="setup-title">初期設定 (v81)</div>
+      <div class="setup-title">初期設定 (v82)</div>
       <div class="setup-subtitle">初回設定 - プッシュ通知を受け取れるようにします</div>
 
       <!-- ①-1 ユーザー認証（複数方法対応） -->
@@ -4205,19 +4205,18 @@
         // ボタンを無効化して処理中表示
         enableBtn.disabled = true;
         enableBtn.textContent = '設定中...';
-        resultDiv.textContent = `🔍 デバッグ情報:\n${debugInfo.join('\n')}\n\n通知許可を確認中...`;
-        resultDiv.className = 'step-result';
-        resultDiv.style.display = 'block';
+        // 通知許可ダイアログ表示中は背景テキストを非表示
+        resultDiv.style.display = 'none';
 
-        // Step 1: 通知許可をリクエスト（これはFirebase Messaging有無に関係なく必要）
+        // Step 1: 通知許可をリクエスト
         console.log('[通知設定] Step 1: 通知許可リクエスト開始');
-        debugInfo.push('requestPermission呼び出し中...');
-        resultDiv.textContent = `🔍 デバッグ情報:\n${debugInfo.join('\n')}`;
 
         const permission = await Notification.requestPermission();
-        debugInfo.push(`許可結果: ${permission}`);
         console.log('[通知設定] 通知許可結果:', permission);
-        resultDiv.textContent = `🔍 デバッグ情報:\n${debugInfo.join('\n')}`;
+        
+        // 許可結果後に表示エリアを有効化
+        resultDiv.style.display = 'block';
+        resultDiv.className = 'step-result';
 
         // 🔧 iOS PWAでは初回denied後、アプリ画面で再度許可ダイアログが出ることがある
         // deniedでもエラー表示せず、アプリに自動遷移する
@@ -4477,8 +4476,19 @@
 
         // FCM非サポートブラウザ（Safari等）をチェック
         if (!window.firebaseMessaging) {
-                  console.log('   スマホアプリでは通知を受け取れます');
+          console.log('ℹ️ Firebase Messaging非対応環境');
           return;
+        }
+
+        // 🔧 iOS PWAで通知許可がまだの場合は再リクエスト
+        if (Notification.permission !== 'granted') {
+          console.log('🔔 通知許可をリクエスト中...');
+          const permission = await Notification.requestPermission();
+          console.log('🔔 通知許可結果:', permission);
+          if (permission !== 'granted') {
+            console.log('⏭️ 通知が許可されていないため、FCMトークンチェックをスキップ');
+            return;
+          }
         }
 
         // Firebase Messagingからトークンを取得
