@@ -898,3 +898,94 @@ exports.onDeviceCreated = onDocumentCreated('users/{userEmail}/devices/{deviceId
 // ========================================
 const deviceSync = require('./deviceSync');
 exports.syncActiveDevices = deviceSync.syncActiveDevices;
+
+// ========================================
+// 🔧 手動同期エンドポイント（管理用）
+// 全アクティブデバイスを activeDevices コレクションに同期
+// ========================================
+const {onRequest} = require('firebase-functions/v2/https');
+
+exports.manualSyncActiveDevices = onRequest(
+  { cors: true, region: 'us-central1' },
+  async (req, res) => {
+    console.log('🔄 [manualSyncActiveDevices] 手動同期開始');
+
+    try {
+      // 全ユーザーを取得
+      const usersSnapshot = await db.collection('users').get();
+      console.log(`📊 [manualSyncActiveDevices] ユーザー数: ${usersSnapshot.size}`);
+
+      let totalSynced = 0;
+      const results = [];
+
+      for (const userDoc of usersSnapshot.docs) {
+        const userEmail = userDoc.id;
+        const userData = userDoc.data();
+
+        // devicesサブコレクションからアクティブなデバイスを取得
+        const devicesSnapshot = await db
+          .collection('users')
+          .doc(userEmail)
+          .collection('devices')
+          .where('active', '==', true)
+          .get();
+
+        if (devicesSnapshot.empty) {
+          continue;
+        }
+
+        // FCMトークンを収集
+        const fcmTokens = [];
+        let userName = userData.userName || 'Unknown';
+
+        devicesSnapshot.forEach(deviceDoc => {
+          const deviceData = deviceDoc.data();
+          if (deviceData.fcmToken) {
+            fcmTokens.push(deviceData.fcmToken);
+            if (deviceData.userName) {
+              userName = deviceData.userName;
+            }
+          }
+        });
+
+        if (fcmTokens.length === 0) {
+          continue;
+        }
+
+        // activeDevicesに同期
+        await db.collection('activeDevices').doc(userEmail).set({
+          fcmTokens: fcmTokens,
+          userName: userName,
+          lastUpdated: FieldValue.serverTimestamp(),
+          syncedAt: new Date().toISOString()
+        }, { merge: true });
+
+        totalSynced++;
+        results.push({
+          email: userEmail,
+          userName: userName,
+          tokenCount: fcmTokens.length
+        });
+
+        console.log(`✅ [manualSyncActiveDevices] ${userName} (${userEmail}): ${fcmTokens.length} tokens`);
+      }
+
+      console.log(`✅ [manualSyncActiveDevices] 同期完了: ${totalSynced}ユーザー`);
+
+      res.json({
+        success: true,
+        message: `${totalSynced}ユーザーを同期しました`,
+        totalUsers: usersSnapshot.size,
+        syncedUsers: totalSynced,
+        results: results
+      });
+
+    } catch (error) {
+      console.error('❌ [manualSyncActiveDevices] エラー:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  }
+);
