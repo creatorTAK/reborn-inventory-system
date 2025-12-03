@@ -1412,25 +1412,30 @@
           }
 
           // 通常のフロー: DOM要素が準備されるまで待つ
+          let waitRetryCount = 0;
+          const MAX_WAIT_RETRIES = 15; // 最大3秒待機（200ms × 15）
           const waitForDOM = () => {
             const authSection = document.getElementById('google-auth-section');
             const authResult = document.getElementById('auth-result');
             const setupScreen = document.getElementById('setup-screen');
-            // セットアップ完了済みユーザーはsetupScreenの表示チェックをスキップ
-            const setupCompleted = localStorage.getItem('fcm-setup-completed') === '1';
-            console.log('[Auth] DOM確認: authSection=', !!authSection, 'authResult=', !!authResult, 'setupScreen=', !!setupScreen, 'setupCompleted=', setupCompleted);
+            waitRetryCount++;
+            console.log('[Auth] DOM確認 (' + waitRetryCount + '/' + MAX_WAIT_RETRIES + '): authSection=', !!authSection, 'authResult=', !!authResult, 'setupScreen=', !!setupScreen);
 
-            // DOM要素が存在し、かつ（セットアップ完了済み OR setupScreenが表示中）
-            if (authSection && authResult && setupScreen && (setupCompleted || setupScreen.style.display !== 'none')) {
+            // DOM要素が存在すれば処理を進める（setupScreenの表示状態は問わない）
+            if (authSection && authResult && setupScreen) {
               console.log('[Auth] ✅ DOM準備完了 - handleGoogleAuthResult呼び出し');
+              window.handleGoogleAuthResult(user);
+            } else if (waitRetryCount >= MAX_WAIT_RETRIES) {
+              // 最大リトライ回数に達した場合、DOM要素がなくても進める
+              console.warn('[Auth] ⚠️ DOM待機タイムアウト - 強制的に処理を続行');
               window.handleGoogleAuthResult(user);
             } else {
               console.log('[Auth] ⏳ DOM未準備 - 200ms後に再試行');
               setTimeout(waitForDOM, 200);
             }
           };
-          // 少し待ってからDOM確認を開始（セットアップ画面表示を待つ）
-          setTimeout(waitForDOM, 500);
+          // 少し待ってからDOM確認を開始
+          setTimeout(waitForDOM, 300);
         } else if (!user) {
           console.log('[Auth] 👤 未ログイン状態');
           window.authHandled = false; // ログアウト時にフラグリセット
