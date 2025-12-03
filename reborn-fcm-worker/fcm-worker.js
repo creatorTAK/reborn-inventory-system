@@ -2,8 +2,13 @@
  * REBORN FCM Worker
  *
  * Endpoints:
- * - POST /send - Send push notifications via FCM
+ * - POST /send - Send push notifications via FCM HTTP v1 API
  * - POST /send-email - Send email notifications via Resend
+ *
+ * Required Environment Variables (Secrets):
+ * - FIREBASE_SERVICE_ACCOUNT: Firebase Service Account JSON string
+ * - FIREBASE_PROJECT_ID: Firebase project ID (e.g., "reborn-chat")
+ * - RESEND_API_KEY: Resend API key for email
  */
 
 // CORS headers for all responses
@@ -35,7 +40,7 @@ export default {
 
       // Health check
       if (request.method === 'GET' && path === '/health') {
-        return jsonResponse({ status: 'ok', service: 'reborn-fcm-worker' });
+        return jsonResponse({ status: 'ok', service: 'reborn-fcm-worker', version: 'v2-fcm-http-v1' });
       }
 
       // 404 for unknown routes
@@ -43,72 +48,118 @@ export default {
 
     } catch (error) {
       console.error('[Worker Error]', error);
-      return jsonResponse({ error: error.message }, 500);
+      return jsonResponse({ error: error.message, stack: error.stack }, 500);
     }
   }
 };
 
 /**
- * Handle push notification requests
+ * Handle push notification requests using FCM HTTP v1 API
  * POST /send
  * Body: { tokens: string[], title: string, body: string, data?: object }
  */
 async function handlePushNotification(request, env) {
+  console.log('[FCM] handlePushNotification called');
+
   const { tokens, title, body, data } = await request.json();
 
   if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
+    console.log('[FCM] Error: tokens array is required');
     return jsonResponse({ error: 'tokens array is required' }, 400);
   }
 
   if (!title || !body) {
+    console.log('[FCM] Error: title and body are required');
     return jsonResponse({ error: 'title and body are required' }, 400);
   }
 
-  const FCM_SERVER_KEY = env.FCM_SERVER_KEY;
-  if (!FCM_SERVER_KEY) {
-    return jsonResponse({ error: 'FCM_SERVER_KEY not configured' }, 500);
+  // Check required environment variables
+  if (!env.FIREBASE_SERVICE_ACCOUNT) {
+    console.error('[FCM] Error: FIREBASE_SERVICE_ACCOUNT not configured');
+    return jsonResponse({ error: 'FIREBASE_SERVICE_ACCOUNT not configured' }, 500);
   }
+
+  if (!env.FIREBASE_PROJECT_ID) {
+    console.error('[FCM] Error: FIREBASE_PROJECT_ID not configured');
+    return jsonResponse({ error: 'FIREBASE_PROJECT_ID not configured' }, 500);
+  }
+
+  console.log('[FCM] Sending to', tokens.length, 'tokens');
+  console.log('[FCM] Title:', title);
+  console.log('[FCM] Body:', body);
 
   const results = [];
   const errors = [];
 
-  for (const token of tokens) {
-    try {
-      const response = await fetch('https://fcm.googleapis.com/fcm/send', {
-        method: 'POST',
-        headers: {
-          'Authorization': `key=${FCM_SERVER_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: token,
-          notification: {
-            title: title,
-            body: body,
-            icon: '/icons/icon-192.png',
-            badge: '/icons/badge-72.png',
-            click_action: 'https://furira.jp'
-          },
-          data: data || {},
-          webpush: {
-            fcm_options: {
-              link: 'https://furira.jp'
+  try {
+    // Get Firebase Access Token using Service Account
+    const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+    console.log('[FCM] Service Account loaded:', serviceAccount.client_email);
+
+    const accessToken = await getFirebaseAccessToken(serviceAccount);
+    console.log('[FCM] Access token obtained');
+
+    // FCM HTTP v1 API endpoint
+    const fcmUrl = `https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`;
+
+    for (const token of tokens) {
+      try {
+        const message = {
+          message: {
+            token: token,
+            notification: {
+              title: title,
+              body: body,
+            },
+            data: {
+              ...(data || {}),
+              click_action: 'https://furira.jp'
+            },
+            webpush: {
+              notification: {
+                icon: '/icons/icon-192.png',
+                badge: '/icons/badge-72.png',
+              },
+              fcm_options: {
+                link: 'https://furira.jp'
+              }
             }
           }
-        }),
-      });
+        };
 
-      const result = await response.json();
+        console.log('[FCM] Sending to token:', token.substring(0, 30) + '...');
 
-      if (result.success === 1) {
-        results.push({ token: token.substring(0, 20) + '...', success: true });
-      } else {
-        errors.push({ token: token.substring(0, 20) + '...', error: result });
+        const response = await fetch(fcmUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(message),
+        });
+
+        const responseText = await response.text();
+        console.log('[FCM] Response status:', response.status);
+        console.log('[FCM] Response body:', responseText.substring(0, 200));
+
+        if (response.ok) {
+          const result = JSON.parse(responseText);
+          results.push({ token: token.substring(0, 20) + '...', success: true, messageId: result.name });
+        } else {
+          const errorResult = JSON.parse(responseText);
+          errors.push({ token: token.substring(0, 20) + '...', error: errorResult.error?.message || responseText });
+        }
+      } catch (error) {
+        console.error('[FCM] Error sending to token:', error);
+        errors.push({ token: token.substring(0, 20) + '...', error: error.message });
       }
-    } catch (error) {
-      errors.push({ token: token.substring(0, 20) + '...', error: error.message });
     }
+  } catch (error) {
+    console.error('[FCM] Fatal error:', error);
+    return jsonResponse({ error: error.message, phase: 'authentication' }, 500);
   }
+
+  console.log('[FCM] Results:', results.length, 'success,', errors.length, 'failed');
 
   return jsonResponse({
     success: errors.length === 0,
@@ -117,6 +168,73 @@ async function handlePushNotification(request, env) {
     results,
     errors: errors.length > 0 ? errors : undefined
   });
+}
+
+/**
+ * Get Firebase Access Token using Service Account (OAuth2)
+ */
+async function getFirebaseAccessToken(serviceAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  const expiry = now + 3600;
+
+  const jwtHeader = {
+    alg: 'RS256',
+    typ: 'JWT'
+  };
+
+  const jwtPayload = {
+    iss: serviceAccount.client_email,
+    sub: serviceAccount.client_email,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: expiry,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging'
+  };
+
+  // Generate JWT using Web Crypto API
+  const encoder = new TextEncoder();
+  const header = base64UrlEncode(JSON.stringify(jwtHeader));
+  const payload = base64UrlEncode(JSON.stringify(jwtPayload));
+  const message = `${header}.${payload}`;
+
+  const privateKey = await crypto.subtle.importKey(
+    'pkcs8',
+    pemToBinary(serviceAccount.private_key),
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      hash: 'SHA-256'
+    },
+    false,
+    ['sign']
+  );
+
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    privateKey,
+    encoder.encode(message)
+  );
+
+  const jwt = `${message}.${base64UrlEncode(signature)}`;
+
+  // Exchange JWT for Access Token
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt
+    })
+  });
+
+  if (!tokenResponse.ok) {
+    const errorText = await tokenResponse.text();
+    throw new Error('Failed to get access token: ' + errorText);
+  }
+
+  const tokenData = await tokenResponse.json();
+  return tokenData.access_token;
 }
 
 /**
@@ -144,11 +262,10 @@ async function handleSendEmail(request, env) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'FURIRA <noreply@furira.jp>',
+        from: 'フリラ <noreply@furira.jp>',
         to: [to],
         subject: subject,
         text: body,
-        // HTML version with simple formatting
         html: `
 <!DOCTYPE html>
 <html>
@@ -209,8 +326,31 @@ async function handleSendEmail(request, env) {
 }
 
 /**
- * Helper function to escape HTML
+ * Utility functions
  */
+function base64UrlEncode(data) {
+  if (data instanceof ArrayBuffer) {
+    data = String.fromCharCode(...new Uint8Array(data));
+  }
+  return btoa(data)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
+function pemToBinary(pem) {
+  const b64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\s/g, '');
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 function escapeHtml(text) {
   const map = {
     '&': '&amp;',
@@ -222,9 +362,6 @@ function escapeHtml(text) {
   return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-/**
- * Helper function to return JSON response with CORS headers
- */
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
