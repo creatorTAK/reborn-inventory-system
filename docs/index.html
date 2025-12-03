@@ -3216,64 +3216,8 @@
             const userDocRef = doc(db, 'users', email);
             await setDoc(userDocRef, newUserData);
 
-            // 管理者にタスクを追加
-            try {
-              await addTaskToOwners({
-                type: 'pending_user_approval',
-                title: '新規ユーザーの承認待ち',
-                description: `${displayName}（${email}）が新規登録しました。承認または却下してください。`,
-                link: 'config-permission-users',
-                relatedData: {
-                  pendingUserEmail: email,
-                  pendingUserName: displayName,
-                  pendingUserPhoto: photoURL || ''
-                }
-              });
-              console.log('[PendingUser] 管理者へのタスク追加完了');
-            } catch (taskError) {
-              console.error('[PendingUser] タスク追加エラー:', taskError);
-            }
-
-            // 管理者にプッシュ通知を送信
-            console.log('[PendingUser] === プッシュ通知処理開始 ===');
-            console.log('[PendingUser] sendPushToOwners関数存在確認:', typeof sendPushToOwners);
-            try {
-              await sendPushToOwners({
-                title: '🆕 新規ユーザー承認待ち',
-                body: `${displayName}さんが新規登録しました`,
-                data: { type: 'pending_user', userEmail: email }
-              });
-              console.log('[PendingUser] ✅ プッシュ通知送信完了');
-            } catch (pushError) {
-              console.error('[PendingUser] ❌ プッシュ通知送信エラー:', pushError);
-              console.error('[PendingUser] エラー詳細:', pushError.message, pushError.stack);
-            }
-            console.log('[PendingUser] === プッシュ通知処理終了 ===');
-
-            // システム通知チャットにメッセージを送信
-            console.log('[PendingUser] === システムチャット処理開始 ===');
-            console.log('[PendingUser] sendSystemChatMessage関数存在確認:', typeof sendSystemChatMessage);
-            try {
-              await sendSystemChatMessage(
-                `🆕 新規ユーザー承認待ち\n${displayName}（${email}）が新規登録しました。\nシステム設定 > ユーザー管理 から承認してください。`
-              );
-              console.log('[PendingUser] ✅ システムチャット送信完了');
-            } catch (chatError) {
-              console.error('[PendingUser] ❌ システムチャット送信エラー:', chatError);
-              console.error('[PendingUser] エラー詳細:', chatError.message, chatError.stack);
-            }
-            console.log('[PendingUser] === システムチャット処理終了 ===');
-
-            // 管理者にResendでメール送信
-            try {
-              await sendEmailToOwners({
-                subject: '🆕 新規ユーザー承認待ち - フリラ',
-                body: `新規ユーザーが登録しました。\n\n名前: ${displayName}\nメール: ${email}\n\nシステム設定 > ユーザー管理 から承認または却下してください。\n\nhttps://furira.jp`
-              });
-              console.log('[PendingUser] メール送信完了');
-            } catch (emailError) {
-              console.error('[PendingUser] メール送信エラー:', emailError);
-            }
+            // 注: 管理者への通知（タスク/プッシュ/チャット/メール）は
+            // saveNewUserName()で承認待ち画面が表示される時に送信される
 
             // 【画面1】ログイン成功画面（pending用）
             document.getElementById('google-auth-section').style.display = 'none';
@@ -3574,6 +3518,63 @@
 
           // 承認状態をリアルタイム監視開始
           startPendingApprovalListener(email, userName, displayIcon, firebaseUid);
+
+          // === 管理者への通知（承認待ち画面到達時に送信） ===
+          // 管理者にタスクを追加
+          try {
+            await addTaskToOwners({
+              type: 'pending_user_approval',
+              title: '新規ユーザーの承認待ち',
+              description: `${userName}（${email}）が新規登録しました。承認または却下してください。`,
+              link: 'config-permission-users',
+              relatedData: {
+                pendingUserEmail: email,
+                pendingUserName: userName,
+                pendingUserPhoto: displayIcon || ''
+              }
+            });
+            console.log('[PendingUser] 管理者へのタスク追加完了');
+          } catch (taskError) {
+            console.error('[PendingUser] タスク追加エラー:', taskError);
+          }
+
+          // 管理者にプッシュ通知を送信
+          console.log('[PendingUser] === プッシュ通知処理開始 ===');
+          try {
+            await sendPushToOwners({
+              title: '🆕 新規ユーザー承認待ち',
+              body: `${userName}さんが新規登録しました`,
+              data: { type: 'pending_user', userEmail: email }
+            });
+            console.log('[PendingUser] ✅ プッシュ通知送信完了');
+          } catch (pushError) {
+            console.error('[PendingUser] ❌ プッシュ通知送信エラー:', pushError);
+          }
+          console.log('[PendingUser] === プッシュ通知処理終了 ===');
+
+          // システム通知チャットにメッセージを送信
+          console.log('[PendingUser] === システムチャット処理開始 ===');
+          try {
+            await sendSystemChatMessage(
+              `🆕 新規ユーザー承認待ち\n${userName}（${email}）が新規登録しました。\nシステム設定 > ユーザー管理 から承認してください。`
+            );
+            console.log('[PendingUser] ✅ システムチャット送信完了');
+          } catch (chatError) {
+            console.error('[PendingUser] ❌ システムチャット送信エラー:', chatError);
+          }
+          console.log('[PendingUser] === システムチャット処理終了 ===');
+
+          // 管理者にResendでメール送信
+          try {
+            await sendEmailToOwners({
+              subject: '🆕 新規ユーザー承認待ち - フリラ',
+              body: `新規ユーザーが登録しました。\n\n名前: ${userName}\nメール: ${email}\n\nシステム設定 > ユーザー管理 から承認または却下してください。\n\nhttps://furira.jp`
+            });
+            console.log('[PendingUser] メール送信完了');
+          } catch (emailError) {
+            console.error('[PendingUser] メール送信エラー:', emailError);
+          }
+          // === 管理者への通知終了 ===
         }
       } catch (error) {
         console.error('[saveNewUserName] エラー:', error);
