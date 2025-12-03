@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v33-noconsole'; // 緊急対応：全console無効化（Safari）
+const CACHE_NAME = 'reborn-v34-auth-fix'; // 認証ループ修正
 const urlsToCache = [
   '/',
   '/index.html',
