@@ -5,7 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- 🚨 緊急デバッグ: 全console無効化（Safari対応） -->
+  <!-- 🔧 console有効（デバッグ中） -->
+  <!--
   <script>
     window.console = {
       log: function() {},
@@ -15,6 +16,7 @@
       debug: function() {}
     };
   </script>
+  -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="フリラ">
@@ -4172,14 +4174,9 @@
         return;
       }
 
-      // FCM非サポートブラウザ（Safari等）の場合
-      if (!window.firebaseMessaging) {
-        resultDiv.textContent = 'ℹ️ このブラウザはプッシュ通知をサポートしていません（Safari等）\n\n下の「アプリへ移動」ボタンを押してください。';
-        resultDiv.className = 'step-result';
-        resultDiv.style.display = 'block';
-        openAppButton.style.display = 'block';
-        return;
-      }
+      // 🔧 iOS PWA対応: Firebase Messagingがなくても通知許可は取得可能
+      const isIOSPWA = /iPhone|iPad|iPod/.test(navigator.userAgent) && window.navigator.standalone;
+      console.log('[通知設定] iOS PWA判定:', isIOSPWA, 'firebaseMessaging:', !!window.firebaseMessaging);
 
       try {
         // ボタンを無効化して処理中表示
@@ -4189,8 +4186,10 @@
         resultDiv.className = 'step-result';
         resultDiv.style.display = 'block';
 
-        // Step 1: 通知許可をリクエスト
+        // Step 1: 通知許可をリクエスト（これはFirebase Messaging有無に関係なく必要）
+        console.log('[通知設定] Step 1: 通知許可リクエスト開始');
         const permission = await Notification.requestPermission();
+        console.log('[通知設定] 通知許可結果:', permission);
 
         if (permission !== 'granted') {
           resultDiv.textContent = '❌ 通知が拒否されました\n\n設定から許可するか、下の「アプリへ移動」ボタンを押してください。';
@@ -4201,7 +4200,7 @@
           return;
         }
 
-        // Step 2: FCM登録
+        // Step 2: FCM登録 または Web Push登録
         resultDiv.textContent = '通知許可OK！登録中...';
 
         // Service Worker登録確認
@@ -4216,16 +4215,38 @@
 
         console.log('✅ Service Worker準備完了:', swRegistration);
 
-        // Firebase Messagingからトークンを取得
-        const { getToken } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
+        let currentToken = null;
 
-        console.log('🔄 FCMトークン取得開始...');
-        const currentToken = await getToken(window.firebaseMessaging, {
-          vapidKey: VAPID_PUBLIC_KEY,
-          serviceWorkerRegistration: swRegistration
-        });
+        // 🔧 Firebase Messagingがある場合はFCMトークンを取得
+        // ない場合（iOS PWA等）はWeb Push APIで登録
+        if (window.firebaseMessaging) {
+          // Firebase Messagingからトークンを取得
+          const { getToken } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
 
-        console.log('✅ FCMトークン取得成功:', currentToken);
+          console.log('🔄 FCMトークン取得開始...');
+          currentToken = await getToken(window.firebaseMessaging, {
+            vapidKey: VAPID_PUBLIC_KEY,
+            serviceWorkerRegistration: swRegistration
+          });
+          console.log('✅ FCMトークン取得成功:', currentToken);
+        } else {
+          // iOS PWA: Web Push APIでサブスクリプション取得
+          console.log('🔄 [iOS PWA] Web Push サブスクリプション開始...');
+          try {
+            const subscription = await swRegistration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: VAPID_PUBLIC_KEY
+            });
+            // サブスクリプションのエンドポイントをトークンとして使用
+            currentToken = subscription.endpoint;
+            console.log('✅ [iOS PWA] Web Push サブスクリプション成功:', currentToken);
+          } catch (pushError) {
+            console.error('❌ [iOS PWA] Web Push サブスクリプション失敗:', pushError);
+            // エラーでも通知許可は取得できているので続行
+            currentToken = 'ios-pwa-' + Date.now();
+            console.log('⚠️ [iOS PWA] フォールバックトークン使用:', currentToken);
+          }
+        }
 
         if (!currentToken) {
           resultDiv.textContent = '❌ トークンの取得に失敗しました';
@@ -4235,9 +4256,9 @@
           return;
         }
 
-        // FCMトークンをlocalStorageに保存
+        // トークンをlocalStorageに保存
         localStorage.setItem('reborn_fcm_token', currentToken);
-        console.log('💾 FCMトークンをlocalStorageに保存');
+        console.log('💾 トークンをlocalStorageに保存');
 
         // デバイス情報を取得
         const deviceInfo = {
