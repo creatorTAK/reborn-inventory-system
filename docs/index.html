@@ -3096,26 +3096,34 @@
             }
 
             // 管理者にプッシュ通知を送信
+            console.log('[PendingUser] === プッシュ通知処理開始 ===');
+            console.log('[PendingUser] sendPushToOwners関数存在確認:', typeof sendPushToOwners);
             try {
               await sendPushToOwners({
                 title: '🆕 新規ユーザー承認待ち',
                 body: `${displayName}さんが新規登録しました`,
                 data: { type: 'pending_user', userEmail: email }
               });
-              console.log('[PendingUser] プッシュ通知送信完了');
+              console.log('[PendingUser] ✅ プッシュ通知送信完了');
             } catch (pushError) {
-              console.error('[PendingUser] プッシュ通知送信エラー:', pushError);
+              console.error('[PendingUser] ❌ プッシュ通知送信エラー:', pushError);
+              console.error('[PendingUser] エラー詳細:', pushError.message, pushError.stack);
             }
+            console.log('[PendingUser] === プッシュ通知処理終了 ===');
 
             // システム通知チャットにメッセージを送信
+            console.log('[PendingUser] === システムチャット処理開始 ===');
+            console.log('[PendingUser] sendSystemChatMessage関数存在確認:', typeof sendSystemChatMessage);
             try {
               await sendSystemChatMessage(
                 `🆕 新規ユーザー承認待ち\n${displayName}（${email}）が新規登録しました。\nシステム設定 > ユーザー管理 から承認してください。`
               );
-              console.log('[PendingUser] システムチャット送信完了');
+              console.log('[PendingUser] ✅ システムチャット送信完了');
             } catch (chatError) {
-              console.error('[PendingUser] システムチャット送信エラー:', chatError);
+              console.error('[PendingUser] ❌ システムチャット送信エラー:', chatError);
+              console.error('[PendingUser] エラー詳細:', chatError.message, chatError.stack);
             }
+            console.log('[PendingUser] === システムチャット処理終了 ===');
 
             // 管理者にResendでメール送信
             try {
@@ -5420,28 +5428,44 @@
 
         if (ownerTokens.length === 0) {
           console.warn('[Push] ❌ 管理者のFCMトークンが見つかりません（active=trueのデバイスにfcmTokenがない）');
+          console.log('[Push] === sendPushToOwners終了（トークンなし） ===');
           return;
         }
 
+        console.log('[Push] Step3: Cloudflare Workerに送信開始');
+        console.log('[Push] トークン数:', ownerTokens.length);
+        console.log('[Push] 通知タイトル:', notification.title);
+        console.log('[Push] 通知本文:', notification.body);
+
         // Cloudflare Worker経由でプッシュ送信
+        const requestBody = {
+          tokens: ownerTokens,
+          title: notification.title,
+          body: notification.body,
+          data: notification.data || {}
+        };
+        console.log('[Push] リクエストボディ:', JSON.stringify(requestBody).substring(0, 200) + '...');
+
         const response = await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tokens: ownerTokens,
-            title: notification.title,
-            body: notification.body,
-            data: notification.data || {}
-          })
+          body: JSON.stringify(requestBody)
         });
 
+        console.log('[Push] レスポンスステータス:', response.status);
+        const responseText = await response.text();
+        console.log('[Push] レスポンスボディ:', responseText.substring(0, 500));
+
         if (!response.ok) {
-          throw new Error('プッシュ送信失敗: ' + response.status);
+          throw new Error('プッシュ送信失敗: ' + response.status + ' - ' + responseText);
         }
 
-        console.log('[Push] 管理者へのプッシュ送信完了:', ownerTokens.length, '件');
+        console.log('[Push] ✅ 管理者へのプッシュ送信完了:', ownerTokens.length, '件');
+        console.log('[Push] === sendPushToOwners終了（成功） ===');
       } catch (error) {
-        console.error('[Push] 送信エラー:', error);
+        console.error('[Push] ❌ 送信エラー:', error);
+        console.error('[Push] エラー詳細:', error.message, error.stack);
+        console.log('[Push] === sendPushToOwners終了（エラー） ===');
       }
     }
 
