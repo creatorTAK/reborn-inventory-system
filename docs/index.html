@@ -3548,7 +3548,7 @@
             const pushResult = await sendPushToOwners({
               title: '🆕 新規ユーザー承認待ち',
               body: `${userName}さんが新規登録しました`,
-              data: { type: 'pending_user', userEmail: email, badgeCount: 1 }
+              data: { type: 'pending_user', userEmail: email, badgeCount: '1' }
             });
             console.log('[PendingUser] プッシュ結果:', pushResult);
             
@@ -5811,9 +5811,12 @@
           for (const err of workerResult.errors) {
             debugInfo.details.push(`❌ FCMエラー: ${err.error}`);
             
-            // "not found" または "unregistered" エラーの場合、該当トークンを削除
+            // トークン無効エラーの場合のみ、該当トークンを削除
+            // "invalid value" などのデータ形式エラーは除外
             const errorLower = (err.error || '').toLowerCase();
-            if (errorLower.includes('not found') || errorLower.includes('unregistered') || errorLower.includes('invalid')) {
+            const isTokenError = (errorLower.includes('not found') || errorLower.includes('unregistered')) 
+                                 && !errorLower.includes('invalid value');
+            if (isTokenError) {
               // トークンの先頭部分でマッチング（Workerは先頭20文字を返す）
               const tokenPrefix = err.token?.replace('...', '') || '';
               const matchedTokenInfo = tokenInfoList.find(t => t.token.startsWith(tokenPrefix));
