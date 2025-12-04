@@ -932,6 +932,7 @@
     // トークルーム一覧をリアルタイムリスニング
     function startListening() {
       console.log('[Firestore] startListening() 開始');
+      console.log('[Firestore] 🔍 currentUserName:', JSON.stringify(currentUserName), 'length:', currentUserName?.length);
 
       // 既存のリスナーを解除（重複登録防止）
       if (unsubscribeRooms) {
@@ -946,12 +947,46 @@
         container.innerHTML = '<div style="padding:20px;text-align:center;color:#40B4E5;">トークルームを読み込んでいます...</div>';
       }
 
+      // ユーザー名のトリム（前後の空白除去）
+      const trimmedUserName = (currentUserName || '').trim();
+      console.log('[Firestore] 🔍 trimmedUserName:', JSON.stringify(trimmedUserName));
+
+      if (!trimmedUserName) {
+        console.error('[Firestore] ❌ ユーザー名が空です！ルーム取得を中止');
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⚠️</div>
+            <div class="empty-state-text">ユーザー情報が取得できません</div>
+            <div style="font-size: 14px; color: #a0aec0;">アプリを再起動してください</div>
+          </div>
+        `;
+        return;
+      }
+
       // 自分がメンバーに含まれているルームのみ取得
       const q = query(
         collection(db, 'rooms'),
-        where('members', 'array-contains', currentUserName),
+        where('members', 'array-contains', trimmedUserName),
         orderBy('lastMessageAt', 'desc')
       );
+
+      // 🔧 まず一回限りの取得を試行（onSnapshotの問題を診断）
+      console.log('[Firestore] 📡 getDocs で一回限り取得を試行...');
+      getDocs(q).then(snapshot => {
+        console.log('[Firestore] 📡 getDocs 成功: ルーム数=', snapshot.size);
+        if (snapshot.size === 0) {
+          // さらにデバッグ: 全ルームを取得して確認
+          getDocs(collection(db, 'rooms')).then(allRooms => {
+            console.log('[Firestore] 🔍 全ルーム数:', allRooms.size);
+            allRooms.forEach(doc => {
+              const data = doc.data();
+              console.log('[Firestore] 🔍 ルーム:', doc.id, 'members:', data.members, 'includes?:', data.members?.includes(trimmedUserName));
+            });
+          });
+        }
+      }).catch(err => {
+        console.error('[Firestore] ❌ getDocs エラー:', err);
+      });
 
       console.log('[Firestore] 新規リスナー登録');
       unsubscribeRooms = onSnapshot(q, (snapshot) => {
