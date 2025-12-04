@@ -6421,6 +6421,106 @@
     // 🗑️ postSystemNotification関数は削除（Firebase Functions v2で処理、GAS版不使用のため）
     // 以前はGAS版で使用していたが、現在はFirebase Functionsが全て処理
 
+    // 🌐 グローバルルームにユーザーを自動追加する関数
+    // room_default_all, room_inventory_alert, system の3つのルームに全ユーザーを追加
+    async function addCurrentUserToGlobalRooms() {
+      console.log('[Global Rooms] ユーザーをグローバルルームに追加開始');
+
+      const userName = localStorage.getItem('reborn_user_name');
+      const userEmail = localStorage.getItem('reborn_user_email');
+
+      if (!userName || !userEmail) {
+        console.log('[Global Rooms] ユーザー未ログイン - スキップ');
+        return;
+      }
+
+      try {
+        // Firebase SDKを動的インポート
+        const { initializeApp, getApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+        const { getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        // Firebase設定（reborn-chat に統一）
+        const firebaseConfig = {
+          apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+          authDomain: "furira.jp",
+          projectId: "reborn-chat",
+          storageBucket: "reborn-chat.firebasestorage.app",
+          messagingSenderId: "345706548795",
+          appId: "1:345706548795:web:058a553da6b4b74db5161e"
+        };
+
+        // Firebase初期化（既存インスタンスを使用）
+        let app;
+        try {
+          app = getApp('global-rooms-init');
+        } catch {
+          app = initializeApp(firebaseConfig, 'global-rooms-init');
+        }
+        const db = getFirestore(app);
+
+        // グローバルルームの定義
+        const globalRooms = [
+          {
+            id: 'room_default_all',
+            name: '💬 全体',
+            type: 'default',
+            icon: '💬',
+            defaultMessage: '全体ルームが作成されました'
+          },
+          {
+            id: 'room_inventory_alert',
+            name: '📦 在庫アラート',
+            type: 'system',
+            icon: '📦',
+            defaultMessage: '在庫アラートルームが作成されました'
+          },
+          {
+            id: 'system',
+            name: '📢 システム通知',
+            type: 'system',
+            icon: '📢',
+            defaultMessage: 'システム通知ルームが作成されました'
+          }
+        ];
+
+        // 各ルームを処理
+        for (const room of globalRooms) {
+          const roomRef = doc(db, 'rooms', room.id);
+          const roomSnap = await getDoc(roomRef);
+
+          if (!roomSnap.exists()) {
+            // ルームが存在しない場合は作成
+            await setDoc(roomRef, {
+              roomId: room.id,
+              name: room.name,
+              type: room.type,
+              icon: room.icon,
+              members: [userName],
+              memberEmails: [userEmail],
+              createdBy: 'システム',
+              createdAt: serverTimestamp(),
+              lastMessage: room.defaultMessage,
+              lastMessageAt: serverTimestamp(),
+              lastMessageBy: 'システム'
+            });
+            console.log(`[Global Rooms] ${room.name}を作成し、${userName}を追加しました`);
+          } else {
+            // 既存ルームにユーザーを追加（arrayUnionで重複防止）
+            await updateDoc(roomRef, {
+              members: arrayUnion(userName),
+              memberEmails: arrayUnion(userEmail)
+            });
+            console.log(`[Global Rooms] ${room.name}に${userName}を追加しました`);
+          }
+        }
+
+        console.log('[Global Rooms] 全グローバルルームへのユーザー追加完了');
+
+      } catch (error) {
+        console.error('[Global Rooms] エラー:', error);
+      }
+    }
+
     // 初期化
     document.addEventListener('DOMContentLoaded', function() {
       console.log('[Chat FAB] DOMContentLoaded - リスナー開始');
@@ -6429,6 +6529,7 @@
 
       initializeSystemNotificationRoom(); // システム通知ルーム作成
       initializeDefaultRoom(); // 全体ルーム作成
+      addCurrentUserToGlobalRooms(); // 🌐 ユーザーをグローバルルームに追加
       startChatUnreadListener();
 
       // 🔄 デバイス自動同期（FCMトークン・lastUsedAt更新）

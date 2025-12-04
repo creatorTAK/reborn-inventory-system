@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v43-chatgpt-fix'; // 直列実行+全例外捕捉
+const CACHE_NAME = 'reborn-v44-global-rooms'; // グローバルルーム自動追加
 const urlsToCache = [
   '/',
   '/index.html',
