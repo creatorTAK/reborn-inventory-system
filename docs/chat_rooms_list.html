@@ -930,9 +930,10 @@
     });
 
     // トークルーム一覧をリアルタイムリスニング
-    function startListening() {
+    async function startListening() {
       console.log('[Firestore] startListening() 開始');
       console.log('[Firestore] 🔍 currentUserName:', JSON.stringify(currentUserName), 'length:', currentUserName?.length);
+      console.log('[Firestore] 🔍 currentUserEmail:', JSON.stringify(currentUserEmail));
 
       // 既存のリスナーを解除（重複登録防止）
       if (unsubscribeRooms) {
@@ -947,12 +948,14 @@
         container.innerHTML = '<div style="padding:20px;text-align:center;color:#40B4E5;">トークルームを読み込んでいます...</div>';
       }
 
-      // ユーザー名のトリム（前後の空白除去）
+      // 🔧 メールアドレスベースでルームを検索（ユーザー名変更に対応）
+      const trimmedUserEmail = (currentUserEmail || '').trim();
       const trimmedUserName = (currentUserName || '').trim();
+      console.log('[Firestore] 🔍 trimmedUserEmail:', JSON.stringify(trimmedUserEmail));
       console.log('[Firestore] 🔍 trimmedUserName:', JSON.stringify(trimmedUserName));
 
-      if (!trimmedUserName) {
-        console.error('[Firestore] ❌ ユーザー名が空です！ルーム取得を中止');
+      if (!trimmedUserEmail && !trimmedUserName) {
+        console.error('[Firestore] ❌ ユーザー情報が空です！ルーム取得を中止');
         container.innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">⚠️</div>
@@ -963,32 +966,76 @@
         return;
       }
 
-      // 自分がメンバーに含まれているルームのみ取得
-      const q = query(
+      // 🔧 emailベースのクエリを優先（ユーザー名変更に強い）
+      // memberEmailsフィールドがあるルームはemailで、なければmembersで検索
+      const qByEmail = trimmedUserEmail ? query(
+        collection(db, 'rooms'),
+        where('memberEmails', 'array-contains', trimmedUserEmail),
+        orderBy('lastMessageAt', 'desc')
+      ) : null;
+
+      const qByName = query(
         collection(db, 'rooms'),
         where('members', 'array-contains', trimmedUserName),
         orderBy('lastMessageAt', 'desc')
       );
 
-      // 🔧 まず一回限りの取得を試行（onSnapshotの問題を診断）
-      console.log('[Firestore] 📡 getDocs で一回限り取得を試行...');
-      getDocs(q).then(snapshot => {
-        console.log('[Firestore] 📡 getDocs 成功: ルーム数=', snapshot.size);
-        if (snapshot.size === 0) {
-          // さらにデバッグ: 全ルームを取得して確認
-          getDocs(collection(db, 'rooms')).then(allRooms => {
-            console.log('[Firestore] 🔍 全ルーム数:', allRooms.size);
-            allRooms.forEach(doc => {
-              const data = doc.data();
-              console.log('[Firestore] 🔍 ルーム:', doc.id, 'members:', data.members, 'includes?:', data.members?.includes(trimmedUserName));
-            });
-          });
+      // 🔧 まずemailで検索、結果が0件ならnameでも検索
+      console.log('[Firestore] 📡 emailベースで検索試行...');
+
+      let useEmailQuery = false;
+      if (qByEmail) {
+        try {
+          const emailSnapshot = await getDocs(qByEmail);
+          console.log('[Firestore] 📡 emailクエリ結果:', emailSnapshot.size, '件');
+          if (emailSnapshot.size > 0) {
+            useEmailQuery = true;
+          }
+        } catch (err) {
+          console.log('[Firestore] emailクエリ失敗（インデックス未作成の可能性）:', err.message);
         }
-      }).catch(err => {
-        console.error('[Firestore] ❌ getDocs エラー:', err);
+      }
+
+      // nameベースでも検索
+      let nameSnapshotSize = 0;
+      try {
+        const nameSnapshot = await getDocs(qByName);
+        nameSnapshotSize = nameSnapshot.size;
+        console.log('[Firestore] 📡 nameクエリ結果:', nameSnapshotSize, '件');
+      } catch (err) {
+        console.log('[Firestore] nameクエリ失敗:', err.message);
+      }
+
+      // どちらかで結果があれば使用
+      let q = useEmailQuery ? qByEmail : qByName;
+      let useClientFilter = false;
+      console.log('[Firestore] 使用クエリ:', useEmailQuery ? 'memberEmails' : 'members');
+
+      // 🔧 両方のクエリが0件の場合、全ルーム取得してクライアントサイドフィルタ
+      if (!useEmailQuery && nameSnapshotSize === 0) {
+        console.log('[Firestore] ⚠️ 両クエリ0件 - 全ルーム取得してクライアントフィルタに切り替え');
+        useClientFilter = true;
+        // orderByのみのクエリ（フィルタなし）
+        q = query(
+          collection(db, 'rooms'),
+          orderBy('lastMessageAt', 'desc')
+        );
+      }
+
+      // デバッグ: 全ルームを確認
+      getDocs(collection(db, 'rooms')).then(allRooms => {
+        console.log('[Firestore] 🔍 全ルーム数:', allRooms.size);
+        allRooms.forEach(doc => {
+          const data = doc.data();
+          console.log('[Firestore] 🔍 ルーム:', doc.id,
+            'memberEmails:', data.memberEmails,
+            'members:', data.members,
+            'emailMatch:', data.memberEmails?.includes(trimmedUserEmail),
+            'nameMatch:', data.members?.includes(trimmedUserName));
+        });
       });
 
-      console.log('[Firestore] 新規リスナー登録');
+      console.log('[Firestore] 新規リスナー登録 (clientFilter:', useClientFilter, ')');
       unsubscribeRooms = onSnapshot(q, (snapshot) => {
         console.log('[Firestore] ルーム更新:', snapshot.size + '件');
 
@@ -1009,30 +1056,41 @@
 
         // デバッグ情報
         console.log('[Filter] currentUserName:', currentUserName);
+        console.log('[Filter] currentUserEmail:', currentUserEmail);
         console.log('[Filter] 全ルーム数:', snapshot.size);
 
         let visibleRoomCount = 0;
         snapshot.forEach((doc) => {
           const room = { id: doc.id, ...doc.data() };
 
+          // 🔧 emailまたはnameでマッチング（ユーザー名変更対応）
+          const emailMatch = room.memberEmails?.includes(trimmedUserEmail);
+          const nameMatch = room.members?.includes(trimmedUserName);
+          const isSystemRoom = room.type === 'system';
+
           // デバッグ: 各ルームの情報を出力
           console.log('[Filter] ルーム検証:', {
             id: room.id,
             name: room.name,
             type: room.type,
+            memberEmails: room.memberEmails,
             members: room.members,
-            includes: room.members?.includes(currentUserName)
+            emailMatch: emailMatch,
+            nameMatch: nameMatch,
+            isSystemRoom: isSystemRoom
           });
 
           // フィルタリング: 自分が参加しているルームのみ表示
           // - type='system'のルームは全員に表示
-          // - それ以外は members配列に自分のユーザー名が含まれる場合のみ表示
-          if (room.type === 'system' || (room.members && room.members.includes(currentUserName))) {
-            console.log('[Filter] ✅ ルーム表示:', room.id, room.name);
+          // - memberEmails に自分のメールが含まれる場合
+          // - または members配列に自分のユーザー名が含まれる場合
+          if (isSystemRoom || emailMatch || nameMatch) {
+            console.log('[Filter] ✅ ルーム表示:', room.id, room.name,
+              isSystemRoom ? '(system)' : emailMatch ? '(emailMatch)' : '(nameMatch)');
             appendRoom(room);
             visibleRoomCount++;
           } else {
-            console.log('[Filter] ❌ ルームをスキップ:', room.id, room.name, 'members:', room.members);
+            console.log('[Filter] ❌ ルームをスキップ:', room.id, room.name);
           }
         });
 
