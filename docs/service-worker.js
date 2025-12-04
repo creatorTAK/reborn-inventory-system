@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v42-badge-fix'; // バッジをwaitUntil内に移動
+const CACHE_NAME = 'reborn-v43-chatgpt-fix'; // 直列実行+全例外捕捉
 const urlsToCache = [
   '/',
   '/index.html',
@@ -89,73 +89,73 @@ self.addEventListener('fetch', (event) => {
 });
 
 // プッシュ通知の受信
+// 重要: iOS Safari PWAでは未捕捉の例外でSW全体が失敗するため、全てtry/catchで囲む
+// 参考: ChatGPT分析 - 直列実行 + 例外捕捉が必須
 self.addEventListener('push', (event) => {
-  console.log('[Service Worker] Push received:', event);
-
-  let notificationData = {
-    title: 'フリラ',
-    body: 'テスト通知です',
-    icon: '/icon-180.png',
-    badge: '/icon-180.png',
-    data: {
-      url: '/'
-    }
-  };
-
-  // サーバーからデータが送られてきた場合
-  if (event.data) {
+  event.waitUntil((async () => {
     try {
-      const data = event.data.json();
-      notificationData = {
-        title: data.title || 'FURIRA',
-        body: data.body || 'テスト通知です',
-        icon: data.icon || '/icon-180.png',
-        badge: data.badge || '/icon-180.png',
-        data: data.data || { url: '/' }
+      console.log('[SW] Push received');
+
+      let notificationData = {
+        title: 'フリラ',
+        body: 'テスト通知です',
+        icon: '/icon-180.png',
+        badge: '/icon-180.png',
+        data: { url: '/' }
       };
-    } catch (e) {
-      console.error('[Service Worker] Push data parse error:', e);
+
+      if (event.data) {
+        try {
+          const data = event.data.json();
+          notificationData = {
+            title: data.title || notificationData.title,
+            body: data.body || notificationData.body,
+            icon: data.icon || notificationData.icon,
+            badge: data.badge || notificationData.badge,
+            data: data.data || notificationData.data
+          };
+          console.log('[SW] Payload parsed:', JSON.stringify(notificationData.data));
+        } catch (e) {
+          console.error('[SW] push data json parse error', e);
+        }
+      }
+
+      // バッジ: 正の整数のみ（0やnullはiOSでバグあり）
+      const badgeCountRaw = notificationData.data?.badgeCount;
+      const badgeCount = (typeof badgeCountRaw !== 'undefined' && badgeCountRaw !== null)
+        ? parseInt(badgeCountRaw, 10)
+        : null;
+
+      // まずバッジをセット（直列実行 - 順序は実験で入れ替え可能）
+      if ('setAppBadge' in self.registration && Number.isInteger(badgeCount) && badgeCount > 0) {
+        try {
+          await self.registration.setAppBadge(badgeCount);
+          console.log('[SW] ✅ setAppBadge ok:', badgeCount);
+        } catch (e) {
+          console.error('[SW] ❌ setAppBadge failed:', e.name, e.message);
+          // 失敗しても続行（未捕捉で落とさない）
+        }
+      }
+
+      // 通知は確実に表示する（例外は捕まえる）
+      try {
+        await self.registration.showNotification(notificationData.title, {
+          body: notificationData.body,
+          icon: notificationData.icon,
+          badge: notificationData.badge,
+          data: notificationData.data,
+          vibrate: [200, 100, 200],
+          tag: 'reborn-notification'
+        });
+        console.log('[SW] ✅ showNotification ok');
+      } catch (e) {
+        console.error('[SW] ❌ showNotification failed:', e.name, e.message);
+      }
+
+    } catch (topErr) {
+      console.error('[SW] push handler top-level error:', topErr);
     }
-  }
-
-  console.log('[Service Worker] Badge API対応:', 'setAppBadge' in self.registration);
-  console.log('[Service Worker] 通知データ:', JSON.stringify(notificationData.data));
-
-  // 通知表示とバッジ設定を両方waitUntilに含める（バックグラウンド終了防止）
-  const promises = [];
-
-  // 通知表示（必須）
-  promises.push(
-    self.registration.showNotification(notificationData.title, {
-      body: notificationData.body,
-      icon: notificationData.icon,
-      badge: notificationData.badge,
-      data: notificationData.data,
-      vibrate: [200, 100, 200],
-      tag: 'reborn-notification'
-    })
-  );
-
-  // バッジ設定（waitUntil内で実行することでバックグラウンドでも確実に完了）
-  if ('setAppBadge' in self.registration) {
-    const badgeCountRaw = notificationData.data?.badgeCount;
-    console.log('[Service Worker] badgeCountRaw:', badgeCountRaw);
-    if (badgeCountRaw !== undefined && badgeCountRaw !== null) {
-      const badgeCount = parseInt(badgeCountRaw, 10) || 1;
-      console.log('[Service Worker] setAppBadge呼び出し:', badgeCount);
-      promises.push(
-        self.registration.setAppBadge(badgeCount)
-          .then(() => console.log('[Service Worker] ✅ バッジ設定成功:', badgeCount))
-          .catch(err => console.error('[Service Worker] ❌ Badge API エラー:', err.name, err.message))
-      );
-    } else {
-      console.log('[Service Worker] badgeCountなし - バッジ設定スキップ');
-    }
-  } else {
-    console.log('[Service Worker] Badge API未対応');
-  }
-
-  event.waitUntil(Promise.all(promises));
+  })());
 });
 
 // 通知クリック時の処理
