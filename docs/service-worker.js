@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v48-registration-badge'; // self.registration.setAppBadge に戻す
+const CACHE_NAME = 'reborn-v49-rollback'; // 動作確認済みバージョンにロールバック
 const urlsToCache = [
   '/',
   '/index.html',
@@ -89,8 +89,8 @@ self.addEventListener('fetch', (event) => {
 });
 
 // プッシュ通知の受信
-// ChatGPT推奨: 直列実行 + 全例外捕捉（通知は動作確認済み）
-// バッジ: navigator.setAppBadge を試行
+// 重要: iOS Safari PWAでは未捕捉の例外でSW全体が失敗するため、全てtry/catchで囲む
+// 参考: ChatGPT分析 - 直列実行 + 例外捕捉が必須
 self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
     try {
@@ -120,23 +120,24 @@ self.addEventListener('push', (event) => {
         }
       }
 
-      // バッジ: 正の整数のみ
+      // バッジ: 正の整数のみ（0やnullはiOSでバグあり）
       const badgeCountRaw = notificationData.data?.badgeCount;
       const badgeCount = (typeof badgeCountRaw !== 'undefined' && badgeCountRaw !== null)
         ? parseInt(badgeCountRaw, 10)
         : null;
 
-      // バッジ設定: self.registration.setAppBadge を使用
-      if (Number.isInteger(badgeCount) && badgeCount > 0) {
+      // まずバッジをセット（直列実行 - 順序は実験で入れ替え可能）
+      if ('setAppBadge' in self.registration && Number.isInteger(badgeCount) && badgeCount > 0) {
         try {
           await self.registration.setAppBadge(badgeCount);
           console.log('[SW] ✅ setAppBadge ok:', badgeCount);
         } catch (e) {
           console.error('[SW] ❌ setAppBadge failed:', e.name, e.message);
+          // 失敗しても続行（未捕捉で落とさない）
         }
       }
 
-      // 通知表示
+      // 通知は確実に表示する（例外は捕まえる）
       try {
         await self.registration.showNotification(notificationData.title, {
           body: notificationData.body,
