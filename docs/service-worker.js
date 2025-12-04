@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v47-navigator-badge'; // navigator.setAppBadge優先 + waitUntil内
+const CACHE_NAME = 'reborn-v48-registration-badge'; // self.registration.setAppBadge に戻す
 const urlsToCache = [
   '/',
   '/index.html',
@@ -126,16 +126,11 @@ self.addEventListener('push', (event) => {
         ? parseInt(badgeCountRaw, 10)
         : null;
 
-      // バッジ設定: navigator.setAppBadge を優先的に試行
+      // バッジ設定: self.registration.setAppBadge を使用
       if (Number.isInteger(badgeCount) && badgeCount > 0) {
         try {
-          if ('setAppBadge' in navigator) {
-            await navigator.setAppBadge(badgeCount);
-            console.log('[SW] ✅ navigator.setAppBadge ok:', badgeCount);
-          } else if ('setAppBadge' in self.registration) {
-            await self.registration.setAppBadge(badgeCount);
-            console.log('[SW] ✅ self.registration.setAppBadge ok:', badgeCount);
-          }
+          await self.registration.setAppBadge(badgeCount);
+          console.log('[SW] ✅ setAppBadge ok:', badgeCount);
         } catch (e) {
           console.error('[SW] ❌ setAppBadge failed:', e.name, e.message);
         }
