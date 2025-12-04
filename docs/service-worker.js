@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v39-badge-parallel'; // 通知とバッジを並列実行
+const CACHE_NAME = 'reborn-v40-simple'; // シンプル版に戻す
 const urlsToCache = [
   '/',
   '/index.html',
@@ -118,38 +118,25 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  // 通知表示とバッジ設定を並列実行（通知は必須、バッジは任意）
-  const showNotificationPromise = self.registration.showNotification(notificationData.title, {
-    body: notificationData.body,
-    icon: notificationData.icon,
-    badge: notificationData.badge,
-    data: notificationData.data,
-    vibrate: [200, 100, 200],
-    tag: 'reborn-notification'
-  });
-
-  // バッジ設定（エラーでも通知には影響させない）
-  const setBadgePromise = (async () => {
-    try {
-      console.log('[Service Worker] Badge API対応:', 'setAppBadge' in self.registration);
-      if ('setAppBadge' in self.registration && notificationData.data) {
-        const badgeCountRaw = notificationData.data.badgeCount;
-        console.log('[Service Worker] badgeCountRaw:', badgeCountRaw);
-        if (badgeCountRaw !== undefined && badgeCountRaw !== null) {
-          const badgeCount = parseInt(badgeCountRaw, 10) || 1;
-          console.log('[Service Worker] setAppBadge呼び出し:', badgeCount);
-          await self.registration.setAppBadge(badgeCount);
-          console.log('[Service Worker] ✅ バッジ設定成功:', badgeCount);
-        }
-      }
-    } catch (err) {
-      console.error('[Service Worker] ❌ Badge API エラー:', err);
+  // バッジ設定（通知とは独立して実行）
+  if ('setAppBadge' in self.registration) {
+    const badgeCountRaw = notificationData.data?.badgeCount;
+    if (badgeCountRaw !== undefined && badgeCountRaw !== null) {
+      const badgeCount = parseInt(badgeCountRaw, 10) || 1;
+      self.registration.setAppBadge(badgeCount).catch(() => {});
     }
-  })();
+  }
 
-  // 両方の完了を待つ（バッジエラーは無視）
+  // 通知表示
   event.waitUntil(
-    Promise.all([showNotificationPromise, setBadgePromise.catch(() => {})])
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      data: notificationData.data,
+      vibrate: [200, 100, 200],
+      tag: 'reborn-notification'
+    })
   );
 });
 
