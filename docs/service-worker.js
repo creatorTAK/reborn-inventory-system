@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v44-global-rooms'; // グローバルルーム自動追加
+const CACHE_NAME = 'reborn-v45-login-rooms'; // ログイン時にグローバルルーム追加
 const urlsToCache = [
   '/',
   '/index.html',
