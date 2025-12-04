@@ -933,6 +933,9 @@
           <div id="pending-status" style="margin-top: 12px; font-size: 12px; color: #9ca3af;">
             <span class="loading-dot">●</span> リアルタイムで承認状況を確認中...
           </div>
+          <!-- デバッグ情報表示エリア -->
+          <div id="pending-debug-info" style="margin-top: 12px; text-align: left; max-height: 200px; overflow-y: auto;">
+          </div>
           <button id="pending-retry-btn" onclick="signOutAndRetry()"
                   style="margin-top: 16px; padding: 10px 20px; background: #f3f4f6; border: none;
                          border-radius: 6px; font-size: 13px; color: #6b7280; cursor: pointer;">
@@ -3538,17 +3541,41 @@
             console.error('[PendingUser] タスク追加エラー:', taskError);
           }
 
-          // 管理者にプッシュ通知を送信
+          // 管理者にプッシュ通知を送信（デバッグ表示付き）
           console.log('[PendingUser] === プッシュ通知処理開始 ===');
+          let pushDebugHtml = '';
           try {
-            await sendPushToOwners({
+            const pushResult = await sendPushToOwners({
               title: '🆕 新規ユーザー承認待ち',
               body: `${userName}さんが新規登録しました`,
               data: { type: 'pending_user', userEmail: email }
             });
-            console.log('[PendingUser] ✅ プッシュ通知送信完了');
+            console.log('[PendingUser] プッシュ結果:', pushResult);
+            
+            // デバッグ情報をHTMLで生成
+            if (pushResult.success) {
+              pushDebugHtml = `<div style="margin-top:10px;padding:8px;background:#d1fae5;border-radius:6px;font-size:11px;">
+                ✅ プッシュ通知送信成功（${pushResult.tokenCount}件）
+              </div>`;
+            } else {
+              pushDebugHtml = `<div style="margin-top:10px;padding:8px;background:#fee2e2;border-radius:6px;font-size:11px;">
+                ❌ プッシュ通知失敗: ${pushResult.reason}<br>
+                <details style="margin-top:4px;"><summary>詳細</summary>
+                ${pushResult.debug.details.map(d => `<div>・${d}</div>`).join('')}
+                </details>
+              </div>`;
+            }
           } catch (pushError) {
             console.error('[PendingUser] ❌ プッシュ通知送信エラー:', pushError);
+            pushDebugHtml = `<div style="margin-top:10px;padding:8px;background:#fee2e2;border-radius:6px;font-size:11px;">
+              ❌ プッシュ通知例外: ${pushError.message}
+            </div>`;
+          }
+          
+          // 承認待ち画面にデバッグ情報を追加
+          const pendingDebugDiv = document.getElementById('pending-debug-info');
+          if (pendingDebugDiv) {
+            pendingDebugDiv.innerHTML += pushDebugHtml;
           }
           console.log('[PendingUser] === プッシュ通知処理終了 ===');
 
@@ -5698,69 +5725,71 @@
       }
     }
 
-    // 管理者にプッシュ通知を送信
+    // 管理者にプッシュ通知を送信（デバッグ強化版）
     async function sendPushToOwners(notification) {
+      const debugInfo = { step: '', details: [] };
       try {
         console.log('[Push] === sendPushToOwners開始 ===');
+        debugInfo.step = '初期化';
+        
         const db = await getFirebaseDb();
         const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
         // Step 1: usersコレクションから管理者を取得
+        debugInfo.step = 'Step1: 管理者検索';
         console.log('[Push] Step1: usersコレクションからpermissionId=ownerを検索');
         const usersRef = collection(db, 'users');
         const ownersQuery = query(usersRef, where('permissionId', '==', 'owner'));
         const ownersSnapshot = await getDocs(ownersQuery);
 
         if (ownersSnapshot.empty) {
-          console.warn('[Push] ❌ 管理者が見つかりません（permissionId=ownerのユーザーが0件）');
-          return;
+          debugInfo.details.push('❌ 管理者0人（permissionId=ownerなし）');
+          console.warn('[Push] ❌ 管理者が見つかりません');
+          return { success: false, reason: '管理者が見つかりません', debug: debugInfo };
         }
 
+        debugInfo.details.push(`✅ 管理者${ownersSnapshot.size}人発見`);
         console.log('[Push] ✅ 管理者を発見:', ownersSnapshot.size, '人');
 
         // Step 2: 各管理者のdevicesサブコレクションからFCMトークンを取得
+        debugInfo.step = 'Step2: デバイス検索';
         const ownerTokens = [];
         for (const ownerDoc of ownersSnapshot.docs) {
           const ownerData = ownerDoc.data();
           const ownerEmail = ownerData.userEmail;
-          console.log('[Push] Step2: 管理者デバイス検索:', ownerEmail, 'docId:', ownerDoc.id);
+          console.log('[Push] Step2: 管理者デバイス検索:', ownerEmail);
 
           const devicesRef = collection(db, 'users', ownerEmail, 'devices');
 
-          // まず全デバイスを取得してログ出力
+          // 全デバイスを取得
           const allDevicesSnapshot = await getDocs(devicesRef);
-          console.log('[Push] デバイス総数:', allDevicesSnapshot.size, '件');
-          allDevicesSnapshot.forEach(d => {
-            const dd = d.data();
-            console.log('[Push] デバイス詳細:', d.id, 'active=', dd.active, 'fcmToken=', dd.fcmToken ? '有' : '無');
-          });
+          debugInfo.details.push(`${ownerEmail}: 全デバイス${allDevicesSnapshot.size}件`);
 
           // active=trueのデバイスをフィルタ
           const activeDevicesQuery = query(devicesRef, where('active', '==', true));
           const devicesSnapshot = await getDocs(activeDevicesQuery);
-          console.log('[Push] active=trueのデバイス:', devicesSnapshot.size, '件');
+          debugInfo.details.push(`${ownerEmail}: active=true ${devicesSnapshot.size}件`);
 
+          let tokenCount = 0;
           devicesSnapshot.forEach((deviceDoc) => {
             const deviceData = deviceDoc.data();
             if (deviceData.fcmToken) {
               ownerTokens.push(deviceData.fcmToken);
-              console.log('[Push] ✅ FCMトークン取得:', ownerEmail, deviceDoc.id);
-            } else {
-              console.warn('[Push] ⚠️ fcmTokenなし:', deviceDoc.id);
+              tokenCount++;
             }
           });
+          debugInfo.details.push(`${ownerEmail}: FCMトークン${tokenCount}件`);
         }
 
         if (ownerTokens.length === 0) {
-          console.warn('[Push] ❌ 管理者のFCMトークンが見つかりません（active=trueのデバイスにfcmTokenがない）');
-          console.log('[Push] === sendPushToOwners終了（トークンなし） ===');
-          return;
+          debugInfo.details.push('❌ FCMトークン0件');
+          console.warn('[Push] ❌ 管理者のFCMトークンが見つかりません');
+          return { success: false, reason: 'FCMトークンがありません', debug: debugInfo };
         }
 
-        console.log('[Push] Step3: Cloudflare Workerに送信開始');
-        console.log('[Push] トークン数:', ownerTokens.length);
-        console.log('[Push] 通知タイトル:', notification.title);
-        console.log('[Push] 通知本文:', notification.body);
+        debugInfo.step = 'Step3: Worker送信';
+        debugInfo.details.push(`✅ トークン${ownerTokens.length}件で送信開始`);
+        console.log('[Push] Step3: Cloudflare Workerに送信開始, トークン数:', ownerTokens.length);
 
         // Cloudflare Worker経由でプッシュ送信
         const requestBody = {
@@ -5769,7 +5798,6 @@
           body: notification.body,
           data: notification.data || {}
         };
-        console.log('[Push] リクエストボディ:', JSON.stringify(requestBody).substring(0, 200) + '...');
 
         const response = await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
           method: 'POST',
@@ -5777,20 +5805,21 @@
           body: JSON.stringify(requestBody)
         });
 
-        console.log('[Push] レスポンスステータス:', response.status);
         const responseText = await response.text();
-        console.log('[Push] レスポンスボディ:', responseText.substring(0, 500));
+        debugInfo.details.push(`Worker応答: ${response.status}`);
+        debugInfo.details.push(`応答内容: ${responseText.substring(0, 100)}`);
+        console.log('[Push] レスポンス:', response.status, responseText.substring(0, 200));
 
         if (!response.ok) {
-          throw new Error('プッシュ送信失敗: ' + response.status + ' - ' + responseText);
+          return { success: false, reason: `Worker失敗: ${response.status}`, debug: debugInfo };
         }
 
-        console.log('[Push] ✅ 管理者へのプッシュ送信完了:', ownerTokens.length, '件');
-        console.log('[Push] === sendPushToOwners終了（成功） ===');
+        console.log('[Push] ✅ 管理者へのプッシュ送信完了');
+        return { success: true, tokenCount: ownerTokens.length, debug: debugInfo };
       } catch (error) {
+        debugInfo.details.push(`❌ エラー: ${error.message}`);
         console.error('[Push] ❌ 送信エラー:', error);
-        console.error('[Push] エラー詳細:', error.message, error.stack);
-        console.log('[Push] === sendPushToOwners終了（エラー） ===');
+        return { success: false, reason: error.message, debug: debugInfo };
       }
     }
 
