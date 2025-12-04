@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v49-rollback'; // 動作確認済みバージョンにロールバック
+const CACHE_NAME = 'reborn-v50-restore'; // v45に完全復元
 const urlsToCache = [
   '/',
   '/index.html',
