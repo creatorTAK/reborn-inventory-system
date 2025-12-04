@@ -3460,9 +3460,29 @@
           iconToSave = window.currentUserIconURL;
         }
 
-        // Firestore更新
-        const { getFirestore, doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-        const db = window.firebaseDB || getFirestore();
+        console.log('[saveNewUserName] 🔧 保存開始:', { email, userName, hasIcon: !!iconToSave });
+
+        // Firestore更新（setDoc + mergeで確実に保存）
+        const { getFirestore, doc, setDoc, getApps, initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        // Firestoreインスタンスを確実に取得
+        let db = window.firebaseDB;
+        if (!db) {
+          console.log('[saveNewUserName] ⚠️ window.firebaseDB未設定、初期化します');
+          const firebaseConfig = {
+            apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+            authDomain: "furira.jp",
+            projectId: "reborn-chat",
+            storageBucket: "reborn-chat.firebasestorage.app",
+            messagingSenderId: "345706548795",
+            appId: "1:345706548795:web:058a553da6b4b74db5161e"
+          };
+          const { getApps: getApps2, initializeApp: initializeApp2 } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+          const app = getApps2().length ? getApps2()[0] : initializeApp2(firebaseConfig);
+          db = getFirestore(app);
+          window.firebaseDB = db;
+        }
+
         const userRef = doc(db, 'users', email);
 
         // 更新データを作成
@@ -3470,7 +3490,10 @@
         if (iconToSave) {
           updateData.userIconUrl = iconToSave; // 他ページと統一したフィールド名
         }
-        await updateDoc(userRef, updateData);
+
+        // setDoc + mergeで確実に保存（updateDocより信頼性が高い）
+        await setDoc(userRef, updateData, { merge: true });
+        console.log('[saveNewUserName] ✅ Firestore保存成功:', updateData);
 
         // localStorage更新
         localStorage.setItem('reborn_user_name', userName);
@@ -3479,7 +3502,7 @@
           localStorage.setItem('reborn_user_icon_url', iconToSave); // 他ページ共通のキー
         }
 
-        console.log('[saveNewUserName] ユーザー情報を更新:', userName, iconToSave ? '（アイコンあり）' : '（アイコンなし）');
+        console.log('[saveNewUserName] ✅ 完了:', userName, iconToSave ? '（アイコンあり）' : '（アイコンなし）');
 
         if (userType === 'owner') {
           // 保存完了メッセージと「次へ」ボタンを表示（入力フィールドはそのまま）
