@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v40-simple'; // シンプル版に戻す
+const CACHE_NAME = 'reborn-v41-original'; // 元のコードに完全復元
 const urlsToCache = [
   '/',
   '/index.html',
@@ -118,16 +118,27 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  // バッジ設定（通知とは独立して実行）
+  // アプリバッジを更新（通知データにバッジカウントが含まれている場合）
+  // 重要: Service Workerでは self.registration.setAppBadge() を使用
+  console.log('[Service Worker] Badge API対応:', 'setAppBadge' in self.registration);
+  console.log('[Service Worker] 通知データ:', JSON.stringify(notificationData.data));
+
   if ('setAppBadge' in self.registration) {
     const badgeCountRaw = notificationData.data?.badgeCount;
+    console.log('[Service Worker] badgeCountRaw:', badgeCountRaw);
     if (badgeCountRaw !== undefined && badgeCountRaw !== null) {
       const badgeCount = parseInt(badgeCountRaw, 10) || 1;
-      self.registration.setAppBadge(badgeCount).catch(() => {});
+      console.log('[Service Worker] setAppBadge呼び出し:', badgeCount);
+      self.registration.setAppBadge(badgeCount)
+        .then(() => console.log('[Service Worker] ✅ バッジ設定成功:', badgeCount))
+        .catch(err => console.error('[Service Worker] ❌ Badge API エラー:', err.name, err.message));
+    } else {
+      console.log('[Service Worker] badgeCountなし - バッジ設定スキップ');
     }
+  } else {
+    console.log('[Service Worker] Badge API未対応');
   }
 
-  // 通知表示
   event.waitUntil(
     self.registration.showNotification(notificationData.title, {
       body: notificationData.body,
