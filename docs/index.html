@@ -933,9 +933,6 @@
           <div id="pending-status" style="margin-top: 12px; font-size: 12px; color: #9ca3af;">
             <span class="loading-dot">●</span> リアルタイムで承認状況を確認中...
           </div>
-          <!-- デバッグ情報表示エリア -->
-          <div id="pending-debug-info" style="margin-top: 12px; text-align: left; max-height: 200px; overflow-y: auto;">
-          </div>
           <button id="pending-retry-btn" onclick="signOutAndRetry()"
                   style="margin-top: 16px; padding: 10px 20px; background: #f3f4f6; border: none;
                          border-radius: 6px; font-size: 13px; color: #6b7280; cursor: pointer;">
@@ -3562,43 +3559,16 @@
             console.error('[PendingUser] タスク追加エラー:', taskError);
           }
 
-          // 管理者にプッシュ通知を送信（デバッグ表示付き）
-          console.log('[PendingUser] === プッシュ通知処理開始 ===');
-          let pushDebugHtml = '';
+          // 管理者にプッシュ通知を送信
           try {
-            const pushResult = await sendPushToOwners({
+            await sendPushToOwners({
               title: '🆕 新規ユーザー承認待ち',
               body: `${userName}さんが新規登録しました`,
               data: { type: 'pending_user', userEmail: email, badgeCount: '1' }
             });
-            console.log('[PendingUser] プッシュ結果:', pushResult);
-            
-            // デバッグ情報をHTMLで生成
-            if (pushResult.success) {
-              pushDebugHtml = `<div style="margin-top:10px;padding:8px;background:#d1fae5;border-radius:6px;font-size:11px;">
-                ✅ プッシュ通知送信成功（${pushResult.tokenCount}件）
-              </div>`;
-            } else {
-              pushDebugHtml = `<div style="margin-top:10px;padding:8px;background:#fee2e2;border-radius:6px;font-size:11px;">
-                ❌ プッシュ通知失敗: ${pushResult.reason}<br>
-                <details style="margin-top:4px;"><summary>詳細</summary>
-                ${pushResult.debug.details.map(d => `<div>・${d}</div>`).join('')}
-                </details>
-              </div>`;
-            }
           } catch (pushError) {
-            console.error('[PendingUser] ❌ プッシュ通知送信エラー:', pushError);
-            pushDebugHtml = `<div style="margin-top:10px;padding:8px;background:#fee2e2;border-radius:6px;font-size:11px;">
-              ❌ プッシュ通知例外: ${pushError.message}
-            </div>`;
+            console.error('[PendingUser] プッシュ通知エラー:', pushError);
           }
-          
-          // 承認待ち画面にデバッグ情報を追加
-          const pendingDebugDiv = document.getElementById('pending-debug-info');
-          if (pendingDebugDiv) {
-            pendingDebugDiv.innerHTML += pushDebugHtml;
-          }
-          console.log('[PendingUser] === プッシュ通知処理終了 ===');
 
           // システム通知チャットにメッセージを送信
           console.log('[PendingUser] === システムチャット処理開始 ===');
@@ -5987,7 +5957,7 @@
         // 管理者をメンバーに追加してチャット一覧に表示されるようにする
         const roomRef = doc(db, 'rooms', systemRoomId);
         await setDoc(roomRef, {
-          name: 'システム通知',
+          name: '👑 管理者通知',
           type: 'system',
           lastMessage: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
           lastMessageAt: serverTimestamp(),  // chat_rooms_listのorderByで使用
