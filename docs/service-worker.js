@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v45-login-rooms'; // ログイン時にグローバルルーム追加
+const CACHE_NAME = 'reborn-v46-badge-fireforget'; // navigator.setAppBadge + waitUntil外
 const urlsToCache = [
   '/',
   '/index.html',
@@ -89,73 +89,68 @@ self.addEventListener('fetch', (event) => {
 });
 
 // プッシュ通知の受信
-// 重要: iOS Safari PWAでは未捕捉の例外でSW全体が失敗するため、全てtry/catchで囲む
-// 参考: ChatGPT分析 - 直列実行 + 例外捕捉が必須
+// 過去の動作実績: self.navigator.setAppBadge + waitUntil外（fire-and-forget）
 self.addEventListener('push', (event) => {
-  event.waitUntil((async () => {
+  console.log('[SW] Push received');
+
+  let notificationData = {
+    title: 'フリラ',
+    body: 'テスト通知です',
+    icon: '/icon-180.png',
+    badge: '/icon-180.png',
+    data: { url: '/' }
+  };
+
+  if (event.data) {
     try {
-      console.log('[SW] Push received');
-
-      let notificationData = {
-        title: 'フリラ',
-        body: 'テスト通知です',
-        icon: '/icon-180.png',
-        badge: '/icon-180.png',
-        data: { url: '/' }
+      const data = event.data.json();
+      notificationData = {
+        title: data.title || notificationData.title,
+        body: data.body || notificationData.body,
+        icon: data.icon || notificationData.icon,
+        badge: data.badge || notificationData.badge,
+        data: data.data || notificationData.data
       };
-
-      if (event.data) {
-        try {
-          const data = event.data.json();
-          notificationData = {
-            title: data.title || notificationData.title,
-            body: data.body || notificationData.body,
-            icon: data.icon || notificationData.icon,
-            badge: data.badge || notificationData.badge,
-            data: data.data || notificationData.data
-          };
-          console.log('[SW] Payload parsed:', JSON.stringify(notificationData.data));
-        } catch (e) {
-          console.error('[SW] push data json parse error', e);
-        }
-      }
-
-      // バッジ: 正の整数のみ（0やnullはiOSでバグあり）
-      const badgeCountRaw = notificationData.data?.badgeCount;
-      const badgeCount = (typeof badgeCountRaw !== 'undefined' && badgeCountRaw !== null)
-        ? parseInt(badgeCountRaw, 10)
-        : null;
-
-      // まずバッジをセット（直列実行 - 順序は実験で入れ替え可能）
-      if ('setAppBadge' in self.registration && Number.isInteger(badgeCount) && badgeCount > 0) {
-        try {
-          await self.registration.setAppBadge(badgeCount);
-          console.log('[SW] ✅ setAppBadge ok:', badgeCount);
-        } catch (e) {
-          console.error('[SW] ❌ setAppBadge failed:', e.name, e.message);
-          // 失敗しても続行（未捕捉で落とさない）
-        }
-      }
-
-      // 通知は確実に表示する（例外は捕まえる）
-      try {
-        await self.registration.showNotification(notificationData.title, {
-          body: notificationData.body,
-          icon: notificationData.icon,
-          badge: notificationData.badge,
-          data: notificationData.data,
-          vibrate: [200, 100, 200],
-          tag: 'reborn-notification'
-        });
-        console.log('[SW] ✅ showNotification ok');
-      } catch (e) {
-        console.error('[SW] ❌ showNotification failed:', e.name, e.message);
-      }
-
-    } catch (topErr) {
-      console.error('[SW] push handler top-level error:', topErr);
+      console.log('[SW] Payload parsed:', JSON.stringify(notificationData.data));
+    } catch (e) {
+      console.error('[SW] push data json parse error', e);
     }
-  })());
+  }
+
+  // 🔴 バッジ: waitUntilの外で fire-and-forget（過去の動作パターン）
+  const badgeCountRaw = notificationData.data?.badgeCount;
+  const badgeCount = (typeof badgeCountRaw !== 'undefined' && badgeCountRaw !== null)
+    ? parseInt(badgeCountRaw, 10)
+    : null;
+
+  if (Number.isInteger(badgeCount) && badgeCount > 0) {
+    // self.navigator.setAppBadge を使用（過去の動作実績）
+    if ('setAppBadge' in navigator) {
+      navigator.setAppBadge(badgeCount)
+        .then(() => console.log('[SW] ✅ navigator.setAppBadge ok:', badgeCount))
+        .catch(e => console.error('[SW] ❌ navigator.setAppBadge failed:', e));
+    } else if (self.navigator && 'setAppBadge' in self.navigator) {
+      self.navigator.setAppBadge(badgeCount)
+        .then(() => console.log('[SW] ✅ self.navigator.setAppBadge ok:', badgeCount))
+        .catch(e => console.error('[SW] ❌ self.navigator.setAppBadge failed:', e));
+    }
+  }
+
+  // 🔵 通知表示: waitUntil内で確実に実行
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      data: notificationData.data,
+      vibrate: [200, 100, 200],
+      tag: 'reborn-notification'
+    }).then(() => {
+      console.log('[SW] ✅ showNotification ok');
+    }).catch(e => {
+      console.error('[SW] ❌ showNotification failed:', e);
+    })
+  );
 });
 
 // 通知クリック時の処理
