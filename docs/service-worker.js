@@ -120,8 +120,9 @@ self.addEventListener('push', (event) => {
 
   // アプリバッジを更新（通知データにバッジカウントが含まれている場合）
   if ('setAppBadge' in self.navigator) {
-    const badgeCount = notificationData.data?.badgeCount;
-    if (badgeCount !== undefined) {
+    const badgeCountRaw = notificationData.data?.badgeCount;
+    if (badgeCountRaw !== undefined) {
+      const badgeCount = parseInt(badgeCountRaw, 10) || 1;
       self.navigator.setAppBadge(badgeCount).catch(err => {
         console.error('[Service Worker] Badge API エラー:', err);
       });
