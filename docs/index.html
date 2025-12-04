@@ -5928,16 +5928,32 @@
       }
     }
 
-    // システム通知チャットにメッセージを送信
+    // システム通知チャットにメッセージを送信（管理者のみに表示）
     async function sendSystemChatMessage(message) {
       try {
         console.log('[SystemChat] === sendSystemChatMessage開始 ===');
         console.log('[SystemChat] メッセージ:', message.substring(0, 50) + '...');
         const db = await getFirebaseDb();
-        const { collection, doc, addDoc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { collection, doc, addDoc, setDoc, getDocs, query, where, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
         const systemRoomId = 'system-notifications';
         console.log('[SystemChat] roomId:', systemRoomId);
+
+        // 管理者（owner）のリストを取得
+        const usersRef = collection(db, 'users');
+        const ownersQuery = query(usersRef, where('permissionId', '==', 'owner'));
+        const ownersSnapshot = await getDocs(ownersQuery);
+
+        const ownerEmails = [];
+        const ownerNames = [];
+        ownersSnapshot.forEach(doc => {
+          const data = doc.data();
+          ownerEmails.push(doc.id); // ドキュメントID = メールアドレス
+          if (data.userName) {
+            ownerNames.push(data.userName);
+          }
+        });
+        console.log('[SystemChat] 管理者:', ownerEmails.length, '名');
 
         // システム通知ルームにメッセージを追加
         const messagesRef = collection(db, 'rooms', systemRoomId, 'messages');
@@ -5951,15 +5967,18 @@
         console.log('[SystemChat] ✅ メッセージ追加完了:', messageDoc.id);
 
         // ルームのlastMessageとlastMessageAtを更新（存在しない場合は作成）
+        // 管理者をメンバーに追加してチャット一覧に表示されるようにする
         const roomRef = doc(db, 'rooms', systemRoomId);
         await setDoc(roomRef, {
           name: 'システム通知',
           type: 'system',
           lastMessage: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
           lastMessageAt: serverTimestamp(),  // chat_rooms_listのorderByで使用
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
+          memberEmails: ownerEmails,  // 管理者のメールアドレス（クエリ用）
+          members: ownerNames         // 管理者のユーザー名（クエリ用）
         }, { merge: true });
-        console.log('[SystemChat] ✅ ルーム更新完了');
+        console.log('[SystemChat] ✅ ルーム更新完了（管理者メンバー追加）');
 
         console.log('[SystemChat] === sendSystemChatMessage完了 ===');
       } catch (error) {
