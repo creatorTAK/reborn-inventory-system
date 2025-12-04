@@ -5806,12 +5806,41 @@
         });
 
         const responseText = await response.text();
+        console.log('[Push] レスポンス:', response.status, responseText);
+
+        // Worker応答をパース
+        let workerResult;
+        try {
+          workerResult = JSON.parse(responseText);
+        } catch (e) {
+          workerResult = { raw: responseText };
+        }
+
         debugInfo.details.push(`Worker応答: ${response.status}`);
-        debugInfo.details.push(`応答内容: ${responseText.substring(0, 100)}`);
-        console.log('[Push] レスポンス:', response.status, responseText.substring(0, 200));
+        debugInfo.details.push(`送信成功: ${workerResult.sent || 0}件`);
+        debugInfo.details.push(`送信失敗: ${workerResult.failed || 0}件`);
+        
+        // FCMからのエラー詳細を表示
+        if (workerResult.errors && workerResult.errors.length > 0) {
+          workerResult.errors.forEach((err, i) => {
+            debugInfo.details.push(`❌ FCMエラー${i+1}: ${err.error}`);
+          });
+        }
+        
+        // 成功時のmessageIdを表示
+        if (workerResult.results && workerResult.results.length > 0) {
+          workerResult.results.forEach((res, i) => {
+            debugInfo.details.push(`✅ FCM成功${i+1}: ${res.messageId || 'ID不明'}`);
+          });
+        }
 
         if (!response.ok) {
           return { success: false, reason: `Worker失敗: ${response.status}`, debug: debugInfo };
+        }
+
+        // Workerは成功でもFCMが失敗している場合がある
+        if (workerResult.failed > 0) {
+          return { success: false, reason: `FCM送信失敗: ${workerResult.failed}件`, debug: debugInfo };
         }
 
         console.log('[Push] ✅ 管理者へのプッシュ送信完了');
