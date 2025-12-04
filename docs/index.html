@@ -2882,28 +2882,19 @@
         }
 
         // アクティブユーザー → ログイン成功
-        // Googleアカウント情報をFirestoreに自動同期（SaaS対応：名前・写真変更を反映）
-        const syncUpdates = {};
-        if (displayName && displayName !== userData.userName) {
-          syncUpdates.userName = displayName;
-          console.log('[PC Login] Googleアカウント名を同期:', userData.userName, '→', displayName);
-        }
+        // Googleアカウント写真のみ自動同期（ユーザー名は登録時に設定したものを保持）
         if (photoURL && photoURL !== userData.photoURL) {
-          syncUpdates.photoURL = photoURL;
-          console.log('[PC Login] Googleアカウント写真を同期');
-        }
-        if (Object.keys(syncUpdates).length > 0) {
           try {
             const userRef = doc(db, 'users', email);
-            await updateDoc(userRef, syncUpdates);
-            console.log('[PC Login] Firestore同期完了:', syncUpdates);
+            await updateDoc(userRef, { photoURL: photoURL });
+            console.log('[PC Login] Googleアカウント写真を同期');
           } catch (syncError) {
             console.error('[PC Login] Firestore同期エラー:', syncError);
           }
         }
 
-        // 同期後の最新名前を使用（Googleアカウント名を優先）
-        const finalUserName = displayName || userName;
+        // Firestoreに保存されているユーザー名を優先（登録時に設定した名前を保持）
+        const finalUserName = userName;
         localStorage.setItem('reborn_user_name', finalUserName);
         localStorage.setItem('reborn_user_email', email);
         localStorage.setItem('reborn_user_permission_id', permissionId);
@@ -3066,12 +3057,8 @@
           }
 
           // アクティブユーザー → ログイン成功
-          // Googleアカウント情報をFirestoreに自動同期（SaaS対応：名前・写真変更を反映）
+          // Googleアカウント写真のみ自動同期（ユーザー名は登録時に設定したものを保持）
           const syncUpdates = {};
-          if (displayName && displayName !== existingUserData.userName) {
-            syncUpdates.userName = displayName;
-            console.log('[Mobile Login] Googleアカウント名を同期:', existingUserData.userName, '→', displayName);
-          }
           if (photoURL && photoURL !== existingUserData.photoURL) {
             syncUpdates.photoURL = photoURL;
             console.log('[Mobile Login] Googleアカウント写真を同期');
@@ -3090,8 +3077,8 @@
             }
           }
 
-          // 同期後の最新名前を使用（Googleアカウント名を優先）
-          const finalUserName = displayName || userName;
+          // Firestoreに保存されているユーザー名を優先（登録時に設定した名前を保持）
+          const finalUserName = userName;
           localStorage.setItem('reborn_user_name', finalUserName);
           localStorage.setItem('reborn_user_email', email);
           localStorage.setItem('reborn_user_permission_id', permissionId);
