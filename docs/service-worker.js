@@ -119,16 +119,17 @@ self.addEventListener('push', (event) => {
   }
 
   // アプリバッジを更新（通知データにバッジカウントが含まれている場合）
-  console.log('[Service Worker] Badge API対応:', 'setAppBadge' in self.navigator);
+  // 重要: Service Workerでは self.registration.setAppBadge() を使用
+  console.log('[Service Worker] Badge API対応:', 'setAppBadge' in self.registration);
   console.log('[Service Worker] 通知データ:', JSON.stringify(notificationData.data));
   
-  if ('setAppBadge' in self.navigator) {
+  if ('setAppBadge' in self.registration) {
     const badgeCountRaw = notificationData.data?.badgeCount;
     console.log('[Service Worker] badgeCountRaw:', badgeCountRaw);
     if (badgeCountRaw !== undefined && badgeCountRaw !== null) {
       const badgeCount = parseInt(badgeCountRaw, 10) || 1;
       console.log('[Service Worker] setAppBadge呼び出し:', badgeCount);
-      self.navigator.setAppBadge(badgeCount)
+      self.registration.setAppBadge(badgeCount)
         .then(() => console.log('[Service Worker] ✅ バッジ設定成功:', badgeCount))
         .catch(err => console.error('[Service Worker] ❌ Badge API エラー:', err.name, err.message));
     } else {
