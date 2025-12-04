@@ -1129,13 +1129,27 @@
       const user = usersCache.find(u => u.userName === userName);
       console.log('[Room Icon] 検索結果:', user);
 
-      if (user && user.userIconUrl) {
-        console.log('[Room Icon] アイコンURL返却:', user.userIconUrl);
-        return user.userIconUrl;
+      if (user && (user.userIconUrl || user.photoURL)) {
+        const iconUrl = user.userIconUrl || user.photoURL;
+        console.log('[Room Icon] アイコンURL返却:', iconUrl);
+        return iconUrl;
       } else {
         console.warn('[Room Icon] アイコンURLなし:', userName);
         return null;
       }
+    }
+
+    // 🔧 メールアドレスからユーザーアイコンURLを取得
+    function getUserIconUrlByEmail(email) {
+      if (!email || !usersCache || usersCache.length === 0) {
+        return null;
+      }
+
+      const user = usersCache.find(u => u.id === email || u.userEmail === email);
+      if (user && (user.userIconUrl || user.photoURL)) {
+        return user.userIconUrl || user.photoURL;
+      }
+      return null;
     }
 
     // トークルームをUIに追加
@@ -1184,12 +1198,24 @@
       icon.className = 'room-icon';
 
       // 個別チャット（DM）の場合は相手ユーザーのアイコンを表示
-      if (room.type === 'direct' && room.members && room.members.length === 2) {
-        // 自分以外のメンバーを取得
-        const otherUser = room.members.find(m => m !== currentUserName);
-        const iconUrl = getUserIconUrl(otherUser);
+      if (room.type === 'direct') {
+        // 🔧 memberEmailsから自分以外を特定（ユーザー名変更対応）
+        let otherUser = null;
+        let otherUserEmail = null;
 
-        console.log('[Room Icon] 個別チャット:', { roomId: room.id, otherUser, iconUrl });
+        if (room.memberEmails && room.memberEmails.length === 2) {
+          otherUserEmail = room.memberEmails.find(e => e !== currentUserEmail);
+          // emailからusersCacheでユーザー名を取得
+          const otherUserData = usersCache.find(u => u.id === otherUserEmail || u.userEmail === otherUserEmail);
+          otherUser = otherUserData?.userName || otherUserEmail?.split('@')[0] || '不明';
+        } else if (room.members && room.members.length === 2) {
+          // フォールバック: 旧方式
+          otherUser = room.members.find(m => m !== currentUserName);
+        }
+
+        const iconUrl = getUserIconUrl(otherUser) || (otherUserEmail ? getUserIconUrlByEmail(otherUserEmail) : null);
+
+        console.log('[Room Icon] 個別チャット:', { roomId: room.id, otherUser, otherUserEmail, iconUrl });
 
         if (iconUrl) {
           // アイコン画像がある場合
@@ -1233,9 +1259,21 @@
       name.className = 'room-name';
 
       // 個別チャットの場合は相手のユーザー名を動的生成
-      if (room.type === 'direct' && room.members && Array.isArray(room.members)) {
-        const otherMember = room.members.find(m => m !== currentUserName);
-        name.textContent = otherMember || '不明なユーザー';
+      if (room.type === 'direct') {
+        // 🔧 memberEmailsから自分以外を特定（ユーザー名変更対応）
+        let otherMemberName = '不明なユーザー';
+
+        if (room.memberEmails && room.memberEmails.length === 2) {
+          const otherEmail = room.memberEmails.find(e => e !== currentUserEmail);
+          // emailからusersCacheでユーザー名を取得
+          const otherUserData = usersCache.find(u => u.id === otherEmail || u.userEmail === otherEmail);
+          otherMemberName = otherUserData?.userName || otherEmail?.split('@')[0] || '不明なユーザー';
+        } else if (room.members && Array.isArray(room.members)) {
+          // フォールバック: 旧方式
+          otherMemberName = room.members.find(m => m !== currentUserName) || '不明なユーザー';
+        }
+
+        name.textContent = otherMemberName;
       } else {
         name.textContent = room.name || '無題のルーム';
       }
