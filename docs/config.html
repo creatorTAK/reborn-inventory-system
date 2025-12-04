@@ -6823,21 +6823,21 @@ ${prompt || '（未設定）'}
 
         console.log('📋 [権限チェック] メニュー権限設定:', menuPerms);
 
-        // 商品登録設定のサブタブを制御
+        // 商品登録設定のサブタブを制御（defaultOwnerOnly: falseは全員表示がデフォルト）
         applySubTabPermissions('product', [
-          { id: 'product-salesword', tabId: 'product-salesword-tab', paneId: 'product-salesword' },
-          { id: 'product-condition', tabId: 'product-condition-tab', paneId: 'product-condition' },
-          { id: 'product-hashtag', tabId: 'product-hashtag-tab', paneId: 'product-hashtag' },
-          { id: 'product-discount', tabId: 'product-discount-tab', paneId: 'product-discount' },
-          { id: 'product-ai', tabId: 'product-ai-tab', paneId: 'product-ai' }
+          { id: 'product-salesword', tabId: 'product-salesword-tab', paneId: 'product-salesword', defaultOwnerOnly: false },
+          { id: 'product-condition', tabId: 'product-condition-tab', paneId: 'product-condition', defaultOwnerOnly: false },
+          { id: 'product-hashtag', tabId: 'product-hashtag-tab', paneId: 'product-hashtag', defaultOwnerOnly: false },
+          { id: 'product-discount', tabId: 'product-discount-tab', paneId: 'product-discount', defaultOwnerOnly: false },
+          { id: 'product-ai', tabId: 'product-ai-tab', paneId: 'product-ai', defaultOwnerOnly: false }
         ], menuPerms, permissionId, 'productConfigTabs');
 
-        // システム設定のサブタブを制御
+        // システム設定のサブタブを制御（MENU_DEFINITIONSに合わせたdefaultOwnerOnlyフラグ）
         applySubTabPermissions('system', [
-          { id: 'system-basic', tabId: 'system-basic-tab', paneId: 'system-basic' },
-          { id: 'system-management', tabId: 'system-management-tab', paneId: 'system-management' },
-          { id: 'system-shipping', tabId: 'system-shipping-tab', paneId: 'system-shipping' },
-          { id: 'system-procure', tabId: 'system-procure-tab', paneId: 'system-procure' },
+          { id: 'system-basic', tabId: 'system-basic-tab', paneId: 'system-basic', defaultOwnerOnly: false },
+          { id: 'system-management', tabId: 'system-management-tab', paneId: 'system-management', defaultOwnerOnly: true },
+          { id: 'system-shipping', tabId: 'system-shipping-tab', paneId: 'system-shipping', defaultOwnerOnly: true },
+          { id: 'system-procure', tabId: 'system-procure-tab', paneId: 'system-procure', defaultOwnerOnly: true },
           { id: 'system-permission', tabId: 'system-permission-tab', paneId: 'system-permission', alwaysOwnerOnly: true }
         ], menuPerms, permissionId, 'systemConfigTabs');
 
@@ -6861,12 +6861,23 @@ ${prompt || '（未設定）'}
       subTabs.forEach(subTab => {
         // 権限設定タブは常に管理者のみ
         if (subTab.alwaysOwnerOnly) {
-          hideTab(subTab.tabId, subTab.paneId);
-          console.log(`🔒 [権限チェック] ${subTab.id} を非表示（管理者のみ固定）`);
-          return;
+          if (permissionId === 'owner') {
+            // 管理者は表示
+            console.log(`✅ [権限チェック] ${subTab.id} を表示（管理者）`);
+          } else {
+            hideTab(subTab.tabId, subTab.paneId);
+            console.log(`🔒 [権限チェック] ${subTab.id} を非表示（管理者のみ固定）`);
+            return;
+          }
         }
 
-        const perm = menuPerms[subTab.id] || { visibleTo: ['owner'] };
+        // Firestoreに設定がない場合のデフォルト値を決定
+        // defaultOwnerOnly: false → 全員に表示（owner, employee, staff, leader, outsource）
+        // defaultOwnerOnly: true → 管理者のみ
+        const defaultVisibleTo = subTab.defaultOwnerOnly === false
+          ? ['owner', 'employee', 'staff', 'leader', 'outsource']
+          : ['owner'];
+        const perm = menuPerms[subTab.id] || { visibleTo: defaultVisibleTo };
         const isVisible = perm.visibleTo.includes(permissionId);
 
         if (isVisible) {
