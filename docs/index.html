@@ -4316,9 +4316,27 @@
               userVisibleOnly: true,
               applicationServerKey: VAPID_PUBLIC_KEY
             });
-            // サブスクリプションのエンドポイントをトークンとして使用
-            currentToken = subscription.endpoint;
-            console.log('✅ [iOS PWA] Web Push サブスクリプション成功:', currentToken);
+
+            // サブスクリプションの完全情報をJSON形式で保存（Web Push送信に必要）
+            const subscriptionJson = subscription.toJSON();
+            const webPushData = {
+              endpoint: subscriptionJson.endpoint,
+              keys: {
+                p256dh: subscriptionJson.keys?.p256dh || '',
+                auth: subscriptionJson.keys?.auth || ''
+              }
+            };
+
+            // Web Pushサブスクリプションを識別できる形式でトークン化
+            // "webpush:" プレフィックスで識別可能にする
+            currentToken = 'webpush:' + btoa(JSON.stringify(webPushData));
+
+            // 完全なサブスクリプション情報をlocalStorageに保存
+            localStorage.setItem('reborn_webpush_subscription', JSON.stringify(webPushData));
+
+            console.log('✅ [iOS PWA] Web Push サブスクリプション成功');
+            console.log('  📍 Endpoint:', subscriptionJson.endpoint.substring(0, 50) + '...');
+            console.log('  🔑 Keys: p256dh=' + (webPushData.keys.p256dh ? '有り' : 'なし') + ', auth=' + (webPushData.keys.auth ? '有り' : 'なし'));
           } catch (pushError) {
             console.error('❌ [iOS PWA] Web Push サブスクリプション失敗:', pushError);
             // エラーでも通知許可は取得できているので続行

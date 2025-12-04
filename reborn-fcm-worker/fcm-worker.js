@@ -2,13 +2,15 @@
  * REBORN FCM Worker
  *
  * Endpoints:
- * - POST /send - Send push notifications via FCM HTTP v1 API
+ * - POST /send - Send push notifications via FCM HTTP v1 API or Web Push
  * - POST /send-email - Send email notifications via Resend
  *
  * Required Environment Variables (Secrets):
  * - FIREBASE_SERVICE_ACCOUNT: Firebase Service Account JSON string
  * - FIREBASE_PROJECT_ID: Firebase project ID (e.g., "reborn-chat")
  * - RESEND_API_KEY: Resend API key for email
+ * - VAPID_PRIVATE_KEY: VAPID private key for Web Push (Base64 encoded)
+ * - VAPID_PUBLIC_KEY: VAPID public key for Web Push (Base64 encoded)
  */
 
 // CORS headers for all responses
@@ -40,7 +42,7 @@ export default {
 
       // Health check
       if (request.method === 'GET' && path === '/health') {
-        return jsonResponse({ status: 'ok', service: 'reborn-fcm-worker', version: 'v2-fcm-http-v1' });
+        return jsonResponse({ status: 'ok', service: 'reborn-fcm-worker', version: 'v3-webpush-support' });
       }
 
       // 404 for unknown routes
@@ -54,112 +56,151 @@ export default {
 };
 
 /**
- * Handle push notification requests using FCM HTTP v1 API
+ * Handle push notification requests
+ * Supports both FCM tokens and Web Push subscriptions
  * POST /send
  * Body: { tokens: string[], title: string, body: string, data?: object }
  */
 async function handlePushNotification(request, env) {
-  console.log('[FCM] handlePushNotification called');
+  console.log('[Push] handlePushNotification called');
 
   const { tokens, title, body, data } = await request.json();
 
   if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
-    console.log('[FCM] Error: tokens array is required');
+    console.log('[Push] Error: tokens array is required');
     return jsonResponse({ error: 'tokens array is required' }, 400);
   }
 
   if (!title || !body) {
-    console.log('[FCM] Error: title and body are required');
+    console.log('[Push] Error: title and body are required');
     return jsonResponse({ error: 'title and body are required' }, 400);
   }
 
-  // Check required environment variables
-  if (!env.FIREBASE_SERVICE_ACCOUNT) {
-    console.error('[FCM] Error: FIREBASE_SERVICE_ACCOUNT not configured');
-    return jsonResponse({ error: 'FIREBASE_SERVICE_ACCOUNT not configured' }, 500);
-  }
-
-  if (!env.FIREBASE_PROJECT_ID) {
-    console.error('[FCM] Error: FIREBASE_PROJECT_ID not configured');
-    return jsonResponse({ error: 'FIREBASE_PROJECT_ID not configured' }, 500);
-  }
-
-  console.log('[FCM] Sending to', tokens.length, 'tokens');
-  console.log('[FCM] Title:', title);
-  console.log('[FCM] Body:', body);
+  console.log('[Push] Sending to', tokens.length, 'tokens');
+  console.log('[Push] Title:', title);
+  console.log('[Push] Body:', body);
 
   const results = [];
   const errors = [];
 
-  try {
-    // Get Firebase Access Token using Service Account
-    const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
-    console.log('[FCM] Service Account loaded:', serviceAccount.client_email);
+  // Separate tokens by type
+  const webPushTokens = [];
+  const fcmTokens = [];
 
-    const accessToken = await getFirebaseAccessToken(serviceAccount);
-    console.log('[FCM] Access token obtained');
-
-    // FCM HTTP v1 API endpoint
-    const fcmUrl = `https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`;
-
-    for (const token of tokens) {
-      try {
-        const message = {
-          message: {
-            token: token,
-            notification: {
-              title: title,
-              body: body,
-            },
-            data: {
-              ...(data || {}),
-              click_action: 'https://furira.jp'
-            },
-            webpush: {
-              notification: {
-                icon: '/icons/icon-192.png',
-                badge: '/icons/badge-72.png',
-              },
-              fcm_options: {
-                link: 'https://furira.jp'
-              }
-            }
-          }
-        };
-
-        console.log('[FCM] Sending to token:', token.substring(0, 30) + '...');
-
-        const response = await fetch(fcmUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(message),
-        });
-
-        const responseText = await response.text();
-        console.log('[FCM] Response status:', response.status);
-        console.log('[FCM] Response body:', responseText.substring(0, 200));
-
-        if (response.ok) {
-          const result = JSON.parse(responseText);
-          results.push({ token: token.substring(0, 20) + '...', success: true, messageId: result.name });
-        } else {
-          const errorResult = JSON.parse(responseText);
-          errors.push({ token: token.substring(0, 20) + '...', error: errorResult.error?.message || responseText });
-        }
-      } catch (error) {
-        console.error('[FCM] Error sending to token:', error);
-        errors.push({ token: token.substring(0, 20) + '...', error: error.message });
-      }
+  for (const token of tokens) {
+    if (token.startsWith('webpush:')) {
+      webPushTokens.push(token);
+    } else if (token.startsWith('ios-pwa-') || token.startsWith('https://')) {
+      // Old format Web Push endpoints - skip with warning
+      console.log('[Push] Skipping old format token:', token.substring(0, 30) + '...');
+      errors.push({ token: token.substring(0, 20) + '...', error: 'Old format token - please re-register' });
+    } else {
+      fcmTokens.push(token);
     }
-  } catch (error) {
-    console.error('[FCM] Fatal error:', error);
-    return jsonResponse({ error: error.message, phase: 'authentication' }, 500);
   }
 
-  console.log('[FCM] Results:', results.length, 'success,', errors.length, 'failed');
+  // Handle Web Push tokens
+  if (webPushTokens.length > 0) {
+    console.log('[WebPush] Processing', webPushTokens.length, 'Web Push tokens');
+
+    if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) {
+      console.error('[WebPush] VAPID keys not configured');
+      for (const token of webPushTokens) {
+        errors.push({ token: token.substring(0, 20) + '...', error: 'VAPID keys not configured' });
+      }
+    } else {
+      for (const token of webPushTokens) {
+        try {
+          const result = await sendWebPush(token, { title, body, data }, env);
+          if (result.success) {
+            results.push({ token: token.substring(0, 20) + '...', success: true, type: 'webpush' });
+          } else {
+            errors.push({ token: token.substring(0, 20) + '...', error: result.error, type: 'webpush' });
+          }
+        } catch (error) {
+          console.error('[WebPush] Error:', error);
+          errors.push({ token: token.substring(0, 20) + '...', error: error.message, type: 'webpush' });
+        }
+      }
+    }
+  }
+
+  // Handle FCM tokens
+  if (fcmTokens.length > 0) {
+    console.log('[FCM] Processing', fcmTokens.length, 'FCM tokens');
+
+    if (!env.FIREBASE_SERVICE_ACCOUNT || !env.FIREBASE_PROJECT_ID) {
+      console.error('[FCM] Firebase configuration missing');
+      for (const token of fcmTokens) {
+        errors.push({ token: token.substring(0, 20) + '...', error: 'Firebase not configured' });
+      }
+    } else {
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT);
+        const accessToken = await getFirebaseAccessToken(serviceAccount);
+        const fcmUrl = `https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`;
+
+        for (const token of fcmTokens) {
+          try {
+            const message = {
+              message: {
+                token: token,
+                notification: {
+                  title: title,
+                  body: body,
+                },
+                data: {
+                  ...(data || {}),
+                  click_action: 'https://furira.jp'
+                },
+                webpush: {
+                  notification: {
+                    icon: '/icons/icon-192.png',
+                    badge: '/icons/badge-72.png',
+                  },
+                  fcm_options: {
+                    link: 'https://furira.jp'
+                  }
+                }
+              }
+            };
+
+            console.log('[FCM] Sending to token:', token.substring(0, 30) + '...');
+
+            const response = await fetch(fcmUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(message),
+            });
+
+            const responseText = await response.text();
+            console.log('[FCM] Response status:', response.status);
+
+            if (response.ok) {
+              const result = JSON.parse(responseText);
+              results.push({ token: token.substring(0, 20) + '...', success: true, messageId: result.name, type: 'fcm' });
+            } else {
+              const errorResult = JSON.parse(responseText);
+              errors.push({ token: token.substring(0, 20) + '...', error: errorResult.error?.message || responseText, type: 'fcm' });
+            }
+          } catch (error) {
+            console.error('[FCM] Error sending to token:', error);
+            errors.push({ token: token.substring(0, 20) + '...', error: error.message, type: 'fcm' });
+          }
+        }
+      } catch (error) {
+        console.error('[FCM] Fatal error:', error);
+        for (const token of fcmTokens) {
+          errors.push({ token: token.substring(0, 20) + '...', error: error.message, type: 'fcm' });
+        }
+      }
+    }
+  }
+
+  console.log('[Push] Results:', results.length, 'success,', errors.length, 'failed');
 
   return jsonResponse({
     success: errors.length === 0,
@@ -168,6 +209,276 @@ async function handlePushNotification(request, env) {
     results,
     errors: errors.length > 0 ? errors : undefined
   });
+}
+
+/**
+ * Send Web Push notification using RFC 8030 protocol
+ */
+async function sendWebPush(token, notification, env) {
+  console.log('[WebPush] Sending notification...');
+
+  // Decode the subscription from token
+  let subscription;
+  try {
+    const encodedData = token.substring('webpush:'.length);
+    subscription = JSON.parse(atob(encodedData));
+    console.log('[WebPush] Decoded subscription endpoint:', subscription.endpoint.substring(0, 50) + '...');
+  } catch (e) {
+    console.error('[WebPush] Failed to decode token:', e);
+    return { success: false, error: 'Invalid Web Push token format' };
+  }
+
+  if (!subscription.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
+    console.error('[WebPush] Incomplete subscription data');
+    return { success: false, error: 'Incomplete subscription (missing endpoint or keys)' };
+  }
+
+  try {
+    // Prepare the payload
+    const payload = JSON.stringify({
+      title: notification.title,
+      body: notification.body,
+      icon: '/icon-180.png',
+      badge: '/icon-180.png',
+      data: {
+        ...(notification.data || {}),
+        url: 'https://furira.jp'
+      }
+    });
+
+    // Generate VAPID headers
+    const vapidHeaders = await generateVapidHeaders(
+      subscription.endpoint,
+      env.VAPID_PUBLIC_KEY,
+      env.VAPID_PRIVATE_KEY
+    );
+
+    // Encrypt the payload using aes128gcm
+    const encryptedPayload = await encryptPayload(
+      payload,
+      subscription.keys.p256dh,
+      subscription.keys.auth
+    );
+
+    // Send the request
+    const response = await fetch(subscription.endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': vapidHeaders.authorization,
+        'Content-Type': 'application/octet-stream',
+        'Content-Encoding': 'aes128gcm',
+        'TTL': '86400',
+        ...vapidHeaders.crypto
+      },
+      body: encryptedPayload
+    });
+
+    console.log('[WebPush] Response status:', response.status);
+
+    if (response.status === 201 || response.status === 200) {
+      console.log('[WebPush] ✅ Successfully sent');
+      return { success: true };
+    } else if (response.status === 410) {
+      console.log('[WebPush] ❌ Subscription expired');
+      return { success: false, error: 'Subscription expired (410 Gone)' };
+    } else {
+      const responseText = await response.text();
+      console.log('[WebPush] ❌ Error:', response.status, responseText);
+      return { success: false, error: `HTTP ${response.status}: ${responseText}` };
+    }
+  } catch (error) {
+    console.error('[WebPush] Exception:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Generate VAPID headers for Web Push authentication
+ */
+async function generateVapidHeaders(endpoint, publicKeyBase64, privateKeyBase64) {
+  const endpointUrl = new URL(endpoint);
+  const audience = `${endpointUrl.protocol}//${endpointUrl.host}`;
+
+  // Create JWT payload
+  const now = Math.floor(Date.now() / 1000);
+  const jwtHeader = { typ: 'JWT', alg: 'ES256' };
+  const jwtPayload = {
+    aud: audience,
+    exp: now + 86400, // 24 hours
+    sub: 'mailto:support@furira.jp'
+  };
+
+  // Import VAPID private key for signing
+  const privateKeyBytes = base64UrlDecode(privateKeyBase64);
+  const privateKey = await crypto.subtle.importKey(
+    'pkcs8',
+    createPKCS8FromRaw(privateKeyBytes),
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    false,
+    ['sign']
+  );
+
+  // Create and sign JWT
+  const encoder = new TextEncoder();
+  const headerB64 = base64UrlEncode(JSON.stringify(jwtHeader));
+  const payloadB64 = base64UrlEncode(JSON.stringify(jwtPayload));
+  const signatureInput = `${headerB64}.${payloadB64}`;
+
+  const signature = await crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    privateKey,
+    encoder.encode(signatureInput)
+  );
+
+  // Convert signature to JWT format (DER to raw)
+  const signatureB64 = base64UrlEncode(new Uint8Array(signature));
+  const jwt = `${signatureInput}.${signatureB64}`;
+
+  return {
+    authorization: `vapid t=${jwt}, k=${publicKeyBase64}`,
+    crypto: {}
+  };
+}
+
+/**
+ * Encrypt payload for Web Push using aes128gcm
+ * Implements RFC 8291 (Message Encryption for Web Push)
+ */
+async function encryptPayload(payload, p256dhBase64, authBase64) {
+  const encoder = new TextEncoder();
+  const payloadBytes = encoder.encode(payload);
+
+  // Decode subscriber's public key and auth secret
+  const subscriberPublicKeyBytes = base64UrlDecode(p256dhBase64);
+  const authSecret = base64UrlDecode(authBase64);
+
+  // Import subscriber's public key
+  const subscriberPublicKey = await crypto.subtle.importKey(
+    'raw',
+    subscriberPublicKeyBytes,
+    { name: 'ECDH', namedCurve: 'P-256' },
+    false,
+    []
+  );
+
+  // Generate ephemeral key pair
+  const ephemeralKeyPair = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    ['deriveBits']
+  );
+
+  // Derive shared secret
+  const sharedSecret = await crypto.subtle.deriveBits(
+    { name: 'ECDH', public: subscriberPublicKey },
+    ephemeralKeyPair.privateKey,
+    256
+  );
+
+  // Export ephemeral public key
+  const ephemeralPublicKey = await crypto.subtle.exportKey('raw', ephemeralKeyPair.publicKey);
+  const ephemeralPublicKeyBytes = new Uint8Array(ephemeralPublicKey);
+
+  // Derive encryption key using HKDF
+  const sharedSecretKey = await crypto.subtle.importKey(
+    'raw',
+    sharedSecret,
+    { name: 'HKDF' },
+    false,
+    ['deriveBits']
+  );
+
+  // PRK = HKDF-Extract(salt=auth_secret, IKM=shared_secret)
+  // Key = HKDF-Expand(PRK, info="Content-Encoding: aes128gcm" + 0x00, len=16)
+  // Nonce = HKDF-Expand(PRK, info="Content-Encoding: nonce" + 0x00, len=12)
+
+  // Create info for key derivation
+  const keyInfo = createInfo('aesgcm', subscriberPublicKeyBytes, ephemeralPublicKeyBytes);
+  const nonceInfo = createInfo('nonce', subscriberPublicKeyBytes, ephemeralPublicKeyBytes);
+
+  // First, derive PRK from auth and shared secret
+  const prkKey = await crypto.subtle.importKey(
+    'raw',
+    authSecret,
+    { name: 'HKDF' },
+    false,
+    ['deriveBits']
+  );
+
+  // Derive IKM from shared secret
+  const ikm = await deriveHKDF(prkKey, new Uint8Array(sharedSecret), concat(
+    encoder.encode('WebPush: info\x00'),
+    subscriberPublicKeyBytes,
+    ephemeralPublicKeyBytes
+  ), 32);
+
+  const ikmKey = await crypto.subtle.importKey(
+    'raw',
+    ikm,
+    { name: 'HKDF' },
+    false,
+    ['deriveBits']
+  );
+
+  // Derive CEK (Content Encryption Key)
+  const cek = await deriveHKDF(ikmKey, new Uint8Array(0), encoder.encode('Content-Encoding: aes128gcm\x00'), 16);
+
+  // Derive nonce
+  const nonce = await deriveHKDF(ikmKey, new Uint8Array(0), encoder.encode('Content-Encoding: nonce\x00'), 12);
+
+  // Import CEK for AES-GCM
+  const aesKey = await crypto.subtle.importKey(
+    'raw',
+    cek,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt']
+  );
+
+  // Add padding delimiter
+  const paddedPayload = concat(payloadBytes, new Uint8Array([2])); // 2 = final record
+
+  // Encrypt
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce },
+    aesKey,
+    paddedPayload
+  );
+
+  // Build aes128gcm encoded message
+  // Format: salt (16) + rs (4) + idlen (1) + keyid (65) + ciphertext
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const rs = new Uint8Array([0, 0, 16, 1]); // Record size: 4097
+  const idlen = new Uint8Array([65]); // Key ID length
+
+  return concat(
+    salt,
+    rs,
+    idlen,
+    ephemeralPublicKeyBytes,
+    new Uint8Array(encrypted)
+  );
+}
+
+/**
+ * Derive key material using HKDF
+ */
+async function deriveHKDF(key, salt, info, length) {
+  const derived = await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt, info },
+    key,
+    length * 8
+  );
+  return new Uint8Array(derived);
+}
+
+/**
+ * Create info parameter for HKDF
+ */
+function createInfo(type, subscriberKey, senderKey) {
+  const encoder = new TextEncoder();
+  const typeBytes = encoder.encode(`Content-Encoding: ${type}\x00`);
+  return concat(typeBytes, subscriberKey, senderKey);
 }
 
 /**
@@ -214,7 +525,7 @@ async function getFirebaseAccessToken(serviceAccount) {
     encoder.encode(message)
   );
 
-  const jwt = `${message}.${base64UrlEncode(signature)}`;
+  const jwt = `${message}.${base64UrlEncode(new Uint8Array(signature))}`;
 
   // Exchange JWT for Access Token
   const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -329,13 +640,31 @@ async function handleSendEmail(request, env) {
  * Utility functions
  */
 function base64UrlEncode(data) {
-  if (data instanceof ArrayBuffer) {
-    data = String.fromCharCode(...new Uint8Array(data));
+  let str;
+  if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+    const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+    str = String.fromCharCode(...bytes);
+  } else {
+    str = data;
   }
-  return btoa(data)
+  return btoa(str)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=/g, '');
+}
+
+function base64UrlDecode(str) {
+  // Add padding if needed
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) {
+    str += '=';
+  }
+  const binary = atob(str);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 function pemToBinary(pem) {
@@ -349,6 +678,42 @@ function pemToBinary(pem) {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes.buffer;
+}
+
+/**
+ * Create PKCS8 wrapper for raw EC private key
+ */
+function createPKCS8FromRaw(rawKey) {
+  // PKCS8 header for P-256 EC key
+  const header = new Uint8Array([
+    0x30, 0x81, 0x87, 0x02, 0x01, 0x00, 0x30, 0x13,
+    0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02,
+    0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d,
+    0x03, 0x01, 0x07, 0x04, 0x6d, 0x30, 0x6b, 0x02,
+    0x01, 0x01, 0x04, 0x20
+  ]);
+  const footer = new Uint8Array([
+    0xa1, 0x44, 0x03, 0x42, 0x00, 0x04
+  ]);
+
+  // For now, return raw key wrapped minimally
+  // If rawKey is already 32 bytes, wrap it
+  if (rawKey.length === 32) {
+    return concat(header, rawKey, footer, new Uint8Array(64));
+  }
+  // If it's already a full PKCS8 key, return as-is
+  return rawKey;
+}
+
+function concat(...arrays) {
+  const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const arr of arrays) {
+    result.set(arr, offset);
+    offset += arr.length;
+  }
+  return result;
 }
 
 function escapeHtml(text) {
