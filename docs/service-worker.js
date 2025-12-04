@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v41-original'; // 元のコードに完全復元
+const CACHE_NAME = 'reborn-v42-badge-fix'; // バッジをwaitUntil内に移動
 const urlsToCache = [
   '/',
   '/index.html',
@@ -118,28 +118,14 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  // アプリバッジを更新（通知データにバッジカウントが含まれている場合）
-  // 重要: Service Workerでは self.registration.setAppBadge() を使用
   console.log('[Service Worker] Badge API対応:', 'setAppBadge' in self.registration);
   console.log('[Service Worker] 通知データ:', JSON.stringify(notificationData.data));
 
-  if ('setAppBadge' in self.registration) {
-    const badgeCountRaw = notificationData.data?.badgeCount;
-    console.log('[Service Worker] badgeCountRaw:', badgeCountRaw);
-    if (badgeCountRaw !== undefined && badgeCountRaw !== null) {
-      const badgeCount = parseInt(badgeCountRaw, 10) || 1;
-      console.log('[Service Worker] setAppBadge呼び出し:', badgeCount);
-      self.registration.setAppBadge(badgeCount)
-        .then(() => console.log('[Service Worker] ✅ バッジ設定成功:', badgeCount))
-        .catch(err => console.error('[Service Worker] ❌ Badge API エラー:', err.name, err.message));
-    } else {
-      console.log('[Service Worker] badgeCountなし - バッジ設定スキップ');
-    }
-  } else {
-    console.log('[Service Worker] Badge API未対応');
-  }
+  // 通知表示とバッジ設定を両方waitUntilに含める（バックグラウンド終了防止）
+  const promises = [];
 
-  event.waitUntil(
+  // 通知表示（必須）
+  promises.push(
     self.registration.showNotification(notificationData.title, {
       body: notificationData.body,
       icon: notificationData.icon,
@@ -149,6 +135,27 @@ self.addEventListener('push', (event) => {
       tag: 'reborn-notification'
     })
   );
+
+  // バッジ設定（waitUntil内で実行することでバックグラウンドでも確実に完了）
+  if ('setAppBadge' in self.registration) {
+    const badgeCountRaw = notificationData.data?.badgeCount;
+    console.log('[Service Worker] badgeCountRaw:', badgeCountRaw);
+    if (badgeCountRaw !== undefined && badgeCountRaw !== null) {
+      const badgeCount = parseInt(badgeCountRaw, 10) || 1;
+      console.log('[Service Worker] setAppBadge呼び出し:', badgeCount);
+      promises.push(
+        self.registration.setAppBadge(badgeCount)
+          .then(() => console.log('[Service Worker] ✅ バッジ設定成功:', badgeCount))
+          .catch(err => console.error('[Service Worker] ❌ Badge API エラー:', err.name, err.message))
+      );
+    } else {
+      console.log('[Service Worker] badgeCountなし - バッジ設定スキップ');
+    }
+  } else {
+    console.log('[Service Worker] Badge API未対応');
+  }
+
+  event.waitUntil(Promise.all(promises));
 });
 
 // 通知クリック時の処理
