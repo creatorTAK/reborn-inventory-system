@@ -1,7 +1,7 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v36-force-update'; // 強制更新対応
+const CACHE_NAME = 'reborn-v37-badge-fix'; // Badge API修正
 const urlsToCache = [
   '/',
   '/index.html',
