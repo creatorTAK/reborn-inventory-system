@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-05 11:00 - アイコン選択を絵文字ピッカーに変更 -->
+  <!-- Cache Bust: 2025-12-05 11:30 - メンバー選択にユーザー検索機能を追加 -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -513,6 +513,45 @@
       background: #e2e8f0;
       transform: scale(0.95);
     }
+    /* メンバー検索スタイル */
+    .member-search-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .member-search-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    .member-search-input:focus {
+      outline: none;
+      border-color: var(--reborn-primary);
+    }
+    .member-search-input::placeholder {
+      color: #a0aec0;
+    }
+    .member-count {
+      font-size: 12px;
+      color: #718096;
+      white-space: nowrap;
+    }
+    .no-results {
+      text-align: center;
+      padding: 20px;
+      color: #718096;
+    }
+    .no-results-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    .no-results-text {
+      font-size: 14px;
+    }
     .modal-buttons {
       display: flex;
       gap: 12px;
@@ -833,6 +872,10 @@
           <label class="form-label">メンバー選択 *</label>
           <div style="margin-bottom: 8px; font-size: 14px; color: #718096;">
             グループに参加するメンバーを選択してください（複数選択可）
+          </div>
+          <div class="member-search-container">
+            <input type="text" class="member-search-input" id="memberSearchInput" placeholder="🔍 ユーザー名で検索..." oninput="filterGroupMembers(this.value)">
+            <span class="member-count" id="memberCount"></span>
           </div>
           <div id="groupMemberListContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px;">
             <div class="loading">メンバー一覧を読み込んでいます...</div>
@@ -1681,12 +1724,18 @@
 
     // グループメンバー選択用の配列
     let selectedGroupMembers = [];
+    // フィルター用にユーザーリストを保存
+    let groupMemberUsersList = [];
 
     // グループメンバーリストを読み込む
     async function loadGroupMemberList() {
       console.log('[Group Room] メンバー一覧を読み込み中...');
       const container = document.getElementById('groupMemberListContainer');
       container.innerHTML = '<div class="loading">メンバー一覧を読み込んでいます...</div>';
+
+      // 検索入力をリセット
+      const searchInput = document.getElementById('memberSearchInput');
+      if (searchInput) searchInput.value = '';
 
       try {
         let users;
@@ -1711,6 +1760,8 @@
         console.log('[Group Room] ユーザー一覧取得成功:', users.length + '件');
 
         if (!users || users.length === 0) {
+          groupMemberUsersList = [];
+          updateMemberCount(0, 0);
           container.innerHTML = `
             <div class="empty-state">
               <div class="empty-state-icon">👥</div>
@@ -1720,10 +1771,11 @@
           return;
         }
 
-        // 自分自身を除外
-        const filteredUsers = users.filter(u => u.userName !== currentUserName);
+        // 自分自身を除外してグローバル変数に保存
+        groupMemberUsersList = users.filter(u => u.userName !== currentUserName);
 
-        if (filteredUsers.length === 0) {
+        if (groupMemberUsersList.length === 0) {
+          updateMemberCount(0, 0);
           container.innerHTML = `
             <div class="empty-state">
               <div class="empty-state-icon">👥</div>
@@ -1733,68 +1785,12 @@
           return;
         }
 
-        // メンバー一覧を表示（チェックボックス付き）
-        container.innerHTML = '';
-        filteredUsers.forEach(user => {
-          const item = document.createElement('div');
-          item.className = 'user-list-item-checkbox';
-          item.onclick = () => toggleGroupMember(user.userName, item);
-
-          // チェックボックス
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.className = 'user-checkbox';
-          checkbox.onclick = (e) => {
-            e.stopPropagation();
-            toggleGroupMember(user.userName, item);
-          };
-
-          // ユーザーアイコン表示
-          let iconElement;
-          if (user.userIconUrl) {
-            iconElement = document.createElement('div');
-            iconElement.className = 'user-icon';
-
-            const img = document.createElement('img');
-            img.src = user.userIconUrl;
-            img.alt = user.userName;
-            img.onerror = function() {
-              const placeholder = document.createElement('div');
-              placeholder.className = 'user-icon-placeholder';
-              placeholder.textContent = user.userName.charAt(0);
-              this.parentElement.replaceWith(placeholder);
-            };
-
-            iconElement.appendChild(img);
-          } else {
-            iconElement = document.createElement('div');
-            iconElement.className = 'user-icon-placeholder';
-            iconElement.textContent = user.userName.charAt(0);
-          }
-
-          const info = document.createElement('div');
-          info.className = 'user-info';
-
-          const name = document.createElement('div');
-          name.className = 'user-name';
-          name.textContent = user.userName;
-
-          const permission = document.createElement('div');
-          permission.className = 'user-permission';
-          permission.textContent = user.permissionDisplay || 'スタッフ';
-
-          info.appendChild(name);
-          info.appendChild(permission);
-
-          item.appendChild(checkbox);
-          item.appendChild(iconElement);
-          item.appendChild(info);
-
-          container.appendChild(item);
-        });
+        // メンバー一覧を表示
+        renderGroupMemberList(groupMemberUsersList);
 
       } catch (error) {
         console.error('[Group Room] ユーザー一覧取得エラー:', error);
+        groupMemberUsersList = [];
         container.innerHTML = `
           <div class="empty-state">
             <div class="empty-state-icon">⚠️</div>
@@ -1803,6 +1799,120 @@
         `;
       }
     }
+
+    // メンバー数を更新
+    function updateMemberCount(shown, total) {
+      const countElement = document.getElementById('memberCount');
+      if (countElement) {
+        if (shown === total) {
+          countElement.textContent = `${total}人`;
+        } else {
+          countElement.textContent = `${shown}/${total}人`;
+        }
+      }
+    }
+
+    // メンバーリストをレンダリング
+    function renderGroupMemberList(users) {
+      const container = document.getElementById('groupMemberListContainer');
+      container.innerHTML = '';
+
+      updateMemberCount(users.length, groupMemberUsersList.length);
+
+      if (users.length === 0) {
+        container.innerHTML = `
+          <div class="no-results">
+            <div class="no-results-icon">🔍</div>
+            <div class="no-results-text">該当するユーザーが見つかりません</div>
+          </div>
+        `;
+        return;
+      }
+
+      users.forEach(user => {
+        const item = document.createElement('div');
+        item.className = 'user-list-item-checkbox';
+        item.dataset.userName = user.userName;
+
+        // 既に選択されている場合はクラスを追加
+        if (selectedGroupMembers.includes(user.userName)) {
+          item.classList.add('selected');
+        }
+
+        item.onclick = () => toggleGroupMember(user.userName, item);
+
+        // チェックボックス
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'user-checkbox';
+        checkbox.checked = selectedGroupMembers.includes(user.userName);
+        checkbox.onclick = (e) => {
+          e.stopPropagation();
+          toggleGroupMember(user.userName, item);
+        };
+
+        // ユーザーアイコン表示
+        let iconElement;
+        if (user.userIconUrl) {
+          iconElement = document.createElement('div');
+          iconElement.className = 'user-icon';
+
+          const img = document.createElement('img');
+          img.src = user.userIconUrl;
+          img.alt = user.userName;
+          img.onerror = function() {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'user-icon-placeholder';
+            placeholder.textContent = user.userName.charAt(0);
+            this.parentElement.replaceWith(placeholder);
+          };
+
+          iconElement.appendChild(img);
+        } else {
+          iconElement = document.createElement('div');
+          iconElement.className = 'user-icon-placeholder';
+          iconElement.textContent = user.userName.charAt(0);
+        }
+
+        const info = document.createElement('div');
+        info.className = 'user-info';
+
+        const name = document.createElement('div');
+        name.className = 'user-name';
+        name.textContent = user.userName;
+
+        const permission = document.createElement('div');
+        permission.className = 'user-permission';
+        permission.textContent = user.permissionDisplay || 'スタッフ';
+
+        info.appendChild(name);
+        info.appendChild(permission);
+
+        item.appendChild(checkbox);
+        item.appendChild(iconElement);
+        item.appendChild(info);
+
+        container.appendChild(item);
+      });
+    }
+
+    // メンバー検索フィルター
+    window.filterGroupMembers = function(searchTerm) {
+      const term = searchTerm.toLowerCase().trim();
+
+      if (!term) {
+        // 検索語が空の場合は全員表示
+        renderGroupMemberList(groupMemberUsersList);
+        return;
+      }
+
+      // ユーザー名でフィルター
+      const filtered = groupMemberUsersList.filter(user =>
+        user.userName.toLowerCase().includes(term)
+      );
+
+      renderGroupMemberList(filtered);
+    };
 
     // グループメンバーの選択切り替え
     function toggleGroupMember(userName, itemElement) {
