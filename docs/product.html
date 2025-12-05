@@ -991,6 +991,85 @@ style="display:none;">削除</button>
     }
   };
 
+  // 登録モード（設定から読み込み）
+  window.registrationMode = 'individual';
+
+  // プラットフォームタブを設定に基づいて初期化
+  function initPlatformTabs() {
+    try {
+      const config = JSON.parse(localStorage.getItem('config') || '{}');
+      const platformSettings = config.プラットフォーム設定;
+
+      if (!platformSettings) {
+        console.log('[Platform] 設定なし。デフォルト表示（メルカリのみ）');
+        // デフォルト：メルカリのみ表示
+        hidePlatformTabsExcept(['mercari']);
+        return;
+      }
+
+      console.log('[Platform] 設定を読み込み:', platformSettings);
+
+      // 登録モードを設定
+      window.registrationMode = platformSettings.registrationMode || 'individual';
+
+      // 有効なプラットフォームのみ表示
+      if (platformSettings.platforms && Array.isArray(platformSettings.platforms)) {
+        const enabledPlatforms = platformSettings.platforms
+          .filter(p => p.enabled)
+          .map(p => p.id);
+
+        console.log('[Platform] 有効なプラットフォーム:', enabledPlatforms);
+
+        if (enabledPlatforms.length > 0) {
+          hidePlatformTabsExcept(enabledPlatforms);
+
+          // 最初の有効なプラットフォームを選択
+          selectPlatform(enabledPlatforms[0]);
+        } else {
+          // 何も有効でない場合はメルカリをデフォルト表示
+          hidePlatformTabsExcept(['mercari']);
+        }
+      }
+
+      // 登録モードに応じてUIを調整
+      updateRegistrationModeUI();
+
+    } catch (e) {
+      console.error('[Platform] 初期化エラー:', e);
+      // エラー時はメルカリのみ表示
+      hidePlatformTabsExcept(['mercari']);
+    }
+  }
+
+  // 指定されたプラットフォーム以外を非表示
+  function hidePlatformTabsExcept(enabledIds) {
+    const tabs = document.querySelectorAll('.platform-tab');
+    tabs.forEach(tab => {
+      const platformId = tab.dataset.platform;
+      if (enabledIds.includes(platformId)) {
+        tab.style.display = '';
+      } else {
+        tab.style.display = 'none';
+      }
+    });
+
+    // タブが1つだけなら、タブバー自体を非表示にする（シンプルに）
+    const visibleTabs = document.querySelectorAll('.platform-tab:not([style*="display: none"])');
+    const tabsContainer = document.querySelector('.platform-tabs-container');
+    if (tabsContainer) {
+      tabsContainer.style.display = visibleTabs.length <= 1 ? 'none' : '';
+    }
+  }
+
+  // 登録モードに応じたUI調整
+  function updateRegistrationModeUI() {
+    // 将来実装: 一括登録モードの場合のUI変更
+    if (window.registrationMode === 'batch') {
+      console.log('[Platform] 一括登録モード - UI調整（将来実装）');
+      // 例: 登録ボタンのテキスト変更、複数プラットフォーム同時選択UI等
+    }
+  }
+
   // プラットフォーム切り替え関数
   function selectPlatform(platformId) {
     const config = window.platformConfig[platformId];
@@ -1025,6 +1104,11 @@ style="display:none;">削除</button>
     // バリデーションルールを変更
     console.log('[Platform] フォーム更新:', platformId);
   }
+
+  // ページ読み込み時にプラットフォームタブを初期化
+  document.addEventListener('DOMContentLoaded', function() {
+    initPlatformTabs();
+  });
 </script>
 
 <!-- 外部JavaScriptファイル（トークン削減、ブラウザキャッシュ活用）-->
