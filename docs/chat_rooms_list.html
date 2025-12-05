@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-11-27 16:00 - 検索キーワードをトークルームに引き継ぐ機能追加 -->
+  <!-- Cache Bust: 2025-12-05 11:00 - アイコン選択を絵文字ピッカーに変更 -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -391,6 +391,128 @@
       background: white;
       cursor: pointer;
     }
+    /* 絵文字ピッカースタイル */
+    .emoji-picker-button {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 16px;
+      background: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: border-color 0.2s;
+    }
+    .emoji-picker-button:hover {
+      border-color: var(--reborn-primary);
+    }
+    .emoji-picker-button .selected-emoji {
+      font-size: 24px;
+    }
+    .emoji-picker-button .button-text {
+      color: #4a5568;
+      flex: 1;
+      text-align: left;
+    }
+    .emoji-picker-button .change-icon {
+      color: #a0aec0;
+      font-size: 14px;
+    }
+    .emoji-picker-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+    }
+    .emoji-picker-modal.active {
+      display: flex;
+    }
+    .emoji-picker-content {
+      background: white;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 360px;
+      max-height: 70vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+    .emoji-picker-header {
+      padding: 16px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .emoji-picker-header h3 {
+      margin: 0;
+      font-size: 18px;
+      color: #2d3748;
+    }
+    .emoji-picker-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #a0aec0;
+      padding: 4px;
+    }
+    .emoji-categories {
+      display: flex;
+      gap: 4px;
+      padding: 12px;
+      border-bottom: 1px solid #e2e8f0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .emoji-category-btn {
+      background: none;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+      color: #718096;
+      transition: all 0.2s;
+    }
+    .emoji-category-btn.active {
+      background: var(--reborn-primary);
+      color: white;
+    }
+    .emoji-grid-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+    .emoji-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+    }
+    .emoji-item {
+      font-size: 24px;
+      padding: 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.2s;
+    }
+    .emoji-item:hover {
+      background: #edf2f7;
+    }
+    .emoji-item:active {
+      background: #e2e8f0;
+      transform: scale(0.95);
+    }
     .modal-buttons {
       display: flex;
       gap: 12px;
@@ -697,19 +819,13 @@
           />
         </div>
         <div class="form-group">
-          <label class="form-label" for="roomIconSelect">アイコン</label>
-          <select class="form-select" id="roomIconSelect">
-            <option value="💬">💬 チャット</option>
-            <option value="📢">📢 お知らせ</option>
-            <option value="💡">💡 アイデア</option>
-            <option value="📊">📊 会議</option>
-            <option value="🎯">🎯 プロジェクト</option>
-            <option value="📦">📦 在庫</option>
-            <option value="🚀">🚀 リリース</option>
-            <option value="🔧">🔧 メンテナンス</option>
-            <option value="🎉">🎉 イベント</option>
-            <option value="⭐">⭐ 重要</option>
-          </select>
+          <label class="form-label">アイコン</label>
+          <input type="hidden" id="roomIconSelect" value="💬">
+          <button type="button" class="emoji-picker-button" onclick="openEmojiPicker()">
+            <span class="selected-emoji" id="selectedEmojiPreview">💬</span>
+            <span class="button-text">タップして絵文字を選択</span>
+            <span class="change-icon">▼</span>
+          </button>
         </div>
 
         <!-- メンバー選択 -->
@@ -752,6 +868,24 @@
         <button type="button" class="modal-button secondary" onclick="closeDirectChatModal()">
           キャンセル
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 絵文字ピッカーモーダル -->
+  <div class="emoji-picker-modal" id="emojiPickerModal">
+    <div class="emoji-picker-content">
+      <div class="emoji-picker-header">
+        <h3>🎨 アイコンを選択</h3>
+        <button class="emoji-picker-close" onclick="closeEmojiPicker()">×</button>
+      </div>
+      <div class="emoji-categories" id="emojiCategories">
+        <!-- カテゴリボタンはJSで生成 -->
+      </div>
+      <div class="emoji-grid-container">
+        <div class="emoji-grid" id="emojiGrid">
+          <!-- 絵文字はJSで生成 -->
+        </div>
       </div>
     </div>
   </div>
@@ -799,6 +933,89 @@
       console.log('[DEBUG] currentUserName:', currentUserName);
       console.log('[DEBUG] currentUserEmail:', currentUserEmail);
     };
+
+    // ================================================================================
+    // 絵文字ピッカー機能
+    // ================================================================================
+    const emojiCategories = {
+      'よく使う': ['💬', '📢', '💡', '📊', '🎯', '📦', '🚀', '🔧', '🎉', '⭐', '❤️', '👍', '✅', '📝', '📌', '🔔', '💼', '📁', '🏠', '🛒'],
+      '顔・感情': ['😀', '😊', '🥰', '😎', '🤔', '😅', '🤣', '😢', '😤', '🥳', '🤩', '😇', '🙂', '😉', '🤗', '🤭', '😏', '😌', '🙃', '😋', '😛', '😜', '🤪', '😝'],
+      '仕事': ['💼', '📊', '📈', '📉', '💹', '🗂️', '📋', '📁', '📂', '🗃️', '🗄️', '📑', '🗒️', '📓', '📔', '📒', '📕', '📗', '📘', '📙', '📚', '📖', '🔖', '📎'],
+      'コミュニケーション': ['💬', '💭', '🗨️', '🗯️', '📢', '📣', '📯', '🔔', '🔕', '📱', '📲', '☎️', '📞', '📟', '📠', '✉️', '📧', '📨', '📩', '📤', '📥', '📦', '📫', '📪'],
+      'ツール': ['🔧', '🔨', '⚒️', '🛠️', '⚙️', '🔩', '🗜️', '⛏️', '🔗', '⛓️', '🧰', '🔐', '🔑', '🗝️', '🔒', '🔓', '🛡️', '⚔️', '💣', '🔪', '🗡️', '⚰️', '🪓', '🧲'],
+      'シンボル': ['⭐', '🌟', '✨', '💫', '⚡', '🔥', '💥', '❤️', '🧡', '💛', '💚', '💙', '💜', '🤎', '🖤', '🤍', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💝'],
+      '自然・動物': ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🌸', '🌺', '🌻', '🌹', '🌷', '🌱', '🌲', '🌳', '🍀'],
+      '食べ物': ['🍎', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍔', '🍕', '🍣', '🍜', '🍝', '🍦', '🍩', '🍪', '☕'],
+      '活動': ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🏓', '🏸', '🏒', '🎿', '⛷️', '🏂', '🎮', '🎯', '🎳', '🎰', '🎲', '🧩', '🎭', '🎨'],
+      '旅行': ['🚗', '🚕', '🚌', '🚎', '🏎️', '🚓', '🚑', '🚒', '🚐', '🛻', '🚚', '🚛', '🚜', '✈️', '🛫', '🛬', '🚀', '🛸', '🚁', '⛵', '🚤', '🛥️', '🛳️', '⚓'],
+      '天気・時間': ['☀️', '🌤️', '⛅', '🌥️', '☁️', '🌦️', '🌧️', '⛈️', '🌩️', '🌨️', '❄️', '💨', '🌪️', '🌈', '🌙', '🌛', '🌜', '⏰', '⏱️', '⏲️', '🕐', '🕑', '🕒', '📅']
+    };
+
+    let currentEmojiCategory = 'よく使う';
+
+    // 絵文字ピッカーを開く
+    window.openEmojiPicker = function() {
+      console.log('[Emoji Picker] 開く');
+      const modal = document.getElementById('emojiPickerModal');
+      modal.classList.add('active');
+      renderEmojiCategories();
+      renderEmojiGrid(currentEmojiCategory);
+    };
+
+    // 絵文字ピッカーを閉じる
+    window.closeEmojiPicker = function() {
+      console.log('[Emoji Picker] 閉じる');
+      document.getElementById('emojiPickerModal').classList.remove('active');
+    };
+
+    // カテゴリボタンを描画
+    function renderEmojiCategories() {
+      const container = document.getElementById('emojiCategories');
+      container.innerHTML = '';
+
+      Object.keys(emojiCategories).forEach(category => {
+        const btn = document.createElement('button');
+        btn.className = 'emoji-category-btn' + (category === currentEmojiCategory ? ' active' : '');
+        btn.textContent = category;
+        btn.onclick = () => {
+          currentEmojiCategory = category;
+          renderEmojiCategories();
+          renderEmojiGrid(category);
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    // 絵文字グリッドを描画
+    function renderEmojiGrid(category) {
+      const grid = document.getElementById('emojiGrid');
+      grid.innerHTML = '';
+
+      const emojis = emojiCategories[category] || [];
+      emojis.forEach(emoji => {
+        const item = document.createElement('div');
+        item.className = 'emoji-item';
+        item.textContent = emoji;
+        item.onclick = () => selectEmoji(emoji);
+        grid.appendChild(item);
+      });
+    }
+
+    // 絵文字を選択
+    function selectEmoji(emoji) {
+      console.log('[Emoji Picker] 選択:', emoji);
+      document.getElementById('roomIconSelect').value = emoji;
+      document.getElementById('selectedEmojiPreview').textContent = emoji;
+      closeEmojiPicker();
+    }
+
+    // 絵文字ピッカーモーダルの背景クリックで閉じる
+    document.getElementById('emojiPickerModal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeEmojiPicker();
+      }
+    });
+    // ================================================================================
 
     // PWA版：URLパラメータから取得（GASテンプレート変数は使用しない）
     const isPWAFlag        = true;  // PWA版として動作
@@ -2146,6 +2363,9 @@
       if (type === 'room') {
         // 新規ルーム作成モーダルを開く
         document.getElementById('createRoomModal').classList.add('active');
+        // 絵文字ピッカーをデフォルトにリセット
+        document.getElementById('roomIconSelect').value = '💬';
+        document.getElementById('selectedEmojiPreview').textContent = '💬';
         // グループメンバーリストを読み込む
         await loadGroupMemberList();
       } else if (type === 'direct') {
