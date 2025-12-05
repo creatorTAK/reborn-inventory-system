@@ -1532,7 +1532,20 @@
 
       const item = document.createElement('div');
       item.className = 'room-item';
-      item.onclick = () => openRoom(room.id);
+      item.onclick = () => {
+        // スワイプ中の場合はスワイプを閉じるだけ
+        if (currentlySwipedItem === item) {
+          item.style.transform = 'translateX(0)';
+          currentlySwipedItem = null;
+          return;
+        }
+        // 他のスワイプ中のアイテムがあれば閉じる
+        if (currentlySwipedItem) {
+          currentlySwipedItem.style.transform = 'translateX(0)';
+          currentlySwipedItem = null;
+        }
+        openRoom(room.id);
+      };
 
       // アイコン
       const icon = document.createElement('div');
@@ -2361,6 +2374,17 @@
       }
     }
 
+    // 現在スワイプ中のアイテムを追跡
+    let currentlySwipedItem = null;
+
+    // すべてのスワイプを閉じる
+    function closeAllSwipes() {
+      if (currentlySwipedItem) {
+        currentlySwipedItem.style.transform = 'translateX(0)';
+        currentlySwipedItem = null;
+      }
+    }
+
     // スワイプジェスチャー設定
     function setupSwipeGesture(wrapper, item) {
       let startX = 0;
@@ -2370,6 +2394,11 @@
       const leftButtonWidth = 70;   // ピン留めの幅
 
       item.addEventListener('touchstart', (e) => {
+        // 他のスワイプ中のアイテムがあれば閉じる
+        if (currentlySwipedItem && currentlySwipedItem !== item) {
+          currentlySwipedItem.style.transform = 'translateX(0)';
+        }
+
         startX = e.touches[0].clientX;
         currentX = startX;
         item.classList.add('swiping');
@@ -2404,12 +2433,17 @@
         if (diff < -40) {
           // 左に40px以上スワイプでミュート・削除ボタン表示
           item.style.transform = `translateX(-${rightButtonWidth}px)`;
+          currentlySwipedItem = item;
         } else if (diff > 40) {
           // 右に40px以上スワイプでピン留めボタン表示
           item.style.transform = `translateX(${leftButtonWidth}px)`;
+          currentlySwipedItem = item;
         } else {
           // 閉じる
           item.style.transform = 'translateX(0)';
+          if (currentlySwipedItem === item) {
+            currentlySwipedItem = null;
+          }
         }
 
         isSwiping = false;
