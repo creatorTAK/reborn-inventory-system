@@ -7362,6 +7362,16 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
               console.error('❌ localStorage設定のパースに失敗:', e);
             }
           }
+
+          // 商品名プレビューと説明プレビューも更新（管理番号形式変更対応）
+          if (typeof updateNamePreview === 'function') {
+            updateNamePreview();
+            console.log('✅ 商品名プレビューを更新しました');
+          }
+          if (typeof updateDescriptionFromDetail === 'function') {
+            updateDescriptionFromDetail();
+            console.log('✅ 説明プレビューを更新しました');
+          }
         }
       });
       console.log('📡 BroadcastChannelリスナー起動完了（reborn_config_updates）');
