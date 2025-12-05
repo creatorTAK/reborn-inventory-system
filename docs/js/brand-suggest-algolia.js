@@ -204,6 +204,11 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
           window.updateNamePreview();
         }
 
+        // updateDescriptionFromDetail() を呼び出し（商品説明プレビュー更新）
+        if (typeof window.updateDescriptionFromDetail === 'function') {
+          window.updateDescriptionFromDetail();
+        }
+
         // サジェストパネルを非表示
         panel.style.display = 'none';
 
