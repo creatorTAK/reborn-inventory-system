@@ -5077,8 +5077,9 @@ window.updateLoadingProgress = function(percent, text) {
     const intervalId = setInterval(() => {
       elapsedTime += checkInterval;
 
-      // CACHED_CONFIGが初期化されたらセットアップ実行
-      if (window.CACHED_CONFIG) {
+      // CACHED_CONFIGが初期化され、かつセールスワード設定が読み込まれたらセットアップ実行
+      // 注意: CACHED_CONFIG = {} だけでは不十分、よく使うセールスワードの読み込み完了を待つ
+      if (window.CACHED_CONFIG && window.CACHED_CONFIG['よく使うセールスワード']) {
         clearInterval(intervalId);
         console.log('[waitForCachedConfigAndSetup] ✅ CACHED_CONFIG初期化完了（' + elapsedTime + 'ms経過）');
 
@@ -5114,7 +5115,32 @@ window.updateLoadingProgress = function(percent, text) {
       // タイムアウト
       if (elapsedTime >= maxWaitTime) {
         clearInterval(intervalId);
-        console.warn('[waitForCachedConfigAndSetup] ⚠️ CACHED_CONFIG初期化タイムアウト（' + maxWaitTime + 'ms）、よく使うワードなしでセットアップ');
+        console.warn('[waitForCachedConfigAndSetup] ⚠️ CACHED_CONFIG初期化タイムアウト（' + maxWaitTime + 'ms）');
+
+        // タイムアウト時はlocalStorageから直接読み込みを試みる
+        try {
+          const saleswordConfigStr = localStorage.getItem('rebornConfig_salesword');
+          if (saleswordConfigStr) {
+            const saleswordConfig = JSON.parse(saleswordConfigStr);
+            console.log('[waitForCachedConfigAndSetup] ⚠️ フォールバック: localStorageから直接読み込み:', saleswordConfig);
+
+            if (saleswordConfig?.表示形式) {
+              SALESWORD_FORMAT = saleswordConfig.表示形式;
+              console.log('[waitForCachedConfigAndSetup] ✅ SALESWORD_FORMATに表示形式を設定（フォールバック）:', SALESWORD_FORMAT);
+            }
+
+            if (saleswordConfig?.よく使う && saleswordConfig.よく使う.length > 0) {
+              SALESWORD_DATA.wordsByCategory['よく使う'] = saleswordConfig.よく使う;
+            }
+
+            if (saleswordConfig?.デフォルト) {
+              defaultSalesword = saleswordConfig.デフォルト;
+            }
+          }
+        } catch (e) {
+          console.error('[waitForCachedConfigAndSetup] ❌ フォールバック読み込みエラー:', e);
+        }
+
         setupCategoryDropdown();
       }
     }, checkInterval);
