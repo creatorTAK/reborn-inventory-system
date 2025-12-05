@@ -2420,8 +2420,11 @@
     // スワイプジェスチャー設定
     function setupSwipeGesture(wrapper, item) {
       let startX = 0;
+      let startY = 0;
       let currentX = 0;
       let isSwiping = false;
+      let isScrolling = false;
+      let directionLocked = false;
       const rightButtonWidth = 140; // 非表示 + 削除の合計幅
       const leftButtonWidth = 140;  // ミュート + ピン留めの合計幅
 
@@ -2432,16 +2435,33 @@
         }
 
         startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
         currentX = startX;
+        isSwiping = false;
+        isScrolling = false;
+        directionLocked = false;
         item.classList.add('swiping');
       });
 
       item.addEventListener('touchmove', (e) => {
-        if (!isSwiping && Math.abs(e.touches[0].clientX - startX) > 10) {
-          isSwiping = true;
+        const deltaX = Math.abs(e.touches[0].clientX - startX);
+        const deltaY = Math.abs(e.touches[0].clientY - startY);
+
+        // 方向がまだ確定していない場合、判定する
+        if (!directionLocked && (deltaX > 10 || deltaY > 10)) {
+          directionLocked = true;
+          // 横方向の動きが縦方向より1.5倍以上大きい場合のみスワイプ
+          if (deltaX > deltaY * 1.5 && deltaX > 15) {
+            isSwiping = true;
+            isScrolling = false;
+          } else {
+            isSwiping = false;
+            isScrolling = true;
+          }
         }
 
         if (isSwiping) {
+          e.preventDefault(); // スクロールを防止
           currentX = e.touches[0].clientX;
           const diff = currentX - startX;
 
@@ -2456,30 +2476,38 @@
             item.style.transform = `translateX(${offset}px)`;
           }
         }
-      });
+      }, { passive: false });
 
       item.addEventListener('touchend', (e) => {
         item.classList.remove('swiping');
-        const diff = currentX - startX;
 
-        if (diff < -40) {
-          // 左に40px以上スワイプで非表示・削除ボタン表示
-          item.style.transform = `translateX(-${rightButtonWidth}px)`;
-          currentlySwipedItem = item;
-        } else if (diff > 40) {
-          // 右に40px以上スワイプでミュート・ピン留めボタン表示
-          item.style.transform = `translateX(${leftButtonWidth}px)`;
-          currentlySwipedItem = item;
-        } else {
-          // 閉じる
-          item.style.transform = 'translateX(0)';
-          if (currentlySwipedItem === item) {
-            currentlySwipedItem = null;
+        // スワイプモードの場合のみアクション実行
+        if (isSwiping) {
+          const diff = currentX - startX;
+
+          if (diff < -40) {
+            // 左に40px以上スワイプで非表示・削除ボタン表示
+            item.style.transform = `translateX(-${rightButtonWidth}px)`;
+            currentlySwipedItem = item;
+          } else if (diff > 40) {
+            // 右に40px以上スワイプでミュート・ピン留めボタン表示
+            item.style.transform = `translateX(${leftButtonWidth}px)`;
+            currentlySwipedItem = item;
+          } else {
+            // 閉じる
+            item.style.transform = 'translateX(0)';
+            if (currentlySwipedItem === item) {
+              currentlySwipedItem = null;
+            }
           }
         }
 
+        // リセット
         isSwiping = false;
+        isScrolling = false;
+        directionLocked = false;
         startX = 0;
+        startY = 0;
         currentX = 0;
       });
     }
