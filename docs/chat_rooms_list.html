@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-05-v3 - カテゴリコンテナ固定高さ -->
+  <!-- Cache Bust: 2025-12-05-v4 - スワイプUI改善・ピン留め機能追加 -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -179,14 +179,13 @@
       z-index: 1;
     }
     .mute-button {
-      width: 80px;
+      width: 70px;
       background: #f59e0b;
       color: white;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
-      font-weight: 500;
+      font-size: 24px;
       cursor: pointer;
       transition: all 0.3s ease;
     }
@@ -194,16 +193,38 @@
       background: #d97706;
     }
     .delete-button {
-      width: 80px;
+      width: 70px;
       background: #ef4444;
       color: white;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
-      font-weight: 500;
+      font-size: 24px;
       cursor: pointer;
       transition: all 0.3s ease;
+    }
+    /* 左側ボタン（ピン留め） */
+    .swipe-buttons-left {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      display: flex;
+      z-index: 1;
+    }
+    .pin-button {
+      width: 70px;
+      background: #3b82f6;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .pin-button:active {
+      background: #2563eb;
     }
     .delete-button:active {
       background: #dc2626;
@@ -1343,7 +1364,8 @@
         console.log('[Filter] currentUserEmail:', currentUserEmail);
         console.log('[Filter] 全ルーム数:', snapshot.size);
 
-        let visibleRoomCount = 0;
+        // ルームを配列に収集してソート
+        const visibleRooms = [];
         snapshot.forEach((doc) => {
           const room = { id: doc.id, ...doc.data() };
 
@@ -1371,12 +1393,30 @@
           if (isSystemRoom || emailMatch || nameMatch) {
             console.log('[Filter] ✅ ルーム表示:', room.id, room.name,
               isSystemRoom ? '(system)' : emailMatch ? '(emailMatch)' : '(nameMatch)');
-            appendRoom(room);
-            visibleRoomCount++;
+            visibleRooms.push(room);
           } else {
             console.log('[Filter] ❌ ルームをスキップ:', room.id, room.name);
           }
         });
+
+        // ソート: ピン留め優先 → 最終メッセージ時間降順
+        visibleRooms.sort((a, b) => {
+          const aPinned = a.pinnedBy && Array.isArray(a.pinnedBy) && a.pinnedBy.includes(currentUserName);
+          const bPinned = b.pinnedBy && Array.isArray(b.pinnedBy) && b.pinnedBy.includes(currentUserName);
+
+          // ピン留めされているルームを上に
+          if (aPinned && !bPinned) return -1;
+          if (!aPinned && bPinned) return 1;
+
+          // 同じピン留め状態なら最終メッセージ時間で降順ソート
+          const aTime = a.lastMessageAt?.toMillis?.() || 0;
+          const bTime = b.lastMessageAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        });
+
+        // ソートされた順序で表示
+        visibleRooms.forEach(room => appendRoom(room));
+        const visibleRoomCount = visibleRooms.length;
 
         // フィルタリング後に表示するルームがない場合
         if (visibleRoomCount === 0) {
@@ -1445,26 +1485,27 @@
       wrapper.className = 'room-item-wrapper';
       wrapper.dataset.roomId = room.id;
 
-      // ミュート状態をチェック
+      // ミュート・ピン留め状態をチェック
       const isMuted = room.mutedBy && Array.isArray(room.mutedBy) && room.mutedBy.includes(currentUserName);
+      const isPinned = room.pinnedBy && Array.isArray(room.pinnedBy) && room.pinnedBy.includes(currentUserName);
 
-      // ボタンコンテナ
+      // 右側ボタンコンテナ（ミュート・削除）
       const buttonsContainer = document.createElement('div');
       buttonsContainer.className = 'swipe-buttons';
 
-      // ミュートボタン
+      // ミュートボタン（アイコン）
       const muteBtn = document.createElement('div');
       muteBtn.className = 'mute-button';
-      muteBtn.textContent = isMuted ? '通知ON' : 'ミュート';
+      muteBtn.textContent = isMuted ? '🔔' : '🔕';
       muteBtn.onclick = (e) => {
         e.stopPropagation();
         toggleMuteRoom(room.id, isMuted);
       };
 
-      // 削除ボタン
+      // 削除ボタン（アイコン）
       const deleteBtn = document.createElement('div');
       deleteBtn.className = 'delete-button';
-      deleteBtn.textContent = '削除';
+      deleteBtn.textContent = '🗑️';
       deleteBtn.onclick = (e) => {
         e.stopPropagation();
         confirmDeleteRoom(room.id, room.name || '不明なルーム');
@@ -1472,6 +1513,21 @@
 
       buttonsContainer.appendChild(muteBtn);
       buttonsContainer.appendChild(deleteBtn);
+
+      // 左側ボタンコンテナ（ピン留め）
+      const buttonsContainerLeft = document.createElement('div');
+      buttonsContainerLeft.className = 'swipe-buttons-left';
+
+      // ピン留めボタン
+      const pinBtn = document.createElement('div');
+      pinBtn.className = 'pin-button';
+      pinBtn.textContent = isPinned ? '📍' : '📌';
+      pinBtn.onclick = (e) => {
+        e.stopPropagation();
+        togglePinRoom(room.id, isPinned);
+      };
+
+      buttonsContainerLeft.appendChild(pinBtn);
 
       const item = document.createElement('div');
       item.className = 'room-item';
@@ -1571,6 +1627,14 @@
         name.textContent = displayName;
       }
 
+      // ピン留め中の場合はアイコンを追加
+      if (isPinned) {
+        const pinIcon = document.createElement('span');
+        pinIcon.textContent = ' 📌';
+        pinIcon.style.fontSize = '14px';
+        name.appendChild(pinIcon);
+      }
+
       // ミュート中の場合はアイコンを追加
       if (isMuted) {
         const muteIcon = document.createElement('span');
@@ -1651,6 +1715,7 @@
       // スワイプジェスチャー設定
       setupSwipeGesture(wrapper, item);
 
+      wrapper.appendChild(buttonsContainerLeft);
       wrapper.appendChild(buttonsContainer);
       wrapper.appendChild(item);
       container.appendChild(wrapper);
@@ -2296,7 +2361,8 @@
       let startX = 0;
       let currentX = 0;
       let isSwiping = false;
-      const buttonWidth = 160; // ミュート + 削除の合計幅
+      const rightButtonWidth = 140; // ミュート + 削除の合計幅
+      const leftButtonWidth = 70;   // ピン留めの幅
 
       item.addEventListener('touchstart', (e) => {
         startX = e.touches[0].clientX;
@@ -2313,9 +2379,14 @@
           currentX = e.touches[0].clientX;
           const diff = currentX - startX;
 
-          // 左スワイプのみ許可（diff < 0）
+          // 左スワイプ（diff < 0）：ミュート・削除ボタン表示
           if (diff < 0) {
-            const offset = Math.max(diff, -buttonWidth);
+            const offset = Math.max(diff, -rightButtonWidth);
+            item.style.transform = `translateX(${offset}px)`;
+          }
+          // 右スワイプ（diff > 0）：ピン留めボタン表示
+          else if (diff > 0) {
+            const offset = Math.min(diff, leftButtonWidth);
             item.style.transform = `translateX(${offset}px)`;
           }
         }
@@ -2326,8 +2397,11 @@
         const diff = currentX - startX;
 
         if (diff < -40) {
-          // 40px以上スワイプでボタン表示
-          item.style.transform = `translateX(-${buttonWidth}px)`;
+          // 左に40px以上スワイプでミュート・削除ボタン表示
+          item.style.transform = `translateX(-${rightButtonWidth}px)`;
+        } else if (diff > 40) {
+          // 右に40px以上スワイプでピン留めボタン表示
+          item.style.transform = `translateX(${leftButtonWidth}px)`;
         } else {
           // 閉じる
           item.style.transform = 'translateX(0)';
@@ -2376,6 +2450,46 @@
       } catch (error) {
         console.error('[Mute Room] エラー:', error);
         alert('ミュート設定の変更に失敗しました: ' + error.message);
+      }
+    }
+
+    // ルームピン留め切り替え
+    async function togglePinRoom(roomId, currentlyPinned) {
+      try {
+        console.log('[Pin Room] ピン留め切り替え:', { roomId, currentlyPinned, currentUserName });
+
+        const roomRef = doc(db, 'rooms', roomId);
+        const roomSnap = await getDoc(roomRef);
+
+        if (!roomSnap.exists()) {
+          console.error('[Pin Room] ルームが存在しません:', roomId);
+          return;
+        }
+
+        const roomData = roomSnap.data();
+        let pinnedBy = roomData.pinnedBy || [];
+
+        if (currentlyPinned) {
+          // ピン解除：配列から削除
+          pinnedBy = pinnedBy.filter(user => user !== currentUserName);
+          console.log('[Pin Room] ピン解除:', currentUserName);
+        } else {
+          // ピン留め：配列に追加
+          if (!pinnedBy.includes(currentUserName)) {
+            pinnedBy.push(currentUserName);
+          }
+          console.log('[Pin Room] ピン留め設定:', currentUserName);
+        }
+
+        // Firestoreを更新
+        await updateDoc(roomRef, { pinnedBy });
+        console.log('[Pin Room] 更新成功:', pinnedBy);
+
+        // UIは自動的にリアルタイム更新される（onSnapshot）
+
+      } catch (error) {
+        console.error('[Pin Room] エラー:', error);
+        alert('ピン留め設定の変更に失敗しました: ' + error.message);
       }
     }
 
