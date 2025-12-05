@@ -178,6 +178,46 @@
       display: flex;
       z-index: 1;
     }
+    /* 右側ボタン: 非表示 + 削除（テキスト） */
+    .hide-button {
+      width: 70px;
+      background: #6b7280;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .hide-button:active {
+      background: #4b5563;
+    }
+    .delete-button {
+      width: 70px;
+      background: #ef4444;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .delete-button:active {
+      background: #dc2626;
+    }
+    /* 左側ボタン: ミュート + ピン留め（アイコン） */
+    .swipe-buttons-left {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      display: flex;
+      z-index: 1;
+    }
     .mute-button {
       width: 70px;
       background: #f59e0b;
@@ -192,27 +232,6 @@
     .mute-button:active {
       background: #d97706;
     }
-    .delete-button {
-      width: 70px;
-      background: #ef4444;
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-    /* 左側ボタン（ピン留め） */
-    .swipe-buttons-left {
-      position: absolute;
-      left: 0;
-      top: 0;
-      height: 100%;
-      display: flex;
-      z-index: 1;
-    }
     .pin-button {
       width: 70px;
       background: #3b82f6;
@@ -226,9 +245,6 @@
     }
     .pin-button:active {
       background: #2563eb;
-    }
-    .delete-button:active {
-      background: #dc2626;
     }
     .room-icon {
       font-size: 32px;
@@ -1387,14 +1403,20 @@
             isSystemRoom: isSystemRoom
           });
 
+          // 非表示チェック: hiddenBy配列に自分のユーザー名が含まれているか
+          const isHidden = room.hiddenBy && Array.isArray(room.hiddenBy) && room.hiddenBy.includes(currentUserName);
+
           // フィルタリング: 自分が参加しているルームのみ表示
           // - type='system'のルームは全員に表示
           // - memberEmails に自分のメールが含まれる場合
           // - または members配列に自分のユーザー名が含まれる場合
-          if (isSystemRoom || emailMatch || nameMatch) {
+          // - 非表示設定されているルームは除外
+          if ((isSystemRoom || emailMatch || nameMatch) && !isHidden) {
             console.log('[Filter] ✅ ルーム表示:', room.id, room.name,
               isSystemRoom ? '(system)' : emailMatch ? '(emailMatch)' : '(nameMatch)');
             visibleRooms.push(room);
+          } else if (isHidden) {
+            console.log('[Filter] 🙈 非表示ルーム:', room.id, room.name);
           } else {
             console.log('[Filter] ❌ ルームをスキップ:', room.id, room.name);
           }
@@ -1490,17 +1512,17 @@
       const isMuted = room.mutedBy && Array.isArray(room.mutedBy) && room.mutedBy.includes(currentUserName);
       const isPinned = room.pinnedBy && Array.isArray(room.pinnedBy) && room.pinnedBy.includes(currentUserName);
 
-      // 右側ボタンコンテナ（ミュート・削除）
+      // 右側ボタンコンテナ（非表示・削除）- 左スワイプで表示
       const buttonsContainer = document.createElement('div');
       buttonsContainer.className = 'swipe-buttons';
 
-      // ミュートボタン（Bootstrap Icon）
-      const muteBtn = document.createElement('div');
-      muteBtn.className = 'mute-button';
-      muteBtn.innerHTML = isMuted ? '<i class="bi bi-bell"></i>' : '<i class="bi bi-bell-slash"></i>';
-      muteBtn.onclick = (e) => {
+      // 非表示ボタン（テキスト）
+      const hideBtn = document.createElement('div');
+      hideBtn.className = 'hide-button';
+      hideBtn.textContent = '非表示';
+      hideBtn.onclick = (e) => {
         e.stopPropagation();
-        toggleMuteRoom(room.id, isMuted);
+        toggleHideRoom(room.id);
       };
 
       // 削除ボタン（テキスト）
@@ -1512,12 +1534,21 @@
         confirmDeleteRoom(room.id, room.name || '不明なルーム');
       };
 
-      buttonsContainer.appendChild(muteBtn);
+      buttonsContainer.appendChild(hideBtn);
       buttonsContainer.appendChild(deleteBtn);
 
-      // 左側ボタンコンテナ（ピン留め）
+      // 左側ボタンコンテナ（ミュート・ピン留め）- 右スワイプで表示
       const buttonsContainerLeft = document.createElement('div');
       buttonsContainerLeft.className = 'swipe-buttons-left';
+
+      // ミュートボタン（Bootstrap Icon）
+      const muteBtn = document.createElement('div');
+      muteBtn.className = 'mute-button';
+      muteBtn.innerHTML = isMuted ? '<i class="bi bi-bell"></i>' : '<i class="bi bi-bell-slash"></i>';
+      muteBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleMuteRoom(room.id, isMuted);
+      };
 
       // ピン留めボタン（Bootstrap Icon）
       const pinBtn = document.createElement('div');
@@ -1528,6 +1559,7 @@
         togglePinRoom(room.id, isPinned);
       };
 
+      buttonsContainerLeft.appendChild(muteBtn);
       buttonsContainerLeft.appendChild(pinBtn);
 
       const item = document.createElement('div');
@@ -2529,6 +2561,43 @@
       } catch (error) {
         console.error('[Pin Room] エラー:', error);
         alert('ピン留め設定の変更に失敗しました: ' + error.message);
+      }
+    }
+
+    // ルーム非表示切り替え
+    async function toggleHideRoom(roomId) {
+      try {
+        console.log('[Hide Room] 非表示設定:', { roomId, currentUserName });
+
+        const roomRef = doc(db, 'rooms', roomId);
+        const roomSnap = await getDoc(roomRef);
+
+        if (!roomSnap.exists()) {
+          console.error('[Hide Room] ルームが存在しません:', roomId);
+          return;
+        }
+
+        const roomData = roomSnap.data();
+        let hiddenBy = roomData.hiddenBy || [];
+
+        // 非表示：配列に追加（トグルではなく常に非表示化）
+        if (!hiddenBy.includes(currentUserName)) {
+          hiddenBy.push(currentUserName);
+        }
+        console.log('[Hide Room] 非表示設定:', currentUserName);
+
+        // Firestoreを更新
+        await updateDoc(roomRef, { hiddenBy });
+        console.log('[Hide Room] 更新成功:', hiddenBy);
+
+        // スワイプをリセット
+        closeAllSwipes();
+
+        // UIは自動的にリアルタイム更新される（onSnapshot）
+
+      } catch (error) {
+        console.error('[Hide Room] エラー:', error);
+        alert('非表示設定に失敗しました: ' + error.message);
       }
     }
 

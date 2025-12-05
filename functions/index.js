@@ -405,6 +405,13 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
 
     console.log('📋 [onChatMessageCreated] ルーム:', roomData.name, 'タイプ:', roomType, 'メンバー:', members);
 
+    // 🔔 非表示解除: 新着メッセージ時にhiddenByをクリア（ルームを再表示）
+    if (roomData.hiddenBy && roomData.hiddenBy.length > 0) {
+      console.log('👁️ [onChatMessageCreated] 非表示解除:', roomData.hiddenBy);
+      await roomRef.update({ hiddenBy: [] });
+      console.log('✅ [onChatMessageCreated] hiddenBy クリア完了');
+    }
+
     // 送信者以外のメンバーに通知
     const targetMembers = members.filter(member => member !== senderName);
 
@@ -490,11 +497,17 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
       updateChatUnreadCounts(roomId, memberEmailsForUnread)
     ];
 
+    // 🔍 デバッグ: normalUsers の状態を確認
+    console.log(`🔍 [DEBUG] normalUsers.length: ${normalUsers.length}, normalUsers: ${JSON.stringify(normalUsers)}`);
+
     // 通常の通知（メンションされていないユーザー）
     if (normalUsers.length > 0) {
+      console.log(`📤 [onChatMessageCreated] sendChatNotifications呼び出し開始`);
       notificationPromises.push(
         sendChatNotifications(senderName, messageText, roomData.name || '個別チャット', normalUsers, roomData.mutedBy || [])
       );
+    } else {
+      console.log(`⏭️ [onChatMessageCreated] normalUsers.length=0, FCM通知スキップ`);
     }
 
     // メンション通知（メンションされたユーザー、ミュート無視）
@@ -518,6 +531,7 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
 /**
  * 🎯 指定ルームを閲覧中のユーザーのメールアドレスを取得
  * viewingStatus コレクションをクエリして、roomId が一致するユーザーを返す
+ * 🔧 5分以上前の古いデータは無視（タスクキルでクリアされないケース対策）
  */
 async function getViewingUsers(roomId) {
   try {
@@ -526,9 +540,21 @@ async function getViewingUsers(roomId) {
       .get();
 
     const viewingUsers = [];
+    const now = Date.now();
+    const VIEWING_TIMEOUT_MS = 5 * 60 * 1000; // 5分
+
     viewingSnapshot.forEach(doc => {
-      // ドキュメントIDがユーザーのメールアドレス
-      viewingUsers.push(doc.id);
+      const data = doc.data();
+      const lastUpdated = data.lastUpdated?.toMillis?.() || 0;
+      const isRecent = (now - lastUpdated) < VIEWING_TIMEOUT_MS;
+
+      if (isRecent) {
+        // ドキュメントIDがユーザーのメールアドレス
+        viewingUsers.push(doc.id);
+        console.log(`👀 [getViewingUsers] アクティブ: ${doc.id} (${Math.round((now - lastUpdated) / 1000)}秒前)`);
+      } else {
+        console.log(`⏰ [getViewingUsers] タイムアウト除外: ${doc.id} (${Math.round((now - lastUpdated) / 1000)}秒前)`);
+      }
     });
 
     return viewingUsers;
@@ -663,7 +689,8 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
         data: {
           type: 'CHAT_MESSAGE',
           roomName: roomName,
-          senderName: senderName
+          senderName: senderName,
+          badgeCount: '1'
         },
         android: {
           notification: {
@@ -673,7 +700,8 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
         apns: {
           payload: {
             aps: {
-              sound: 'default'
+              sound: 'default',
+              badge: 1
             }
           }
         },
@@ -702,7 +730,15 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
         data: {
           type: 'CHAT_MESSAGE',
           roomName: roomName,
-          senderName: senderName
+          senderName: senderName,
+          badgeCount: '1'
+        },
+        apns: {
+          payload: {
+            aps: {
+              badge: 1
+            }
+          }
         },
         tokens: tokensWithoutSound
       };
