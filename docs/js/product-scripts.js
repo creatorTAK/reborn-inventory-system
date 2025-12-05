@@ -7315,11 +7315,14 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
   // 動的サイズシステム設定
   setupSizeSystem();
 
-    // セールスワード専用初期化
-    initializeSalesWords();
-
     // 設定マスタ全体を読み込み（配置順序を含む）
+    // ⚠️ 重要: initializeSalesWords() より先に実行すること
+    // CACHED_CONFIGにセールスワード表示形式が設定された後でないと
+    // SALESWORD_FORMAT変数が正しく初期化されない
     await loadAllConfig();
+
+    // セールスワード専用初期化（loadAllConfig後に実行）
+    initializeSalesWords();
 
     // 設定マスタから商品状態ボタンを読み込み
     loadConditionButtonsFromConfig();
