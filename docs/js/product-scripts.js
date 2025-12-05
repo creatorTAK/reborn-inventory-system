@@ -3129,6 +3129,8 @@ window.updateLoadingProgress = function(percent, text) {
   function applySaleswordFormat(salesword) {
     if (!salesword) return '';
 
+    console.log('[applySaleswordFormat] 🔍 現在のSALESWORD_FORMAT:', JSON.stringify(SALESWORD_FORMAT));
+
     // ワード別オーバーライドを確認
     let prefix = SALESWORD_FORMAT.globalPrefix;
     let suffix = SALESWORD_FORMAT.globalSuffix;
@@ -5096,9 +5098,16 @@ window.updateLoadingProgress = function(percent, text) {
         }
 
         // 表示形式設定を読み込み（PWA版で欠落していた処理）
+        console.log('[waitForCachedConfigAndSetup] 🔍 表示形式チェック:');
+        console.log('  - saleswordConfig.表示形式:', saleswordConfig?.表示形式);
+        console.log('  - typeof:', typeof saleswordConfig?.表示形式);
+        console.log('  - JSON:', JSON.stringify(saleswordConfig?.表示形式));
+
         if (saleswordConfig?.表示形式) {
           SALESWORD_FORMAT = saleswordConfig.表示形式;
           console.log('[waitForCachedConfigAndSetup] ✅ SALESWORD_FORMATに表示形式を設定:', SALESWORD_FORMAT);
+        } else {
+          console.warn('[waitForCachedConfigAndSetup] ⚠️ 表示形式が見つかりません、デフォルト値を使用');
         }
 
         // デフォルトセールスワード設定を読み込み

@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v98';  // セールスワード初期化順序を修正（loadAllConfig → initializeSalesWords）
+const CACHE_VERSION = 'v99';  // セールスワード表示形式デバッグログ追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
