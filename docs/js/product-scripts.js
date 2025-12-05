@@ -5094,6 +5094,18 @@ window.updateLoadingProgress = function(percent, text) {
           console.log('[waitForCachedConfigAndSetup] ✅ SALESWORD_DATAに「よく使う」を追加:', frequentWords.length + '件');
         }
 
+        // 表示形式設定を読み込み（PWA版で欠落していた処理）
+        if (saleswordConfig?.表示形式) {
+          SALESWORD_FORMAT = saleswordConfig.表示形式;
+          console.log('[waitForCachedConfigAndSetup] ✅ SALESWORD_FORMATに表示形式を設定:', SALESWORD_FORMAT);
+        }
+
+        // デフォルトセールスワード設定を読み込み
+        if (saleswordConfig?.デフォルト) {
+          defaultSalesword = saleswordConfig.デフォルト;
+          console.log('[waitForCachedConfigAndSetup] ✅ デフォルトセールスワードを設定:', defaultSalesword);
+        }
+
         setupCategoryDropdown();
         applyDefaultSalesword();
         return;
@@ -7345,13 +7357,13 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         if (event.data && event.data.type === 'configChanged') {
           console.log('📥 BroadcastChannelで設定変更通知を受信しました:', event.data.timestamp);
 
-          // localStorageから最新設定を読み込み
+          // localStorageから最新設定を読み込み（管理番号）
           const cachedConfigStr = localStorage.getItem('rebornConfig_managementNumber');
           if (cachedConfigStr) {
             try {
               const newConfig = JSON.parse(cachedConfigStr);
               window.managementNumberConfig = newConfig;
-              console.log('✅ グローバル変数を更新しました:', newConfig);
+              console.log('✅ 管理番号グローバル変数を更新しました:', newConfig);
 
               // UIも再描画
               if (newConfig.segments && newConfig.segments.length > 0) {
@@ -7363,7 +7375,21 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
             }
           }
 
-          // 商品名プレビューと説明プレビューも更新（管理番号形式変更対応）
+          // localStorageから最新設定を読み込み（セールスワード表示形式）
+          const saleswordConfigStr = localStorage.getItem('rebornConfig_salesword');
+          if (saleswordConfigStr) {
+            try {
+              const saleswordConfig = JSON.parse(saleswordConfigStr);
+              if (saleswordConfig.表示形式) {
+                SALESWORD_FORMAT = saleswordConfig.表示形式;
+                console.log('✅ SALESWORD_FORMATを更新しました:', SALESWORD_FORMAT);
+              }
+            } catch (e) {
+              console.error('❌ セールスワード設定のパースに失敗:', e);
+            }
+          }
+
+          // 商品名プレビューと説明プレビューも更新（管理番号形式・セールスワード形式変更対応）
           if (typeof updateNamePreview === 'function') {
             updateNamePreview();
             console.log('✅ 商品名プレビューを更新しました');
