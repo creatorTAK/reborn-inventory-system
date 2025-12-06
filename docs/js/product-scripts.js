@@ -1395,8 +1395,8 @@ window.updateLoadingProgress = function(percent, text) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'quick-btn';
-      button.textContent = btn.label;
-      button.setAttribute('data-text', btn.text);
+      button.textContent = btn.ボタンラベル || btn.label || '';
+      button.setAttribute('data-text', btn.ボタンテキスト || btn.text || '');
 
       // クリックイベント
       button.addEventListener('click', function() {
