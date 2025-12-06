@@ -859,7 +859,7 @@ window.updateLoadingProgress = function(percent, text) {
 
       <!-- カラー検索入力欄 -->
       <div class="color-search-wrapper" style="margin-bottom: 8px; position: relative;">
-        <input type="text" class="color-search-input" data-index="${colorCount}" placeholder="🔍 カラーを検索..." autocomplete="off" style="font-size: 16px; width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+        <input type="text" class="color-search-input" data-index="${colorCount}" placeholder="カラーを検索..." autocomplete="off" style="font-size: 16px; width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
         <div class="color-suggest-list" data-index="${colorCount}" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #d1d5db; border-top: none; border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
       </div>
 
@@ -1091,7 +1091,7 @@ window.updateLoadingProgress = function(percent, text) {
 
       <!-- 検索バー -->
       <div class="attribute-search-wrapper" style="margin-bottom: 8px; position: relative;">
-        <input type="text" class="attribute-search-input" data-index="${attributeCount}" placeholder="🔍 属性を検索..." autocomplete="off" style="font-size: 16px; width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+        <input type="text" class="attribute-search-input" data-index="${attributeCount}" placeholder="属性を検索..." autocomplete="off" style="font-size: 16px; width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
         <div class="attribute-suggest-list" data-index="${attributeCount}" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #d1d5db; border-top: none; border-radius: 0 0 8px 8px; max-height: 200px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
       </div>
 
@@ -7745,6 +7745,13 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         // グローバルにマスターオプションを保存（階層式セレクター用）
         window.globalMasterOptions = opts;
 
+        // カラー・素材マスタ初期化（Firestoreデータ読み込み完了後に実行）
+        initializeColorMasters();
+        initializeMaterialMasters();
+
+        // カラー検索機能をセットアップ（COLOR_OPTIONS設定後）
+        setupColorSearch();
+
         wirePreviewWatchers();
         updateNamePreview();
         adjustPreviewHeight();
@@ -7816,11 +7823,8 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     // クイック挿入ボタン設定
     setupQuickInsertButtons();
 
-    // 素材マスターデータ初期化
-    initializeMaterialMasters();
-
-    // カラーマスターデータ初期化
-    initializeColorMasters();
+    // 素材・カラーマスターデータ初期化は loadMasterOptions() 内で実行
+    // （Firestoreデータ読み込み完了後に実行する必要があるため）
 
     // 管理番号UI初期化（動的セグメント対応）
     initManagementNumberUI();
@@ -7906,8 +7910,8 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     // 商品属性検索機能をセットアップ
     setupAttributeSearch();
 
-    // カラー検索機能をセットアップ
-    setupColorSearch();
+    // カラー検索機能は loadMasterOptions() 内で実行
+    // （COLOR_OPTIONS設定後に実行する必要があるため）
 
     // 素材入力フィールドの変更監視
     document.addEventListener('change', function(e) {
