@@ -4962,7 +4962,7 @@ window.updateLoadingProgress = function(percent, text) {
 
       // 全カテゴリからワードを検索
       const results = [];
-      for (const [category, words] of Object.entries(SALESWORD_DATA.wordsByCategory)) {
+      for (const [category, words] of Object.entries(SALESWORD_DATA.wordsByCategory || {})) {
         if (!words || !Array.isArray(words)) continue;
 
         words.forEach(word => {
@@ -5233,6 +5233,7 @@ window.updateLoadingProgress = function(percent, text) {
 
         setupCategoryDropdown();
         applyDefaultSalesword();
+        setupSaleswordSearch(); // セールスワード検索機能を初期化
         return;
       }
 
@@ -5266,6 +5267,7 @@ window.updateLoadingProgress = function(percent, text) {
         }
 
         setupCategoryDropdown();
+        setupSaleswordSearch(); // セールスワード検索機能を初期化
       }
     }, checkInterval);
   }
