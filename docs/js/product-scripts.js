@@ -978,9 +978,19 @@ window.updateLoadingProgress = function(percent, text) {
         return;
       }
 
-      // COLOR_OPTIONSから検索（既にFirestore/GASから読み込み済み）
+      // カラーデータを取得（複数ソースをフォールバック）
+      let colorData = COLOR_OPTIONS;
+      console.log('カラー検索開始 - query:', query, 'COLOR_OPTIONS:', COLOR_OPTIONS?.length || 0);
+
+      if (!colorData || colorData.length === 0) {
+        const masterOpts = window.globalMasterOptions || MASTER_OPTIONS || {};
+        colorData = masterOpts['カラー/配色/トーン'] || [];
+        console.log('カラー検索: globalMasterOptionsからデータ取得:', colorData.length, 'キー一覧:', Object.keys(masterOpts));
+      }
+
+      // カラーデータから検索
       const results = [];
-      COLOR_OPTIONS.forEach(color => {
+      colorData.forEach(color => {
         if (color.toLowerCase().includes(query)) {
           results.push(color);
         }
