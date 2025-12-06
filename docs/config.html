@@ -6138,71 +6138,83 @@ ${descFormattedNumber}`;
     // ========================================
 
     /**
-     * 仕入・出品のプルダウンを初期化（キャッシュ優先 → サーバー更新）
+     * 仕入・出品のプルダウンを初期化（Firestoreから取得）
      */
-    function initProcureListingDropdowns() {
+    async function initProcureListingDropdowns() {
       console.log('🚀 仕入・出品プルダウン初期化開始');
-      
+
+      if (!window.db) {
+        console.warn('⚠️ Firestoreが初期化されていません（仕入・出品プルダウン）');
+        return;
+      }
+
+      const savedConfig = localStorage.getItem('rebornConfig_procureListingDefault');
+      const config = savedConfig ? JSON.parse(savedConfig) : {};
+
       // 仕入先プルダウンを初期化
       const procureSelect = document.getElementById('デフォルト仕入先');
       if (procureSelect) {
-        // Step 1: キャッシュから即座に初期化
         try {
-          const cached = localStorage.getItem('masterData_仕入先');
-          if (cached) {
-            const options = JSON.parse(cached);
-            console.log('✅ 仕入先キャッシュから読み込み:', options.length, '件');
-            populateSelect(procureSelect, options);
-            
-            // 設定値を適用
-            const savedConfig = localStorage.getItem('rebornConfig_procureListingDefault');
-            if (savedConfig) {
-              const config = JSON.parse(savedConfig);
-              if (config.デフォルト仕入先) {
-                procureSelect.value = config.デフォルト仕入先;
-                console.log('✅ デフォルト仕入先を設定しました（キャッシュ）:', config.デフォルト仕入先);
-              }
+          console.log('📦 Firestoreから仕入先一覧を取得中...');
+          const snapshot = await window.db.collection('suppliers')
+            .orderBy('name', 'asc')
+            .get();
+
+          const options = [];
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.name) {
+              options.push(data.name);
             }
-          } else {
-            console.log('⚠️ 仕入先キャッシュなし、サーバーから取得します');
+          });
+
+          console.log('✅ 仕入先 ' + options.length + '件 を読み込みました');
+          populateSelect(procureSelect, options);
+
+          // 設定値を適用
+          if (config.デフォルト仕入先) {
+            procureSelect.value = config.デフォルト仕入先;
+            console.log('✅ デフォルト仕入先を設定しました:', config.デフォルト仕入先);
           }
+
+          // キャッシュに保存
+          localStorage.setItem('masterData_仕入先', JSON.stringify(options));
         } catch (e) {
-          console.error('❌ 仕入先キャッシュ読み込みエラー:', e);
+          console.error('❌ 仕入先読み込みエラー:', e);
         }
-        
-        // PWA版では Firestore から取得（未実装）
-        // 暫定: localStorage のキャッシュのみ使用
       }
 
       // 出品先プルダウンを初期化
       const listingSelect = document.getElementById('デフォルト出品先');
       if (listingSelect) {
-        // Step 1: キャッシュから即座に初期化
         try {
-          const cached = localStorage.getItem('masterData_出品先');
-          if (cached) {
-            const options = JSON.parse(cached);
-            console.log('✅ 出品先キャッシュから読み込み:', options.length, '件');
-            populateSelect(listingSelect, options);
-            
-            // 設定値を適用
-            const savedConfig = localStorage.getItem('rebornConfig_procureListingDefault');
-            if (savedConfig) {
-              const config = JSON.parse(savedConfig);
-              if (config.デフォルト出品先) {
-                listingSelect.value = config.デフォルト出品先;
-                console.log('✅ デフォルト出品先を設定しました（キャッシュ）:', config.デフォルト出品先);
-              }
+          console.log('📦 Firestoreから出品先一覧を取得中...');
+          const snapshot = await window.db.collection('salesChannels')
+            .orderBy('name', 'asc')
+            .get();
+
+          const options = [];
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.name) {
+              options.push(data.name);
             }
-          } else {
-            console.log('⚠️ 出品先キャッシュなし、サーバーから取得します');
+          });
+
+          console.log('✅ 出品先 ' + options.length + '件 を読み込みました');
+          populateSelect(listingSelect, options);
+
+          // 設定値を適用
+          if (config.デフォルト出品先) {
+            listingSelect.value = config.デフォルト出品先;
+            console.log('✅ デフォルト出品先を設定しました:', config.デフォルト出品先);
           }
+
+          // キャッシュに保存
+          localStorage.setItem('masterData_出品先', JSON.stringify(options));
         } catch (e) {
-          console.error('❌ 出品先キャッシュ読み込みエラー:', e);
+          console.error('❌ 出品先読み込みエラー:', e);
         }
-        
-        // PWA版では Firestore から取得（未実装）
-        // 暫定: localStorage のキャッシュのみ使用
       }
     }
 
