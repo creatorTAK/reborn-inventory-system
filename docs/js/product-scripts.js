@@ -462,13 +462,38 @@ window.updateLoadingProgress = function(percent, text) {
   };
 
   // 設定マスタから仕入・出品デフォルトを読み込む
-  function loadProcureListingDefaults() {
+  async function loadProcureListingDefaults() {
+    // まず仕入先・出品先の選択肢をFirestoreから読み込む
+    await loadSupplierAndSalesChannelOptions();
+
+    // PWA版: localStorage/Firestoreから読み込み
+    if (window.CACHED_CONFIG && window.CACHED_CONFIG['仕入出品デフォルト']) {
+      PROCURE_LISTING_DEFAULTS = window.CACHED_CONFIG['仕入出品デフォルト'];
+      console.log('✅ 仕入・出品デフォルト設定を読み込みました (PWA版):', PROCURE_LISTING_DEFAULTS);
+      applyProcureListingDefaults();
+      return;
+    }
+
+    // localStorageから直接読み込み（フォールバック）
+    const saved = localStorage.getItem('rebornConfig_procureListingDefault');
+    if (saved) {
+      try {
+        PROCURE_LISTING_DEFAULTS = JSON.parse(saved);
+        console.log('✅ 仕入・出品デフォルト設定を読み込みました (localStorage):', PROCURE_LISTING_DEFAULTS);
+        applyProcureListingDefaults();
+        return;
+      } catch (e) {
+        console.error('仕入・出品デフォルト設定パースエラー:', e);
+      }
+    }
+
+    // GAS版（従来の処理）
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       google.script.run
         .withSuccessHandler(function(config) {
           if (config) {
             PROCURE_LISTING_DEFAULTS = config;
-            console.log('仕入・出品デフォルト設定を読み込みました:', config);
+            console.log('仕入・出品デフォルト設定を読み込みました (GAS版):', config);
             // デフォルト値を適用
             applyProcureListingDefaults();
           }
@@ -477,6 +502,49 @@ window.updateLoadingProgress = function(percent, text) {
           console.error('仕入・出品デフォルト設定読み込みエラー:', error);
         })
         .getProcureListingDefaults();
+    }
+  }
+
+  // 仕入先・出品先の選択肢をFirestoreから読み込む
+  async function loadSupplierAndSalesChannelOptions() {
+    if (!window.db) {
+      console.warn('⚠️ Firestoreが初期化されていません（仕入先・出品先選択肢）');
+      return;
+    }
+
+    const fillSel = (id, arr) => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      sel.innerHTML = '<option value="">--</option>';
+      (arr || []).forEach(v => sel.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`));
+    };
+
+    try {
+      // 仕入先を取得
+      const suppliersSnap = await window.db.collection('suppliers').orderBy('name', 'asc').get();
+      const suppliers = [];
+      suppliersSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.name) suppliers.push(data.name);
+      });
+      if (suppliers.length > 0) {
+        fillSel('仕入先', suppliers);
+        console.log('✅ 仕入先選択肢を設定:', suppliers.length + '件');
+      }
+
+      // 出品先を取得
+      const channelsSnap = await window.db.collection('salesChannels').orderBy('name', 'asc').get();
+      const channels = [];
+      channelsSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.name) channels.push(data.name);
+      });
+      if (channels.length > 0) {
+        fillSel('出品先', channels);
+        console.log('✅ 出品先選択肢を設定:', channels.length + '件');
+      }
+    } catch (e) {
+      console.error('❌ 仕入先・出品先選択肢読み込みエラー:', e);
     }
   }
 
@@ -8008,7 +8076,7 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     loadShippingDefaults();
 
     // 設定マスタから仕入・出品デフォルトを読み込み
-    loadProcureListingDefaults();
+    await loadProcureListingDefaults();
 
     // 担当者名を読み込み（PropertiesService）
     loadOperatorName();
