@@ -3286,9 +3286,64 @@ ${descFormattedNumber}`;
       } catch (e) {
         console.error('❌ [設定画面] localStorage読み込みエラー:', e);
       }
-      
-      // Step 2: PWA版ではFirestoreから読み込む（GASコードは不要）
-      // Firestoreからの読み込みは既に完了している（上のlocalStorageで十分）
+
+      // Step 2: Firestoreから最新設定を取得してマージ（PWA版）
+      if (window.db) {
+        console.log('🔄 [設定画面] Step 2: Firestoreから最新設定を取得中...');
+        window.db.collection('settings').doc('common').get()
+          .then((docSnap) => {
+            if (docSnap.exists) {
+              const firestoreData = docSnap.data();
+              console.log('✅ [設定画面] Firestoreから設定取得成功:', firestoreData);
+
+              // FirestoreのデータでcurrentConfigを更新
+              if (firestoreData.conditionButtons && firestoreData.conditionButtons.length > 0) {
+                currentConfig['商品状態ボタン'] = firestoreData.conditionButtons;
+                localStorage.setItem('rebornConfig_conditionButtons', JSON.stringify(firestoreData.conditionButtons));
+                renderConditionButtons(firestoreData.conditionButtons);
+                console.log('✅ [設定画面] 商品状態ボタンをFirestoreから読み込み:', firestoreData.conditionButtons.length, '件');
+              }
+              if (firestoreData.hashtag) {
+                currentConfig['ハッシュタグ'] = firestoreData.hashtag;
+                localStorage.setItem('rebornConfig_hashtag', JSON.stringify(firestoreData.hashtag));
+                renderHashtagConfig(firestoreData.hashtag);
+              }
+              if (firestoreData.discount) {
+                currentConfig['割引情報'] = firestoreData.discount;
+                localStorage.setItem('rebornConfig_discount', JSON.stringify(firestoreData.discount));
+                renderDiscountConfig(firestoreData.discount);
+              }
+              if (firestoreData.shippingDefault) {
+                currentConfig['配送デフォルト'] = firestoreData.shippingDefault;
+                localStorage.setItem('rebornConfig_shippingDefault', JSON.stringify(firestoreData.shippingDefault));
+                renderShippingDefaults(firestoreData.shippingDefault);
+              }
+              if (firestoreData.procureListingDefault) {
+                currentConfig['仕入出品デフォルト'] = firestoreData.procureListingDefault;
+                localStorage.setItem('rebornConfig_procureListingDefault', JSON.stringify(firestoreData.procureListingDefault));
+                renderProcureListingDefaults(firestoreData.procureListingDefault);
+              }
+              if (firestoreData.salesword) {
+                currentConfig['よく使うセールスワード'] = firestoreData.salesword;
+                localStorage.setItem('rebornConfig_salesword', JSON.stringify(firestoreData.salesword));
+              }
+              if (firestoreData.aiSettings) {
+                currentConfig['AI生成設定'] = firestoreData.aiSettings;
+                localStorage.setItem('rebornConfig_aiSettings', JSON.stringify(firestoreData.aiSettings));
+                renderAiSettings(firestoreData.aiSettings);
+              }
+
+              console.log('✅ [設定画面] Firestore設定をマージ完了');
+            } else {
+              console.log('⚠️ [設定画面] Firestore settings/commonが存在しません');
+            }
+          })
+          .catch((e) => {
+            console.error('❌ [設定画面] Firestore読み込みエラー:', e);
+          });
+      } else {
+        console.warn('⚠️ [設定画面] Firestoreが初期化されていません（localStorageのみ使用）');
+      }
     }
 
     /**
