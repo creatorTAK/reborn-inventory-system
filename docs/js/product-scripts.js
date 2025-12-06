@@ -589,12 +589,24 @@ window.updateLoadingProgress = function(percent, text) {
 
   // 設定マスタから商品状態ボタンを読み込む
   function loadConditionButtonsFromConfig() {
+    // 1. まずCACHED_CONFIG（localStorage/Firestore）を確認
+    if (window.CACHED_CONFIG && window.CACHED_CONFIG['商品状態ボタン']) {
+      const cachedButtons = window.CACHED_CONFIG['商品状態ボタン'];
+      if (cachedButtons && Object.keys(cachedButtons).length > 0) {
+        CONDITION_BUTTONS = cachedButtons;
+        console.log('✅ 商品状態ボタン設定を読み込みました（キャッシュ）:', Object.keys(CONDITION_BUTTONS).length, '種類');
+        updateConditionButtons();
+        return;
+      }
+    }
+
+    // 2. キャッシュにない場合、GASから読み込み（レガシー対応）
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       google.script.run
         .withSuccessHandler(function(buttons) {
           if (buttons) {
             CONDITION_BUTTONS = buttons;
-            console.log('商品状態ボタン設定を読み込みました:', Object.keys(CONDITION_BUTTONS).length, '種類');
+            console.log('✅ 商品状態ボタン設定を読み込みました（GAS）:', Object.keys(CONDITION_BUTTONS).length, '種類');
             // 既に商品の状態が選択されている場合はボタンを更新
             updateConditionButtons();
           }
@@ -603,6 +615,8 @@ window.updateLoadingProgress = function(percent, text) {
           console.error('商品状態ボタン設定読み込みエラー:', error);
         })
         .getConditionButtons();
+    } else {
+      console.warn('⚠️ 商品状態ボタン設定が見つかりません（キャッシュ/GAS両方利用不可）');
     }
   }
 
@@ -936,25 +950,33 @@ window.updateLoadingProgress = function(percent, text) {
    * カラー検索機能のセットアップ（全行に対して初期化）
    */
   function setupColorSearch() {
+    console.log('🔍 setupColorSearch() 開始');
+
     // 既存のカラー行すべてに検索機能をセットアップ
     const colorItems = document.querySelectorAll('.color-item');
+    console.log('🔍 検出されたカラー行数:', colorItems.length);
+
     colorItems.forEach(item => {
       const index = item.getAttribute('data-index');
       if (index) {
+        console.log('🔍 カラー行', index, 'に検索機能をセットアップ');
         setupColorRowSearch(parseInt(index));
       }
     });
 
-    // 入力欄外クリックで全ての候補リストを閉じる
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('.color-search-wrapper')) {
-        document.querySelectorAll('.color-suggest-list').forEach(list => {
-          list.style.display = 'none';
-        });
-      }
-    });
+    // 入力欄外クリックで全ての候補リストを閉じる（1回だけ登録）
+    if (!window._colorSearchClickHandlerRegistered) {
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.color-search-wrapper')) {
+          document.querySelectorAll('.color-suggest-list').forEach(list => {
+            list.style.display = 'none';
+          });
+        }
+      });
+      window._colorSearchClickHandlerRegistered = true;
+    }
 
-    console.log('カラー検索機能を初期化しました');
+    console.log('✅ カラー検索機能を初期化しました');
   }
 
   /**
