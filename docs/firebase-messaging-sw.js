@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v128';  // 商品状態ボタンのプロパティ名修正（ボタンラベル/ボタンテキスト）
+const CACHE_VERSION = 'v129';  // 素材セクション動的追加機能
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）

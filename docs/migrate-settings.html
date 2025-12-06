@@ -41,6 +41,12 @@
     <button id="migrateConditionBtn" style="background: #22c55e;">商品状態ボタンのみ保存</button>
   </div>
 
+  <div class="card">
+    <h2>🔧 素材マスタ修正</h2>
+    <p>素材(箇所)の重複項目「表地：」を削除します（「表地」は残ります）</p>
+    <button id="fixMaterialLocationBtn" style="background: #f59e0b;">「表地：」重複を確認・削除</button>
+  </div>
+
   <div id="status"></div>
 
   <!-- Firebase SDK -->
@@ -204,6 +210,70 @@
         localStorage.setItem('rebornConfig_conditionButtons', JSON.stringify(conditionButtonsConfig));
 
         showStatus('✅ 商品状態ボタンを保存しました（18件）！<br><br>このページを閉じて、商品登録画面を再読み込みしてください。', 'success');
+      } catch (error) {
+        showStatus('❌ エラー: ' + error.message, 'error');
+      }
+    });
+
+    // 素材(箇所)から重複「表地：」を削除
+    document.getElementById('fixMaterialLocationBtn')?.addEventListener('click', async () => {
+      showStatus('素材(箇所)マスタを確認中...');
+      try {
+        // masterOptionsコレクションから素材(箇所)ドキュメントを取得
+        const snapshot = await db.collection('masterOptions').get();
+        let targetDoc = null;
+        let currentItems = [];
+
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.fieldName === '素材(箇所)') {
+            targetDoc = doc;
+            currentItems = data.items || [];
+          }
+        });
+
+        if (!targetDoc) {
+          showStatus('⚠️ 素材(箇所)マスタが見つかりません', 'warning');
+          return;
+        }
+
+        // 現在の項目を表示
+        let html = '<h3>現在の素材(箇所):</h3><ul>';
+        currentItems.forEach(item => {
+          const isDuplicate = item === '表地：';
+          html += `<li${isDuplicate ? ' style="color:red;font-weight:bold;"' : ''}>${item}${isDuplicate ? ' ← 削除対象' : ''}</li>`;
+        });
+        html += '</ul>';
+
+        // 「表地：」が含まれているか確認
+        const hasDuplicate = currentItems.includes('表地：');
+        if (!hasDuplicate) {
+          html += '<p class="success">✅ 重複「表地：」は存在しません（修正不要）</p>';
+          statusDiv.innerHTML = html;
+          return;
+        }
+
+        // 確認ダイアログ
+        html += '<p class="warning">⚠️ 「表地：」を削除しますか？（「表地」は残ります）</p>';
+        html += '<button id="confirmFixBtn" style="background:#dc2626;margin-top:10px;">削除を実行</button>';
+        statusDiv.innerHTML = html;
+
+        document.getElementById('confirmFixBtn').addEventListener('click', async () => {
+          showStatus('削除中...');
+          try {
+            // 「表地：」を除外した新しい配列
+            const newItems = currentItems.filter(item => item !== '表地：');
+
+            // Firestoreを更新
+            await db.collection('masterOptions').doc(targetDoc.id).update({
+              items: newItems
+            });
+
+            showStatus('✅ 「表地：」を削除しました！<br><br>商品登録画面を再読み込みしてください。<br><br>更新後の項目数: ' + newItems.length + '件', 'success');
+          } catch (error) {
+            showStatus('❌ 削除エラー: ' + error.message, 'error');
+          }
+        });
       } catch (error) {
         showStatus('❌ エラー: ' + error.message, 'error');
       }

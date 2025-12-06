@@ -711,11 +711,8 @@ window.updateLoadingProgress = function(percent, text) {
   // セレクトボックスにマスタデータを設定
   function populateMaterialSelects(index) {
     const locationSelect = document.getElementById(`素材${index}_箇所`);
-    const type1Select = document.getElementById(`素材${index}_種類1`);
-    const type2Select = document.getElementById(`素材${index}_種類2`);
-    const percent1Select = document.getElementById(`素材${index}_％1`);
-    const percent2Select = document.getElementById(`素材${index}_％2`);
 
+    // 箇所のドロップダウンを設定
     if (locationSelect) {
       locationSelect.innerHTML = '<option value="">--</option>';
       MATERIAL_LOCATIONS.forEach(loc => {
@@ -723,33 +720,32 @@ window.updateLoadingProgress = function(percent, text) {
       });
     }
 
-    if (type1Select) {
-      type1Select.innerHTML = '<option value="">--</option>';
-      MATERIAL_TYPES.forEach(type => {
-        type1Select.insertAdjacentHTML('beforeend', `<option value="${type}">${type}</option>`);
+    // 素材セクション内の全ての種類・割合セレクトを設定
+    const composition = document.querySelector(`.material-composition[data-material-index="${index}"]`);
+    if (composition) {
+      const rows = composition.querySelectorAll('.composition-row');
+      rows.forEach((row, i) => {
+        const rowIndex = i + 1;
+        const typeSelect = document.getElementById(`素材${index}_種類${rowIndex}`);
+        const percentSelect = document.getElementById(`素材${index}_％${rowIndex}`);
+
+        if (typeSelect) {
+          typeSelect.innerHTML = '<option value="">--</option>';
+          MATERIAL_TYPES.forEach(type => {
+            typeSelect.insertAdjacentHTML('beforeend', `<option value="${type}">${type}</option>`);
+          });
+        }
+
+        if (percentSelect) {
+          percentSelect.innerHTML = '<option value="">--%</option>';
+          for (let p = 5; p <= 100; p += 5) {
+            percentSelect.insertAdjacentHTML('beforeend', `<option value="${p}%">${p}%</option>`);
+          }
+        }
       });
-    }
 
-    if (type2Select) {
-      type2Select.innerHTML = '<option value="">--</option>';
-      MATERIAL_TYPES.forEach(type => {
-        type2Select.insertAdjacentHTML('beforeend', `<option value="${type}">${type}</option>`);
-      });
-    }
-
-    // 割合のプルダウンを0-100で初期化
-    if (percent1Select) {
-      percent1Select.innerHTML = '<option value="">--%</option>';
-      for (let i = 0; i <= 100; i++) {
-        percent1Select.insertAdjacentHTML('beforeend', `<option value="${i}">${i}%</option>`);
-      }
-    }
-
-    if (percent2Select) {
-      percent2Select.innerHTML = '<option value="">--%</option>';
-      for (let i = 0; i <= 100; i++) {
-        percent2Select.insertAdjacentHTML('beforeend', `<option value="${i}">${i}%</option>`);
-      }
+      // 削除ボタンの表示更新
+      updateCompositionRemoveButtons(index);
     }
   }
 
@@ -780,8 +776,8 @@ window.updateLoadingProgress = function(percent, text) {
           </select>
         </label>
         
-        <div class="material-composition">
-          <div class="composition-row">
+        <div class="material-composition" data-material-index="${materialCount}">
+          <div class="composition-row" data-row-index="1">
             <label>種類:
               <select id="素材${materialCount}_種類1" class="material-type">
                 <option value="">--</option>
@@ -792,21 +788,10 @@ window.updateLoadingProgress = function(percent, text) {
                 <option value="">--%</option>
               </select>
             </label>
-          </div>
-
-          <div class="composition-row">
-            <label>種類:
-              <select id="素材${materialCount}_種類2" class="material-type">
-                <option value="">--</option>
-              </select>
-            </label>
-            <label>割合:
-              <select id="素材${materialCount}_％2" class="material-percent">
-                <option value="">--%</option>
-              </select>
-            </label>
+            <button type="button" class="remove-composition-btn" onclick="removeCompositionRow(${materialCount}, 1)" style="display:none;">×</button>
           </div>
         </div>
+        <button type="button" class="add-composition-btn" onclick="addCompositionRow(${materialCount})">＋ 種類を追加</button>
       </div>
     `;
 
@@ -851,6 +836,115 @@ window.updateLoadingProgress = function(percent, text) {
       }
     });
   }
+
+  // ========== 素材の種類・割合 動的追加機能 ==========
+
+  // 種類・割合の行を追加
+  function addCompositionRow(materialIndex) {
+    const composition = document.querySelector(`.material-composition[data-material-index="${materialIndex}"]`);
+    if (!composition) {
+      console.error('素材セクションが見つかりません:', materialIndex);
+      return;
+    }
+
+    // 現在の行数を取得
+    const currentRows = composition.querySelectorAll('.composition-row');
+    const newRowIndex = currentRows.length + 1;
+
+    // 最大10行まで
+    if (newRowIndex > 10) {
+      alert('種類は最大10個まで追加できます');
+      return;
+    }
+
+    // 新しい行を作成
+    const newRow = document.createElement('div');
+    newRow.className = 'composition-row';
+    newRow.setAttribute('data-row-index', newRowIndex);
+    newRow.innerHTML = `
+      <label>種類:
+        <select id="素材${materialIndex}_種類${newRowIndex}" class="material-type">
+          <option value="">--</option>
+        </select>
+      </label>
+      <label>割合:
+        <select id="素材${materialIndex}_％${newRowIndex}" class="material-percent">
+          <option value="">--%</option>
+        </select>
+      </label>
+      <button type="button" class="remove-composition-btn" onclick="removeCompositionRow(${materialIndex}, ${newRowIndex})">×</button>
+    `;
+
+    composition.appendChild(newRow);
+
+    // 新しいセレクトボックスにオプションを設定
+    const typeSelect = document.getElementById(`素材${materialIndex}_種類${newRowIndex}`);
+    const percentSelect = document.getElementById(`素材${materialIndex}_％${newRowIndex}`);
+
+    if (typeSelect) {
+      MATERIAL_TYPES.forEach(type => {
+        typeSelect.insertAdjacentHTML('beforeend', `<option value="${type}">${type}</option>`);
+      });
+    }
+
+    if (percentSelect) {
+      for (let p = 5; p <= 100; p += 5) {
+        percentSelect.insertAdjacentHTML('beforeend', `<option value="${p}%">${p}%</option>`);
+      }
+    }
+
+    // 削除ボタンの表示更新
+    updateCompositionRemoveButtons(materialIndex);
+  }
+
+  // 種類・割合の行を削除
+  function removeCompositionRow(materialIndex, rowIndex) {
+    const composition = document.querySelector(`.material-composition[data-material-index="${materialIndex}"]`);
+    if (!composition) return;
+
+    const row = composition.querySelector(`.composition-row[data-row-index="${rowIndex}"]`);
+    if (row) {
+      row.remove();
+
+      // 行のインデックスを再番号付け
+      const rows = composition.querySelectorAll('.composition-row');
+      rows.forEach((r, i) => {
+        const newIndex = i + 1;
+        r.setAttribute('data-row-index', newIndex);
+
+        // IDを更新
+        const typeSelect = r.querySelector('.material-type');
+        const percentSelect = r.querySelector('.material-percent');
+        const removeBtn = r.querySelector('.remove-composition-btn');
+
+        if (typeSelect) typeSelect.id = `素材${materialIndex}_種類${newIndex}`;
+        if (percentSelect) percentSelect.id = `素材${materialIndex}_％${newIndex}`;
+        if (removeBtn) removeBtn.onclick = () => removeCompositionRow(materialIndex, newIndex);
+      });
+
+      updateCompositionRemoveButtons(materialIndex);
+      updateDescriptionFromDetail(); // 素材情報更新
+    }
+  }
+
+  // 種類・割合の削除ボタン表示制御
+  function updateCompositionRemoveButtons(materialIndex) {
+    const composition = document.querySelector(`.material-composition[data-material-index="${materialIndex}"]`);
+    if (!composition) return;
+
+    const rows = composition.querySelectorAll('.composition-row');
+    rows.forEach(row => {
+      const btn = row.querySelector('.remove-composition-btn');
+      if (btn) {
+        // 1行しかない場合は削除ボタンを非表示
+        btn.style.display = rows.length > 1 ? 'inline-block' : 'none';
+      }
+    });
+  }
+
+  // グローバルに公開
+  window.addCompositionRow = addCompositionRow;
+  window.removeCompositionRow = removeCompositionRow;
 
   // ========== カラー動的追加機能 ==========
 
@@ -4244,19 +4338,28 @@ window.updateLoadingProgress = function(percent, text) {
     items.forEach((item, i) => {
       const index = i + 1;
       const location = _val(`素材${index}_箇所`);
-      const type1 = _val(`素材${index}_種類1`);
-      const percent1 = _val(`素材${index}_％1`);
-      const type2 = _val(`素材${index}_種類2`);
-      const percent2 = _val(`素材${index}_％2`);
 
-      if (location && type1) {
-        materialText += `${location}: ${type1}`;
-        if (percent1) materialText += ` ${percent1}%`;
-        if (type2) {
-          materialText += `, ${type2}`;
-          if (percent2) materialText += ` ${percent2}%`;
-        }
-        materialText += '\n';
+      // 動的な行数に対応: 全ての種類・割合を取得
+      const composition = item.querySelector('.material-composition');
+      const materials = [];
+
+      if (composition) {
+        const rows = composition.querySelectorAll('.composition-row');
+        rows.forEach((row, rowIdx) => {
+          const rowIndex = rowIdx + 1;
+          const type = _val(`素材${index}_種類${rowIndex}`);
+          const percent = _val(`素材${index}_％${rowIndex}`);
+
+          if (type) {
+            let part = type;
+            if (percent) part += ` ${percent}`;
+            materials.push(part);
+          }
+        });
+      }
+
+      if (location && materials.length > 0) {
+        materialText += `${location}: ${materials.join('、')}\n`;
       }
     });
 
@@ -4976,23 +5079,37 @@ window.updateLoadingProgress = function(percent, text) {
     // 商品の状態
     productInfo.condition = _val('商品の状態') || '';
 
-    // 素材情報を収集
+    // 素材情報を収集（動的行数対応）
     const materials = [];
-    for (let i = 1; i <= 10; i++) {
-      const location = _val(`素材${i}_箇所`);
-      const type1 = _val(`素材${i}_種類1`);
-      const percent1 = _val(`素材${i}_％1`);
+    const materialItems = document.querySelectorAll('.material-item');
+    materialItems.forEach((item, idx) => {
+      const materialIndex = idx + 1;
+      const location = _val(`素材${materialIndex}_箇所`);
 
-      if (location || type1) {
+      // 動的な行数に対応
+      const composition = item.querySelector('.material-composition');
+      const parts = [];
+      if (composition) {
+        const rows = composition.querySelectorAll('.composition-row');
+        rows.forEach((row, rowIdx) => {
+          const rowIndex = rowIdx + 1;
+          const type = _val(`素材${materialIndex}_種類${rowIndex}`);
+          const percent = _val(`素材${materialIndex}_％${rowIndex}`);
+          if (type) {
+            let part = type;
+            if (percent) part += ` ${percent}`;
+            parts.push(part);
+          }
+        });
+      }
+
+      if (location || parts.length > 0) {
         let materialStr = '';
         if (location) materialStr += location + ': ';
-        if (type1) {
-          materialStr += type1;
-          if (percent1) materialStr += ` ${percent1}%`;
-        }
+        materialStr += parts.join('、');
         materials.push(materialStr);
       }
-    }
+    });
     productInfo.material = materials.join(', ');
 
     // カラー情報を収集（selectドロップダウンから）
@@ -6736,18 +6853,34 @@ window.updateLoadingProgress = function(percent, text) {
   }
 
   /**
-   * 素材セクションを1つに戻す
+   * 素材セクションを1つに戻す（動的行数対応）
    */
   function resetMaterialSections() {
     try {
       const materialItems = document.querySelectorAll('.material-item');
       materialItems.forEach((item, index) => {
         if (index === 0) {
+          // 箇所をクリア
           clearField('素材1_箇所');
-          clearField('素材1_種類1');
-          clearField('素材1_％1');
-          clearField('素材1_種類2');
-          clearField('素材1_％2');
+
+          // 動的な行数に対応: 全ての種類・割合をクリア
+          const composition = item.querySelector('.material-composition');
+          if (composition) {
+            const rows = composition.querySelectorAll('.composition-row');
+            // 最初の行だけ残し、残りは削除
+            rows.forEach((row, rowIdx) => {
+              if (rowIdx === 0) {
+                clearField('素材1_種類1');
+                clearField('素材1_％1');
+              } else {
+                row.remove();
+              }
+            });
+            // 削除ボタン非表示に
+            if (typeof updateCompositionRemoveButtons === 'function') {
+              updateCompositionRemoveButtons(1);
+            }
+          }
         } else {
           item.remove();
         }
