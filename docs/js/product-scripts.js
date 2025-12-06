@@ -7857,7 +7857,8 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
       button.textContent = '▼';
     }
 
-    // 開閉状態の保存は「保存」ボタン押下時に行う
+    // 開閉状態を即時保存（ページを離れても維持されるように）
+    saveDescriptionBlocksCollapseState();
   }
 
   /**
@@ -7903,7 +7904,8 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
       button.textContent = '▼';
     }
 
-    // 開閉状態の保存は「保存」ボタン押下時に行う
+    // 開閉状態を即時保存（ページを離れても維持されるように）
+    saveTitleBlocksCollapseState();
   }
 
   /**
