@@ -1044,8 +1044,10 @@ window.updateLoadingProgress = function(percent, text) {
         return;
       }
 
-      // globalMasterOptionsから検索
-      const masterOptions = window.globalMasterOptions || {};
+      // globalMasterOptionsまたはMASTER_OPTIONSから検索
+      const masterOptions = window.globalMasterOptions || MASTER_OPTIONS || {};
+      console.log('[属性検索] query:', query);
+      console.log('[属性検索] masterOptions keys:', Object.keys(masterOptions));
       const results = [];
 
       // カテゴリリスト（商品属性用）
