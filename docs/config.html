@@ -5609,13 +5609,62 @@ ${descFormattedNumber}`;
     }
 
     /**
+     * ワード別設定のカテゴリプルダウン変更時
+     */
+    function handleWordCategoryChange(index) {
+      const categorySelect = document.getElementById(`wordCategorySelect_${index}`);
+      const saleswordSelect = document.getElementById(`wordSaleswordSelect_${index}`);
+
+      if (!categorySelect || !saleswordSelect) return;
+
+      const selectedCategory = categorySelect.value;
+
+      // セールスワードプルダウンをクリアして再構築
+      saleswordSelect.innerHTML = '<option value="">ワード選択</option>';
+
+      if (selectedCategory && SALESWORD_MASTER[selectedCategory]) {
+        // 選択されたカテゴリのワードをプルダウンに追加
+        SALESWORD_MASTER[selectedCategory].forEach(word => {
+          const option = document.createElement('option');
+          option.value = word;
+          option.textContent = word;
+          saleswordSelect.appendChild(option);
+        });
+        saleswordSelect.disabled = false;
+      } else {
+        saleswordSelect.disabled = true;
+      }
+
+      // WORD_OVERRIDESのwordをクリア（カテゴリ変更時）
+      WORD_OVERRIDES[index].word = '';
+    }
+
+    /**
+     * ワード別設定のセールスワードプルダウン変更時
+     */
+    function handleWordSaleswordChange(index) {
+      const saleswordSelect = document.getElementById(`wordSaleswordSelect_${index}`);
+
+      if (!saleswordSelect) return;
+
+      // WORD_OVERRIDESを更新
+      WORD_OVERRIDES[index].word = saleswordSelect.value;
+    }
+
+    /**
      * ワード別設定の入力フィールドから値を更新
      */
     function updateWordOverrideFromInput(index) {
+      const saleswordSelect = document.getElementById(`wordSaleswordSelect_${index}`);
       const prefixSelect = document.getElementById(`wordPrefixSelect_${index}`);
       const prefixCustom = document.getElementById(`wordPrefixCustom_${index}`);
       const suffixSelect = document.getElementById(`wordSuffixSelect_${index}`);
       const suffixCustom = document.getElementById(`wordSuffixCustom_${index}`);
+
+      // ワード（セールスワード）を更新
+      if (saleswordSelect) {
+        WORD_OVERRIDES[index].word = saleswordSelect.value || '';
+      }
 
       let prefix = '';
       let suffix = '';
@@ -5701,16 +5750,37 @@ ${descFormattedNumber}`;
         const suffixIsCustom = suffixValue && !['', '】', '』', '」', '）', '｜', '！', '★', '☆', '◆', '●', '■', '♡', '✨', '※'].includes(suffixValue);
         const suffixSelectValue = suffixIsCustom ? 'custom' : suffixValue;
 
+        // カテゴリプルダウンのオプションを作成
+        const categoryOptions = Object.keys(SALESWORD_MASTER).map(cat =>
+          `<option value="${cat}">${cat}</option>`
+        ).join('');
+
+        // 現在の設定値からカテゴリを逆引き（override.wordがどのカテゴリに属するか）
+        let currentCategory = '';
+        let currentWord = override.word || '';
+        for (const [cat, words] of Object.entries(SALESWORD_MASTER)) {
+          if (words.includes(currentWord)) {
+            currentCategory = cat;
+            break;
+          }
+        }
+
         item.innerHTML = `
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <span style="font-size: 13px; font-weight: 500;">設定 ${index + 1}</span>
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeWordOverride(${index})">削除</button>
+            <button type="button" style="padding: 2px 8px; font-size: 11px; color: #dc3545; background: transparent; border: 1px solid #dc3545; border-radius: 4px; cursor: pointer;" onclick="removeWordOverride(${index})" onmouseover="this.style.background='#dc3545';this.style.color='white';" onmouseout="this.style.background='transparent';this.style.color='#dc3545';">削除</button>
           </div>
           <div style="margin-bottom: 8px;">
             <label style="font-size: 12px; margin-bottom: 4px; display: block;">セールスワード</label>
-            <input type="text" class="form-control form-control-sm" value="${override.word || ''}"
-                   onchange="updateWordOverride(${index}, 'word', this.value)"
-                   placeholder="例: 匿名配送">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <select id="wordCategorySelect_${index}" class="form-select form-select-sm" onchange="handleWordCategoryChange(${index})">
+                <option value="">カテゴリ選択</option>
+                ${categoryOptions}
+              </select>
+              <select id="wordSaleswordSelect_${index}" class="form-select form-select-sm" onchange="handleWordSaleswordChange(${index})" ${currentCategory ? '' : 'disabled'}>
+                <option value="">ワード選択</option>
+              </select>
+            </div>
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
             <div>
@@ -5745,6 +5815,31 @@ ${descFormattedNumber}`;
         const suffixSelect = document.getElementById(`wordSuffixSelect_${index}`);
         if (prefixSelect) prefixSelect.value = prefixSelectValue;
         if (suffixSelect) suffixSelect.value = suffixSelectValue;
+
+        // カテゴリとセールスワードのプルダウンの値を設定
+        const categorySelect = document.getElementById(`wordCategorySelect_${index}`);
+        const saleswordSelect = document.getElementById(`wordSaleswordSelect_${index}`);
+
+        if (categorySelect && currentCategory) {
+          categorySelect.value = currentCategory;
+
+          // セールスワードプルダウンにオプションを追加
+          if (saleswordSelect && SALESWORD_MASTER[currentCategory]) {
+            saleswordSelect.innerHTML = '<option value="">ワード選択</option>';
+            SALESWORD_MASTER[currentCategory].forEach(word => {
+              const option = document.createElement('option');
+              option.value = word;
+              option.textContent = word;
+              saleswordSelect.appendChild(option);
+            });
+            saleswordSelect.disabled = false;
+
+            // セールスワードの値を設定
+            if (currentWord) {
+              saleswordSelect.value = currentWord;
+            }
+          }
+        }
       });
     }
 
