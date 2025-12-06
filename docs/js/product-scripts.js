@@ -4932,8 +4932,132 @@ window.updateLoadingProgress = function(percent, text) {
         applyDefaultSalesword();
 
         console.log('セールスワード初期化完了');
+
+        // セールスワード検索機能を初期化
+        setupSaleswordSearch();
       }
     }
+  }
+
+  /**
+   * セールスワード検索機能のセットアップ
+   */
+  function setupSaleswordSearch() {
+    const searchInput = document.getElementById('saleswordSearch');
+    const suggestList = document.getElementById('saleswordSuggestList');
+
+    if (!searchInput || !suggestList) {
+      console.log('セールスワード検索要素が見つかりません');
+      return;
+    }
+
+    // 入力時の検索処理
+    searchInput.addEventListener('input', function() {
+      const query = this.value.trim().toLowerCase();
+
+      if (query.length === 0) {
+        suggestList.style.display = 'none';
+        return;
+      }
+
+      // 全カテゴリからワードを検索
+      const results = [];
+      for (const [category, words] of Object.entries(SALESWORD_DATA.wordsByCategory)) {
+        if (!words || !Array.isArray(words)) continue;
+
+        words.forEach(word => {
+          if (word.toLowerCase().includes(query)) {
+            results.push({ word, category });
+          }
+        });
+      }
+
+      // 重複排除（同じワードでも異なるカテゴリなら表示）
+      const uniqueResults = results.filter((item, index, self) =>
+        index === self.findIndex(t => t.word === item.word && t.category === item.category)
+      );
+
+      // 候補を表示
+      if (uniqueResults.length > 0) {
+        suggestList.innerHTML = uniqueResults.slice(0, 20).map(item => `
+          <div class="salesword-suggest-item" data-word="${item.word}" data-category="${item.category}"
+               style="padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;"
+               onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='white'">
+            <span style="font-weight: 500;">${item.word}</span>
+            <span style="font-size: 11px; color: #6b7280; background: #e5e7eb; padding: 2px 6px; border-radius: 4px;">${item.category}</span>
+          </div>
+        `).join('');
+        suggestList.style.display = 'block';
+
+        // 候補クリック時の処理
+        suggestList.querySelectorAll('.salesword-suggest-item').forEach(item => {
+          item.addEventListener('click', function() {
+            const word = this.dataset.word;
+            const category = this.dataset.category;
+            selectSaleswordFromSearch(word, category);
+            searchInput.value = '';
+            suggestList.style.display = 'none';
+          });
+        });
+      } else {
+        suggestList.innerHTML = '<div style="padding: 10px 12px; color: #9ca3af; font-size: 13px;">該当するワードが見つかりません</div>';
+        suggestList.style.display = 'block';
+      }
+    });
+
+    // 入力欄外クリックで候補を閉じる
+    document.addEventListener('click', function(e) {
+      if (!searchInput.contains(e.target) && !suggestList.contains(e.target)) {
+        suggestList.style.display = 'none';
+      }
+    });
+
+    // Escapeキーで候補を閉じる
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        suggestList.style.display = 'none';
+        this.blur();
+      }
+    });
+
+    console.log('セールスワード検索機能を初期化しました');
+  }
+
+  /**
+   * 検索から選択されたセールスワードをプルダウンに反映
+   */
+  function selectSaleswordFromSearch(word, category) {
+    const categorySelect = document.getElementById('セールスワード(カテゴリ)');
+    const keywordSelect = document.getElementById('セールスワード');
+
+    if (!categorySelect || !keywordSelect) {
+      console.error('セールスワードプルダウンが見つかりません');
+      return;
+    }
+
+    // カテゴリを設定
+    categorySelect.value = category;
+
+    // キーワードプルダウンを更新（onSalesWordCategoryChangedと同様の処理）
+    const categoryWords = SALESWORD_DATA.wordsByCategory[category] || [];
+    const uniqueWords = [...new Set(categoryWords)];
+
+    keywordSelect.innerHTML = '<option value="">-- キーワードを選択 --</option>';
+    uniqueWords.forEach(w => {
+      const option = document.createElement('option');
+      option.value = w;
+      option.textContent = w;
+      keywordSelect.appendChild(option);
+    });
+    keywordSelect.disabled = false;
+
+    // キーワードを設定
+    keywordSelect.value = word;
+
+    // 商品名プレビューを更新
+    updateNamePreview();
+
+    console.log(`セールスワード検索から選択: ${category} / ${word}`);
   }
 
   function setupCategoryDropdown() {
