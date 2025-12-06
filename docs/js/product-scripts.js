@@ -2338,9 +2338,6 @@ window.updateLoadingProgress = function(percent, text) {
         const defaultProcureDate = PROCURE_LISTING_DEFAULTS['デフォルト仕入日'];
         if (defaultProcureDate) {
           procureDateField.value = defaultProcureDate;
-        } else {
-          // 設定がない場合も今日の日付をデフォルトとして使用
-          procureDateField.value = today;
         }
       }
     }
@@ -2370,9 +2367,6 @@ window.updateLoadingProgress = function(percent, text) {
         const defaultListingDate = PROCURE_LISTING_DEFAULTS['デフォルト出品日'];
         if (defaultListingDate) {
           listingDateField.value = defaultListingDate;
-        } else {
-          // 設定がない場合も今日の日付をデフォルトとして使用
-          listingDateField.value = today;
         }
       }
     }
