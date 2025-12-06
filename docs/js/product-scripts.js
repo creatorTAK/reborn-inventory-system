@@ -738,7 +738,7 @@ window.updateLoadingProgress = function(percent, text) {
 
         if (percentSelect) {
           percentSelect.innerHTML = '<option value="">--%</option>';
-          for (let p = 5; p <= 100; p += 5) {
+          for (let p = 1; p <= 100; p++) {
             percentSelect.insertAdjacentHTML('beforeend', `<option value="${p}%">${p}%</option>`);
           }
         }
@@ -888,7 +888,7 @@ window.updateLoadingProgress = function(percent, text) {
     }
 
     if (percentSelect) {
-      for (let p = 5; p <= 100; p += 5) {
+      for (let p = 1; p <= 100; p++) {
         percentSelect.insertAdjacentHTML('beforeend', `<option value="${p}%">${p}%</option>`);
       }
     }
