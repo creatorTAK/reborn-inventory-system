@@ -2320,7 +2320,12 @@ window.updateLoadingProgress = function(percent, text) {
   }
 
   function applyProcureListingDefaults() {
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD形式
+    // ローカル時間（日本時間）でYYYY-MM-DD形式を取得
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
 
     // デフォルト仕入日
     const procureDateField = document.getElementById('仕入日');
