@@ -617,38 +617,62 @@ window.updateLoadingProgress = function(percent, text) {
 
   // 素材マスタデータの取得と設定
   function initializeMaterialMasters() {
+    // 1. まずFirestoreから読み込んだMASTER_OPTIONSを確認
+    const masterOpts = window.globalMasterOptions || MASTER_OPTIONS || {};
+    const hasLocation = masterOpts['素材(箇所)'] && masterOpts['素材(箇所)'].length > 0;
+    const hasType = masterOpts['素材(種類)'] && masterOpts['素材(種類)'].length > 0;
+
+    if (hasLocation || hasType) {
+      MATERIAL_LOCATIONS = masterOpts['素材(箇所)'] || [];
+      MATERIAL_TYPES = masterOpts['素材(種類)'] || [];
+      populateMaterialSelects(1);
+      console.log('✅ 素材マスタ取得完了（Firestore） - 箇所:', MATERIAL_LOCATIONS.length, '種類:', MATERIAL_TYPES.length);
+      return;
+    }
+
+    // 2. MASTER_OPTIONSにない場合、GASから読み込み（レガシー対応）
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       google.script.run
         .withSuccessHandler(function(opts) {
           MATERIAL_LOCATIONS = opts['素材(箇所)'] || [];
           MATERIAL_TYPES = opts['素材(種類)'] || [];
-
           populateMaterialSelects(1);
-
-          console.log('素材マスタ取得完了 - 箇所:', MATERIAL_LOCATIONS.length, '種類:', MATERIAL_TYPES.length);
+          console.log('素材マスタ取得完了（GAS） - 箇所:', MATERIAL_LOCATIONS.length, '種類:', MATERIAL_TYPES.length);
         })
         .withFailureHandler(function(error) {
           console.error('素材マスタ取得エラー:', error);
         })
         .getMasterOptions();
+    } else {
+      console.warn('⚠️ 素材マスタデータが見つかりません（Firestore/GAS両方利用不可）');
     }
   }
 
   // カラーマスタデータの取得と設定
   function initializeColorMasters() {
+    // 1. まずFirestoreから読み込んだMASTER_OPTIONSを確認
+    const masterOpts = window.globalMasterOptions || MASTER_OPTIONS || {};
+    if (masterOpts['カラー/配色/トーン'] && masterOpts['カラー/配色/トーン'].length > 0) {
+      COLOR_OPTIONS = masterOpts['カラー/配色/トーン'];
+      populateColorSelect(1);
+      console.log('✅ カラーマスタ取得完了（Firestore）:', COLOR_OPTIONS.length);
+      return;
+    }
+
+    // 2. MASTER_OPTIONSにない場合、GASから読み込み（レガシー対応）
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       google.script.run
         .withSuccessHandler(function(opts) {
           COLOR_OPTIONS = opts['カラー/配色/トーン'] || [];
-
           populateColorSelect(1);
-
-          console.log('カラーマスタ取得完了:', COLOR_OPTIONS.length);
+          console.log('カラーマスタ取得完了（GAS）:', COLOR_OPTIONS.length);
         })
         .withFailureHandler(function(error) {
           console.error('カラーマスタ取得エラー:', error);
         })
         .getMasterOptions();
+    } else {
+      console.warn('⚠️ カラーマスタデータが見つかりません（Firestore/GAS両方利用不可）');
     }
   }
 
