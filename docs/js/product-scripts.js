@@ -798,6 +798,27 @@ window.updateLoadingProgress = function(percent, text) {
     materialList.appendChild(newItem);
     populateMaterialSelects(materialCount);
     updateRemoveButtons();
+
+    // 新しいセレクトにイベントリスナーを追加してプレビュー更新
+    const locationSelect = document.getElementById(`素材${materialCount}_箇所`);
+    const typeSelect = document.getElementById(`素材${materialCount}_種類1`);
+    const percentSelect = document.getElementById(`素材${materialCount}_％1`);
+
+    const updateMaterialPreview = () => {
+      if (typeof updateDescriptionFromDetail === 'function') {
+        updateDescriptionFromDetail();
+      }
+    };
+
+    if (locationSelect) {
+      locationSelect.addEventListener('change', updateMaterialPreview);
+    }
+    if (typeSelect) {
+      typeSelect.addEventListener('change', updateMaterialPreview);
+    }
+    if (percentSelect) {
+      percentSelect.addEventListener('change', updateMaterialPreview);
+    }
   }
 
   // 素材セットを削除
@@ -891,6 +912,20 @@ window.updateLoadingProgress = function(percent, text) {
       for (let p = 1; p <= 100; p++) {
         percentSelect.insertAdjacentHTML('beforeend', `<option value="${p}%">${p}%</option>`);
       }
+    }
+
+    // 新しいセレクトにイベントリスナーを追加してプレビュー更新
+    const updateMaterialPreview = () => {
+      if (typeof updateDescriptionFromDetail === 'function') {
+        updateDescriptionFromDetail();
+      }
+    };
+
+    if (typeSelect) {
+      typeSelect.addEventListener('change', updateMaterialPreview);
+    }
+    if (percentSelect) {
+      percentSelect.addEventListener('change', updateMaterialPreview);
     }
 
     // 削除ボタンの表示更新

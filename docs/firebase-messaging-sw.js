@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v130';  // 素材割合1-100%対応、削除ボタン縮小
+const CACHE_VERSION = 'v131';  // 素材追加ボタン色修正、余白追加、プレビュー反映修正
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
