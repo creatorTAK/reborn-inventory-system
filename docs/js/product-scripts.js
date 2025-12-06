@@ -3305,6 +3305,9 @@ window.updateLoadingProgress = function(percent, text) {
       ghostClass: 'sortable-ghost',      // ドラッグ中の要素に適用されるクラス
       chosenClass: 'sortable-chosen',    // 選択中の要素に適用されるクラス
       dragClass: 'sortable-drag',        // ドラッグ中の要素に適用されるクラス
+      delay: 300,                        // 300ms長押しでドラッグ開始（誤操作防止）
+      delayOnTouchOnly: true,            // タッチデバイスのみ遅延適用
+      touchStartThreshold: 10,           // 10px以上移動したらドラッグキャンセル（スクロール優先）
       onEnd: function() {
         // ドロップ後に並び順を保存
         saveTitleBlockOrder();
@@ -8228,6 +8231,9 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
       dragClass: 'sortable-drag',
+      delay: 300,                        // 300ms長押しでドラッグ開始（誤操作防止）
+      delayOnTouchOnly: true,            // タッチデバイスのみ遅延適用
+      touchStartThreshold: 10,           // 10px以上移動したらドラッグキャンセル（スクロール優先）
       onEnd: function() {
         // ドロップ後に並び順を保存
         saveDescriptionBlocksOrder();
