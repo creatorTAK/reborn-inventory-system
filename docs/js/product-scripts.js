@@ -1023,6 +1023,166 @@ window.updateLoadingProgress = function(percent, text) {
     }
   }
 
+  /**
+   * 商品属性検索機能のセットアップ
+   */
+  function setupAttributeSearch() {
+    const searchInput = document.getElementById('attributeSearch');
+    const suggestList = document.getElementById('attributeSuggestList');
+
+    if (!searchInput || !suggestList) {
+      console.log('商品属性検索要素が見つかりません');
+      return;
+    }
+
+    // 入力時の検索処理
+    searchInput.addEventListener('input', function() {
+      const query = this.value.trim().toLowerCase();
+
+      if (query.length === 0) {
+        suggestList.style.display = 'none';
+        return;
+      }
+
+      // globalMasterOptionsから検索
+      const masterOptions = window.globalMasterOptions || {};
+      const results = [];
+
+      // カテゴリリスト（商品属性用）
+      const attributeCategories = [
+        '生地・素材・質感系', '季節感・機能性', '着用シーン・イベント', '見た目・印象',
+        'トレンド表現', 'サイズ感・体型カバー', '年代・テイスト・スタイル', 'カラー/配色/トーン',
+        '柄・模様', 'ディテール・仕様', 'シルエット/ライン', 'ネックライン',
+        '襟・衿', '袖・袖付け', '丈', '革/加工', '毛皮/加工', '生産国'
+      ];
+
+      // 各カテゴリの値を検索
+      attributeCategories.forEach(category => {
+        const values = masterOptions[category] || [];
+        values.forEach(value => {
+          if (value.toLowerCase().includes(query)) {
+            results.push({ value, category });
+          }
+        });
+      });
+
+      // 重複排除
+      const uniqueResults = results.filter((item, index, self) =>
+        index === self.findIndex(t => t.value === item.value && t.category === item.category)
+      );
+
+      // 候補を表示
+      if (uniqueResults.length > 0) {
+        suggestList.innerHTML = uniqueResults.slice(0, 20).map(item => `
+          <div class="attribute-suggest-item" data-value="${item.value}" data-category="${item.category}"
+               style="padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;"
+               onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='white'">
+            <span style="font-weight: 500;">${item.value}</span>
+            <span style="font-size: 11px; color: #6b7280; background: #e5e7eb; padding: 2px 6px; border-radius: 4px;">${item.category}</span>
+          </div>
+        `).join('');
+        suggestList.style.display = 'block';
+
+        // 候補クリック時の処理
+        suggestList.querySelectorAll('.attribute-suggest-item').forEach(item => {
+          item.addEventListener('click', function() {
+            const value = this.dataset.value;
+            const category = this.dataset.category;
+            addAttributeFromSearch(value, category);
+            searchInput.value = '';
+            suggestList.style.display = 'none';
+          });
+        });
+      } else {
+        suggestList.innerHTML = '<div style="padding: 10px 12px; color: #9ca3af; font-size: 13px;">該当する属性が見つかりません</div>';
+        suggestList.style.display = 'block';
+      }
+    });
+
+    // 入力欄外クリックで候補を閉じる
+    document.addEventListener('click', function(e) {
+      if (!searchInput.contains(e.target) && !suggestList.contains(e.target)) {
+        suggestList.style.display = 'none';
+      }
+    });
+
+    // Escapeキーで候補を閉じる
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        suggestList.style.display = 'none';
+        this.blur();
+      }
+    });
+
+    console.log('商品属性検索機能を初期化しました');
+  }
+
+  /**
+   * 検索から選択された属性を追加
+   */
+  function addAttributeFromSearch(value, category) {
+    // 現在の属性数を取得
+    const items = document.querySelectorAll('.attribute-item');
+    const currentCount = items.length;
+
+    // 最初の属性が空の場合はそこに設定
+    const firstCategorySelect = document.getElementById('商品属性1_カテゴリ');
+    const firstValueSelect = document.getElementById('商品属性1_値');
+
+    if (currentCount === 1 && firstCategorySelect && !firstCategorySelect.value) {
+      // 最初の属性が未設定の場合、そこに設定
+      firstCategorySelect.value = category;
+      updateAttributeValues('商品属性1_カテゴリ', '商品属性1_値');
+      
+      // 値のセットは少し遅延させる（プルダウンの更新を待つ）
+      setTimeout(() => {
+        const valueSelect = document.getElementById('商品属性1_値');
+        if (valueSelect) {
+          valueSelect.value = value;
+          updateNamePreview();
+        }
+      }, 100);
+      return;
+    }
+
+    // 既に同じ値が設定されていないかチェック
+    for (let i = 1; i <= currentCount; i++) {
+      const catSelect = document.getElementById(`商品属性${i}_カテゴリ`);
+      const valSelect = document.getElementById(`商品属性${i}_値`);
+      if (catSelect && valSelect && catSelect.value === category && valSelect.value === value) {
+        alert('この属性は既に追加されています');
+        return;
+      }
+    }
+
+    // 最大数チェック
+    if (currentCount >= 10) {
+      alert('商品属性は最大10個まで追加できます');
+      return;
+    }
+
+    // 新しい属性を追加
+    addAttribute();
+
+    // 追加された属性に値を設定
+    const newIndex = attributeCount;
+    const newCategorySelect = document.getElementById(`商品属性${newIndex}_カテゴリ`);
+
+    if (newCategorySelect) {
+      newCategorySelect.value = category;
+      updateAttributeValues(`商品属性${newIndex}_カテゴリ`, `商品属性${newIndex}_値`);
+
+      // 値のセットは少し遅延させる
+      setTimeout(() => {
+        const newValueSelect = document.getElementById(`商品属性${newIndex}_値`);
+        if (newValueSelect) {
+          newValueSelect.value = value;
+          updateNamePreview();
+        }
+      }, 100);
+    }
+  }
+
   // 商品の状態に応じてボタンを表示切替
   function updateConditionButtons() {
     const conditionSelect = document.getElementById('商品の状態');
@@ -7582,6 +7742,9 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     populateAttributeCategory(1);
     setupAttributeSelector(1);
     updateAttributeRemoveButtons();
+
+    // 商品属性検索機能をセットアップ
+    setupAttributeSearch();
 
     // 素材入力フィールドの変更監視
     document.addEventListener('change', function(e) {
