@@ -857,6 +857,12 @@ window.updateLoadingProgress = function(percent, text) {
         <button type="button" class="remove-color-btn" onclick="removeColor(${colorCount})">削除</button>
       </div>
 
+      <!-- カラー検索入力欄 -->
+      <div class="color-search-wrapper" style="margin-bottom: 8px; position: relative;">
+        <input type="text" class="color-search-input" data-index="${colorCount}" placeholder="🔍 カラーを検索..." autocomplete="off" style="font-size: 16px; width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px;">
+        <div class="color-suggest-list" data-index="${colorCount}" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #d1d5db; border-top: none; border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+      </div>
+
       <div class="color-fields">
         <label>色:
           <select id="カラー${colorCount}" class="color-select">
@@ -868,6 +874,7 @@ window.updateLoadingProgress = function(percent, text) {
 
     colorList.appendChild(newItem);
     populateColorSelect(colorCount);
+    setupColorRowSearch(colorCount); // 検索機能をセットアップ
     updateColorRemoveButtons();
   }
 
@@ -899,6 +906,12 @@ window.updateLoadingProgress = function(percent, text) {
           select.id = `カラー${newIndex}`;
           select.value = oldValue; // 選択値を保持
         }
+
+        // 検索要素のdata-indexも更新
+        const searchInput = item.querySelector('.color-search-input');
+        const suggestList = item.querySelector('.color-suggest-list');
+        if (searchInput) searchInput.setAttribute('data-index', newIndex);
+        if (suggestList) suggestList.setAttribute('data-index', newIndex);
       });
 
       updateColorRemoveButtons();
@@ -915,6 +928,119 @@ window.updateLoadingProgress = function(percent, text) {
         btn.style.display = items.length > 1 ? 'block' : 'none';
       }
     });
+  }
+
+  // ========== カラー検索機能 ==========
+
+  /**
+   * カラー検索機能のセットアップ（全行に対して初期化）
+   */
+  function setupColorSearch() {
+    // 既存のカラー行すべてに検索機能をセットアップ
+    const colorItems = document.querySelectorAll('.color-item');
+    colorItems.forEach(item => {
+      const index = item.getAttribute('data-index');
+      if (index) {
+        setupColorRowSearch(parseInt(index));
+      }
+    });
+
+    // 入力欄外クリックで全ての候補リストを閉じる
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.color-search-wrapper')) {
+        document.querySelectorAll('.color-suggest-list').forEach(list => {
+          list.style.display = 'none';
+        });
+      }
+    });
+
+    console.log('カラー検索機能を初期化しました');
+  }
+
+  /**
+   * 特定のカラー行に検索機能をセットアップ
+   */
+  function setupColorRowSearch(index) {
+    const searchInput = document.querySelector(`.color-search-input[data-index="${index}"]`);
+    const suggestList = document.querySelector(`.color-suggest-list[data-index="${index}"]`);
+
+    if (!searchInput || !suggestList) {
+      console.log(`カラー${index}の検索要素が見つかりません`);
+      return;
+    }
+
+    // 入力時の検索処理
+    searchInput.addEventListener('input', function() {
+      const query = this.value.trim().toLowerCase();
+
+      if (query.length === 0) {
+        suggestList.style.display = 'none';
+        return;
+      }
+
+      // COLOR_OPTIONSから検索（既にFirestore/GASから読み込み済み）
+      const results = [];
+      COLOR_OPTIONS.forEach(color => {
+        if (color.toLowerCase().includes(query)) {
+          results.push(color);
+        }
+      });
+
+      // 候補を表示
+      if (results.length > 0) {
+        suggestList.innerHTML = results.slice(0, 20).map(color => `
+          <div class="color-suggest-item" data-value="${color}"
+               style="padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;"
+               onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='white'">
+            <span style="font-weight: 500;">${color}</span>
+          </div>
+        `).join('');
+        suggestList.style.display = 'block';
+
+        // 候補クリック時の処理
+        suggestList.querySelectorAll('.color-suggest-item').forEach(item => {
+          item.addEventListener('click', function() {
+            const value = this.dataset.value;
+            selectColorForRow(index, value);
+            searchInput.value = '';
+            suggestList.style.display = 'none';
+          });
+        });
+      } else {
+        suggestList.innerHTML = '<div style="padding: 10px 12px; color: #9ca3af; font-size: 13px;">該当するカラーが見つかりません</div>';
+        suggestList.style.display = 'block';
+      }
+    });
+
+    // Escapeキーで候補を閉じる
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        suggestList.style.display = 'none';
+        this.blur();
+      }
+    });
+  }
+
+  /**
+   * 指定した行にカラーを設定
+   */
+  function selectColorForRow(index, value) {
+    const colorSelect = document.getElementById(`カラー${index}`);
+
+    if (!colorSelect) {
+      console.error(`カラー${index}のプルダウンが見つかりません`);
+      return;
+    }
+
+    // 値を設定
+    colorSelect.value = value;
+
+    // プレビューを更新
+    if (typeof updateDescriptionFromDetail === 'function') {
+      updateDescriptionFromDetail();
+    }
+
+    console.log(`カラー${index}に「${value}」を設定しました`);
   }
 
   // ========== 商品属性動的追加機能 ==========
@@ -7779,6 +7905,9 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
 
     // 商品属性検索機能をセットアップ
     setupAttributeSearch();
+
+    // カラー検索機能をセットアップ
+    setupColorSearch();
 
     // 素材入力フィールドの変更監視
     document.addEventListener('change', function(e) {
