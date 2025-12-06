@@ -6153,70 +6153,130 @@ ${descFormattedNumber}`;
       const savedConfig = localStorage.getItem('rebornConfig_procureListingDefault');
       const config = savedConfig ? JSON.parse(savedConfig) : {};
 
+      // 仕入先を取得
+      let supplierOptions = [];
+      try {
+        console.log('📦 Firestoreから仕入先一覧を取得中...');
+        const snapshot = await window.db.collection('suppliers')
+          .orderBy('name', 'asc')
+          .get();
+
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.name) {
+            supplierOptions.push(data.name);
+          }
+        });
+        console.log('✅ 仕入先 ' + supplierOptions.length + '件 を読み込みました');
+      } catch (e) {
+        console.error('❌ 仕入先読み込みエラー:', e);
+      }
+
+      // 出品先を取得
+      let salesChannelOptions = [];
+      try {
+        console.log('📦 Firestoreから出品先一覧を取得中...');
+        const snapshot = await window.db.collection('salesChannels')
+          .orderBy('name', 'asc')
+          .get();
+
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.name) {
+            salesChannelOptions.push(data.name);
+          }
+        });
+        console.log('✅ 出品先 ' + salesChannelOptions.length + '件 を読み込みました');
+      } catch (e) {
+        console.error('❌ 出品先読み込みエラー:', e);
+      }
+
+      // データが両方0件の場合、初期データを自動投入
+      if (supplierOptions.length === 0 && salesChannelOptions.length === 0) {
+        console.log('⚠️ 仕入先・出品先が未登録です。初期データを投入します...');
+        await seedInitialMasterData();
+        // 再取得
+        return initProcureListingDropdowns();
+      }
+
       // 仕入先プルダウンを初期化
       const procureSelect = document.getElementById('デフォルト仕入先');
       if (procureSelect) {
-        try {
-          console.log('📦 Firestoreから仕入先一覧を取得中...');
-          const snapshot = await window.db.collection('suppliers')
-            .orderBy('name', 'asc')
-            .get();
-
-          const options = [];
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.name) {
-              options.push(data.name);
-            }
-          });
-
-          console.log('✅ 仕入先 ' + options.length + '件 を読み込みました');
-          populateSelect(procureSelect, options);
-
-          // 設定値を適用
-          if (config.デフォルト仕入先) {
-            procureSelect.value = config.デフォルト仕入先;
-            console.log('✅ デフォルト仕入先を設定しました:', config.デフォルト仕入先);
-          }
-
-          // キャッシュに保存
-          localStorage.setItem('masterData_仕入先', JSON.stringify(options));
-        } catch (e) {
-          console.error('❌ 仕入先読み込みエラー:', e);
+        populateSelect(procureSelect, supplierOptions);
+        if (config.デフォルト仕入先) {
+          procureSelect.value = config.デフォルト仕入先;
+          console.log('✅ デフォルト仕入先を設定しました:', config.デフォルト仕入先);
         }
+        localStorage.setItem('masterData_仕入先', JSON.stringify(supplierOptions));
       }
 
       // 出品先プルダウンを初期化
       const listingSelect = document.getElementById('デフォルト出品先');
       if (listingSelect) {
-        try {
-          console.log('📦 Firestoreから出品先一覧を取得中...');
-          const snapshot = await window.db.collection('salesChannels')
-            .orderBy('name', 'asc')
-            .get();
-
-          const options = [];
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.name) {
-              options.push(data.name);
-            }
-          });
-
-          console.log('✅ 出品先 ' + options.length + '件 を読み込みました');
-          populateSelect(listingSelect, options);
-
-          // 設定値を適用
-          if (config.デフォルト出品先) {
-            listingSelect.value = config.デフォルト出品先;
-            console.log('✅ デフォルト出品先を設定しました:', config.デフォルト出品先);
-          }
-
-          // キャッシュに保存
-          localStorage.setItem('masterData_出品先', JSON.stringify(options));
-        } catch (e) {
-          console.error('❌ 出品先読み込みエラー:', e);
+        populateSelect(listingSelect, salesChannelOptions);
+        if (config.デフォルト出品先) {
+          listingSelect.value = config.デフォルト出品先;
+          console.log('✅ デフォルト出品先を設定しました:', config.デフォルト出品先);
         }
+        localStorage.setItem('masterData_出品先', JSON.stringify(salesChannelOptions));
+      }
+    }
+
+    /**
+     * 仕入先・出品先の初期データを投入
+     */
+    async function seedInitialMasterData() {
+      if (!window.db) return;
+
+      const suppliers = [
+        { name: 'セカンドストリート' },
+        { name: 'ハードオフ' },
+        { name: 'ブックオフ' },
+        { name: 'トレジャーファクトリー' },
+        { name: 'キングファミリー' },
+        { name: 'オフハウス' },
+        { name: 'ドンドンダウン' },
+        { name: '個人仕入れ' },
+        { name: 'ネット仕入れ' },
+        { name: 'その他' }
+      ];
+
+      const salesChannels = [
+        { name: 'メルカリ', commission: 10 },
+        { name: 'メルカリShops', commission: 10 },
+        { name: 'ヤフオク', commission: 10 },
+        { name: 'ヤフーフリマ', commission: 5 },
+        { name: 'ラクマ', commission: 6 },
+        { name: 'BASE', commission: 3 }
+      ];
+
+      const batch = window.db.batch();
+
+      // 仕入先を追加
+      for (const supplier of suppliers) {
+        const docRef = window.db.collection('suppliers').doc();
+        batch.set(docRef, {
+          ...supplier,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      // 出品先を追加
+      for (const channel of salesChannels) {
+        const docRef = window.db.collection('salesChannels').doc();
+        batch.set(docRef, {
+          ...channel,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      try {
+        await batch.commit();
+        console.log('✅ 初期データ投入完了: 仕入先 ' + suppliers.length + '件, 出品先 ' + salesChannels.length + '件');
+      } catch (error) {
+        console.error('❌ 初期データ投入エラー:', error);
       }
     }
 
