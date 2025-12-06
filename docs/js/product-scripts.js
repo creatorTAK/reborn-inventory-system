@@ -2550,8 +2550,8 @@ window.updateLoadingProgress = function(percent, text) {
         willCallLegacy: !segments || segments.length === 0
       });
       if (!segments || segments.length === 0) {
-        console.log('✅ レガシーUIを呼び出します');
-        initLegacyManagementUI();
+        console.log('✅ 管理番号未設定メッセージを表示します');
+        showManagementNumberNotConfigured();
       } else {
         console.log('❌ セグメント設定が存在するため、レガシーUIをスキップ');
       }
@@ -2562,10 +2562,10 @@ window.updateLoadingProgress = function(percent, text) {
     google.script.run
       .withSuccessHandler(function(segments) {
         if (!segments || segments.length === 0) {
-          // セグメント設定がない場合は旧UIを使用
+          // セグメント設定がない場合は未設定メッセージを表示
           localStorage.removeItem('reborn_mgmt_segments');
           if (!cachedSegments) {
-            initLegacyManagementUI();
+            showManagementNumberNotConfigured();
           }
           return;
         }
@@ -2584,9 +2584,9 @@ window.updateLoadingProgress = function(percent, text) {
       })
       .withFailureHandler(function(e) {
         console.error('セグメント設定の読み込みに失敗:', e);
-        // キャッシュがなければ旧UIを使用
+        // キャッシュがなければ未設定メッセージを表示
         if (!cachedSegments) {
-          initLegacyManagementUI();
+          showManagementNumberNotConfigured();
         }
       })
       .getManagementNumberSegments();
@@ -3166,6 +3166,36 @@ window.updateLoadingProgress = function(percent, text) {
   }
 
   // 旧UI初期化（後方互換用）
+  // 管理番号が未設定の場合のメッセージ表示
+  function showManagementNumberNotConfigured() {
+    const container = document.getElementById('managementNumberFields');
+    if (!container) {
+      console.log('❌ managementNumberFields が見つかりません');
+      return;
+    }
+
+    container.innerHTML = `
+      <div style="padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center;">
+        <div style="font-size: 13px; color: #64748b; margin-bottom: 8px;">
+          📋 管理番号は設定されていません
+        </div>
+        <div style="font-size: 11px; color: #94a3b8;">
+          設定画面の「🔢管理番号設定」から設定できます
+        </div>
+      </div>
+    `;
+
+    // UI生成完了後、コンテナを表示する
+    container.style.display = 'block';
+    console.log('✅ 管理番号未設定メッセージを表示しました');
+
+    // プレビューセクションは非表示のまま
+    const previewSection = document.getElementById('managementNumberPreview');
+    if (previewSection) {
+      previewSection.style.display = 'none';
+    }
+  }
+
   function initLegacyManagementUI() {
       const container = document.getElementById('managementNumberFields');
     if (!container) {
