@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>設定マイグレーション - FURIRA</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+    .card { background: #f5f5f5; border-radius: 8px; padding: 20px; margin: 20px 0; }
+    pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+    button { background: #40B4E5; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; margin: 10px 5px; }
+    button:hover { background: #1E8FBF; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .success { color: #22c55e; }
+    .error { color: #ef4444; }
+    .warning { color: #f59e0b; }
+    #status { margin-top: 20px; padding: 15px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>📦 設定マイグレーション</h1>
+
+  <div class="card">
+    <h2>現在のデフォルト値</h2>
+    <p>以下の値をFirestoreに保存します：</p>
+
+    <h3>割引情報</h3>
+    <pre id="discountPreview"></pre>
+
+    <h3>ハッシュタグ</h3>
+    <pre id="hashtagPreview"></pre>
+  </div>
+
+  <div class="card">
+    <h2>操作</h2>
+    <button id="checkBtn">現在のFirestore設定を確認</button>
+    <button id="migrateBtn">Firestoreに保存</button>
+  </div>
+
+  <div id="status"></div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+  <script>
+    // Firebase設定
+    const firebaseConfig = {
+      apiKey: "AIzaSyA4hNktMqmUBArzKRpMt_Q9f5EiL0xlegk",
+      authDomain: "furira.jp",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "618498936498",
+      appId: "1:618498936498:web:ccd51d56455cb34261c4ba",
+      measurementId: "G-LT40ET0CXZ"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // 現在のデフォルト値
+    const discountConfig = {
+      'フォロー割': [
+        { '範囲': '〜2,999円', '割引額': '100円引' },
+        { '範囲': '〜5,999円', '割引額': '200円引' },
+        { '範囲': '〜8,999円', '割引額': '300円引' },
+        { '範囲': '9,000円〜', '割引額': '500円引' }
+      ],
+      'リピート割': [
+        { '範囲': '', '割引額': '200円引' }
+      ],
+      'まとめ割': [
+        { '範囲': '2点', '割引額': '300円' },
+        { '範囲': '3点', '割引額': '500円' },
+        { '範囲': '4点', '割引額': '1,000円' }
+      ]
+    };
+
+    const hashtagConfig = {
+      commonPrefix: '#REBORN_',
+      hashtags: [
+        {
+          title: '全商品',
+          suffix: '全商品',
+          icon: '🏷️',
+          defaultChecked: true
+        }
+      ]
+    };
+
+    // プレビュー表示
+    document.getElementById('discountPreview').textContent = JSON.stringify(discountConfig, null, 2);
+    document.getElementById('hashtagPreview').textContent = JSON.stringify(hashtagConfig, null, 2);
+
+    const statusDiv = document.getElementById('status');
+
+    function showStatus(message, type = 'info') {
+      const color = type === 'success' ? '#dcfce7' : type === 'error' ? '#fee2e2' : type === 'warning' ? '#fef3c7' : '#e0f2fe';
+      statusDiv.innerHTML = `<div style="background: ${color}; padding: 15px; border-radius: 8px;">${message}</div>`;
+    }
+
+    // 現在の設定を確認
+    document.getElementById('checkBtn').addEventListener('click', async () => {
+      showStatus('Firestoreを確認中...');
+      try {
+        const docRef = db.collection('settings').doc('common');
+        const doc = await docRef.get();
+
+        if (doc.exists) {
+          const data = doc.data();
+          let html = '<h3>現在のFirestore設定:</h3>';
+          html += '<pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px;">';
+          html += 'discount: ' + (data.discount ? JSON.stringify(data.discount, null, 2) : '(未設定)') + '\n\n';
+          html += 'hashtag: ' + (data.hashtag ? JSON.stringify(data.hashtag, null, 2) : '(未設定)');
+          html += '</pre>';
+
+          if (data.discount && data.hashtag) {
+            html += '<p class="warning">⚠️ 両方とも既に設定されています。上書きする場合は「Firestoreに保存」をクリックしてください。</p>';
+          } else if (data.discount || data.hashtag) {
+            html += '<p class="warning">⚠️ 一部の設定が存在します。</p>';
+          } else {
+            html += '<p class="success">✅ 設定が空です。マイグレーションを実行してください。</p>';
+          }
+
+          statusDiv.innerHTML = html;
+        } else {
+          showStatus('⚠️ settings/common ドキュメントが存在しません。マイグレーションで作成されます。', 'warning');
+        }
+      } catch (error) {
+        showStatus('❌ エラー: ' + error.message, 'error');
+      }
+    });
+
+    // マイグレーション実行
+    document.getElementById('migrateBtn').addEventListener('click', async () => {
+      if (!confirm('Firestoreに割引情報とハッシュタグ設定を保存しますか？')) {
+        return;
+      }
+
+      showStatus('保存中...');
+      try {
+        const docRef = db.collection('settings').doc('common');
+
+        await docRef.set({
+          discount: discountConfig,
+          hashtag: hashtagConfig
+        }, { merge: true });
+
+        showStatus('✅ 保存完了！Firestoreに設定が保存されました。<br><br>このページを閉じて、商品登録画面を再読み込みしてください。', 'success');
+      } catch (error) {
+        showStatus('❌ エラー: ' + error.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>

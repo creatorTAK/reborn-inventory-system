@@ -1342,35 +1342,52 @@ window.updateLoadingProgress = function(percent, text) {
   }
 
   // ハッシュタグ設定（設定マスタから読み込む）
+  // デフォルトは空（Firestoreから読み込む）
   let HASHTAG_CONFIG = {
-    全商品プレフィックス: '#REBORN_',
-    全商品テキスト: '全商品',
-    ブランドプレフィックス: '#REBORN_',
-    ブランドサフィックス: 'アイテム一覧',
-    カテゴリプレフィックス: '#REBORN_',
-    カテゴリサフィックス: '一覧'
+    hashtags: []  // 空の場合はプレビューに表示されない
   };
 
   // 設定マスタからハッシュタグ設定を読み込む
   function loadHashtagConfig() {
+    // 1. まずCACHED_CONFIG（Firestore）から読み込み
+    if (window.CACHED_CONFIG && window.CACHED_CONFIG['ハッシュタグ']) {
+      HASHTAG_CONFIG = window.CACHED_CONFIG['ハッシュタグ'];
+      console.log('✅ ハッシュタグ設定をCACHED_CONFIGから読み込みました:', HASHTAG_CONFIG);
+      renderHashtagCheckboxes();
+      if (typeof updateDescriptionFromDetail === 'function') {
+        updateDescriptionFromDetail();
+      }
+      return;
+    }
+
+    // 2. CACHED_CONFIGにない場合、GASから読み込み（レガシー対応）
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       google.script.run
         .withSuccessHandler(function(config) {
           if (config) {
             HASHTAG_CONFIG = config;
-            console.log('ハッシュタグ設定を読み込みました:', config);
+            console.log('ハッシュタグ設定をGASから読み込みました:', config);
             // ハッシュタグチェックボックスを生成
             renderHashtagCheckboxes();
             // 設定読み込み後、商品の説明を更新
             if (typeof updateDescriptionFromDetail === 'function') {
               updateDescriptionFromDetail();
             }
+          } else {
+            // GASからも設定がない場合はチェックボックスを空で表示
+            console.log('⚠️ ハッシュタグ設定が見つかりません');
+            renderHashtagCheckboxes();
           }
         })
         .withFailureHandler(function(error) {
           console.error('ハッシュタグ設定読み込みエラー:', error);
+          renderHashtagCheckboxes();
         })
         .getHashtagConfig();
+    } else {
+      // PWA環境でGASがない場合
+      console.log('⚠️ GAS環境ではありません。ハッシュタグ設定なし。');
+      renderHashtagCheckboxes();
     }
   }
 
@@ -1608,43 +1625,50 @@ window.updateLoadingProgress = function(percent, text) {
   }
 
   // 割引情報設定（設定マスタから読み込む）
-  let DISCOUNT_CONFIG = {
-    'フォロー割': [
-      { 範囲: '〜2,999円', 割引額: '100円引' },
-      { 範囲: '〜5,999円', 割引額: '200円引' },
-      { 範囲: '〜8,999円', 割引額: '300円引' },
-      { 範囲: '9,000円〜', 割引額: '500円引' }
-    ],
-    'リピート割': [
-      { 範囲: '', 割引額: '200円引' }
-    ],
-    'まとめ割': [
-      { 範囲: '2点', 割引額: '300円' },
-      { 範囲: '3点', 割引額: '500円' },
-      { 範囲: '4点', 割引額: '1,000円' }
-    ]
-  };
+  // デフォルトは空（Firestoreから読み込む）
+  let DISCOUNT_CONFIG = {};  // 空の場合はプレビューに表示されない
 
   // 設定マスタから割引情報を読み込む
   function loadDiscountConfig() {
+    // 1. まずCACHED_CONFIG（Firestore）から読み込み
+    if (window.CACHED_CONFIG && window.CACHED_CONFIG['割引情報']) {
+      DISCOUNT_CONFIG = window.CACHED_CONFIG['割引情報'];
+      console.log('✅ 割引情報設定をCACHED_CONFIGから読み込みました:', DISCOUNT_CONFIG);
+      renderDiscountCheckboxes();
+      if (typeof updateDescriptionFromDetail === 'function') {
+        updateDescriptionFromDetail();
+      }
+      return;
+    }
+
+    // 2. CACHED_CONFIGにない場合、GASから読み込み（レガシー対応）
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       google.script.run
         .withSuccessHandler(function(config) {
           if (config) {
             DISCOUNT_CONFIG = config;
-            console.log('割引情報設定を読み込みました:', Object.keys(config).length, '種類');
+            console.log('割引情報設定をGASから読み込みました:', Object.keys(config).length, '種類');
             // チェックボックスを生成
             renderDiscountCheckboxes();
             // 設定読み込み後、商品の説明を更新
             if (typeof updateDescriptionFromDetail === 'function') {
               updateDescriptionFromDetail();
             }
+          } else {
+            // GASからも設定がない場合はチェックボックスを空で表示
+            console.log('⚠️ 割引情報設定が見つかりません');
+            renderDiscountCheckboxes();
           }
         })
         .withFailureHandler(function(error) {
           console.error('割引情報設定読み込みエラー:', error);
+          renderDiscountCheckboxes();
         })
         .getDiscountConfig();
+    } else {
+      // PWA環境でGASがない場合
+      console.log('⚠️ GAS環境ではありません。割引情報設定なし。');
+      renderDiscountCheckboxes();
     }
   }
 
