@@ -592,9 +592,27 @@ window.updateLoadingProgress = function(percent, text) {
     // 1. まずCACHED_CONFIG（localStorage/Firestore）を確認
     if (window.CACHED_CONFIG && window.CACHED_CONFIG['商品状態ボタン']) {
       const cachedButtons = window.CACHED_CONFIG['商品状態ボタン'];
-      if (cachedButtons && Object.keys(cachedButtons).length > 0) {
-        CONDITION_BUTTONS = cachedButtons;
-        console.log('✅ 商品状態ボタン設定を読み込みました（キャッシュ）:', Object.keys(CONDITION_BUTTONS).length, '種類');
+      if (cachedButtons && (Array.isArray(cachedButtons) ? cachedButtons.length > 0 : Object.keys(cachedButtons).length > 0)) {
+        // 配列形式の場合、オブジェクト形式に変換
+        if (Array.isArray(cachedButtons)) {
+          CONDITION_BUTTONS = {};
+          cachedButtons.forEach(btn => {
+            const state = btn['商品の状態'];
+            if (state) {
+              if (!CONDITION_BUTTONS[state]) {
+                CONDITION_BUTTONS[state] = [];
+              }
+              CONDITION_BUTTONS[state].push({
+                ボタンラベル: btn['ボタンラベル'] || btn['ラベル'] || '',
+                ボタンテキスト: btn['ボタンテキスト'] || btn['テキスト'] || ''
+              });
+            }
+          });
+          console.log('✅ 商品状態ボタン設定を読み込みました（キャッシュ・配列→オブジェクト変換）:', Object.keys(CONDITION_BUTTONS).length, '種類');
+        } else {
+          CONDITION_BUTTONS = cachedButtons;
+          console.log('✅ 商品状態ボタン設定を読み込みました（キャッシュ）:', Object.keys(CONDITION_BUTTONS).length, '種類');
+        }
         updateConditionButtons();
         return;
       }
