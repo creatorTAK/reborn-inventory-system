@@ -24,17 +24,21 @@
     <h2>現在のデフォルト値</h2>
     <p>以下の値をFirestoreに保存します：</p>
 
-    <h3>割引情報</h3>
+    <h3>🔘 商品状態ボタン</h3>
+    <pre id="conditionButtonsPreview" style="max-height: 300px; overflow-y: auto;"></pre>
+
+    <h3>💰 割引情報</h3>
     <pre id="discountPreview"></pre>
 
-    <h3>ハッシュタグ</h3>
+    <h3>🏷️ ハッシュタグ</h3>
     <pre id="hashtagPreview"></pre>
   </div>
 
   <div class="card">
     <h2>操作</h2>
     <button id="checkBtn">現在のFirestore設定を確認</button>
-    <button id="migrateBtn">Firestoreに保存</button>
+    <button id="migrateBtn">すべてFirestoreに保存</button>
+    <button id="migrateConditionBtn" style="background: #22c55e;">商品状態ボタンのみ保存</button>
   </div>
 
   <div id="status"></div>
@@ -89,7 +93,30 @@
       ]
     };
 
+    // 商品状態ボタンのプリセット（配列形式に変換）
+    const conditionButtonsConfig = [
+      { '商品の状態': '新品、未使用', 'ラベル': 'タグ付き未使用', 'テキスト': 'タグ付き未使用品です。' },
+      { '商品の状態': '新品、未使用', 'ラベル': '新品未開封', 'テキスト': '新品未開封です。' },
+      { '商品の状態': '新品、未使用', 'ラベル': '試着のみ', 'テキスト': '試着のみの未使用品です。' },
+      { '商品の状態': '未使用に近い', 'ラベル': '数回着用', 'テキスト': '数回のみ着用の美品です。' },
+      { '商品の状態': '未使用に近い', 'ラベル': 'ほぼ未使用', 'テキスト': 'ほぼ未使用に近い状態です。' },
+      { '商品の状態': '未使用に近い', 'ラベル': '室内試着のみ', 'テキスト': '室内で試着したのみです。' },
+      { '商品の状態': '目立った傷や汚れなし', 'ラベル': '美品', 'テキスト': 'ほとんど使用感がなく、とても綺麗な状態です。' },
+      { '商品の状態': '目立った傷や汚れなし', 'ラベル': '保管時のシワ', 'テキスト': '保管時の小さなシワがありますが、着用には問題ありません。' },
+      { '商品の状態': '目立った傷や汚れなし', 'ラベル': '着用感少ない', 'テキスト': '着用感が少なく、まだまだご使用いただけます。' },
+      { '商品の状態': 'やや傷や汚れあり', 'ラベル': '使用感あり', 'テキスト': '若干の使用感がありますが、着用に問題ありません。' },
+      { '商品の状態': 'やや傷や汚れあり', 'ラベル': '小さな汚れ', 'テキスト': '目立たない程度の小さな汚れがあります。' },
+      { '商品の状態': 'やや傷や汚れあり', 'ラベル': '毛玉あり', 'テキスト': '若干の毛玉がございますが、まだまだご使用いただけます。' },
+      { '商品の状態': 'やや傷や汚れあり', 'ラベル': '色褪せあり', 'テキスト': '若干の色褪せがありますが、着用には問題ありません。' },
+      { '商品の状態': '傷や汚れあり', 'ラベル': '使用感強い', 'テキスト': '使用感が強めですが、まだご使用いただけます。' },
+      { '商品の状態': '傷や汚れあり', 'ラベル': '汚れあり', 'テキスト': '汚れがございます。写真でご確認ください。' },
+      { '商品の状態': '傷や汚れあり', 'ラベル': '傷あり', 'テキスト': '傷がございます。写真でご確認ください。' },
+      { '商品の状態': '全体的に状態が悪い', 'ラベル': '全体的に傷あり', 'テキスト': '全体的に傷や汚れがあります。ご了承の上ご購入ください。' },
+      { '商品の状態': '全体的に状態が悪い', 'ラベル': '目立つ汚れ', 'テキスト': '目立つ汚れがあります。写真をよくご確認ください。' }
+    ];
+
     // プレビュー表示
+    document.getElementById('conditionButtonsPreview').textContent = JSON.stringify(conditionButtonsConfig, null, 2);
     document.getElementById('discountPreview').textContent = JSON.stringify(discountConfig, null, 2);
     document.getElementById('hashtagPreview').textContent = JSON.stringify(hashtagConfig, null, 2);
 
@@ -110,17 +137,16 @@
         if (doc.exists) {
           const data = doc.data();
           let html = '<h3>現在のFirestore設定:</h3>';
-          html += '<pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px;">';
-          html += 'discount: ' + (data.discount ? JSON.stringify(data.discount, null, 2) : '(未設定)') + '\n\n';
-          html += 'hashtag: ' + (data.hashtag ? JSON.stringify(data.hashtag, null, 2) : '(未設定)');
+          html += '<pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; max-height: 400px; overflow-y: auto;">';
+          html += '🔘 conditionButtons: ' + (data.conditionButtons && data.conditionButtons.length > 0 ? data.conditionButtons.length + '件' : '(未設定)') + '\n\n';
+          html += '💰 discount: ' + (data.discount ? '設定済み' : '(未設定)') + '\n\n';
+          html += '🏷️ hashtag: ' + (data.hashtag ? '設定済み' : '(未設定)');
           html += '</pre>';
 
-          if (data.discount && data.hashtag) {
-            html += '<p class="warning">⚠️ 両方とも既に設定されています。上書きする場合は「Firestoreに保存」をクリックしてください。</p>';
-          } else if (data.discount || data.hashtag) {
-            html += '<p class="warning">⚠️ 一部の設定が存在します。</p>';
+          if (data.conditionButtons && data.conditionButtons.length > 0) {
+            html += '<p class="success">✅ 商品状態ボタンは既に設定されています（' + data.conditionButtons.length + '件）</p>';
           } else {
-            html += '<p class="success">✅ 設定が空です。マイグレーションを実行してください。</p>';
+            html += '<p class="warning">⚠️ 商品状態ボタンが未設定です。「商品状態ボタンのみ保存」をクリックしてください。</p>';
           }
 
           statusDiv.innerHTML = html;
@@ -132,9 +158,9 @@
       }
     });
 
-    // マイグレーション実行
+    // 全設定マイグレーション実行
     document.getElementById('migrateBtn').addEventListener('click', async () => {
-      if (!confirm('Firestoreに割引情報とハッシュタグ設定を保存しますか？')) {
+      if (!confirm('Firestoreに全ての設定（商品状態ボタン・割引情報・ハッシュタグ）を保存しますか？')) {
         return;
       }
 
@@ -143,11 +169,40 @@
         const docRef = db.collection('settings').doc('common');
 
         await docRef.set({
+          conditionButtons: conditionButtonsConfig,
           discount: discountConfig,
           hashtag: hashtagConfig
         }, { merge: true });
 
-        showStatus('✅ 保存完了！Firestoreに設定が保存されました。<br><br>このページを閉じて、商品登録画面を再読み込みしてください。', 'success');
+        // localStorageにも保存
+        localStorage.setItem('rebornConfig_conditionButtons', JSON.stringify(conditionButtonsConfig));
+        localStorage.setItem('rebornConfig_discount', JSON.stringify(discountConfig));
+        localStorage.setItem('rebornConfig_hashtag', JSON.stringify(hashtagConfig));
+
+        showStatus('✅ 保存完了！FirestoreとlocalStorageに設定が保存されました。<br><br>このページを閉じて、商品登録画面を再読み込みしてください。', 'success');
+      } catch (error) {
+        showStatus('❌ エラー: ' + error.message, 'error');
+      }
+    });
+
+    // 商品状態ボタンのみマイグレーション
+    document.getElementById('migrateConditionBtn').addEventListener('click', async () => {
+      if (!confirm('商品状態ボタンのプリセット（18件）をFirestoreに保存しますか？')) {
+        return;
+      }
+
+      showStatus('保存中...');
+      try {
+        const docRef = db.collection('settings').doc('common');
+
+        await docRef.set({
+          conditionButtons: conditionButtonsConfig
+        }, { merge: true });
+
+        // localStorageにも保存
+        localStorage.setItem('rebornConfig_conditionButtons', JSON.stringify(conditionButtonsConfig));
+
+        showStatus('✅ 商品状態ボタンを保存しました（18件）！<br><br>このページを閉じて、商品登録画面を再読み込みしてください。', 'success');
       } catch (error) {
         showStatus('❌ エラー: ' + error.message, 'error');
       }

@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v124';  // config.htmlにFirestore読み込み追加
+const CACHE_VERSION = 'v125';  // migrate-settings.htmlに商品状態ボタン追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
