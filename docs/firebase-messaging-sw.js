@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v136';  // 仕入先・出品先の初期データ自動投入機能追加
+const CACHE_VERSION = 'v137';  // 仕入先・出品先データをスプレッドシートの値に更新
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
