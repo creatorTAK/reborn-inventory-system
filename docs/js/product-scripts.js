@@ -7858,7 +7858,24 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     }
 
     // 開閉状態を即時保存（ページを離れても維持されるように）
-    saveDescriptionBlocksCollapseState();
+    try {
+      const container = document.getElementById('descriptionBlocksContainer');
+      if (container) {
+        const blocks = container.querySelectorAll('.desc-draggable-block');
+        const state = {};
+        blocks.forEach(b => {
+          const c = b.querySelector('.section-content');
+          if (c) {
+            const blockType = b.dataset.blockType;
+            state[blockType] = c.style.display !== 'none';
+          }
+        });
+        localStorage.setItem('descriptionBlocksCollapseState', JSON.stringify(state));
+        console.log('説明ブロック開閉状態を即時保存:', state);
+      }
+    } catch (e) {
+      console.error('説明ブロック開閉状態保存エラー:', e);
+    }
   }
 
   /**
@@ -7905,7 +7922,24 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     }
 
     // 開閉状態を即時保存（ページを離れても維持されるように）
-    saveTitleBlocksCollapseState();
+    try {
+      const container = document.getElementById('titleBlockContainer');
+      if (container) {
+        const blocks = container.querySelectorAll('.title-draggable-block');
+        const state = {};
+        blocks.forEach(b => {
+          const c = b.querySelector('.section-content');
+          if (c) {
+            const blockId = b.dataset.blockId;
+            state[blockId] = c.style.display !== 'none';
+          }
+        });
+        localStorage.setItem('titleBlocksCollapseState', JSON.stringify(state));
+        console.log('タイトルブロック開閉状態を即時保存:', state);
+      }
+    } catch (e) {
+      console.error('タイトルブロック開閉状態保存エラー:', e);
+    }
   }
 
   /**
