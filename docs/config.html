@@ -1964,62 +1964,72 @@
           if (docSnap.exists) {
             const data = docSnap.data();
             console.log('🔍 [DEBUG] Firestore data.managementNumber:', data.managementNumber);
-            if (data.managementNumber && data.managementNumber.segments) {
-              console.log('🔍 [DEBUG] 読み込むsegments:', data.managementNumber.segments);
-              this.segments = data.managementNumber.segments;
+
+            const presetKey = data.managementNumber?.presetKey || '';
+            const savedSegments = data.managementNumber?.segments || [];
+
+            // プリセットキーを先に設定
+            const hiddenInput = document.getElementById('mnbPresetSelect');
+            if (hiddenInput && presetKey) {
+              hiddenInput.value = presetKey;
+            }
+
+            // セグメントが保存されている場合
+            if (savedSegments.length > 0) {
+              console.log('🔍 [DEBUG] 読み込むsegments:', savedSegments);
+              this.segments = savedSegments;
               this.renderSegments();
               this.updatePreview();
               console.log('✅ Firestoreから管理番号設定を読み込み:', this.segments.length, 'セグメント');
+            }
+            // セグメントが空だがプリセットキーがある場合（プリセットを再適用）
+            else if (presetKey && presetKey !== 'custom' && this.presets[presetKey]) {
+              console.log('🔄 プリセットキーからセグメントを復元:', presetKey);
+              this.segments = JSON.parse(JSON.stringify(this.presets[presetKey]));
+              this.renderSegments();
+              this.updatePreview();
+            }
 
-              // プリセットキーが保存されていれば反映
-              if (data.managementNumber.presetKey) {
-                const hiddenInput = document.getElementById('mnbPresetSelect');
-                if (hiddenInput) {
-                  hiddenInput.value = data.managementNumber.presetKey;
-                }
-              }
+            // 現在の設定表示を更新
+            if (typeof updateCurrentSettingsView === 'function') {
+              updateCurrentSettingsView();
+            }
 
-              // 現在の設定表示を更新
-              if (typeof updateCurrentSettingsView === 'function') {
-                updateCurrentSettingsView();
-              }
+            // 配置設定もチェックボックスに反映
+            const showInTitle = document.getElementById('商品名に管理番号配置');
+            const showInDescription = document.getElementById('説明文に管理番号配置');
+            const formatSelect = document.getElementById('管理番号形式');
+            const positionSelect = document.getElementById('管理番号配置位置');
+            const descFormatSelect = document.getElementById('説明文管理番号形式');
+            const descPositionSelect = document.getElementById('説明文管理番号配置位置');
 
-              // 配置設定もチェックボックスに反映
-              const showInTitle = document.getElementById('商品名に管理番号配置');
-              const showInDescription = document.getElementById('説明文に管理番号配置');
-              const formatSelect = document.getElementById('管理番号形式');
-              const positionSelect = document.getElementById('管理番号配置位置');
-              const descFormatSelect = document.getElementById('説明文管理番号形式');
-              const descPositionSelect = document.getElementById('説明文管理番号配置位置');
+            if (showInTitle && data.managementNumber?.showInTitle !== undefined) {
+              showInTitle.checked = data.managementNumber.showInTitle;
+              console.log('✅ 商品名チェックボックスを設定:', data.managementNumber.showInTitle);
+            }
+            if (showInDescription && data.managementNumber?.showInDescription !== undefined) {
+              showInDescription.checked = data.managementNumber.showInDescription;
+              console.log('✅ 説明文チェックボックスを設定:', data.managementNumber.showInDescription);
+            }
+            if (formatSelect && data.managementNumber?.titleFormat) {
+              formatSelect.value = data.managementNumber.titleFormat;
+            }
+            if (positionSelect && data.managementNumber?.titlePosition) {
+              positionSelect.value = data.managementNumber.titlePosition;
+            }
+            if (descFormatSelect && data.managementNumber?.descFormat) {
+              descFormatSelect.value = data.managementNumber.descFormat;
+            }
+            if (descPositionSelect && data.managementNumber?.descPosition) {
+              descPositionSelect.value = data.managementNumber.descPosition;
+            }
 
-              if (showInTitle && data.managementNumber.showInTitle !== undefined) {
-                showInTitle.checked = data.managementNumber.showInTitle;
-                console.log('✅ 商品名チェックボックスを設定:', data.managementNumber.showInTitle);
-              }
-              if (showInDescription && data.managementNumber.showInDescription !== undefined) {
-                showInDescription.checked = data.managementNumber.showInDescription;
-                console.log('✅ 説明文チェックボックスを設定:', data.managementNumber.showInDescription);
-              }
-              if (formatSelect && data.managementNumber.titleFormat) {
-                formatSelect.value = data.managementNumber.titleFormat;
-              }
-              if (positionSelect && data.managementNumber.titlePosition) {
-                positionSelect.value = data.managementNumber.titlePosition;
-              }
-              if (descFormatSelect && data.managementNumber.descFormat) {
-                descFormatSelect.value = data.managementNumber.descFormat;
-              }
-              if (descPositionSelect && data.managementNumber.descPosition) {
-                descPositionSelect.value = data.managementNumber.descPosition;
-              }
-
-              // 形式選択の表示/非表示を更新
-              if (typeof toggleManagementNumberFormat === 'function') {
-                toggleManagementNumberFormat();
-              }
-              if (typeof toggleManagementNumberDescriptionFormat === 'function') {
-                toggleManagementNumberDescriptionFormat();
-              }
+            // 形式選択の表示/非表示を更新
+            if (typeof toggleManagementNumberFormat === 'function') {
+              toggleManagementNumberFormat();
+            }
+            if (typeof toggleManagementNumberDescriptionFormat === 'function') {
+              toggleManagementNumberDescriptionFormat();
             }
           } else {
             console.log('📝 Firestoreに設定が見つかりません（初回起動）');
