@@ -1460,6 +1460,15 @@
           <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">生成される管理番号の例</div>
           <div id="mnbCurrentPreview" style="font-family: monospace; font-size: 24px; color: #1e40af; font-weight: 700; letter-spacing: 1px;">AA-001</div>
         </div>
+        <!-- カウンターリセットボタン -->
+        <div style="margin-top: 12px; text-align: center;">
+          <button type="button" onclick="resetManagementNumberCounter()" style="padding: 8px 16px; font-size: 12px; color: #dc2626; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+            🔄 カウンターをリセット（開始値から採番）
+          </button>
+          <div style="font-size: 10px; color: #9ca3af; margin-top: 4px;">
+            ※ 設定の開始番号からカウンターをリセットします
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -2850,6 +2859,135 @@ ${descFormattedNumber}`;
       ManagementNumberBuilder.init();
     }
   }
+
+  /**
+   * 管理番号カウンターをリセット
+   * 現在の設定に基づいてカウンターを開始値にリセットする
+   */
+  async function resetManagementNumberCounter() {
+    try {
+      const segments = ManagementNumberBuilder?.segments || [];
+      if (segments.length === 0) {
+        alert('管理番号の設定がありません。先にフォーマットを選択してください。');
+        return;
+      }
+
+      // 連番セグメントを探す
+      const sequenceSegment = segments.find(s => s.type === 'sequence');
+      if (!sequenceSegment) {
+        alert('連番設定が含まれていません。カウンターリセットは不要です。');
+        return;
+      }
+
+      // 開始値を取得
+      const startNum = parseInt(sequenceSegment.config?.start || '1', 10);
+
+      // カウンターキーを生成（プレフィックス部分）
+      let counterKeyParts = [];
+      for (const segment of segments) {
+        if (segment.type === 'sequence') break; // 連番の前まで
+
+        switch (segment.type) {
+          case 'shelf':
+            // 棚番号は動的に選択されるため、全ての可能なキーをリセット対象とする確認が必要
+            counterKeyParts.push('shelf');
+            break;
+          case 'category':
+            counterKeyParts.push(`category_${segment.config?.code || ''}`);
+            break;
+          case 'date':
+            // 日付は動的なのでスキップ
+            break;
+          case 'rank':
+            counterKeyParts.push(`rank_${segment.config?.value || ''}`);
+            break;
+          case 'size':
+            counterKeyParts.push(`size_${segment.config?.code || ''}`);
+            break;
+          case 'color':
+            counterKeyParts.push(`color_${segment.config?.code || ''}`);
+            break;
+          case 'custom':
+            counterKeyParts.push(`custom_${segment.config?.value || ''}`);
+            break;
+        }
+      }
+
+      // 棚番号を含む場合は、どの棚番号をリセットするか確認
+      const hasShelf = segments.some(s => s.type === 'shelf');
+
+      let targetCounterKeys = [];
+
+      if (hasShelf) {
+        const shelfInput = prompt(
+          '棚番号ごとにカウンターが管理されています。\n' +
+          'リセットする棚番号を入力してください（例: AA）\n' +
+          '※ 全ての棚番号をリセットする場合は「ALL」と入力',
+          ''
+        );
+
+        if (!shelfInput) {
+          return; // キャンセル
+        }
+
+        if (shelfInput.toUpperCase() === 'ALL') {
+          // 全ての棚番号カウンターをリセット
+          if (!confirm('全ての棚番号のカウンターをリセットします。\n本当によろしいですか？')) {
+            return;
+          }
+          // Firestoreから全てのカウンターを取得してリセット
+          const countersRef = window.db.collection('managementNumberCounters');
+          const snapshot = await countersRef.get();
+          snapshot.forEach(doc => {
+            targetCounterKeys.push(doc.id);
+          });
+        } else {
+          // 指定された棚番号のカウンターをリセット
+          const shelfCode = shelfInput.toUpperCase();
+          const counterKey = `${shelfCode}_`;
+          targetCounterKeys.push(counterKey);
+        }
+      } else {
+        // 棚番号なしの場合（シンプル連番など）
+        const counterKey = counterKeyParts.join('_') || 'counter';
+        targetCounterKeys.push(counterKey);
+      }
+
+      // 確認ダイアログ
+      const confirmMessage = hasShelf && targetCounterKeys.length > 1
+        ? `${targetCounterKeys.length}個のカウンターを開始値 ${startNum} にリセットします。\n本当によろしいですか？`
+        : `カウンターを開始値 ${startNum} にリセットします。\n次に採番される番号は ${String(startNum).padStart(sequenceSegment.config?.digits || 3, '0')} になります。\n本当によろしいですか？`;
+
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      // Firestoreでカウンターをリセット
+      const batch = window.db.batch();
+      for (const key of targetCounterKeys) {
+        const counterRef = window.db.collection('managementNumberCounters').doc(key);
+        batch.set(counterRef, {
+          currentNumber: startNum - 1, // 次の採番で startNum になるように
+          resetAt: new Date(),
+          resetBy: 'config_manual_reset'
+        });
+      }
+      await batch.commit();
+
+      console.log('✅ カウンターをリセットしました:', targetCounterKeys, '開始値:', startNum);
+      alert(`カウンターをリセットしました。\n次に採番される番号は ${String(startNum).padStart(sequenceSegment.config?.digits || 3, '0')} から始まります。`);
+
+      // プレビューを更新
+      updateCurrentSettingsView();
+
+    } catch (error) {
+      console.error('❌ カウンターリセットエラー:', error);
+      alert('カウンターのリセットに失敗しました: ' + error.message);
+    }
+  }
+
+  // グローバルに公開
+  window.resetManagementNumberCounter = resetManagementNumberCounter;
 
   // ===== フォーマット表示更新関数 =====
 
