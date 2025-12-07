@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v53-master-ui-fix'; // マスタ管理UI修正
-const SW_VERSION = 'v53-master-ui-fix'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v54-stale-while-revalidate'; // キャッシュ戦略改善
+const SW_VERSION = 'v54-stale-while-revalidate'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
@@ -80,12 +80,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // その他のリソースはキャッシュ優先
+  // その他のリソース（JS/CSS/画像等）は stale-while-revalidate
+  // キャッシュから即座に返しつつ、バックグラウンドで最新版を取得
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        return response || fetch(event.request);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.match(event.request).then((cachedResponse) => {
+        // バックグラウンドでネットワークから最新版を取得してキャッシュ更新
+        const fetchPromise = fetch(event.request).then((networkResponse) => {
+          // 成功したらキャッシュを更新（次回アクセス時に最新版が使われる）
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch(() => {
+          // ネットワークエラー時は何もしない（キャッシュが使われる）
+          return null;
+        });
+
+        // キャッシュがあれば即座に返す、なければネットワークを待つ
+        return cachedResponse || fetchPromise;
+      });
+    })
   );
 });
 
