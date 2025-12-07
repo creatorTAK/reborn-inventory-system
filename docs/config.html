@@ -1446,6 +1446,61 @@
 
   <input type="hidden" id="mnbPresetSelect" value="">
 
+  <!-- ===== 現在の設定表示エリア（デフォルト表示） ===== -->
+  <div id="mnbCurrentSettingsView" style="margin-bottom: 16px;">
+    <!-- 設定がない場合 -->
+    <div id="mnbNoSettingsMessage" style="padding: 24px; text-align: center; background: #f9fafb; border: 2px dashed #d1d5db; border-radius: 12px;">
+      <div style="font-size: 32px; margin-bottom: 8px;">📋</div>
+      <div style="font-size: 14px; color: #6b7280; margin-bottom: 16px;">管理番号の設定がまだありません</div>
+      <button type="button" onclick="enterMnbEditMode()" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);">
+        ✏️ 管理番号を設定する
+      </button>
+    </div>
+
+    <!-- 設定がある場合 -->
+    <div id="mnbCurrentSettings" style="display: none;">
+      <!-- 現在のフォーマット表示 -->
+      <div style="padding: 20px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #3b82f6; border-radius: 12px; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div>
+            <div style="font-size: 12px; color: #3b82f6; font-weight: 600; margin-bottom: 4px;">現在の管理番号フォーマット</div>
+            <div id="mnbCurrentPresetName" style="font-size: 16px; font-weight: 700; color: #1e40af;">未設定</div>
+          </div>
+          <button type="button" onclick="enterMnbEditMode()" style="padding: 8px 16px; background: white; color: #3b82f6; border: 2px solid #3b82f6; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#3b82f6'; this.style.color='white';" onmouseout="this.style.background='white'; this.style.color='#3b82f6';">
+            ✏️ 編集
+          </button>
+        </div>
+
+        <!-- 生成例（大きく表示） -->
+        <div style="padding: 16px; background: white; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">生成される管理番号の例</div>
+          <div id="mnbCurrentPreview" style="font-family: monospace; font-size: 24px; color: #1e40af; font-weight: 700; letter-spacing: 1px;">---</div>
+        </div>
+      </div>
+
+      <!-- セグメント詳細 -->
+      <div id="mnbCurrentSegmentDetails" style="padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px; font-weight: 600;">📊 セグメント構成</div>
+        <div id="mnbCurrentSegmentList" style="font-size: 13px; color: #374151;">
+          <!-- 動的に生成 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 編集モードコンテナ（デフォルト非表示） ===== -->
+  <div id="mnbEditModeContainer" style="display: none;">
+    <!-- 編集モードヘッダー -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 12px 16px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 18px;">✏️</span>
+        <span style="font-size: 14px; font-weight: 600; color: #92400e;">編集モード</span>
+      </div>
+      <button type="button" onclick="exitMnbEditMode()" style="padding: 6px 12px; background: white; color: #92400e; border: 1px solid #f59e0b; border-radius: 6px; font-size: 12px; cursor: pointer;">
+        ✕ 閉じる
+      </button>
+    </div>
+
   <!-- ===== プリセットセクション（アコーディオン） ===== -->
   <div class="mnb-accordion-section" style="margin-bottom: 12px;">
     <div class="mnb-accordion-header" id="mnbPresetHeader" onclick="toggleMnbAccordion('preset')" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #f3f4f6; color: #374151; border: 2px solid #e5e7eb; border-radius: 10px; cursor: pointer; transition: all 0.2s;">
@@ -1564,10 +1619,12 @@
     </div>
   </div>
 
-  <!-- リセットボタン -->
+  <!-- リセットボタン（編集モード内） -->
   <button type="button" onclick="clearManagementNumberSettings()" style="width: 100%; padding: 10px; background: white; border: 2px solid #ef4444; border-radius: 8px; color: #ef4444; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 16px; transition: all 0.2s;" onmouseover="this.style.background='#fef2f2';" onmouseout="this.style.background='white';">
     🗑️ すべてクリア
   </button>
+
+  </div><!-- /mnbEditModeContainer -->
 
   <!-- 管理番号の配置設定 -->
   <div style="margin-top: 24px; padding: 16px; background: white; border: 1px solid #e5e7eb; border-radius: 8px;">
@@ -1934,15 +1991,17 @@
               this.updatePreview();
               console.log('✅ Firestoreから管理番号設定を読み込み:', this.segments.length, 'セグメント');
 
-              // 読み込んだセグメントがある場合、カスタムセクションを開く
-              if (this.segments.length > 0) {
-                const customContent = document.getElementById('mnbCustomContent');
-                const customArrow = document.getElementById('mnbCustomArrow');
-                if (customContent && customArrow) {
-                  customContent.style.display = 'block';
-                  customArrow.textContent = '−';
-                  console.log('✅ カスタムセクションを自動で開きました');
+              // プリセットキーが保存されていれば反映
+              if (data.managementNumber.presetKey) {
+                const hiddenInput = document.getElementById('mnbPresetSelect');
+                if (hiddenInput) {
+                  hiddenInput.value = data.managementNumber.presetKey;
                 }
+              }
+
+              // 現在の設定表示を更新
+              if (typeof updateCurrentSettingsView === 'function') {
+                updateCurrentSettingsView();
               }
 
               // 配置設定もチェックボックスに反映
@@ -2802,6 +2861,122 @@ ${descFormattedNumber}`;
       });
     } else {
       ManagementNumberBuilder.init();
+    }
+  }
+
+  // ===== 編集モード切替関数 =====
+
+  // 編集モードに入る
+  function enterMnbEditMode() {
+    const currentSettingsView = document.getElementById('mnbCurrentSettingsView');
+    const editModeContainer = document.getElementById('mnbEditModeContainer');
+
+    if (currentSettingsView) {
+      currentSettingsView.style.display = 'none';
+    }
+    if (editModeContainer) {
+      editModeContainer.style.display = 'block';
+    }
+
+    // セグメントがある場合はカスタムセクションを開く
+    if (ManagementNumberBuilder && ManagementNumberBuilder.segments.length > 0) {
+      const customContent = document.getElementById('mnbCustomContent');
+      const customArrow = document.getElementById('mnbCustomArrow');
+      if (customContent && customArrow) {
+        customContent.style.display = 'block';
+        customArrow.textContent = '−';
+      }
+      // カスタムヘッダーをアクティブに
+      const customHeader = document.getElementById('mnbCustomHeader');
+      if (customHeader) {
+        customHeader.style.background = '#3b82f6';
+        customHeader.style.color = 'white';
+        customHeader.style.borderColor = '#3b82f6';
+      }
+    }
+
+    console.log('✏️ 編集モードに入りました');
+  }
+
+  // 編集モードを終了
+  function exitMnbEditMode() {
+    const currentSettingsView = document.getElementById('mnbCurrentSettingsView');
+    const editModeContainer = document.getElementById('mnbEditModeContainer');
+
+    if (editModeContainer) {
+      editModeContainer.style.display = 'none';
+    }
+    if (currentSettingsView) {
+      currentSettingsView.style.display = 'block';
+    }
+
+    // 現在の設定表示を更新
+    updateCurrentSettingsView();
+
+    console.log('📋 編集モードを終了しました');
+  }
+
+  // 現在の設定表示を更新
+  function updateCurrentSettingsView() {
+    const noSettingsMessage = document.getElementById('mnbNoSettingsMessage');
+    const currentSettings = document.getElementById('mnbCurrentSettings');
+    const presetNameElem = document.getElementById('mnbCurrentPresetName');
+    const previewElem = document.getElementById('mnbCurrentPreview');
+    const segmentListElem = document.getElementById('mnbCurrentSegmentList');
+
+    if (!ManagementNumberBuilder || ManagementNumberBuilder.segments.length === 0) {
+      // 設定なし
+      if (noSettingsMessage) noSettingsMessage.style.display = 'block';
+      if (currentSettings) currentSettings.style.display = 'none';
+      return;
+    }
+
+    // 設定あり
+    if (noSettingsMessage) noSettingsMessage.style.display = 'none';
+    if (currentSettings) currentSettings.style.display = 'block';
+
+    // プリセット名を判定
+    const presetKey = document.getElementById('mnbPresetSelect')?.value || '';
+    const presetNames = {
+      'simple': '🔢 シンプル連番',
+      'shelf': '📦 棚番号 + 連番',
+      'category_date': '📅 カテゴリ + 日付 + 連番',
+      'shelf_date': '🗓️ 棚番号 + 日付 + 連番',
+      'category_rank': '⭐ カテゴリ + ランク + 連番'
+    };
+    const presetName = presetNames[presetKey] || '🛠️ カスタム設定';
+    if (presetNameElem) {
+      presetNameElem.textContent = presetName;
+    }
+
+    // プレビュー
+    if (previewElem) {
+      previewElem.textContent = ManagementNumberBuilder.generatePreview();
+    }
+
+    // セグメントリスト
+    if (segmentListElem) {
+      const segments = ManagementNumberBuilder.segments;
+      const segmentTypes = ManagementNumberBuilder.segmentTypes;
+      let html = '';
+
+      segments.forEach((segment, index) => {
+        const type = segmentTypes[segment.type];
+        if (!type) return;
+
+        const preview = type.preview(segment.config);
+        const separator = index < segments.length - 1 ? (segment.separator || '-') : '';
+
+        html += `
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">${type.name}</span>
+            <span style="font-family: monospace; color: #1e40af;">${preview}</span>
+            ${separator ? `<span style="color: #94a3b8;">${separator}</span>` : ''}
+          </div>
+        `;
+      });
+
+      segmentListElem.innerHTML = html;
     }
   }
 
@@ -5580,6 +5755,10 @@ ${descFormattedNumber}`;
           data.titlePosition = position ? position.value : 'end';
           data.descFormat = descFormat ? descFormat.value : '【】';
           data.descPosition = descPosition ? descPosition.value : 'bottom';
+
+          // プリセットキーも保存
+          const presetSelect = document.getElementById('mnbPresetSelect');
+          data.presetKey = presetSelect ? presetSelect.value : '';
 
           console.log('💾 管理番号の配置設定（保存データ）:', {
             showInTitle: data.showInTitle,
