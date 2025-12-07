@@ -300,44 +300,45 @@ const masterCategories = {
       shipping: {
         label: '発送方法',
         collection: 'shippingMethods',
-        description: '発送方法と送料を管理',
+        description: '発送方法と送料を管理（GAS版UI互換）',
         fields: [
-          { 
-            name: 'name', 
-            label: '発送方法名', 
-            required: true, 
+          {
+            name: 'method1',
+            label: '発送方法（カテゴリ）',
+            required: true,
             type: 'text',
-            placeholder: '例: ゆうパック',
+            placeholder: '例: らくらくメルカリ便',
             validation: {
               minLength: 1,
               maxLength: 50
             }
           },
-          { 
-            name: 'price', 
-            label: '送料（円）', 
-            required: true, 
+          {
+            name: 'method2',
+            label: '発送方法（詳細）',
+            required: true,
+            type: 'text',
+            placeholder: '例: ネコポス',
+            validation: {
+              minLength: 1,
+              maxLength: 50
+            }
+          },
+          {
+            name: 'fee',
+            label: '送料（円）',
+            required: true,
             type: 'number',
-            placeholder: '例: 700',
+            placeholder: '例: 210',
             validation: {
               min: 0,
               max: 100000
             }
-          },
-          { 
-            name: 'description', 
-            label: '説明', 
-            required: false, 
-            type: 'textarea',
-            placeholder: '例: 追跡あり、補償なし',
-            validation: {
-              maxLength: 500
-            }
           }
         ],
-        displayFields: ['name', 'price'],
-        searchFields: ['name'],
-        sortBy: 'name',
+        displayFields: ['method1', 'method2', 'fee'],
+        searchFields: ['method1', 'method2'],
+        sortBy: 'method1',
         sortOrder: 'asc',
         searchable: true,
         usageCount: false,
@@ -348,12 +349,23 @@ const masterCategories = {
       packaging: {
         label: '梱包資材',
         collection: 'packagingMaterials',
-        description: '梱包資材と単価を管理',
+        description: '梱包資材と単価を管理（GAS版UI互換）',
         fields: [
-          { 
-            name: 'name', 
-            label: '資材名', 
-            required: true, 
+          {
+            name: 'productName',
+            label: '資材名',
+            required: true,
+            type: 'text',
+            placeholder: '例: 透明OPP袋 A4サイズ 100枚',
+            validation: {
+              minLength: 1,
+              maxLength: 100
+            }
+          },
+          {
+            name: 'category',
+            label: 'カテゴリ',
+            required: true,
             type: 'text',
             placeholder: '例: OPP袋',
             validation: {
@@ -361,32 +373,42 @@ const masterCategories = {
               maxLength: 50
             }
           },
-          { 
-            name: 'abbreviation', 
-            label: '略称', 
-            required: true, 
+          {
+            name: 'supplier',
+            label: '発注先',
+            required: false,
             type: 'text',
-            placeholder: '例: OPP',
+            placeholder: '例: Amazon',
             validation: {
-              minLength: 1,
-              maxLength: 20
+              maxLength: 50
             }
           },
-          { 
-            name: 'unitPrice', 
-            label: '単価（円）', 
-            required: true, 
+          {
+            name: 'quantity',
+            label: '入数',
+            required: true,
             type: 'number',
-            placeholder: '例: 10',
+            placeholder: '例: 100',
+            validation: {
+              min: 1,
+              max: 100000
+            }
+          },
+          {
+            name: 'price',
+            label: '単価（円）',
+            required: true,
+            type: 'number',
+            placeholder: '例: 939',
             validation: {
               min: 0,
-              max: 100000
+              max: 1000000
             }
           }
         ],
-        displayFields: ['name', 'abbreviation', 'unitPrice'],
-        searchFields: ['name', 'abbreviation'],
-        sortBy: 'name',
+        displayFields: ['productName', 'category', 'quantity', 'price'],
+        searchFields: ['productName', 'category', 'supplier'],
+        sortBy: 'category',
         sortOrder: 'asc',
         searchable: true,
         usageCount: false,
