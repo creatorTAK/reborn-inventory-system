@@ -1581,35 +1581,21 @@
             カテゴリと商品ランク（S/A/B/C）で分類。価値別の管理に最適
           </div>
         </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- ===== カスタム設定セクション（アコーディオン） ===== -->
-  <div class="mnb-accordion-section" style="margin-bottom: 16px;">
-    <div class="mnb-accordion-header" id="mnbCustomHeader" onclick="toggleMnbAccordion('custom')" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #f3f4f6; color: #374151; border: 2px solid #e5e7eb; border-radius: 10px; cursor: pointer; transition: all 0.2s;">
-      <div style="display: flex; flex-direction: column; gap: 2px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 18px;">🛠️</span>
-          <span style="font-size: 14px; font-weight: 600;">カスタム設定</span>
-        </div>
-        <span style="font-size: 11px; color: #6b7280; margin-left: 26px;">自由にセグメントを組み合わせ</span>
-      </div>
-      <span id="mnbCustomArrow" style="font-size: 18px; font-weight: bold; transition: transform 0.3s;">＋</span>
-    </div>
-    <div id="mnbCustomContent" style="display: none; padding: 12px 0 0 0;">
-      <!-- セグメントリスト -->
-      <div id="mnbSegmentsList" class="mnb-segments">
-        <div class="mnb-segments-empty">
-          セグメントを追加してください<br><small style="font-size: 12px;">ドラッグして並び替えできます</small>
+        <!-- カスタム設定 -->
+        <div class="mnb-preset-card" data-preset="custom" onclick="selectPresetCard('custom')" style="padding: 14px; background: white; border: 2px solid #e5e7eb; border-radius: 10px; cursor: pointer; transition: all 0.2s;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <span style="font-size: 20px;">🛠️</span>
+            <span style="font-size: 14px; font-weight: 600; color: #1f2937;">カスタム設定</span>
+          </div>
+          <div style="background: #f1f5f9; padding: 8px 12px; border-radius: 6px; margin-bottom: 8px;">
+            <span style="font-family: monospace; font-size: 15px; color: #3b82f6; font-weight: 600;">自由に組み合わせ</span>
+          </div>
+          <div style="font-size: 11px; color: #64748b; line-height: 1.4;">
+            セグメントを自由に追加・編集。独自のフォーマットを作成
+          </div>
         </div>
       </div>
-
-      <!-- セグメント追加ボタン -->
-      <button type="button" class="mnb-add-segment" onclick="openAddSegmentModal()">
-        <span>➕</span>
-        <span>セグメントを追加</span>
-      </button>
     </div>
   </div>
 
@@ -1944,8 +1930,8 @@
 
     // プリセットカード選択を適用
     applyPresetFromCard(presetKey) {
-      if (!presetKey) {
-        // カスタム設定の場合はセグメントをクリアしない
+      if (!presetKey || presetKey === 'custom') {
+        // カスタム設定の場合はセグメントをクリアしない（既存を維持）
         console.log('カスタム設定が選択されました');
         return;
       }
@@ -2400,6 +2386,15 @@
     }
 
     closeSegmentModal();
+
+    // カスタム設定が選択中の場合はUIをリフレッシュ
+    const hiddenInput = document.getElementById('mnbPresetSelect');
+    if (hiddenInput && hiddenInput.value === 'custom') {
+      const customCard = document.querySelector('.mnb-preset-card[data-preset="custom"]');
+      if (customCard) {
+        renderInlineCustomSettings(customCard);
+      }
+    }
   }
 
   /**
@@ -2971,8 +2966,14 @@ ${descFormattedNumber}`;
     }
 
     // 5. 選択されたカード内にインライン設定を展開
-    if (selectedCard && ManagementNumberBuilder && ManagementNumberBuilder.segments.length > 0) {
-      renderInlinePresetSettings(selectedCard);
+    if (selectedCard) {
+      if (presetKey === 'custom') {
+        // カスタム設定: セグメント追加UI
+        renderInlineCustomSettings(selectedCard);
+      } else if (ManagementNumberBuilder && ManagementNumberBuilder.segments.length > 0) {
+        // プリセット: 設定フィールド
+        renderInlinePresetSettings(selectedCard);
+      }
     }
 
     console.log('📋 プリセット選択:', presetKey || 'カスタム');
@@ -3065,6 +3066,85 @@ ${descFormattedNumber}`;
 
     // カード内に追加
     cardElement.appendChild(panel);
+  }
+
+  // カスタム設定用インラインUI（セグメント追加機能付き）
+  function renderInlineCustomSettings(cardElement) {
+    const segments = ManagementNumberBuilder.segments;
+    const segmentTypes = ManagementNumberBuilder.segmentTypes;
+
+    // 既存の設定パネルがあれば削除
+    const existingPanel = cardElement.querySelector('.mnb-inline-settings');
+    if (existingPanel) {
+      existingPanel.remove();
+    }
+
+    // カード内に設定パネルを作成
+    const panel = document.createElement('div');
+    panel.className = 'mnb-inline-settings';
+    panel.style.cssText = 'margin-top: 12px; padding-top: 12px; border-top: 1px dashed #cbd5e1;';
+    panel.onclick = function(e) { e.stopPropagation(); };
+
+    let html = '';
+
+    // 既存セグメント一覧
+    if (segments.length > 0) {
+      html += `<div style="margin-bottom: 10px;">`;
+      segments.forEach((segment, index) => {
+        const type = segmentTypes[segment.type];
+        if (!type) return;
+        const preview = type.preview(segment.config);
+        const separator = (index < segments.length - 1 && segment.separator) ? segment.separator : '';
+
+        html += `
+          <div style="display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: #f8fafc; border-radius: 6px; margin-bottom: 6px;">
+            <span style="font-size: 16px;">${type.icon}</span>
+            <span style="flex: 1; font-size: 13px; color: #374151;">${type.name}</span>
+            <span style="font-family: monospace; font-size: 13px; color: #3b82f6; font-weight: 600;">${preview}${separator ? '<span style="color: #f97316;">' + separator + '</span>' : ''}</span>
+            <button onclick="event.stopPropagation(); ManagementNumberBuilder.editSegment(${index})" style="padding: 3px 8px; font-size: 11px; background: #e5e7eb; color: #374151; border: none; border-radius: 4px; cursor: pointer;">編集</button>
+            <button onclick="event.stopPropagation(); removeCustomSegmentAndRefresh(${index})" style="padding: 3px 8px; font-size: 11px; background: #fee2e2; color: #dc2626; border: none; border-radius: 4px; cursor: pointer;">削除</button>
+          </div>
+        `;
+      });
+      html += `</div>`;
+    } else {
+      html += `
+        <div style="text-align: center; padding: 12px; color: #94a3b8; font-size: 12px; background: #f8fafc; border-radius: 6px; margin-bottom: 10px;">
+          セグメントを追加してください
+        </div>
+      `;
+    }
+
+    // セグメント追加ボタン
+    html += `
+      <button onclick="event.stopPropagation(); openAddSegmentModal()" style="width: 100%; padding: 10px; font-size: 13px; font-weight: 600; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+        <span style="font-size: 16px;">+</span> セグメントを追加
+      </button>
+    `;
+
+    // 生成プレビュー
+    const preview = ManagementNumberBuilder.generatePreview();
+    if (preview) {
+      html += `
+        <div style="margin-top: 10px; padding: 6px 10px; background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-radius: 5px; display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 11px; color: #3b82f6;">生成例</span>
+          <span id="mnbInlineTotalPreview" style="font-family: monospace; font-size: 14px; color: #1e40af; font-weight: 700;">${preview}</span>
+        </div>
+      `;
+    }
+
+    panel.innerHTML = html;
+    cardElement.appendChild(panel);
+  }
+
+  // カスタム設定でセグメント削除後にUIを更新
+  function removeCustomSegmentAndRefresh(index) {
+    ManagementNumberBuilder.removeSegment(index);
+    // カスタムカードを再選択してUIをリフレッシュ
+    const customCard = document.querySelector('.mnb-preset-card[data-preset="custom"]');
+    if (customCard) {
+      renderInlineCustomSettings(customCard);
+    }
   }
 
   // インライン設定変更時のコールバック
@@ -3173,6 +3253,8 @@ ${descFormattedNumber}`;
   window.toggleMnbAccordion = toggleMnbAccordion;
   window.selectPresetCard = selectPresetCard;
   window.renderInlinePresetSettings = renderInlinePresetSettings;
+  window.renderInlineCustomSettings = renderInlineCustomSettings;
+  window.removeCustomSegmentAndRefresh = removeCustomSegmentAndRefresh;
   window.updateInlineSegmentConfig = updateInlineSegmentConfig;
   window.updateInlineSegmentSeparator = updateInlineSegmentSeparator;
   window.updateInlinePreview = updateInlinePreview;
