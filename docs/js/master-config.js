@@ -300,10 +300,10 @@ const masterCategories = {
       shipping: {
         label: '発送方法',
         collection: 'shippingMethods',
-        description: '発送方法と送料を管理（GAS版UI互換）',
+        description: '発送方法と送料を管理',
         fields: [
           {
-            name: 'method1',
+            name: 'category',
             label: '発送方法（カテゴリ）',
             required: true,
             type: 'text',
@@ -314,7 +314,7 @@ const masterCategories = {
             }
           },
           {
-            name: 'method2',
+            name: 'detail',
             label: '発送方法（詳細）',
             required: true,
             type: 'text',
@@ -325,7 +325,7 @@ const masterCategories = {
             }
           },
           {
-            name: 'fee',
+            name: 'price',
             label: '送料（円）',
             required: true,
             type: 'number',
@@ -336,27 +336,27 @@ const masterCategories = {
             }
           }
         ],
-        displayFields: ['method1', 'method2', 'fee'],
-        searchFields: ['method1', 'method2'],
-        sortBy: 'method1',
+        displayFields: ['category', 'detail', 'price'],
+        searchFields: ['category', 'detail', 'name'],
+        sortBy: 'category',
         sortOrder: 'asc',
         searchable: true,
         usageCount: false,
         bulkDelete: true,
-        maxDisplayResults: 50
+        maxDisplayResults: 100
       },
       
       packaging: {
         label: '梱包資材',
         collection: 'packagingMaterials',
-        description: '梱包資材と単価を管理（GAS版UI互換）',
+        description: '梱包資材と単価を管理',
         fields: [
           {
-            name: 'productName',
+            name: 'name',
             label: '資材名',
             required: true,
             type: 'text',
-            placeholder: '例: 透明OPP袋 A4サイズ 100枚',
+            placeholder: '例: A4 ジッパー式ポリ袋',
             validation: {
               minLength: 1,
               maxLength: 100
@@ -367,10 +367,20 @@ const masterCategories = {
             label: 'カテゴリ',
             required: true,
             type: 'text',
-            placeholder: '例: OPP袋',
+            placeholder: '例: 封筒・袋類',
             validation: {
               minLength: 1,
               maxLength: 50
+            }
+          },
+          {
+            name: 'abbreviation',
+            label: '略称',
+            required: false,
+            type: 'text',
+            placeholder: '例: A4ジッパ',
+            validation: {
+              maxLength: 20
             }
           },
           {
@@ -396,7 +406,7 @@ const masterCategories = {
           },
           {
             name: 'price',
-            label: '単価（円）',
+            label: '購入価格（円）',
             required: true,
             type: 'number',
             placeholder: '例: 939',
@@ -406,14 +416,14 @@ const masterCategories = {
             }
           }
         ],
-        displayFields: ['productName', 'category', 'quantity', 'price'],
-        searchFields: ['productName', 'category', 'supplier'],
+        displayFields: ['name', 'category', 'quantity', 'price'],
+        searchFields: ['name', 'category', 'abbreviation', 'supplier'],
         sortBy: 'category',
         sortOrder: 'asc',
         searchable: true,
         usageCount: false,
         bulkDelete: true,
-        maxDisplayResults: 50
+        maxDisplayResults: 100
       },
       
       staff: {
