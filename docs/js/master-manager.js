@@ -244,6 +244,40 @@ async function loadMaster(category, type) {
   // 全マスタを汎用Firestoreエンジンで表示（GAS版UI廃止）
   hideGasMasterUI();
 
+  // タブグループの表示切り替え
+  const productTabs = document.getElementById('product-master-tabs');
+  const businessTabs = document.getElementById('business-master-tabs');
+
+  if (productTabs && businessTabs) {
+    if (category === 'product') {
+      productTabs.style.display = 'block';
+      businessTabs.style.display = 'none';
+      // 業務タブのアクティブ状態をクリア
+      document.querySelectorAll('#businessMasterTabs .nav-link').forEach(tab => {
+        tab.classList.remove('active');
+      });
+    } else if (category === 'business') {
+      productTabs.style.display = 'none';
+      businessTabs.style.display = 'block';
+      // 商品タブのアクティブ状態をクリア
+      document.querySelectorAll('#productMasterTabs .nav-link').forEach(tab => {
+        tab.classList.remove('active');
+      });
+    }
+
+    // 現在のタブをアクティブに設定
+    const currentTabId = `master-${type}-tab`;
+    const currentTab = document.getElementById(currentTabId);
+    if (currentTab) {
+      // 同じグループ内の他のタブのアクティブを解除
+      const tabContainer = category === 'product' ? '#productMasterTabs' : '#businessMasterTabs';
+      document.querySelectorAll(`${tabContainer} .nav-link`).forEach(tab => {
+        tab.classList.remove('active');
+      });
+      currentTab.classList.add('active');
+    }
+  }
+
   // window.masterCategoriesの存在確認
   if (!window.masterCategories) {
     console.error('❌ [Master Manager] master-config.js が読み込まれていません');
