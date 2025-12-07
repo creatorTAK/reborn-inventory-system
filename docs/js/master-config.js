@@ -343,7 +343,11 @@ const masterCategories = {
         searchable: true,
         usageCount: false,
         bulkDelete: true,
-        maxDisplayResults: 100
+        maxDisplayResults: 100,
+        // アコーディオン表示設定
+        groupBy: 'category',  // カテゴリ別にグループ化
+        groupLabel: '発送方法（カテゴリ）',  // グループヘッダーのラベル
+        itemDisplayMode: 'labeled'  // ラベル付き表示モード
       },
       
       packaging: {

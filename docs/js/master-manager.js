@@ -33,6 +33,9 @@ let selectedMasterData = new Set(); // 選択されたマスタID
 // キャッシュ管理
 let masterCache = {}; // カテゴリ/タイプごとのキャッシュ {collection: [...]}
 
+// アコーディオン展開状態管理
+let expandedGroups = new Set(); // 展開中のグループ名
+
 // ============================================
 // ユーティリティ関数（カタカナ⇔ひらがな変換）
 // ============================================
@@ -265,6 +268,9 @@ async function loadMaster(category, type) {
   currentCategory = category;
   currentMasterType = type;
   currentMasterConfig = window.masterCategories[category].masters[type];
+
+  // マスタタイプ変更時はアコーディオン展開状態をリセット
+  expandedGroups.clear();
 
   if (!currentMasterConfig) {
     console.error(`❌ [Master Manager] マスタ設定が見つかりません: ${category}/${type}`);
@@ -543,7 +549,19 @@ function renderMasterList() {
   container.classList.remove('hidden');
   emptyState.classList.add('hidden');
 
-  // 表示件数制限（パフォーマンス対策）
+  // groupByが設定されている場合はアコーディオン表示
+  if (currentMasterConfig.groupBy) {
+    renderAccordionList(container);
+  } else {
+    // 従来のフラットリスト表示
+    renderFlatList(container);
+  }
+}
+
+/**
+ * フラットリスト表示（従来の表示方式）
+ */
+function renderFlatList(container) {
   const displayItems = filteredMasterData.slice(0, MAX_DISPLAY_RESULTS);
   const hasMore = filteredMasterData.length > MAX_DISPLAY_RESULTS;
 
@@ -566,21 +584,135 @@ function renderMasterList() {
 }
 
 /**
+ * アコーディオン表示（グループ別折りたたみ）
+ */
+function renderAccordionList(container) {
+  const groupBy = currentMasterConfig.groupBy;
+
+  // データをグループ化
+  const groups = {};
+  filteredMasterData.forEach(item => {
+    const groupKey = item[groupBy] || '未分類';
+    if (!groups[groupKey]) {
+      groups[groupKey] = [];
+    }
+    groups[groupKey].push(item);
+  });
+
+  // グループ名でソート
+  const sortedGroupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'ja'));
+
+  // 初回表示時は全グループを展開状態にする（または最初のグループだけ展開）
+  if (expandedGroups.size === 0 && sortedGroupKeys.length > 0) {
+    // 検索結果がある場合は全て展開、それ以外は最初のグループだけ展開
+    const searchInput = document.getElementById('searchInput');
+    const hasSearchQuery = searchInput && searchInput.value.trim().length > 0;
+    if (hasSearchQuery) {
+      sortedGroupKeys.forEach(key => expandedGroups.add(key));
+    } else {
+      expandedGroups.add(sortedGroupKeys[0]);
+    }
+  }
+
+  // 各グループをアコーディオン形式で表示
+  sortedGroupKeys.forEach(groupKey => {
+    const groupItems = groups[groupKey];
+    const isExpanded = expandedGroups.has(groupKey);
+
+    // グループヘッダー
+    const groupHeader = document.createElement('div');
+    groupHeader.className = `accordion-header ${isExpanded ? 'expanded' : ''}`;
+    groupHeader.innerHTML = `
+      <div class="accordion-toggle">
+        <i class="bi ${isExpanded ? 'bi-chevron-down' : 'bi-chevron-right'}"></i>
+        <span class="accordion-title">${escapeHtml(groupKey)}</span>
+        <span class="accordion-count">(${groupItems.length}件)</span>
+      </div>
+    `;
+    groupHeader.addEventListener('click', () => toggleAccordion(groupKey));
+    container.appendChild(groupHeader);
+
+    // グループ内アイテム（コンテナ）
+    const groupContent = document.createElement('div');
+    groupContent.className = `accordion-content ${isExpanded ? 'expanded' : ''}`;
+    groupContent.setAttribute('data-group', groupKey);
+
+    if (isExpanded) {
+      groupItems.forEach(item => {
+        const card = createMasterCard(item, true); // true = ラベル付き表示
+        groupContent.appendChild(card);
+      });
+    }
+
+    container.appendChild(groupContent);
+  });
+}
+
+/**
+ * アコーディオンの展開/収納を切り替え
+ */
+window.toggleAccordion = function(groupKey) {
+  const isCurrentlyExpanded = expandedGroups.has(groupKey);
+
+  if (isCurrentlyExpanded) {
+    expandedGroups.delete(groupKey);
+  } else {
+    expandedGroups.add(groupKey);
+  }
+
+  // 該当グループのみ更新
+  const header = document.querySelector(`.accordion-header .accordion-title`);
+  const allHeaders = document.querySelectorAll('.accordion-header');
+  const allContents = document.querySelectorAll('.accordion-content');
+
+  allHeaders.forEach((h, index) => {
+    const title = h.querySelector('.accordion-title');
+    if (title && title.textContent === groupKey) {
+      const content = allContents[index];
+      const icon = h.querySelector('i');
+
+      if (expandedGroups.has(groupKey)) {
+        h.classList.add('expanded');
+        content.classList.add('expanded');
+        icon.className = 'bi bi-chevron-down';
+
+        // コンテンツを動的に生成
+        if (content.children.length === 0) {
+          const groupBy = currentMasterConfig.groupBy;
+          const groupItems = filteredMasterData.filter(item => (item[groupBy] || '未分類') === groupKey);
+          groupItems.forEach(item => {
+            const card = createMasterCard(item, true);
+            content.appendChild(card);
+          });
+        }
+      } else {
+        h.classList.remove('expanded');
+        content.classList.remove('expanded');
+        icon.className = 'bi bi-chevron-right';
+      }
+    }
+  });
+}
+
+/**
  * マスタカード作成
  * @param {Object} item - マスタデータ
  * @returns {HTMLElement} カード要素
  */
-function createMasterCard(item) {
+function createMasterCard(item, useLabeled = false) {
   const card = document.createElement('div');
   card.className = 'master-card';
   card.setAttribute('data-master-id', item.id);
+
+  // ラベル付き表示モードか判定
+  const isLabeledMode = useLabeled || currentMasterConfig.itemDisplayMode === 'labeled';
 
   // 通常モード時はクリックで編集モーダルを開く
   if (!selectionMode) {
     card.style.cursor = 'pointer';
     card.addEventListener('click', (e) => {
-      // 削除ボタンクリック時は編集を開かない
-      if (e.target.closest('.btn-delete')) return;
+      // 編集・削除ボタンクリック時はカードのクリックイベントを無視
+      if (e.target.closest('.btn-delete') || e.target.closest('.btn-edit')) return;
       showEditModal(item.id);
     });
   }
@@ -607,13 +739,46 @@ function createMasterCard(item) {
   // メイン情報部分
   cardContent += '<div class="master-info">';
 
-  // displayFieldsに従ってフィールドを表示
-  const displayFields = currentMasterConfig.displayFields || ['name'];
-  displayFields.forEach((fieldName, index) => {
-    const fieldValue = item[fieldName] || '';
-    const className = index === 0 ? 'master-field-primary' : 'master-field-secondary';
-    cardContent += `<div class="${className}">${escapeHtml(fieldValue)}</div>`;
-  });
+  if (isLabeledMode) {
+    // ラベル付き表示モード（GAS版風）
+    const fields = currentMasterConfig.fields || [];
+    const displayFields = currentMasterConfig.displayFields || [];
+    const groupByField = currentMasterConfig.groupBy;
+
+    displayFields.forEach(fieldName => {
+      // groupByフィールドは既にヘッダーに表示されているのでスキップ
+      if (fieldName === groupByField) return;
+
+      const fieldConfig = fields.find(f => f.name === fieldName);
+      const fieldLabel = fieldConfig ? fieldConfig.label : fieldName;
+      let fieldValue = item[fieldName];
+
+      // 数値フィールドで価格の場合は¥を付ける
+      let isPriceField = false;
+      if (fieldConfig && fieldConfig.type === 'number' && (fieldName === 'price' || fieldName.includes('price') || fieldName.includes('fee'))) {
+        fieldValue = fieldValue !== undefined && fieldValue !== null ? `¥${Number(fieldValue).toLocaleString()}` : '';
+        isPriceField = true;
+      } else {
+        fieldValue = fieldValue !== undefined && fieldValue !== null ? fieldValue : '';
+      }
+
+      const priceClass = isPriceField ? ' price-value' : '';
+      cardContent += `
+        <div class="master-field-labeled">
+          <span class="field-label">${escapeHtml(fieldLabel)}</span>
+          <span class="field-value${priceClass}">${escapeHtml(String(fieldValue))}</span>
+        </div>
+      `;
+    });
+  } else {
+    // 従来の表示モード（コンパクト）
+    const displayFields = currentMasterConfig.displayFields || ['name'];
+    displayFields.forEach((fieldName, index) => {
+      const fieldValue = item[fieldName] || '';
+      const className = index === 0 ? 'master-field-primary' : 'master-field-secondary';
+      cardContent += `<div class="${className}">${escapeHtml(fieldValue)}</div>`;
+    });
+  }
 
   // 使用回数表示（usageCount対応の場合）
   if (currentMasterConfig.usageCount && item.usageCount !== undefined) {
@@ -629,11 +794,14 @@ function createMasterCard(item) {
 
   cardContent += '</div>'; // master-info終了
 
-  // 通常モード時のみ削除ボタン表示
+  // 通常モード時のみ編集・削除ボタン表示
   if (!selectionMode) {
     cardContent += `
       <div class="master-actions">
-        <button class="btn-delete" onclick="showDeleteModal('${item.id}')">
+        <button class="btn-edit" onclick="event.stopPropagation(); showEditModal('${item.id}')" title="編集">
+          <i class="bi bi-pencil"></i>
+        </button>
+        <button class="btn-delete" onclick="event.stopPropagation(); showDeleteModal('${item.id}')" title="削除">
           <i class="bi bi-trash"></i>
         </button>
       </div>
