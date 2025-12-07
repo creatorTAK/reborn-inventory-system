@@ -1853,11 +1853,11 @@
     // プリセット定義
     presets: {
       simple: [
-        { type: 'sequence', config: { digits: '4', start: '1001' }, separator: '' }
+        { type: 'sequence', config: { digits: '3', start: '1' }, separator: '' }
       ],
       shelf: [
         { type: 'shelf', config: { format: 'AA' }, separator: '-' },
-        { type: 'sequence', config: { digits: '4', start: '1001' }, separator: '' }
+        { type: 'sequence', config: { digits: '3', start: '1' }, separator: '' }
       ],
       category_date: [
         { type: 'category', config: { code: 'K' }, separator: '-' },
@@ -2797,25 +2797,206 @@ ${descFormattedNumber}`;
     const allCards = document.querySelectorAll('.mnb-preset-card');
     allCards.forEach(card => card.classList.remove('selected'));
 
-    // 2. 選択されたカードに選択状態を追加
+    // 2. 既存のインライン設定パネルを削除
+    const existingPanel = document.getElementById('mnbInlineSettingsPanel');
+    if (existingPanel) {
+      existingPanel.remove();
+    }
+
+    // 3. 選択されたカードに選択状態を追加
     const selectedCard = document.querySelector(`.mnb-preset-card[data-preset="${presetKey}"]`);
     if (selectedCard) {
       selectedCard.classList.add('selected');
     }
 
-    // 3. 隠しinputの値を更新
+    // 4. 隠しinputの値を更新
     const hiddenInput = document.getElementById('mnbPresetSelect');
     if (hiddenInput) {
       hiddenInput.value = presetKey;
     }
 
-    // 4. プリセット選択時はセグメントリストをクリア（カスタム専用）
-    if (ManagementNumberBuilder && ManagementNumberBuilder.segments) {
-      ManagementNumberBuilder.segments = [];
-      ManagementNumberBuilder.renderSegments();
+    // 5. プリセットを適用（セグメントを設定）
+    if (ManagementNumberBuilder) {
+      ManagementNumberBuilder.applyPresetFromCard(presetKey);
+    }
+
+    // 6. 選択されたカードの後にインライン設定パネルを表示
+    if (selectedCard && ManagementNumberBuilder && ManagementNumberBuilder.segments.length > 0) {
+      renderInlinePresetSettings(selectedCard);
     }
 
     console.log('📋 プリセット選択:', presetKey || 'カスタム');
+  }
+
+  // インライン設定パネルを生成
+  function renderInlinePresetSettings(cardElement) {
+    const segments = ManagementNumberBuilder.segments;
+    const segmentTypes = ManagementNumberBuilder.segmentTypes;
+
+    // 設定パネルを作成
+    const panel = document.createElement('div');
+    panel.id = 'mnbInlineSettingsPanel';
+    panel.style.cssText = 'margin-top: 10px; padding: 16px; background: #f8fafc; border: 2px solid #3b82f6; border-radius: 10px;';
+
+    // ヘッダー
+    panel.innerHTML = `
+      <div style="font-size: 13px; font-weight: 600; color: #1e40af; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+        <span>⚙️</span>
+        <span>詳細設定</span>
+      </div>
+      <div id="mnbInlineSegmentsList" style="display: flex; flex-direction: column; gap: 12px;"></div>
+    `;
+
+    // カードの後に挿入
+    cardElement.after(panel);
+
+    // 各セグメントの設定フィールドを生成
+    const listContainer = panel.querySelector('#mnbInlineSegmentsList');
+
+    segments.forEach((segment, index) => {
+      const type = segmentTypes[segment.type];
+      if (!type) return;
+
+      const segmentDiv = document.createElement('div');
+      segmentDiv.style.cssText = 'background: white; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb;';
+
+      // セグメントヘッダー
+      let html = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px;">${type.icon}</span>
+            <span style="font-size: 13px; font-weight: 600; color: #374151;">${type.name}</span>
+          </div>
+          <div style="font-family: monospace; font-size: 13px; color: #3b82f6; font-weight: 600;" id="mnbInlinePreview_${index}">${type.preview(segment.config)}</div>
+        </div>
+      `;
+
+      // 設定フィールド
+      if (type.fields && type.fields.length > 0) {
+        html += '<div style="display: flex; flex-direction: column; gap: 8px;">';
+
+        type.fields.forEach(field => {
+          // 条件付きフィールドをチェック
+          if (field.conditional) {
+            const conditionValue = segment.config[field.conditional.field];
+            if (conditionValue !== field.conditional.value) {
+              return; // 条件を満たさない場合はスキップ
+            }
+          }
+
+          const fieldId = `mnbInlineField_${index}_${field.id}`;
+          const currentValue = segment.config[field.id] || '';
+
+          html += `<div style="display: flex; align-items: center; gap: 8px;">`;
+          html += `<label style="font-size: 12px; color: #6b7280; min-width: 70px;">${field.label}</label>`;
+
+          if (field.type === 'select') {
+            html += `<select id="${fieldId}" class="form-select form-select-sm" style="flex: 1; font-size: 14px;" onchange="updateInlineSegmentConfig(${index}, '${field.id}', this.value)">`;
+            field.options.forEach(opt => {
+              const selected = opt.value === currentValue ? 'selected' : '';
+              html += `<option value="${opt.value}" ${selected}>${opt.label}</option>`;
+            });
+            html += `</select>`;
+          } else if (field.type === 'number') {
+            html += `<input type="number" id="${fieldId}" class="form-control form-control-sm" style="flex: 1; font-size: 14px;" value="${currentValue}" placeholder="${field.placeholder || ''}" onchange="updateInlineSegmentConfig(${index}, '${field.id}', this.value)">`;
+          } else {
+            html += `<input type="text" id="${fieldId}" class="form-control form-control-sm" style="flex: 1; font-size: 14px;" value="${currentValue}" placeholder="${field.placeholder || ''}" onchange="updateInlineSegmentConfig(${index}, '${field.id}', this.value)">`;
+          }
+
+          html += `</div>`;
+        });
+
+        html += '</div>';
+      }
+
+      // 区切り文字（最後のセグメント以外）
+      if (index < segments.length - 1) {
+        html += `
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e5e7eb;">
+            <label style="font-size: 12px; color: #6b7280; min-width: 70px;">区切り文字</label>
+            <select id="mnbInlineSeparator_${index}" class="form-select form-select-sm" style="flex: 1; font-size: 14px;" onchange="updateInlineSegmentSeparator(${index}, this.value)">
+              <option value="-" ${segment.separator === '-' ? 'selected' : ''}>ハイフン (-)</option>
+              <option value="_" ${segment.separator === '_' ? 'selected' : ''}>アンダースコア (_)</option>
+              <option value="/" ${segment.separator === '/' ? 'selected' : ''}>スラッシュ (/)</option>
+              <option value="" ${segment.separator === '' ? 'selected' : ''}>なし</option>
+            </select>
+          </div>
+        `;
+      }
+
+      segmentDiv.innerHTML = html;
+      listContainer.appendChild(segmentDiv);
+    });
+
+    // プレビュー表示
+    const previewDiv = document.createElement('div');
+    previewDiv.style.cssText = 'margin-top: 12px; padding: 10px 12px; background: #eff6ff; border-radius: 6px; text-align: center;';
+    previewDiv.innerHTML = `
+      <div style="font-size: 11px; color: #3b82f6; margin-bottom: 4px;">生成される管理番号</div>
+      <div id="mnbInlineTotalPreview" style="font-family: monospace; font-size: 16px; color: #1e40af; font-weight: 700;">${ManagementNumberBuilder.generatePreview()}</div>
+    `;
+    listContainer.appendChild(previewDiv);
+  }
+
+  // インライン設定変更時のコールバック
+  function updateInlineSegmentConfig(segmentIndex, fieldId, value) {
+    if (!ManagementNumberBuilder || !ManagementNumberBuilder.segments[segmentIndex]) return;
+
+    ManagementNumberBuilder.segments[segmentIndex].config[fieldId] = value;
+
+    // プレビュー更新
+    updateInlinePreview(segmentIndex);
+    updateInlineTotalPreview();
+    ManagementNumberBuilder.updatePreview();
+
+    // 条件付きフィールドの表示/非表示を更新
+    const segment = ManagementNumberBuilder.segments[segmentIndex];
+    const type = ManagementNumberBuilder.segmentTypes[segment.type];
+
+    if (type && type.fields) {
+      type.fields.forEach(field => {
+        if (field.conditional && field.conditional.field === fieldId) {
+          // 条件付きフィールドの親要素を探して表示/非表示
+          const conditionalField = document.getElementById(`mnbInlineField_${segmentIndex}_${field.id}`);
+          if (conditionalField) {
+            const parentDiv = conditionalField.closest('div[style*="display: flex"]');
+            if (parentDiv) {
+              parentDiv.style.display = (value === field.conditional.value) ? 'flex' : 'none';
+            }
+          }
+        }
+      });
+    }
+  }
+
+  // インライン区切り文字変更時のコールバック
+  function updateInlineSegmentSeparator(segmentIndex, value) {
+    if (!ManagementNumberBuilder || !ManagementNumberBuilder.segments[segmentIndex]) return;
+
+    ManagementNumberBuilder.segments[segmentIndex].separator = value;
+
+    // プレビュー更新
+    updateInlineTotalPreview();
+    ManagementNumberBuilder.updatePreview();
+  }
+
+  // 個別セグメントのプレビュー更新
+  function updateInlinePreview(segmentIndex) {
+    const segment = ManagementNumberBuilder.segments[segmentIndex];
+    const type = ManagementNumberBuilder.segmentTypes[segment.type];
+    const previewElem = document.getElementById(`mnbInlinePreview_${segmentIndex}`);
+
+    if (previewElem && type) {
+      previewElem.textContent = type.preview(segment.config);
+    }
+  }
+
+  // 全体プレビュー更新
+  function updateInlineTotalPreview() {
+    const totalPreview = document.getElementById('mnbInlineTotalPreview');
+    if (totalPreview && ManagementNumberBuilder) {
+      totalPreview.textContent = ManagementNumberBuilder.generatePreview();
+    }
   }
 
   // アコーディオン開閉（グローバル関数）
@@ -2862,6 +3043,11 @@ ${descFormattedNumber}`;
   // グローバルに公開
   window.toggleMnbAccordion = toggleMnbAccordion;
   window.selectPresetCard = selectPresetCard;
+  window.renderInlinePresetSettings = renderInlinePresetSettings;
+  window.updateInlineSegmentConfig = updateInlineSegmentConfig;
+  window.updateInlineSegmentSeparator = updateInlineSegmentSeparator;
+  window.updateInlinePreview = updateInlinePreview;
+  window.updateInlineTotalPreview = updateInlineTotalPreview;
 </script>
           </div>
 
