@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v52-original-badge'; // オリジナルバッジパターン復元
-const SW_VERSION = 'v52-original-badge'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v53-master-ui-fix'; // マスタ管理UI修正
+const SW_VERSION = 'v53-master-ui-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
