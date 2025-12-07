@@ -503,10 +503,10 @@ const masterCategories = {
         collection: 'salesChannels',
         description: '出品先プラットフォームを管理',
         fields: [
-          { 
-            name: 'name', 
-            label: '出品先名', 
-            required: true, 
+          {
+            name: 'name',
+            label: '出品先名',
+            required: true,
             type: 'text',
             placeholder: '例: メルカリ',
             validation: {
@@ -514,10 +514,10 @@ const masterCategories = {
               maxLength: 50
             }
           },
-          { 
-            name: 'commission', 
-            label: '手数料率（%）', 
-            required: false, 
+          {
+            name: 'commission',
+            label: '手数料率（%）',
+            required: false,
             type: 'number',
             placeholder: '例: 10',
             validation: {
@@ -525,10 +525,10 @@ const masterCategories = {
               max: 100
             }
           },
-          { 
-            name: 'url', 
-            label: 'URL', 
-            required: false, 
+          {
+            name: 'url',
+            label: 'URL',
+            required: false,
             type: 'url',
             placeholder: '例: https://www.mercari.com',
             validation: {
@@ -539,6 +539,45 @@ const masterCategories = {
         displayFields: ['name', 'commission'],
         searchFields: ['name'],
         sortBy: 'name',
+        sortOrder: 'asc',
+        searchable: true,
+        usageCount: false,
+        bulkDelete: true,
+        maxDisplayResults: 50
+      },
+
+      categoryCode: {
+        label: 'カテゴリコード',
+        collection: 'categoryCodes',
+        description: '管理番号用のカテゴリコードを管理',
+        fields: [
+          {
+            name: 'code',
+            label: 'コード',
+            required: true,
+            type: 'text',
+            placeholder: '例: T',
+            validation: {
+              minLength: 1,
+              maxLength: 3,
+              pattern: '^[A-Za-z0-9]+$'
+            }
+          },
+          {
+            name: 'name',
+            label: 'カテゴリ名',
+            required: true,
+            type: 'text',
+            placeholder: '例: トップス',
+            validation: {
+              minLength: 1,
+              maxLength: 50
+            }
+          }
+        ],
+        displayFields: ['code', 'name'],
+        searchFields: ['code', 'name'],
+        sortBy: 'code',
         sortOrder: 'asc',
         searchable: true,
         usageCount: false,

@@ -47,6 +47,9 @@ console.log('[product.html] ✅ Script loaded - Version @945-PWA-Brand-Preload')
   window.brandsCache = null;
   window.brandsCacheTimestamp = null;
 
+  // カテゴリコードキャッシュをグローバルに初期化
+  window.categoryCodesCache = null;
+
   /**
    * 親ウィンドウからデータを受信（Algolia移行版）
    * - 管理番号設定: GAS経由で受け取る（Firestore直接アクセスをスキップ）
@@ -465,6 +468,8 @@ window.updateLoadingProgress = function(percent, text) {
   async function loadProcureListingDefaults() {
     // まず仕入先・出品先の選択肢をFirestoreから読み込む
     await loadSupplierAndSalesChannelOptions();
+    // カテゴリコードマスタも読み込む（管理番号設定用）
+    await loadCategoryCodesFromFirestore();
 
     // PWA版: localStorage/Firestoreから読み込み
     if (window.CACHED_CONFIG && window.CACHED_CONFIG['仕入出品デフォルト']) {
@@ -545,6 +550,36 @@ window.updateLoadingProgress = function(percent, text) {
       }
     } catch (e) {
       console.error('❌ 仕入先・出品先選択肢読み込みエラー:', e);
+    }
+  }
+
+  // カテゴリコードをFirestoreから読み込む（管理番号設定用）
+  async function loadCategoryCodesFromFirestore() {
+    if (!window.db) {
+      console.warn('⚠️ Firestoreが初期化されていません（カテゴリコード）');
+      return;
+    }
+
+    try {
+      const snapshot = await window.db.collection('categoryCodes').orderBy('code', 'asc').get();
+      const codes = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.code && data.name) {
+          codes.push({ code: data.code, name: data.name });
+        }
+      });
+
+      if (codes.length > 0) {
+        window.categoryCodesCache = codes;
+        console.log('✅ カテゴリコードマスタを読み込み:', codes.length + '件');
+      } else {
+        window.categoryCodesCache = [];
+        console.log('⚠️ カテゴリコードマスタが空です');
+      }
+    } catch (e) {
+      console.error('❌ カテゴリコード読み込みエラー:', e);
+      window.categoryCodesCache = [];
     }
   }
 
@@ -2712,17 +2747,19 @@ window.updateLoadingProgress = function(percent, text) {
           break;
 
         case 'category':
-          // カテゴリコード選択（AA〜ZZ）
+          // カテゴリコード選択（Firestoreマスタから取得）
           const categoryDiv = document.createElement('div');
           categoryDiv.style.marginBottom = '8px';
 
-          // AA〜ZZの選択肢を生成
+          // カテゴリコードマスタから選択肢を生成
           let categoryOptions = '<option value="">--選択--</option>';
-          for (let i = 65; i <= 90; i++) { // A-Z
-            for (let j = 65; j <= 90; j++) { // A-Z
-              const code = String.fromCharCode(i) + String.fromCharCode(j);
-              categoryOptions += `<option value="${code}">${code}</option>`;
-            }
+          if (window.categoryCodesCache && window.categoryCodesCache.length > 0) {
+            window.categoryCodesCache.forEach(item => {
+              categoryOptions += `<option value="${item.code}">${item.code} (${item.name})</option>`;
+            });
+          } else {
+            // マスタが空の場合はメッセージ表示
+            categoryOptions = '<option value="">-- マスタ管理で追加してください --</option>';
           }
 
           categoryDiv.innerHTML = `

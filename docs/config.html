@@ -1771,11 +1771,19 @@
       category: {
         icon: '📁',
         name: 'カテゴリコード',
-        desc: '商品カテゴリ (K, O など)',
+        desc: 'マスタ管理で設定したカテゴリ',
         fields: [
-          { id: 'code', label: 'コード', type: 'text', placeholder: 'K' }
+          {
+            id: 'code',
+            label: 'カテゴリ',
+            type: 'select',
+            dynamicOptions: 'categoryCodes',  // Firestoreから動的に読み込み
+            options: [
+              { value: '', label: '-- 読み込み中 --' }
+            ]
+          }
         ],
-        preview: (config) => config.code || 'K'
+        preview: (config) => config.code || '?'
       },
       date: {
         icon: '📅',
@@ -1879,6 +1887,42 @@
       this.setupDragAndDrop();
       // loadSettings()はFirebase初期化後に外部から呼ばれる
       this.setupPresetSelector();
+    },
+
+    // カテゴリコードマスタを読み込み（dynamicOptions対応）
+    async loadCategoryCodes() {
+      if (!window.db) {
+        console.warn('⚠️ Firestore未初期化（カテゴリコード読み込みスキップ）');
+        return;
+      }
+
+      try {
+        const snapshot = await window.db.collection('categoryCodes').orderBy('code', 'asc').get();
+        const codes = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.code && data.name) {
+            codes.push({ value: data.code, label: `${data.code} (${data.name})` });
+          }
+        });
+
+        if (codes.length > 0) {
+          // segmentTypesのcategoryフィールドを更新
+          this.segmentTypes.category.fields[0].options = codes;
+          console.log('✅ カテゴリコードマスタを読み込み:', codes.length + '件');
+        } else {
+          // マスタが空の場合は案内メッセージ
+          this.segmentTypes.category.fields[0].options = [
+            { value: '', label: '-- マスタ管理で追加してください --' }
+          ];
+          console.log('⚠️ カテゴリコードマスタが空です');
+        }
+      } catch (e) {
+        console.error('❌ カテゴリコード読み込みエラー:', e);
+        this.segmentTypes.category.fields[0].options = [
+          { value: '', label: '-- 読み込みエラー --' }
+        ];
+      }
     },
 
     // プリセットセレクター設定（カード型対応）
@@ -8508,10 +8552,12 @@ ${prompt || '（未設定）'}
 
     // Firebase初期化は既にscriptタグで実行済み
     // ManagementNumberBuilderのloadSettings()を呼ぶ
-    function initFirebaseAndLoadSettings() {
+    async function initFirebaseAndLoadSettings() {
       // Firestore初期化完了後、ManagementNumberBuilderのloadSettings()を呼ぶ
       if (window.ManagementNumberBuilder && window.firestoreReady) {
         console.log('🔥 Firebase初期化完了 → ManagementNumberBuilder.loadSettings()を呼び出します');
+        // カテゴリコードマスタを先に読み込む
+        await window.ManagementNumberBuilder.loadCategoryCodes();
         window.ManagementNumberBuilder.loadSettings();
       } else {
         // まだ準備ができていない場合は500ms後にリトライ
