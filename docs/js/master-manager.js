@@ -237,15 +237,8 @@ function setupEventListeners() {
 async function loadMaster(category, type) {
   console.log(`📋 [Master Manager] マスタロード開始: ${category}/${type}`);
 
-  // 🚀 フェーズ0: 発送方法・梱包資材はGAS版UIをiframe表示
-  if (category === 'business' && (type === 'shipping' || type === 'packaging')) {
-    console.log(`🔄 [Master Manager] GAS版UI表示: ${type}`);
-    showGasMasterUI(type);
-    return;
-  } else {
-    // それ以外のマスタ（担当者・仕入先・出品先等）は汎用エンジンを使用
-    hideGasMasterUI();
-  }
+  // 全マスタを汎用Firestoreエンジンで表示（GAS版UI廃止）
+  hideGasMasterUI();
 
   // window.masterCategoriesの存在確認
   if (!window.masterCategories) {
