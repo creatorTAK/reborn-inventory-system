@@ -2953,58 +2953,50 @@ ${descFormattedNumber}`;
         targetCounterKeys.push(counterKey);
       }
 
-      // 既存商品をスキャンして最大番号を取得
+      // 既存カウンター値を取得して考慮
       const digits = sequenceSegment.config?.digits || 3;
-      let maxExistingNumbers = {};
+      let existingCounterValues = {};
 
       for (const key of targetCounterKeys) {
-        // キーからプレフィックスを復元（例: "AA_" → "AA-"）
-        const prefix = key.replace(/_$/, '-');
-
-        // Firestoreから既存商品をスキャン
-        const productsRef = window.db.collection('products');
-        const snapshot = await productsRef.get();
-
-        let maxNumber = 0;
-        const regex = new RegExp(`^${prefix.replace('-', '[-]?')}(\\d+)$`, 'i');
-
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          const mgmtNum = data.managementNumber || '';
-          const match = mgmtNum.match(regex);
-          if (match) {
-            const num = parseInt(match[1], 10);
-            if (num > maxNumber) {
-              maxNumber = num;
-            }
+        try {
+          // Firestoreから既存カウンター値を取得
+          const counterDoc = await window.db.collection('managementNumberCounters').doc(key).get();
+          if (counterDoc.exists) {
+            const data = counterDoc.data();
+            existingCounterValues[key] = data.currentNumber || 0;
+            console.log(`📊 ${key} 既存カウンター値:`, existingCounterValues[key]);
+          } else {
+            existingCounterValues[key] = 0;
+            console.log(`📊 ${key} カウンター未作成（新規）`);
           }
-        });
-
-        maxExistingNumbers[key] = maxNumber;
-        console.log(`📊 ${key} 既存最大番号:`, maxNumber);
+        } catch (e) {
+          console.warn(`⚠️ ${key} カウンター取得エラー:`, e);
+          existingCounterValues[key] = 0;
+        }
       }
 
       // 各カウンターの新しい値を計算
+      // 既存カウンター値と開始値を比較し、大きい方を採用
       let resetResults = [];
       for (const key of targetCounterKeys) {
-        const existingMax = maxExistingNumbers[key] || 0;
-        const newCounterValue = Math.max(startNum - 1, existingMax);
+        const existingValue = existingCounterValues[key] || 0;
+        const newCounterValue = Math.max(startNum - 1, existingValue);
         const nextNumber = newCounterValue + 1;
-        resetResults.push({ key, existingMax, newCounterValue, nextNumber });
+        resetResults.push({ key, existingValue, newCounterValue, nextNumber });
       }
 
-      // 確認ダイアログ（既存データ情報を含む）
+      // 確認ダイアログ（既存カウンター情報を含む）
       let confirmMessage;
       if (hasShelf && targetCounterKeys.length > 1) {
-        confirmMessage = `${targetCounterKeys.length}個のカウンターをリセットします。\n既存データを考慮して続きから採番されます。\n本当によろしいですか？`;
+        confirmMessage = `${targetCounterKeys.length}個のカウンターを同期します。\n既存カウンターを考慮して続きから採番されます。\n本当によろしいですか？`;
       } else {
         const result = resetResults[0];
-        if (result.existingMax > 0) {
-          confirmMessage = `既存データの最大番号: ${result.existingMax}\n` +
+        if (result.existingValue >= startNum) {
+          confirmMessage = `既存カウンター値: ${result.existingValue}\n` +
             `次に採番される番号: ${String(result.nextNumber).padStart(digits, '0')}\n` +
-            `（既存データの続きから採番されます）\n\n本当によろしいですか？`;
+            `（既存カウンターの続きから採番されます）\n\n本当によろしいですか？`;
         } else {
-          confirmMessage = `カウンターを開始値 ${startNum} にリセットします。\n` +
+          confirmMessage = `カウンターを開始値 ${startNum} に設定します。\n` +
             `次に採番される番号は ${String(startNum).padStart(digits, '0')} になります。\n\n本当によろしいですか？`;
         }
       }
@@ -3013,15 +3005,15 @@ ${descFormattedNumber}`;
         return;
       }
 
-      // Firestoreでカウンターをリセット（既存データを考慮）
+      // Firestoreでカウンターを同期（既存カウンターを考慮）
       const batch = window.db.batch();
       for (const result of resetResults) {
         const counterRef = window.db.collection('managementNumberCounters').doc(result.key);
         batch.set(counterRef, {
-          currentNumber: result.newCounterValue, // 既存データを考慮した値
-          resetAt: new Date(),
-          resetBy: 'config_manual_reset',
-          existingMaxAtReset: result.existingMax // 参照用に保存
+          currentNumber: result.newCounterValue, // 既存カウンターを考慮した値
+          syncedAt: new Date(),
+          syncedBy: 'config_manual_sync',
+          previousValue: result.existingValue // 参照用に保存
         });
       }
       await batch.commit();
@@ -3031,15 +3023,15 @@ ${descFormattedNumber}`;
         `${r.key}: 次は ${String(r.nextNumber).padStart(digits, '0')}`
       ).join('\n');
 
-      console.log('✅ カウンターをリセットしました:', resetResults);
-      alert(`カウンターをリセットしました。\n\n${resultMsg}`);
+      console.log('✅ カウンターを同期しました:', resetResults);
+      alert(`カウンターを同期しました。\n\n${resultMsg}`);
 
       // プレビューを更新
       updateCurrentSettingsView();
 
     } catch (error) {
-      console.error('❌ カウンターリセットエラー:', error);
-      alert('カウンターのリセットに失敗しました: ' + error.message);
+      console.error('❌ カウンター同期エラー:', error);
+      alert('カウンターの同期に失敗しました: ' + error.message);
     }
   }
 
