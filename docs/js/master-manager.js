@@ -24,6 +24,7 @@ let allMasterData = [];
 let filteredMasterData = [];
 let searchDebounceTimer = null;
 let masterToDelete = null;
+let masterToEdit = null; // 編集中のマスタデータ
 
 // 選択モード関連
 let selectionMode = false;
@@ -574,6 +575,16 @@ function createMasterCard(item) {
   card.className = 'master-card';
   card.setAttribute('data-master-id', item.id);
 
+  // 通常モード時はクリックで編集モーダルを開く
+  if (!selectionMode) {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', (e) => {
+      // 削除ボタンクリック時は編集を開かない
+      if (e.target.closest('.btn-delete')) return;
+      showEditModal(item.id);
+    });
+  }
+
   // カード内容を構築
   let cardContent = '';
 
@@ -737,6 +748,20 @@ window.hideAddModal = function() {
   if (modal) {
     modal.classList.add('hidden');
   }
+
+  // 編集モードをリセット
+  masterToEdit = null;
+
+  // モーダルを追加モードに戻す
+  const modalTitle = document.getElementById('addModalTitle');
+  const submitBtn = document.getElementById('addSubmitBtn');
+  if (modalTitle) {
+    modalTitle.textContent = '新規追加';
+  }
+  if (submitBtn) {
+    submitBtn.textContent = '追加';
+    submitBtn.setAttribute('onclick', 'addMaster()');
+  }
 };
 
 /**
@@ -796,6 +821,198 @@ window.addMaster = async function() {
   } catch (error) {
     console.error('❌ [Master Manager] 追加エラー:', error);
     const detailedError = `エラー: ${error.message || '追加に失敗しました'}`;
+    showError(errorMessage, detailedError);
+  } finally {
+    showLoading(false);
+  }
+};
+
+// ============================================
+// マスタ編集
+// ============================================
+
+/**
+ * 編集モーダル表示
+ * @param {string} masterId - マスタID
+ */
+window.showEditModal = function(masterId) {
+  const modal = document.getElementById('addModal');
+  const modalTitle = document.getElementById('addModalTitle');
+  const modalBody = document.getElementById('addModalBody');
+  const errorMessage = document.getElementById('addErrorMessage');
+  const submitBtn = document.getElementById('addSubmitBtn');
+
+  if (!modal || !modalBody) {
+    console.error('[Master Manager] モーダル要素が見つかりません');
+    return;
+  }
+
+  // 編集対象を検索
+  const item = filteredMasterData.find(m => m.id === masterId) ||
+               allMasterData.find(m => m.id === masterId);
+  if (!item) {
+    console.error('[Master Manager] 編集対象が見つかりません:', masterId);
+    alert('データが見つかりません');
+    return;
+  }
+
+  masterToEdit = item;
+
+  // currentMasterConfigが未設定の場合はエラー
+  if (!currentMasterConfig) {
+    console.error('[Master Manager] マスタが選択されていません');
+    alert('マスタを選択してください');
+    return;
+  }
+
+  // fieldsが未定義の場合はエラー
+  if (!currentMasterConfig.fields || currentMasterConfig.fields.length === 0) {
+    console.error('[Master Manager] マスタ設定にfieldsが定義されていません:', currentMasterConfig);
+    alert('マスタ設定にエラーがあります');
+    return;
+  }
+
+  // モーダルタイトルを変更
+  if (modalTitle) {
+    modalTitle.textContent = '編集';
+  }
+
+  // 送信ボタンのテキストを変更
+  if (submitBtn) {
+    submitBtn.textContent = '更新';
+    submitBtn.setAttribute('onclick', 'updateMasterData()');
+  }
+
+  // エラーメッセージクリア
+  if (errorMessage) {
+    errorMessage.textContent = '';
+    errorMessage.classList.add('hidden');
+  }
+
+  // 入力フォーム動的生成（既存データを入力）
+  modalBody.innerHTML = '';
+
+  currentMasterConfig.fields.forEach(field => {
+    const formGroup = document.createElement('div');
+    formGroup.className = 'form-group';
+
+    const label = document.createElement('label');
+    label.className = 'form-label';
+    label.htmlFor = `add-${field.name}`;
+    label.textContent = field.label;
+    if (field.required) {
+      label.innerHTML += ' <span style="color: #ff4757;">*</span>';
+    }
+
+    const input = document.createElement('input');
+    input.type = field.type === 'number' ? 'number' : 'text';
+    input.id = `add-${field.name}`;
+    input.className = 'form-input';
+    input.placeholder = field.placeholder || '';
+    if (field.maxLength) {
+      input.maxLength = field.maxLength;
+    }
+
+    // 既存データを入力
+    const existingValue = item[field.name];
+    if (existingValue !== undefined && existingValue !== null) {
+      input.value = existingValue;
+    }
+
+    formGroup.appendChild(label);
+    formGroup.appendChild(input);
+    modalBody.appendChild(formGroup);
+  });
+
+  modal.classList.remove('hidden');
+};
+
+/**
+ * 編集モーダル非表示（追加モーダルと共通）
+ */
+window.hideEditModal = function() {
+  hideAddModal(); // hideAddModal内でリセット処理も実行される
+};
+
+/**
+ * マスタ更新実行
+ */
+window.updateMasterData = async function() {
+  const errorMessage = document.getElementById('addErrorMessage');
+
+  if (!errorMessage || !masterToEdit) {
+    console.error('[Master Manager] 更新対象がありません');
+    return;
+  }
+
+  // 入力値を収集
+  const data = {};
+  let hasError = false;
+
+  currentMasterConfig.fields.forEach(field => {
+    const input = document.getElementById(`add-${field.name}`);
+    let value = input ? input.value.trim() : '';
+
+    // 数値型の変換
+    if (field.type === 'number' && value !== '') {
+      value = parseFloat(value);
+      if (isNaN(value)) {
+        showError(errorMessage, `${field.label}は数値で入力してください`);
+        hasError = true;
+        return;
+      }
+    }
+
+    // バリデーション
+    if (field.required && (value === '' || value === null || value === undefined)) {
+      showError(errorMessage, `${field.label}を入力してください`);
+      hasError = true;
+      return;
+    }
+
+    data[field.name] = value;
+  });
+
+  if (hasError) return;
+
+  try {
+    showLoading(true);
+
+    // Firestore APIで更新
+    const result = await window.updateMaster(currentMasterConfig.collection, masterToEdit.id, data);
+
+    if (result.success) {
+      console.log(`✅ [Master Manager] 更新成功: ${currentMasterConfig.label}`);
+
+      // ローカルデータを更新
+      const updateLocalData = (dataArray) => {
+        const index = dataArray.findIndex(m => m.id === masterToEdit.id);
+        if (index !== -1) {
+          dataArray[index] = { ...dataArray[index], ...data };
+        }
+      };
+
+      updateLocalData(allMasterData);
+      updateLocalData(filteredMasterData);
+      if (masterCache[currentMasterConfig.collection]) {
+        updateLocalData(masterCache[currentMasterConfig.collection]);
+      }
+
+      // リスト再描画
+      renderMasterList();
+
+      // モーダルを閉じてリセット
+      hideEditModal();
+      alert(`${currentMasterConfig.label}を更新しました`);
+    } else {
+      const detailedError = result.error || '更新に失敗しました';
+      console.error('❌ [Master Manager] 更新失敗:', detailedError);
+      showError(errorMessage, detailedError);
+    }
+
+  } catch (error) {
+    console.error('❌ [Master Manager] 更新エラー:', error);
+    const detailedError = `エラー: ${error.message || '更新に失敗しました'}`;
     showError(errorMessage, detailedError);
   } finally {
     showLoading(false);
