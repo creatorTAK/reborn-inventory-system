@@ -1021,32 +1021,25 @@ async function updateBrand(brandId, nameEn, nameKana) {
  * @param {number} options.limit - 取得件数制限
  * @returns {Promise<Array>} マスタデータ配列
  */
-async function getMasterData(collection, options = {}) {
+async function getMasterData(collectionName, options = {}) {
   try {
     const db = await initializeFirestore();
-    const {
-      collection: firestoreCollection,
-      getDocs,
-      query,
-      orderBy,
-      limit: firestoreLimit
-    } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    // クエリ構築
-    let q = firestoreCollection(db, collection);
+    // compat版構文でクエリ構築
+    let ref = db.collection(collectionName);
 
     // ソート
     if (options.sortBy) {
       const sortOrder = options.sortOrder || 'asc';
-      q = query(q, orderBy(options.sortBy, sortOrder));
+      ref = ref.orderBy(options.sortBy, sortOrder);
     }
 
     // 件数制限
     if (options.limit) {
-      q = query(q, firestoreLimit(options.limit));
+      ref = ref.limit(options.limit);
     }
 
-    const snapshot = await getDocs(q);
+    const snapshot = await ref.get();
     const data = [];
 
     snapshot.forEach((doc) => {
@@ -1056,11 +1049,11 @@ async function getMasterData(collection, options = {}) {
       });
     });
 
-    console.log(`✅ [Master API] ${collection}取得完了: ${data.length}件`);
+    console.log(`✅ [Master API] ${collectionName}取得完了: ${data.length}件`);
     return data;
 
   } catch (error) {
-    console.error(`❌ [Master API] ${collection}取得エラー:`, error);
+    console.error(`❌ [Master API] ${collectionName}取得エラー:`, error);
     throw error;
   }
 }
@@ -1073,19 +1066,15 @@ async function getMasterData(collection, options = {}) {
  * @param {boolean} includeUsageCount - 使用回数カウント機能を含めるか
  * @returns {Promise<object>} { success: boolean, id?: string, error?: string }
  */
-async function createMaster(collection, data, includeUsageCount = false) {
+async function createMaster(collectionName, data, includeUsageCount = false) {
   try {
     const db = await initializeFirestore();
-    const {
-      collection: firestoreCollection,
-      addDoc,
-      serverTimestamp
-    } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
+    // compat版構文
     const masterData = {
       ...data,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
     // 使用回数カウント機能
@@ -1093,8 +1082,8 @@ async function createMaster(collection, data, includeUsageCount = false) {
       masterData.usageCount = 0;
     }
 
-    const docRef = await addDoc(firestoreCollection(db, collection), masterData);
-    console.log(`✅ [Master API] ${collection}作成成功: ${docRef.id}`);
+    const docRef = await db.collection(collectionName).add(masterData);
+    console.log(`✅ [Master API] ${collectionName}作成成功: ${docRef.id}`);
 
     return {
       success: true,
@@ -1102,7 +1091,7 @@ async function createMaster(collection, data, includeUsageCount = false) {
     };
 
   } catch (error) {
-    console.error(`❌ [Master API] ${collection}作成エラー:`, error);
+    console.error(`❌ [Master API] ${collectionName}作成エラー:`, error);
     return {
       success: false,
       error: error.message || 'マスタの作成に失敗しました'
@@ -1118,32 +1107,27 @@ async function createMaster(collection, data, includeUsageCount = false) {
  * @param {object} data - 更新データ
  * @returns {Promise<object>} { success: boolean, error?: string }
  */
-async function updateMaster(collection, id, data) {
+async function updateMaster(collectionName, id, data) {
   try {
     if (!id || !id.trim()) {
       return { success: false, error: 'IDは必須です' };
     }
 
     const db = await initializeFirestore();
-    const {
-      doc,
-      updateDoc,
-      serverTimestamp
-    } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
+    // compat版構文
     const updateData = {
       ...data,
-      updatedAt: serverTimestamp()
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    const docRef = doc(db, collection, id);
-    await updateDoc(docRef, updateData);
+    await db.collection(collectionName).doc(id).update(updateData);
 
-    console.log(`✅ [Master API] ${collection}更新成功: ${id}`);
+    console.log(`✅ [Master API] ${collectionName}更新成功: ${id}`);
     return { success: true };
 
   } catch (error) {
-    console.error(`❌ [Master API] ${collection}更新エラー:`, error);
+    console.error(`❌ [Master API] ${collectionName}更新エラー:`, error);
     return {
       success: false,
       error: error.message || 'マスタの更新に失敗しました'
@@ -1158,31 +1142,25 @@ async function updateMaster(collection, id, data) {
  * @param {string} id - ドキュメントID
  * @returns {Promise<object>} { success: boolean, error?: string }
  */
-async function incrementMasterUsageCount(collection, id) {
+async function incrementMasterUsageCount(collectionName, id) {
   try {
     if (!id || !id.trim()) {
       return { success: false, error: 'IDは必須です' };
     }
 
     const db = await initializeFirestore();
-    const {
-      doc,
-      updateDoc,
-      increment,
-      serverTimestamp
-    } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    const docRef = doc(db, collection, id);
-    await updateDoc(docRef, {
-      usageCount: increment(1),
-      updatedAt: serverTimestamp()
+    // compat版構文
+    await db.collection(collectionName).doc(id).update({
+      usageCount: firebase.firestore.FieldValue.increment(1),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log(`✅ [Master API] ${collection}使用回数更新: ${id}`);
+    console.log(`✅ [Master API] ${collectionName}使用回数更新: ${id}`);
     return { success: true };
 
   } catch (error) {
-    console.error(`❌ [Master API] ${collection}使用回数更新エラー:`, error);
+    console.error(`❌ [Master API] ${collectionName}使用回数更新エラー:`, error);
     return {
       success: false,
       error: error.message || '使用回数の更新に失敗しました'
@@ -1197,26 +1175,22 @@ async function incrementMasterUsageCount(collection, id) {
  * @param {string} id - ドキュメントID
  * @returns {Promise<object>} { success: boolean, error?: string }
  */
-async function deleteMaster(collection, id) {
+async function deleteMaster(collectionName, id) {
   try {
     if (!id || !id.trim()) {
       return { success: false, error: 'IDは必須です' };
     }
 
     const db = await initializeFirestore();
-    const {
-      doc,
-      deleteDoc
-    } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    const docRef = doc(db, collection, id);
-    await deleteDoc(docRef);
+    // compat版構文
+    await db.collection(collectionName).doc(id).delete();
 
-    console.log(`✅ [Master API] ${collection}削除成功: ${id}`);
+    console.log(`✅ [Master API] ${collectionName}削除成功: ${id}`);
     return { success: true };
 
   } catch (error) {
-    console.error(`❌ [Master API] ${collection}削除エラー:`, error);
+    console.error(`❌ [Master API] ${collectionName}削除エラー:`, error);
     return {
       success: false,
       error: error.message || 'マスタの削除に失敗しました'
