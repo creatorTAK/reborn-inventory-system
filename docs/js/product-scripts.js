@@ -2424,9 +2424,30 @@ window.updateLoadingProgress = function(percent, text) {
 
         // managementNumber フィールドを返す
         if (data.managementNumber) {
-          // localStorageにもキャッシュ（次回の高速表示用）
+          // タイムスタンプ比較：localStorageの方が新しい場合は上書きしない
+          const localTimestamp = parseInt(localStorage.getItem('managementConfigTimestamp') || '0');
+          const firestoreTimestamp = data.updatedAt?.toMillis?.() || 0;
+
+          console.log('🕐 タイムスタンプ比較:', {
+            local: localTimestamp,
+            localDate: localTimestamp ? new Date(localTimestamp).toISOString() : 'なし',
+            firestore: firestoreTimestamp,
+            firestoreDate: firestoreTimestamp ? new Date(firestoreTimestamp).toISOString() : 'なし'
+          });
+
+          if (localTimestamp > firestoreTimestamp) {
+            console.log('⏭️ localStorageの方が新しいため、Firestoreデータでの上書きをスキップ');
+            // localStorageの既存データを返す
+            const existingConfig = localStorage.getItem('rebornConfig_managementNumber');
+            if (existingConfig) {
+              return JSON.parse(existingConfig);
+            }
+          }
+
+          // Firestoreの方が新しい、または同等の場合はキャッシュを更新
           localStorage.setItem('rebornConfig_managementNumber', JSON.stringify(data.managementNumber));
-          console.log('💾 localStorageにもキャッシュしました');
+          localStorage.setItem('managementConfigTimestamp', firestoreTimestamp.toString());
+          console.log('💾 localStorageをFirestoreデータで更新しました');
           return data.managementNumber;
         } else {
           console.log('⚠️ managementNumber フィールドが存在しません');
