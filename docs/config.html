@@ -2985,24 +2985,40 @@ ${descFormattedNumber}`;
         resetResults.push({ key, existingValue, newCounterValue, nextNumber });
       }
 
-      // 確認ダイアログ（既存カウンター情報を含む）
-      let confirmMessage;
-      if (hasShelf && targetCounterKeys.length > 1) {
-        confirmMessage = `${targetCounterKeys.length}個のカウンターを同期します。\n既存カウンターを考慮して続きから採番されます。\n本当によろしいですか？`;
-      } else {
+      // 単一カウンターの場合、手動で番号を指定するオプションを提供
+      if (targetCounterKeys.length === 1) {
         const result = resetResults[0];
-        if (result.existingValue >= startNum) {
-          confirmMessage = `既存カウンター値: ${result.existingValue}\n` +
-            `次に採番される番号: ${String(result.nextNumber).padStart(digits, '0')}\n` +
-            `（既存カウンターの続きから採番されます）\n\n本当によろしいですか？`;
-        } else {
-          confirmMessage = `カウンターを開始値 ${startNum} に設定します。\n` +
-            `次に採番される番号は ${String(startNum).padStart(digits, '0')} になります。\n\n本当によろしいですか？`;
-        }
-      }
+        const manualInput = prompt(
+          `現在のカウンター値: ${result.existingValue || '未設定'}\n` +
+          `設定の開始値: ${startNum}\n\n` +
+          `次に採番したい番号を入力してください。\n` +
+          `（例: 既存商品がAA-1012まである場合は「1013」と入力）\n\n` +
+          `※ 空欄またはキャンセルで開始値(${startNum})から採番`,
+          result.existingValue >= startNum ? String(result.nextNumber) : String(startNum)
+        );
 
-      if (!confirm(confirmMessage)) {
-        return;
+        if (manualInput === null) {
+          return; // キャンセル
+        }
+
+        const manualNumber = parseInt(manualInput.trim(), 10);
+        if (manualInput.trim() !== '' && !isNaN(manualNumber) && manualNumber > 0) {
+          // 手動入力された番号を使用（入力値から採番するので -1 する）
+          result.newCounterValue = manualNumber - 1;
+          result.nextNumber = manualNumber;
+          result.manualOverride = true;
+        }
+
+        const confirmMsg = `次に採番される番号: ${String(result.nextNumber).padStart(digits, '0')}\n\n本当によろしいですか？`;
+        if (!confirm(confirmMsg)) {
+          return;
+        }
+      } else {
+        // 複数カウンターの場合は従来の確認ダイアログ
+        const confirmMessage = `${targetCounterKeys.length}個のカウンターを同期します。\n既存カウンターを考慮して続きから採番されます。\n本当によろしいですか？`;
+        if (!confirm(confirmMessage)) {
+          return;
+        }
       }
 
       // Firestoreでカウンターを同期（既存カウンターを考慮）
