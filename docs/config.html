@@ -1438,47 +1438,34 @@
 
 <!-- 管理番号ビルダーUI -->
 <div class="mnb-container">
-  <!-- ヒント -->
-  <div style="font-size: 11px; color: #6b7280; padding: 10px 12px; background: #f0f9ff; border-radius: 6px; border-left: 3px solid #3b82f6; margin-bottom: 16px; line-height: 1.6;">
-    <div style="color: #3b82f6; font-weight: 600; margin-bottom: 4px;">
-      <span>💡 概要</span>
-    </div>
-    <div id="mnb-overview-content" style="display: block; padding-left: 12px; margin-bottom: 8px;">
-      商品登録時に自動で管理番号（例: AA-1001）が生成されます。プリセットから基本パターンを選択したり、セグメント（カテゴリ、日付、ランク、サイズ、カラー、連番、カスタム値）を自由に組み合わせて、独自の管理番号フォーマットを作成できます
-    </div>
-  </div>
-
   <input type="hidden" id="mnbPresetSelect" value="">
 
-  <!-- ===== 現在の設定表示エリア（デフォルト表示） ===== -->
+  <!-- ===== 現在の設定表示エリア ===== -->
   <div id="mnbCurrentSettingsView" style="margin-bottom: 16px;">
     <!-- 設定がない場合 -->
     <div id="mnbNoSettingsMessage" style="padding: 24px; text-align: center; background: #f9fafb; border: 2px dashed #d1d5db; border-radius: 12px;">
       <div style="font-size: 32px; margin-bottom: 8px;">📋</div>
       <div style="font-size: 14px; color: #6b7280; margin-bottom: 16px;">管理番号の設定がまだありません</div>
       <button type="button" onclick="enterMnbEditMode()" style="padding: 12px 24px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);">
-        ✏️ 管理番号を設定する
+        🔧 管理番号を設定する
       </button>
     </div>
 
     <!-- 設定がある場合 -->
     <div id="mnbCurrentSettings" style="display: none;">
-      <!-- 現在のフォーマット表示 -->
-      <div style="padding: 20px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #3b82f6; border-radius: 12px; margin-bottom: 12px;">
+      <div style="padding: 20px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #3b82f6; border-radius: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
           <div>
             <div style="font-size: 12px; color: #3b82f6; font-weight: 600; margin-bottom: 4px;">現在の管理番号フォーマット</div>
-            <div id="mnbCurrentPresetName" style="font-size: 16px; font-weight: 700; color: #1e40af;">未設定</div>
+            <div id="mnbCurrentPresetName" style="font-size: 16px; font-weight: 700; color: #1e40af;">📦 棚番号 + 連番</div>
           </div>
-          <button type="button" onclick="enterMnbEditMode()" style="padding: 8px 16px; background: white; color: #3b82f6; border: 2px solid #3b82f6; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#3b82f6'; this.style.color='white';" onmouseout="this.style.background='white'; this.style.color='#3b82f6';">
+          <button type="button" onclick="enterMnbEditMode()" style="padding: 8px 16px; background: white; color: #3b82f6; border: 2px solid #3b82f6; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
             ✏️ 編集
           </button>
         </div>
-
-        <!-- 生成例（大きく表示） -->
         <div style="padding: 16px; background: white; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">生成される管理番号の例</div>
-          <div id="mnbCurrentPreview" style="font-family: monospace; font-size: 24px; color: #1e40af; font-weight: 700; letter-spacing: 1px;">---</div>
+          <div id="mnbCurrentPreview" style="font-family: monospace; font-size: 24px; color: #1e40af; font-weight: 700; letter-spacing: 1px;">AA-001</div>
         </div>
       </div>
     </div>
@@ -2915,10 +2902,13 @@ ${descFormattedNumber}`;
     const presetNameElem = document.getElementById('mnbCurrentPresetName');
     const previewElem = document.getElementById('mnbCurrentPreview');
 
-    if (!ManagementNumberBuilder || ManagementNumberBuilder.segments.length === 0) {
+    const segments = ManagementNumberBuilder?.segments || [];
+
+    if (segments.length === 0) {
       // 設定なし
       if (noSettingsMessage) noSettingsMessage.style.display = 'block';
       if (currentSettings) currentSettings.style.display = 'none';
+      console.log('📋 管理番号: 未設定');
       return;
     }
 
@@ -2933,7 +2923,8 @@ ${descFormattedNumber}`;
       'shelf': '📦 棚番号 + 連番',
       'category_date': '📅 カテゴリ + 日付 + 連番',
       'shelf_date': '🗓️ 棚番号 + 日付 + 連番',
-      'category_rank': '⭐ カテゴリ + ランク + 連番'
+      'category_rank': '⭐ カテゴリ + ランク + 連番',
+      'custom': '🛠️ カスタム設定'
     };
     const presetName = presetNames[presetKey] || '🛠️ カスタム設定';
     if (presetNameElem) {
@@ -2941,9 +2932,11 @@ ${descFormattedNumber}`;
     }
 
     // プレビュー
-    if (previewElem) {
-      previewElem.textContent = ManagementNumberBuilder.generatePreview();
+    if (previewElem && ManagementNumberBuilder) {
+      previewElem.textContent = ManagementNumberBuilder.generatePreview() || '---';
     }
+
+    console.log('📋 管理番号: 設定あり -', presetName);
   }
 
   // プリセットカード選択（グローバル関数）
@@ -8363,6 +8356,10 @@ ${prompt || '（未設定）'}
       if (window.ManagementNumberBuilder && window.firestoreReady) {
         console.log('🔥 Firebase初期化完了 → ManagementNumberBuilder.loadSettings()を呼び出します');
         window.ManagementNumberBuilder.loadSettings();
+      } else {
+        // まだ準備ができていない場合は500ms後にリトライ
+        console.log('⏳ Firebase/ManagementNumberBuilder待機中...');
+        setTimeout(initFirebaseAndLoadSettings, 500);
       }
     }
 
