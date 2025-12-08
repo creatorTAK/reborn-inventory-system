@@ -9472,3 +9472,7 @@ async function saveProductToFirestore(formData) {
 window.updateBrandDisplay = updateBrandDisplay;
 window.updateNamePreview = updateNamePreview;
 window.saveProductToFirestore = saveProductToFirestore;
+
+// AI生成用画像アップロード関数をグローバルスコープに公開
+window.handleImageUpload = handleImageUpload;
+window.removeImage = removeImage;
