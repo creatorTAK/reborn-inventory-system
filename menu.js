@@ -1125,6 +1125,28 @@ function doGet(e) {
     }
 
     // ========================================
+    // 発送方法マスタ管理（GAS版UI - iframe用）
+    // ========================================
+    if (menuType === 'shipping-master') {
+      Logger.log('[doGet] 発送方法マスタ管理UI表示');
+      return HtmlService.createTemplateFromFile('shipping_method_master_ui')
+        .evaluate()
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+
+    // ========================================
+    // 梱包資材マスタ管理（GAS版UI - iframe用）
+    // ========================================
+    if (menuType === 'packaging-master') {
+      Logger.log('[doGet] 梱包資材マスタ管理UI表示');
+      return HtmlService.createTemplateFromFile('packaging_materials_ui')
+        .evaluate()
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+
+    // ========================================
     // GAS版UI廃止: PWA版へリダイレクト
     // ========================================
     const PWA_URL = 'https://reborn-inventory.com/';

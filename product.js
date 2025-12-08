@@ -331,6 +331,16 @@ srcRange.copyTo(dstRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, fa
       // 通知エラーは商品登録の成功には影響させない
     }
 
+    // 🔢 Firestoreカウンターを自動同期
+    try {
+      Logger.log('[saveProduct] カウンター同期開始: ' + mgmtKey);
+      const syncResult = syncManagementNumberCounter(mgmtKey);
+      Logger.log('[saveProduct] カウンター同期結果: ' + JSON.stringify(syncResult));
+    } catch (syncError) {
+      Logger.log('[saveProduct] カウンター同期エラー: ' + syncError);
+      // カウンター同期エラーは商品登録の成功には影響させない
+    }
+
     Logger.log('[DEBUG] saveProduct completed successfully, returning message: ' + message);
 
     // システム通知ルーム投稿用のデータを含めて返す
@@ -1449,10 +1459,131 @@ function debugSignatureWithCloudflare() {
       responseCode: responseCode,
       responseText: responseText
     };
-    
+
   } catch (error) {
     Logger.log('Error: ' + error);
     throw error;
+  }
+}
+
+// =============================================================================
+// Firestore カウンター自動同期（商品登録時）
+// =============================================================================
+
+/**
+ * 管理番号からカウンターキーと番号を抽出
+ * @param {string} managementNumber - 管理番号（例: "AA-1013"）
+ * @return {Object|null} { counterKey: "AA_", number: 1013 } または null
+ */
+function parseManagementNumber(managementNumber) {
+  if (!managementNumber) return null;
+
+  // パターン: "AA-1013" or "AA1013" or "1013"
+  const match = managementNumber.match(/^([A-Za-z]+)[-]?(\d+)$/);
+  if (match) {
+    return {
+      counterKey: match[1].toUpperCase() + '_',
+      number: parseInt(match[2], 10)
+    };
+  }
+
+  // 数字のみの場合
+  const numMatch = managementNumber.match(/^(\d+)$/);
+  if (numMatch) {
+    return {
+      counterKey: 'counter',
+      number: parseInt(numMatch[1], 10)
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Firestoreの管理番号カウンターを更新
+ * 商品登録時に自動的に呼び出され、カウンターを最新の番号に同期
+ *
+ * @param {string} managementNumber - 登録された管理番号
+ * @return {Object} 成功/失敗の結果
+ */
+function syncManagementNumberCounter(managementNumber) {
+  try {
+    const parsed = parseManagementNumber(managementNumber);
+    if (!parsed) {
+      Logger.log('[syncCounter] 管理番号をパースできません: ' + managementNumber);
+      return { success: false, error: 'Invalid management number format' };
+    }
+
+    const { counterKey, number } = parsed;
+    const projectId = 'reborn-chat';
+    const collectionPath = 'managementNumberCounters';
+
+    Logger.log(`[syncCounter] カウンター同期: ${counterKey} = ${number}`);
+
+    // まず現在のカウンター値を取得
+    const getUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionPath}/${counterKey}`;
+    const token = ScriptApp.getOAuthToken();
+
+    const getOptions = {
+      method: 'get',
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true
+    };
+
+    const getResponse = UrlFetchApp.fetch(getUrl, getOptions);
+    const getCode = getResponse.getResponseCode();
+
+    let currentNumber = 0;
+    if (getCode === 200) {
+      const data = JSON.parse(getResponse.getContentText());
+      if (data.fields && data.fields.currentNumber) {
+        currentNumber = parseInt(data.fields.currentNumber.integerValue || '0', 10);
+      }
+      Logger.log(`[syncCounter] 現在のカウンター値: ${currentNumber}`);
+    } else {
+      Logger.log(`[syncCounter] カウンターが存在しません（新規作成）`);
+    }
+
+    // 新しい番号がカウンターより大きい場合のみ更新
+    if (number > currentNumber) {
+      const updateUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collectionPath}/${counterKey}`;
+
+      const firestoreDoc = {
+        fields: {
+          currentNumber: { integerValue: number.toString() },
+          lastSyncedAt: { timestampValue: new Date().toISOString() },
+          lastSyncedBy: { stringValue: 'product_registration' },
+          lastManagementNumber: { stringValue: managementNumber }
+        }
+      };
+
+      const updateOptions = {
+        method: 'patch',
+        contentType: 'application/json',
+        headers: { 'Authorization': 'Bearer ' + token },
+        payload: JSON.stringify(firestoreDoc),
+        muteHttpExceptions: true
+      };
+
+      const updateResponse = UrlFetchApp.fetch(updateUrl, updateOptions);
+      const updateCode = updateResponse.getResponseCode();
+
+      if (updateCode === 200) {
+        Logger.log(`[syncCounter] ✅ カウンター更新成功: ${counterKey} = ${number}`);
+        return { success: true, counterKey, number, previousNumber: currentNumber };
+      } else {
+        const errorText = updateResponse.getContentText();
+        Logger.log(`[syncCounter] ❌ カウンター更新失敗: ${updateCode} - ${errorText}`);
+        return { success: false, error: errorText };
+      }
+    } else {
+      Logger.log(`[syncCounter] カウンター更新不要（現在値 ${currentNumber} >= 新規 ${number}）`);
+      return { success: true, skipped: true, counterKey, number, currentNumber };
+    }
+
+  } catch (error) {
+    Logger.log('[syncCounter] エラー: ' + error.toString());
+    return { success: false, error: error.toString() };
   }
 }
 
