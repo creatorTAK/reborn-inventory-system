@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v148';  // 在庫管理[object Object]表示修正、保存ボタン余白修正
+const CACHE_VERSION = 'v149';  // FURIRAブランドカラー統一（オレンジヘッダー、デニムブルーボタン）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
