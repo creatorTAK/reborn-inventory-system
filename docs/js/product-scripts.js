@@ -6879,29 +6879,36 @@ window.updateLoadingProgress = function(percent, text) {
 
       // === 保存成功後に画像データとAI生成テキストをクリア ===
       // AI生成用画像（uploadedImages）をクリア
-      if (uploadedImages && uploadedImages.length > 0) {
+      if (typeof uploadedImages !== 'undefined') {
         uploadedImages = [];
         const container = document.getElementById('imagePreviewContainer');
         if (container) {
           container.style.display = 'none';
+          // プレビューのDOM要素もクリア
+          const previewList = container.querySelector('.preview-list, #imagePreviewList');
+          if (previewList) previewList.innerHTML = '';
         }
         const fileInput = document.getElementById('productImages');
         if (fileInput) {
           fileInput.value = '';
         }
+        // プレビュー表示を更新
+        if (typeof displayImagePreviews === 'function') {
+          displayImagePreviews();
+        }
         debug.log('保存成功後にAI生成用画像データをクリアしました');
       }
 
       // 商品画像（productImages）をクリア
-      if (productImages && productImages.length > 0) {
+      if (typeof productImages !== 'undefined') {
         productImages = [];
-        const container = document.getElementById('productImagesPreviewContainer');
-        if (container) {
-          container.style.display = 'none';
-        }
         const fileInput = document.getElementById('productImagesForSave');
         if (fileInput) {
           fileInput.value = '';
+        }
+        // プレビュー表示を更新（DOMクリアも含む）
+        if (typeof displayProductImagesPreview === 'function') {
+          displayProductImagesPreview();
         }
         debug.log('保存成功後に商品画像データをクリアしました');
       }
@@ -6910,6 +6917,19 @@ window.updateLoadingProgress = function(percent, text) {
         window.AI_GENERATED_TEXT = '';
         debug.log('保存成功後にAI生成テキストをクリアしました');
       }
+
+      // === 商品属性のリセットと商品名プレビューの更新 ===
+      // 属性2以降を削除し、NAME_REST_FIELDSを更新
+      if (typeof resetAttributeSections === 'function') {
+        resetAttributeSections();
+      }
+      if (typeof updateAttributeFields === 'function') {
+        updateAttributeFields();
+      }
+      if (typeof updateNamePreview === 'function') {
+        updateNamePreview();
+      }
+      debug.log('保存成功後に商品属性と商品名プレビューをリセットしました');
 
       hideLoadingOverlay();
       
@@ -9390,8 +9410,23 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
       analysis: formData['Agent分析結果'] ? JSON.parse(formData['Agent分析結果']) : {}
     },
 
-    // 画像
-    images: formData['JSON_データ'] ? JSON.parse(formData['JSON_データ']) : []
+    // 画像（常に { imageUrls: [...] } 形式で保存）
+    images: (() => {
+      if (!formData['JSON_データ']) return { imageUrls: [] };
+      try {
+        const parsed = JSON.parse(formData['JSON_データ']);
+        // {imageUrls: [...]} 形式ならそのまま、配列ならimageUrlsにラップ
+        if (parsed && parsed.imageUrls) {
+          return { imageUrls: parsed.imageUrls };
+        } else if (Array.isArray(parsed)) {
+          return { imageUrls: parsed };
+        }
+        return { imageUrls: [] };
+      } catch (e) {
+        console.error('[convertFormToFirestoreDoc] JSON_データのパースエラー:', e);
+        return { imageUrls: [] };
+      }
+    })()
   };
 
   return doc;
