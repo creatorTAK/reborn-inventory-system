@@ -5472,9 +5472,11 @@ window.updateLoadingProgress = function(percent, text) {
 
     // 商品属性を収集（商品名ブロックから）
     // フィールドIDは「商品属性N_値」の形式
+    // 動的追加された要素はキャッシュに入っていない可能性があるので直接取得
     const attributes = [];
     for (let i = 1; i <= 10; i++) {
-      const attrValue = _val(`商品属性${i}_値`);
+      const attrElement = document.getElementById(`商品属性${i}_値`);
+      const attrValue = attrElement ? (attrElement.value || '').trim() : '';
       if (attrValue) {
         attributes.push(attrValue);
         debug.log(`商品属性${i}_値: ${attrValue}`);
