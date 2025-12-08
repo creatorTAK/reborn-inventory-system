@@ -437,12 +437,34 @@ window.updateLoadingProgress = function(percent, text) {
 
   // 設定マスタから配送デフォルトを読み込む
   function loadShippingDefaults() {
+    // PWA版: CACHED_CONFIG または localStorage から読み込み
+    if (window.CACHED_CONFIG && window.CACHED_CONFIG['配送デフォルト']) {
+      SHIPPING_DEFAULTS = window.CACHED_CONFIG['配送デフォルト'];
+      console.log('✅ 配送デフォルト設定を読み込みました (PWA版):', SHIPPING_DEFAULTS);
+      applyShippingDefaults();
+      return;
+    }
+
+    // localStorageから直接読み込み（フォールバック）
+    const saved = localStorage.getItem('rebornConfig_shippingDefault');
+    if (saved) {
+      try {
+        SHIPPING_DEFAULTS = JSON.parse(saved);
+        console.log('✅ 配送デフォルト設定を読み込みました (localStorage):', SHIPPING_DEFAULTS);
+        applyShippingDefaults();
+        return;
+      } catch (e) {
+        console.error('配送デフォルト設定パースエラー:', e);
+      }
+    }
+
+    // GAS版（従来の処理）
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       google.script.run
         .withSuccessHandler(function(config) {
           if (config) {
             SHIPPING_DEFAULTS = config;
-            console.log('配送デフォルト設定を読み込みました:', config);
+            console.log('配送デフォルト設定を読み込みました (GAS版):', config);
             // デフォルト値を適用
             applyShippingDefaults();
           }
