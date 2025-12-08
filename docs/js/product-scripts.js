@@ -136,9 +136,10 @@ const NAME_LIMIT = 40;
   const DESC_LIMIT_MODE = 'warn';
 
   // 画像ストレージプロバイダー設定
-  // 'gdrive': Googleドライブ（推奨: 個人・チーム利用）
+  // 'firebase': Firebase Storage（推奨: API連携対応、公開URL取得可能）
+  // 'gdrive': Googleドライブ（旧方式: チーム利用）
   // 'r2': Cloudflare R2（将来: SaaS化時）
-  const IMAGE_STORAGE_PROVIDER = 'gdrive';
+  const IMAGE_STORAGE_PROVIDER = 'firebase';
 
 // AI生成文を保存するグローバル変数
 window.AI_GENERATED_TEXT = '';
@@ -5149,6 +5150,80 @@ window.updateLoadingProgress = function(percent, text) {
     }
   }
 
+  /**
+   * Firebase Storageに商品画像をアップロード
+   * @param {string} managementNumber - 管理番号（フォルダ名として使用）
+   * @param {Array} images - アップロードする画像の配列 [{data: base64, name: filename}]
+   * @returns {Promise<{success: boolean, urls: string[], error?: string}>}
+   */
+  async function uploadImagesToFirebaseStorage(managementNumber, images) {
+    console.log('[Firebase Storage] アップロード開始:', managementNumber, images.length + '枚');
+
+    // Firebase Storageが初期化されているか確認
+    if (!window.firebaseStorage || !window.storageRef || !window.storageUploadBytes || !window.storageGetDownloadURL) {
+      console.error('[Firebase Storage] Firebase Storageが初期化されていません');
+      return {
+        success: false,
+        urls: [],
+        error: 'Firebase Storageが初期化されていません'
+      };
+    }
+
+    const uploadedUrls = [];
+    const errors = [];
+
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      try {
+        console.log(`[Firebase Storage] 画像 ${i + 1}/${images.length} アップロード中: ${image.name}`);
+
+        // Base64データからBlobを作成
+        const base64Data = image.data.split(',')[1]; // data:image/jpeg;base64,xxx の xxx 部分
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let j = 0; j < byteCharacters.length; j++) {
+          byteNumbers[j] = byteCharacters.charCodeAt(j);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: image.mimeType || 'image/jpeg' });
+
+        // ファイル名を生成（タイムスタンプ + 連番）
+        const timestamp = Date.now();
+        const fileName = `image_${String(i + 1).padStart(3, '0')}_${timestamp}.jpg`;
+
+        // Firebase Storageにアップロード
+        const storagePath = `products/${managementNumber}/${fileName}`;
+        const imageRef = window.storageRef(window.firebaseStorage, storagePath);
+
+        await window.storageUploadBytes(imageRef, blob);
+        console.log(`[Firebase Storage] アップロード完了: ${storagePath}`);
+
+        // 公開URLを取得
+        const downloadURL = await window.storageGetDownloadURL(imageRef);
+        uploadedUrls.push(downloadURL);
+        console.log(`[Firebase Storage] URL取得: ${downloadURL}`);
+
+      } catch (error) {
+        console.error(`[Firebase Storage] 画像 ${i + 1} アップロードエラー:`, error);
+        errors.push(`${image.name}: ${error.message}`);
+      }
+    }
+
+    const result = {
+      success: uploadedUrls.length > 0,
+      urls: uploadedUrls,
+      successCount: uploadedUrls.length,
+      totalCount: images.length,
+      error: errors.length > 0 ? errors.join(', ') : null
+    };
+
+    console.log('[Firebase Storage] アップロード結果:', result);
+    return result;
+  }
+
+  // グローバルに公開（PWA版で使用）
+  window.uploadImagesToFirebaseStorage = uploadImagesToFirebaseStorage;
+
   // ページ読み込み時に設定を確認
   document.addEventListener('DOMContentLoaded', function() {
     checkProductImageBlockVisibility();
@@ -6500,12 +6575,43 @@ window.updateLoadingProgress = function(percent, text) {
       // PWA版：Firestore直接保存（PROD-002 Phase 1）
       console.log('[PWA] Firestoreに保存');
       try {
+        // 商品画像がある場合は先にFirebase Storageにアップロード
+        if (productImages && productImages.length > 0 && IMAGE_STORAGE_PROVIDER === 'firebase') {
+          const managementNumber = d['管理番号'] || 'unknown_' + Date.now();
+          console.log('[PWA] Firebase Storage画像アップロード開始:', managementNumber);
+          debug.log(`📤 Firebase Storage画像アップロード開始: ${productImages.length}枚`);
+
+          const uploadResult = await window.uploadImagesToFirebaseStorage(managementNumber, productImages);
+
+          if (uploadResult.success) {
+            debug.log(`✅ Firebase Storage アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
+            // 画像URLをJSON形式で保存
+            d['JSON_データ'] = JSON.stringify({ imageUrls: uploadResult.urls });
+            d['画像URL'] = uploadResult.urls.join('\n'); // 改行区切りでも保存（互換性）
+            console.log('[PWA] 画像URL:', uploadResult.urls);
+          } else {
+            console.warn('[PWA] 画像アップロード一部失敗:', uploadResult.error);
+            if (uploadResult.urls.length > 0) {
+              // 一部成功した場合は続行
+              d['JSON_データ'] = JSON.stringify({ imageUrls: uploadResult.urls });
+              d['画像URL'] = uploadResult.urls.join('\n');
+            }
+          }
+        }
+
         const result = await saveProductToFirestore(d);
         console.log('[onSave] Firestore保存結果:', result);
 
         if (result.success) {
           // 成功メッセージ表示
-          show(`✅ ${result.message}\n商品番号: ${result.productId}\n管理番号: ${result.managementNumber}`);
+          let message = `✅ ${result.message}\n商品番号: ${result.productId}\n管理番号: ${result.managementNumber}`;
+          if (d['JSON_データ']) {
+            const imageData = JSON.parse(d['JSON_データ']);
+            if (imageData.imageUrls && imageData.imageUrls.length > 0) {
+              message += `\n📷 画像: ${imageData.imageUrls.length}枚アップロード済み`;
+            }
+          }
+          show(message);
 
           // フォームリセット
           setTimeout(() => {
