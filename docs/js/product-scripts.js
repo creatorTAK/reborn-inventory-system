@@ -5426,11 +5426,13 @@ window.updateLoadingProgress = function(percent, text) {
     productInfo.condition = _val('商品の状態') || '';
 
     // 素材情報を収集（動的行数対応）
+    // 動的追加された要素はキャッシュに入っていない可能性があるので直接取得
     const materials = [];
     const materialItems = document.querySelectorAll('.material-item');
     materialItems.forEach((item, idx) => {
       const materialIndex = idx + 1;
-      const location = _val(`素材${materialIndex}_箇所`);
+      const locationEl = document.getElementById(`素材${materialIndex}_箇所`);
+      const location = locationEl ? (locationEl.value || '').trim() : '';
 
       // 動的な行数に対応
       const composition = item.querySelector('.material-composition');
@@ -5439,8 +5441,10 @@ window.updateLoadingProgress = function(percent, text) {
         const rows = composition.querySelectorAll('.composition-row');
         rows.forEach((row, rowIdx) => {
           const rowIndex = rowIdx + 1;
-          const type = _val(`素材${materialIndex}_種類${rowIndex}`);
-          const percent = _val(`素材${materialIndex}_％${rowIndex}`);
+          const typeEl = document.getElementById(`素材${materialIndex}_種類${rowIndex}`);
+          const percentEl = document.getElementById(`素材${materialIndex}_％${rowIndex}`);
+          const type = typeEl ? (typeEl.value || '').trim() : '';
+          const percent = percentEl ? (percentEl.value || '').trim() : '';
           if (type) {
             let part = type;
             if (percent) part += ` ${percent}`;
@@ -5459,9 +5463,11 @@ window.updateLoadingProgress = function(percent, text) {
     productInfo.material = materials.join(', ');
 
     // カラー情報を収集（selectドロップダウンから）
+    // 動的追加された要素はキャッシュに入っていない可能性があるので直接取得
     const colors = [];
     for (let i = 1; i <= 10; i++) {
-      const colorValue = _val(`カラー${i}`);
+      const colorEl = document.getElementById(`カラー${i}`);
+      const colorValue = colorEl ? (colorEl.value || '').trim() : '';
       if (colorValue) {
         colors.push(colorValue);
         debug.log(`カラー${i}: ${colorValue}`);
