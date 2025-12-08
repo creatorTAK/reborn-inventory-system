@@ -646,16 +646,15 @@ function renderAccordionList(container) {
   // グループ名でソート
   const sortedGroupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'ja'));
 
-  // 初回表示時は全グループを展開状態にする（または最初のグループだけ展開）
-  if (expandedGroups.size === 0 && sortedGroupKeys.length > 0) {
-    // 検索結果がある場合は全て展開、それ以外は最初のグループだけ展開
+  // 検索時のみ全グループを展開（初回表示は全て閉じた状態）
+  if (sortedGroupKeys.length > 0) {
     const searchInput = document.getElementById('searchInput');
     const hasSearchQuery = searchInput && searchInput.value.trim().length > 0;
     if (hasSearchQuery) {
+      // 検索結果がある場合は全て展開
       sortedGroupKeys.forEach(key => expandedGroups.add(key));
-    } else {
-      expandedGroups.add(sortedGroupKeys[0]);
     }
+    // 検索なしの場合は全て閉じた状態（自動展開しない）
   }
 
   // 各グループをアコーディオン形式で表示
@@ -681,13 +680,18 @@ function renderAccordionList(container) {
     groupContent.className = `accordion-content ${isExpanded ? 'expanded' : ''}`;
     groupContent.setAttribute('data-group', groupKey);
 
+    // CSS Grid アニメーション用の内部ラッパー
+    const innerWrapper = document.createElement('div');
+    innerWrapper.className = 'accordion-inner';
+
     if (isExpanded) {
       groupItems.forEach(item => {
         const card = createMasterCard(item, true); // true = ラベル付き表示
-        groupContent.appendChild(card);
+        innerWrapper.appendChild(card);
       });
     }
 
+    groupContent.appendChild(innerWrapper);
     container.appendChild(groupContent);
   });
 }
@@ -720,13 +724,14 @@ window.toggleAccordion = function(groupKey) {
         content.classList.add('expanded');
         icon.className = 'bi bi-chevron-down';
 
-        // コンテンツを動的に生成
-        if (content.children.length === 0) {
+        // コンテンツを動的に生成（accordion-inner内に追加）
+        const innerWrapper = content.querySelector('.accordion-inner') || content;
+        if (innerWrapper.children.length === 0) {
           const groupBy = currentMasterConfig.groupBy;
           const groupItems = filteredMasterData.filter(item => (item[groupBy] || '未分類') === groupKey);
           groupItems.forEach(item => {
             const card = createMasterCard(item, true);
-            content.appendChild(card);
+            innerWrapper.appendChild(card);
           });
         }
       } else {
