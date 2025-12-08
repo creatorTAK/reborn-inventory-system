@@ -323,6 +323,7 @@ async function getProductListFromFirestore(filters = {}) {
         lastEditor: data.lastEditor || '',
         updatedAt: data.updatedAt || '',
         imageUrl1: data.imageUrl1 || '',
+        images: data.images?.imageUrls || data.images || [],
         searchText: data.searchText || ''
       });
     });
