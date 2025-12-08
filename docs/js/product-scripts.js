@@ -4825,9 +4825,9 @@ window.updateLoadingProgress = function(percent, text) {
   function displayImagePreviews() {
     const container = document.getElementById('imagePreviewContainer');
     const list = document.getElementById('imagePreviewList');
-    const count = document.getElementById('imageCount');
+    const aiImageCount = document.getElementById('aiImageCount');
 
-    if (!container || !list || !count) {
+    if (!container || !list) {
       console.error('プレビュー要素が見つかりません');
       return;
     }
@@ -4835,12 +4835,15 @@ window.updateLoadingProgress = function(percent, text) {
     // 画像がない場合は非表示
     if (uploadedImages.length === 0) {
       container.style.display = 'none';
+      if (aiImageCount) aiImageCount.textContent = '0';
       return;
     }
 
     // 画像がある場合は表示
     container.style.display = 'block';
-    count.textContent = uploadedImages.length;
+    // AI生成用画像数を更新（最大3枚）
+    const aiCount = Math.min(uploadedImages.length, 3);
+    if (aiImageCount) aiImageCount.textContent = aiCount;
 
     // プレビューリストをクリア
     list.innerHTML = '';
@@ -5271,19 +5274,37 @@ window.updateLoadingProgress = function(percent, text) {
         return;
       }
 
-      // サーバー側のAPI呼び出し
-      google.script.run
-        .withSuccessHandler(function(generatedText) {
-          debug.log('AI生成成功:', generatedText);
+      // PWA版かGAS版かを判定
+      const isPWA = !(typeof google !== 'undefined' && google.script && google.script.run);
 
-          // AI生成文をグローバル変数に保存
-          window.AI_GENERATED_TEXT = generatedText;
+      if (isPWA) {
+        // PWA版: fetch経由でGAS WebアプリAPIを呼び出す
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
 
-          // プレビューを更新
-          updateDescriptionFromDetail();
+        fetch(GAS_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8'
+          },
+          body: JSON.stringify({
+            action: 'generateAI',
+            productInfo: productInfo,
+            images: images
+          })
+        })
+        .then(response => response.json())
+        .then(result => {
+          if (result.success) {
+            debug.log('AI生成成功:', result.generatedText);
 
-          // 成功メッセージ
-          alert(`✅ AI説明文を生成しました！
+            // AI生成文をグローバル変数に保存
+            window.AI_GENERATED_TEXT = result.generatedText;
+
+            // プレビューを更新
+            updateDescriptionFromDetail();
+
+            // 成功メッセージ
+            alert(`✅ AI説明文を生成しました！
 
 商品の説明プレビューを確認して、必要に応じて直接編集してください。
 
@@ -5292,40 +5313,75 @@ window.updateLoadingProgress = function(percent, text) {
 • 画像から取得した情報は、AIの判断に基づいています
 • 必ず内容をご確認の上、誤りがあれば修正してください`);
 
-          // ボタンを元に戻す
-          resetAiButton(aiGenBtn, originalText);
-
-          // 画像データはクリアしない（保存時に画像URLを記録するため）
-          debug.log('AI生成成功。画像データは保存時まで保持します。');
-        })
-        .withFailureHandler(function(error) {
-          console.error('AI生成エラー:', error);
-
-          // エラーメッセージの表示
-          let errorMsg = 'AI説明文の生成に失敗しました。\n\n';
-
-          if (error.message && error.message.includes('NG(CONFIG)')) {
-            errorMsg += 'APIキーが設定されていません。\n\n';
-            errorMsg += '【設定手順】\n';
-            errorMsg += '1. Google Apps Scriptエディタを開く\n';
-            errorMsg += '2. ⚙️ プロジェクトの設定を開く\n';
-            errorMsg += '3. スクリプト プロパティに追加:\n';
-            errorMsg += '   プロパティ: GEMINI_API_KEY\n';
-            errorMsg += '   値: あなたのAPIキー';
-          } else if (error.message && error.message.includes('NG(API)')) {
-            errorMsg += 'API呼び出しに失敗しました。\n';
-            errorMsg += 'しばらく時間をおいて再度お試しください。\n\n';
-            errorMsg += `エラー詳細: ${error.message}`;
+            // ボタンを元に戻す
+            resetAiButton(aiGenBtn, originalText);
           } else {
-            errorMsg += `エラー詳細: ${error.message || 'Unknown error'}`;
+            throw new Error(result.error || 'Unknown error');
           }
-
-          alert('❌ ' + errorMsg);
-
-          // ボタンを元に戻す
-          resetAiButton(aiGenBtn, originalText);
         })
-        .generateProductDescription(productInfo, images);
+        .catch(error => {
+          console.error('AI生成エラー:', error);
+          alert('❌ AI説明文の生成に失敗しました。\n\nエラー詳細: ' + error.message);
+          resetAiButton(aiGenBtn, originalText);
+        });
+
+      } else {
+        // GAS版: google.script.runを使用
+        google.script.run
+          .withSuccessHandler(function(generatedText) {
+            debug.log('AI生成成功:', generatedText);
+
+            // AI生成文をグローバル変数に保存
+            window.AI_GENERATED_TEXT = generatedText;
+
+            // プレビューを更新
+            updateDescriptionFromDetail();
+
+            // 成功メッセージ
+            alert(`✅ AI説明文を生成しました！
+
+商品の説明プレビューを確認して、必要に応じて直接編集してください。
+
+⚠️ 注意事項
+• 品番から取得した情報は、Google検索結果の品質に依存します
+• 画像から取得した情報は、AIの判断に基づいています
+• 必ず内容をご確認の上、誤りがあれば修正してください`);
+
+            // ボタンを元に戻す
+            resetAiButton(aiGenBtn, originalText);
+
+            // 画像データはクリアしない（保存時に画像URLを記録するため）
+            debug.log('AI生成成功。画像データは保存時まで保持します。');
+          })
+          .withFailureHandler(function(error) {
+            console.error('AI生成エラー:', error);
+
+            // エラーメッセージの表示
+            let errorMsg = 'AI説明文の生成に失敗しました。\n\n';
+
+            if (error.message && error.message.includes('NG(CONFIG)')) {
+              errorMsg += 'APIキーが設定されていません。\n\n';
+              errorMsg += '【設定手順】\n';
+              errorMsg += '1. Google Apps Scriptエディタを開く\n';
+              errorMsg += '2. ⚙️ プロジェクトの設定を開く\n';
+              errorMsg += '3. スクリプト プロパティに追加:\n';
+              errorMsg += '   プロパティ: GEMINI_API_KEY\n';
+              errorMsg += '   値: あなたのAPIキー';
+            } else if (error.message && error.message.includes('NG(API)')) {
+              errorMsg += 'API呼び出しに失敗しました。\n';
+              errorMsg += 'しばらく時間をおいて再度お試しください。\n\n';
+              errorMsg += `エラー詳細: ${error.message}`;
+            } else {
+              errorMsg += `エラー詳細: ${error.message || 'Unknown error'}`;
+            }
+
+            alert('❌ ' + errorMsg);
+
+            // ボタンを元に戻す
+            resetAiButton(aiGenBtn, originalText);
+          })
+          .generateProductDescription(productInfo, images);
+      }
 
     } catch (error) {
       console.error('AI生成処理エラー:', error);
