@@ -1350,11 +1350,19 @@ window.toggleSelectionMode = function() {
 
   if (selectionMode) {
     // 選択モードON
-    if (selectModeBtn) selectModeBtn.classList.add('active');
+    if (selectModeBtn) {
+      selectModeBtn.classList.add('active');
+      // ボタンのテキストとアイコンを「解除」に変更
+      selectModeBtn.innerHTML = '<i class="bi bi-x-square"></i><span>選択解除</span>';
+    }
     if (selectionToolbar) selectionToolbar.classList.remove('hidden');
   } else {
     // 選択モードOFF
-    if (selectModeBtn) selectModeBtn.classList.remove('active');
+    if (selectModeBtn) {
+      selectModeBtn.classList.remove('active');
+      // ボタンのテキストとアイコンを「選択削除」に戻す
+      selectModeBtn.innerHTML = '<i class="bi bi-check-square"></i><span>選択削除</span>';
+    }
     if (selectionToolbar) selectionToolbar.classList.add('hidden');
   }
 
