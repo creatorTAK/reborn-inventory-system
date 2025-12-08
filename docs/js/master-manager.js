@@ -898,9 +898,30 @@ function updateStats() {
 // ============================================
 
 /**
+ * 既存の発送方法カテゴリを取得
+ * @returns {Promise<string[]>} ユニークなカテゴリ名の配列
+ */
+async function getExistingShippingCategories() {
+  try {
+    // Firestoreから発送方法データを取得
+    const shippingData = await window.getMasterData('shippingMethods', { sortBy: 'category' });
+    
+    // ユニークなカテゴリを抽出
+    const categories = [...new Set(shippingData.map(item => item.category).filter(Boolean))];
+    categories.sort((a, b) => a.localeCompare(b, 'ja'));
+    
+    console.log('📋 [Master Manager] 既存カテゴリ取得:', categories);
+    return categories;
+  } catch (error) {
+    console.error('❌ [Master Manager] カテゴリ取得エラー:', error);
+    return [];
+  }
+}
+
+/**
  * 追加モーダル表示
  */
-window.showAddModal = function() {
+window.showAddModal = async function() {
   const modal = document.getElementById('addModal');
   const modalBody = document.getElementById('addModalBody');
   const errorMessage = document.getElementById('addErrorMessage');
@@ -933,6 +954,13 @@ window.showAddModal = function() {
   // 入力フォーム動的生成
   modalBody.innerHTML = '';
 
+  // 発送方法の場合、既存カテゴリを取得
+  let existingCategories = [];
+  const isShippingMethod = currentMasterConfig.collection === 'shippingMethods';
+  if (isShippingMethod) {
+    existingCategories = await getExistingShippingCategories();
+  }
+
   currentMasterConfig.fields.forEach(field => {
     const formGroup = document.createElement('div');
     formGroup.className = 'form-group';
@@ -945,17 +973,75 @@ window.showAddModal = function() {
       label.innerHTML += ' <span style="color: #ff4757;">*</span>';
     }
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.id = `add-${field.name}`;
-    input.className = 'form-input';
-    input.placeholder = field.placeholder || '';
-    if (field.maxLength) {
-      input.maxLength = field.maxLength;
+    formGroup.appendChild(label);
+
+    // 発送方法のカテゴリフィールドはプルダウン＋カスタム入力
+    if (isShippingMethod && field.name === 'category') {
+      // プルダウン（セレクト）
+      const select = document.createElement('select');
+      select.id = `add-${field.name}`;
+      select.className = 'form-input';
+      
+      // 「選択してください」オプション
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = '選択してください';
+      select.appendChild(defaultOption);
+      
+      // 既存カテゴリをオプションとして追加
+      existingCategories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        select.appendChild(option);
+      });
+      
+      // カスタム（新規作成）オプション
+      const customOption = document.createElement('option');
+      customOption.value = '__custom__';
+      customOption.textContent = '＋ 新しいカテゴリを作成';
+      select.appendChild(customOption);
+      
+      formGroup.appendChild(select);
+      
+      // カスタム入力フィールド（初期非表示）
+      const customInputWrapper = document.createElement('div');
+      customInputWrapper.id = `add-${field.name}-custom-wrapper`;
+      customInputWrapper.style.display = 'none';
+      customInputWrapper.style.marginTop = '8px';
+      
+      const customInput = document.createElement('input');
+      customInput.type = 'text';
+      customInput.id = `add-${field.name}-custom`;
+      customInput.className = 'form-input';
+      customInput.placeholder = '新しいカテゴリ名を入力（例: らくらくメルカリ便）';
+      
+      customInputWrapper.appendChild(customInput);
+      formGroup.appendChild(customInputWrapper);
+      
+      // プルダウン変更時のイベントハンドラ
+      select.addEventListener('change', function() {
+        const customWrapper = document.getElementById(`add-${field.name}-custom-wrapper`);
+        if (this.value === '__custom__') {
+          customWrapper.style.display = 'block';
+          document.getElementById(`add-${field.name}-custom`).focus();
+        } else {
+          customWrapper.style.display = 'none';
+        }
+      });
+    } else {
+      // 通常のテキスト入力
+      const input = document.createElement('input');
+      input.type = field.type === 'number' ? 'number' : 'text';
+      input.id = `add-${field.name}`;
+      input.className = 'form-input';
+      input.placeholder = field.placeholder || '';
+      if (field.maxLength) {
+        input.maxLength = field.maxLength;
+      }
+      formGroup.appendChild(input);
     }
 
-    formGroup.appendChild(label);
-    formGroup.appendChild(input);
     modalBody.appendChild(formGroup);
   });
 
@@ -997,10 +1083,17 @@ window.addMaster = async function() {
   // 入力値を収集
   const data = {};
   let hasError = false;
+  const isShippingMethod = currentMasterConfig.collection === 'shippingMethods';
 
   currentMasterConfig.fields.forEach(field => {
     const input = document.getElementById(`add-${field.name}`);
-    const value = input ? input.value.trim() : '';
+    let value = input ? input.value.trim() : '';
+
+    // 発送方法のカテゴリでカスタム選択の場合、カスタム入力フィールドの値を使用
+    if (isShippingMethod && field.name === 'category' && value === '__custom__') {
+      const customInput = document.getElementById(`add-${field.name}-custom`);
+      value = customInput ? customInput.value.trim() : '';
+    }
 
     // バリデーション
     if (field.required && !value) {
