@@ -1119,14 +1119,20 @@ window.addMaster = async function() {
       // キャッシュクリア（再読み込み強制）
       delete masterCache[currentMasterConfig.collection];
 
-      hideAddModal();
-      alert(`${currentMasterConfig.label}を追加しました。\n検索して確認してください。`);
+      // 新しいアイテムをローカルデータに追加（即座に反映）
+      const newItem = {
+        id: result.id,
+        ...data
+      };
+      allMasterData.push(newItem);
+      filteredMasterData.push(newItem);
 
-      // 検索を再実行
-      const searchInput = document.getElementById('searchInput');
-      if (searchInput && searchInput.value.trim().length > 0) {
-        await performSearch(searchInput.value.trim());
-      }
+      // 画面を即座に更新
+      renderMasterList();
+      updateStats();
+
+      hideAddModal();
+      alert(`${currentMasterConfig.label}を追加しました。`);
     } else {
       const detailedError = result.error || '追加に失敗しました';
       console.error('❌ [Master Manager] 追加失敗:', detailedError);
