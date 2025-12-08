@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v144';  // 管理番号未設定時のメッセージ表示
+const CACHE_VERSION = 'v145';  // 通知音設定対応
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -85,6 +85,44 @@ function incrementBadge(dbName) {
       reject(tx.error);
     };
   }));
+}
+
+// ================================================================================
+// 通知音設定の取得（IndexedDB: SettingsDB）
+// ================================================================================
+function getNotificationSoundSetting() {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('SettingsDB', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('settings')) {
+        db.createObjectStore('settings');
+      }
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      try {
+        const tx = db.transaction('settings', 'readonly');
+        const store = tx.objectStore('settings');
+        const getReq = store.get('notificationSound');
+
+        getReq.onsuccess = () => {
+          const value = getReq.result;
+          db.close();
+          // 未設定の場合はtrue（デフォルトで音あり）
+          resolve(value !== undefined ? value : true);
+        };
+        getReq.onerror = () => {
+          db.close();
+          resolve(true); // エラー時はデフォルトで音あり
+        };
+      } catch (e) {
+        db.close();
+        resolve(true);
+      }
+    };
+    req.onerror = () => resolve(true); // エラー時はデフォルトで音あり
+  });
 }
 
 // ================================================================================
@@ -234,12 +272,17 @@ self.addEventListener('push', (event) => {
         }
       }
 
-      // 5. 新しい通知を表示
+      // 5. 通知音設定を取得
+      const soundEnabled = await getNotificationSoundSetting();
+      console.log('[SW] Notification sound setting:', soundEnabled);
+
+      // 6. 新しい通知を表示
       const notificationOptions = {
         body: body,
         icon: icon,
         badge: badge,
-        vibrate: [200, 100, 200],
+        vibrate: soundEnabled ? [200, 100, 200] : [], // 音オフ時はバイブもオフ
+        silent: !soundEnabled, // 音オフ時はサイレント通知
         data: {
           url: link,
           messageId: messageId,
@@ -249,10 +292,10 @@ self.addEventListener('push', (event) => {
         renotify: true
       };
 
-      console.log('[SW v33] Showing notification:', title);
+      console.log('[SW v145] Showing notification:', title, 'silent:', !soundEnabled);
       await self.registration.showNotification(title, notificationOptions);
 
-      console.log('[SW v33] Push event handled successfully');
+      console.log('[SW v145] Push event handled successfully');
 
     } catch (error) {
       console.error('[SW v33] Error in push handler:', error);

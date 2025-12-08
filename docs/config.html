@@ -8677,6 +8677,14 @@ ${prompt || '（未設定）'}
           soundCheckbox.checked = notificationSound;
         }
 
+        // IndexedDBにも通知音設定を同期（Service Worker用）
+        try {
+          await saveNotificationSoundToIndexedDB(notificationSound);
+          console.log('✅ 通知音設定をIndexedDBに同期:', notificationSound);
+        } catch (idbError) {
+          console.warn('⚠️ IndexedDB同期エラー（無視）:', idbError);
+        }
+
         // 🔧 アイコン読み込み（localStorageから）
         const iconUrl = localStorage.getItem('reborn_user_icon_url');
         const iconPreview = document.getElementById('basicUserIconPreview');
@@ -8692,6 +8700,41 @@ ${prompt || '（未設定）'}
       // ローディング非表示、コンテンツ表示
       document.getElementById('basicSettingsLoading').style.display = 'none';
       document.getElementById('basicSettingsContent').style.display = 'block';
+    }
+
+    /**
+     * IndexedDBに通知音設定を保存（Service Worker用）
+     */
+    function saveNotificationSoundToIndexedDB(soundEnabled) {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open('SettingsDB', 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('settings')) {
+            db.createObjectStore('settings');
+          }
+        };
+        req.onsuccess = () => {
+          const db = req.result;
+          try {
+            const tx = db.transaction('settings', 'readwrite');
+            const store = tx.objectStore('settings');
+            store.put(soundEnabled, 'notificationSound');
+            tx.oncomplete = () => {
+              db.close();
+              resolve(true);
+            };
+            tx.onerror = () => {
+              db.close();
+              reject(tx.error);
+            };
+          } catch (e) {
+            db.close();
+            reject(e);
+          }
+        };
+        req.onerror = () => reject(req.error);
+      });
     }
 
     /**
@@ -8718,6 +8761,14 @@ ${prompt || '（未設定）'}
         config.notificationEnabled = settings.notificationEnabled;
         config.notificationSound = settings.notificationSound;
         localStorage.setItem('config', JSON.stringify(config));
+
+        // 1.5. IndexedDBに通知音設定を保存（Service Worker用）
+        try {
+          await saveNotificationSoundToIndexedDB(settings.notificationSound);
+          console.log('✅ 通知音設定をIndexedDBに保存しました:', settings.notificationSound);
+        } catch (idbError) {
+          console.warn('⚠️ IndexedDB保存エラー（続行）:', idbError);
+        }
 
         // 2. ユーザーメールアドレスを取得
         const userEmail = localStorage.getItem('reborn_user_email');
