@@ -497,9 +497,14 @@ async function performSearch(query) {
       const lowerQuery = katakanaQuery.toLowerCase();
       const hiraganaQuery = katakanaToHiragana(lowerQuery);
 
+      // searchFields設定を使用して検索（searchTextがない場合にも対応）
+      const searchFields = currentMasterConfig.searchFields || ['name'];
+
       const results = masterCache[collection].filter(item => {
-        // searchTextをひらがなに変換して比較
-        const searchText = item.searchText || '';
+        // searchFieldsの各フィールドを検索対象として結合
+        const searchText = searchFields
+          .map(field => item[field] || '')
+          .join(' ');
         const hiraganaSearchText = katakanaToHiragana(searchText.toLowerCase());
         return hiraganaSearchText.includes(hiraganaQuery);
       });
