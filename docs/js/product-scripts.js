@@ -435,8 +435,54 @@ window.updateLoadingProgress = function(percent, text) {
     '発送までの日数': '1~2日で発送'
   };
 
+  // Firestoreから配送方法カテゴリをセレクトボックスに読み込む
+  async function loadShippingMethodOptions() {
+    const select = document.getElementById('配送の方法');
+    if (!select) {
+      console.log('配送の方法セレクトが見つかりません');
+      return;
+    }
+
+    try {
+      // PWA版: Firestoreから直接取得
+      if (window.db) {
+        const snapshot = await window.db.collection('shippingMethods')
+          .orderBy('category', 'asc')
+          .get();
+
+        // ユニークなカテゴリを取得
+        const categories = new Set();
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.category) {
+            categories.add(data.category);
+          }
+        });
+
+        // 日本語順でソート
+        const sortedCategories = Array.from(categories).sort((a, b) => a.localeCompare(b, 'ja'));
+
+        // セレクトボックスをクリアして再構築
+        select.innerHTML = '';
+        sortedCategories.forEach(category => {
+          const option = document.createElement('option');
+          option.value = category;
+          option.textContent = category;
+          select.appendChild(option);
+        });
+
+        console.log('✅ 配送方法オプションを読み込みました:', sortedCategories);
+      }
+    } catch (error) {
+      console.error('配送方法オプション読み込みエラー:', error);
+    }
+  }
+
   // 設定マスタから配送デフォルトを読み込む
-  function loadShippingDefaults() {
+  async function loadShippingDefaults() {
+    // まず配送方法オプションをFirestoreから読み込む
+    await loadShippingMethodOptions();
+
     // PWA版: CACHED_CONFIG または localStorage から読み込み
     if (window.CACHED_CONFIG && window.CACHED_CONFIG['配送デフォルト']) {
       SHIPPING_DEFAULTS = window.CACHED_CONFIG['配送デフォルト'];
@@ -8188,7 +8234,7 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     loadDiscountConfig();
 
     // 設定マスタから配送デフォルトを読み込み
-    loadShippingDefaults();
+    await loadShippingDefaults();
 
     // 設定マスタから仕入・出品デフォルトを読み込み
     await loadProcureListingDefaults();
