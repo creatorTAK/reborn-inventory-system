@@ -3494,16 +3494,7 @@ ${descFormattedNumber}`;
           </label>
           <select id="配送の方法" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 16px; background: white; cursor: pointer; transition: all 0.2s;" onfocus="this.style.borderColor='#3b82f6'; this.style.background='#f9fafb';" onblur="this.style.borderColor='#d1d5db'; this.style.background='white';">
             <option value="">-- 選択してください --</option>
-            <option value="未定">未定</option>
-            <option value="らくらくメルカリ便">らくらくメルカリ便</option>
-            <option value="ゆうゆうメルカリ便">ゆうゆうメルカリ便</option>
-            <option value="ゆうメール">ゆうメール</option>
-            <option value="レターパック">レターパック</option>
-            <option value="普通郵便(定形、定形外)">普通郵便(定形、定形外)</option>
-            <option value="クロネコヤマト">クロネコヤマト</option>
-            <option value="ゆうパック">ゆうパック</option>
-            <option value="クリックポスト">クリックポスト</option>
-            <option value="ゆうパケット">ゆうパケット</option>
+            <!-- Firestoreのマスタ管理（発送方法）から動的に読み込まれます -->
           </select>
         </div>
 
@@ -8045,6 +8036,9 @@ ${prompt || '（未設定）'}
         // 梱包資材一覧を読み込んでプルダウンに設定
         loadPackagingMaterials();
 
+        // 発送方法カテゴリ一覧を読み込んでプルダウンに設定
+        loadShippingMethodCategories();
+
         // 仕入・出品プルダウンを初期化（Firebase初期化後に実行）
         initProcureListingDropdowns();
       } else {
@@ -8087,6 +8081,52 @@ ${prompt || '（未設定）'}
         console.log(`✅ 梱包資材 ${snapshot.size}件 を読み込みました`);
       } catch (error) {
         console.error('❌ 梱包資材読み込みエラー:', error);
+      }
+    }
+
+    /**
+     * Firestoreから発送方法カテゴリ一覧を取得してプルダウンに設定
+     * マスタ管理の発送方法と連動
+     */
+    async function loadShippingMethodCategories() {
+      if (!window.db) {
+        console.warn('⚠️ Firestoreが初期化されていません（発送方法読み込みスキップ）');
+        return;
+      }
+
+      try {
+        console.log('📮 Firestoreから発送方法カテゴリ一覧を取得中...');
+        const snapshot = await window.db.collection('shippingMethods')
+          .orderBy('category', 'asc')
+          .get();
+
+        const select = document.getElementById('配送の方法');
+        if (!select) {
+          console.warn('⚠️ 配送の方法selectが見つかりません');
+          return;
+        }
+
+        // ユニークなカテゴリを抽出
+        const categories = new Set();
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.category) {
+            categories.add(data.category);
+          }
+        });
+
+        // カテゴリをソートして追加
+        const sortedCategories = Array.from(categories).sort((a, b) => a.localeCompare(b, 'ja'));
+        sortedCategories.forEach(category => {
+          const option = document.createElement('option');
+          option.value = category;
+          option.textContent = category;
+          select.appendChild(option);
+        });
+
+        console.log(`✅ 発送方法カテゴリ ${sortedCategories.length}件 を読み込みました`);
+      } catch (error) {
+        console.error('❌ 発送方法カテゴリ読み込みエラー:', error);
       }
     }
 
