@@ -5471,11 +5471,13 @@ window.updateLoadingProgress = function(percent, text) {
     debug.log(`収集したカラー情報: "${productInfo.color}"`);
 
     // 商品属性を収集（商品名ブロックから）
+    // フィールドIDは「商品属性N_値」の形式
     const attributes = [];
     for (let i = 1; i <= 10; i++) {
-      const attrValue = _val(`商品属性${i}`);
+      const attrValue = _val(`商品属性${i}_値`);
       if (attrValue) {
         attributes.push(attrValue);
+        debug.log(`商品属性${i}_値: ${attrValue}`);
       }
     }
 
