@@ -4944,8 +4944,9 @@ window.updateLoadingProgress = function(percent, text) {
     const block = document.getElementById('productImagesBlock');
 
     // まずlocalStorageから読み込み（高速表示）
+    // デフォルトはON（true）- localStorageに明示的に'false'が設定されている場合のみOFF
     const localStorageValue = localStorage.getItem('enableProductImageSave');
-    let enabled = localStorageValue === 'true';
+    let enabled = localStorageValue !== 'false';
 
     console.log('🔍 商品画像ブロック表示チェック:');
     console.log('  - localStorage値:', localStorageValue);
@@ -5252,10 +5253,10 @@ window.updateLoadingProgress = function(percent, text) {
       // 元のテキストを保存
       const originalText = aiGenBtn.innerHTML;
 
-      // ローディング状態に変更
+      // ローディング状態に変更（アニメーション付き）
       aiGenBtn.disabled = true;
-      aiGenBtn.innerHTML = '⏳ 生成中...';
-      aiGenBtn.style.opacity = '0.6';
+      aiGenBtn.innerHTML = '<span class="hourglass">⏳</span> 生成中<span class="loading-dots"></span>';
+      aiGenBtn.classList.add('ai-btn-loading', 'ai-btn-loading-pulse');
       aiGenBtn.style.cursor = 'wait';
 
       // 商品情報を収集
@@ -5522,6 +5523,7 @@ window.updateLoadingProgress = function(percent, text) {
 
     button.disabled = false;
     button.innerHTML = originalText;
+    button.classList.remove('ai-btn-loading', 'ai-btn-loading-pulse');
     button.style.opacity = '1';
     button.style.cursor = 'pointer';
   }
@@ -6901,7 +6903,7 @@ window.updateLoadingProgress = function(percent, text) {
 
       // 商品画像（productImages）をクリア
       if (typeof productImages !== 'undefined') {
-        productImages = [];
+        productImages.length = 0; // 配列を空にする（参照を維持）
         const fileInput = document.getElementById('productImagesForSave');
         if (fileInput) {
           fileInput.value = '';
@@ -6909,6 +6911,13 @@ window.updateLoadingProgress = function(percent, text) {
         // プレビュー表示を更新（DOMクリアも含む）
         if (typeof displayProductImagesPreview === 'function') {
           displayProductImagesPreview();
+        }
+        // 直接DOM要素もクリア（displayProductImagesPreviewが効かない場合の保険）
+        const productImagesContainer = document.getElementById('productImagesPreviewContainer');
+        if (productImagesContainer) {
+          productImagesContainer.style.display = 'none';
+          const list = document.getElementById('productImagesPreviewList');
+          if (list) list.innerHTML = '';
         }
         debug.log('保存成功後に商品画像データをクリアしました');
       }
@@ -6920,16 +6929,30 @@ window.updateLoadingProgress = function(percent, text) {
 
       // === 商品属性のリセットと商品名プレビューの更新 ===
       // 属性2以降を削除し、NAME_REST_FIELDSを更新
-      if (typeof resetAttributeSections === 'function') {
-        resetAttributeSections();
+      try {
+        // window経由で確実に呼び出し
+        if (typeof window.resetAttributeSections === 'function') {
+          window.resetAttributeSections();
+          debug.log('✅ resetAttributeSections 実行完了');
+        } else {
+          console.warn('⚠️ window.resetAttributeSections が見つかりません');
+        }
+        if (typeof window.updateAttributeFields === 'function') {
+          window.updateAttributeFields();
+          debug.log('✅ updateAttributeFields 実行完了');
+        } else {
+          console.warn('⚠️ window.updateAttributeFields が見つかりません');
+        }
+        if (typeof window.updateNamePreview === 'function') {
+          window.updateNamePreview();
+          debug.log('✅ updateNamePreview 実行完了');
+        } else {
+          console.warn('⚠️ window.updateNamePreview が見つかりません');
+        }
+        debug.log('保存成功後に商品属性と商品名プレビューをリセットしました');
+      } catch (resetError) {
+        console.error('属性リセットエラー:', resetError);
       }
-      if (typeof updateAttributeFields === 'function') {
-        updateAttributeFields();
-      }
-      if (typeof updateNamePreview === 'function') {
-        updateNamePreview();
-      }
-      debug.log('保存成功後に商品属性と商品名プレビューをリセットしました');
 
       hideLoadingOverlay();
       
@@ -9517,6 +9540,8 @@ async function saveProductToFirestore(formData) {
 window.updateBrandDisplay = updateBrandDisplay;
 window.updateNamePreview = updateNamePreview;
 window.saveProductToFirestore = saveProductToFirestore;
+window.updateAttributeFields = updateAttributeFields;
+window.resetAttributeSections = resetAttributeSections;
 
 // AI生成用画像アップロード関数をグローバルスコープに公開
 window.handleImageUpload = handleImageUpload;
