@@ -3603,11 +3603,15 @@
 
           // 管理者にプッシュ通知を送信
           try {
-            await sendPushToOwners({
+            const pushResult = await sendPushToOwners({
               title: '🆕 新規ユーザー承認待ち',
               body: `${userName}さんが新規登録しました`,
               data: { type: 'pending_user', userEmail: email, badgeCount: '1' }
             });
+            console.log('[PendingUser] プッシュ通知結果:', JSON.stringify(pushResult, null, 2));
+            if (!pushResult.success) {
+              console.warn('[PendingUser] プッシュ通知失敗:', pushResult.reason);
+            }
           } catch (pushError) {
             console.error('[PendingUser] プッシュ通知エラー:', pushError);
           }
@@ -5827,43 +5831,60 @@
 
         // Step 1: usersコレクションから管理者を取得
         debugInfo.step = 'Step1: 管理者検索';
+        console.log('[Push] Step1: usersコレクションから permissionId==owner を検索');
         const usersRef = collection(db, 'users');
         const ownersQuery = query(usersRef, where('permissionId', '==', 'owner'));
         const ownersSnapshot = await getDocs(ownersQuery);
 
+        console.log(`[Push] 管理者検索結果: ${ownersSnapshot.size}人`);
         if (ownersSnapshot.empty) {
           debugInfo.details.push('❌ 管理者0人');
+          console.warn('[Push] ❌ 管理者が見つかりません');
           return { success: false, reason: '管理者が見つかりません', debug: debugInfo };
         }
+
+        // 見つかった管理者をログ出力
+        ownersSnapshot.docs.forEach((doc, i) => {
+          const data = doc.data();
+          console.log(`[Push] 管理者${i+1}: ${data.userName} (${data.userEmail}), permissionId=${data.permissionId}`);
+        });
 
         debugInfo.details.push(`✅ 管理者${ownersSnapshot.size}人発見`);
 
         // Step 2: トークンとデバイス情報を収集（削除用にドキュメント参照も保持）
         debugInfo.step = 'Step2: デバイス検索';
+        console.log('[Push] Step2: 各管理者のデバイスを検索');
         const tokenInfoList = []; // { token, ownerEmail, deviceDocRef }
-        
+
         for (const ownerDoc of ownersSnapshot.docs) {
           const ownerEmail = ownerDoc.data().userEmail;
+          console.log(`[Push] 検索中: users/${ownerEmail}/devices (active==true)`);
           const devicesRef = collection(db, 'users', ownerEmail, 'devices');
           const activeDevicesQuery = query(devicesRef, where('active', '==', true));
           const devicesSnapshot = await getDocs(activeDevicesQuery);
 
+          console.log(`[Push] ${ownerEmail}: アクティブデバイス ${devicesSnapshot.size}件`);
           debugInfo.details.push(`${ownerEmail}: active=${devicesSnapshot.size}件`);
 
           devicesSnapshot.forEach((deviceDoc) => {
             const deviceData = deviceDoc.data();
+            console.log(`[Push] デバイス ${deviceDoc.id}: fcmToken=${deviceData.fcmToken ? '有り(' + deviceData.fcmToken.substring(0, 20) + '...)' : '無し'}, active=${deviceData.active}`);
             if (deviceData.fcmToken) {
               tokenInfoList.push({
                 token: deviceData.fcmToken,
                 ownerEmail: ownerEmail,
                 deviceDocRef: deviceDoc.ref
               });
+            } else {
+              console.warn(`[Push] ⚠️ FCMトークンなし: ${ownerEmail}/${deviceDoc.id}`);
             }
           });
         }
 
+        console.log(`[Push] 収集したトークン数: ${tokenInfoList.length}`);
         if (tokenInfoList.length === 0) {
           debugInfo.details.push('❌ FCMトークン0件');
+          console.warn('[Push] ❌ FCMトークンが見つかりません');
           return { success: false, reason: 'FCMトークンがありません', debug: debugInfo };
         }
 
@@ -5871,7 +5892,11 @@
         debugInfo.details.push(`✅ トークン${tokenInfoList.length}件で送信`);
 
         // Cloudflare Worker経由でプッシュ送信
+        console.log('[Push] Step3: Cloudflare Workerにプッシュ通知を送信');
         const tokens = tokenInfoList.map(t => t.token);
+        console.log(`[Push] 送信先トークン数: ${tokens.length}`);
+        console.log(`[Push] 通知内容: title="${notification.title}", body="${notification.body}"`);
+
         const response = await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -5883,14 +5908,19 @@
           })
         });
 
+        console.log(`[Push] Worker応答ステータス: ${response.status}`);
         const responseText = await response.text();
+        console.log(`[Push] Worker応答本文: ${responseText}`);
+
         let workerResult;
         try {
           workerResult = JSON.parse(responseText);
         } catch (e) {
           workerResult = { raw: responseText };
+          console.warn('[Push] Worker応答のJSONパース失敗:', e);
         }
 
+        console.log(`[Push] 送信成功: ${workerResult.sent || 0}件, 送信失敗: ${workerResult.failed || 0}件`);
         debugInfo.details.push(`Worker応答: ${response.status}`);
         debugInfo.details.push(`送信成功: ${workerResult.sent || 0}件`);
         debugInfo.details.push(`送信失敗: ${workerResult.failed || 0}件`);
