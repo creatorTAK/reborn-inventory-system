@@ -1,8 +1,9 @@
 // Firebase Cloud Messaging Service Worker
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
+// @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v154';  // キャッシュ戦略改善: HTML=Network First, JS/CSS=Cache First
+const CACHE_VERSION = 'v155';  // ホーム画面アイコンバッジ対応追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -74,6 +75,17 @@ function incrementBadge(dbName) {
       const currentCount = Number(getReq.result || 0) + 1;
       store.put(currentCount, 'count');
       console.log(`[Badge] ${dbName} count:`, currentCount);
+
+      // 🔔 ホーム画面アイコンにバッジを設定
+      if (navigator.setAppBadge) {
+        navigator.setAppBadge(currentCount).then(() => {
+          console.log(`[Badge] ✅ setAppBadge(${currentCount}) 成功`);
+        }).catch(err => {
+          console.warn(`[Badge] ⚠️ setAppBadge失敗:`, err);
+        });
+      } else {
+        console.log('[Badge] setAppBadge API未対応');
+      }
     };
 
     tx.oncomplete = () => {
