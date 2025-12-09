@@ -2,7 +2,7 @@
 // @796 Phase 3: NOTIF-004根本対策 - event.waitUntil()ベースに全面改修
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v153';  // 商品画像アップロード関数をグローバルスコープに公開
+const CACHE_VERSION = 'v154';  // キャッシュ戦略改善: HTML=Network First, JS/CSS=Cache First
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -29,7 +29,7 @@ const PRECACHE_RESOURCES = [
 // 閲覧中のルームID管理（クライアントからpostMessageで受け取る）
 const viewingRoomByClient = new Map(); // clientId -> roomId
 
-console.log('[SW v39] Service Worker initialized - manual push handling only');
+console.log('[SW v154] Service Worker initialized - Network First caching enabled');
 
 // ================================================================================
 // キャッシュクリーンアップ（軽量化）
@@ -198,14 +198,14 @@ function updateFirestoreUnreadCount(userName) {
 // 🎯 CORE: push イベントハンドラ（event.waitUntil()使用）
 // ================================================================================
 self.addEventListener('push', (event) => {
-  console.log('[SW v33] Push event received');
+  console.log('[SW v154] Push event received');
 
   // ペイロード解析
   let payload = {};
   try {
     payload = event.data ? event.data.json() : {};
   } catch (e) {
-    console.error('[SW v33] Failed to parse payload:', e);
+    console.error('[SW v154] Failed to parse payload:', e);
     payload = {
       data: {
         title: 'New message',
@@ -237,7 +237,7 @@ self.addEventListener('push', (event) => {
       // 1. キャッシュクリーンアップ + 重複チェック
       pruneCache();
       if (notificationCache.has(cacheKey)) {
-        console.log('[SW v33] Duplicate notification, skipping:', cacheKey);
+        console.log('[SW v154] Duplicate notification, skipping:', cacheKey);
         return;
       }
       notificationCache.set(cacheKey, Date.now());
@@ -298,7 +298,7 @@ self.addEventListener('push', (event) => {
       console.log('[SW v145] Push event handled successfully');
 
     } catch (error) {
-      console.error('[SW v33] Error in push handler:', error);
+      console.error('[SW v154] Error in push handler:', error);
       // エラーでも通知は試みる
       try {
         await self.registration.showNotification('REBORN', {
@@ -306,7 +306,7 @@ self.addEventListener('push', (event) => {
           icon: '/icon-180.png'
         });
       } catch (e) {
-        console.error('[SW v33] Failed to show error notification:', e);
+        console.error('[SW v154] Failed to show error notification:', e);
       }
     }
   })();
@@ -325,17 +325,23 @@ self.addEventListener('message', (event) => {
     if (data.roomId) {
       // グローバル変数として保持（シンプルに1つだけ）
       self._currentViewingRoomId = data.roomId;
-      console.log('[SW v62] Client viewing room:', data.roomId);
+      console.log('[SW v154] Client viewing room:', data.roomId);
     } else {
       self._currentViewingRoomId = null;
-      console.log('[SW v62] Client left room');
+      console.log('[SW v154] Client left room');
     }
   }
 
   // 🎯 バッジクリア命令（クライアントからの要求）
   if (data.type === 'CLEAR_BADGE') {
-    console.log('[SW v62] Received CLEAR_BADGE command');
+    console.log('[SW v154] Received CLEAR_BADGE command');
     clearAllBadges();
+  }
+
+  // 🎯 新バージョンへの即時更新（クライアントからの要求）
+  if (data.type === 'SKIP_WAITING') {
+    console.log('[SW v154] Received SKIP_WAITING command');
+    self.skipWaiting();
   }
 });
 
@@ -347,7 +353,7 @@ async function clearAllBadges() {
     // 1. Navigator Badge API（アプリアイコンバッジ）
     if (navigator.clearAppBadge) {
       await navigator.clearAppBadge();
-      console.log('[SW v62] App badge cleared via Navigator API');
+      console.log('[SW v154] App badge cleared via Navigator API');
     }
 
     // 2. IndexedDB のカウントをリセット（RebornBadgeDB）
@@ -356,9 +362,9 @@ async function clearAllBadges() {
     // 3. IndexedDB のカウントをリセット（SystemNotificationDB）
     await resetBadgeInDB('SystemNotificationDB');
 
-    console.log('[SW v62] All badges cleared successfully');
+    console.log('[SW v154] All badges cleared successfully');
   } catch (err) {
-    console.error('[SW v62] Error clearing badges:', err);
+    console.error('[SW v154] Error clearing badges:', err);
   }
 }
 
@@ -371,7 +377,7 @@ function resetBadgeInDB(dbName) {
 
     tx.oncomplete = () => {
       db.close();
-      console.log(`[SW v62] ${dbName} count reset to 0`);
+      console.log(`[SW v154] ${dbName} count reset to 0`);
       resolve(true);
     };
     tx.onerror = () => {
@@ -379,7 +385,7 @@ function resetBadgeInDB(dbName) {
       reject(tx.error);
     };
   })).catch(err => {
-    console.error(`[SW v62] Error resetting ${dbName}:`, err);
+    console.error(`[SW v154] Error resetting ${dbName}:`, err);
   });
 }
 
@@ -388,7 +394,7 @@ async function isAnyClientViewingChat() {
   try {
     // 方法1: postMessageで受け取ったフラグをチェック
     if (self._currentViewingRoomId) {
-      console.log('[SW v39] Client is viewing room (flag):', self._currentViewingRoomId);
+      console.log('[SW v154] Client is viewing room (flag):', self._currentViewingRoomId);
       return true;
     }
 
@@ -399,12 +405,12 @@ async function isAnyClientViewingChat() {
       // URLにchat_ui_firestore.htmlが含まれていればチャット閲覧中と判定
       if (client.url && client.url.includes('chat_ui_firestore.html')) {
         // visibilityStateがvisibleかどうかも確認（可能なら）
-        console.log('[SW v39] Found client viewing chat (URL):', client.url);
+        console.log('[SW v154] Found client viewing chat (URL):', client.url);
         return true;
       }
     }
   } catch (err) {
-    console.error('[SW v39] Error checking clients:', err);
+    console.error('[SW v154] Error checking clients:', err);
   }
   return false;
 }
@@ -413,7 +419,7 @@ async function isAnyClientViewingChat() {
 // 通知クリックイベント
 // ================================================================================
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW v33] Notification clicked');
+  console.log('[SW v154] Notification clicked');
 
   event.notification.close();
 
@@ -440,20 +446,20 @@ self.addEventListener('notificationclick', (event) => {
 // Service Worker インストール
 // ================================================================================
 self.addEventListener('install', (event) => {
-  console.log('[SW v33] Installing...');
+  console.log('[SW v154] Installing...');
 
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('[SW v33] Precaching resources');
+        console.log('[SW v154] Precaching resources');
         return cache.addAll(PRECACHE_RESOURCES);
       })
       .then(() => {
-        console.log('[SW v33] Precache complete');
+        console.log('[SW v154] Precache complete');
         return self.skipWaiting();
       })
       .catch((error) => {
-        console.error('[SW v33] Precache error:', error);
+        console.error('[SW v154] Precache error:', error);
         return self.skipWaiting();
       })
   );
@@ -463,7 +469,7 @@ self.addEventListener('install', (event) => {
 // Service Worker 有効化
 // ================================================================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW v33] Activating...');
+  console.log('[SW v154] Activating...');
 
   event.waitUntil(
     caches.keys()
@@ -471,28 +477,112 @@ self.addEventListener('activate', (event) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
             if (cacheName !== CACHE_NAME) {
-              console.log('[SW v33] Deleting old cache:', cacheName);
+              console.log('[SW v154] Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
           })
         );
       })
       .then(() => {
-        console.log('[SW v33] Activated, claiming clients');
+        console.log('[SW v154] Activated, claiming clients');
         return self.clients.claim();
       })
   );
 });
 
 // ================================================================================
+// Fetch イベントハンドラ（キャッシュ戦略）
+// ================================================================================
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // 同一オリジンのリクエストのみ処理
+  if (url.origin !== location.origin) {
+    return;
+  }
+
+  // API呼び出しはキャッシュしない
+  if (url.pathname.includes('/api/') || url.pathname.includes('/exec')) {
+    return;
+  }
+
+  // HTML: Network First（常にネットワーク優先、オフライン時のみキャッシュ）
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/' || !url.pathname.includes('.')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // 成功したらキャッシュを更新
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, clone);
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          // オフライン時はキャッシュから返す
+          return caches.match(event.request).then(cached => {
+            return cached || caches.match('/index.html');
+          });
+        })
+    );
+    return;
+  }
+
+  // JS/CSS: Cache First with Network Update（高速表示 + バックグラウンド更新）
+  if (url.pathname.match(/\.(js|css)$/)) {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        // バックグラウンドでネットワークから取得してキャッシュ更新
+        const fetchPromise = fetch(event.request).then(response => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, clone);
+            });
+          }
+          return response;
+        }).catch(() => null);
+
+        // キャッシュがあれば即座に返す、なければネットワークを待つ
+        return cached || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // 画像: Cache First（長期キャッシュ）
+  if (url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/)) {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) {
+          return cached;
+        }
+        return fetch(event.request).then(response => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, clone);
+            });
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+});
+
+// ================================================================================
 // Service Worker エラーハンドリング
 // ================================================================================
 self.addEventListener('error', (event) => {
-  console.error('[SW v33] Global error:', event.error);
+  console.error('[SW v154] Global error:', event.error);
 });
 
 self.addEventListener('unhandledrejection', (event) => {
-  console.error('[SW v33] Unhandled rejection:', event.reason);
+  console.error('[SW v154] Unhandled rejection:', event.reason);
 });
 
-console.log('[SW v33] Service Worker loaded successfully');
+console.log('[SW v154] Service Worker loaded successfully');
