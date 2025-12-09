@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v155';  // ホーム画面アイコンバッジ対応追加
+const CACHE_VERSION = 'v156';  // IndexedDBバッジカウント同期追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -30,7 +30,7 @@ const PRECACHE_RESOURCES = [
 // 閲覧中のルームID管理（クライアントからpostMessageで受け取る）
 const viewingRoomByClient = new Map(); // clientId -> roomId
 
-console.log('[SW v154] Service Worker initialized - Network First caching enabled');
+console.log('[SW v156] Service Worker initialized - Network First caching enabled');
 
 // ================================================================================
 // キャッシュクリーンアップ（軽量化）
@@ -210,14 +210,14 @@ function updateFirestoreUnreadCount(userName) {
 // 🎯 CORE: push イベントハンドラ（event.waitUntil()使用）
 // ================================================================================
 self.addEventListener('push', (event) => {
-  console.log('[SW v154] Push event received');
+  console.log('[SW v156] Push event received');
 
   // ペイロード解析
   let payload = {};
   try {
     payload = event.data ? event.data.json() : {};
   } catch (e) {
-    console.error('[SW v154] Failed to parse payload:', e);
+    console.error('[SW v156] Failed to parse payload:', e);
     payload = {
       data: {
         title: 'New message',
@@ -249,7 +249,7 @@ self.addEventListener('push', (event) => {
       // 1. キャッシュクリーンアップ + 重複チェック
       pruneCache();
       if (notificationCache.has(cacheKey)) {
-        console.log('[SW v154] Duplicate notification, skipping:', cacheKey);
+        console.log('[SW v156] Duplicate notification, skipping:', cacheKey);
         return;
       }
       notificationCache.set(cacheKey, Date.now());
@@ -310,7 +310,7 @@ self.addEventListener('push', (event) => {
       console.log('[SW v145] Push event handled successfully');
 
     } catch (error) {
-      console.error('[SW v154] Error in push handler:', error);
+      console.error('[SW v156] Error in push handler:', error);
       // エラーでも通知は試みる
       try {
         await self.registration.showNotification('REBORN', {
@@ -318,7 +318,7 @@ self.addEventListener('push', (event) => {
           icon: '/icon-180.png'
         });
       } catch (e) {
-        console.error('[SW v154] Failed to show error notification:', e);
+        console.error('[SW v156] Failed to show error notification:', e);
       }
     }
   })();
@@ -337,25 +337,70 @@ self.addEventListener('message', (event) => {
     if (data.roomId) {
       // グローバル変数として保持（シンプルに1つだけ）
       self._currentViewingRoomId = data.roomId;
-      console.log('[SW v154] Client viewing room:', data.roomId);
+      console.log('[SW v156] Client viewing room:', data.roomId);
     } else {
       self._currentViewingRoomId = null;
-      console.log('[SW v154] Client left room');
+      console.log('[SW v156] Client left room');
     }
   }
 
   // 🎯 バッジクリア命令（クライアントからの要求）
   if (data.type === 'CLEAR_BADGE') {
-    console.log('[SW v154] Received CLEAR_BADGE command');
+    console.log('[SW v156] Received CLEAR_BADGE command');
     clearAllBadges();
   }
 
   // 🎯 新バージョンへの即時更新（クライアントからの要求）
   if (data.type === 'SKIP_WAITING') {
-    console.log('[SW v154] Received SKIP_WAITING command');
+    console.log('[SW v156] Received SKIP_WAITING command');
     self.skipWaiting();
   }
+
+  // 🎯 バッジカウント同期（クライアントからの要求）
+  // アプリが開かれたときに、IndexedDBのカウントをFirestoreベースの正しい値に同期
+  if (data.type === 'SYNC_BADGE_COUNT') {
+    console.log('[SW v156] Received SYNC_BADGE_COUNT:', data);
+    syncBadgeCounts(data.chatCount || 0, data.todoCount || 0);
+  }
 });
+
+// ================================================================================
+// バッジカウント同期処理（クライアントの正しい値に合わせる）
+// ================================================================================
+async function syncBadgeCounts(chatCount, todoCount) {
+  try {
+    // RebornBadgeDB（チャット用）をchatCountに設定
+    await setBadgeInDB('RebornBadgeDB', chatCount);
+
+    // SystemNotificationDB（やることリスト用）をtodoCountに設定
+    await setBadgeInDB('SystemNotificationDB', todoCount);
+
+    console.log('[SW v156] Badge counts synced: chat=' + chatCount + ', todo=' + todoCount);
+  } catch (err) {
+    console.error('[SW v156] Error syncing badge counts:', err);
+  }
+}
+
+// IndexedDBのバッジカウントを特定の値に設定
+function setBadgeInDB(dbName, count) {
+  return openDB(dbName).then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction('badge', 'readwrite');
+    const store = tx.objectStore('badge');
+    store.put(count, 'count');
+
+    tx.oncomplete = () => {
+      db.close();
+      console.log(`[SW v156] ${dbName} count set to ${count}`);
+      resolve(true);
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  })).catch(err => {
+    console.error(`[SW v156] Error setting ${dbName}:`, err);
+  });
+}
 
 // ================================================================================
 // バッジクリア処理（SW側で実行）
@@ -365,7 +410,7 @@ async function clearAllBadges() {
     // 1. Navigator Badge API（アプリアイコンバッジ）
     if (navigator.clearAppBadge) {
       await navigator.clearAppBadge();
-      console.log('[SW v154] App badge cleared via Navigator API');
+      console.log('[SW v156] App badge cleared via Navigator API');
     }
 
     // 2. IndexedDB のカウントをリセット（RebornBadgeDB）
@@ -374,9 +419,9 @@ async function clearAllBadges() {
     // 3. IndexedDB のカウントをリセット（SystemNotificationDB）
     await resetBadgeInDB('SystemNotificationDB');
 
-    console.log('[SW v154] All badges cleared successfully');
+    console.log('[SW v156] All badges cleared successfully');
   } catch (err) {
-    console.error('[SW v154] Error clearing badges:', err);
+    console.error('[SW v156] Error clearing badges:', err);
   }
 }
 
@@ -389,7 +434,7 @@ function resetBadgeInDB(dbName) {
 
     tx.oncomplete = () => {
       db.close();
-      console.log(`[SW v154] ${dbName} count reset to 0`);
+      console.log(`[SW v156] ${dbName} count reset to 0`);
       resolve(true);
     };
     tx.onerror = () => {
@@ -397,7 +442,7 @@ function resetBadgeInDB(dbName) {
       reject(tx.error);
     };
   })).catch(err => {
-    console.error(`[SW v154] Error resetting ${dbName}:`, err);
+    console.error(`[SW v156] Error resetting ${dbName}:`, err);
   });
 }
 
@@ -406,7 +451,7 @@ async function isAnyClientViewingChat() {
   try {
     // 方法1: postMessageで受け取ったフラグをチェック
     if (self._currentViewingRoomId) {
-      console.log('[SW v154] Client is viewing room (flag):', self._currentViewingRoomId);
+      console.log('[SW v156] Client is viewing room (flag):', self._currentViewingRoomId);
       return true;
     }
 
@@ -417,12 +462,12 @@ async function isAnyClientViewingChat() {
       // URLにchat_ui_firestore.htmlが含まれていればチャット閲覧中と判定
       if (client.url && client.url.includes('chat_ui_firestore.html')) {
         // visibilityStateがvisibleかどうかも確認（可能なら）
-        console.log('[SW v154] Found client viewing chat (URL):', client.url);
+        console.log('[SW v156] Found client viewing chat (URL):', client.url);
         return true;
       }
     }
   } catch (err) {
-    console.error('[SW v154] Error checking clients:', err);
+    console.error('[SW v156] Error checking clients:', err);
   }
   return false;
 }
@@ -431,7 +476,7 @@ async function isAnyClientViewingChat() {
 // 通知クリックイベント
 // ================================================================================
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW v154] Notification clicked');
+  console.log('[SW v156] Notification clicked');
 
   event.notification.close();
 
@@ -458,20 +503,20 @@ self.addEventListener('notificationclick', (event) => {
 // Service Worker インストール
 // ================================================================================
 self.addEventListener('install', (event) => {
-  console.log('[SW v154] Installing...');
+  console.log('[SW v156] Installing...');
 
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('[SW v154] Precaching resources');
+        console.log('[SW v156] Precaching resources');
         return cache.addAll(PRECACHE_RESOURCES);
       })
       .then(() => {
-        console.log('[SW v154] Precache complete');
+        console.log('[SW v156] Precache complete');
         return self.skipWaiting();
       })
       .catch((error) => {
-        console.error('[SW v154] Precache error:', error);
+        console.error('[SW v156] Precache error:', error);
         return self.skipWaiting();
       })
   );
@@ -481,7 +526,7 @@ self.addEventListener('install', (event) => {
 // Service Worker 有効化
 // ================================================================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW v154] Activating...');
+  console.log('[SW v156] Activating...');
 
   event.waitUntil(
     caches.keys()
@@ -489,14 +534,14 @@ self.addEventListener('activate', (event) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
             if (cacheName !== CACHE_NAME) {
-              console.log('[SW v154] Deleting old cache:', cacheName);
+              console.log('[SW v156] Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
           })
         );
       })
       .then(() => {
-        console.log('[SW v154] Activated, claiming clients');
+        console.log('[SW v156] Activated, claiming clients');
         return self.clients.claim();
       })
   );
@@ -590,11 +635,11 @@ self.addEventListener('fetch', (event) => {
 // Service Worker エラーハンドリング
 // ================================================================================
 self.addEventListener('error', (event) => {
-  console.error('[SW v154] Global error:', event.error);
+  console.error('[SW v156] Global error:', event.error);
 });
 
 self.addEventListener('unhandledrejection', (event) => {
-  console.error('[SW v154] Unhandled rejection:', event.reason);
+  console.error('[SW v156] Unhandled rejection:', event.reason);
 });
 
-console.log('[SW v154] Service Worker loaded successfully');
+console.log('[SW v156] Service Worker loaded successfully');
