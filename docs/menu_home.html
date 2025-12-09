@@ -676,16 +676,39 @@
 
     // 削除：openPWAPage / openGASPage は使用しない（navigateToPageを使用）
 
-    // ページ遷移（Firestore経由で親ウィンドウに通知）
+    // postMessageフォールバック関数
+    function navigateViaPostMessage(page) {
+      console.log('[menu_home] 📤 postMessageフォールバック実行:', page);
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: 'navigateToPage',
+            page: page
+          }, '*');
+          console.log('[menu_home] ✅ postMessage送信成功');
+          return true;
+        }
+      } catch (e) {
+        console.error('[menu_home] ❌ postMessage送信失敗:', e);
+      }
+      return false;
+    }
+
+    // ページ遷移（Firestore経由で親ウィンドウに通知、タイムアウト付き）
     window.navigateToPage = async function(page) {
       console.log('[menu_home] ========== navigateToPage開始 ==========');
       console.log('[menu_home] 遷移先:', page);
 
       console.log('[menu_home] firestoreReady:', firestoreReady);
 
+      // Firestoreが初期化されていない場合はpostMessageにフォールバック
       if (!firestoreReady || !db) {
-        console.error('[menu_home] ❌ Firestoreが初期化されていません');
-        alert('エラー: Firestoreが初期化されていません。ページをリロードしてください。');
+        console.warn('[menu_home] ⚠️ Firestoreが初期化されていません - postMessageにフォールバック');
+        if (navigateViaPostMessage(page)) {
+          return;
+        }
+        console.error('[menu_home] ❌ ナビゲーション失敗');
+        alert('エラー: ページ遷移に失敗しました。アプリを再起動してください。');
         return;
       }
 
@@ -696,8 +719,8 @@
         console.log('[menu_home] Firestore書き込み開始...');
         console.log('[menu_home] sessionId:', sessionId);
 
-        // Firestoreのnavigationコレクションに書き込み
-        await db.collection('navigation').doc('menuControl').set({
+        // タイムアウト付きでFirestore書き込み（5秒）
+        const firestorePromise = db.collection('navigation').doc('menuControl').set({
           action: 'navigate',
           page: page,
           sessionId: sessionId,
@@ -705,14 +728,27 @@
           from: 'menu_home'
         });
 
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Firestore timeout (5s)')), 5000);
+        });
+
+        await Promise.race([firestorePromise, timeoutPromise]);
+
         console.log('[menu_home] ✅ Firestore書き込み成功');
         console.log('[menu_home] ========== navigateToPage完了 ==========');
 
       } catch (error) {
         console.error('[menu_home] ❌ Firestoreエラー:', error);
         console.error('[menu_home] error.message:', error.message);
-        console.error('[menu_home] error.stack:', error.stack);
-        alert('エラー: ページ遷移に失敗しました - ' + error.message);
+
+        // Firestoreエラー時はpostMessageにフォールバック
+        console.log('[menu_home] 🔄 postMessageにフォールバック...');
+        if (navigateViaPostMessage(page)) {
+          return;
+        }
+
+        console.error('[menu_home] ❌ 全てのナビゲーション手段が失敗');
+        alert('エラー: ページ遷移に失敗しました。アプリを再起動してください。');
       }
     };
 
@@ -822,11 +858,36 @@
 
         // 2. チャット未読カウント（全ルーム合計）
         window.chatUnreadByRoom = {};
+        // リスナー管理用Map（重複リスナー防止）
+        const roomUnreadListeners = new Map();
 
         function updateTotalChatUnread() {
           const totalUnread = Object.values(window.chatUnreadByRoom).reduce((sum, count) => sum + count, 0);
           console.log('[menu_home] Chat 未読合計:', totalUnread, window.chatUnreadByRoom);
           updateChatBadge(totalUnread);
+        }
+
+        // ルーム未読リスナーを登録（重複チェック付き）
+        function subscribeRoomUnread(roomId, userEmail) {
+          // 既にリスナーが登録されている場合はスキップ
+          if (roomUnreadListeners.has(roomId)) {
+            console.log('[menu_home] ルーム', roomId, 'のリスナーは既に登録済み');
+            return;
+          }
+
+          const unreadDocRef = db.collection('rooms').doc(roomId).collection('unreadCounts').doc(userEmail);
+          const unsubscribe = unreadDocRef.onSnapshot((unreadDoc) => {
+            const unreadData = unreadDoc.data();
+            const unreadCount = unreadData?.unreadCount || 0;
+            window.chatUnreadByRoom[roomId] = unreadCount;
+            updateTotalChatUnread();
+          }, (error) => {
+            console.log('[menu_home] ルーム', roomId, '未読取得エラー:', error.message);
+          });
+
+          // リスナーを登録
+          roomUnreadListeners.set(roomId, unsubscribe);
+          console.log('[menu_home] ルーム', roomId, 'の未読リスナーを登録');
         }
 
         // ユーザーが参加しているルームを取得
@@ -837,34 +898,17 @@
 
           roomsSnapshot.forEach((roomDoc) => {
             const roomId = roomDoc.id;
-            const unreadDocRef = db.collection('rooms').doc(roomId).collection('unreadCounts').doc(userEmail);
-
-            unreadDocRef.onSnapshot((unreadDoc) => {
-              const unreadData = unreadDoc.data();
-              const unreadCount = unreadData?.unreadCount || 0;
-              window.chatUnreadByRoom[roomId] = unreadCount;
-              updateTotalChatUnread();
-            }, (error) => {
-              console.log('[menu_home] ルーム', roomId, '未読取得エラー:', error.message);
-            });
+            subscribeRoomUnread(roomId, userEmail);
           });
         }, (error) => {
           console.error('[menu_home] ルームリスナーエラー:', error);
         });
 
         // デフォルトルーム（全体チャット、システム通知、アラート）
+        // 共通のsubscribeRoomUnread関数を使用（重複リスナー防止）
         const defaultRoomIds = ['room_default_all', 'system', 'system-notifications', 'room_inventory_alert'];
         defaultRoomIds.forEach((roomId) => {
-          const unreadDocRef = db.collection('rooms').doc(roomId).collection('unreadCounts').doc(userEmail);
-
-          unreadDocRef.onSnapshot((unreadDoc) => {
-            const unreadData = unreadDoc.data();
-            const unreadCount = unreadData?.unreadCount || 0;
-            window.chatUnreadByRoom[roomId] = unreadCount;
-            updateTotalChatUnread();
-          }, (error) => {
-            console.log('[menu_home] デフォルトルーム', roomId, '未読取得:', error.message);
-          });
+          subscribeRoomUnread(roomId, userEmail);
         });
 
         console.log('[menu_home] ✅ バッジリスナー設定完了');

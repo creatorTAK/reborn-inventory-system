@@ -6336,12 +6336,42 @@
 
         // 未読カウント管理用のグローバル変数を初期化
         if (!window.chatUnreadByRoom) window.chatUnreadByRoom = {};
+        // リスナー管理用Map（重複リスナー防止）
+        if (!window.chatRoomListeners) window.chatRoomListeners = new Map();
 
         // 未読カウント合計を更新する関数
         function updateTotalUnread() {
           const totalUnread = Object.values(window.chatUnreadByRoom).reduce((sum, count) => sum + count, 0);
           console.log('[Chat FAB] 未読カウント合計:', totalUnread, window.chatUnreadByRoom);
           updateChatBadge(totalUnread);
+        }
+
+        // ルーム未読リスナーを登録（重複チェック付き）
+        function subscribeRoomUnread(roomId) {
+          // 既にリスナーが登録されている場合はスキップ
+          if (window.chatRoomListeners.has(roomId)) {
+            console.log('[Chat FAB] ルーム', roomId, 'のリスナーは既に登録済み');
+            return;
+          }
+
+          const unreadDocRef = doc(db, `rooms/${roomId}/unreadCounts/${userEmail}`);
+          const unsubscribe = onSnapshot(unreadDocRef, (unreadDoc) => {
+            const unreadData = unreadDoc.data();
+            const unreadCount = unreadData?.unreadCount || 0;
+
+            // このルームの未読カウントを記録
+            window.chatUnreadByRoom[roomId] = unreadCount;
+            console.log(`[Chat FAB] ${roomId} 未読:`, unreadCount);
+
+            // 全ルームの未読を合計して更新
+            updateTotalUnread();
+          }, (error) => {
+            console.log(`[Chat FAB] ルーム ${roomId} 未読取得エラー:`, error.message);
+          });
+
+          // リスナーを登録
+          window.chatRoomListeners.set(roomId, unsubscribe);
+          console.log('[Chat FAB] ルーム', roomId, 'の未読リスナーを登録');
         }
 
         // 【リスナー1】自分が参加している通常ルームを取得
@@ -6353,25 +6383,10 @@
         onSnapshot(roomsQuery, (roomsSnapshot) => {
           console.log('[Chat FAB] 通常ルーム数:', roomsSnapshot.size);
 
-          // 各ルームの未読カウントを取得
+          // 各ルームの未読カウントを取得（重複防止）
           roomsSnapshot.forEach((roomDoc) => {
             const roomId = roomDoc.id;
-            const unreadDocRef = doc(db, `rooms/${roomId}/unreadCounts/${userEmail}`);
-
-            // 各ルームの未読をリスニング
-            onSnapshot(unreadDocRef, (unreadDoc) => {
-              const unreadData = unreadDoc.data();
-              const unreadCount = unreadData?.unreadCount || 0;
-
-              // このルームの未読カウントを記録
-              window.chatUnreadByRoom[roomId] = unreadCount;
-              console.log(`[Chat FAB] ${roomId} 未読:`, unreadCount);
-
-              // 全ルームの未読を合計して更新
-              updateTotalUnread();
-            }, (error) => {
-              console.error('[Chat FAB] ルーム', roomId, 'の未読取得エラー:', error);
-            });
+            subscribeRoomUnread(roomId);
           });
         }, (error) => {
           console.error('[Chat FAB] ルームリスト取得エラー:', error);
@@ -6381,21 +6396,7 @@
         const defaultRoomIds = ['room_default_all', 'system', 'system-notifications', 'room_inventory_alert'];
 
         defaultRoomIds.forEach((roomId) => {
-          const unreadDocRef = doc(db, `rooms/${roomId}/unreadCounts/${userEmail}`);
-
-          onSnapshot(unreadDocRef, (unreadDoc) => {
-            const unreadData = unreadDoc.data();
-            const unreadCount = unreadData?.unreadCount || 0;
-
-            // このルームの未読カウントを記録
-            window.chatUnreadByRoom[roomId] = unreadCount;
-            console.log(`[Chat FAB] デフォルトルーム ${roomId} 未読:`, unreadCount);
-
-            // 全ルームの未読を合計して更新
-            updateTotalUnread();
-          }, (error) => {
-            console.log(`[Chat FAB] デフォルトルーム ${roomId} 未読取得:`, error.message, '(ルーム未作成の可能性)');
-          });
+          subscribeRoomUnread(roomId);
         });
 
       } catch (error) {
