@@ -1923,7 +1923,33 @@
           profitRate: data.profitRate || '',
           inventoryDays: data.inventoryDays || 0,
           imageUrl1: data.imageUrl1 || '',
-          images: data.images?.imageUrls || data.images || [],
+          // images: data.imagesから読み込み、なければJSON_データをパース
+          images: (() => {
+            // 1. data.images.imageUrls形式（新形式）
+            if (data.images?.imageUrls && data.images.imageUrls.length > 0) {
+              return data.images.imageUrls;
+            }
+            // 2. data.images配列形式
+            if (Array.isArray(data.images) && data.images.length > 0) {
+              return data.images;
+            }
+            // 3. JSON_データからパース（旧形式）
+            if (data['JSON_データ']) {
+              try {
+                const parsed = JSON.parse(data['JSON_データ']);
+                if (parsed?.imageUrls && parsed.imageUrls.length > 0) {
+                  return parsed.imageUrls;
+                }
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  return parsed;
+                }
+              } catch (e) {
+                console.warn('[Inventory] JSON_データ パースエラー:', e);
+              }
+            }
+            // 4. フォールバック
+            return [];
+          })(),
           searchText: data.searchText || ''
         });
       });
