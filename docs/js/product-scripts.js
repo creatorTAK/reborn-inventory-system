@@ -9521,3 +9521,9 @@ window.saveProductToFirestore = saveProductToFirestore;
 // AI生成用画像アップロード関数をグローバルスコープに公開
 window.handleImageUpload = handleImageUpload;
 window.removeImage = removeImage;
+
+// 商品画像アップロード関数をグローバルスコープに公開
+window.handleProductImageUpload = handleProductImageUpload;
+window.displayProductImagesPreview = displayProductImagesPreview;
+window.removeProductImage = removeProductImage;
+window.clearAllProductImages = clearAllProductImages;
