@@ -5520,38 +5520,65 @@
     let pendingApprovalUnsubscribe = null;
 
     async function startPendingApprovalListener(email, displayName, photoURL, firebaseUid) {
-      console.log('[PendingApproval] リスナー開始:', email);
+      console.log('[PendingApproval] === リスナー開始 ===');
+      console.log('[PendingApproval] email:', email);
+      console.log('[PendingApproval] displayName:', displayName);
+      console.log('[PendingApproval] 監視対象: users/' + email);
 
       try {
         const db = await getFirebaseDb();
         const { doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
         const userDocRef = doc(db, 'users', email);
+        console.log('[PendingApproval] Firestoreドキュメント参照作成完了');
 
         // 既存のリスナーがあれば解除
         if (pendingApprovalUnsubscribe) {
+          console.log('[PendingApproval] 既存リスナーを解除');
           pendingApprovalUnsubscribe();
         }
 
         pendingApprovalUnsubscribe = onSnapshot(userDocRef, (docSnapshot) => {
+          console.log('[PendingApproval] 🔔 onSnapshot発火: exists=' + docSnapshot.exists());
           if (!docSnapshot.exists()) {
             // ドキュメントが削除された = 却下された
             console.log('[PendingApproval] ❌ ユーザードキュメントが削除されました（却下）');
 
-            document.getElementById('pending-icon').textContent = '❌';
-            document.getElementById('pending-icon').classList.remove('pending-animation');
-            document.getElementById('pending-title').textContent = '承認されませんでした';
-            document.getElementById('pending-title').style.color = '#dc2626';
-            document.getElementById('pending-message').innerHTML = '管理者により却下されました。<br>別のアカウントでお試しください。';
-            document.getElementById('pending-status').style.display = 'none';
-            document.getElementById('pending-retry-btn').style.display = 'none';
+            // UI要素の存在確認
+            const pendingIcon = document.getElementById('pending-icon');
+            const pendingTitle = document.getElementById('pending-title');
+            const pendingMessage = document.getElementById('pending-message');
+            const pendingStatus = document.getElementById('pending-status');
+            const pendingRetryBtn = document.getElementById('pending-retry-btn');
+
+            console.log('[PendingApproval] UI要素チェック:', {
+              pendingIcon: !!pendingIcon,
+              pendingTitle: !!pendingTitle,
+              pendingMessage: !!pendingMessage,
+              pendingStatus: !!pendingStatus,
+              pendingRetryBtn: !!pendingRetryBtn
+            });
+
+            if (!pendingIcon || !pendingTitle || !pendingMessage) {
+              console.error('[PendingApproval] ❌ UI要素が見つかりません！承認待ち画面が表示されていない可能性があります');
+              return;
+            }
+
+            pendingIcon.textContent = '❌';
+            pendingIcon.classList.remove('pending-animation');
+            pendingTitle.textContent = '承認されませんでした';
+            pendingTitle.style.color = '#dc2626';
+            pendingMessage.innerHTML = '管理者により却下されました。<br>別のアカウントでお試しください。';
+            if (pendingStatus) pendingStatus.style.display = 'none';
+            if (pendingRetryBtn) pendingRetryBtn.style.display = 'none';
 
             // ログアウトボタンを表示
             const logoutBtn = document.createElement('button');
             logoutBtn.textContent = '別のアカウントでログイン';
             logoutBtn.style.cssText = 'margin-top: 20px; padding: 12px 24px; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;';
             logoutBtn.onclick = () => location.reload();
-            document.getElementById('pending-message').appendChild(logoutBtn);
+            pendingMessage.appendChild(logoutBtn);
+            console.log('[PendingApproval] ✅ 却下画面への切り替え完了');
 
             // リスナー解除
             if (pendingApprovalUnsubscribe) {
