@@ -534,13 +534,38 @@ window.continueProductRegistration = function() {
     // フラグを削除
     sessionStorage.removeItem('scrollToTopAfterReload');
 
-    // 確実にトップへスクロール（DOMレンダリング完了後に実行）
+    // 親フレームとiframe両方をトップへスクロールする関数
+    const scrollToTop = function() {
+      // iframe内のスクロール
+      window.scrollTo(0, 0);
+
+      // 親フレームのスクロール（同一オリジンなので直接呼び出し可能）
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.scrollTo(0, 0);
+        }
+      } catch (e) {
+        // cross-origin の場合は無視
+        console.log('[ScrollToTop] 親フレームへのアクセス失敗:', e);
+      }
+    };
+
+    // ブラウザの復元処理と競合するため、複数回実行して確実にトップへ移動
+    // loadイベント後に実行（画像等の読み込み完了後）
+    window.addEventListener('load', function() {
+      scrollToTop();
+      requestAnimationFrame(scrollToTop);
+      setTimeout(scrollToTop, 50);
+      setTimeout(scrollToTop, 150);
+      setTimeout(scrollToTop, 300);
+    });
+
+    // DOMContentLoadedでも実行（より早いタイミング）
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() {
-        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-      });
+      document.addEventListener('DOMContentLoaded', scrollToTop);
     } else {
-      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      scrollToTop();
+      requestAnimationFrame(scrollToTop);
     }
   }
 })();
