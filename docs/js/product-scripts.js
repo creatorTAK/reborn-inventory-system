@@ -518,9 +518,19 @@ window.closeSuccessModal = function() {
  * 続けて登録（ページリロード）
  */
 window.continueProductRegistration = function() {
+  // スクロール位置の復元を無効化
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+
+  // モーダルを閉じる
+  closeSuccessModal();
+
+  // 一旦トップにスクロール
+  window.scrollTo(0, 0);
+
   // ページをリロードして初期状態に戻す
   window.location.reload();
-  // リロード後は自動的にページ上部にスクロールされる
 }
 
 
@@ -5307,7 +5317,7 @@ window.continueProductRegistration = function() {
    * @param {Array} images - アップロードする画像の配列 [{data: base64, name: filename}]
    * @returns {Promise<{success: boolean, urls: string[], error?: string}>}
    */
-  async function uploadImagesToFirebaseStorage(managementNumber, images) {
+  async function uploadImagesToFirebaseStorage(managementNumber, images, onProgress) {
     console.log('[Firebase Storage] アップロード開始:', managementNumber, images.length + '枚');
 
     // Firebase Storageが初期化されているか確認
@@ -5322,11 +5332,18 @@ window.continueProductRegistration = function() {
 
     const uploadedUrls = [];
     const errors = [];
+    const totalImages = images.length;
 
     for (let i = 0; i < images.length; i++) {
       const image = images[i];
       try {
         console.log(`[Firebase Storage] 画像 ${i + 1}/${images.length} アップロード中: ${image.name}`);
+
+        // 進捗コールバックを呼び出し
+        if (onProgress) {
+          const progressPercent = 20 + Math.round((i / totalImages) * 50); // 20% ～ 70%
+          onProgress(progressPercent, `画像アップロード中... (${i + 1}/${totalImages}枚)`);
+        }
 
         // Base64データからBlobを作成
         const base64Data = image.data.split(',')[1]; // data:image/jpeg;base64,xxx の xxx 部分
@@ -6784,10 +6801,12 @@ window.continueProductRegistration = function() {
           const managementNumber = d['管理番号'] || 'unknown_' + Date.now();
           console.log('[PWA] Firebase Storage画像アップロード開始:', managementNumber);
 
-          // 画像アップロード進捗表示
-          updateLoadingProgress(20, `画像アップロード中... (${productImages.length}枚)`);
-
-          const uploadResult = await window.uploadImagesToFirebaseStorage(managementNumber, productImages);
+          // 画像アップロード進捗表示（進捗コールバック付き）
+          const uploadResult = await window.uploadImagesToFirebaseStorage(
+            managementNumber,
+            productImages,
+            (percent, message) => updateLoadingProgress(percent, message)
+          );
 
           if (uploadResult.success) {
             debug.log(`✅ Firebase Storage アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
