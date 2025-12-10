@@ -1037,13 +1037,14 @@
           </div>
           <div class="col-12">
             <label class="form-label fw-bold small" id="descToggleLabel" style="cursor: pointer; display: flex; align-items: center; gap: 4px; user-select: none;">
-              商品の説明 <span id="descToggleIcon" style="font-size: 12px;">▼</span>
+              商品の説明 <span id="descToggleIcon" style="font-size: 12px;">▼ 全文表示</span>
             </label>
-            <div id="descriptionDetailContainer" style="display: none;">
+            <div id="descriptionDetailContainer" style="max-height: 100px; overflow: hidden; position: relative;">
               ${isEditable
                 ? `<textarea class="form-control form-control-sm" id="productDescription" rows="6">${product.productDescription || ''}</textarea>`
                 : `<div class="form-control-plaintext" style="white-space: pre-wrap; background: #f8f9fa; padding: 10px; border-radius: 6px; font-size: 13px; line-height: 1.5;">${product.productDescription || '-'}</div>`
               }
+              <div id="descFadeOverlay" style="position: absolute; bottom: 0; left: 0; right: 0; height: 30px; background: linear-gradient(transparent, #f8f9fa); pointer-events: none;"></div>
             </div>
           </div>
 
@@ -1099,22 +1100,29 @@
           e.stopPropagation();
           const container = document.getElementById('descriptionDetailContainer');
           const icon = document.getElementById('descToggleIcon');
+          const overlay = document.getElementById('descFadeOverlay');
           console.log('🔍 [DEBUG] 商品説明トグルクリック:', { container: !!container, icon: !!icon });
           if (!container) {
             console.log('🔍 [DEBUG] containerが見つかりません');
             return;
           }
 
-          // display: none または空文字の場合は非表示状態とみなす
-          const isHidden = !container.style.display || container.style.display === 'none';
-          console.log('🔍 [DEBUG] 現在の状態:', { isHidden, currentDisplay: container.style.display });
+          // max-heightで折りたたみ状態を判定
+          const isCollapsed = container.style.maxHeight === '100px' || !container.style.maxHeight || container.style.maxHeight === '';
+          console.log('🔍 [DEBUG] 現在の状態:', { isCollapsed, currentMaxHeight: container.style.maxHeight });
 
-          if (isHidden) {
-            container.style.display = 'block';
-            if (icon) icon.textContent = '▲';
+          if (isCollapsed) {
+            // 全文表示
+            container.style.maxHeight = 'none';
+            container.style.overflow = 'visible';
+            if (icon) icon.textContent = '▲ 閉じる';
+            if (overlay) overlay.style.display = 'none';
           } else {
-            container.style.display = 'none';
-            if (icon) icon.textContent = '▼';
+            // 折りたたみ
+            container.style.maxHeight = '100px';
+            container.style.overflow = 'hidden';
+            if (icon) icon.textContent = '▼ 全文表示';
+            if (overlay) overlay.style.display = 'block';
           }
         });
       }
