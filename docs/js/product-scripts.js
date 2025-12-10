@@ -8296,7 +8296,35 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         updateNamePreview();
       }
     });
-    input.addEventListener('focus', doFilter);
+    input.addEventListener('focus', () => {
+      doFilter();
+
+      // ブランドフィールドの場合、候補リストが見えるように自動スクロール
+      if (inputId === 'ブランド(英語)' || inputId === '商品名_ブランド(英語)') {
+        // 少し遅延させてキーボードが開いた後にスクロール
+        setTimeout(() => {
+          // 入力欄が画面の上部1/3に来るようにスクロール
+          const inputRect = input.getBoundingClientRect();
+          const targetY = window.innerHeight * 0.25; // 画面の上から25%の位置
+
+          if (inputRect.top > targetY) {
+            const scrollAmount = inputRect.top - targetY;
+
+            // iframe内のスクロール
+            window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+
+            // 親フレームのスクロール（同一オリジンの場合）
+            try {
+              if (window.parent && window.parent !== window) {
+                window.parent.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+              }
+            } catch (e) {
+              // cross-origin の場合は無視
+            }
+          }
+        }, 300);
+      }
+    });
     input.addEventListener('blur', hideLater);
     input.addEventListener('keydown', (e)=>{
       if (panel.hidden) return;
