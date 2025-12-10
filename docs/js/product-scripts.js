@@ -5318,7 +5318,7 @@ window.continueProductRegistration = function() {
    * @returns {Promise<{success: boolean, urls: string[], error?: string}>}
    */
   async function uploadImagesToFirebaseStorage(managementNumber, images, onProgress) {
-    console.log('[Firebase Storage] アップロード開始:', managementNumber, images.length + '枚');
+    console.log('[Firebase Storage] 並列アップロード開始:', managementNumber, images.length + '枚');
 
     // Firebase Storageが初期化されているか確認
     if (!window.firebaseStorage || !window.storageRef || !window.storageUploadBytes || !window.storageGetDownloadURL) {
@@ -5330,20 +5330,20 @@ window.continueProductRegistration = function() {
       };
     }
 
-    const uploadedUrls = [];
-    const errors = [];
     const totalImages = images.length;
+    let completedCount = 0;
+    const errors = [];
+    const timestamp = Date.now();
 
-    for (let i = 0; i < images.length; i++) {
-      const image = images[i];
+    // 初期進捗表示
+    if (onProgress) {
+      onProgress(20, `画像アップロード開始... (0/${totalImages}枚)`);
+    }
+
+    // 各画像のアップロードPromiseを作成（並列実行）
+    const uploadPromises = images.map(async (image, index) => {
       try {
-        console.log(`[Firebase Storage] 画像 ${i + 1}/${images.length} アップロード中: ${image.name}`);
-
-        // 進捗コールバックを呼び出し
-        if (onProgress) {
-          const progressPercent = 20 + Math.round((i / totalImages) * 50); // 20% ～ 70%
-          onProgress(progressPercent, `画像アップロード中... (${i + 1}/${totalImages}枚)`);
-        }
+        console.log(`[Firebase Storage] 画像 ${index + 1}/${totalImages} アップロード開始: ${image.name}`);
 
         // Base64データからBlobを作成
         const base64Data = image.data.split(',')[1]; // data:image/jpeg;base64,xxx の xxx 部分
@@ -5356,8 +5356,7 @@ window.continueProductRegistration = function() {
         const blob = new Blob([byteArray], { type: image.mimeType || 'image/jpeg' });
 
         // ファイル名を生成（タイムスタンプ + 連番）
-        const timestamp = Date.now();
-        const fileName = `image_${String(i + 1).padStart(3, '0')}_${timestamp}.jpg`;
+        const fileName = `image_${String(index + 1).padStart(3, '0')}_${timestamp}.jpg`;
 
         // Firebase Storageにアップロード
         const storagePath = `products/${managementNumber}/${fileName}`;
@@ -5368,14 +5367,38 @@ window.continueProductRegistration = function() {
 
         // 公開URLを取得
         const downloadURL = await window.storageGetDownloadURL(imageRef);
-        uploadedUrls.push(downloadURL);
         console.log(`[Firebase Storage] URL取得: ${downloadURL}`);
 
+        // 完了カウント更新＆進捗バー更新
+        completedCount++;
+        if (onProgress) {
+          const progressPercent = 20 + Math.round((completedCount / totalImages) * 50); // 20% ～ 70%
+          onProgress(progressPercent, `画像アップロード中... (${completedCount}/${totalImages}枚)`);
+        }
+
+        return { index, url: downloadURL, success: true };
+
       } catch (error) {
-        console.error(`[Firebase Storage] 画像 ${i + 1} アップロードエラー:`, error);
+        console.error(`[Firebase Storage] 画像 ${index + 1} アップロードエラー:`, error);
         errors.push(`${image.name}: ${error.message}`);
+
+        // エラーでも完了カウント更新
+        completedCount++;
+        if (onProgress) {
+          const progressPercent = 20 + Math.round((completedCount / totalImages) * 50);
+          onProgress(progressPercent, `画像アップロード中... (${completedCount}/${totalImages}枚)`);
+        }
+
+        return { index, url: null, success: false };
       }
-    }
+    });
+
+    // 全画像の並列アップロードを待機
+    const results = await Promise.all(uploadPromises);
+
+    // 結果を元の順序でソートしてURLを抽出
+    const sortedResults = results.sort((a, b) => a.index - b.index);
+    const uploadedUrls = sortedResults.filter(r => r.success).map(r => r.url);
 
     const result = {
       success: uploadedUrls.length > 0,
@@ -5385,7 +5408,7 @@ window.continueProductRegistration = function() {
       error: errors.length > 0 ? errors.join(', ') : null
     };
 
-    console.log('[Firebase Storage] アップロード結果:', result);
+    console.log('[Firebase Storage] 並列アップロード結果:', result);
     return result;
   }
 
