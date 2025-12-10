@@ -130,6 +130,49 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
   }
 
   /**
+   * ブランド選択を適用（共通処理）
+   * キーボード予測変換からの入力でも、候補クリックでも同じ処理を実行
+   */
+  function applyBrandSelection(brand) {
+    const brandNameEn = brand.name || '';
+    const brandNameKana = brand.nameKana || '';
+
+    // 英語名を入力フィールドに設定
+    input.value = brandNameEn || brandNameKana;
+
+    // カナ名を隠しフィールドに設定
+    const kanaField = document.getElementById('ブランド(カナ)');
+    if (kanaField) {
+      kanaField.value = brandNameKana;
+    }
+
+    // 商品名ブロックのブランドフィールドに反映
+    const titleBrandEnField = document.getElementById('商品名_ブランド(英語)');
+    const titleBrandKanaField = document.getElementById('商品名_ブランド(カナ)');
+    if (titleBrandEnField) {
+      titleBrandEnField.value = brandNameEn;
+    }
+    if (titleBrandKanaField) {
+      titleBrandKanaField.value = brandNameKana;
+    }
+
+    // updateBrandDisplay() を呼び出し（商品名プレビュー更新）
+    if (typeof window.updateBrandDisplay === 'function') {
+      window.updateBrandDisplay();
+    }
+
+    // updateNamePreview() を呼び出し
+    if (typeof window.updateNamePreview === 'function') {
+      window.updateNamePreview();
+    }
+
+    // updateDescriptionFromDetail() を呼び出し（商品説明プレビュー更新）
+    if (typeof window.updateDescriptionFromDetail === 'function') {
+      window.updateDescriptionFromDetail();
+    }
+  }
+
+  /**
    * サジェストパネルを表示（Firestore版と同じ2行表示）
    */
   function showSuggestions(brands) {
@@ -184,42 +227,8 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
 
       // クリックイベント
       div.addEventListener('click', () => {
-        const brandNameEn = brand.name || '';
-        const brandNameKana = brand.nameKana || '';
-
-        // 英語名を入力フィールドに設定
-        input.value = brandNameEn || brandNameKana;
-
-        // カナ名を隠しフィールドに設定
-        const kanaField = document.getElementById('ブランド(カナ)');
-        if (kanaField) {
-          kanaField.value = brandNameKana;
-        }
-
-        // 商品名ブロックのブランドフィールドに反映
-        const titleBrandEnField = document.getElementById('商品名_ブランド(英語)');
-        const titleBrandKanaField = document.getElementById('商品名_ブランド(カナ)');
-        if (titleBrandEnField) {
-          titleBrandEnField.value = brandNameEn;
-        }
-        if (titleBrandKanaField) {
-          titleBrandKanaField.value = brandNameKana;
-        }
-
-        // updateBrandDisplay() を呼び出し（商品名プレビュー更新）
-        if (typeof window.updateBrandDisplay === 'function') {
-          window.updateBrandDisplay();
-        }
-
-        // updateNamePreview() を呼び出し
-        if (typeof window.updateNamePreview === 'function') {
-          window.updateNamePreview();
-        }
-
-        // updateDescriptionFromDetail() を呼び出し（商品説明プレビュー更新）
-        if (typeof window.updateDescriptionFromDetail === 'function') {
-          window.updateDescriptionFromDetail();
-        }
+        // 共通処理を実行
+        applyBrandSelection(brand);
 
         // サジェストパネルを非表示
         panel.style.display = 'none';
@@ -272,11 +281,38 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
     }
   });
 
-  // フォーカスアウト時にパネルを非表示（少し遅延させてクリックイベントを処理）
-  input.addEventListener('blur', function() {
+  // フォーカスアウト時にパネルを非表示 + 入力値の自動マッチング
+  input.addEventListener('blur', async function() {
+    const query = this.value.trim();
+
+    // パネルを非表示（クリックイベント処理のため少し遅延）
     setTimeout(() => {
       panel.style.display = 'none';
     }, 200);
+
+    // 入力値が空の場合は何もしない
+    if (!query) return;
+
+    // 既にカナフィールドに値がある場合は、候補から選択済みなのでスキップ
+    const kanaField = document.getElementById('ブランド(カナ)');
+    if (kanaField && kanaField.value) return;
+
+    // Algoliaで検索して完全一致するブランドを探す
+    try {
+      const brands = await searchBrands(query);
+
+      // 完全一致するブランドを探す（大文字小文字無視）
+      const exactMatch = brands.find(brand =>
+        brand.name && brand.name.toLowerCase() === query.toLowerCase()
+      );
+
+      if (exactMatch) {
+        console.log(`✅ [Algolia] キーボード入力からブランド自動選択: ${exactMatch.name}`);
+        applyBrandSelection(exactMatch);
+      }
+    } catch (error) {
+      console.warn('[Algolia] 自動マッチングエラー:', error);
+    }
   });
 
   console.log(`✅ [Brand Suggest Algolia] ${inputId} に Algolia検索機能をアタッチしました`);
