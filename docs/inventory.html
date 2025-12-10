@@ -1047,31 +1047,34 @@
 
       // 画像ブロック生成（ギャラリーUI）- getThumbUrl()はグローバル関数を使用
       if (imagesToDisplay.length > 0) {
-        // 枚数表示
-        const imageCountLabel = imagesToDisplay.length > 1 ? `<span class="text-muted small">(${imagesToDisplay.length}枚)</span>` : '';
+        const totalImages = imagesToDisplay.length;
+        const counterText = totalImages > 1 ? `(1/${totalImages})` : '';
 
         // メイン画像 + サムネイル（サムネイルURLを使用して高速化）
         const mainThumbUrl = getThumbUrl(imagesToDisplay[0]);
         imageBlockHtml = `
           <div class="text-center mb-2">
-            ${imageCountLabel}
             <div class="image-wrapper loading" style="display: inline-block; max-width: 80%; max-height: 200px; min-width: 150px; min-height: 150px;">
-              <img id="mainProductImage" src="${mainThumbUrl}" data-original="${imagesToDisplay[0]}" class="img-thumbnail" style="max-width: 100%; max-height: 200px; object-fit: contain; cursor: pointer; border-radius: 8px;" alt="" loading="lazy" onload="this.classList.add('loaded'); this.parentElement.classList.remove('loading');" onerror="this.src='${imagesToDisplay[0]}'">
+              <img id="mainProductImage" src="${mainThumbUrl}" data-original="${imagesToDisplay[0]}" data-index="0" data-total="${totalImages}" style="max-width: 100%; max-height: 200px; object-fit: contain; cursor: pointer; border-radius: 8px; border: 1px solid #dee2e6;" alt="" loading="lazy" onload="this.classList.add('loaded'); this.parentElement.classList.remove('loading');" onerror="this.src='${imagesToDisplay[0]}'">
             </div>
-            <div class="text-muted small mt-1">タップで拡大</div>
+            <div class="text-muted small mt-1" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span style="cursor: pointer;" title="タップで拡大">🔍</span>
+              <span id="imageCounter">${counterText}</span>
+            </div>
           </div>
         `;
 
-        // サムネイル一覧（すべての画像）- サムネイルURLを使用
+        // サムネイル一覧（すべての画像）- シンプルな枠で統一
         if (imagesToDisplay.length > 1) {
-          imageBlockHtml += '<div id="thumbnailContainer" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; justify-content: center;">';
+          imageBlockHtml += '<div id="thumbnailContainer" style="display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; justify-content: center;">';
 
           imagesToDisplay.forEach((url, index) => {
             const thumbUrl = getThumbUrl(url);
-            const isActive = index === 0 ? 'border: 2px solid #0d6efd;' : 'border: 2px solid transparent;';
+            const isActive = index === 0;
+            const borderStyle = isActive ? 'border: 2px solid #0d6efd;' : 'border: 2px solid #e0e0e0;';
             imageBlockHtml += `
-              <div class="image-wrapper loading" style="width: 60px; height: 60px; flex-shrink: 0; ${isActive} border-radius: 6px;">
-                <img src="${thumbUrl}" class="img-thumbnail product-thumbnail" data-index="${index}" data-original="${url}" style="width: 60px; height: 60px; object-fit: cover; cursor: pointer;" alt="" loading="lazy" onload="this.classList.add('loaded'); this.parentElement.classList.remove('loading');" onerror="this.src='${url}'">
+              <div class="thumb-wrapper ${isActive ? 'active' : ''}" data-index="${index}" style="width: 56px; height: 56px; flex-shrink: 0; ${borderStyle} border-radius: 6px; overflow: hidden; cursor: pointer; background: #f5f5f5;">
+                <img src="${thumbUrl}" class="product-thumbnail" data-index="${index}" data-original="${url}" style="width: 100%; height: 100%; object-fit: cover; display: block;" alt="" loading="lazy" onerror="this.src='${url}'">
               </div>
             `;
           });
@@ -1324,8 +1327,10 @@
       // サムネイルクリック → メイン画像を入れ替え
       if (thumbnailContainer) {
         thumbnailContainer.addEventListener('click', function(e) {
-          if (e.target.classList.contains('product-thumbnail')) {
-            const clickedIndex = parseInt(e.target.dataset.index, 10);
+          // サムネイル画像またはラッパーがクリックされた場合
+          const thumbImg = e.target.closest('.thumb-wrapper');
+          if (thumbImg) {
+            const clickedIndex = parseInt(thumbImg.dataset.index, 10);
             const images = window._currentProductImages;
 
             if (images && images[clickedIndex]) {
@@ -1335,20 +1340,29 @@
                 const thumbUrl = getThumbUrl(images[clickedIndex]);
                 mainImg.src = thumbUrl;
                 mainImg.dataset.original = images[clickedIndex];
+                mainImg.dataset.index = clickedIndex;
                 // ローディング状態をリセット
                 mainImg.classList.remove('loaded');
                 if (mainImg.parentElement) {
                   mainImg.parentElement.classList.add('loading');
                 }
+
+                // カウンター更新
+                const counter = document.getElementById('imageCounter');
+                if (counter && images.length > 1) {
+                  counter.textContent = `(${clickedIndex + 1}/${images.length})`;
+                }
               }
 
-              // サムネイルのアクティブ状態を更新（ラッパー要素のborderを更新）
-              const allWrappers = thumbnailContainer.querySelectorAll('.image-wrapper');
+              // サムネイルのアクティブ状態を更新
+              const allWrappers = thumbnailContainer.querySelectorAll('.thumb-wrapper');
               allWrappers.forEach((wrapper, idx) => {
                 if (idx === clickedIndex) {
                   wrapper.style.border = '2px solid #0d6efd';
+                  wrapper.classList.add('active');
                 } else {
-                  wrapper.style.border = '2px solid transparent';
+                  wrapper.style.border = '2px solid #e0e0e0';
+                  wrapper.classList.remove('active');
                 }
               });
             }
