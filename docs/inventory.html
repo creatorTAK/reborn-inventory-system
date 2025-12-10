@@ -178,11 +178,30 @@
       width: 100%;
       height: 150px;
       border-radius: 0;
+      background: #f5f5f5;
     }
     .product-card .image-wrapper img {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
+    }
+    /* 画像なし状態 */
+    .image-wrapper.no-image::before {
+      content: '画像なし';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #999;
+      font-size: 12px;
+      z-index: 2;
+    }
+    .image-wrapper.no-image {
+      background: #e9ecef !important;
+    }
+    .image-wrapper.no-image::after {
+      display: none !important;
+      animation: none !important;
     }
   </style>
 </head>
@@ -857,11 +876,15 @@
         const thumbImageUrl = originalImageUrl ? getThumbUrl(originalImageUrl) : '';
         const placeholderUrl = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"%3E%3Crect fill="%23e9ecef" width="300" height="200"/%3E%3Ctext fill="%236c757d" font-family="Arial" font-size="14" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
 
+        // 画像がない場合は最初から「画像なし」状態にする
+        const hasImage = !!originalImageUrl;
+        const wrapperClass = hasImage ? 'image-wrapper loading' : 'image-wrapper no-image';
+
         html += `
           <div class="col-12 col-md-6">
             <div class="card product-card">
-              <div class="image-wrapper loading" style="width: 100%; height: 150px;">
-                <img src="${thumbImageUrl || placeholderUrl}" class="product-image" alt="" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous" onload="this.classList.add('loaded'); this.parentElement.classList.remove('loading');" onerror="this.onerror=null; this.src='${originalImageUrl || placeholderUrl}'">
+              <div class="${wrapperClass}" style="width: 100%; height: 150px;">
+                ${hasImage ? `<img src="${thumbImageUrl}" class="product-image" alt="" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous" onload="this.classList.add('loaded'); this.parentElement.classList.remove('loading');" onerror="if(!this.dataset.retried){this.dataset.retried='1';this.src='${originalImageUrl}';}else{this.style.display='none';this.parentElement.classList.remove('loading');this.parentElement.classList.add('no-image');}">` : ''}
               </div>
               <div class="card-body p-2">
                 <div class="d-flex justify-content-between align-items-start mb-1">
