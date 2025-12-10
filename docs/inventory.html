@@ -752,14 +752,17 @@
         console.log('[DEBUG CLIENT] Product:', product.managementNumber, 'images:', product.images);
         const statusClass = getStatusClass(product.status);
         // images配列（R2保存）→ imageUrl1（AI用）→ placeholder の優先順位
-        const imageUrl = (product.images && product.images.length > 0)
+        const originalImageUrl = (product.images && product.images.length > 0)
           ? product.images[0]
-          : (product.imageUrl1 || 'https://via.placeholder.com/300x200?text=No+Image');
-        
+          : (product.imageUrl1 || '');
+        // サムネイルURLを使用（読み込み高速化）
+        const thumbImageUrl = originalImageUrl ? getThumbUrl(originalImageUrl) : '';
+        const placeholderUrl = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"%3E%3Crect fill="%23e9ecef" width="300" height="200"/%3E%3Ctext fill="%236c757d" font-family="Arial" font-size="14" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
+
         html += `
           <div class="col-12 col-md-6">
             <div class="card product-card">
-              <img src="${imageUrl}" class="product-image" alt="${product.productName || '商品画像'}" referrerpolicy="no-referrer" crossorigin="anonymous">
+              <img src="${thumbImageUrl || placeholderUrl}" class="product-image" alt="${product.productName || '商品画像'}" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null; this.src='${originalImageUrl || placeholderUrl}'">
               <div class="card-body p-2">
                 <div class="d-flex justify-content-between align-items-start mb-1">
                   <span class="badge ${statusClass} status-badge">${product.status}</span>
@@ -912,33 +915,7 @@
         : [product.imageUrl1, product.imageUrl2, product.imageUrl3].filter(url => url);
       console.log('🖼️ [DEBUG] 表示する画像:', imagesToDisplay);
 
-      // サムネイルURL生成ヘルパー（元のURLからサムネイルURLを生成）
-      const getThumbUrl = (originalUrl) => {
-        if (!originalUrl) return originalUrl;
-        try {
-          // Firebase Storage URLの場合
-          // 例: https://firebasestorage.googleapis.com/v0/b/bucket/o/products%2Fxxx%2Fimage.jpg?alt=media&token=xxx
-          // → https://firebasestorage.googleapis.com/v0/b/bucket/o/products%2Fxxx%2Fthumbs%2Fimage_thumb_200.jpg?alt=media&token=xxx
-          const url = new URL(originalUrl);
-          const pathMatch = url.pathname.match(/\/o\/(.+)/);
-          if (pathMatch) {
-            const encodedPath = pathMatch[1];
-            const decodedPath = decodeURIComponent(encodedPath);
-            const pathParts = decodedPath.split('/');
-            const fileName = pathParts.pop();
-            const fileNameWithoutExt = fileName.replace(/\.[^.]+$/, '');
-            const thumbFileName = `${fileNameWithoutExt}_thumb_200.jpg`;
-            const thumbPath = [...pathParts, 'thumbs', thumbFileName].join('/');
-            const thumbEncodedPath = encodeURIComponent(thumbPath).replace(/%2F/g, '%2F');
-            return `${url.origin}/v0/b/${url.pathname.split('/')[3]}/o/${thumbEncodedPath}?alt=media`;
-          }
-        } catch (e) {
-          console.warn('[getThumbUrl] サムネイルURL生成エラー:', e);
-        }
-        return originalUrl; // エラー時は元のURLを返す
-      };
-
-      // 画像ブロック生成（ギャラリーUI）
+      // 画像ブロック生成（ギャラリーUI）- getThumbUrl()はグローバル関数を使用
       if (imagesToDisplay.length > 0) {
         // 枚数表示
         const imageCountLabel = imagesToDisplay.length > 1 ? `<span class="text-muted small">(${imagesToDisplay.length}枚)</span>` : '';
@@ -1402,6 +1379,30 @@
     function formatCurrency(value) {
       if (!value && value !== 0) return '-';
       return '¥' + Number(value).toLocaleString();
+    }
+
+    // サムネイルURL生成ヘルパー（グローバル）
+    function getThumbUrl(originalUrl) {
+      if (!originalUrl) return originalUrl;
+      try {
+        // Firebase Storage URLの場合
+        const url = new URL(originalUrl);
+        const pathMatch = url.pathname.match(/\/o\/(.+)/);
+        if (pathMatch) {
+          const encodedPath = pathMatch[1];
+          const decodedPath = decodeURIComponent(encodedPath);
+          const pathParts = decodedPath.split('/');
+          const fileName = pathParts.pop();
+          const fileNameWithoutExt = fileName.replace(/\.[^.]+$/, '');
+          const thumbFileName = `${fileNameWithoutExt}_thumb_200.jpg`;
+          const thumbPath = [...pathParts, 'thumbs', thumbFileName].join('/');
+          const thumbEncodedPath = encodeURIComponent(thumbPath).replace(/%2F/g, '%2F');
+          return `${url.origin}/v0/b/${url.pathname.split('/')[3]}/o/${thumbEncodedPath}?alt=media`;
+        }
+      } catch (e) {
+        // エラー時は元のURLを返す
+      }
+      return originalUrl;
     }
 
     function showLoading() {
