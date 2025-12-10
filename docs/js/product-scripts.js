@@ -378,6 +378,151 @@ window.updateLoadingProgress = function(percent, text) {
     }
   }
 
+// ==================== 保存成功モーダル ====================
+
+/**
+ * 保存成功モーダルを初期化
+ */
+window.initSuccessModal = function() {
+  // 既に存在する場合は作成しない
+  if (document.getElementById('saveSuccessModal')) return;
+
+  const modalHTML = `
+    <div id="saveSuccessModal" class="success-modal-overlay">
+      <div class="success-modal-content">
+        <div class="success-modal-icon">✅</div>
+        <div class="success-modal-title">保存が完了しました</div>
+        <div class="success-modal-message">商品が正常に登録されました</div>
+        <div class="success-modal-buttons">
+          <button type="button" class="success-modal-btn primary" onclick="continueProductRegistration()">
+            続けて登録
+          </button>
+          <button type="button" class="success-modal-btn secondary" onclick="closeSuccessModal()">
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+    <style>
+      .success-modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+      }
+      .success-modal-overlay.active {
+        display: flex;
+      }
+      .success-modal-content {
+        background: white;
+        border-radius: 16px;
+        padding: 32px 24px;
+        max-width: 320px;
+        width: 90%;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        animation: modalSlideIn 0.3s ease-out;
+      }
+      @keyframes modalSlideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-20px) scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+      .success-modal-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+      }
+      .success-modal-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 8px;
+      }
+      .success-modal-message {
+        font-size: 14px;
+        color: #6b7280;
+        margin-bottom: 24px;
+      }
+      .success-modal-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .success-modal-btn {
+        padding: 14px 24px;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: none;
+      }
+      .success-modal-btn.primary {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+      }
+      .success-modal-btn.primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+      }
+      .success-modal-btn.secondary {
+        background: #f3f4f6;
+        color: #4b5563;
+      }
+      .success-modal-btn.secondary:hover {
+        background: #e5e7eb;
+      }
+    </style>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  console.log('✅ 保存成功モーダルを初期化しました');
+}
+
+/**
+ * 保存成功モーダルを表示
+ */
+window.showSuccessModal = function() {
+  // モーダルが初期化されていない場合は初期化
+  if (!document.getElementById('saveSuccessModal')) {
+    initSuccessModal();
+  }
+  const modal = document.getElementById('saveSuccessModal');
+  if (modal) {
+    modal.classList.add('active');
+  }
+}
+
+/**
+ * 保存成功モーダルを閉じる
+ */
+window.closeSuccessModal = function() {
+  const modal = document.getElementById('saveSuccessModal');
+  if (modal) {
+    modal.classList.remove('active');
+  }
+}
+
+/**
+ * 続けて登録（ページリロード）
+ */
+window.continueProductRegistration = function() {
+  // ページをリロードして初期状態に戻す
+  window.location.reload();
+  // リロード後は自動的にページ上部にスクロールされる
+}
+
 
   // 配送デフォルト設定（設定マスタから読み込む）
   let SHIPPING_DEFAULTS = {
@@ -5090,9 +5235,11 @@ window.updateLoadingProgress = function(percent, text) {
       return;
     }
 
-    // 画像がない場合は非表示
+    // 画像がない場合は非表示（プレビューリストもクリア）
     if (productImages.length === 0) {
       container.style.display = 'none';
+      list.innerHTML = '';  // ← 修正: プレビューリストをクリア
+      count.textContent = '0';
       return;
     }
 
@@ -6671,20 +6818,21 @@ window.updateLoadingProgress = function(percent, text) {
         console.log('[onSave] Firestore保存結果:', result);
 
         if (result.success) {
-          // 成功メッセージ表示
-          let message = `✅ ${result.message}\n商品番号: ${result.productId}\n管理番号: ${result.managementNumber}`;
-          if (d['JSON_データ']) {
-            const imageData = JSON.parse(d['JSON_データ']);
-            if (imageData.imageUrls && imageData.imageUrls.length > 0) {
-              message += `\n📷 画像: ${imageData.imageUrls.length}枚アップロード済み`;
-            }
-          }
-          show(message);
+          show(''); // メッセージをクリア
+          hideLoadingOverlay();
 
-          // フォームリセット
-          setTimeout(() => {
-            onReset();
-          }, 2000);
+          // 保存成功モーダルを表示
+          showSuccessModal();
+
+          // リセットボタンを「続けて登録」に変更
+          const resetBtn = document.getElementById('resetButton');
+          if (resetBtn) {
+            resetBtn.textContent = '続けて登録';
+            resetBtn.onclick = continueProductRegistration;
+            resetBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+            resetBtn.style.color = 'white';
+            resetBtn.style.border = 'none';
+          }
         } else {
           // エラーメッセージ表示
           show(result.message);
@@ -6955,7 +7103,20 @@ window.updateLoadingProgress = function(percent, text) {
       }
 
       hideLoadingOverlay();
-      
+
+      // 保存成功モーダルを表示
+      showSuccessModal();
+
+      // リセットボタンを「続けて登録」に変更
+      const resetBtn = document.getElementById('resetButton');
+      if (resetBtn) {
+        resetBtn.textContent = '続けて登録';
+        resetBtn.onclick = continueProductRegistration;
+        resetBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+        resetBtn.style.color = 'white';
+        resetBtn.style.border = 'none';
+      }
+
     } catch (error) {
       console.error('[DEBUG] Firestore保存エラー:', error);
       hideLoadingOverlay();
