@@ -901,9 +901,17 @@
       // 画像HTML生成（images配列 → imageUrl1-3 の優先順位）
       let imagesHtml = '';
       let firstImageHtml = '';
+      console.log('🖼️ [DEBUG] 画像データ:', {
+        images: product.images,
+        imagesLength: product.images?.length,
+        imageUrl1: product.imageUrl1,
+        imageUrl2: product.imageUrl2,
+        imageUrl3: product.imageUrl3
+      });
       const imagesToDisplay = (product.images && product.images.length > 0)
         ? product.images
         : [product.imageUrl1, product.imageUrl2, product.imageUrl3].filter(url => url);
+      console.log('🖼️ [DEBUG] 表示する画像:', imagesToDisplay);
 
       // 基本情報用のメイン画像（1枚目）
       if (imagesToDisplay.length > 0) {
@@ -963,7 +971,7 @@
 
       container.innerHTML = `
         <div class="row g-3">
-          <!-- 基本情報（画像+情報の2カラム） -->
+          <!-- 基本情報 -->
           <div class="col-12">
             <h6 class="border-bottom pb-2">📝 基本情報</h6>
           </div>
@@ -971,22 +979,24 @@
             ${firstImageHtml}
           </div>
           <div class="col-7">
-            <div class="mb-2">
-              <label class="form-label fw-bold small mb-0">管理番号</label>
-              <div class="form-control-plaintext py-0" style="font-size: 15px; font-weight: 600;">${product.managementNumber || '-'}</div>
+            <div class="row g-2">
+              <div class="col-12">
+                <label class="form-label fw-bold small mb-0">管理番号</label>
+                <div class="form-control-plaintext pt-0" style="font-size: 15px; font-weight: 600;">${product.managementNumber || '-'}</div>
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-bold small mb-0">ステータス</label>
+                ${statusSelectHtml}
+              </div>
             </div>
-            <div class="mb-2">
-              <label class="form-label fw-bold small mb-0">ステータス</label>
-              ${statusSelectHtml}
-            </div>
-            <div class="mb-2">
-              <label class="form-label fw-bold small mb-0">担当者</label>
-              <div class="form-control-plaintext py-0">${product.person || '-'}</div>
-            </div>
-            <div class="mb-0">
-              <label class="form-label fw-bold small mb-0">仕入日</label>
-              <div class="form-control-plaintext py-0">${product.purchaseDate || '-'}</div>
-            </div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">担当者</label>
+            <div class="form-control-plaintext">${product.person || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">仕入日</label>
+            <div class="form-control-plaintext">${product.purchaseDate || '-'}</div>
           </div>
 
           <!-- 商品情報 -->
@@ -1084,12 +1094,22 @@
       // 商品の説明 開閉トグルのイベントリスナーを設定
       const descToggleLabel = document.getElementById('descToggleLabel');
       if (descToggleLabel) {
-        descToggleLabel.addEventListener('click', function() {
+        descToggleLabel.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
           const container = document.getElementById('descriptionDetailContainer');
           const icon = document.getElementById('descToggleIcon');
-          if (!container) return; // 編集モードの場合はcontainerがない
+          console.log('🔍 [DEBUG] 商品説明トグルクリック:', { container: !!container, icon: !!icon });
+          if (!container) {
+            console.log('🔍 [DEBUG] 編集モードのためcontainerなし');
+            return;
+          }
 
-          if (container.style.display === 'none') {
+          // display: none または空文字の場合は非表示状態とみなす
+          const isHidden = !container.style.display || container.style.display === 'none';
+          console.log('🔍 [DEBUG] 現在の状態:', { isHidden, currentDisplay: container.style.display });
+
+          if (isHidden) {
             container.style.display = 'block';
             if (icon) icon.textContent = '▲';
           } else {
@@ -2081,7 +2101,18 @@
             profitRate: data.profitRate || '',
             inventoryDays: data.inventoryDays || 0,
             imageUrl1: data.imageUrl1 || '',
-            images: data.images || []
+            imageUrl2: data.imageUrl2 || '',
+            imageUrl3: data.imageUrl3 || '',
+            // images: data.images.imageUrls形式 または data.images配列形式に対応
+            images: (() => {
+              if (data.images?.imageUrls && Array.isArray(data.images.imageUrls)) {
+                return data.images.imageUrls;
+              }
+              if (Array.isArray(data.images)) {
+                return data.images;
+              }
+              return [];
+            })()
           };
         }
 
