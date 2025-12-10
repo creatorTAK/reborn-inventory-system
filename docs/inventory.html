@@ -131,6 +131,59 @@
     .lightbox-close:hover {
       color: #ccc;
     }
+    /* スケルトンローダー（画像読み込み中） */
+    .skeleton-loader {
+      background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes skeleton-pulse {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    /* 画像ラッパー */
+    .image-wrapper {
+      position: relative;
+      display: inline-block;
+      background: #f0f0f0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .image-wrapper.loading {
+      min-width: 60px;
+      min-height: 60px;
+    }
+    .image-wrapper.loading::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, #e0e0e0 25%, #f5f5f5 50%, #e0e0e0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-pulse 1.5s ease-in-out infinite;
+      z-index: 1;
+    }
+    .image-wrapper img {
+      display: block;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .image-wrapper img.loaded {
+      opacity: 1;
+    }
+    /* 商品一覧用の画像ラッパー */
+    .product-card .image-wrapper {
+      width: 100%;
+      height: 150px;
+      border-radius: 0;
+    }
+    .product-card .image-wrapper img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
   </style>
 </head>
 <body>
@@ -807,7 +860,9 @@
         html += `
           <div class="col-12 col-md-6">
             <div class="card product-card">
-              <img src="${thumbImageUrl || placeholderUrl}" class="product-image" alt="${product.productName || '商品画像'}" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null; this.src='${originalImageUrl || placeholderUrl}'">
+              <div class="image-wrapper loading" style="width: 100%; height: 150px;">
+                <img src="${thumbImageUrl || placeholderUrl}" class="product-image" alt="" loading="lazy" referrerpolicy="no-referrer" crossorigin="anonymous" onload="this.classList.add('loaded'); this.parentElement.classList.remove('loading');" onerror="this.onerror=null; this.src='${originalImageUrl || placeholderUrl}'">
+              </div>
               <div class="card-body p-2">
                 <div class="d-flex justify-content-between align-items-start mb-1">
                   <span class="badge ${statusClass} status-badge">${product.status}</span>
@@ -960,16 +1015,26 @@
         : [product.imageUrl1, product.imageUrl2, product.imageUrl3].filter(url => url);
       console.log('🖼️ [DEBUG] 表示する画像:', imagesToDisplay);
 
+      // 画像をプリロード（表示前にロード開始で高速化）
+      imagesToDisplay.forEach(url => {
+        const thumbUrl = getThumbUrl(url);
+        const img = new Image();
+        img.src = thumbUrl;
+      });
+
       // 画像ブロック生成（ギャラリーUI）- getThumbUrl()はグローバル関数を使用
       if (imagesToDisplay.length > 0) {
         // 枚数表示
         const imageCountLabel = imagesToDisplay.length > 1 ? `<span class="text-muted small">(${imagesToDisplay.length}枚)</span>` : '';
 
-        // メイン画像 + サムネイル
+        // メイン画像 + サムネイル（サムネイルURLを使用して高速化）
+        const mainThumbUrl = getThumbUrl(imagesToDisplay[0]);
         imageBlockHtml = `
           <div class="text-center mb-2">
             ${imageCountLabel}
-            <img id="mainProductImage" src="${imagesToDisplay[0]}" class="img-thumbnail" style="max-width: 80%; max-height: 200px; object-fit: contain; cursor: pointer; border-radius: 8px;" alt="商品画像" loading="lazy">
+            <div class="image-wrapper loading" style="display: inline-block; max-width: 80%; max-height: 200px; min-width: 150px; min-height: 150px;">
+              <img id="mainProductImage" src="${mainThumbUrl}" data-original="${imagesToDisplay[0]}" class="img-thumbnail" style="max-width: 100%; max-height: 200px; object-fit: contain; cursor: pointer; border-radius: 8px;" alt="" loading="lazy" onload="this.classList.add('loaded'); this.parentElement.classList.remove('loading');" onerror="this.src='${imagesToDisplay[0]}'">
+            </div>
             <div class="text-muted small mt-1">タップで拡大</div>
           </div>
         `;
@@ -982,7 +1047,9 @@
             const thumbUrl = getThumbUrl(url);
             const isActive = index === 0 ? 'border: 2px solid #0d6efd;' : 'border: 2px solid transparent;';
             imageBlockHtml += `
-              <img src="${thumbUrl}" class="img-thumbnail product-thumbnail" data-index="${index}" data-original="${url}" style="width: 60px; height: 60px; object-fit: cover; cursor: pointer; flex-shrink: 0; ${isActive}" alt="画像${index + 1}" loading="lazy" onerror="this.src='${url}'">
+              <div class="image-wrapper loading" style="width: 60px; height: 60px; flex-shrink: 0; ${isActive} border-radius: 6px;">
+                <img src="${thumbUrl}" class="img-thumbnail product-thumbnail" data-index="${index}" data-original="${url}" style="width: 60px; height: 60px; object-fit: cover; cursor: pointer;" alt="" loading="lazy" onload="this.classList.add('loaded'); this.parentElement.classList.remove('loading');" onerror="this.src='${url}'">
+              </div>
             `;
           });
 
@@ -1199,14 +1266,15 @@
       const mainImage = document.getElementById('mainProductImage');
       const thumbnailContainer = document.getElementById('thumbnailContainer');
 
-      // メイン画像クリック → ライトボックスで拡大表示
+      // メイン画像クリック → ライトボックスで拡大表示（元画像を使用）
       if (mainImage) {
         mainImage.addEventListener('click', function() {
-          const currentSrc = this.src;
+          // data-originalがあれば元画像、なければ現在のsrcを使用
+          const originalSrc = this.dataset.original || this.src;
           const lightbox = document.getElementById('imageLightbox');
           const lightboxImg = document.getElementById('lightboxImage');
           if (lightbox && lightboxImg) {
-            lightboxImg.src = currentSrc;
+            lightboxImg.src = originalSrc;
             lightbox.style.display = 'flex';
           }
         });
@@ -1238,19 +1306,26 @@
             const images = window._currentProductImages;
 
             if (images && images[clickedIndex]) {
-              // メイン画像を更新
+              // メイン画像を更新（サムネイルURLを使用、元画像はdata-originalに保存）
               const mainImg = document.getElementById('mainProductImage');
               if (mainImg) {
-                mainImg.src = images[clickedIndex];
+                const thumbUrl = getThumbUrl(images[clickedIndex]);
+                mainImg.src = thumbUrl;
+                mainImg.dataset.original = images[clickedIndex];
+                // ローディング状態をリセット
+                mainImg.classList.remove('loaded');
+                if (mainImg.parentElement) {
+                  mainImg.parentElement.classList.add('loading');
+                }
               }
 
-              // サムネイルのアクティブ状態を更新
-              const allThumbs = thumbnailContainer.querySelectorAll('.product-thumbnail');
-              allThumbs.forEach((thumb, idx) => {
+              // サムネイルのアクティブ状態を更新（ラッパー要素のborderを更新）
+              const allWrappers = thumbnailContainer.querySelectorAll('.image-wrapper');
+              allWrappers.forEach((wrapper, idx) => {
                 if (idx === clickedIndex) {
-                  thumb.style.border = '2px solid #0d6efd';
+                  wrapper.style.border = '2px solid #0d6efd';
                 } else {
-                  thumb.style.border = '2px solid transparent';
+                  wrapper.style.border = '2px solid transparent';
                 }
               });
             }
