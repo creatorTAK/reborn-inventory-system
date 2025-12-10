@@ -1954,14 +1954,16 @@
     // 管理番号で商品詳細を取得
     async function getProductByManagementNumber(managementNumber) {
       try {
-        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { query, where, getDocs: getDocsQuery } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-        // ドキュメントIDは管理番号（特殊文字置換済み）
-        const docId = managementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
-        const productRef = doc(db, 'products', docId);
-        const docSnap = await getDoc(productRef);
+        // 管理番号フィールドでクエリ検索
+        const productsRef = collection(db, 'products');
+        const q = query(productsRef, where('managementNumber', '==', managementNumber));
+        const querySnapshot = await getDocsQuery(q);
 
-        if (docSnap.exists()) {
+        // 最初の一致するドキュメントを使用
+        if (!querySnapshot.empty) {
+          const docSnap = querySnapshot.docs[0];
           const data = docSnap.data();
           console.log('🔥 [FIRESTORE] 商品詳細取得成功:', managementNumber);
           return {
