@@ -8301,28 +8301,32 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
 
       // ブランドフィールドの場合、候補リストが見えるように自動スクロール
       if (inputId === 'ブランド(英語)' || inputId === '商品名_ブランド(英語)') {
-        // 少し遅延させてキーボードが開いた後にスクロール
-        setTimeout(() => {
-          // 入力欄が画面の上部1/3に来るようにスクロール
-          const inputRect = input.getBoundingClientRect();
-          const targetY = window.innerHeight * 0.25; // 画面の上から25%の位置
+        // iOSキーボード対応：複数回のスクロール試行
+        const scrollInputToTop = () => {
+          // scrollIntoViewを使用（iOSでより確実に動作）
+          input.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-          if (inputRect.top > targetY) {
-            const scrollAmount = inputRect.top - targetY;
+          // 親フレームでも同様にスクロール
+          try {
+            if (window.parent && window.parent !== window) {
+              // 親フレーム内での入力位置を取得
+              const inputRect = input.getBoundingClientRect();
+              const iframeRect = window.frameElement ? window.frameElement.getBoundingClientRect() : { top: 0 };
+              const absoluteTop = iframeRect.top + inputRect.top;
 
-            // iframe内のスクロール
-            window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-
-            // 親フレームのスクロール（同一オリジンの場合）
-            try {
-              if (window.parent && window.parent !== window) {
-                window.parent.scrollBy({ top: scrollAmount, behavior: 'smooth' });
-              }
-            } catch (e) {
-              // cross-origin の場合は無視
+              // 入力欄を画面上部に移動（100pxの余白を確保）
+              const targetScrollTop = window.parent.scrollY + absoluteTop - 100;
+              window.parent.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
             }
+          } catch (e) {
+            // cross-origin の場合は無視
           }
-        }, 300);
+        };
+
+        // キーボードアニメーション完了を待って複数回試行
+        setTimeout(scrollInputToTop, 100);
+        setTimeout(scrollInputToTop, 300);
+        setTimeout(scrollInputToTop, 500);
       }
     });
     input.addEventListener('blur', hideLater);
