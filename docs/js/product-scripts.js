@@ -518,20 +518,32 @@ window.closeSuccessModal = function() {
  * 続けて登録（ページリロード）
  */
 window.continueProductRegistration = function() {
-  // スクロール位置の復元を無効化
-  if ('scrollRestoration' in history) {
-    history.scrollRestoration = 'manual';
-  }
-
   // モーダルを閉じる
   closeSuccessModal();
 
-  // 一旦トップにスクロール
-  window.scrollTo(0, 0);
+  // リロード後にトップへスクロールするフラグをセット
+  sessionStorage.setItem('scrollToTopAfterReload', 'true');
 
   // ページをリロードして初期状態に戻す
   window.location.reload();
 }
+
+// ページロード時にスクロールトップフラグをチェック
+(function() {
+  if (sessionStorage.getItem('scrollToTopAfterReload') === 'true') {
+    // フラグを削除
+    sessionStorage.removeItem('scrollToTopAfterReload');
+
+    // 確実にトップへスクロール（DOMレンダリング完了後に実行）
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      });
+    } else {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    }
+  }
+})();
 
 
   // 配送デフォルト設定（設定マスタから読み込む）
