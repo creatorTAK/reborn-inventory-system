@@ -140,6 +140,18 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
 
     panel.innerHTML = '';
 
+    // 入力欄の画面位置を取得して、候補リストを上/下どちらに表示するか決定
+    const inputRect = input.getBoundingClientRect();
+    const screenHeight = window.innerHeight;
+    const isInLowerHalf = inputRect.top > screenHeight * 0.5;
+
+    // 画面の下半分にある場合は候補を上に表示
+    if (isInLowerHalf) {
+      panel.classList.add('suggest-above');
+    } else {
+      panel.classList.remove('suggest-above');
+    }
+
     brands.forEach((brand, i) => {
       const div = document.createElement('div');
       div.className = 'sug-item brand-item';
