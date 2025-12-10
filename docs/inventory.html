@@ -899,8 +899,7 @@
       const isEditable = (product.status === '登録済み' || product.status === '出品準備中');
 
       // 画像HTML生成（images配列 → imageUrl1-3 の優先順位）
-      let imagesHtml = '';
-      let firstImageHtml = '';
+      let imageBlockHtml = '';
       console.log('🖼️ [DEBUG] 画像データ:', {
         images: product.images,
         imagesLength: product.images?.length,
@@ -913,30 +912,48 @@
         : [product.imageUrl1, product.imageUrl2, product.imageUrl3].filter(url => url);
       console.log('🖼️ [DEBUG] 表示する画像:', imagesToDisplay);
 
-      // 基本情報用のメイン画像（1枚目）
+      // 画像ブロック生成
       if (imagesToDisplay.length > 0) {
-        firstImageHtml = `
-          <img src="${imagesToDisplay[0]}" class="img-thumbnail" style="width: 100%; max-height: 180px; object-fit: cover; cursor: pointer; border-radius: 8px;" alt="商品画像" onclick="window.open('${imagesToDisplay[0]}', '_blank')">
+        // 枚数表示
+        const imageCountLabel = imagesToDisplay.length > 1 ? `<span class="text-muted small">(${imagesToDisplay.length}枚)</span>` : '';
+
+        // 1枚目（メイン画像）- センター配置
+        imageBlockHtml = `
+          <div class="text-center mb-2">
+            ${imageCountLabel}
+            <img src="${imagesToDisplay[0]}" class="img-thumbnail" style="max-width: 80%; max-height: 200px; object-fit: contain; cursor: pointer; border-radius: 8px;" alt="商品画像" onclick="window.open('${imagesToDisplay[0]}', '_blank')">
+          </div>
         `;
+
+        // 2枚目以降のサムネイル
+        if (imagesToDisplay.length > 1) {
+          const visibleThumbs = imagesToDisplay.slice(1, 4); // 2〜4枚目（最大3枚表示）
+          const hiddenThumbs = imagesToDisplay.slice(4); // 5枚目以降
+
+          imageBlockHtml += '<div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px;">';
+
+          // 2〜4枚目を表示
+          visibleThumbs.forEach((url, index) => {
+            imageBlockHtml += `
+              <img src="${url}" class="img-thumbnail" style="width: 70px; height: 70px; object-fit: cover; cursor: pointer; flex-shrink: 0;" alt="画像${index + 2}" onclick="window.open('${url}', '_blank')">
+            `;
+          });
+
+          // 5枚目以降も横スクロールで表示
+          hiddenThumbs.forEach((url, index) => {
+            imageBlockHtml += `
+              <img src="${url}" class="img-thumbnail" style="width: 70px; height: 70px; object-fit: cover; cursor: pointer; flex-shrink: 0;" alt="画像${index + 5}" onclick="window.open('${url}', '_blank')">
+            `;
+          });
+
+          imageBlockHtml += '</div>';
+        }
       } else {
-        firstImageHtml = `
+        imageBlockHtml = `
           <div style="width: 100%; height: 120px; background: #e9ecef; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #6c757d;">
             <span>画像なし</span>
           </div>
         `;
-      }
-
-      // 商品情報用の全画像ギャラリー
-      if (imagesToDisplay.length > 1) {
-        imagesHtml = '<div class="mb-3"><label class="form-label fw-bold small">その他の画像（' + (imagesToDisplay.length - 1) + '枚）</label><div class="row g-2">';
-        imagesToDisplay.slice(1).forEach((url, index) => {
-          imagesHtml += `
-            <div class="col-4 col-md-3">
-              <img src="${url}" class="img-thumbnail" style="width: 100%; height: 80px; object-fit: cover; cursor: pointer;" alt="画像${index + 2}" onclick="window.open('${url}', '_blank')">
-            </div>
-          `;
-        });
-        imagesHtml += '</div></div>';
       }
 
       // ステータス選択HTML
@@ -975,20 +992,18 @@
           <div class="col-12">
             <h6 class="border-bottom pb-2">📝 基本情報</h6>
           </div>
-          <div class="col-5">
-            ${firstImageHtml}
+          <!-- 画像ブロック -->
+          <div class="col-12">
+            ${imageBlockHtml}
           </div>
-          <div class="col-7">
-            <div class="row g-2">
-              <div class="col-12">
-                <label class="form-label fw-bold small mb-0">管理番号</label>
-                <div class="form-control-plaintext pt-0" style="font-size: 15px; font-weight: 600;">${product.managementNumber || '-'}</div>
-              </div>
-              <div class="col-12">
-                <label class="form-label fw-bold small mb-0">ステータス</label>
-                ${statusSelectHtml}
-              </div>
-            </div>
+          <!-- 管理番号・ステータス -->
+          <div class="col-6">
+            <label class="form-label fw-bold small mb-0">管理番号</label>
+            <div class="form-control-plaintext pt-0" style="font-size: 15px; font-weight: 600;">${product.managementNumber || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small mb-0">ステータス</label>
+            ${statusSelectHtml}
           </div>
           <div class="col-6">
             <label class="form-label fw-bold small">担当者</label>
@@ -1003,7 +1018,6 @@
           <div class="col-12">
             <h6 class="border-bottom pb-2 mt-2">🏷️ 商品情報 ${isEditable ? '<span class="badge bg-success small">編集可能</span>' : ''}</h6>
           </div>
-          ${imagesHtml}
           <div class="col-12">
             <label class="form-label fw-bold small">ブランド</label>
             ${createField(product.brand, 'productBrand')}
