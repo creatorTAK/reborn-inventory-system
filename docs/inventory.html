@@ -1951,9 +1951,56 @@
       return products;
     }
 
+    // 管理番号で商品詳細を取得
+    async function getProductByManagementNumber(managementNumber) {
+      try {
+        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        // ドキュメントIDは管理番号（特殊文字置換済み）
+        const docId = managementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
+        const productRef = doc(db, 'products', docId);
+        const docSnap = await getDoc(productRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          console.log('🔥 [FIRESTORE] 商品詳細取得成功:', managementNumber);
+          return {
+            id: docSnap.id,
+            managementNumber: data.managementNumber || '',
+            status: data.status || '',
+            brand: data.brand?.nameEn || (typeof data.brand === 'string' ? data.brand : ''),
+            category: data.category?.major || (typeof data.category === 'string' ? data.category : ''),
+            itemName: data.itemName || '',
+            person: data.person || data.assignedTo || '',
+            size: data.size?.display || (typeof data.size === 'string' ? data.size : ''),
+            color: data.color || '',
+            productName: data.productName || '',
+            purchaseDate: data.purchase?.date || data.purchaseDate || '',
+            purchaseAmount: data.purchase?.amount || data.purchaseAmount || 0,
+            listingDate: data.listing?.date || data.listingDate || '',
+            listingAmount: data.listing?.amount || data.listingAmount || 0,
+            saleDate: data.saleDate || '',
+            saleAmount: data.saleAmount || 0,
+            profit: data.profit || 0,
+            profitRate: data.profitRate || '',
+            inventoryDays: data.inventoryDays || 0,
+            imageUrl1: data.imageUrl1 || ''
+          };
+        }
+
+        console.warn('🔥 [FIRESTORE] 商品が見つかりません:', managementNumber);
+        return null;
+
+      } catch (error) {
+        console.error('[Firestore API] getProductByManagementNumber エラー:', error);
+        return null;
+      }
+    }
+
     // グローバルに公開
     window.FirestoreApi = {
-      getProductList
+      getProductList,
+      getProductByManagementNumber
     };
 
     console.log('✅ [DEBUG] FirestoreApi初期化完了');
