@@ -8,14 +8,19 @@
  */
 
 const {onDocumentCreated} = require('firebase-functions/v2/firestore');
+const {onObjectFinalized} = require('firebase-functions/v2/storage');
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
+const {getStorage} = require('firebase-admin/storage');
+const sharp = require('sharp');
+const path = require('path');
 
 // Firebase Admin初期化
 initializeApp();
 const db = getFirestore();
 const messaging = getMessaging();
+const bucket = getStorage().bucket();
 
 /**
  * 商品登録時の通知処理
@@ -1025,3 +1030,103 @@ exports.manualSyncActiveDevices = onRequest(
     }
   }
 );
+
+
+// ============================================
+// 🖼️ サムネイル自動生成
+// ============================================
+
+/**
+ * 画像アップロード時にサムネイルを自動生成
+ * Storage トリガー: 商品画像がアップロードされた時
+ */
+exports.generateThumbnail = onObjectFinalized({
+  region: 'asia-northeast1',
+  memory: '512MiB',
+  timeoutSeconds: 120,
+}, async (event) => {
+  const filePath = event.data.name;
+  const contentType = event.data.contentType;
+
+  console.log('🖼️ [generateThumbnail] ファイル検知:', filePath);
+
+  // 画像以外はスキップ
+  if (!contentType || !contentType.startsWith('image/')) {
+    console.log('⏭️ [generateThumbnail] 画像以外のためスキップ:', contentType);
+    return null;
+  }
+
+  // 既にサムネイルの場合はスキップ（無限ループ防止）
+  if (filePath.includes('_thumb_')) {
+    console.log('⏭️ [generateThumbnail] サムネイルのためスキップ');
+    return null;
+  }
+
+  // 商品画像フォルダ以外はスキップ（必要に応じて調整）
+  if (!filePath.startsWith('products/') && !filePath.startsWith('images/')) {
+    console.log('⏭️ [generateThumbnail] 対象フォルダ外のためスキップ:', filePath);
+    return null;
+  }
+
+  try {
+    const startTime = Date.now();
+
+    // ファイル名とパスを解析
+    const fileName = path.basename(filePath);
+    const fileDir = path.dirname(filePath);
+    const fileNameWithoutExt = path.parse(fileName).name;
+    const fileExt = path.parse(fileName).ext;
+
+    // サムネイルのファイル名
+    const thumbFileName = `${fileNameWithoutExt}_thumb_200${fileExt}`;
+    const thumbFilePath = `${fileDir}/thumbs/${thumbFileName}`;
+
+    console.log('📂 [generateThumbnail] サムネイル生成開始:', {
+      original: filePath,
+      thumbnail: thumbFilePath
+    });
+
+    // 元画像をダウンロード
+    const file = bucket.file(filePath);
+    const [imageBuffer] = await file.download();
+
+    // サムネイル生成（200x200、アスペクト比維持）
+    const thumbnailBuffer = await sharp(imageBuffer)
+      .resize(200, 200, {
+        fit: 'cover',
+        position: 'center'
+      })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+
+    // サムネイルをアップロード
+    const thumbFile = bucket.file(thumbFilePath);
+    await thumbFile.save(thumbnailBuffer, {
+      metadata: {
+        contentType: 'image/jpeg',
+        metadata: {
+          originalPath: filePath,
+          generatedAt: new Date().toISOString()
+        }
+      }
+    });
+
+    // サムネイルを公開
+    await thumbFile.makePublic();
+
+    // サムネイルのURLを取得
+    const thumbUrl = `https://storage.googleapis.com/${bucket.name}/${thumbFilePath}`;
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [generateThumbnail] 完了: ${duration}ms`, {
+      original: filePath,
+      thumbnail: thumbUrl
+    });
+
+    return { success: true, thumbnailUrl: thumbUrl };
+
+  } catch (error) {
+    console.error('❌ [generateThumbnail] エラー:', error);
+    return { success: false, error: error.message };
+  }
+});
