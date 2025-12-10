@@ -526,7 +526,7 @@ window.continueProductRegistration = function() {
 
   // ページをリロードして初期状態に戻す
   window.location.reload();
-}
+};
 
 // ページロード時にスクロールトップフラグをチェック
 (function() {
