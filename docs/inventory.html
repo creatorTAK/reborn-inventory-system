@@ -85,6 +85,15 @@
     input[type="number"] {
       font-size: 16px !important;
     }
+    /* モーダル横スクロール防止 */
+    #productDetailModal .modal-body {
+      overflow-x: hidden;
+      word-break: break-word;
+    }
+    #productDetailModal .form-control-plaintext {
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
   </style>
 </head>
 <body>
@@ -1951,6 +1960,26 @@
       return products;
     }
 
+    // Firestore Timestampを日付文字列に変換するヘルパー関数
+    function formatTimestamp(timestamp) {
+      if (!timestamp) return '';
+      // Firestore Timestamp オブジェクトの場合
+      if (timestamp && typeof timestamp.toDate === 'function') {
+        const date = timestamp.toDate();
+        return date.toLocaleDateString('ja-JP');
+      }
+      // {seconds, nanoseconds} 形式の場合
+      if (timestamp && typeof timestamp.seconds === 'number') {
+        const date = new Date(timestamp.seconds * 1000);
+        return date.toLocaleDateString('ja-JP');
+      }
+      // すでに文字列の場合
+      if (typeof timestamp === 'string') {
+        return timestamp;
+      }
+      return '';
+    }
+
     // 管理番号で商品詳細を取得
     async function getProductByManagementNumber(managementNumber) {
       try {
@@ -1965,28 +1994,40 @@
         if (!querySnapshot.empty) {
           const docSnap = querySnapshot.docs[0];
           const data = docSnap.data();
-          console.log('🔥 [FIRESTORE] 商品詳細取得成功:', managementNumber);
+          console.log('🔥 [FIRESTORE] 商品詳細取得成功:', managementNumber, data);
+
+          // 仕入日・出品日のTimestamp変換
+          const purchaseDateRaw = data.purchase?.date || data.purchaseDate;
+          const listingDateRaw = data.listing?.date || data.listingDate;
+          const saleDateRaw = data.saleDate;
+
           return {
             id: docSnap.id,
             managementNumber: data.managementNumber || '',
             status: data.status || '',
             brand: data.brand?.nameEn || (typeof data.brand === 'string' ? data.brand : ''),
             category: data.category?.major || (typeof data.category === 'string' ? data.category : ''),
+            item: data.category?.item || data.itemName || '',
             itemName: data.itemName || '',
             person: data.person || data.assignedTo || '',
             size: data.size?.display || (typeof data.size === 'string' ? data.size : ''),
             color: data.color || '',
+            material: data.material || '',
             productName: data.productName || '',
-            purchaseDate: data.purchase?.date || data.purchaseDate || '',
+            productDescription: data.description || data.productDescription || '',
+            purchaseDate: formatTimestamp(purchaseDateRaw),
             purchaseAmount: data.purchase?.amount || data.purchaseAmount || 0,
-            listingDate: data.listing?.date || data.listingDate || '',
+            purchaseSource: data.purchase?.source || data.purchaseSource || '',
+            listingDate: formatTimestamp(listingDateRaw),
             listingAmount: data.listing?.amount || data.listingAmount || 0,
-            saleDate: data.saleDate || '',
+            listingDestination: data.listing?.destination || data.listingDestination || '',
+            saleDate: formatTimestamp(saleDateRaw),
             saleAmount: data.saleAmount || 0,
             profit: data.profit || 0,
             profitRate: data.profitRate || '',
             inventoryDays: data.inventoryDays || 0,
-            imageUrl1: data.imageUrl1 || ''
+            imageUrl1: data.imageUrl1 || '',
+            images: data.images || []
           };
         }
 
