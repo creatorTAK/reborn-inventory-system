@@ -5422,6 +5422,15 @@ window.continueProductRegistration = function() {
         return;
       }
 
+      // 画像がない場合は確認メッセージを表示
+      if (images.length === 0) {
+        const proceed = confirm('⚠️ AI生成用の画像がアップロードされていません。\n\n画像なしでも生成できますが、画像があるとより正確な説明文が生成されます。\n\nこのまま画像なしで生成しますか？');
+        if (!proceed) {
+          resetAiButton(aiGenBtn, originalText);
+          return;
+        }
+      }
+
       // PWA版かGAS版かを判定
       const isPWA = !(typeof google !== 'undefined' && google.script && google.script.run);
 
@@ -6756,29 +6765,9 @@ window.continueProductRegistration = function() {
       return show(ng);
     }
 
-    // 楽観的UI: ローディング画面を表示し、1.5秒で0→100%アニメーション
+    // ローディング画面を表示（保存完了まで表示し続ける）
     showLoadingOverlay('登録中', 'データを保存中...');
-
-    const startTime = Date.now();
-    const duration = 1500; // 1.5秒
-
-    const animateProgress = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min((elapsed / duration) * 100, 100);
-
-      updateLoadingProgress(progress, `${Math.round(progress)}%`);
-
-      if (progress < 100) {
-        requestAnimationFrame(animateProgress);
-      } else {
-        // 100%到達 → すぐにローディング画面を閉じる
-        setTimeout(() => {
-          hideLoadingOverlay();
-        }, 100);
-      }
-    };
-
-    requestAnimationFrame(animateProgress);
+    updateLoadingProgress(10, '準備中...');
 
     // バックグラウンドで実際の保存処理
     console.log('[DEBUG] Checking productImages:', productImages ? productImages.length : 0);
@@ -6794,7 +6783,9 @@ window.continueProductRegistration = function() {
         if (productImages && productImages.length > 0 && IMAGE_STORAGE_PROVIDER === 'firebase') {
           const managementNumber = d['管理番号'] || 'unknown_' + Date.now();
           console.log('[PWA] Firebase Storage画像アップロード開始:', managementNumber);
-          debug.log(`📤 Firebase Storage画像アップロード開始: ${productImages.length}枚`);
+
+          // 画像アップロード進捗表示
+          updateLoadingProgress(20, `画像アップロード中... (${productImages.length}枚)`);
 
           const uploadResult = await window.uploadImagesToFirebaseStorage(managementNumber, productImages);
 
@@ -6803,7 +6794,7 @@ window.continueProductRegistration = function() {
             // 画像URLをJSON形式で保存
             d['JSON_データ'] = JSON.stringify({ imageUrls: uploadResult.urls });
             d['画像URL'] = uploadResult.urls.join('\n'); // 改行区切りでも保存（互換性）
-            console.log('[PWA] 画像URL:', uploadResult.urls);
+            updateLoadingProgress(70, '画像アップロード完了');
           } else {
             console.warn('[PWA] 画像アップロード一部失敗:', uploadResult.error);
             if (uploadResult.urls.length > 0) {
@@ -6812,12 +6803,21 @@ window.continueProductRegistration = function() {
               d['画像URL'] = uploadResult.urls.join('\n');
             }
           }
+        } else {
+          updateLoadingProgress(30, '商品データを準備中...');
         }
 
+        // Firestore保存
+        updateLoadingProgress(80, 'データを保存中...');
         const result = await saveProductToFirestore(d);
         console.log('[onSave] Firestore保存結果:', result);
 
         if (result.success) {
+          updateLoadingProgress(100, '保存完了！');
+
+          // 少し待ってからオーバーレイを閉じてモーダル表示
+          await new Promise(resolve => setTimeout(resolve, 300));
+
           show(''); // メッセージをクリア
           hideLoadingOverlay();
 
@@ -6835,10 +6835,12 @@ window.continueProductRegistration = function() {
           }
         } else {
           // エラーメッセージ表示
+          hideLoadingOverlay();
           show(result.message);
         }
       } catch (error) {
         console.error('[onSave] エラー:', error);
+        hideLoadingOverlay();
         show(`NG(ERROR): ${error.message}`);
       }
     } else {
