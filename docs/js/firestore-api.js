@@ -407,7 +407,10 @@ async function getProductByManagementNumber(managementNumber) {
         // size: オブジェクト {display, actual} または文字列に対応
         size: data.size?.display || (typeof data.size === 'string' ? data.size : ''),
         color: data.color || '',
+        material: data.material || '',
         productName: data.productName || '',
+        // 商品説明: description または productDescription フィールドに対応
+        productDescription: data.description || data.productDescription || '',
         // purchase/listing: ネスト構造または旧フラット構造に対応
         purchaseDate: data.purchase?.date || data.purchaseDate || '',
         purchaseAmount: data.purchase?.amount || data.purchaseAmount || 0,
@@ -418,7 +421,11 @@ async function getProductByManagementNumber(managementNumber) {
         profit: data.profit || 0,
         profitRate: data.profitRate || '',
         inventoryDays: data.inventoryDays || 0,
-        imageUrl1: data.imageUrl1 || ''
+        // 画像: 配列または個別フィールドに対応
+        images: data.images || [],
+        imageUrl1: data.imageUrl1 || '',
+        imageUrl2: data.imageUrl2 || '',
+        imageUrl3: data.imageUrl3 || ''
       };
     }
 
