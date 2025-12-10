@@ -1025,6 +1025,27 @@
             </div>
           </div>
         </div>
+
+        <!-- システム情報セクション -->
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+          <h4 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 12px 0;">ℹ️ システム情報</h4>
+          <div style="font-size: 12px; color: #6b7280;">
+            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f3f4f6;">
+              <span>Service Worker</span>
+              <span id="swVersionDisplay" style="font-weight: 600; color: #374151;">確認中...</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+              <span>キャッシュ</span>
+              <span id="cacheStatusDisplay" style="font-weight: 600; color: #374151;">確認中...</span>
+            </div>
+          </div>
+          <button type="button" onclick="forceUpdateServiceWorker()" style="margin-top: 12px; width: 100%; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+            🔄 キャッシュを強制クリア
+          </button>
+          <div style="font-size: 10px; color: #9ca3af; margin-top: 6px; text-align: center;">
+            更新が反映されない場合にお試しください
+          </div>
+        </div>
         </div><!-- /basicSettingsContent -->
           </div>
 
@@ -9003,9 +9024,104 @@ ${prompt || '（未設定）'}
       google.script.host.close();
     }
   }
-  
+
+  // ================= Service Worker バージョン確認機能 =================
+
+  // Service Workerのバージョンを確認して表示
+  async function checkServiceWorkerVersion() {
+    const swVersionEl = document.getElementById('swVersionDisplay');
+    const cacheStatusEl = document.getElementById('cacheStatusDisplay');
+
+    if (!swVersionEl || !cacheStatusEl) return;
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration && registration.active) {
+          // Service Workerのスクリプトを取得してバージョンを確認
+          const response = await fetch('/firebase-messaging-sw.js?_=' + Date.now());
+          const text = await response.text();
+          const versionMatch = text.match(/CACHE_VERSION\s*=\s*['"]([^'"]+)['"]/);
+          if (versionMatch) {
+            swVersionEl.textContent = versionMatch[1];
+            swVersionEl.style.color = '#10b981'; // 緑色
+          } else {
+            swVersionEl.textContent = '不明';
+            swVersionEl.style.color = '#f59e0b';
+          }
+        } else {
+          swVersionEl.textContent = '未登録';
+          swVersionEl.style.color = '#ef4444';
+        }
+
+        // キャッシュ情報を取得
+        const cacheNames = await caches.keys();
+        const currentCache = cacheNames.find(name => name.startsWith('reborn-pwa-'));
+        if (currentCache) {
+          cacheStatusEl.textContent = currentCache.replace('reborn-pwa-', '');
+          cacheStatusEl.style.color = '#10b981';
+        } else {
+          cacheStatusEl.textContent = 'なし';
+          cacheStatusEl.style.color = '#6b7280';
+        }
+      } else {
+        swVersionEl.textContent = '未対応';
+        swVersionEl.style.color = '#6b7280';
+        cacheStatusEl.textContent = '未対応';
+        cacheStatusEl.style.color = '#6b7280';
+      }
+    } catch (error) {
+      console.error('SW version check error:', error);
+      swVersionEl.textContent = 'エラー';
+      swVersionEl.style.color = '#ef4444';
+    }
+  }
+
+  // Service Workerを強制更新してキャッシュをクリア
+  async function forceUpdateServiceWorker() {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '処理中...';
+    btn.disabled = true;
+
+    try {
+      // 1. 全キャッシュを削除
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(name => caches.delete(name)));
+      console.log('✅ 全キャッシュを削除しました');
+
+      // 2. Service Workerを更新
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) {
+          await registration.update();
+          console.log('✅ Service Workerを更新しました');
+
+          // skipWaitingを送信
+          if (registration.waiting) {
+            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+        }
+      }
+
+      // 3. ページをリロード
+      alert('キャッシュをクリアしました。ページを再読み込みします。');
+      window.location.reload(true);
+
+    } catch (error) {
+      console.error('Force update error:', error);
+      alert('エラーが発生しました: ' + error.message);
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     console.log('[sidebar_config] DOMContentLoaded fired');
+
+    // Service Workerバージョン確認
+    checkServiceWorkerVersion();
+
     const backButton = document.getElementById('back-button');
     console.log('[sidebar_config] backButton element:', backButton);
 
