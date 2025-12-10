@@ -2069,6 +2069,13 @@
             hasDescription: !!data.description,
             hasProductDescription: !!data.productDescription
           });
+          console.log('🖼️ [DEBUG] 画像フィールド:', {
+            images: data.images,
+            imagesType: typeof data.images,
+            hasImageUrls: !!data.images?.imageUrls,
+            JSON_データ: data['JSON_データ'] ? '存在' : 'なし',
+            imageUrl1: data.imageUrl1
+          });
 
           // 仕入日・出品日のTimestamp変換
           const purchaseDateRaw = data.purchase?.date || data.purchaseDate;
@@ -2103,14 +2110,31 @@
             imageUrl1: data.imageUrl1 || '',
             imageUrl2: data.imageUrl2 || '',
             imageUrl3: data.imageUrl3 || '',
-            // images: data.images.imageUrls形式 または data.images配列形式に対応
+            // images: getProductListと同じロジックで取得
             images: (() => {
-              if (data.images?.imageUrls && Array.isArray(data.images.imageUrls)) {
+              // 1. data.images.imageUrls形式（新形式）
+              if (data.images?.imageUrls && data.images.imageUrls.length > 0) {
                 return data.images.imageUrls;
               }
-              if (Array.isArray(data.images)) {
+              // 2. data.images配列形式
+              if (Array.isArray(data.images) && data.images.length > 0) {
                 return data.images;
               }
+              // 3. JSON_データからパース（旧形式）
+              if (data['JSON_データ']) {
+                try {
+                  const parsed = JSON.parse(data['JSON_データ']);
+                  if (parsed?.imageUrls && parsed.imageUrls.length > 0) {
+                    return parsed.imageUrls;
+                  }
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    return parsed;
+                  }
+                } catch (e) {
+                  console.warn('[getProductByManagementNumber] JSON_データ パースエラー:', e);
+                }
+              }
+              // 4. フォールバック
               return [];
             })()
           };
