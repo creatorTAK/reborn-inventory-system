@@ -1,0 +1,1833 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Cache Bust: 2025-11-13 13:45 - REBORN Theme v3.0 -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <!-- REBORN Theme -->
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+    }
+    .content-container {
+      padding: 16px;
+    }
+    .dashboard-card {
+      margin-bottom: 16px;
+    }
+    .status-badge {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+    }
+    .product-card {
+      margin-bottom: 12px;
+      transition: transform 0.2s;
+    }
+    .product-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .product-image {
+      width: 100%;
+      height: 170px;
+      object-fit: contain;  /* 画像全体を表示（余白あり） */
+      background-color: white;  /* 余白部分の背景色 */
+      border-radius: 8px 8px 0 0;
+      border-bottom: 1px solid #e9ecef;  /* 画像とテキストの境界線 */
+    }
+    /* PCは正方形表示 */
+    @media (min-width: 768px) {
+      .product-image {
+        aspect-ratio: 1 / 1;
+        height: auto;
+        object-fit: cover;
+      }
+    }
+    .filter-section {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .pagination-container {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+    }
+    /* iOS自動ズーム防止: inputのfont-sizeを16px以上に設定 */
+    .form-control-sm,
+    input[type="text"],
+    input[type="email"],
+    input[type="number"] {
+      font-size: 16px !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- 統一ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" id="back-button">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <span style="font-size: 20px;">📦</span>
+        在庫管理
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+
+  <!-- 商品詳細モーダル -->
+  <div class="modal fade" id="productDetailModal" tabindex="-1" aria-labelledby="productDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="productDetailModalLabel">📦 商品詳細</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="productDetailBody">
+          <!-- 商品詳細が動的に挿入される -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+          <button type="button" class="btn btn-primary" id="btnSaveProductStatus">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 販売記録モーダル -->
+  <div class="modal fade" id="salesRecordModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">💰 販売記録</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <!-- 基本情報 -->
+          <div class="mb-4 p-3 bg-light rounded border border-2 shadow-sm">
+            <h6 class="border-bottom border-2 border-primary pb-2 mb-3 fw-bold">基本情報</h6>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">販売日 <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="salesDate" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">販売先 <span class="text-danger">*</span></label>
+                <select class="form-select" id="salesPlatform" required>
+                  <option value="メルカリ" selected>メルカリ</option>
+                  <option value="メルカリShops">メルカリShops</option>
+                  <option value="ラクマ">ラクマ</option>
+                  <option value="Yahoo!フリマ">Yahoo!フリマ</option>
+                  <option value="BASE">BASE</option>
+                  <option value="その他">その他</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label">販売金額 <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text">¥</span>
+                  <input type="number" class="form-control" id="salesAmount" min="0" required>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 発送情報 -->
+          <div class="mb-4 p-3 bg-light rounded border border-2 shadow-sm">
+            <h6 class="border-bottom border-2 border-primary pb-2 mb-3 fw-bold">発送情報</h6>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">発送方法（カテゴリ） <span class="text-danger">*</span></label>
+                <select class="form-select" id="shippingMethod1" required>
+                  <option value="">選択してください</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">発送方法（詳細） <span class="text-danger">*</span></label>
+                <select class="form-select" id="shippingMethod2" required disabled>
+                  <option value="">まず発送方法を選択してください</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label">送料</label>
+                <div class="input-group">
+                  <span class="input-group-text">¥</span>
+                  <input type="text" class="form-control bg-light" id="shippingFee" readonly>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 梱包資材プリセット選択 -->
+          <div class="mb-3 text-center">
+            <button type="button" class="btn btn-outline-primary" onclick="showPresetSelector()">
+              📋 プリセットから選択
+            </button>
+          </div>
+
+          <!-- 梱包資材 -->
+          <div class="mb-4 p-3 bg-light rounded border border-2 shadow-sm">
+            <h6 class="border-bottom border-2 border-primary pb-2 mb-3 fw-bold">梱包資材</h6>
+            <div id="packagingMaterialsContainer">
+              <!-- 動的に追加される梱包資材選択欄 -->
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="addPackagingMaterial">
+              <i class="bi bi-plus-circle"></i> 梱包資材を追加
+            </button>
+            <div class="mt-3">
+              <strong>梱包資材費合計: </strong>
+              <span id="totalPackagingCost">¥0.00</span>
+            </div>
+          </div>
+
+          <!-- 手数料・利益 -->
+          <div class="mb-4 p-3 bg-light rounded border border-2 shadow-sm">
+            <h6 class="border-bottom border-2 border-success pb-2 mb-3 fw-bold">利益計算</h6>
+            <table class="table table-sm">
+              <tbody>
+                <tr>
+                  <td>販売金額</td>
+                  <td class="text-end" id="profitSalesAmount">¥0</td>
+                </tr>
+                <tr>
+                  <td>仕入金額</td>
+                  <td class="text-end text-danger" id="profitPurchaseCost">- ¥0</td>
+                </tr>
+                <tr>
+                  <td>プラットフォーム手数料 (<span id="platformFeeRate">10</span>%)</td>
+                  <td class="text-end text-danger" id="profitPlatformFee">- ¥0</td>
+                </tr>
+                <tr>
+                  <td>決済手数料</td>
+                  <td class="text-end text-danger" id="profitPaymentFee">- ¥0</td>
+                </tr>
+                <tr>
+                  <td>送料</td>
+                  <td class="text-end text-danger" id="profitShippingFee">- ¥0</td>
+                </tr>
+                <tr>
+                  <td>梱包資材費</td>
+                  <td class="text-end text-danger" id="profitPackagingCost">- ¥0</td>
+                </tr>
+                <tr class="table-primary fw-bold">
+                  <td>最終利益</td>
+                  <td class="text-end" id="finalProfit">¥0</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-primary" id="saveSalesRecord">販売記録を保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- プリセット選択モーダル -->
+  <div class="modal fade" id="presetSelectorModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">📋 プリセット選択</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="presetSelectorList">
+            <!-- プリセット一覧がここに表示されます -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ダッシュボード -->
+  <div class="content-container">
+  <div class="dashboard-card" id="dashboardSection">
+    <h5 class="mb-3">📊 在庫状況ダッシュボード</h5>
+    <div class="row g-2">
+      <div class="col-6 col-md-4">
+        <div class="card text-center">
+          <div class="card-body py-2">
+            <div class="text-muted small">総商品数</div>
+            <h5 class="mb-0" id="statTotal">-</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4">
+        <div class="card text-center">
+          <div class="card-body py-2">
+            <div class="text-muted small">登録済み</div>
+            <h5 class="mb-0" id="statRegistered">-</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4">
+        <div class="card text-center">
+          <div class="card-body py-2">
+            <div class="text-muted small">出品準備中</div>
+            <h5 class="mb-0" id="statPreparing">-</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4">
+        <div class="card text-center bg-primary text-white">
+          <div class="card-body py-2">
+            <div class="small">出品中</div>
+            <h5 class="mb-0" id="statListed">-</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4">
+        <div class="card text-center bg-success text-white">
+          <div class="card-body py-2">
+            <div class="small">販売済み</div>
+            <h5 class="mb-0" id="statSold">-</h5>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-4">
+        <div class="card text-center">
+          <div class="card-body py-2">
+            <div class="text-muted small">取り下げ</div>
+            <h5 class="mb-0" id="statWithdrawn">-</h5>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row g-2 mt-2">
+      <div class="col-6">
+        <div class="card">
+          <div class="card-body py-2">
+            <div class="text-muted small">総利益金額</div>
+            <h6 class="mb-0" id="statTotalProfit">-</h6>
+          </div>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="card">
+          <div class="card-body py-2">
+            <div class="text-muted small">平均在庫日数</div>
+            <h6 class="mb-0" id="statAvgDays">-</h6>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 検索・フィルタ -->
+  <div class="filter-section">
+    <h5 class="mb-3">🔍 検索・絞り込み</h5>
+    
+    <!-- ステータスフィルタ -->
+    <div class="mb-3">
+      <label class="form-label small">ステータス（複数選択可）</label>
+      <div class="d-flex flex-wrap gap-2">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="登録済み" id="status1" checked>
+          <label class="form-check-label small" for="status1">登録済み</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="出品準備中" id="status2" checked>
+          <label class="form-check-label small" for="status2">出品準備中</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="出品中" id="status3" checked>
+          <label class="form-check-label small" for="status3">出品中</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="販売済み" id="status4" checked>
+          <label class="form-check-label small" for="status4">販売済み</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="取り下げ" id="status5" checked>
+          <label class="form-check-label small" for="status5">取り下げ</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- テキスト検索 -->
+    <div class="mb-3">
+      <label for="searchText" class="form-label small">商品名・管理番号で検索</label>
+      <input type="text" class="form-control form-control-sm" id="searchText" placeholder="例: AA-1001, UNIQLO">
+    </div>
+
+    <!-- 詳細フィルタ（折りたたみ） -->
+    <div class="accordion" id="advancedFilters">
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed py-2 small" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFilters">
+            詳細フィルタ
+          </button>
+        </h2>
+        <div id="collapseFilters" class="accordion-collapse collapse" data-bs-parent="#advancedFilters">
+          <div class="accordion-body">
+            <div class="row g-2">
+              <div class="col-6">
+                <label for="filterBrand" class="form-label small">ブランド</label>
+                <input type="text" class="form-control form-control-sm" id="filterBrand" placeholder="UNIQLO">
+              </div>
+              <div class="col-6">
+                <label for="filterCategory" class="form-label small">カテゴリ</label>
+                <input type="text" class="form-control form-control-sm" id="filterCategory" placeholder="メンズ">
+              </div>
+              <div class="col-6">
+                <label for="filterSize" class="form-label small">サイズ</label>
+                <input type="text" class="form-control form-control-sm" id="filterSize" placeholder="M">
+              </div>
+              <div class="col-6">
+                <label for="filterColor" class="form-label small">カラー</label>
+                <input type="text" class="form-control form-control-sm" id="filterColor" placeholder="ブルー">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ソート -->
+    <div class="row g-2 mt-2">
+      <div class="col-6">
+        <label for="sortBy" class="form-label small">並び順</label>
+        <select class="form-select form-select-sm" id="sortBy">
+          <option value="registeredAt">登録日時</option>
+          <option value="listingDate">出品日</option>
+          <option value="saleDate">販売日</option>
+          <option value="profit">利益金額</option>
+        </select>
+      </div>
+      <div class="col-6">
+        <label for="sortOrder" class="form-label small">順序</label>
+        <select class="form-select form-select-sm" id="sortOrder">
+          <option value="desc">新しい順</option>
+          <option value="asc">古い順</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 検索ボタン -->
+    <div class="d-grid gap-2 mt-3">
+      <button class="btn btn-primary btn-sm" id="btnSearch">🔍 検索</button>
+      <button class="btn btn-outline-secondary btn-sm" id="btnReset">リセット</button>
+    </div>
+  </div>
+
+  <!-- 検索結果 -->
+  <div id="resultsSection">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0">検索結果: <span id="resultCount">0</span>件</h6>
+      <select class="form-select form-select-sm" style="width: auto;" id="perPage">
+        <option value="10" selected>10件/ページ</option>
+        <option value="20">20件/ページ</option>
+        <option value="50">50件/ページ</option>
+        <option value="100">100件/ページ</option>
+      </select>
+    </div>
+
+    <!-- 商品一覧 -->
+    <div id="productList"></div>
+
+    <!-- ページネーション -->
+    <div class="pagination-container" id="paginationContainer"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // ===== デバッグログ =====
+    const SIDEBAR_VERSION = 'v293-google-script-run';
+    console.log('🔍 [DEBUG] sidebar_inventory.html loaded - VERSION:', SIDEBAR_VERSION);
+    console.log('🔍 [DEBUG] document.location.href:', document.location.href);
+    console.log('🔍 [DEBUG] document.referrer:', document.referrer);
+    console.log('🔍 [DEBUG] google.script存在チェック:', typeof google !== 'undefined' && typeof google.script !== 'undefined');
+    console.log('🔍 [DEBUG] google.script.run存在チェック:', typeof google !== 'undefined' && typeof google.script !== 'undefined' && typeof google.script.run !== 'undefined');
+
+    // グローバル変数
+    let currentPage = 1;
+    const CACHE_DURATION_MS = 60000; // キャッシュ有効期限: 60秒
+    let currentFilters = {};
+    let currentSort = { sortBy: 'registeredAt', sortOrder: 'desc' };
+    let currentProduct = null; // 現在表示中の商品データ
+
+    // 初期化
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('🔍 [DEBUG] DOMContentLoaded - 初期化開始');
+      loadDashboard();  // UX改善: 初期表示は統計のみ、検索ボタンで商品表示
+
+      // イベントリスナー
+      document.getElementById('btnSearch').addEventListener('click', () => {
+        currentPage = 1;
+        loadDashboardAndSearch();
+      });
+
+      document.getElementById('btnReset').addEventListener('click', resetFilters);
+
+      document.getElementById('perPage').addEventListener('change', () => {
+        currentPage = 1;
+        loadDashboardAndSearch();
+      });
+
+      document.getElementById('sortBy').addEventListener('change', () => {
+        currentSort.sortBy = document.getElementById('sortBy').value;
+        loadDashboardAndSearch();
+      });
+
+      document.getElementById('sortOrder').addEventListener('change', () => {
+        currentSort.sortOrder = document.getElementById('sortOrder').value;
+        loadDashboardAndSearch();
+      });
+
+      // 商品詳細モーダル - 保存ボタン
+      document.getElementById('btnSaveProductStatus').addEventListener('click', saveProductStatus);
+    });
+
+    // ダッシュボード統計のみをロード（初期表示用）
+    function loadDashboard() {
+      console.log('📊 [DEBUG] ダッシュボード統計のみ読み込み開始');
+      showLoading();
+
+      // 商品一覧をクリア（UX改善: 検索前は何も表示しない）
+      const productList = document.getElementById('productList');
+      const resultCount = document.getElementById('resultCount');
+      const paginationArea = document.getElementById('paginationArea');
+
+      if (productList) productList.innerHTML = '';
+      if (resultCount) resultCount.textContent = '0';
+      if (paginationArea) paginationArea.innerHTML = '';
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+
+          if (result && result.success && result.data) {
+            const stats = result.data;
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statRegistered').textContent = stats.statusCounts.registered;
+            document.getElementById('statPreparing').textContent = stats.statusCounts.preparingListing;
+            document.getElementById('statListed').textContent = stats.statusCounts.listed;
+            document.getElementById('statSold').textContent = stats.statusCounts.sold;
+            document.getElementById('statWithdrawn').textContent = stats.statusCounts.withdrawn;
+            document.getElementById('statTotalProfit').textContent = formatCurrency(stats.totalProfit);
+            document.getElementById('statAvgDays').textContent = stats.averageInventoryDays + '日';
+
+            console.log('✅ [DEBUG] ダッシュボード統計読み込み完了（商品一覧は検索ボタンで表示）');
+          } else {
+            console.error('❌ API内部エラー:', result.error);
+            showError('読み込みエラー: ' + (result.error || '不明なエラー'));
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          console.error('❌ [ERROR] ダッシュボード読み込みエラー:', error);
+          showError('読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
+        })
+        .getStatisticsAPI({});
+    }
+
+    // ダッシュボードと商品一覧を一度に読み込み（検索実行時）
+    function loadDashboardAndSearch(showLoadingIndicator = true) {
+      const startTime = performance.now();
+      console.log('🔍 [PERF] 読み込み開始');
+
+      if (showLoadingIndicator) {
+        showLoading();
+      }
+
+      // フィルタ収集
+      const statusCheckboxes = document.querySelectorAll('input[type="checkbox"][id^="status"]:checked');
+      const statusValues = Array.from(statusCheckboxes).map(cb => cb.value);
+
+      const params = {
+        statuses: statusValues,  // 配列として渡す
+        searchText: document.getElementById('searchText').value.trim(),
+        brand: document.getElementById('filterBrand').value.trim(),
+        category: document.getElementById('filterCategory').value.trim(),
+        size: document.getElementById('filterSize').value.trim(),
+        color: document.getElementById('filterColor').value.trim(),
+        page: currentPage,
+        limit: parseInt(document.getElementById('perPage').value) || 10,  // ✅ 元に戻す：ユーザー選択値を使用
+        sortBy: document.getElementById('sortBy').value,
+        sortOrder: document.getElementById('sortOrder').value
+      };
+
+      const apiCallTime = performance.now();
+      console.log('🔍 [PERF] API呼び出し開始:', (apiCallTime - startTime).toFixed(0) + 'ms');
+      console.log('🔍 [DEBUG] フィルタパラメータ:', params);
+      console.log('🔍 [DEBUG] google.script.run:', google.script.run);
+      console.log('🔍 [DEBUG] google.script.run.getInventoryDashboardAPI:', typeof google.script.run.getInventoryDashboardAPI);
+
+      // 🎯 テスト：まずモック関数を試す
+      console.log('🎯 [TEST] testInventoryDashboardMock()を呼び出します（固定データ）...');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          console.log('🔍 [DEBUG] API応答受信 - typeof:', typeof result);
+          console.log('🔍 [DEBUG] API応答受信 - result:', result);
+          console.log('🔍 [DEBUG] API応答受信 - result === null:', result === null);
+          console.log('🔍 [DEBUG] API応答受信 - result === undefined:', result === undefined);
+
+          const apiResponseTime = performance.now();
+          console.log('🔍 [PERF] API応答受信:', (apiResponseTime - apiCallTime).toFixed(0) + 'ms');
+
+          if (showLoadingIndicator) {
+            hideLoading();
+          }
+
+          if (result && result.success && result.data) {
+            const data = result.data;
+
+            // ダッシュボード更新
+            const stats = data.statistics;
+            document.getElementById('statTotal').textContent = stats.total;
+            document.getElementById('statRegistered').textContent = stats.statusCounts.registered;
+            document.getElementById('statPreparing').textContent = stats.statusCounts.preparingListing;
+            document.getElementById('statListed').textContent = stats.statusCounts.listed;
+            document.getElementById('statSold').textContent = stats.statusCounts.sold;
+            document.getElementById('statWithdrawn').textContent = stats.statusCounts.withdrawn;
+            document.getElementById('statTotalProfit').textContent = formatCurrency(stats.totalProfit);
+            document.getElementById('statAvgDays').textContent = stats.averageInventoryDays + '日';
+
+            // 商品一覧更新
+            displayProducts(data.products);
+            displayPagination(data.page, data.totalPages, data.totalCount);
+            document.getElementById('resultCount').textContent = data.totalCount;
+
+            const renderEndTime = performance.now();
+            console.log('🔍 [PERF] 画面描画完了:', (renderEndTime - apiResponseTime).toFixed(0) + 'ms');
+            console.log('✅ [PERF] 合計時間:', (renderEndTime - startTime).toFixed(0) + 'ms (' + ((renderEndTime - startTime) / 1000).toFixed(1) + '秒)');
+            console.log('📊 [PERF] 統計:', stats.total + '件中' + data.products.length + '件表示');
+          } else {
+            console.error('❌ API内部エラー:', result.error);
+            showError('読み込みエラー: ' + (result.error || '不明なエラー'));
+          }
+        })
+        .withFailureHandler(function(error) {
+          const errorTime = performance.now();
+          console.error('❌ [ERROR] withFailureHandler が呼ばれました！');
+          console.error('❌ [ERROR] error typeof:', typeof error);
+          console.error('❌ [ERROR] error:', error);
+          console.error('❌ [ERROR] error.message:', error ? error.message : 'N/A');
+          console.error('❌ [PERF] API失敗:', (errorTime - apiCallTime).toFixed(0) + 'ms');
+          if (showLoadingIndicator) {
+            hideLoading();
+          }
+          showError('読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
+        })
+        .getInventoryDashboardAPI(params);  // 🎯 本番APIに戻す
+    }
+
+    // 商品表示
+    function displayProducts(products) {
+      const container = document.getElementById('productList');
+      
+      if (!products || products.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">商品が見つかりませんでした。</div>';
+        return;
+      }
+
+      let html = '<div class="row g-2">';
+      
+      products.forEach(product => {
+        console.log('[DEBUG CLIENT] Product:', product.managementNumber, 'images:', product.images);
+        const statusClass = getStatusClass(product.status);
+        // images配列（R2保存）→ imageUrl1（AI用）→ placeholder の優先順位
+        const imageUrl = (product.images && product.images.length > 0)
+          ? product.images[0]
+          : (product.imageUrl1 || 'https://via.placeholder.com/300x200?text=No+Image');
+        
+        html += `
+          <div class="col-12 col-md-6">
+            <div class="card product-card">
+              <img src="${imageUrl}" class="product-image" alt="${product.productName || '商品画像'}" referrerpolicy="no-referrer" crossorigin="anonymous">
+              <div class="card-body p-2">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                  <span class="badge ${statusClass} status-badge">${product.status}</span>
+                  <small class="text-muted">${product.managementNumber}</small>
+                </div>
+                <h6 class="card-title mb-1 small">${product.productName || ''}</h6>
+                <div class="small text-muted mb-2">
+                  ${product.brand || ''} / ${product.category || ''} / ${product.size || ''} / ${product.color || ''}
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="small">
+                    <strong>出品: ${formatCurrency(product.listingAmount)}</strong><br>
+                    <span class="text-success">利益: ${formatCurrency(product.profit)}</span>
+                  </div>
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="viewProduct('${product.managementNumber}')">詳細</button>
+                    <button class="btn btn-outline-success" onclick="openSalesRecordModal('${product.managementNumber}')">販売記録</button>
+                    <button class="btn btn-outline-secondary" onclick="duplicateProduct('${product.managementNumber}')">複製</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    // ページネーション表示
+    function displayPagination(currentPage, totalPages, totalCount) {
+      const container = document.getElementById('paginationContainer');
+      
+      if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+      }
+
+      let html = '<nav><ul class="pagination pagination-sm">';
+      
+      // 前へ
+      html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${currentPage - 1}); return false;">前へ</a>
+              </li>`;
+      
+      // ページ番号
+      const startPage = Math.max(1, currentPage - 2);
+      const endPage = Math.min(totalPages, currentPage + 2);
+      
+      if (startPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1); return false;">1</a></li>`;
+        if (startPage > 2) {
+          html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                  <a class="page-link" href="#" onclick="changePage(${i}); return false;">${i}</a>
+                </li>`;
+      }
+      
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+          html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${totalPages}); return false;">${totalPages}</a></li>`;
+      }
+      
+      // 次へ
+      html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${currentPage + 1}); return false;">次へ</a>
+              </li>`;
+      
+      html += '</ul></nav>';
+      container.innerHTML = html;
+    }
+
+    // ページ変更
+    function changePage(page) {
+      currentPage = page;
+      loadDashboardAndSearch();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // フィルタリセット
+    function resetFilters() {
+      document.getElementById('searchText').value = '';
+      document.getElementById('filterBrand').value = '';
+      document.getElementById('filterCategory').value = '';
+      document.getElementById('filterSize').value = '';
+      document.getElementById('filterColor').value = '';
+      
+      // ステータスは全てチェック
+      document.querySelectorAll('input[type="checkbox"][id^="status"]').forEach(cb => {
+        cb.checked = true;
+      });
+      
+      document.getElementById('sortBy').value = 'registeredAt';
+      document.getElementById('sortOrder').value = 'desc';
+      
+      currentPage = 1;
+      loadDashboardAndSearch();
+    }
+
+    // 商品詳細表示
+    function viewProduct(managementNumber) {
+      showLoading();
+
+      // fetch()でAPI呼び出し
+      const baseUrl = window.location.href.split('?')[0];
+      const params = new URLSearchParams({
+        action: 'getProductDetail',
+        managementNumber: managementNumber
+      });
+
+      fetch(baseUrl + '?' + params.toString())
+        .then(response => response.json())
+        .then(function(response) {
+          hideLoading();
+          if (response.success) {
+            currentProduct = response.data;
+            displayProductDetail(response.data);
+
+            // モーダルを表示
+            const modal = new bootstrap.Modal(document.getElementById('productDetailModal'));
+            modal.show();
+          } else {
+            showError('商品詳細の取得エラー: ' + response.error);
+          }
+        })
+        .catch(function(error) {
+          hideLoading();
+          showError('商品詳細の取得エラー: ' + (error.message || error));
+        });
+    }
+
+    // 商品詳細をモーダルに表示
+    function displayProductDetail(product) {
+      const container = document.getElementById('productDetailBody');
+
+      // 「登録済み」「出品準備中」のみ編集可能
+      const isEditable = (product.status === '登録済み' || product.status === '出品準備中');
+
+      // 画像HTML生成（images配列 → imageUrl1-3 の優先順位）
+      let imagesHtml = '';
+      const imagesToDisplay = (product.images && product.images.length > 0)
+        ? product.images
+        : [product.imageUrl1, product.imageUrl2, product.imageUrl3].filter(url => url);
+
+      if (imagesToDisplay.length > 0) {
+        imagesHtml = '<div class="mb-3"><label class="form-label fw-bold">商品画像（' + imagesToDisplay.length + '枚）</label><div class="row g-2">';
+        imagesToDisplay.forEach((url, index) => {
+          imagesHtml += `
+            <div class="col-4 col-md-3">
+              <img src="${url}" class="img-thumbnail" style="width: 100%; height: 120px; object-fit: cover; cursor: pointer;" alt="画像${index + 1}" onclick="window.open('${url}', '_blank')">
+            </div>
+          `;
+        });
+        imagesHtml += '</div></div>';
+      }
+
+      // ステータス選択HTML
+      const statusOptions = ['登録済み', '出品準備中', '出品中', '販売済み', '取り下げ'];
+      let statusSelectHtml = '<select class="form-select" id="productStatus">';
+      statusOptions.forEach(status => {
+        const selected = status === product.status ? 'selected' : '';
+        statusSelectHtml += `<option value="${status}" ${selected}>${status}</option>`;
+      });
+      statusSelectHtml += '</select>';
+
+      // フィールド生成ヘルパー関数
+      const createField = (value, fieldName, fieldType = 'text') => {
+        if (isEditable) {
+          if (fieldType === 'textarea') {
+            return `<textarea class="form-control form-control-sm" id="${fieldName}" rows="4">${value || ''}</textarea>`;
+          } else if (fieldType === 'number') {
+            return `<input type="number" class="form-control form-control-sm" id="${fieldName}" value="${value || ''}" min="0">`;
+          } else {
+            return `<input type="text" class="form-control form-control-sm" id="${fieldName}" value="${value || ''}">`;
+          }
+        } else {
+          if (fieldType === 'textarea') {
+            return `<div class="form-control-plaintext" style="white-space: pre-wrap;">${value || '-'}</div>`;
+          } else if (fieldType === 'number') {
+            return `<div class="form-control-plaintext">${formatCurrency(value)}</div>`;
+          } else {
+            return `<div class="form-control-plaintext">${value || '-'}</div>`;
+          }
+        }
+      };
+
+      container.innerHTML = `
+        <div class="row g-3">
+          <!-- 基本情報 -->
+          <div class="col-12">
+            <h6 class="border-bottom pb-2">📝 基本情報</h6>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">管理番号</label>
+            <div class="form-control-plaintext">${product.managementNumber || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">ステータス</label>
+            ${statusSelectHtml}
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">仕入担当者</label>
+            <div class="form-control-plaintext">${product.person || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">仕入日</label>
+            <div class="form-control-plaintext">${product.purchaseDate || '-'}</div>
+          </div>
+
+          <!-- 商品情報 -->
+          <div class="col-12">
+            <h6 class="border-bottom pb-2 mt-2">🏷️ 商品情報 ${isEditable ? '<span class="badge bg-success small">編集可能</span>' : ''}</h6>
+          </div>
+          ${imagesHtml}
+          <div class="col-12">
+            <label class="form-label fw-bold small">ブランド</label>
+            ${createField(product.brand, 'productBrand')}
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-bold small">商品名</label>
+            ${createField(product.productName, 'productName')}
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">カテゴリ</label>
+            ${createField(product.category, 'productCategory')}
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">アイテム</label>
+            ${createField(product.item, 'productItem')}
+          </div>
+          <div class="col-4">
+            <label class="form-label fw-bold small">サイズ</label>
+            ${createField(product.size, 'productSize')}
+          </div>
+          <div class="col-4">
+            <label class="form-label fw-bold small">カラー</label>
+            ${createField(product.color, 'productColor')}
+          </div>
+          <div class="col-4">
+            <label class="form-label fw-bold small">素材</label>
+            ${createField(product.material, 'productMaterial')}
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-bold small">商品説明</label>
+            ${createField(product.productDescription, 'productDescription', 'textarea')}
+          </div>
+
+          <!-- 金額情報 -->
+          <div class="col-12">
+            <h6 class="border-bottom pb-2 mt-2">💰 金額情報 ${isEditable ? '<span class="badge bg-success small">編集可能</span>' : ''}</h6>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">仕入金額</label>
+            ${createField(product.purchaseAmount, 'purchaseAmount', 'number')}
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">出品金額</label>
+            ${createField(product.listingAmount, 'listingAmount', 'number')}
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">販売金額</label>
+            <div class="form-control-plaintext">${formatCurrency(product.saleAmount)}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">利益金額</label>
+            <div class="form-control-plaintext text-success fw-bold">${formatCurrency(product.profit)}</div>
+          </div>
+
+          <!-- 出品・販売情報 -->
+          <div class="col-12">
+            <h6 class="border-bottom pb-2 mt-2">📢 出品・販売情報</h6>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">出品日</label>
+            <div class="form-control-plaintext">${product.listingDate || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">出品先</label>
+            <div class="form-control-plaintext">${product.listingDestination || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">販売日</label>
+            <div class="form-control-plaintext">${product.saleDate || '-'}</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small">在庫日数</label>
+            <div class="form-control-plaintext">${product.inventoryDays ? product.inventoryDays + '日' : '-'}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 商品複製（Phase 1-2で実装）
+    function duplicateProduct(managementNumber) {
+      if (!confirm('商品「' + managementNumber + '」を複製しますか？')) return;
+
+      showLoading();
+      // google.script.runでAPI呼び出し
+      // fetch()でAPI呼び出し
+      const baseUrl = window.location.href.split('?')[0];
+      const params = new URLSearchParams({
+        action: 'duplicateProduct',
+        managementNumber: managementNumber
+      });
+
+      fetch(baseUrl + '?' + params.toString())
+        .then(response => response.json())
+        .then(function(response) {
+          hideLoading();
+          if (response.success) {
+            alert('商品を複製しました！\n新しい管理番号: ' + response.data.newManagementNumber);
+            loadDashboardAndSearch();
+          } else {
+            showError('複製エラー: ' + response.error);
+          }
+        })
+        .catch(function(error) {
+          hideLoading();
+          showError('複製エラー: ' + (error.message || error));
+        });
+    }
+
+    // 商品ステータス・情報保存
+    function saveProductStatus() {
+      if (!currentProduct) {
+        showError('商品データが見つかりません');
+        return;
+      }
+
+      const newStatus = document.getElementById('productStatus').value;
+      const oldStatus = currentProduct.status;
+      const isEditable = (oldStatus === '登録済み' || oldStatus === '出品準備中');
+
+      // 変更されたフィールドを収集
+      const changedFields = [];
+      if (isEditable) {
+        const fieldMappings = [
+          { id: 'productBrand', apiName: 'ブランド', oldValue: currentProduct.brand },
+          { id: 'productName', apiName: '商品名', oldValue: currentProduct.productName },
+          { id: 'productCategory', apiName: 'カテゴリ', oldValue: currentProduct.category },
+          { id: 'productItem', apiName: 'アイテム', oldValue: currentProduct.item },
+          { id: 'productSize', apiName: 'サイズ', oldValue: currentProduct.size },
+          { id: 'productColor', apiName: 'カラー', oldValue: currentProduct.color },
+          { id: 'productMaterial', apiName: '素材', oldValue: currentProduct.material },
+          { id: 'productDescription', apiName: '商品説明', oldValue: currentProduct.productDescription },
+          { id: 'purchaseAmount', apiName: '仕入金額', oldValue: currentProduct.purchaseAmount, isNumber: true },
+          { id: 'listingAmount', apiName: '出品金額', oldValue: currentProduct.listingAmount, isNumber: true }
+        ];
+
+        fieldMappings.forEach(field => {
+          const element = document.getElementById(field.id);
+          if (element) {
+            let newValue = element.value.trim();
+            if (field.isNumber) {
+              newValue = newValue ? parseFloat(newValue) : '';
+            }
+            const oldValue = field.oldValue || '';
+            if (String(newValue) !== String(oldValue)) {
+              changedFields.push({ field: field.apiName, value: newValue });
+            }
+          }
+        });
+      }
+
+      const statusChanged = (newStatus !== oldStatus);
+
+      // 変更がない場合
+      if (!statusChanged && changedFields.length === 0) {
+        alert('変更がありません');
+        return;
+      }
+
+      // 確認ダイアログ
+      let confirmMessage = '';
+      if (statusChanged && changedFields.length > 0) {
+        confirmMessage = `ステータスを「${oldStatus}」から「${newStatus}」に変更し、${changedFields.length}件のフィールドを更新しますか？`;
+      } else if (statusChanged) {
+        confirmMessage = `ステータスを「${oldStatus}」から「${newStatus}」に変更しますか？`;
+      } else {
+        confirmMessage = `${changedFields.length}件のフィールドを更新しますか？`;
+      }
+
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      showLoading();
+
+      // 更新処理を実行
+      let updatePromises = [];
+      let updateCount = 0;
+      const totalUpdates = (statusChanged ? 1 : 0) + changedFields.length;
+
+      // ステータス更新
+      if (statusChanged) {
+        // google.script.runでAPI呼び出し
+        // fetch()でAPI呼び出し
+        const baseUrl = window.location.href.split('?')[0];
+        const params = new URLSearchParams({
+          action: 'updateProductStatus',
+          managementNumber: currentProduct.managementNumber,
+          newStatus: newStatus
+        });
+
+        fetch(baseUrl + '?' + params.toString())
+          .then(response => response.json())
+          .then(function(response) {
+            updateCount++;
+            if (!response.success) {
+              hideLoading();
+              showError('ステータス更新エラー: ' + response.error);
+            } else if (updateCount === totalUpdates) {
+              completeUpdate();
+            }
+          })
+          .catch(function(error) {
+            hideLoading();
+            showError('ステータス更新エラー: ' + (error.message || error));
+          });
+      }
+
+      // フィールド更新
+      changedFields.forEach(change => {
+        // google.script.runでAPI呼び出し
+        // fetch()でAPI呼び出し
+        const baseUrl = window.location.href.split('?')[0];
+        const params = new URLSearchParams({
+          action: 'updateProduct',
+          managementNumber: currentProduct.managementNumber,
+          field: change.field,
+          value: change.value,
+          editor: '在庫管理画面'
+        });
+
+        fetch(baseUrl + '?' + params.toString())
+          .then(response => response.json())
+          .then(function(response) {
+            updateCount++;
+            if (!response.success) {
+              hideLoading();
+              showError(`フィールド「${change.field}」更新エラー: ` + response.error);
+            } else if (updateCount === totalUpdates) {
+              completeUpdate();
+            }
+          })
+          .catch(function(error) {
+            hideLoading();
+            showError(`フィールド「${change.field}」更新エラー: ` + (error.message || error));
+          });
+      });
+
+      function completeUpdate() {
+        hideLoading();
+        alert('商品情報を更新しました');
+
+        // モーダルを閉じる
+        const modalElement = document.getElementById('productDetailModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        modal.hide();
+
+        // 一覧を再読み込み
+        loadDashboardAndSearch();
+      }
+    }
+
+    // ユーティリティ関数
+    function getStatusClass(status) {
+      const statusClasses = {
+        '登録済み': 'bg-secondary',
+        '出品準備中': 'bg-info',
+        '出品中': 'bg-primary',
+        '販売済み': 'bg-success',
+        '取り下げ': 'bg-warning'
+      };
+      return statusClasses[status] || 'bg-secondary';
+    }
+
+    function formatCurrency(value) {
+      if (!value && value !== 0) return '-';
+      return '¥' + Number(value).toLocaleString();
+    }
+
+    function showLoading() {
+      document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    function hideLoading() {
+      document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    function showError(message) {
+      alert(message);
+    }
+
+    // =============================================================================
+    // 販売記録機能 (INV-004)
+    // =============================================================================
+
+    let shippingMethodMaster = []; // 発送方法マスタデータ
+    let packagingMaterialsMaster = []; // 備品在庫リストデータ（全データ）
+    let packagingMaterialsByCategory = {}; // カテゴリ別の梱包資材データ { "カテゴリ1": [...], "カテゴリ2": [...] }
+    let packagingMaterialCategories = []; // カテゴリ一覧
+    let currentSalesProduct = null; // 販売記録対象の商品データ
+    let packagingMaterialCount = 3; // 梱包資材選択欄の数（初期値3）
+
+    /**
+     * 販売記録モーダルを開く
+     */
+    function openSalesRecordModal(managementNumber) {
+      showLoading();
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result && result.success && result.data) {
+            currentSalesProduct = result.data;
+            initSalesRecordModal();
+          } else {
+            hideLoading();
+            showError('商品データの取得に失敗しました: ' + (result.message || result.error || '不明なエラー'));
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          showError('商品データの取得エラー: ' + (error ? (error.message || error) : 'Unknown error'));
+        })
+        .getProductByManagementNumberAPI(managementNumber);
+    }
+
+    /**
+     * 販売記録モーダルの初期化
+     */
+    function initSalesRecordModal() {
+      packagingMaterialCount = 3;
+
+      // 販売日を今日に設定
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('salesDate').value = today;
+
+      // 販売金額は手動入力（値下げ交渉などで変動するため空欄で開始）
+      document.getElementById('salesAmount').value = '';
+
+      // 発送方法マスタを読み込み
+      loadShippingMethodMaster();
+
+      // 備品在庫リストを読み込み（読み込み完了後にrenderPackagingMaterialsが実行される）
+      loadPackagingMaterialsMaster();
+
+      // イベントリスナー設定
+      setupSalesRecordEventListeners();
+
+      hideLoading();
+
+      // モーダル表示
+      const modal = new bootstrap.Modal(document.getElementById('salesRecordModal'));
+      modal.show();
+    }
+
+    /**
+     * 発送方法マスタ読み込み
+     */
+    function loadShippingMethodMaster() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result && result.success) {
+            shippingMethodMaster = result.data || [];
+            populateShippingMethod1();
+          } else {
+            showError('発送方法マスタの読み込みに失敗しました: ' + (result.message || '不明なエラー'));
+          }
+        })
+        .withFailureHandler(function(error) {
+          showError('発送方法マスタの読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
+        })
+        .getShippingMethodMasterAPI();
+    }
+
+    /**
+     * 備品在庫リスト読み込み（カテゴリ別）
+     */
+    function loadPackagingMaterialsMaster() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result && result.success) {
+            packagingMaterialsByCategory = result.data || {}; // カテゴリ別データ
+            packagingMaterialCategories = result.categories || []; // カテゴリ一覧
+            // データ読み込み完了後に梱包資材選択欄を描画
+            renderPackagingMaterials();
+          } else {
+            showError('備品在庫リストの読み込みに失敗しました: ' + (result.message || '不明なエラー'));
+          }
+        })
+        .withFailureHandler(function(error) {
+          showError('備品在庫リストの読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
+        })
+        .getPackagingMaterialsByCategoryAPI(); // 新APIに変更
+    }
+
+    /**
+     * 発送方法1のプルダウンを生成
+     */
+    function populateShippingMethod1() {
+      const select = document.getElementById('shippingMethod1');
+      const categories = [...new Set(shippingMethodMaster.map(item => item.method1))];
+
+      select.innerHTML = '<option value="">選択してください</option>';
+      categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        select.appendChild(option);
+      });
+    }
+
+    /**
+     * 発送方法1変更時の処理（連動プルダウン）
+     */
+    function onShippingMethod1Change() {
+      const method1 = document.getElementById('shippingMethod1').value;
+      const select2 = document.getElementById('shippingMethod2');
+
+      if (!method1) {
+        select2.disabled = true;
+        select2.innerHTML = '<option value="">まず発送方法を選択してください</option>';
+        document.getElementById('shippingFee').value = '';
+        updateProfitCalculation();
+        return;
+      }
+
+      // method1に対応するmethod2の選択肢を取得
+      const options = shippingMethodMaster.filter(item => item.method1 === method1);
+
+      select2.disabled = false;
+      select2.innerHTML = '<option value="">選択してください</option>';
+      options.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.method2;
+        option.dataset.fee = item.fee;
+        option.textContent = item.method2;
+        select2.appendChild(option);
+      });
+    }
+
+    /**
+     * 発送方法2変更時の処理（送料自動入力）
+     */
+    function onShippingMethod2Change() {
+      const select2 = document.getElementById('shippingMethod2');
+      const selectedOption = select2.options[select2.selectedIndex];
+
+      if (selectedOption && selectedOption.dataset.fee) {
+        document.getElementById('shippingFee').value = selectedOption.dataset.fee;
+        updateProfitCalculation();
+      }
+    }
+
+    /**
+     * 梱包資材選択欄の動的生成（2段式プルダウン）
+     */
+    function renderPackagingMaterials() {
+      const container = document.getElementById('packagingMaterialsContainer');
+      container.innerHTML = '';
+
+      for (let i = 1; i <= packagingMaterialCount; i++) {
+        const div = document.createElement('div');
+        div.className = 'mb-3 p-2 border rounded';
+        div.innerHTML = `
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label small">カテゴリ</label>
+              <select class="form-select form-select-sm" id="packagingCategory${i}">
+                <option value="">選択してください</option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label small">梱包資材${i}</label>
+              <select class="form-select form-select-sm" id="packagingMaterial${i}" disabled>
+                <option value="">カテゴリを選択してください</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">単価</label>
+              <input type="text" class="form-control form-control-sm bg-light" id="packagingCost${i}" readonly>
+            </div>
+          </div>
+        `;
+        container.appendChild(div);
+
+        // カテゴリプルダウンを生成
+        populatePackagingCategory(i);
+      }
+    }
+
+    /**
+     * 梱包資材カテゴリプルダウンを生成
+     */
+    function populatePackagingCategory(index) {
+      const select = document.getElementById(`packagingCategory${index}`);
+
+      select.innerHTML = '<option value="">選択してください</option>';
+      packagingMaterialCategories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        select.appendChild(option);
+      });
+
+      // カテゴリ変更イベントリスナー
+      select.addEventListener('change', function() {
+        onPackagingCategoryChange(index);
+      });
+    }
+
+    /**
+     * 梱包資材カテゴリ変更時の処理
+     */
+    function onPackagingCategoryChange(index) {
+      const categorySelect = document.getElementById(`packagingCategory${index}`);
+      const materialSelect = document.getElementById(`packagingMaterial${index}`);
+      const category = categorySelect.value;
+
+      if (!category) {
+        materialSelect.disabled = true;
+        materialSelect.innerHTML = '<option value="">カテゴリを選択してください</option>';
+        document.getElementById(`packagingCost${index}`).value = '';
+        updatePackagingCostTotal();
+        updateProfitCalculation();
+        return;
+      }
+
+      // 選択されたカテゴリの梱包資材を取得
+      const materials = packagingMaterialsByCategory[category] || [];
+
+      materialSelect.disabled = false;
+      materialSelect.innerHTML = '<option value="">選択してください</option>';
+      materials.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.productName;
+        option.dataset.cost = item.unitCost;
+        option.textContent = item.productName;
+        materialSelect.appendChild(option);
+      });
+
+      // 材質選択イベントリスナー（一度だけ設定）
+      if (!materialSelect.dataset.listenerSet) {
+        materialSelect.addEventListener('change', function() {
+          onPackagingMaterialChange(index);
+        });
+        materialSelect.dataset.listenerSet = 'true';
+      }
+    }
+
+    /**
+     * 梱包資材変更時の処理
+     */
+    function onPackagingMaterialChange(index) {
+      const materialSelect = document.getElementById(`packagingMaterial${index}`);
+      const selectedOption = materialSelect.options[materialSelect.selectedIndex];
+      const costInput = document.getElementById(`packagingCost${index}`);
+
+      if (selectedOption && selectedOption.dataset.cost) {
+        costInput.value = `¥${selectedOption.dataset.cost}`;
+      } else {
+        costInput.value = '';
+      }
+
+      updatePackagingCostTotal();
+      updateProfitCalculation();
+    }
+
+    /**
+     * 梱包資材費合計の更新
+     */
+    function updatePackagingCostTotal() {
+      let total = 0;
+      for (let i = 1; i <= packagingMaterialCount; i++) {
+        const select = document.getElementById(`packagingMaterial${i}`);
+        if (!select) continue;
+        
+        const selectedOption = select.options[select.selectedIndex];
+        if (selectedOption && selectedOption.dataset.cost) {
+          total += parseFloat(selectedOption.dataset.cost);
+        }
+      }
+
+      document.getElementById('totalPackagingCost').textContent = `¥${total.toFixed(2)}`;
+      return total;
+    }
+
+    /**
+     * 利益計算の更新
+     */
+    function updateProfitCalculation() {
+      // 販売金額
+      const salesAmount = parseFloat(document.getElementById('salesAmount').value) || 0;
+      document.getElementById('profitSalesAmount').textContent = `¥${salesAmount.toLocaleString()}`;
+
+      // 仕入金額（商品データから取得）
+      // 通貨記号とカンマを除去してから数値化
+      const purchaseAmountValue = String(currentSalesProduct.purchaseAmount || '0').replace(/[¥,]/g, '');
+      const purchaseCost = parseFloat(purchaseAmountValue) || 0;
+      document.getElementById('profitPurchaseCost').textContent = `- ¥${purchaseCost.toLocaleString()}`;
+
+      // プラットフォーム手数料（メルカリ = 10%）
+      const platformFeeRate = getPlatformFeeRate(document.getElementById('salesPlatform').value);
+      document.getElementById('platformFeeRate').textContent = platformFeeRate;
+      const platformFee = Math.floor(salesAmount * (platformFeeRate / 100));
+      document.getElementById('profitPlatformFee').textContent = `- ¥${platformFee.toLocaleString()}`;
+
+      // 決済手数料（メルカリの場合は0円）
+      const paymentFee = 0; // 今後プラットフォームごとに変更
+      document.getElementById('profitPaymentFee').textContent = `- ¥${paymentFee.toLocaleString()}`;
+
+      // 送料
+      const shippingFee = parseFloat(document.getElementById('shippingFee').value) || 0;
+      document.getElementById('profitShippingFee').textContent = `- ¥${shippingFee.toLocaleString()}`;
+
+      // 梱包資材費
+      const packagingCost = updatePackagingCostTotal();
+      document.getElementById('profitPackagingCost').textContent = `- ¥${packagingCost.toFixed(2)}`;
+
+      // 最終利益
+      const finalProfit = salesAmount - purchaseCost - platformFee - paymentFee - shippingFee - packagingCost;
+      const finalProfitElement = document.getElementById('finalProfit');
+      finalProfitElement.textContent = `¥${Math.round(finalProfit).toLocaleString()}`;
+      finalProfitElement.className = finalProfit >= 0 ? 'text-end text-success fw-bold' : 'text-end text-danger fw-bold';
+    }
+
+    /**
+     * プラットフォーム手数料率を取得
+     */
+    function getPlatformFeeRate(platform) {
+      const feeRates = {
+        'メルカリ': 10,
+        'メルカリShops': 5,
+        'ラクマ': 6,
+        'Yahoo!フリマ': 5,
+        'BASE': 3,
+        'Shopify': 0,
+        'その他': 0
+      };
+      return feeRates[platform] || 0;
+    }
+
+    /**
+     * イベントリスナー設定
+     */
+    function setupSalesRecordEventListeners() {
+      // 販売金額変更
+      document.getElementById('salesAmount').addEventListener('input', updateProfitCalculation);
+
+      // 販売先変更
+      document.getElementById('salesPlatform').addEventListener('change', updateProfitCalculation);
+
+      // 発送方法変更
+      document.getElementById('shippingMethod1').addEventListener('change', onShippingMethod1Change);
+      document.getElementById('shippingMethod2').addEventListener('change', onShippingMethod2Change);
+
+      // 梱包資材追加ボタン
+      document.getElementById('addPackagingMaterial').addEventListener('click', function() {
+        packagingMaterialCount++;
+        renderPackagingMaterials();
+      });
+
+      // 販売記録保存ボタン
+      document.getElementById('saveSalesRecord').addEventListener('click', saveSalesRecord);
+    }
+
+    /**
+     * プリセット選択モーダルを表示
+     */
+    function showPresetSelector() {
+      // プリセット一覧を取得
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            renderPresetSelector(result.data);
+            const modal = new bootstrap.Modal(document.getElementById('presetSelectorModal'));
+            modal.show();
+          } else {
+            alert('プリセット読み込みエラー: ' + result.message);
+          }
+        })
+        .withFailureHandler(function(error) {
+          alert('プリセット読み込みエラー: ' + error.message);
+        })
+        .getPackagingPresetsAPI();
+    }
+
+    /**
+     * プリセット選択肢を表示
+     */
+    function renderPresetSelector(presets) {
+      const container = document.getElementById('presetSelectorList');
+
+      if (presets.length === 0) {
+        container.innerHTML = '<p class="text-center text-muted">プリセットがまだ登録されていません</p>';
+        return;
+      }
+
+      let html = '<div class="list-group">';
+      presets.forEach(preset => {
+        const materialsText = preset.materialsList.map(m => m.productName).join(', ');
+
+        html += `
+          <button type="button" class="list-group-item list-group-item-action" onclick="applyPreset('${preset.presetId}')">
+            <div class="d-flex w-100 justify-content-between">
+              <h6 class="mb-1">${preset.presetName}</h6>
+            </div>
+            <p class="mb-1 small text-muted">${materialsText}</p>
+          </button>
+        `;
+      });
+      html += '</div>';
+
+      container.innerHTML = html;
+    }
+
+    /**
+     * プリセットを適用
+     */
+    function applyPreset(presetId) {
+      // プリセット一覧を取得（再度API呼び出し）
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            const preset = result.data.find(p => p.presetId === presetId);
+            if (preset) {
+              // 既存の梱包資材をクリア
+              packagingMaterialCount = 0;
+
+              // プリセットの資材を追加
+              preset.materialsList.forEach(material => {
+                packagingMaterialCount++;
+              });
+
+              // レンダリング
+              renderPackagingMaterials();
+
+              // 各資材を設定（2段式プルダウン: カテゴリ→資材）
+              preset.materialsList.forEach((material, index) => {
+                const productName = material.productName;
+
+                // 資材マスタから該当資材のカテゴリを検索
+                let category = null;
+                for (const cat in packagingMaterialsByCategory) {
+                  const found = packagingMaterialsByCategory[cat].find(m => m.productName === productName);
+                  if (found) {
+                    category = cat;
+                    break;
+                  }
+                }
+
+                if (category) {
+                  // カテゴリを設定
+                  const categorySelect = document.getElementById(`packagingCategory${index + 1}`);
+                  if (categorySelect) {
+                    categorySelect.value = category;
+                    // カテゴリ変更イベントを発火（資材プルダウンが有効化される）
+                    onPackagingCategoryChange(index + 1);
+
+                    // 資材を設定（カテゴリ変更後に少し待つ）
+                    setTimeout(() => {
+                      const materialSelect = document.getElementById(`packagingMaterial${index + 1}`);
+                      if (materialSelect) {
+                        materialSelect.value = productName;
+                        // 資材変更イベントを発火（単価が設定される）
+                        onPackagingMaterialChange(index + 1);
+                      }
+                    }, 100);
+                  }
+                }
+              });
+
+              // 合計を更新（少し遅延させる）
+              setTimeout(() => {
+                updatePackagingCostTotal();
+                updateProfitCalculation();
+              }, 200);
+
+              // モーダルを閉じる
+              const modal = bootstrap.Modal.getInstance(document.getElementById('presetSelectorModal'));
+              modal.hide();
+
+              alert('✅ プリセット「' + preset.presetName + '」を適用しました');
+            }
+          }
+        })
+        .withFailureHandler(function(error) {
+          alert('プリセット適用エラー: ' + error.message);
+        })
+        .getPackagingPresetsAPI();
+    }
+
+    /**
+     * 販売記録を保存
+     */
+    function saveSalesRecord() {
+      // バリデーション
+      const salesDate = document.getElementById('salesDate').value;
+      const salesPlatform = document.getElementById('salesPlatform').value;
+      const salesAmount = parseFloat(document.getElementById('salesAmount').value);
+      const shippingMethod1 = document.getElementById('shippingMethod1').value;
+      const shippingMethod2 = document.getElementById('shippingMethod2').value;
+      const shippingFee = parseFloat(document.getElementById('shippingFee').value);
+
+      if (!salesDate) {
+        alert('販売日を入力してください');
+        return;
+      }
+      if (!salesPlatform) {
+        alert('販売先を選択してください');
+        return;
+      }
+      if (!salesAmount || salesAmount <= 0) {
+        alert('販売金額を入力してください');
+        return;
+      }
+      if (!shippingMethod1) {
+        alert('発送方法（カテゴリ）を選択してください');
+        return;
+      }
+      if (!shippingMethod2) {
+        alert('発送方法（詳細）を選択してください');
+        return;
+      }
+
+      // データ収集
+      const packagingMaterials = [];
+      for (let i = 1; i <= packagingMaterialCount; i++) {
+        const select = document.getElementById(`packagingMaterial${i}`);
+        if (!select) continue;
+        
+        if (select.value) {
+          const selectedOption = select.options[select.selectedIndex];
+          packagingMaterials.push({
+            productName: select.value,
+            unitCost: parseFloat(selectedOption.dataset.cost)
+          });
+        }
+      }
+
+      const packagingCostTotal = updatePackagingCostTotal();
+      const platformFeeRate = getPlatformFeeRate(salesPlatform);
+      const platformFee = Math.floor(salesAmount * (platformFeeRate / 100));
+      const paymentFee = 0;
+      const purchaseCost = parseFloat(currentSalesProduct.purchaseAmount) || 0;
+      const finalProfit = salesAmount - purchaseCost - platformFee - paymentFee - shippingFee - packagingCostTotal;
+      const profitRate = salesAmount > 0 ? (finalProfit / salesAmount) * 100 : 0;
+
+      // GASテンプレート変数からFCMトークンを取得
+      const fcmToken = '<?= fcmToken ?>';
+
+      const salesData = {
+        managementNumber: currentSalesProduct.managementNumber,
+        salesDate: salesDate,
+        salesPlatform: salesPlatform,
+        salesAmount: salesAmount,
+        shippingMethod1: shippingMethod1,
+        shippingMethod2: shippingMethod2,
+        shippingFee: shippingFee,
+        packagingMaterials: packagingMaterials,
+        packagingCostTotal: packagingCostTotal,
+        platformFee: platformFee,
+        paymentFee: paymentFee,
+        finalProfit: Math.round(finalProfit),
+        profitRate: profitRate,
+        fcmToken: fcmToken
+      };
+
+      if (!confirm(`販売記録を保存しますか？
+
+管理番号: ${currentSalesProduct.managementNumber}
+販売金額: ¥${salesAmount.toLocaleString()}
+最終利益: ¥${Math.round(finalProfit).toLocaleString()}`)) {
+        return;
+      }
+
+      // 【PERF-001 楽観的UI】モーダルを即座に閉じる
+      const modal = bootstrap.Modal.getInstance(document.getElementById('salesRecordModal'));
+      modal.hide();
+
+      // ローディング表示（バックグラウンド処理中）
+      showLoading();
+
+      // バックグラウンドで保存処理を実行
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (result && result.success) {
+            // 【PERF-001 UX改善】保存完了後、画面を再読み込みして最新状態を表示
+            setTimeout(function() {
+              alert('✅ 販売記録を保存しました');
+              // 画面を再読み込みして、更新されたステータスを表示
+              loadDashboardAndSearch(false); // false = ローディング表示なし（既に完了済み）
+            }, 100);
+          } else {
+            // エラー時の通知
+            setTimeout(function() {
+              alert('❌ 保存に失敗しました: ' + (result.message || result.error || '不明なエラー') + '\n\n再度販売記録を登録してください。');
+            }, 100);
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          setTimeout(function() {
+            alert('❌ 保存エラー: ' + (error ? (error.message || error) : 'Unknown error') + '\n\n再度販売記録を登録してください。');
+          }, 100);
+        })
+        .saveSalesRecordAPI(salesData);
+    }
+  </script>
+
+  <!-- 戻るボタン処理 -->
+<script>
+  console.log('[sidebar_inventory] ✅ Script loaded - Version @899-debug');
+  
+  async function goBack() {
+    console.log('[sidebar_inventory] >>> goBack() called at', new Date().toISOString());
+    const isInIframe = window.self !== window.top;
+    console.log('[sidebar_inventory] isInIframe:', isInIframe);
+    
+    if (isInIframe) {
+      console.log('[sidebar_inventory] iframe内で開かれているため、postMessage送信');
+      window.top.postMessage({ type: 'navigateToHome' }, '*');
+      console.log('[sidebar_inventory] ✅ postMessage送信完了');
+    } else {
+      console.log('[sidebar_inventory] 直接開かれているため、google.script.host.close()');
+      google.script.host.close();
+    }
+  }
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('[sidebar_inventory] DOMContentLoaded fired');
+    const backButton = document.getElementById('back-button');
+    console.log('[sidebar_inventory] backButton element:', backButton);
+    
+    if (backButton) {
+      backButton.addEventListener('click', goBack);
+      console.log('[sidebar_inventory] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
+    } else {
+      console.error('[sidebar_inventory] ❌ 戻るボタンが見つかりません');
+    }
+  });
+</script>
+
+  </div> <!-- /content-container -->
+</body>
+</html>

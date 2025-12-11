@@ -24,10 +24,48 @@ const DEBUG_MODE = true;
 // =============================================================================
 
 /**
- * Gemini APIのエンドポイントURL
+ * Gemini APIのベースURL
  * @const {string}
  */
-const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
+const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+/**
+ * モデル階層定義（フォールバック順）
+ * 上位モデルで失敗した場合、下位モデルに自動フォールバック
+ * @const {Array}
+ */
+const GEMINI_MODEL_TIERS = [
+  {
+    name: 'gemini-2.5-flash',
+    tier: 'premium',
+    isThinkingModel: true,    // 思考モデルはmaxTokens多めに必要
+    minMaxTokens: 4096,
+    description: '高品質（思考機能あり）'
+  },
+  {
+    name: 'gemini-2.0-flash',
+    tier: 'standard',
+    isThinkingModel: false,
+    minMaxTokens: 1024,
+    description: '標準'
+  },
+  {
+    name: 'gemini-1.5-flash',
+    tier: 'lite',
+    isThinkingModel: false,
+    minMaxTokens: 1024,
+    description: '軽量・安定版'
+  }
+];
+
+/**
+ * デフォルトで使用するモデル（配列の最初）
+ * @const {string}
+ */
+const DEFAULT_MODEL = GEMINI_MODEL_TIERS[0].name;
+
+// 後方互換性のためのエンドポイント定数（既存コードとの互換用）
+const GEMINI_API_ENDPOINT = `${GEMINI_API_BASE_URL}/${DEFAULT_MODEL}:generateContent`;
 
 /**
  * 生成する説明文の最大文字数
@@ -65,6 +103,144 @@ function getGeminiApiKey() {
   }
 
   return apiKey;
+}
+
+/**
+ * 実際の商品説明生成をテスト（診断用）
+ * GASエディタから直接実行して確認できます
+ */
+function testProductDescriptionDirect() {
+  try {
+    Logger.log('=== 商品説明生成テスト ===');
+
+    // テスト用の商品情報
+    const testProductInfo = {
+      brandName: 'UNIQLO',
+      brandKana: 'ユニクロ',
+      itemName: 'Tシャツ',
+      category: 'トップス',
+      size: 'M',
+      condition: '目立った傷や汚れなし',
+      material: '綿100%',
+      color: 'ホワイト'
+    };
+
+    Logger.log('商品情報: ' + JSON.stringify(testProductInfo));
+
+    // 画像なしで生成
+    const result = generateProductDescription(testProductInfo, []);
+
+    Logger.log('✅ 生成成功！');
+    Logger.log('生成テキスト: ' + result);
+
+    return result;
+  } catch (error) {
+    Logger.log('❌ エラー: ' + error);
+    return null;
+  }
+}
+
+/**
+ * Gemini APIの簡易テスト（診断用）
+ * GASエディタから直接実行して確認できます
+ */
+function testGeminiApiDirect() {
+  try {
+    const apiKey = getGeminiApiKey();
+    const model = 'gemini-2.5-flash';  // テスト対象モデル
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    Logger.log('=== Gemini API 直接テスト ===');
+    Logger.log('モデル: ' + model);
+    Logger.log('URL: ' + url.replace(apiKey, '***'));
+
+    const requestBody = {
+      contents: [{
+        parts: [{ text: 'こんにちは。簡単なテストです。「テスト成功」と返してください。' }]
+      }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 100
+      }
+    };
+
+    Logger.log('リクエスト送信中...');
+
+    const response = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(requestBody),
+      muteHttpExceptions: true
+    });
+
+    const statusCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    Logger.log('ステータス: ' + statusCode);
+    Logger.log('レスポンス: ' + responseText);
+
+    if (statusCode === 200) {
+      const data = JSON.parse(responseText);
+      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        const text = data.candidates[0].content.parts[0].text;
+        Logger.log('✅ 成功！生成テキスト: ' + text);
+      } else {
+        Logger.log('⚠️ レスポンスはあるがコンテンツなし');
+        Logger.log('candidates: ' + JSON.stringify(data.candidates));
+      }
+    } else {
+      Logger.log('❌ エラー: ' + statusCode);
+    }
+
+    return responseText;
+  } catch (error) {
+    Logger.log('❌ 例外: ' + error);
+    return null;
+  }
+}
+
+/**
+ * 利用可能なGeminiモデル一覧を取得（診断用）
+ * GASエディタから直接実行して確認できます
+ */
+function listAvailableGeminiModels() {
+  try {
+    const apiKey = getGeminiApiKey();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+
+    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    const statusCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    if (statusCode !== 200) {
+      Logger.log('❌ APIエラー: ' + statusCode);
+      Logger.log(responseText);
+      return;
+    }
+
+    const data = JSON.parse(responseText);
+    const models = data.models || [];
+
+    Logger.log('=== 利用可能なGeminiモデル ===');
+    Logger.log('総数: ' + models.length);
+    Logger.log('');
+
+    // generateContentをサポートするモデルのみ抽出
+    const generateContentModels = models.filter(m =>
+      m.supportedGenerationMethods &&
+      m.supportedGenerationMethods.includes('generateContent')
+    );
+
+    Logger.log('=== generateContent対応モデル ===');
+    generateContentModels.forEach(m => {
+      Logger.log('- ' + m.name.replace('models/', ''));
+    });
+
+    return generateContentModels.map(m => m.name.replace('models/', ''));
+  } catch (error) {
+    Logger.log('❌ エラー: ' + error);
+    return null;
+  }
 }
 
 /**
@@ -394,27 +570,121 @@ ${imageCount}枚の商品画像が添付されています。
 }
 
 // =============================================================================
-// API呼び出し
+// API呼び出し（フォールバック対応）
 // =============================================================================
 
 /**
- * Gemini APIを呼び出してテキストを生成
+ * モデル情報を取得
+ * @param {string} modelName - モデル名
+ * @returns {Object} モデル設定オブジェクト
+ */
+function getModelConfig(modelName) {
+  return GEMINI_MODEL_TIERS.find(m => m.name === modelName) || GEMINI_MODEL_TIERS[0];
+}
+
+/**
+ * フォールバック対象のエラーかどうかを判定
+ * @param {number} statusCode - HTTPステータスコード
+ * @param {string} errorMessage - エラーメッセージ
+ * @param {string} finishReason - 生成終了理由
+ * @returns {boolean} フォールバックすべきかどうか
+ */
+function shouldFallback(statusCode, errorMessage, finishReason) {
+  // 429: レート制限 → フォールバック
+  if (statusCode === 429) return true;
+
+  // 503: サービス利用不可 → フォールバック
+  if (statusCode === 503) return true;
+
+  // 500: サーバーエラー → フォールバック
+  if (statusCode === 500) return true;
+
+  // MAX_TOKENS: トークン上限到達（思考モデルで発生しやすい）→ フォールバック
+  if (finishReason === 'MAX_TOKENS') return true;
+
+  // 空レスポンス → フォールバック
+  if (errorMessage && errorMessage.includes('空です')) return true;
+
+  return false;
+}
+
+/**
+ * Gemini APIを呼び出し（フォールバック付き）
+ * 上位モデルで失敗した場合、自動的に下位モデルにフォールバック
+ *
+ * @param {string} prompt - 生成用プロンプト
+ * @param {Object} [aiConfig] - AI生成設定
+ * @param {Object} [productInfo] - 商品情報
+ * @param {Array} [images] - 画像データ配列
+ * @returns {string} 生成されたテキスト
+ * @throws {Error} 全モデルで失敗した場合
+ */
+function callGeminiApiWithFallback(prompt, aiConfig, productInfo, images) {
+  let lastError = null;
+
+  for (let i = 0; i < GEMINI_MODEL_TIERS.length; i++) {
+    const modelConfig = GEMINI_MODEL_TIERS[i];
+    const modelName = modelConfig.name;
+
+    try {
+      Logger.log(`[Gemini API] 🔄 モデル試行 ${i + 1}/${GEMINI_MODEL_TIERS.length}: ${modelName} (${modelConfig.description})`);
+
+      const result = callGeminiApiWithModel(prompt, aiConfig, productInfo, images, modelName);
+
+      Logger.log(`[Gemini API] ✅ ${modelName} で生成成功`);
+      return result;
+
+    } catch (error) {
+      lastError = error;
+      Logger.log(`[Gemini API] ⚠️ ${modelName} でエラー: ${error.message}`);
+
+      // フォールバック対象エラーかチェック
+      const errorMsg = error.message || '';
+      const is429 = errorMsg.includes('429');
+      const is5xx = errorMsg.includes('500') || errorMsg.includes('503');
+      const isMaxTokens = errorMsg.includes('MAX_TOKENS');
+      const isEmpty = errorMsg.includes('空です');
+
+      if (is429 || is5xx || isMaxTokens || isEmpty) {
+        if (i < GEMINI_MODEL_TIERS.length - 1) {
+          Logger.log(`[Gemini API] 🔄 フォールバック: ${modelName} → ${GEMINI_MODEL_TIERS[i + 1].name}`);
+          continue;  // 次のモデルを試す
+        }
+      }
+
+      // フォールバック対象外のエラー、または最後のモデル
+      throw error;
+    }
+  }
+
+  // 全モデルで失敗
+  throw lastError || new Error('NG(API): 全てのモデルで生成に失敗しました。');
+}
+
+/**
+ * 指定モデルでGemini APIを呼び出してテキストを生成
  *
  * @param {string} prompt - 生成用プロンプト
  * @param {Object} [aiConfig] - AI生成設定
  * @param {Object} [productInfo] - 商品情報（Google Search Grounding判定用）
+ * @param {Array} [images] - 画像データ配列
+ * @param {string} [modelName] - 使用するモデル名
  * @returns {string} 生成されたテキスト
  * @throws {Error} API呼び出しに失敗した場合
  */
-function callGeminiApi(prompt, aiConfig, productInfo, images) {
+function callGeminiApiWithModel(prompt, aiConfig, productInfo, images, modelName) {
   try {
     const apiKey = getGeminiApiKey();
-    const url = `${GEMINI_API_ENDPOINT}?key=${apiKey}`;
+    const model = modelName || DEFAULT_MODEL;
+    const modelConfig = getModelConfig(model);
+    const url = `${GEMINI_API_BASE_URL}/${model}:generateContent?key=${apiKey}`;
 
     // AI設定のデフォルト値
     const config = aiConfig || {};
     const temperature = config.temperature !== undefined ? config.temperature : 0.7;
-    const maxTokens = config.maxTokens || 1024;
+    // 思考モデルは多めのトークンが必要
+    const minTokens = modelConfig.isThinkingModel ? modelConfig.minMaxTokens : 1024;
+    const maxTokens = Math.max(config.maxTokens || 1024, minTokens);
 
     // 画像データの検証
     images = images || [];
@@ -456,6 +726,18 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
       }
     }
 
+    // thinkingConfig: 画像なしの場合はthinkingBudget: 0で思考機能を無効化
+    // gemini-2.5-flashは思考モデルのため、テキストのみの場合は負荷が高くなる
+    // 画像ありの場合は思考機能を活用して詳細な分析を行う
+    const hasImages = images.length > 0;
+    const thinkingConfig = hasImages
+      ? { thinkingBudget: 1024 }   // 画像あり: 思考機能有効
+      : { thinkingBudget: 0 };     // 画像なし: 思考機能無効（503エラー対策）
+
+    if (DEBUG_MODE) {
+      Logger.log(`[Gemini API] thinkingConfig: ${JSON.stringify(thinkingConfig)} (画像: ${hasImages ? 'あり' : 'なし'})`);
+    }
+
     // リクエストボディの構築
     const requestBody = {
       contents: [{
@@ -465,7 +747,8 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
         temperature: temperature,
         maxOutputTokens: maxTokens,
         topP: 0.8,
-        topK: 40
+        topK: 40,
+        thinkingConfig: thinkingConfig
       },
       safetySettings: [
         {
@@ -509,25 +792,67 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
     };
 
     if (DEBUG_MODE) {
-      Logger.log('[Gemini API] リクエスト送信:', url);
-      Logger.log('[Gemini API] プロンプト:', prompt);
+      Logger.log('[Gemini API] モデル: ' + model);
+      Logger.log('[Gemini API] maxOutputTokens: ' + maxTokens);
+      Logger.log('[Gemini API] 画像数: ' + images.length);
+      Logger.log('[Gemini API] リクエスト送信: ' + url.replace(/key=.*/, 'key=***'));
     }
 
-    // API呼び出し
-    const response = UrlFetchApp.fetch(url, options);
-    const statusCode = response.getResponseCode();
-    const responseText = response.getContentText();
+    // API呼び出し（503エラー時は最大3回リトライ）
+    let response;
+    let statusCode;
+    let responseText;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 2000;  // 2秒待機
 
-    if (DEBUG_MODE) {
-      Logger.log('[Gemini API] ステータスコード:', statusCode);
-      Logger.log('[Gemini API] レスポンス:', responseText);
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      response = UrlFetchApp.fetch(url, options);
+      statusCode = response.getResponseCode();
+      responseText = response.getContentText();
+
+      // 503以外、または成功の場合はループを抜ける
+      if (statusCode !== 503) {
+        break;
+      }
+
+      // 503エラーの場合、リトライ
+      if (attempt < MAX_RETRIES) {
+        Logger.log(`[Gemini API] ⚠️ 503エラー (試行 ${attempt}/${MAX_RETRIES}) - ${RETRY_DELAY_MS/1000}秒後にリトライします...`);
+        Utilities.sleep(RETRY_DELAY_MS);
+      } else {
+        Logger.log(`[Gemini API] ❌ 503エラー - 全 ${MAX_RETRIES} 回の試行が失敗しました`);
+      }
+    }
+
+    Logger.log('[Gemini API] ステータスコード: ' + statusCode);
+    Logger.log('[Gemini API] レスポンス長: ' + responseText.length + '文字');
+
+    // レスポンスの最初の500文字を表示（デバッグ用）
+    if (responseText.length > 0) {
+      Logger.log('[Gemini API] レスポンス内容: ' + responseText.substring(0, 500));
+    } else {
+      Logger.log('[Gemini API] ⚠️ レスポンスが空です');
     }
 
     // ステータスコードのチェック
     if (statusCode !== 200) {
       const errorData = JSON.parse(responseText);
       const errorMessage = errorData.error?.message || 'Unknown error';
-      
+      const errorCode = errorData.error?.code || 'Unknown code';
+      const errorStatus = errorData.error?.status || 'Unknown status';
+      const errorDetails = errorData.error?.details ? JSON.stringify(errorData.error.details) : 'No details';
+
+      // 詳細なエラーログ
+      Logger.log('[Gemini API] ❌ エラー詳細:');
+      Logger.log('  - ステータスコード: ' + statusCode);
+      Logger.log('  - エラーコード: ' + errorCode);
+      Logger.log('  - エラーステータス: ' + errorStatus);
+      Logger.log('  - エラーメッセージ: ' + errorMessage);
+      Logger.log('  - 詳細: ' + errorDetails);
+      Logger.log('  - 画像数: ' + images.length);
+      Logger.log('  - モデル: ' + model);
+      Logger.log('  - プロンプト長: ' + prompt.length + '文字');
+
       // Google Search Grounding関連のエラーの場合は再試行
       if (useGoogleSearch && (errorMessage.includes('google_search') || errorMessage.includes('googleSearch') || errorMessage.includes('grounding'))) {
         Logger.log('[Gemini API] ⚠️ Google Search Groundingがサポートされていません。Google Searchなしで再試行します。');
@@ -619,6 +944,14 @@ function callGeminiApi(prompt, aiConfig, productInfo, images) {
   }
 }
 
+/**
+ * Gemini APIを呼び出してテキストを生成（シンプル版）
+ * gemini-2.5-flashのみ使用
+ */
+function callGeminiApi(prompt, aiConfig, productInfo, images) {
+  return callGeminiApiWithModel(prompt, aiConfig, productInfo, images || [], 'gemini-2.5-flash');
+}
+
 // =============================================================================
 // メイン関数
 // =============================================================================
@@ -643,11 +976,16 @@ function generateProductDescription(productInfo, images) {
       Logger.log(`[情報] ${images.length}枚の画像を使用してAI生成します`);
     }
 
-    // AI生成設定を取得
+    // AI生成設定を取得（Firestoreから - SaaS対応）
     let aiConfig = {};
     try {
-      const config = loadConfigMaster();
-      aiConfig = config && config.AI生成設定 ? config.AI生成設定 : {};
+      const firestoreConfig = loadConfigFromFirestore();
+      if (firestoreConfig && firestoreConfig.aiSettings) {
+        aiConfig = firestoreConfig.aiSettings;
+        Logger.log('[Gemini API] ✅ FirestoreからAI設定を読み込み');
+      } else {
+        Logger.log('[Gemini API] ⚠️ FirestoreにAI設定なし。デフォルト設定を使用');
+      }
     } catch (error) {
       Logger.log('[警告] AI生成設定の読み込みに失敗。デフォルト設定を使用します:', error);
       aiConfig = {};
@@ -672,7 +1010,7 @@ function generateProductDescription(productInfo, images) {
     // プロンプトの構築（画像の枚数を渡す）
     const prompt = buildDescriptionPrompt(productInfo, aiConfig, images.length);
 
-    // API呼び出し（品番がある場合はGoogle Search Groundingが有効化される）
+    // API呼び出し（gemini-2.5-flashのみ使用）
     const generatedText = callGeminiApi(prompt, aiConfig, productInfo, images);
 
     // 文字数チェック（設定された範囲を使用）
@@ -710,7 +1048,7 @@ function testGeminiApiConnection() {
 
     // シンプルなテストプロンプト
     const testPrompt = 'こんにちは！と日本語で返答してください。';
-    const response = callGeminiApi(testPrompt, null, null);
+    const response = callGeminiApi(testPrompt, null, null, []);
 
     return {
       success: true,

@@ -1,0 +1,1521 @@
+<!-- 管理番号ビルダー - レゴブロック式セグメント構築システム -->
+<style>
+  .mnb-container {
+    padding: 0;
+    background: white;
+    border-radius: 8px;
+  }
+
+  .mnb-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #212529;
+  }
+
+  /* セグメントリスト */
+  .mnb-segments {
+    background: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0;
+    min-height: 100px;
+    margin-bottom: 16px;
+  }
+
+  .mnb-segments.drag-over {
+    background: #e3f2fd;
+    border-color: #2196f3;
+  }
+
+  .mnb-segments-empty {
+    text-align: center;
+    color: #9ca3af;
+    padding: 24px 16px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* セグメントブロック */
+  .mnb-segment {
+    background: white;
+    border: 1px solid #e5e7eb;
+    color: #1f2937;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: move;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transition: all 0.2s;
+  }
+
+  .mnb-segment:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 2px 6px rgba(59,130,246,0.15);
+  }
+
+  .mnb-segment.dragging {
+    opacity: 0.5;
+  }
+
+  .mnb-segment-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .mnb-segment-drag-handle {
+    font-size: 16px;
+    color: #9ca3af;
+    cursor: grab;
+  }
+
+  .mnb-segment-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .mnb-segment-icon {
+    font-size: 18px;
+  }
+
+  .mnb-segment-type {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+  }
+
+  .mnb-segment-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 8px;
+  }
+
+  .mnb-segment-controls {
+    display: flex;
+    gap: 8px;
+  }
+
+  .mnb-segment-btn {
+    flex: 1;
+    background: white;
+    border: 1px solid #d1d5db;
+    color: #374151;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.2s;
+    font-weight: 500;
+  }
+
+  .mnb-segment-btn:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+  }
+
+  .mnb-segment-btn.delete {
+    color: #ef4444;
+    border-color: #fecaca;
+  }
+
+  .mnb-segment-btn.delete:hover {
+    background: #fef2f2;
+    border-color: #ef4444;
+  }
+
+  /* セグメント追加ボタン */
+  .mnb-add-segment {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    width: 100%;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .mnb-add-segment:hover {
+    background: #2563eb;
+  }
+
+  /* プレビュー */
+  .mnb-preview {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .mnb-preview-label {
+    font-size: 11px;
+    color: #6b7280;
+    margin-bottom: 8px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .mnb-preview-value {
+    padding: 6px 10px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 11px;
+    color: #1e40af;
+    font-weight: 500;
+  }
+
+  .mnb-preview-parts {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .mnb-preview-part {
+    background: #f3f4f6;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #6b7280;
+    font-weight: 500;
+  }
+
+  /* セグメント編集モーダル */
+  .mnb-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mnb-modal.active {
+    display: flex;
+  }
+
+  .mnb-modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+  }
+
+  .mnb-modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #1f2937;
+  }
+
+  .mnb-form-group {
+    margin-bottom: 12px;
+  }
+
+  .mnb-form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 4px;
+  }
+
+  .mnb-form-input,
+  .mnb-form-select {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+
+  .mnb-form-input:focus,
+  .mnb-form-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  .mnb-modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .mnb-modal-btn {
+    flex: 1;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .mnb-modal-btn-primary {
+    background: #3b82f6;
+    color: white;
+  }
+
+  .mnb-modal-btn-primary:hover {
+    background: #2563eb;
+  }
+
+  .mnb-modal-btn-secondary {
+    background: #e5e7eb;
+    color: #374151;
+  }
+
+  .mnb-modal-btn-secondary:hover {
+    background: #d1d5db;
+  }
+
+  /* セグメントタイプ選択 */
+  .mnb-type-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .mnb-type-card {
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .mnb-type-card:hover {
+    border-color: #3b82f6;
+    background: #f0f9ff;
+  }
+
+  .mnb-type-card.selected {
+    border-color: #3b82f6;
+    background: #dbeafe;
+  }
+
+  .mnb-type-card-icon {
+    font-size: 30px;
+    margin-bottom: 4px;
+  }
+
+  .mnb-type-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 3px;
+  }
+
+  .mnb-type-card-desc {
+    font-size: 11px;
+    color: #6b7280;
+    line-height: 1.3;
+  }
+</style>
+
+<!-- 管理番号ビルダーUI -->
+<div class="mnb-container">
+  <!-- ヒント -->
+  <div style="font-size: 11px; color: #6b7280; padding: 10px 12px; background: #f0f9ff; border-radius: 6px; border-left: 3px solid #3b82f6; margin-bottom: 16px; line-height: 1.6;">
+    <div style="color: #3b82f6; font-weight: 600; margin-bottom: 4px;">
+      <span>💡 概要</span>
+    </div>
+    <div id="mnb-overview-content" style="display: block; padding-left: 12px; margin-bottom: 8px;">
+      商品登録時に自動で管理番号（例: AA-1001）が生成されます。プリセットから基本パターンを選択したり、セグメント（カテゴリ、日付、ランク、サイズ、カラー、連番、カスタム値）を自由に組み合わせて、独自の管理番号フォーマットを作成できます
+    </div>
+  </div>
+
+  <!-- プリセット選択 -->
+  <div style="margin-bottom: 16px; padding: 12px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+    <label style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 12px; display: block;">
+      📋 プリセットから選択
+    </label>
+    <select id="mnbPresetSelect" style="width: 100%; padding: 10px 12px; border: 2px solid #d1d5db; border-radius: 6px; font-size: 13px; background: #f9fafb; cursor: pointer; transition: all 0.2s;" onfocus="this.style.borderColor='#3b82f6'; this.style.background='white';" onblur="this.style.borderColor='#d1d5db'; this.style.background='#f9fafb';">
+      <option value="" style="padding: 8px;">-- カスタム設定 --</option>
+      <option value="simple" style="padding: 8px;">🔢 シンプル連番　(例: 1001, 1002, 1003...)</option>
+      <option value="shelf" style="padding: 8px;">📦 棚番号 + 連番　(例: AA-1001, BB-1001...)</option>
+      <option value="category_date" style="padding: 8px;">📅 カテゴリ + 日付 + 連番　(例: K-251007-001...)</option>
+      <option value="shelf_date" style="padding: 8px;">🗓️ 棚番号 + 日付 + 連番　(例: AA-251007-001...)</option>
+      <option value="category_rank" style="padding: 8px;">⭐ カテゴリ + ランク + 連番　(例: K-A-001...)</option>
+    </select>
+  </div>
+
+  <!-- セグメントリスト -->
+  <div id="mnbSegmentsList" class="mnb-segments">
+    <div class="mnb-segments-empty">
+      セグメントを追加してください<br><small style="font-size: 12px;">ドラッグして並び替えできます</small>
+    </div>
+  </div>
+
+  <!-- セグメント追加ボタン -->
+  <button type="button" class="mnb-add-segment" onclick="openAddSegmentModal()">
+    <span>➕</span>
+    <span>セグメントを追加</span>
+  </button>
+
+  <!-- リセットボタン -->
+  <button type="button" onclick="clearManagementNumberSettings()" style="width: 100%; padding: 10px; background: white; border: 2px solid #ef4444; border-radius: 8px; color: #ef4444; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 16px; transition: all 0.2s;" onmouseover="this.style.background='#fef2f2';" onmouseout="this.style.background='white';">
+    🗑️ すべてクリア
+  </button>
+
+  <!-- 管理番号の配置設定 -->
+  <div style="margin-top: 24px; padding: 16px; background: white; border: 1px solid #e5e7eb; border-radius: 8px;">
+    <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px;">
+      📌 管理番号の配置
+    </div>
+    <div style="font-size: 12px; color: #6b7280; margin-bottom: 12px; line-height: 1.5;">
+      生成された管理番号をどこに表示するか設定できます
+    </div>
+
+    <!-- 配置チェックボックス -->
+    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <input type="checkbox" id="商品名に管理番号配置" style="width: 16px; height: 16px; cursor: pointer;" onchange="toggleManagementNumberFormat(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
+        <label for="商品名に管理番号配置" style="font-size: 13px; cursor: pointer; margin: 0;">商品名に表示</label>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <input type="checkbox" id="説明文に管理番号配置" style="width: 16px; height: 16px; cursor: pointer;" onchange="toggleManagementNumberDescriptionFormat(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
+        <label for="説明文に管理番号配置" style="font-size: 13px; cursor: pointer; margin: 0;">説明文に表示</label>
+      </div>
+    </div>
+
+    <!-- 形式選択（商品名用） -->
+    <div id="管理番号形式選択" style="display: none;">
+      <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">商品名での表示形式</label>
+      <select id="管理番号形式" style="width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white; margin-bottom: 8px;" onchange="updateManagementNumberPreview(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
+        <option value="【】">【AA-1001】</option>
+        <option value="（）">（AA-1001）</option>
+        <option value="『』">『AA-1001』</option>
+        <option value="「」">「AA-1001」</option>
+        <option value="｜｜">｜AA-1001｜</option>
+        <option value="｜">｜AA-1001</option>
+        <option value="-">- AA-1001</option>
+        <option value="none">AA-1001</option>
+      </select>
+
+      <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">配置位置</label>
+      <select id="管理番号配置位置" style="width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white;" onchange="updateManagementNumberPreview(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
+        <option value="end">後ろ（NIKE【AA-1001】）</option>
+        <option value="start">先頭（【AA-1001】NIKE）</option>
+      </select>
+    </div>
+
+    <!-- 形式選択（説明文用） -->
+    <div id="説明文管理番号形式選択" style="display: none; margin-top: 12px;">
+      <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">説明文での表示形式</label>
+      <select id="説明文管理番号形式" style="width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white; margin-bottom: 8px;" onchange="updateManagementNumberPreview(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
+        <option value="【】">管理番号：【AA-1001】</option>
+        <option value="（）">管理番号：（AA-1001）</option>
+        <option value="『』">管理番号：『AA-1001』</option>
+        <option value="「」">管理番号：「AA-1001」</option>
+        <option value="｜｜">管理番号：｜AA-1001｜</option>
+        <option value="｜">管理番号：｜AA-1001</option>
+        <option value="-">管理番号：- AA-1001</option>
+        <option value="none">管理番号：AA-1001</option>
+      </select>
+
+      <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">配置位置</label>
+      <select id="説明文管理番号配置位置" style="width: 100%; font-size: 13px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white;" onchange="updateManagementNumberPreview(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
+        <option value="top">先頭（ブランド名の上）</option>
+        <option value="middle">中（商品情報の下）</option>
+        <option value="bottom">末尾（ハッシュタグの下）</option>
+      </select>
+    </div>
+
+    <!-- プレビューコンテナ（タブ切り替え式） -->
+    <div id="プレビューコンテナ" style="margin-top: 16px; display: none;">
+      <!-- タブボタン -->
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <button id="タブ_商品名" onclick="switchPreviewTab('商品名')" style="flex: 1; padding: 10px; border: 2px solid #40B4E5; background: #40B4E5; color: white; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+          📝 商品名プレビュー
+        </button>
+        <button id="タブ_説明文" onclick="switchPreviewTab('説明文')" style="flex: 1; padding: 10px; border: 2px solid #d1d5db; background: white; color: #6b7280; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+          📄 説明文プレビュー
+        </button>
+      </div>
+
+      <!-- 商品名プレビュー -->
+      <div id="商品名プレビュー_セクション" style="padding: 12px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; display: block;">
+        <div id="商品名プレビュー_管理番号" style="font-size: 14px; color: #111827; line-height: 1.6; min-height: 24px; word-break: break-all;">
+          NIKE エアマックス
+        </div>
+        <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">
+          ※ 実際の商品名でのイメージです
+        </div>
+      </div>
+
+      <!-- 説明文プレビュー -->
+      <div id="説明文プレビュー_セクション" style="padding: 12px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; display: none;">
+        <div id="説明文プレビュー_管理番号" style="font-size: 13px; color: #111827; line-height: 1.8; min-height: 60px; word-break: break-all; white-space: pre-line;">
+【商品情報】
+ブランド：NIKE
+アイテム：エアマックス
+カラー：ブラック
+サイズ：27.0cm
+
+🔢 管理番号：AA-1001
+        </div>
+        <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">
+          ※ 説明文での管理番号表示イメージです
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- セグメント追加/編集モーダル -->
+<div id="mnbModal" class="mnb-modal">
+  <div class="mnb-modal-content">
+    <div class="mnb-modal-title" id="mnbModalTitle">セグメントを追加</div>
+
+    <!-- セグメントタイプ選択 -->
+    <div class="mnb-form-group">
+      <label class="mnb-form-label">セグメントタイプ</label>
+      <div class="mnb-type-grid" id="mnbTypeGrid">
+        <!-- 動的に生成 -->
+      </div>
+    </div>
+
+    <!-- セグメント設定（タイプによって変わる） -->
+    <div id="mnbSegmentConfig">
+      <!-- 動的に生成 -->
+    </div>
+
+    <!-- 区切り文字 -->
+    <div class="mnb-form-group">
+      <label class="mnb-form-label">区切り文字（このセグメントの後）</label>
+      <select class="mnb-form-select" id="mnbSeparator">
+        <option value="-">- (ハイフン)</option>
+        <option value="_">_ (アンダースコア)</option>
+        <option value="">（なし）</option>
+        <option value=".">. (ドット)</option>
+        <option value=" ">　(スペース)</option>
+      </select>
+    </div>
+
+    <!-- アクション -->
+    <div class="mnb-modal-actions">
+      <button type="button" class="mnb-modal-btn mnb-modal-btn-secondary" onclick="closeSegmentModal()">キャンセル</button>
+      <button type="button" class="mnb-modal-btn mnb-modal-btn-primary" onclick="saveSegment()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 管理番号ビルダーシステム
+  const ManagementNumberBuilder = {
+    segments: [],
+    currentEditingIndex: null,
+    selectedType: null,
+
+    // セグメントタイプ定義
+    segmentTypes: {
+      shelf: {
+        icon: '🏷️',
+        name: '棚番号',
+        desc: 'AA, BB などの棚番号',
+        fields: [
+          {
+            id: 'format',
+            label: '棚番号形式',
+            type: 'select',
+            options: [
+              { value: 'AA', label: 'アルファベット2文字 (AA)' },
+              { value: 'A', label: 'アルファベット1文字 (A)' },
+              { value: '01', label: '数字2桁 (01)' },
+              { value: '001', label: '数字3桁 (001)' },
+              { value: 'custom', label: '✏️ カスタム入力' }
+            ]
+          },
+          { id: 'code', label: '棚番号', type: 'text', placeholder: 'AA', conditional: { field: 'format', value: 'custom' } }
+        ],
+        preview: (config) => {
+          if (config.format === 'custom') {
+            return config.code || 'AA';
+          }
+          return config.format || 'AA';
+        }
+      },
+      sequence: {
+        icon: '🔢',
+        name: '連番',
+        desc: '001, 0001 などの連番',
+        fields: [
+          {
+            id: 'digits',
+            label: '桁数',
+            type: 'select',
+            options: [
+              { value: '2', label: '2桁 (01)' },
+              { value: '3', label: '3桁 (001)' },
+              { value: '4', label: '4桁 (0001)' },
+              { value: '5', label: '5桁 (00001)' },
+              { value: '6', label: '6桁 (000001)' }
+            ]
+          },
+          { id: 'start', label: '開始番号', type: 'number', placeholder: '1' }
+        ],
+        preview: (config) => {
+          const num = config.start || 1;
+          const digits = parseInt(config.digits) || 3;
+          return String(num).padStart(digits, '0');
+        }
+      },
+      category: {
+        icon: '📁',
+        name: 'カテゴリコード',
+        desc: '商品カテゴリ (K, O など)',
+        fields: [
+          { id: 'code', label: 'コード', type: 'text', placeholder: 'K' }
+        ],
+        preview: (config) => config.code || 'K'
+      },
+      date: {
+        icon: '📅',
+        name: '登録日',
+        desc: '日付形式を選択',
+        fields: [
+          {
+            id: 'format',
+            label: '形式',
+            type: 'select',
+            options: [
+              { value: 'YYMMDD', label: 'YYMMDD (241007)' },
+              { value: 'YYYYMMDD', label: 'YYYYMMDD (20241007)' },
+              { value: 'YYMD', label: 'YYMD (24107)' },
+              { value: 'YYMM', label: 'YYMM (2410)' }
+            ]
+          }
+        ],
+        preview: (config) => {
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const d = String(now.getDate()).padStart(2, '0');
+
+          switch(config.format) {
+            case 'YYYYMMDD': return `${y}${m}${d}`;
+            case 'YYMD': return `${String(y).slice(2)}${parseInt(m)}${parseInt(d)}`;
+            case 'YYMM': return `${String(y).slice(2)}${m}`;
+            default: return `${String(y).slice(2)}${m}${d}`;
+          }
+        }
+      },
+      rank: {
+        icon: '⭐',
+        name: '品質ランク',
+        desc: 'A, B, C などのランク',
+        fields: [
+          { id: 'value', label: 'ランク値', type: 'text', placeholder: 'A' }
+        ],
+        preview: (config) => config.value || 'A'
+      },
+      size: {
+        icon: '📏',
+        name: 'サイズコード',
+        desc: 'S, M, L などのサイズ',
+        fields: [
+          { id: 'code', label: 'サイズコード', type: 'text', placeholder: 'M' }
+        ],
+        preview: (config) => config.code || 'M'
+      },
+      color: {
+        icon: '🎨',
+        name: '色コード',
+        desc: 'DB, R などの色コード',
+        fields: [
+          { id: 'code', label: '色コード', type: 'text', placeholder: 'DB' }
+        ],
+        preview: (config) => config.code || 'DB'
+      },
+      custom: {
+        icon: '✏️',
+        name: 'カスタム固定値',
+        desc: '任意の固定文字列',
+        fields: [
+          { id: 'value', label: '固定値', type: 'text', placeholder: 'XXX' }
+        ],
+        preview: (config) => config.value || 'XXX'
+      }
+    },
+
+    // プリセット定義
+    presets: {
+      simple: [
+        { type: 'sequence', config: { digits: '4', start: '1001' }, separator: '' }
+      ],
+      shelf: [
+        { type: 'shelf', config: { format: 'AA' }, separator: '-' },
+        { type: 'sequence', config: { digits: '4', start: '1001' }, separator: '' }
+      ],
+      category_date: [
+        { type: 'category', config: { code: 'K' }, separator: '-' },
+        { type: 'date', config: { format: 'YYMMDD' }, separator: '-' },
+        { type: 'sequence', config: { digits: '3', start: '1' }, separator: '' }
+      ],
+      shelf_date: [
+        { type: 'shelf', config: { format: 'AA' }, separator: '-' },
+        { type: 'date', config: { format: 'YYMMDD' }, separator: '-' },
+        { type: 'sequence', config: { digits: '3', start: '1' }, separator: '' }
+      ],
+      category_rank: [
+        { type: 'category', config: { code: 'K' }, separator: '-' },
+        { type: 'rank', config: { value: 'A' }, separator: '-' },
+        { type: 'sequence', config: { digits: '3', start: '1' }, separator: '' }
+      ]
+    },
+
+    // 初期化
+    init() {
+      this.renderTypeGrid();
+      this.updatePreview();
+      this.setupDragAndDrop();
+      this.loadSettings();
+      this.setupPresetSelector();
+    },
+
+    // プリセットセレクター設定
+    setupPresetSelector() {
+      const selector = document.getElementById('mnbPresetSelect');
+      if (!selector) return;
+
+      selector.addEventListener('change', (e) => {
+        const presetKey = e.target.value;
+        if (!presetKey) return;
+
+        const preset = this.presets[presetKey];
+        if (!preset) return;
+
+        // 既存のセグメントをクリアして、プリセットを適用
+        if (confirm('現在の設定を削除してプリセットを適用しますか？')) {
+          this.segments = JSON.parse(JSON.stringify(preset)); // ディープコピー
+          this.renderSegments();
+          this.updatePreview();
+        } else {
+          // キャンセルされた場合は選択を戻す
+          selector.value = '';
+        }
+      });
+    },
+
+    // 設定をサーバーから読み込み
+    loadSettings() {
+      if (google && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler((config) => {
+            if (config && config.segments && config.segments.length > 0) {
+              this.segments = config.segments;
+              this.renderSegments();
+              this.updatePreview();
+              console.log('管理番号設定を読み込みました:', config.segments.length, 'セグメント');
+            }
+          })
+          .withFailureHandler((error) => {
+            console.error('管理番号設定の読み込みエラー:', error);
+          })
+          .getManagementNumberConfig();
+      }
+    },
+
+    // セグメントタイプグリッドを描画
+    renderTypeGrid() {
+      const grid = document.getElementById('mnbTypeGrid');
+      grid.innerHTML = '';
+
+      Object.keys(this.segmentTypes).forEach(typeKey => {
+        const type = this.segmentTypes[typeKey];
+        const card = document.createElement('div');
+        card.className = 'mnb-type-card';
+        card.onclick = () => this.selectType(typeKey);
+        card.innerHTML = `
+          <div class="mnb-type-card-icon">${type.icon}</div>
+          <div class="mnb-type-card-name">${type.name}</div>
+          <div class="mnb-type-card-desc">${type.desc}</div>
+        `;
+        grid.appendChild(card);
+      });
+    },
+
+    // セグメントタイプ選択
+    selectType(typeKey) {
+      this.selectedType = typeKey;
+
+      // カードの選択状態を更新
+      document.querySelectorAll('.mnb-type-card').forEach((card, i) => {
+        card.classList.remove('selected');
+      });
+      const typeKeys = Object.keys(this.segmentTypes);
+      const index = typeKeys.indexOf(typeKey);
+      document.querySelectorAll('.mnb-type-card')[index].classList.add('selected');
+
+      // 設定フィールドを表示
+      this.renderConfigFields(typeKey);
+    },
+
+    // 設定フィールドを描画
+    renderConfigFields(typeKey) {
+      const type = this.segmentTypes[typeKey];
+      const container = document.getElementById('mnbSegmentConfig');
+      container.innerHTML = '';
+
+      type.fields.forEach(field => {
+        const group = document.createElement('div');
+        group.className = 'mnb-form-group';
+
+        // 条件付きフィールドの場合はデフォルトで非表示
+        if (field.conditional) {
+          group.style.display = 'none';
+          group.setAttribute('data-conditional-field', field.conditional.field);
+          group.setAttribute('data-conditional-value', field.conditional.value);
+        }
+
+        const label = document.createElement('label');
+        label.className = 'mnb-form-label';
+        label.textContent = field.label;
+        group.appendChild(label);
+
+        if (field.type === 'select') {
+          const select = document.createElement('select');
+          select.className = 'mnb-form-select';
+          select.id = `mnbField_${field.id}`;
+
+          field.options.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.label;
+            select.appendChild(option);
+          });
+
+          // セレクト変更時に条件付きフィールドの表示/非表示を切り替え
+          select.addEventListener('change', () => {
+            this.updateConditionalFields(field.id, select.value);
+          });
+
+          group.appendChild(select);
+        } else {
+          const input = document.createElement('input');
+          input.className = 'mnb-form-input';
+          input.type = field.type;
+          input.id = `mnbField_${field.id}`;
+          input.placeholder = field.placeholder || '';
+          group.appendChild(input);
+        }
+
+        container.appendChild(group);
+      });
+    },
+
+    // 条件付きフィールドの表示/非表示を更新
+    updateConditionalFields(fieldId, value) {
+      const container = document.getElementById('mnbSegmentConfig');
+      const conditionalFields = container.querySelectorAll(`[data-conditional-field="${fieldId}"]`);
+
+      conditionalFields.forEach(field => {
+        const conditionalValue = field.getAttribute('data-conditional-value');
+        if (value === conditionalValue) {
+          field.style.display = 'block';
+        } else {
+          field.style.display = 'none';
+        }
+      });
+    },
+
+    // セグメントを追加
+    addSegment(segment) {
+      this.segments.push(segment);
+      this.renderSegments();
+      this.updatePreview();
+    },
+
+    // セグメントを更新
+    updateSegment(index, segment) {
+      this.segments[index] = segment;
+      this.renderSegments();
+      this.updatePreview();
+    },
+
+    // セグメントを削除
+    removeSegment(index) {
+      this.segments.splice(index, 1);
+      this.renderSegments();
+      this.updatePreview();
+    },
+
+    // セグメントを移動
+    moveSegment(fromIndex, toIndex) {
+      const segment = this.segments.splice(fromIndex, 1)[0];
+      this.segments.splice(toIndex, 0, segment);
+      this.renderSegments();
+      this.updatePreview();
+    },
+
+    // セグメントリストを描画
+    renderSegments() {
+      const container = document.getElementById('mnbSegmentsList');
+
+      if (this.segments.length === 0) {
+        container.innerHTML = `
+          <div class="mnb-segments-empty">
+            セグメントを追加してください<br>
+            <small>ドラッグして並び替えできます</small>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = '';
+
+      this.segments.forEach((segment, index) => {
+        const type = this.segmentTypes[segment.type];
+        const block = document.createElement('div');
+        block.className = 'mnb-segment';
+        block.draggable = true;
+        block.setAttribute('data-index', index);
+
+        const preview = type.preview(segment.config);
+
+        block.innerHTML = `
+          <div class="mnb-segment-header">
+            <div class="mnb-segment-drag-handle">⋮⋮</div>
+            <div class="mnb-segment-icon">${type.icon}</div>
+            <div class="mnb-segment-type">${type.name}</div>
+          </div>
+          <div class="mnb-segment-value">${preview}</div>
+          <div class="mnb-segment-controls">
+            <button class="mnb-segment-btn" onclick="event.stopPropagation(); ManagementNumberBuilder.editSegment(${index})">編集</button>
+            <button class="mnb-segment-btn delete" onclick="event.stopPropagation(); ManagementNumberBuilder.removeSegment(${index})">削除</button>
+          </div>
+        `;
+
+        container.appendChild(block);
+      });
+    },
+
+    // 管理番号を生成（プレビュー用）
+    generatePreview() {
+      if (this.segments.length === 0) {
+        return '';
+      }
+
+      let preview = '';
+      this.segments.forEach((segment, index) => {
+        const type = this.segmentTypes[segment.type];
+        const value = type.preview(segment.config);
+
+        preview += value;
+        if (index < this.segments.length - 1 && segment.separator) {
+          preview += segment.separator;
+        }
+      });
+
+      return preview;
+    },
+
+    // プレビューを更新
+    updatePreview() {
+      // 商品名プレビューを更新
+      if (typeof updateManagementNumberPreview === 'function') {
+        updateManagementNumberPreview();
+      }
+    },
+
+    // セグメントを編集
+    editSegment(index) {
+      this.currentEditingIndex = index;
+      const segment = this.segments[index];
+
+      document.getElementById('mnbModalTitle').textContent = 'セグメントを編集';
+      this.selectType(segment.type);
+
+      // 設定値を復元
+      const type = this.segmentTypes[segment.type];
+      type.fields.forEach(field => {
+        const elem = document.getElementById(`mnbField_${field.id}`);
+        if (elem) {
+          elem.value = segment.config[field.id] || '';
+
+          // セレクトフィールドの場合、条件付きフィールドも表示更新
+          if (field.type === 'select') {
+            this.updateConditionalFields(field.id, elem.value);
+          }
+        }
+      });
+
+      document.getElementById('mnbSeparator').value = segment.separator || '-';
+      document.getElementById('mnbModal').classList.add('active');
+    },
+
+    // ドラッグ&ドロップ設定（Sortable.js使用）
+    // タッチデバイス（スマホ）でも動作するようになりました
+    setupDragAndDrop() {
+      const container = document.getElementById('mnbSegmentsList');
+
+      // Sortable.jsを使用してドラッグ&ドロップを初期化
+      // タッチイベントに自動対応
+      Sortable.create(container, {
+        animation: 150,                    // アニメーション速度（ミリ秒）
+        handle: '.mnb-drag-handle',        // ⋮⋮ アイコンのみでドラッグ
+        ghostClass: 'sortable-ghost',      // ドラッグ中の要素に適用されるクラス
+        chosenClass: 'sortable-chosen',    // 選択中の要素に適用されるクラス
+        dragClass: 'sortable-drag',        // ドラッグ中の要素に適用されるクラス
+        onEnd: (evt) => {
+          // ドロップ後に並び順を更新
+          const oldIndex = evt.oldIndex;
+          const newIndex = evt.newIndex;
+
+          if (oldIndex !== newIndex) {
+            this.moveSegment(oldIndex, newIndex);
+          }
+        }
+      });
+    },
+
+    // データを取得
+    getData() {
+      return {
+        segments: this.segments
+      };
+    },
+
+    // データをセット
+    setData(data) {
+      this.segments = data.segments || [];
+      this.renderSegments();
+      this.updatePreview();
+    }
+  };
+
+  // グローバル関数
+  function openAddSegmentModal() {
+    ManagementNumberBuilder.currentEditingIndex = null;
+    ManagementNumberBuilder.selectedType = null;
+    document.getElementById('mnbModalTitle').textContent = 'セグメントを追加';
+    document.getElementById('mnbSegmentConfig').innerHTML = '';
+    document.getElementById('mnbSeparator').value = '-';
+
+    // カードの選択状態をクリア
+    document.querySelectorAll('.mnb-type-card').forEach(card => {
+      card.classList.remove('selected');
+    });
+
+    document.getElementById('mnbModal').classList.add('active');
+  }
+
+  function closeSegmentModal() {
+    document.getElementById('mnbModal').classList.remove('active');
+  }
+
+  function saveSegment() {
+    if (!ManagementNumberBuilder.selectedType) {
+      alert('セグメントタイプを選択してください');
+      return;
+    }
+
+    const type = ManagementNumberBuilder.segmentTypes[ManagementNumberBuilder.selectedType];
+    const config = {};
+
+    // 設定値を収集
+    type.fields.forEach(field => {
+      const elem = document.getElementById(`mnbField_${field.id}`);
+      if (elem) {
+        config[field.id] = elem.value;
+      }
+    });
+
+    const segment = {
+      type: ManagementNumberBuilder.selectedType,
+      config: config,
+      separator: document.getElementById('mnbSeparator').value
+    };
+
+    if (ManagementNumberBuilder.currentEditingIndex !== null) {
+      ManagementNumberBuilder.updateSegment(ManagementNumberBuilder.currentEditingIndex, segment);
+    } else {
+      ManagementNumberBuilder.addSegment(segment);
+    }
+
+    closeSegmentModal();
+  }
+
+  /**
+   * 管理番号形式選択の表示/非表示を切り替え
+   */
+  function toggleManagementNumberFormat() {
+    const checkbox = document.getElementById('商品名に管理番号配置');
+    const formatSection = document.getElementById('管理番号形式選択');
+
+    if (checkbox && formatSection) {
+      formatSection.style.display = checkbox.checked ? 'block' : 'none';
+      // プレビューを更新
+      updateManagementNumberPreview();
+    }
+  }
+
+  /**
+   * 説明文管理番号形式選択の表示/非表示を切り替え
+   */
+  function toggleManagementNumberDescriptionFormat() {
+    const checkbox = document.getElementById('説明文に管理番号配置');
+    const formatSection = document.getElementById('説明文管理番号形式選択');
+
+    if (checkbox && formatSection) {
+      formatSection.style.display = checkbox.checked ? 'block' : 'none';
+      // プレビューを更新
+      updateManagementNumberPreview();
+    }
+  }
+
+  /**
+   * プレビュータブを切り替え
+   */
+  function switchPreviewTab(tabName) {
+    const titleTab = document.getElementById('タブ_商品名');
+    const descTab = document.getElementById('タブ_説明文');
+    const titleSection = document.getElementById('商品名プレビュー_セクション');
+    const descSection = document.getElementById('説明文プレビュー_セクション');
+
+    if (tabName === '商品名') {
+      // 商品名タブをアクティブに
+      titleTab.style.background = '#40B4E5';
+      titleTab.style.color = 'white';
+      titleTab.style.borderColor = '#40B4E5';
+
+      descTab.style.background = 'white';
+      descTab.style.color = '#6b7280';
+      descTab.style.borderColor = '#d1d5db';
+
+      titleSection.style.display = 'block';
+      descSection.style.display = 'none';
+    } else if (tabName === '説明文') {
+      // 説明文タブをアクティブに
+      descTab.style.background = '#40B4E5';
+      descTab.style.color = 'white';
+      descTab.style.borderColor = '#40B4E5';
+
+      titleTab.style.background = 'white';
+      titleTab.style.color = '#6b7280';
+      titleTab.style.borderColor = '#d1d5db';
+
+      titleSection.style.display = 'none';
+      descSection.style.display = 'block';
+    }
+  }
+
+  /**
+   * 管理番号プレビューを更新（商品名での表示イメージ）
+   */
+  function updateManagementNumberPreview() {
+    console.log('📝 updateManagementNumberPreview 呼び出し');
+
+    const titleCheckbox = document.getElementById('商品名に管理番号配置');
+    const descCheckbox = document.getElementById('説明文に管理番号配置');
+    const formatSelect = document.getElementById('管理番号形式');
+    const positionSelect = document.getElementById('管理番号配置位置');
+    const titlePreviewElement = document.getElementById('商品名プレビュー_管理番号');
+    const descPreviewElement = document.getElementById('説明文プレビュー_管理番号');
+    const previewContainer = document.getElementById('プレビューコンテナ');
+    const titleTab = document.getElementById('タブ_商品名');
+    const descTab = document.getElementById('タブ_説明文');
+
+    console.log('要素確認:', {
+      titleCheckbox: titleCheckbox ? 'OK' : 'NG',
+      descCheckbox: descCheckbox ? 'OK' : 'NG',
+      formatSelect: formatSelect ? 'OK' : 'NG',
+      positionSelect: positionSelect ? 'OK' : 'NG',
+      titlePreviewElement: titlePreviewElement ? 'OK' : 'NG',
+      descPreviewElement: descPreviewElement ? 'OK' : 'NG'
+    });
+
+    if (!titlePreviewElement || !descPreviewElement) {
+      console.warn('⚠️ プレビュー要素が見つかりません');
+      return;
+    }
+
+    // サンプルテキスト
+    const sampleText = 'NIKE エアマックス';
+
+    console.log('チェックボックス状態:', {
+      title: titleCheckbox ? titleCheckbox.checked : 'null',
+      desc: descCheckbox ? descCheckbox.checked : 'null'
+    });
+
+    const titleChecked = titleCheckbox && titleCheckbox.checked;
+    const descChecked = descCheckbox && descCheckbox.checked;
+
+    // プレビューコンテナの表示/非表示を制御
+    if (previewContainer) {
+      if (!titleChecked && !descChecked) {
+        // 両方OFFの場合は全体を非表示
+        previewContainer.style.display = 'none';
+        console.log('✅ 両方OFF - プレビュー非表示');
+        if (typeof saveManagementNumberPlacementSettings === 'function') {
+          saveManagementNumberPlacementSettings();
+        }
+        return;
+      } else {
+        // どちらかONの場合は表示
+        previewContainer.style.display = 'block';
+      }
+    }
+
+    // タブの表示/非表示を制御
+    if (titleTab && descTab) {
+      if (titleChecked && descChecked) {
+        // 両方ONの場合はタブを表示
+        titleTab.style.display = 'block';
+        descTab.style.display = 'block';
+        // デフォルトで商品名タブをアクティブに
+        switchPreviewTab('商品名');
+      } else if (titleChecked) {
+        // 商品名のみONの場合はタブを非表示、商品名プレビューのみ表示
+        titleTab.style.display = 'none';
+        descTab.style.display = 'none';
+        document.getElementById('商品名プレビュー_セクション').style.display = 'block';
+        document.getElementById('説明文プレビュー_セクション').style.display = 'none';
+      } else if (descChecked) {
+        // 説明文のみONの場合はタブを非表示、説明文プレビューのみ表示
+        titleTab.style.display = 'none';
+        descTab.style.display = 'none';
+        document.getElementById('商品名プレビュー_セクション').style.display = 'none';
+        document.getElementById('説明文プレビュー_セクション').style.display = 'block';
+      }
+    }
+
+    // セグメント設定から管理番号を生成
+    const generatedNumber = ManagementNumberBuilder.generatePreview();
+    const sampleNumber = generatedNumber || 'AA-1001';
+
+    console.log('生成された管理番号:', sampleNumber);
+
+    // 形式と配置位置を取得
+    const format = formatSelect ? formatSelect.value : '【】';
+    const position = positionSelect ? positionSelect.value : 'end';
+
+    console.log('選択値:', { format, position });
+
+    // 管理番号をフォーマット
+    let formattedNumber = '';
+    switch (format) {
+      case '【】':
+        formattedNumber = `【${sampleNumber}】`;
+        break;
+      case '（）':
+        formattedNumber = `（${sampleNumber}）`;
+        break;
+      case '『』':
+        formattedNumber = `『${sampleNumber}』`;
+        break;
+      case '「」':
+        formattedNumber = `「${sampleNumber}」`;
+        break;
+      case '｜｜':
+        formattedNumber = `｜${sampleNumber}｜`;
+        break;
+      case '｜':
+        formattedNumber = `｜${sampleNumber}`;
+        break;
+      case '-':
+        formattedNumber = `- ${sampleNumber}`;
+        break;
+      case 'none':
+        formattedNumber = sampleNumber;
+        break;
+      default:
+        formattedNumber = `【${sampleNumber}】`;
+    }
+
+    // 両端閉じている場合はスペースなし、それ以外はスペースあり
+    const pairs = [
+      { start: '【', end: '】' },
+      { start: '『', end: '』' },
+      { start: '「', end: '」' },
+      { start: '（', end: '）' },
+      { start: '｜', end: '｜' }
+    ];
+    const needsSpace = !pairs.some(pair => 
+      formattedNumber.startsWith(pair.start) && formattedNumber.endsWith(pair.end)
+    );
+
+    // 配置位置に応じて結合
+    let result;
+    if (position === 'start') {
+      result = needsSpace ? `${formattedNumber} ${sampleText}` : `${formattedNumber}${sampleText}`;
+    } else {
+      result = needsSpace ? `${sampleText} ${formattedNumber}` : `${sampleText}${formattedNumber}`;
+    }
+
+    console.log('✅ プレビュー更新:', result);
+
+    // 商品名プレビューを更新
+    if (titleCheckbox && titleCheckbox.checked) {
+      titlePreviewElement.textContent = result;
+    }
+
+    // 説明文プレビューを更新
+    if (descCheckbox && descCheckbox.checked) {
+      const descFormatSelect = document.getElementById('説明文管理番号形式');
+      const descPositionSelect = document.getElementById('説明文管理番号配置位置');
+      
+      const descFormat = descFormatSelect ? descFormatSelect.value : '【】';
+      const descPosition = descPositionSelect ? descPositionSelect.value : 'bottom';
+
+      // 説明文用の管理番号をフォーマット（絵文字なし）
+      let descFormattedNumber = '';
+      switch (descFormat) {
+        case '【】':
+          descFormattedNumber = `管理番号：【${sampleNumber}】`;
+          break;
+        case '（）':
+          descFormattedNumber = `管理番号：（${sampleNumber}）`;
+          break;
+        case '『』':
+          descFormattedNumber = `管理番号：『${sampleNumber}』`;
+          break;
+        case '「」':
+          descFormattedNumber = `管理番号：「${sampleNumber}」`;
+          break;
+        case '｜｜':
+          descFormattedNumber = `管理番号：｜${sampleNumber}｜`;
+          break;
+        case '｜':
+          descFormattedNumber = `管理番号：｜${sampleNumber}`;
+          break;
+        case '-':
+          descFormattedNumber = `管理番号：- ${sampleNumber}`;
+          break;
+        case 'none':
+          descFormattedNumber = `管理番号：${sampleNumber}`;
+          break;
+        default:
+          descFormattedNumber = `管理番号：【${sampleNumber}】`;
+      }
+
+      // 配置位置に応じてプレビューを生成（実際の商品説明に近い形式）
+      let descPreview = '';
+
+      // ブランド名・基本情報（先頭部分）
+      const brandInfo = `ブランド名：UNIQLO（ユニクロ）
+
+カラー（詳細）：ブラック
+
+サイズ（表記）：M`;
+
+      // 商品情報（中央部分）
+      const detailInfo = `【サイズ(実寸)】
+肩幅：47cm
+身幅：55cm
+袖丈：62cm
+着丈：68cm
+
+【素材】
+表地：ナイロン 100%
+中綿：ダウン 90%、フェザー 10%
+
+商品状態（詳細）：
+目立った傷や汚れなし。`;
+
+      // 商品説明・その他（下部）
+      const descriptionPart = `【UNIQLO ウルトラライトダウンジャケット】
+
+UNIQLO（ユニクロ）の定番人気アイテム、ウルトラライトダウンジャケットです。軽量で持ち運びもしやすく、秋冬のアウターとして大活躍します。
+
+【おすすめシーン】
+普段使いはもちろん、旅行や通勤・通学にも便利。コンパクトに収納できるので、バッグに入れておくと安心です。`;
+
+      // ハッシュタグ（最下部）- ユーザー設定から生成
+      let hashtags = '';
+      try {
+        const hashtagConfig = localStorage.getItem('rebornConfig_hashtag');
+        if (hashtagConfig) {
+          const config = JSON.parse(hashtagConfig);
+          const commonPrefix = config.commonPrefix || '#REBORN_';
+
+          // 設定されたハッシュタグを生成（プレビュー用に簡略化）
+          const previewTags = [];
+
+          if (config.hashtags && Array.isArray(config.hashtags)) {
+            config.hashtags.forEach(tag => {
+              if (tag.title === '全商品') {
+                previewTags.push(`${commonPrefix}${tag.suffix || '全商品'}`);
+              } else if (tag.title === 'ブランド') {
+                previewTags.push(`${commonPrefix}UNIQLO${tag.suffix || 'アイテム一覧'}`);
+              } else if (tag.title === 'カテゴリ') {
+                previewTags.push(`${commonPrefix}メンズ・レディース${tag.suffix || '一覧'}`);
+              }
+            });
+          }
+
+          // タグが生成されていればそれを使用
+          if (previewTags.length > 0) {
+            hashtags = previewTags.join('\n');
+          } else {
+            // 旧形式または設定なしの場合
+            hashtags = `${commonPrefix}全商品\n${commonPrefix}UNIQLOアイテム一覧\n${commonPrefix}メンズ・レディース一覧`;
+          }
+        } else {
+          // 設定がない場合のデフォルト
+          hashtags = `#REBORN_全商品\n#REBORN_UNIQLOアイテム一覧\n#REBORN_メンズ・レディース一覧`;
+        }
+      } catch (e) {
+        console.error('ハッシュタグ設定の読み込みエラー:', e);
+        // エラー時のデフォルト
+        hashtags = `#REBORN_全商品\n#REBORN_UNIQLOアイテム一覧\n#REBORN_メンズ・レディース一覧`;
+      }
+
+      if (descPosition === 'top') {
+        // 先頭（ブランド名の上）
+        descPreview = `${descFormattedNumber}
+
+${brandInfo}
+
+${detailInfo}
+
+${descriptionPart}
+
+${hashtags}`;
+      } else if (descPosition === 'middle') {
+        // 中（商品情報の下）
+        descPreview = `${brandInfo}
+
+${detailInfo}
+
+${descFormattedNumber}
+
+${descriptionPart}
+
+${hashtags}`;
+      } else {
+        // 末尾（ハッシュタグの下、一番目立たない位置）
+        descPreview = `${brandInfo}
+
+${detailInfo}
+
+${descriptionPart}
+
+${hashtags}
+
+${descFormattedNumber}`;
+      }
+
+      descPreviewElement.textContent = descPreview;
+    }
+
+    // 設定を保存
+    if (typeof saveManagementNumberPlacementSettings === 'function') {
+      saveManagementNumberPlacementSettings();
+    }
+  }
+
+
+
+  /**
+   * ヒントの開閉を切り替え
+   */
+  function toggleHint(id) {
+    const content = document.getElementById(id + '-content');
+    const icon = document.getElementById(id + '-icon');
+
+    if (content.style.display === 'none') {
+      content.style.display = 'block';
+      icon.textContent = '▼';
+    } else {
+      content.style.display = 'none';
+      icon.textContent = '▶';
+    }
+  }
+
+  /**
+   * ヒントセクションの開閉を切り替え（相互排他的）
+   * @param {string} prefix - プレフィックス（例: 'mnb'）
+   * @param {string} section - セクション名（'overview' または 'hint'）
+   */
+  function toggleHintSection(prefix, section) {
+    const sections = ['overview', 'hint'];
+    const currentContent = document.getElementById(prefix + '-' + section + '-content');
+    const currentIcon = document.getElementById(prefix + '-' + section + '-icon');
+
+    if (!currentContent || !currentIcon) return;
+
+    const isCurrentlyOpen = currentContent.style.display !== 'none';
+
+    // すべてのセクションを閉じる
+    sections.forEach(s => {
+      const content = document.getElementById(prefix + '-' + s + '-content');
+      const icon = document.getElementById(prefix + '-' + s + '-icon');
+      if (content && icon) {
+        content.style.display = 'none';
+        icon.textContent = '▶';
+      }
+    });
+
+    // クリックしたセクションが閉じていた場合のみ開く
+    if (!isCurrentlyOpen) {
+      currentContent.style.display = 'block';
+      currentIcon.textContent = '▼';
+    }
+  }
+
+  /**
+   * 管理番号設定をすべてクリア
+   */
+  function clearManagementNumberSettings() {
+    if (!confirm('管理番号設定をすべてクリアしますか？\n\n・すべてのセグメントが削除されます\n・プリセット選択もリセットされます')) {
+      return;
+    }
+
+    // セグメント配列をクリア
+    MANAGEMENT_NUMBER_CONFIG.segments = [];
+
+    // プリセット選択をリセット
+    const presetSelect = document.getElementById('mnbPresetSelect');
+    if (presetSelect) {
+      presetSelect.value = '';
+    }
+
+    // UIを再描画
+    renderSegments();
+    updatePreview();
+
+    alert('管理番号設定をクリアしました。\n変更を保存するには「設定を保存」ボタンをクリックしてください。');
+  }
+
+  // 初期化
+  if (typeof window !== 'undefined') {
+    window.ManagementNumberBuilder = ManagementNumberBuilder;
+
+    // DOMContentLoadedで初期化
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        ManagementNumberBuilder.init();
+      });
+    } else {
+      ManagementNumberBuilder.init();
+    }
+  }
+</script>

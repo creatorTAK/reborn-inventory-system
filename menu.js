@@ -345,6 +345,33 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // AI生成アクション（PWA版対応）
+    if (action === 'generateAI') {
+      try {
+        const productInfo = requestBody.productInfo || {};
+        const images = requestBody.images || [];
+
+        Logger.log('[AI生成] 商品情報: ' + JSON.stringify(productInfo));
+        Logger.log('[AI生成] 画像数: ' + images.length);
+
+        // gemini_api.jsのgenerateProductDescription関数を呼び出し
+        const generatedText = generateProductDescription(productInfo, images);
+
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true,
+          generatedText: generatedText
+        }))
+          .setMimeType(ContentService.MimeType.JSON);
+      } catch (error) {
+        Logger.log('[AI生成] ERROR: ' + error);
+        return ContentService.createTextOutput(JSON.stringify({
+          success: false,
+          error: error.toString()
+        }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: '不明なアクション: ' + action

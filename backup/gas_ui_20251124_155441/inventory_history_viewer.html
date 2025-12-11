@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-brand-colors.css?v=0bd1a9b">
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      padding: 0;
+      background-color: #f8f9fa;
+      margin: 0;
+    }
+
+    /* PC版（モーダル）のみ透明背景 */
+    @media (min-width: 768px) {
+      body {
+        background-color: transparent;
+      }
+    }
+
+    .container-fluid {
+      padding: 12px; /* スマホ版: 少し余白 */
+    }
+
+    /* PC版: 余白最小 */
+    @media (min-width: 768px) {
+      .container-fluid {
+        padding: 8px;
+      }
+    }
+
+    .filter-section {
+      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      border: 1px solid #e9ecef;
+    }
+    .filter-section .form-label {
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 6px;
+    }
+    .filter-section .form-select,
+    .filter-section .form-control {
+      border: 1px solid #ced4da;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      transition: all 0.2s ease;
+    }
+    .filter-section .form-select:focus,
+    .filter-section .form-control:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .filter-section .btn-primary {
+      padding: 10px 24px;
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+      transition: all 0.2s ease;
+    }
+    .filter-section .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
+    .history-card {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+      border-left: 4px solid #e9ecef;
+      transition: box-shadow 0.2s ease;
+    }
+    .history-card:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .history-card.card-inbound {
+      border-left-color: #10b981;
+    }
+    .history-card.card-outbound {
+      border-left-color: #ef4444;
+    }
+    .history-card.card-adjustment {
+      border-left-color: #f59e0b;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e9ecef;
+    }
+    .card-date {
+      font-size: 0.85rem;
+      color: #6c757d;
+    }
+    .card-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .card-material {
+      font-weight: 600;
+      font-size: 1rem;
+      color: #212529;
+    }
+    .card-quantity {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #212529;
+    }
+    .card-details {
+      font-size: 0.85rem;
+      color: #6c757d;
+    }
+    .card-detail-row {
+      margin-top: 4px;
+    }
+    .card-detail-row.price-info {
+      color: #059669;
+      font-weight: 600;
+    }
+    .table thead th {
+      background-color: #f59e0b;
+      color: white;
+      font-weight: 600;
+      border: none;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .table tbody tr:hover {
+      background-color: #f8f9fa;
+    }
+    .badge-type {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+    }
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+    }
+    .table-container {
+      max-height: 500px;
+      overflow-y: auto;
+      overflow-x: auto;
+    }
+    .table {
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    .table th {
+      font-size: 0.75rem;
+      padding: 8px 4px;
+    }
+    .table td {
+      padding: 6px 4px;
+    }
+    .export-section {
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      margin-top: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+
+  <!-- 統一ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" id="back-button">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <i class="bi bi-clock-history"></i>
+        入出庫履歴
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+
+    <!-- フィルタリングセクション -->
+    <div class="filter-section">
+      <!-- Row 1: カテゴリ | 資材名 -->
+      <div class="row g-2 mb-2">
+        <div class="col-6 col-md-2">
+          <label for="filterCategory" class="form-label small mb-1">カテゴリ</label>
+          <select class="form-select form-select-sm" id="filterCategory">
+            <option value="">全て</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="filterMaterial" class="form-label small mb-1">資材名</label>
+          <select class="form-select form-select-sm" id="filterMaterial">
+            <option value="">全て</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 2: 種別 -->
+      <div class="row g-2 mb-2">
+        <div class="col-6 col-md-2">
+          <label for="filterType" class="form-label small mb-1">種別</label>
+          <select class="form-select form-select-sm" id="filterType">
+            <option value="">全て</option>
+            <option value="入庫">入庫</option>
+            <option value="出庫">出庫</option>
+            <option value="調整">調整</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 3: 期間クイック選択 -->
+      <div class="row g-2 mb-1">
+        <div class="col-12">
+          <label class="form-label small mb-1 text-muted">📅 期間クイック選択</label>
+        </div>
+        <div class="col-12">
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary btn-sm flex-fill" id="btnAllPeriod">全期間</button>
+            <button class="btn btn-outline-primary btn-sm flex-fill" id="btnThisMonth">今月</button>
+            <button class="btn btn-outline-primary btn-sm flex-fill" id="btnLastMonth">先月</button>
+          </div>
+        </div>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-12">
+          <div class="d-flex gap-2">
+            <select class="form-select form-select-sm flex-fill" id="filterYear">
+              <option value="">年選択</option>
+            </select>
+            <select class="form-select form-select-sm flex-fill" id="filterMonth">
+              <option value="">月選択</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 4: 開始日 | 終了日 -->
+      <div class="row g-2 mb-2">
+        <div class="col-6 col-md-2">
+          <label for="filterStartDate" class="form-label small mb-1">開始日</label>
+          <input type="date" class="form-control form-control-sm" id="filterStartDate">
+        </div>
+        <div class="col-6 col-md-2">
+          <label for="filterEndDate" class="form-label small mb-1">終了日</label>
+          <input type="date" class="form-control form-control-sm" id="filterEndDate">
+        </div>
+      </div>
+
+      <!-- Row 5: 検索ボタン -->
+      <div class="row g-2 mb-2">
+        <div class="col-12 col-md-3">
+          <button class="btn btn-primary btn-sm w-100" id="btnSearch">🔍 検索</button>
+        </div>
+      </div>
+
+      <!-- リセット・件数表示 -->
+      <div class="row mt-2">
+        <div class="col-12">
+          <button class="btn btn-outline-secondary btn-sm" id="btnReset">🔄 リセット</button>
+          <span class="ms-3 text-muted small" id="resultCount"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 履歴カード一覧 -->
+    <div id="historyCards"></div>
+
+    <!-- ページネーション -->
+    <div id="pagination" class="d-flex justify-content-center align-items-center gap-2 my-3" style="display: none !important;"></div>
+
+    <!-- CSV出力セクション -->
+    <div class="export-section">
+      <button class="btn btn-success btn-sm" id="btnExportCSV">📥 CSV出力</button>
+      <div class="text-muted small mt-2">フィルタリング結果をCSV形式でダウンロード</div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let currentHistoryData = [];
+    let allMaterials = []; // 全資材データを保持
+    let currentPage = 1;
+    const itemsPerPage = 10;
+
+    // ページ読み込み時の初期化
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('🚀 inventory_history_viewer.html バージョン: @451-PAGINATION-10');
+      console.log('🔧 API関数名: getInventoryHistoryAPI (Wrapperなし - 直接呼び出し)');
+      console.log('🔧 API関数名2: getPackagingMaterialsAPI (Wrapperなし - 直接呼び出し)');
+
+      initializePeriodFilters();
+      loadMaterialsList();
+      showInitialMessage(); // 初期メッセージ表示
+
+      // イベントリスナー設定
+      document.getElementById('filterCategory').addEventListener('change', function() {
+        filterMaterialsByCategory(this.value);
+      });
+      document.getElementById('btnAllPeriod').addEventListener('click', setAllPeriod);
+      document.getElementById('btnThisMonth').addEventListener('click', setThisMonth);
+      document.getElementById('btnLastMonth').addEventListener('click', setLastMonth);
+      document.getElementById('filterYear').addEventListener('change', updatePeriodFromYearMonth);
+      document.getElementById('filterMonth').addEventListener('change', updatePeriodFromYearMonth);
+      document.getElementById('btnSearch').addEventListener('click', loadHistoryData);
+      document.getElementById('btnReset').addEventListener('click', resetFilters);
+      document.getElementById('btnExportCSV').addEventListener('click', exportToCSV);
+    });
+
+    // ローディング表示/非表示
+    function showLoading() {
+      document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    function hideLoading() {
+      document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    // 初期メッセージ表示
+    function showInitialMessage() {
+      const container = document.getElementById('historyCards');
+      container.innerHTML = `
+        <div class="text-center text-muted py-5" style="font-size: 1rem;">
+          <div>検索条件を選択して検索ボタンをクリックしてください</div>
+        </div>
+      `;
+      document.getElementById('resultCount').textContent = '';
+    }
+
+    // 期間フィルタの初期化
+    function initializePeriodFilters() {
+      const currentYear = new Date().getFullYear();
+      const yearSelect = document.getElementById('filterYear');
+
+      // 2020年から現在年まで（降順）
+      for (let year = currentYear; year >= 2020; year--) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = `${year}年`;
+        yearSelect.appendChild(option);
+      }
+
+      // 1月〜12月の固定リスト
+      const monthSelect = document.getElementById('filterMonth');
+      for (let month = 1; month <= 12; month++) {
+        const option = document.createElement('option');
+        option.value = month;
+        option.textContent = `${month}月`;
+        monthSelect.appendChild(option);
+      }
+    }
+
+    // 全期間を設定
+    function setAllPeriod() {
+      document.getElementById('filterStartDate').value = '';
+      document.getElementById('filterEndDate').value = '';
+      document.getElementById('filterYear').value = '';
+      document.getElementById('filterMonth').value = '';
+    }
+
+    // 今月を設定
+    function setThisMonth() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const firstDay = `${year}-${month}-01`;
+      const lastDay = new Date(year, now.getMonth() + 1, 0);
+      const lastDayStr = `${year}-${month}-${String(lastDay.getDate()).padStart(2, '0')}`;
+
+      document.getElementById('filterStartDate').value = firstDay;
+      document.getElementById('filterEndDate').value = lastDayStr;
+      document.getElementById('filterYear').value = '';
+      document.getElementById('filterMonth').value = '';
+    }
+
+    // 先月を設定
+    function setLastMonth() {
+      const now = new Date();
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const year = lastMonth.getFullYear();
+      const month = String(lastMonth.getMonth() + 1).padStart(2, '0');
+      const firstDay = `${year}-${month}-01`;
+      const lastDay = new Date(year, lastMonth.getMonth() + 1, 0);
+      const lastDayStr = `${year}-${month}-${String(lastDay.getDate()).padStart(2, '0')}`;
+
+      document.getElementById('filterStartDate').value = firstDay;
+      document.getElementById('filterEndDate').value = lastDayStr;
+      document.getElementById('filterYear').value = '';
+      document.getElementById('filterMonth').value = '';
+    }
+
+    // 年または月の選択変更時に期間を設定
+    function updatePeriodFromYearMonth() {
+      const year = document.getElementById('filterYear').value;
+      const month = document.getElementById('filterMonth').value;
+
+      if (year && month) {
+        // 年・月両方選択されている場合
+        const lastDay = new Date(year, month, 0).getDate();
+        document.getElementById('filterStartDate').value = `${year}-${String(month).padStart(2, '0')}-01`;
+        document.getElementById('filterEndDate').value = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      } else if (year && !month) {
+        // 年のみ選択されている場合
+        document.getElementById('filterStartDate').value = `${year}-01-01`;
+        document.getElementById('filterEndDate').value = `${year}-12-31`;
+      } else {
+        // それ以外はクリア
+        document.getElementById('filterStartDate').value = '';
+        document.getElementById('filterEndDate').value = '';
+      }
+    }
+
+    // 資材リスト読み込み
+    function loadMaterialsList() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (!result) {
+            console.error('資材リストAPIから応答がありませんでした');
+            return;
+          }
+
+          if (result.success) {
+            allMaterials = result.data;
+
+            // カテゴリのユニークなリストを取得
+            const categories = [...new Set(result.data.map(m => m.category).filter(c => c))];
+            const categorySelect = document.getElementById('filterCategory');
+            categorySelect.innerHTML = '<option value="">全て</option>';
+
+            categories.forEach(cat => {
+              const option = document.createElement('option');
+              option.value = cat;
+              option.textContent = cat;
+              categorySelect.appendChild(option);
+            });
+
+            // 初期表示: 全資材を表示
+            filterMaterialsByCategory('');
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('資材リスト読み込みエラー:', error);
+        })
+        .getPackagingMaterialsAPI();
+    }
+
+    // カテゴリ選択による資材フィルタリング
+    function filterMaterialsByCategory(category) {
+      const materialSelect = document.getElementById('filterMaterial');
+      materialSelect.innerHTML = '<option value="">全て</option>';
+
+      const filtered = category ? allMaterials.filter(m => m.category === category) : allMaterials;
+
+      filtered.forEach(material => {
+        const option = document.createElement('option');
+        option.value = material.productName;
+        option.textContent = material.productName;
+        materialSelect.appendChild(option);
+      });
+    }
+
+    // 履歴データ読み込み
+    function loadHistoryData() {
+      showLoading();
+
+      const params = {
+        materialName: document.getElementById('filterMaterial').value || undefined,
+        type: document.getElementById('filterType').value || undefined,
+        startDate: document.getElementById('filterStartDate').value || undefined,
+        endDate: document.getElementById('filterEndDate').value || undefined,
+        limit: 1000
+      };
+
+      // undefinedのキーを削除
+      Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
+
+      console.log('API呼び出しパラメータ:', params);
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          console.log('✅ Success handler called');
+          console.log('Result:', result);
+          console.log('Result type:', typeof result);
+          
+          if (!result) {
+            showError('APIから応答がありませんでした。入出庫履歴シートが存在するか確認してください。');
+            return;
+          }
+
+          if (result.success) {
+            currentHistoryData = result.data;
+            currentPage = 1; // 検索結果は常に1ページ目から表示
+            renderHistoryTable(result.data);
+            document.getElementById('resultCount').textContent = `${result.data.length}件`;
+          } else {
+            showError(result.message);
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          console.error('❌ Failure handler called');
+          console.error('Error object:', error);
+          console.error('Error message:', error.message);
+          showError('データの読み込みに失敗しました: ' + error.message);
+        })
+        .getInventoryHistoryAPI(params);
+    }
+
+    // 履歴カード描画（ページネーション対応）
+    function renderHistoryTable(data) {
+      const container = document.getElementById('historyCards');
+      const paginationContainer = document.getElementById('pagination');
+
+      if (data.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4">該当するデータがありません</div>';
+        paginationContainer.style.display = 'none';
+        return;
+      }
+
+      // ページネーション計算
+      const totalPages = Math.ceil(data.length / itemsPerPage);
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      const pageData = data.slice(startIndex, endIndex);
+
+      // 現在のページのデータを表示
+      container.innerHTML = pageData.map(item => {
+        // カードタイプクラスを決定
+        let cardTypeClass = '';
+        if (item.type === '入庫') cardTypeClass = 'card-inbound';
+        else if (item.type === '出庫') cardTypeClass = 'card-outbound';
+        else if (item.type === '調整') cardTypeClass = 'card-adjustment';
+
+        return `
+        <div class="history-card ${cardTypeClass}">
+          <div class="card-header">
+            <span class="card-date">${formatDateTime(item.timestamp)}</span>
+            ${getBadgeType(item.type)}
+          </div>
+          <div class="card-main">
+            <div class="card-material">${escapeHtml(item.materialName)}</div>
+            <div class="card-quantity">${item.quantity.toLocaleString()}個</div>
+          </div>
+          <div class="card-details">${item.type === '入庫' ? `<div style="display:flex;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0;"><div style="flex:1;">${item.purchasePrice ? `<div class="card-detail-row price-info">購入価格: ¥${item.purchasePrice.toLocaleString()}</div>` : ''}${item.packageQuantity ? `<div class="card-detail-row price-info">購入個数: ${item.packageQuantity.toLocaleString()}個</div>` : ''}${item.unitCost ? `<div class="card-detail-row price-info">単価: ¥${item.unitCost.toFixed(2)}</div>` : ''}</div><div style="flex:1;">${item.reason ? `<div class="card-detail-row">理由: ${escapeHtml(item.reason)}</div>` : ''}${item.operator ? `<div class="card-detail-row">ユーザー名: ${escapeHtml(item.operator)}</div>` : ''}${item.relatedSalesRecord ? `<div class="card-detail-row">販売記録: ${escapeHtml(item.relatedSalesRecord)}</div>` : ''}${item.note ? `<div class="card-detail-row">備考: ${escapeHtml(item.note)}</div>` : ''}</div></div>` : `${item.reason ? `<div class="card-detail-row" style="margin-top:8px;padding-top:8px;border-top:1px solid #f0f0f0;">理由: ${escapeHtml(item.reason)}</div>` : ''}${item.operator ? `<div class="card-detail-row">ユーザー名: ${escapeHtml(item.operator)}</div>` : ''}${item.relatedSalesRecord ? `<div class="card-detail-row">販売記録: ${escapeHtml(item.relatedSalesRecord)}</div>` : ''}${item.note ? `<div class="card-detail-row">備考: ${escapeHtml(item.note)}</div>` : ''}`}</div>
+        </div>
+      `;}).join('');
+
+      // ページネーションUI生成
+      renderPagination(totalPages, data.length);
+    }
+
+    // ページネーションUI生成
+    function renderPagination(totalPages, totalItems) {
+      const paginationContainer = document.getElementById('pagination');
+
+      if (totalPages <= 1) {
+        paginationContainer.style.display = 'none';
+        return;
+      }
+
+      paginationContainer.style.display = 'flex';
+
+      let html = '';
+
+      // 前へボタン
+      html += `<button class="btn btn-outline-primary btn-sm" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">‹ 前へ</button>`;
+
+      // ページ番号ボタン
+      const maxButtons = 5;
+      let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+      let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+
+      if (endPage - startPage < maxButtons - 1) {
+        startPage = Math.max(1, endPage - maxButtons + 1);
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-outline-primary'} btn-sm" onclick="changePage(${i})">${i}</button>`;
+      }
+
+      // 次へボタン
+      html += `<button class="btn btn-outline-primary btn-sm" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">次へ ›</button>`;
+
+      // 件数表示
+      html += `<span class="text-muted small ms-2">${totalItems}件中 ${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, totalItems)}件</span>`;
+
+      paginationContainer.innerHTML = html;
+    }
+
+    // ページ変更
+    function changePage(page) {
+      currentPage = page;
+      renderHistoryTable(currentHistoryData);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // 種別バッジ生成
+    function getBadgeType(type) {
+      const badges = {
+        '入庫': '<span class="badge bg-success badge-type">入庫</span>',
+        '出庫': '<span class="badge bg-danger badge-type">出庫</span>',
+        '調整': '<span class="badge bg-warning text-dark badge-type">調整</span>'
+      };
+      return badges[type] || type;
+    }
+
+    // 日時フォーマット
+    function formatDateTime(date) {
+      const d = new Date(date);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}`;
+    }
+
+    // HTMLエスケープ
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // フィルタリセット
+    function resetFilters() {
+      document.getElementById('filterCategory').value = '';
+      document.getElementById('filterMaterial').value = '';
+      document.getElementById('filterType').value = '';
+      document.getElementById('filterStartDate').value = '';
+      document.getElementById('filterEndDate').value = '';
+      document.getElementById('filterYear').value = '';
+      document.getElementById('filterMonth').value = '';
+      filterMaterialsByCategory(''); // 資材プルダウンをリセット
+      showInitialMessage(); // 初期メッセージを表示
+    }
+
+    // CSV出力
+    function exportToCSV() {
+      if (currentHistoryData.length === 0) {
+        alert('出力するデータがありません');
+        return;
+      }
+
+      // CSVヘッダー
+      const headers = ['日時', 'ユーザー名', '資材名', '種別', '数量', '理由', '関連販売記録', '備考'];
+
+      // CSVデータ
+      const rows = currentHistoryData.map(item => [
+        formatDateTime(item.timestamp),
+        item.operator,
+        item.materialName,
+        item.type,
+        item.quantity,
+        item.reason,
+        item.relatedSalesRecord,
+        item.note
+      ]);
+
+      // CSV文字列生成
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      // BOM付きUTF-8（Excel対応）
+      const bom = '\uFEFF';
+      const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+      // ダウンロード
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `入出庫履歴_${timestamp}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+
+      // クリックイベントを発火
+      link.click();
+
+      // クリーンアップ（遅延実行でページ遷移を防ぐ）
+      setTimeout(function() {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
+    }
+
+    // エラー表示
+    function showError(message) {
+      const container = document.getElementById('historyCards');
+      container.innerHTML = `<div class="text-center text-danger py-4">❌ ${escapeHtml(message)}</div>`;
+    }
+  </script>
+
+  <!-- 戻るボタン処理 -->
+<script>
+  console.log('[inventory_history_viewer] ✅ Script loaded - Version @899-debug');
+  
+  async function goBack() {
+    console.log('[inventory_history_viewer] >>> goBack() called at', new Date().toISOString());
+    const isInIframe = window.self !== window.top;
+    console.log('[inventory_history_viewer] isInIframe:', isInIframe);
+    
+    if (isInIframe) {
+      console.log('[inventory_history_viewer] iframe内で開かれているため、postMessage送信');
+      window.top.postMessage({ type: 'navigateToHome' }, '*');
+      console.log('[inventory_history_viewer] ✅ postMessage送信完了');
+    } else {
+      console.log('[inventory_history_viewer] 直接開かれているため、google.script.host.close()');
+      google.script.host.close();
+    }
+  }
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('[inventory_history_viewer] DOMContentLoaded fired');
+    const backButton = document.getElementById('back-button');
+    console.log('[inventory_history_viewer] backButton element:', backButton);
+    
+    if (backButton) {
+      backButton.addEventListener('click', goBack);
+      console.log('[inventory_history_viewer] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
+    } else {
+      console.error('[inventory_history_viewer] ❌ 戻るボタンが見つかりません');
+    }
+  });
+</script>
+
+</body>
+</html>

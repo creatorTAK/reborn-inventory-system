@@ -1,0 +1,1663 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- Cache Bust: 2025-11-13 12:45 -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <!-- REBORN Brand Colors & Theme -->
+  <link rel="stylesheet" href="/css/reborn-brand-colors.css?v=0bd1a9b">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/reborn-theme.css?v=0bd1a9b">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #f8f9fa;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ヘッダー */
+    .chat-header {
+      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
+      color: white;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      flex-shrink: 0;
+      position: relative;
+    }
+    .chat-header h1 {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 600;
+      padding-left: 40px; /* 戻るボタンのスペースを確保 */
+    }
+    .chat-header .channel-info {
+      font-size: 0.875rem;
+      opacity: 0.9;
+      margin-top: 4px;
+      padding-left: 40px; /* 戻るボタンのスペースを確保 */
+    }
+    .version-badge {
+      font-size: 0.7rem;
+      opacity: 0.6;
+      margin-left: 8px;
+      padding: 2px 6px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 4px;
+    }
+    /* 戻るボタン（LINE風） */
+    .back-btn {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: white;
+      font-size: 32px;
+      padding: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      transition: opacity 0.2s;
+      font-weight: 300;
+    }
+    .back-btn:hover {
+      opacity: 0.8;
+    }
+    .back-btn:active {
+      opacity: 0.6;
+    }
+
+    /* メッセージリスト */
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      background-color: #f8f9fa;
+    }
+
+    .message-item {
+      margin-bottom: 16px;
+      animation: fadeIn 0.3s ease-in;
+      display: flex;
+      /* iOSのテキスト選択・コールアウトを無効化 */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* メッセージコンテント（アイコン + バブル + 時間） */
+    .message-content {
+      display: flex;
+      align-items: flex-start;
+      max-width: 80%;
+      gap: 8px;
+    }
+
+    /* 自分のメッセージ（右寄せ・青） */
+    .message-item-mine {
+      justify-content: flex-end;
+    }
+    .message-item-mine .message-content {
+      flex-direction: row;
+    }
+    .message-item-mine .message-bubble {
+      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 18px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    /* 他人のメッセージ（左寄せ・グレー） */
+    .message-item-other {
+      justify-content: flex-start;
+    }
+    .message-item-other .message-content {
+      flex-direction: row;
+    }
+    .message-item-other .message-bubble {
+      background-color: white;
+      color: #2d3748;
+      padding: 10px 14px;
+      border-radius: 18px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    /* メッセージバブル */
+    .message-bubble {
+      max-width: 100%;
+    }
+
+    .message-header {
+      display: none; /* ヘッダーは非表示 */
+    }
+
+    /* ユーザーアイコン（LINE風） */
+    .user-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+    .user-icon-placeholder {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 16px;
+      border: 2px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+
+    .message-sender {
+      display: none; /* LINE風：名前を非表示 */
+    }
+
+    /* メッセージラッパー（バブル + 時間） */
+    .message-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+    .message-item-mine .message-wrapper {
+      align-items: flex-end;
+    }
+
+    .message-time {
+      font-size: 0.7rem;
+      color: #718096;
+      opacity: 0.8;
+      padding: 0 4px;
+    }
+    .message-text {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      line-height: 1.5;
+      /* テキスト選択を完全に無効化 */
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    .delete-button {
+      background: none;
+      border: none;
+      color: #ef4444;
+      cursor: pointer;
+      font-size: 0.875rem;
+      padding: 4px 8px;
+      margin-left: 8px;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    .delete-button:hover {
+      opacity: 1;
+    }
+
+    /* 入力エリア */
+    .input-container {
+      padding: 12px 16px;
+      background-color: white;
+      border-top: 1px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+    .input-wrapper {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    /* 添付メニューボタン（LINE風） */
+    .attach-buttons {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .attach-btn {
+      background: none;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      padding: 8px;
+      color: #718096;
+      transition: transform 0.2s, color 0.2s;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .attach-btn:hover {
+      transform: scale(1.1);
+      color: var(--reborn-primary);
+    }
+    .attach-btn:active {
+      transform: scale(0.95);
+    }
+    #messageInput {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #cbd5e0;
+      border-radius: 20px;
+      font-size: 1rem;
+      resize: none;
+      min-height: 44px;
+      max-height: 120px;
+    }
+    #messageInput:focus {
+      outline: none;
+      border-color: var(--reborn-primary);
+    }
+    .send-button {
+      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      font-size: 1.25rem;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .send-button:hover {
+      transform: scale(1.05);
+    }
+    .send-button:active {
+      transform: scale(0.95);
+    }
+    .send-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* ユーザー名選択（GAS版のみ） */
+    #userSelectContainer {
+      margin-bottom: 8px;
+    }
+
+    /* 選択削除モード */
+    .selection-mode-bar {
+      display: none;
+      background-color: #fff3cd;
+      padding: 12px 16px;
+      border-bottom: 1px solid #ffeaa7;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .selection-mode-bar.active {
+      display: flex;
+    }
+    .selection-mode-info {
+      font-size: 0.875rem;
+      color: #856404;
+    }
+    .selection-mode-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    .selection-mode-buttons button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: transform 0.1s;
+    }
+    .selection-mode-buttons button:hover {
+      transform: scale(1.05);
+    }
+    .btn-delete-selected {
+      background-color: #ef4444;
+      color: white;
+    }
+    .btn-cancel-selection {
+      background-color: #6c757d;
+      color: white;
+    }
+    .message-checkbox {
+      display: none;
+      margin-right: 8px;
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .selection-mode .message-checkbox {
+      display: inline-block;
+    }
+    .toggle-selection-btn {
+      background-color: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.4);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      margin-left: 12px;
+    }
+    .toggle-selection-btn:hover {
+      background-color: rgba(255,255,255,0.3);
+    }
+
+    /* 長押しメニュー（LINEライクなポップアップ） */
+    #contextMenu {
+      position: absolute;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      z-index: 3000;
+      display: none;
+      opacity: 0;
+      transform: scale(0.9);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    #contextMenu.active {
+      display: block;
+      opacity: 1;
+      transform: scale(1);
+    }
+    .context-menu-items {
+      display: flex;
+      gap: 0;
+      padding: 8px;
+    }
+    .context-menu-item {
+      display: flex;
+      padding: 10px 16px;
+      background: white;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: none;
+      font-family: inherit;
+      font-size: 14px;
+      color: #374151;
+      border-right: 1px solid #e5e7eb;
+      white-space: nowrap;
+    }
+    .context-menu-item:last-child {
+      border-right: none;
+    }
+    .context-menu-item:active {
+      background: #f3f4f6;
+    }
+    #contextMenuOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      z-index: 2999;
+      display: none;
+    }
+    #contextMenuOverlay.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <!-- 統一ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" id="back-button">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <i class="bi bi-chat-dots"></i>
+        <span id="headerRoomName">チャット</span>
+      </div>
+      <div style="width: 40px;"></div>
+    </div>
+  </div>
+
+  <!-- チャンネル情報バー -->
+  <div style="background: #f8f9fa; padding: 8px 16px; border-bottom: 1px solid #e5e7eb;">
+    <div style="font-size: 13px; color: #6b7280;">
+      <span id="channelName">読み込み中...</span>
+      <span id="userInfo" style="margin-left: 12px;"></span>
+      <button class="toggle-selection-btn" onclick="toggleSelectionMode()" style="float: right; background: #fff; border: 1px solid #d1d5db; color: #374151; padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;">🗑️ 選択削除</button>
+    </div>
+
+    <!-- GAS版：ユーザー名選択ドロップダウン -->
+    <div id="userSelectContainer" style="display: none; margin-top: 8px;">
+      <label style="font-size: 12px; margin-right: 4px;">送信者:</label>
+      <select id="userSelect" style="background: white; border: 1px solid #d1d5db; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+        <option value="">選択してください</option>
+      </select>
+    </div>
+
+    <!-- PWA版：ユーザー名入力 -->
+    <div id="userNameInputContainer" style="display: none; margin-top: 8px;">
+      <label style="font-size: 12px; margin-right: 4px;">あなたの名前:</label>
+      <input type="text" id="userNameInput" placeholder="名前を入力" style="background: white; border: 1px solid #d1d5db; padding: 4px 8px; border-radius: 4px; font-size: 12px; width: 150px;">
+      <button id="saveUserNameBtn" style="background: white; border: 1px solid #d1d5db; padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 4px;">保存</button>
+    </div>
+  </div>
+
+  <!-- 選択削除モードバー -->
+  <div class="selection-mode-bar" id="selectionModeBar">
+    <div class="selection-mode-info">
+      <span id="selectedCount">0</span> 件選択中
+    </div>
+    <div class="selection-mode-buttons">
+      <button class="btn-delete-selected" onclick="deleteSelectedMessages()">削除</button>
+      <button class="btn-cancel-selection" onclick="toggleSelectionMode()">キャンセル</button>
+    </div>
+  </div>
+
+  <div class="messages-container" id="messagesContainer"></div>
+
+  <div class="input-container">
+    <div class="input-wrapper">
+      <!-- 添付メニューボタン（LINE風） -->
+      <div class="attach-buttons">
+        <button class="attach-btn" onclick="triggerFileInput()" title="ファイルを選択">
+          ➕
+        </button>
+        <button class="attach-btn" onclick="triggerCameraInput()" title="カメラで撮影">
+          📷
+        </button>
+        <button class="attach-btn" onclick="triggerImageInput()" title="画像を選択">
+          🖼️
+        </button>
+      </div>
+
+      <textarea
+        id="messageInput"
+        placeholder="メッセージを入力..."
+        rows="1"
+        maxlength="1000"></textarea>
+      <button class="send-button" id="sendButton" onclick="sendMessage()">
+        ➤
+      </button>
+    </div>
+
+    <!-- 非表示のファイル入力 -->
+    <input type="file" id="fileInput" style="display: none;" onchange="handleFileSelect(event)" />
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleFileSelect(event)" />
+    <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)" />
+  </div>
+
+  <!-- 長押しメニュー（LINEライクなポップアップ） -->
+  <div id="contextMenuOverlay" onclick="closeContextMenu()"></div>
+  <div id="contextMenu">
+    <div class="context-menu-items">
+      <button class="context-menu-item" onclick="copyMessage()">コピー</button>
+      <button class="context-menu-item" onclick="replyMessage()">リプライ</button>
+      <button class="context-menu-item" onclick="deleteMessageFromMenu()">削除</button>
+    </div>
+  </div>
+
+  <!-- Firestore API Wrapper (ARCH-001 Phase 2) -->
+  <script type="module" src="/js/firestore-api.js?v=850"></script>
+
+  <!-- GAS API Wrapper (ARCH-001 Phase 2) -->
+  <script src="/js/api.js?v=850"></script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, addDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, doc, updateDoc, getDoc, setDoc, increment, getDocs, arrayUnion } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    // Firebase設定
+    const firebaseConfig = {
+      apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+      authDomain: "reborn-chat.firebaseapp.com",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "345706548795",
+      appId: "1:345706548795:web:058a553da6b4b74db5161e"
+    };
+
+    // Firebase初期化
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    console.log('[Firestore] 初期化完了');
+
+    // グローバル変数（JSON.stringifyで安全に受け取る）
+    let currentUserName = '';
+    let currentRoomId = '';
+    let currentRoomName = '';
+    let usersCache = []; // ユーザー一覧キャッシュ（アイコン表示用）
+
+    // GASテンプレート変数をJavaScript変数に変換（変数名の衝突を避ける）
+    const isPWAFlag        = <?= JSON.stringify(!!isPWA) ?>;
+    const pwaUserNameParam = <?= JSON.stringify(typeof pwaUserName !== 'undefined' ? pwaUserName : "") ?>;
+    // roomId はシングルクォートで直接展開（JSON.stringify不要）
+    const pwaRoomIdParam   = '<?= typeof pwaRoomId !== "undefined" ? pwaRoomId : "" ?>';
+    const gasUserNameParam = <?= JSON.stringify(typeof gasUserName !== 'undefined' ? gasUserName : "") ?>;
+    const gasRoomIdParam   = '<?= typeof gasRoomId !== "undefined" ? gasRoomId : "" ?>';
+    const fcmTokenParam    = <?= JSON.stringify(typeof fcmToken !== 'undefined' ? fcmToken : "") ?>;
+    const gasBaseUrlParam  = '<?= typeof gasBaseUrl !== "undefined" ? gasBaseUrl : "" ?>';  // ✅ API呼び出し用URL
+    const sessionIdParam   = '<?= typeof sessionId !== "undefined" ? sessionId : "unknown" ?>';  // セッションID
+
+    // 判定ロジック：明示フラグ優先、補助として iframe 内かつ userName/fcmToken のどちらかが非空
+    const isEmbedded = (window.top !== window); // iframe内ならtrue
+    const looksLikePWA = isEmbedded && (pwaUserNameParam !== "" || fcmTokenParam !== "");
+    const isPWA = isPWAFlag || looksLikePWA;
+    const isGAS = !isPWA;
+
+    // 初期化
+    document.addEventListener('DOMContentLoaded', async function() {
+      console.log('[Chat UI] 初期化開始');
+
+      // roomId設定
+      if (isGAS) {
+        currentRoomId = gasRoomIdParam || 'room_all';
+      } else {
+        currentRoomId = pwaRoomIdParam || 'room_all';
+      }
+      console.log('[Room] roomId設定:', currentRoomId);
+
+      // ルーム情報を取得してヘッダーに表示
+      try {
+        const roomRef = doc(db, 'rooms', currentRoomId);
+        const roomDoc = await getDoc(roomRef);
+
+        if (roomDoc.exists()) {
+          const roomData = roomDoc.data();
+
+          // 個別チャット（type: 'direct'）の場合は相手のユーザー名を動的生成
+          if (roomData.type === 'direct' && roomData.members && Array.isArray(roomData.members)) {
+            const otherMember = roomData.members.find(m => m !== currentUserName);
+            currentRoomName = otherMember || '不明なユーザー';
+          } else {
+            currentRoomName = roomData.name || '不明なルーム';
+          }
+
+          const roomIcon = roomData.icon || '💬';
+
+          // ヘッダーのルーム名を更新（個別チャットは相手の名前のみ、それ以外はアイコン付き）
+          if (roomData.type === 'direct') {
+            document.getElementById('headerRoomName').textContent = currentRoomName;
+          } else {
+            document.getElementById('headerRoomName').textContent = `${roomIcon} ${currentRoomName}`;
+          }
+
+          document.getElementById('channelName').textContent = `${roomIcon} ${currentRoomName}`;
+          console.log('[Room] ルーム名表示完了:', currentRoomName);
+        } else {
+          console.error('[Room] ルームが見つかりません:', currentRoomId);
+          document.getElementById('channelName').textContent = '⚠️ ルームが見つかりません';
+        }
+      } catch (error) {
+        console.error('[Room] ルーム情報取得エラー:', error);
+        document.getElementById('channelName').textContent = '⚠️ エラー';
+      }
+
+      // ユーザー名設定
+      if (isGAS) {
+        // GAS版：FCM通知登録シートから自動取得
+        if (gasUserNameParam && gasUserNameParam.trim() !== '') {
+          // JSON.parse()でダブルクォーテーションを削除
+          try {
+            currentUserName = JSON.parse(gasUserNameParam);
+          } catch (e) {
+            // パースできない場合はそのまま使用
+            currentUserName = gasUserNameParam;
+          }
+          document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
+          console.log('[GAS] ユーザー名自動設定:', currentUserName);
+          console.log('[GAS] currentUserName length:', currentUserName.length);
+        } else {
+          // ユーザー名が取得できなかった場合、ドロップダウン表示
+          console.log('[GAS] ユーザー名が取得できませんでした。ドロップダウンを表示');
+          showUserSelect();
+        }
+      } else {
+        // PWA版：URLパラメータから取得（親ページのlocalStorageから渡される）
+        // JSON.parse()でダブルクォーテーションを削除
+        try {
+          currentUserName = JSON.parse(pwaUserNameParam);
+        } catch (e) {
+          // パースできない場合はそのまま使用
+          currentUserName = pwaUserNameParam;
+        }
+
+        console.log('[PWA] pwaUserNameParam受信:', pwaUserNameParam);
+        console.log('[PWA] currentUserName設定:', currentUserName);
+        console.log('[PWA] currentUserName length:', currentUserName.length);
+
+        if (currentUserName && currentUserName.trim() !== '') {
+          document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
+          console.log('[PWA] ユーザー名表示完了:', currentUserName);
+        } else {
+          // ユーザー名が未設定の場合、入力UIを表示
+          console.log('[PWA] ユーザー名未設定 - 入力UIを表示');
+          const container = document.getElementById('userNameInputContainer');
+          if (container) {
+            container.style.display = 'block';
+            console.log('[PWA] ユーザー名入力UI表示完了');
+          } else {
+            console.error('[PWA] userNameInputContainer が見つかりません');
+          }
+        }
+      }
+
+      // ユーザー一覧を取得してキャッシュ（アイコン表示用）
+      if (isPWA) {
+        // PWA版：api.js経由でFirestore優先取得（ARCH-001 Phase 2）
+        console.log('[User Cache] api.js経由でユーザー一覧取得開始');
+        getUserList()
+          .then(users => {
+            console.log('[User Cache] ユーザーデータ受信:', users);
+            if (users && users.length > 0) {
+              usersCache = users;
+              console.log('[User Cache] ユーザー一覧キャッシュ完了:', usersCache.length + '件');
+              console.log('[User Cache] キャッシュ内容:', usersCache);
+
+              // メッセージを表示
+              console.log('[User Cache] キャッシュ取得完了、メッセージリスニング開始');
+              startListening();
+            } else {
+              console.warn('[User Cache] ユーザー一覧が空です');
+              // 空の場合でもメッセージは表示する
+              startListening();
+            }
+          })
+          .catch(error => {
+            console.error('[User Cache] ユーザー一覧取得エラー:', error);
+            console.error('[User Cache] エラー詳細:', error.message, error.stack);
+            // エラーの場合でもメッセージは表示する
+            startListening();
+          });
+      } else if (typeof google !== 'undefined' && google.script && google.script.run) {
+        // GAS版：google.script.runで呼び出し
+        google.script.run
+          .withSuccessHandler(function(users) {
+            if (users && users.length > 0) {
+              usersCache = users;
+              console.log('[User Cache] GAS版 ユーザー一覧キャッシュ完了:', usersCache.length + '件');
+            }
+          })
+          .withFailureHandler(function(error) {
+            console.error('[User Cache] GAS版 ユーザー一覧取得エラー:', error);
+          })
+          .getUserListForUI();
+      }
+
+      // メッセージ入力の自動リサイズ
+      const messageInput = document.getElementById('messageInput');
+      messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+      });
+
+      // Enterキーで送信
+      messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      // 未読カウントリセット（このルームを開いたので既読にする）
+      try {
+        // GAS版は未読カウント機能を使用しない（PWA版のみ）
+        console.log('[GAS版] 未読カウントリセットスキップ（PWA版のみ使用）');
+        /*
+        if (currentRoomId && currentUserEmail) {
+          const unreadRef = doc(db, `rooms/${currentRoomId}/unreadCounts/${currentUserEmail}`);
+          await setDoc(unreadRef, {
+            userId: currentUserEmail,
+            count: 0,
+            lastReadAt: serverTimestamp()
+          }, { merge: true });
+
+          console.log('[Firestore] 未読カウントリセット完了:', currentUserEmail);
+        }
+        */
+      } catch (error) {
+        console.error('[Firestore] 未読カウントリセットエラー:', error);
+      }
+
+      // ルームのmembersに自分を追加（未追加の場合）
+      try {
+        if (currentRoomId && currentUserName) {
+          const roomRef = doc(db, 'rooms', currentRoomId);
+          await updateDoc(roomRef, {
+            members: arrayUnion(currentUserName)
+          });
+
+          console.log('[Firestore] ルームメンバーに追加:', currentUserName);
+        }
+      } catch (error) {
+        console.error('[Firestore] メンバー追加エラー:', error);
+      }
+
+      // メッセージのリアルタイムリスニングは、ユーザーキャッシュ取得後に開始
+      // ユーザーキャッシュが取得できない場合は3秒後に開始
+      if (!isPWA) {
+        // GAS版は即座にstartListening
+        startListening();
+      }
+      // PWA版はfetch完了後またはタイムアウト後にstartListeningを呼び出す
+    });
+
+    // GAS版：ユーザー選択ドロップダウン表示
+    function showUserSelect() {
+      const container = document.getElementById('userSelectContainer');
+      const select = document.getElementById('userSelect');
+
+      container.style.display = 'block';
+
+      // FCM通知登録シートからユーザーリスト取得
+      google.script.run
+        .withSuccessHandler(function(users) {
+          console.log('[GAS] ユーザー取得成功:', users);
+
+          if (!users || users.length === 0) {
+            console.error('[GAS] ユーザーが見つかりません');
+            return;
+          }
+
+          // ユーザー一覧をキャッシュ（アイコン表示用）
+          usersCache = users;
+          console.log('[User Cache] ユーザー一覧キャッシュ完了:', usersCache.length + '件');
+
+          // 前回選択したユーザー名を取得
+          const savedUserName = localStorage.getItem('reborn_chat_user_name');
+
+          // ドロップダウンに追加
+          select.innerHTML = '<option value="">選択してください</option>';
+          users.forEach(function(user) {
+            const option = document.createElement('option');
+            option.value = user.userName;
+            option.textContent = user.userName;
+
+            if (savedUserName && user.userName === savedUserName) {
+              option.selected = true;
+              currentUserName = user.userName;
+            }
+
+            select.appendChild(option);
+          });
+
+          // 選択変更時
+          select.addEventListener('change', function() {
+            currentUserName = this.value;
+            localStorage.setItem('reborn_chat_user_name', currentUserName);
+            console.log('[GAS] ユーザー名選択:', currentUserName);
+          });
+        })
+        .withFailureHandler(function(error) {
+          console.error('[GAS] エラー:', error);
+        })
+        .getActiveUsers();
+    }
+
+    // PWA版：ユーザー名入力UI表示
+    function showUserNameInput() {
+      const container = document.getElementById('userNameInputContainer');
+      const input = document.getElementById('userNameInput');
+      const saveBtn = document.getElementById('saveUserNameBtn');
+
+      container.style.display = 'block';
+
+      // 既存の値があれば pre-fill
+      if (currentUserName) {
+        input.value = currentUserName;
+      }
+
+      // 保存ボタンのクリックハンドラー
+      saveBtn.addEventListener('click', function() {
+        const userName = input.value.trim();
+
+        if (!userName) {
+          alert('名前を入力してください');
+          return;
+        }
+
+        // localStorage に保存
+        localStorage.setItem('reborn_user_name', userName);
+        currentUserName = userName;
+
+        // userInfo 表示を更新
+        document.getElementById('userInfo').textContent = `👤 ${userName}`;
+
+        // 入力UIを非表示
+        container.style.display = 'none';
+
+        console.log('[PWA] ユーザー名保存:', userName);
+      });
+    }
+
+    // ユーザーアイコンURLを取得
+    function getUserIconUrl(userName) {
+      console.log('[Icon] アイコンURL取得:', { userName, cacheSize: usersCache?.length || 0 });
+
+      if (!userName || !usersCache || usersCache.length === 0) {
+        console.warn('[Icon] キャッシュが空またはユーザー名なし');
+        return null;
+      }
+
+      const user = usersCache.find(u => u.userName === userName);
+      console.log('[Icon] 検索結果:', user);
+
+      if (user && user.userIconUrl) {
+        console.log('[Icon] アイコンURL返却:', user.userIconUrl);
+        return user.userIconUrl;
+      } else {
+        console.warn('[Icon] アイコンURLなし:', userName);
+        return null;
+      }
+    }
+
+    // ファイルサイズフォーマット関数
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    // Firestoreメッセージをリアルタイムリスニング
+    function startListening() {
+      const q = query(
+        collection(db, `rooms/${currentRoomId}/messages`),
+        orderBy('timestamp', 'desc'),
+        limit(50)
+      );
+
+      onSnapshot(q, (snapshot) => {
+        console.log('[Firestore] メッセージ更新:', snapshot.size + '件');
+
+        const container = document.getElementById('messagesContainer');
+        container.innerHTML = '';
+
+        // 新しい順で取得したので、逆順で表示
+        const messages = [];
+        snapshot.forEach((doc) => {
+          messages.unshift({ id: doc.id, ...doc.data() });
+        });
+
+        messages.forEach((msg) => {
+          appendMessage(msg);
+        });
+
+        // 最下部にスクロール
+        container.scrollTop = container.scrollHeight;
+      }, (error) => {
+        console.error('[Firestore] リスニングエラー:', error);
+        alert('メッセージの受信に失敗しました: ' + error.message);
+      });
+    }
+
+    // メッセージをUIに追加
+    function appendMessage(msg) {
+      const container = document.getElementById('messagesContainer');
+
+      const item = document.createElement('div');
+
+      // msg.userNameもJSON.parseして正規化（古いメッセージ対応）
+      let messageUserName = msg.userName;
+      try {
+        // ダブルクォートで囲まれている場合はパース
+        if (typeof messageUserName === 'string' && messageUserName.startsWith('"') && messageUserName.endsWith('"')) {
+          messageUserName = JSON.parse(messageUserName);
+        }
+      } catch (e) {
+        // パースできない場合はそのまま使用
+      }
+
+      // 自分が削除したメッセージはスキップ（正規化したcurrentUserNameで判定）
+      if (msg.deletedBy) {
+        // deletedBy配列の各要素も正規化して比較
+        const normalizedDeletedBy = msg.deletedBy.map(name => {
+          try {
+            if (typeof name === 'string' && name.startsWith('"') && name.endsWith('"')) {
+              return JSON.parse(name);
+            }
+            return name;
+          } catch (e) {
+            return name;
+          }
+        });
+
+        if (normalizedDeletedBy.includes(currentUserName)) {
+          return;
+        }
+      }
+
+      // 自分のメッセージか他人のメッセージかで分岐
+      const isMine = messageUserName === currentUserName;
+
+      // デバッグログ
+      console.log('[AppendMessage] msg.userName:', msg.userName, 'normalized:', messageUserName, 'currentUserName:', currentUserName, 'isMine:', isMine);
+
+      item.className = isMine ? 'message-item message-item-mine' : 'message-item message-item-other';
+      item.dataset.messageId = msg.id;
+
+      // メッセージコンテント（アイコン + ラッパー）
+      const content = document.createElement('div');
+      content.className = 'message-content';
+
+      // ユーザーアイコン（LINE風）- 相手のメッセージのみ表示
+      if (!isMine) {
+        const iconUrl = getUserIconUrl(messageUserName);
+        if (iconUrl) {
+          // アイコン画像がある場合
+          const icon = document.createElement('img');
+          icon.className = 'user-icon';
+          icon.src = iconUrl;
+          icon.alt = messageUserName || '匿名';
+          icon.onerror = function() {
+            // 画像読み込みエラー時はプレースホルダーに切り替え
+            const placeholder = document.createElement('div');
+            placeholder.className = 'user-icon-placeholder';
+            placeholder.textContent = (messageUserName || '匿').charAt(0);
+            this.replaceWith(placeholder);
+          };
+          content.appendChild(icon);
+        } else {
+          // アイコン画像がない場合はプレースホルダー
+          const placeholder = document.createElement('div');
+          placeholder.className = 'user-icon-placeholder';
+          placeholder.textContent = (messageUserName || '匿').charAt(0);
+          content.appendChild(placeholder);
+        }
+      }
+
+      // メッセージラッパー（バブル + 時間）
+      const wrapper = document.createElement('div');
+      wrapper.className = 'message-wrapper';
+
+      // メッセージバブル
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+
+      // メッセージタイプに応じた表示
+      if (msg.type === 'image') {
+        // 画像メッセージ
+        const img = document.createElement('img');
+        img.src = msg.fileUrl;
+        img.alt = msg.fileName || 'image';
+        img.className = 'message-image';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '300px';
+        img.style.borderRadius = '8px';
+        img.style.cursor = 'pointer';
+
+        // 画像クリックで拡大表示
+        img.onclick = function() {
+          window.open(msg.fileUrl, '_blank');
+        };
+
+        bubble.appendChild(img);
+
+        // キャプションがある場合は表示
+        if (msg.text) {
+          const caption = document.createElement('div');
+          caption.className = 'message-text';
+          caption.textContent = msg.text;
+          caption.style.marginTop = '8px';
+          bubble.appendChild(caption);
+        }
+      } else if (msg.type === 'file') {
+        // ファイルメッセージ
+        const fileLink = document.createElement('a');
+        fileLink.href = msg.fileUrl;
+        fileLink.download = msg.fileName || 'file';
+        fileLink.target = '_blank';
+        fileLink.className = 'message-file-link';
+        fileLink.style.display = 'flex';
+        fileLink.style.alignItems = 'center';
+        fileLink.style.gap = '8px';
+        fileLink.style.padding = '12px';
+        fileLink.style.backgroundColor = '#f7fafc';
+        fileLink.style.borderRadius = '8px';
+        fileLink.style.textDecoration = 'none';
+        fileLink.style.color = '#2d3748';
+
+        // ファイルアイコン
+        const fileIcon = document.createElement('div');
+        fileIcon.innerHTML = `
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+            <polyline points="13 2 13 9 20 9"></polyline>
+          </svg>
+        `;
+
+        // ファイル情報
+        const fileInfo = document.createElement('div');
+        fileInfo.style.flex = '1';
+
+        const fileName = document.createElement('div');
+        fileName.textContent = msg.fileName || 'ファイル';
+        fileName.style.fontWeight = '500';
+        fileName.style.wordBreak = 'break-all';
+
+        const fileSize = document.createElement('div');
+        fileSize.textContent = formatFileSize(msg.fileSize || 0);
+        fileSize.style.fontSize = '0.85rem';
+        fileSize.style.color = '#718096';
+
+        fileInfo.appendChild(fileName);
+        fileInfo.appendChild(fileSize);
+
+        fileLink.appendChild(fileIcon);
+        fileLink.appendChild(fileInfo);
+        bubble.appendChild(fileLink);
+
+        // キャプションがある場合は表示
+        if (msg.text) {
+          const caption = document.createElement('div');
+          caption.className = 'message-text';
+          caption.textContent = msg.text;
+          caption.style.marginTop = '8px';
+          bubble.appendChild(caption);
+        }
+      } else {
+        // テキストメッセージ（デフォルト）
+        const text = document.createElement('div');
+        text.className = 'message-text';
+        text.textContent = msg.text || '';
+        bubble.appendChild(text);
+      }
+
+      // 時間
+      const time = document.createElement('span');
+      time.className = 'message-time';
+      if (msg.timestamp && msg.timestamp.toDate) {
+        const date = msg.timestamp.toDate();
+        // 日付と時間のみ表示（月/日 時:分）
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        time.textContent = `${month}/${day} ${hours}:${minutes}`;
+      } else {
+        const date = new Date();
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        time.textContent = `${month}/${day} ${hours}:${minutes}`;
+      }
+
+      wrapper.appendChild(bubble);
+      wrapper.appendChild(time);
+      content.appendChild(wrapper);
+      item.appendChild(content);
+
+      // 長押しイベントリスナーを追加
+      console.log('[Message] Adding long press listener for message:', msg.id);
+      addLongPressListener(item, msg.id, msg.text || '');
+
+      container.appendChild(item);
+    }
+
+    // 添付ボタンのトリガー関数
+    window.triggerFileInput = function() {
+      document.getElementById('fileInput').click();
+    };
+
+    window.triggerCameraInput = function() {
+      document.getElementById('cameraInput').click();
+    };
+
+    window.triggerImageInput = function() {
+      document.getElementById('imageInput').click();
+    };
+
+    // ファイル選択ハンドラー
+    window.handleFileSelect = async function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      console.log('[File Upload] ファイル選択:', file.name, file.type, file.size);
+
+      // TODO: ファイルアップロード機能の実装
+      // 現在は仮実装（アラート表示のみ）
+      alert(`ファイルアップロード機能は準備中です\n\nファイル名: ${file.name}\nサイズ: ${(file.size / 1024).toFixed(2)} KB`);
+
+      // input要素をリセット（同じファイルを再選択できるように）
+      event.target.value = '';
+    };
+
+    // メッセージ送信
+    window.sendMessage = async function() {
+      const input = document.getElementById('messageInput');
+      const message = input.value.trim();
+
+      if (!message) {
+        return;
+      }
+
+      // ユーザー名チェック
+      if (!currentUserName) {
+        alert('ユーザー名を選択してください');
+        return;
+      }
+
+      // roomIdチェック
+      if (!currentRoomId) {
+        alert('ルームIDが設定されていません');
+        return;
+      }
+
+      try {
+        console.log('[Firestore] メッセージ送信中...');
+
+        // メッセージを送信（サブコレクション）
+        await addDoc(collection(db, `rooms/${currentRoomId}/messages`), {
+          text: message,
+          userName: currentUserName,
+          timestamp: serverTimestamp(),
+          deletedBy: []
+        });
+
+        console.log('[Firestore] メッセージ送信完了');
+
+        // roomsコレクションのlastMessageを更新
+        const roomRef = doc(db, 'rooms', currentRoomId);
+        await updateDoc(roomRef, {
+          lastMessage: message,
+          lastMessageAt: serverTimestamp(),
+          lastMessageBy: currentUserName
+        });
+
+        console.log('[Firestore] ルーム情報更新完了');
+
+        // 未読カウント更新（送信者以外の全メンバー）
+        try {
+          // ルーム情報を取得してメンバーリストを確認
+          const roomSnap = await getDoc(roomRef);
+          if (roomSnap.exists()) {
+            const roomData = roomSnap.data();
+            const memberEmails = roomData.memberEmails || [];
+
+            console.log('[Firestore] 未読カウント更新開始:', {
+              memberEmails: memberEmails,
+              currentUser: currentUserName
+            });
+
+            // 送信者以外の全メンバーの未読カウントを+1
+            // GAS版はcurrentUserNameしか持たないため、userEmailベースのカウント更新はスキップ
+            // PWA版のみunreadCounts機能を使用
+            console.log('[GAS版] 未読カウント処理スキップ（PWA版のみ使用）');
+
+            /*
+            for (const memberEmail of memberEmails) {
+              if (memberEmail !== currentUserEmail) {
+                const unreadRef = doc(db, `rooms/${currentRoomId}/unreadCounts/${memberEmail}`);
+
+                // 未読カウント更新前に現在の値を取得
+                const unreadSnap = await getDoc(unreadRef);
+                const currentUnreadCount = unreadSnap.exists() ? (unreadSnap.data().count || 0) : 0;
+
+                // 未読カウント更新
+                await setDoc(unreadRef, {
+                  userId: memberEmail,
+                  count: increment(1),
+                  lastUpdatedAt: serverTimestamp()
+                }, { merge: true });
+
+                // 新しい未読数（このルームのみ）
+                const newUnreadCount = currentUnreadCount + 1;
+
+                console.log('[Firestore] 未読カウント更新:', memberEmail, newUnreadCount);
+
+                // FCM通知送信（GAS/PWA共通: google.script.runを使用）
+                const notificationTitle = `💬 ${currentRoomName}`;
+                const notificationBody = `${currentUserName}: ${message}`;
+
+                if (typeof google !== 'undefined' && google.script && google.script.run) {
+                  google.script.run
+                    .withSuccessHandler(function(result) {
+                      console.log('[FCM通知] 送信成功:', memberEmail, result);
+                    })
+                    .withFailureHandler(function(error) {
+                      console.error('[FCM通知] 送信エラー:', memberEmail, error);
+                    })
+                    .sendFCMNotificationToUser(notificationTitle, notificationBody, memberEmail, newUnreadCount);
+
+                  console.log('[FCM通知] 送信リクエスト:', memberEmail, 'バッジ:', newUnreadCount);
+                } else {
+                  console.error('[FCM通知] google.script.run が利用できません');
+                }
+              }
+            }
+            */
+          }
+        } catch (error) {
+          console.error('[Firestore] 未読カウント更新エラー:', error);
+          // エラーがあってもメッセージ送信は成功しているので続行
+        }
+
+        // 入力欄クリア
+        input.value = '';
+        input.style.height = 'auto';
+
+      } catch (error) {
+        console.error('[Firestore] 送信エラー:', error);
+        alert('メッセージの送信に失敗しました: ' + error.message);
+      }
+    };
+
+    // チャット一覧に戻る（LINE風）
+    window.goBackToList = async function() {
+      console.log('========================================');
+      console.log('[Navigation] 🔙 チャット一覧に戻る - 関数実行開始');
+      console.log('[Navigation] isPWA:', isPWA);
+      console.log('========================================');
+
+      if (isPWA) {
+        // PWA版: Firestoreで親ウィンドウに通知
+        try {
+          console.log('[Navigation] ========== goBackToList開始 ==========');
+          console.log('[Navigation] 戻る方式: Firestore');
+          console.log('[Navigation] 🔍 sessionIdParam:', sessionIdParam);
+
+          // Firestoreのnavigationコレクションに書き込み
+          await setDoc(doc(db, 'navigation', 'chatControl'), {
+            action: 'goBackToList',
+            sessionId: sessionIdParam,
+            timestamp: serverTimestamp(),
+            from: 'chat_iframe'
+          });
+
+          console.log('[Navigation] ✅ Firestore書き込み成功');
+          console.log('[Navigation] ========== goBackToList完了 ==========');
+
+        } catch (error) {
+          console.error('[Navigation] ❌ Firestoreエラー:', error);
+          console.error('[Navigation] error.stack:', error.stack);
+
+          // フォールバック: history.back()
+          console.warn('[Navigation] フォールバック: history.back()');
+          window.history.back();
+        }
+      } else {
+        // GAS版: メニュー画面に戻る
+        console.log('[Navigation] GAS版: google.script.run 呼び出し');
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run.showChatRoomsList();
+        } else {
+          console.error('[Navigation] google.script.run が利用できません');
+        }
+      }
+    };
+
+    // メッセージ削除（論理削除 - 自分の画面からのみ削除）
+    async function deleteMessage(messageId) {
+      // ユーザー名チェック
+      if (!currentUserName) {
+        alert('ユーザー名を選択してください');
+        return;
+      }
+
+      if (!confirm('このメッセージを削除しますか？')) {
+        return;
+      }
+
+      try {
+        console.log('[Firestore] メッセージ削除中...', messageId);
+        console.log('[Firestore] 削除ユーザー:', currentUserName);
+
+        const messageRef = doc(db, 'messages', messageId);
+        const messageDoc = await getDoc(messageRef);
+
+        if (!messageDoc.exists()) {
+          console.error('[Firestore] メッセージが存在しません');
+          return;
+        }
+
+        const messageData = messageDoc.data();
+        // deletedBy が配列でない場合も考慮して、確実に配列化
+        let deletedByArray = messageData.deletedBy;
+        if (!Array.isArray(deletedByArray)) {
+          deletedByArray = [];
+        }
+
+        // 自分のユーザー名を deletedBy 配列に追加
+        if (!deletedByArray.includes(currentUserName)) {
+          deletedByArray.push(currentUserName);
+        }
+
+        await updateDoc(messageRef, {
+          deletedBy: deletedByArray,
+          lastDeletedAt: serverTimestamp()
+        });
+
+        console.log('[Firestore] メッセージ削除完了（自分の画面からのみ）');
+
+      } catch (error) {
+        console.error('[Firestore] 削除エラー:', error);
+        alert('メッセージの削除に失敗しました: ' + error.message);
+      }
+    }
+
+
+    // 選択削除モードの切り替え
+    window.toggleSelectionMode = function() {
+      const container = document.getElementById('messagesContainer');
+      const bar = document.getElementById('selectionModeBar');
+
+      if (container.classList.contains('selection-mode')) {
+        // 選択モード終了
+        container.classList.remove('selection-mode');
+        bar.classList.remove('active');
+
+        // すべてのチェックボックスをクリア
+        const checkboxes = document.querySelectorAll('.message-checkbox');
+        checkboxes.forEach(cb => cb.checked = false);
+        updateSelectionCount();
+      } else {
+        // 選択モード開始
+        container.classList.add('selection-mode');
+        bar.classList.add('active');
+      }
+    };
+
+    // 選択カウント更新
+    function updateSelectionCount() {
+      const checkboxes = document.querySelectorAll('.message-checkbox:checked');
+      const count = checkboxes.length;
+      document.getElementById('selectedCount').textContent = count;
+    }
+
+    // 選択したメッセージを一括削除（自分の画面からのみ削除）
+    window.deleteSelectedMessages = async function() {
+      const checkboxes = document.querySelectorAll('.message-checkbox:checked');
+
+      if (checkboxes.length === 0) {
+        alert('削除するメッセージを選択してください');
+        return;
+      }
+
+      if (!confirm(`${checkboxes.length}件のメッセージを削除しますか？`)) {
+        return;
+      }
+
+      try {
+        console.log('[Firestore] 一括削除開始:', checkboxes.length + '件');
+
+        // 並列で削除処理
+        const deletePromises = Array.from(checkboxes).map(async (checkbox) => {
+          const messageId = checkbox.dataset.messageId;
+          const messageRef = doc(db, 'messages', messageId);
+          const messageDoc = await getDoc(messageRef);
+
+          if (messageDoc.exists()) {
+            const messageData = messageDoc.data();
+            // deletedBy が配列でない場合も考慮して、確実に配列化
+            let deletedByArray = messageData.deletedBy;
+            if (!Array.isArray(deletedByArray)) {
+              deletedByArray = [];
+            }
+
+            // 自分のユーザー名を deletedBy 配列に追加
+            if (!deletedByArray.includes(currentUserName)) {
+              deletedByArray.push(currentUserName);
+            }
+
+            await updateDoc(messageRef, {
+              deletedBy: deletedByArray,
+              lastDeletedAt: serverTimestamp()
+            });
+          }
+        });
+
+        await Promise.all(deletePromises);
+
+        console.log('[Firestore] 一括削除完了（自分の画面からのみ）');
+
+        // 選択モード終了
+        toggleSelectionMode();
+
+      } catch (error) {
+        console.error('[Firestore] 一括削除エラー:', error);
+        alert('メッセージの削除に失敗しました: ' + error.message);
+      }
+    };
+
+    // 長押しメニュー関連
+    let contextMenuData = {
+      messageId: null,
+      messageText: null
+    };
+    let longPressTimer = null;
+    const LONG_PRESS_DURATION = 500; // 500ms
+
+    // 長押しメニューを開く（メッセージの近くに表示）
+    function openContextMenu(messageId, messageText, targetElement) {
+      console.log('[ContextMenu] Opening menu for message:', messageId);
+      contextMenuData.messageId = messageId;
+      contextMenuData.messageText = messageText;
+
+      const menu = document.getElementById('contextMenu');
+      const overlay = document.getElementById('contextMenuOverlay');
+
+      console.log('[ContextMenu] Menu element:', menu);
+      console.log('[ContextMenu] Overlay element:', overlay);
+
+      // メニュー表示（位置計算のため一時的に表示）
+      menu.style.display = 'block';
+      menu.style.opacity = '0';
+
+      // メッセージ要素の位置を取得
+      const rect = targetElement.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+
+      console.log('[ContextMenu] Target rect:', rect);
+      console.log('[ContextMenu] Menu rect:', menuRect);
+
+      // メニューをメッセージの上部中央に配置
+      let top = rect.top - menuRect.height - 10; // メッセージの上に10px隙間
+      let left = rect.left + (rect.width / 2) - (menuRect.width / 2); // 中央揃え
+
+      // 画面上部にはみ出す場合はメッセージの下に表示
+      if (top < 10) {
+        top = rect.bottom + 10;
+      }
+
+      // 画面左右にはみ出さないように調整
+      if (left < 10) {
+        left = 10;
+      } else if (left + menuRect.width > window.innerWidth - 10) {
+        left = window.innerWidth - menuRect.width - 10;
+      }
+
+      // 位置を設定
+      menu.style.top = top + 'px';
+      menu.style.left = left + 'px';
+
+      console.log('[ContextMenu] Final position - top:', top, 'left:', left);
+
+      // メニュー表示（アニメーション付き）
+      overlay.classList.add('active');
+      menu.classList.add('active');
+
+      // CSSのtransitionを有効にするため、次のフレームでopacityをリセット
+      setTimeout(() => {
+        menu.style.opacity = '1';
+      }, 10);
+
+      console.log('[ContextMenu] Menu classes:', menu.className);
+      console.log('[ContextMenu] Overlay classes:', overlay.className);
+    }
+
+    // 長押しメニューを閉じる
+    window.closeContextMenu = function() {
+      const menu = document.getElementById('contextMenu');
+      const overlay = document.getElementById('contextMenuOverlay');
+
+      overlay.classList.remove('active');
+      menu.classList.remove('active');
+
+      // 次回のために opacity を 0 に戻す
+      setTimeout(() => {
+        menu.style.opacity = '0';
+      }, 200); // transitionの時間（0.2s）後に実行
+
+      contextMenuData = { messageId: null, messageText: null };
+    };
+
+    // コピー機能
+    window.copyMessage = function() {
+      if (!contextMenuData.messageText) return;
+
+      // クリップボードにコピー
+      navigator.clipboard.writeText(contextMenuData.messageText)
+        .then(() => {
+          console.log('[Copy] メッセージをコピーしました');
+          closeContextMenu();
+        })
+        .catch(err => {
+          console.error('[Copy] コピーエラー:', err);
+          // フォールバック: textareaを使った古い方法
+          const textarea = document.createElement('textarea');
+          textarea.value = contextMenuData.messageText;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          closeContextMenu();
+        });
+    };
+
+    // リプライ機能
+    window.replyMessage = function() {
+      if (!contextMenuData.messageText) return;
+
+      const messageInput = document.getElementById('messageInput');
+      const replyText = `> ${contextMenuData.messageText}\n\n`;
+      messageInput.value = replyText;
+      messageInput.focus();
+
+      // 自動リサイズ
+      messageInput.style.height = 'auto';
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+
+      closeContextMenu();
+    };
+
+    // 削除機能（メニューから）
+    window.deleteMessageFromMenu = function() {
+      if (!contextMenuData.messageId) return;
+
+      // closeContextMenu()でcontextMenuDataがリセットされる前にIDを保存
+      const messageId = contextMenuData.messageId;
+
+      closeContextMenu();
+      deleteMessage(messageId);
+    };
+
+    // メッセージアイテムに長押しイベントを追加
+    function addLongPressListener(item, messageId, messageText) {
+      let touchStartTime = 0;
+      let touchMoved = false;
+
+      // タッチ開始
+      item.addEventListener('touchstart', (e) => {
+        console.log('[LongPress] touchstart');
+        touchStartTime = Date.now();
+        touchMoved = false;
+
+        longPressTimer = setTimeout(() => {
+          console.log('[LongPress] Timer fired, touchMoved:', touchMoved);
+          if (!touchMoved) {
+            console.log('[LongPress] Opening context menu');
+            openContextMenu(messageId, messageText, item);
+            // 振動フィードバック（対応ブラウザのみ）
+            if ('vibrate' in navigator) {
+              navigator.vibrate(50);
+            }
+          }
+        }, LONG_PRESS_DURATION);
+      });
+
+      // タッチ移動（スクロール検出）
+      item.addEventListener('touchmove', () => {
+        console.log('[LongPress] touchmove - canceling');
+        touchMoved = true;
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      // タッチ終了
+      item.addEventListener('touchend', () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      // タッチキャンセル
+      item.addEventListener('touchcancel', () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      // PC用: 右クリック
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openContextMenu(messageId, messageText, item);
+      });
+    }
+  </script>
+
+  <!-- 戻るボタン処理 -->
+<script>
+  console.log('[chat_ui_firestore] ✅ Script loaded - Version @899-debug');
+  
+  async function goBack() {
+    console.log('[chat_ui_firestore] >>> goBack() called at', new Date().toISOString());
+    const isInIframe = window.self !== window.top;
+    console.log('[chat_ui_firestore] isInIframe:', isInIframe);
+
+    if (isInIframe) {
+      console.log('[chat_ui_firestore] iframe内で開かれているため、postMessage送信（トーク一覧へ戻る）');
+      window.top.postMessage({ type: 'navigateToChat' }, '*');
+      console.log('[chat_ui_firestore] ✅ postMessage送信完了');
+    } else {
+      console.log('[chat_ui_firestore] 直接開かれているため、google.script.host.close()');
+      google.script.host.close();
+    }
+  }
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('[chat_ui_firestore] DOMContentLoaded fired');
+    const backButton = document.getElementById('back-button');
+    console.log('[chat_ui_firestore] backButton element:', backButton);
+    
+    if (backButton) {
+      backButton.addEventListener('click', goBack);
+      console.log('[chat_ui_firestore] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
+    } else {
+      console.error('[chat_ui_firestore] ❌ 戻るボタンが見つかりません');
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-brand-colors.css?v=9635">
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=9635">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #f8f9fa;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ヘッダー */
+    .chat-header {
+      background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+      color: white;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      flex-shrink: 0;
+    }
+    .chat-header h1 {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .chat-header .channel-info {
+      font-size: 0.875rem;
+      opacity: 0.9;
+      margin-top: 4px;
+    }
+
+    /* メッセージリスト */
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      background-color: #f8f9fa;
+      position: relative;
+    }
+
+    /* Pull-to-Refresh */
+    .pull-to-refresh {
+      position: absolute;
+      top: -60px;
+      left: 0;
+      right: 0;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #40B4E5;
+      font-size: 0.875rem;
+      transition: top 0.3s;
+    }
+    .pull-to-refresh.visible {
+      top: 0;
+    }
+    .message-item {
+      margin-bottom: 16px;
+      animation: fadeIn 0.3s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .message-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .message-sender {
+      font-weight: 600;
+      margin-right: 8px;
+      color: #2d3748;
+    }
+    .message-permission {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 12px;
+      margin-right: 8px;
+    }
+    .permission-owner {
+      background-color: #fef3c7;
+      color: #92400e;
+    }
+    .permission-staff {
+      background-color: #dbeafe;
+      color: #1e40af;
+    }
+    .permission-outsource {
+      background-color: #e0e7ff;
+      color: #4338ca;
+    }
+    .permission-system {
+      background-color: #f3f4f6;
+      color: #6b7280;
+    }
+    .message-timestamp {
+      font-size: 0.75rem;
+      color: #9ca3af;
+    }
+    .message-body {
+      background-color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    /* 入力エリア */
+    .input-container {
+      background-color: white;
+      padding: 16px;
+      border-top: 1px solid #e5e7eb;
+      flex-shrink: 0;
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .message-input {
+      flex: 1;
+      resize: none;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 16px;
+      max-height: 120px;
+    }
+    .message-input:focus {
+      outline: none;
+      border-color: #40B4E5;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    .send-button {
+      background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .send-button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    .send-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .char-counter {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      text-align: right;
+      margin-top: 4px;
+    }
+    .char-counter.warning {
+      color: #f59e0b;
+    }
+    .char-counter.error {
+      color: #ef4444;
+    }
+
+    /* 空状態 */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #9ca3af;
+    }
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+    }
+
+    /* Loading Overlay */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+    }
+
+    /* Toast Notification */
+    .toast-container {
+      position: fixed;
+      top: 80px;
+      right: 16px;
+      z-index: 9998;
+    }
+
+    /* iOS自動ズーム防止 */
+    input, textarea {
+      font-size: 16px !important;
+    }
+
+    /* スクロールバーのスタイル（Webkit） */
+    .messages-container::-webkit-scrollbar {
+      width: 8px;
+    }
+    .messages-container::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    .messages-container::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 4px;
+    }
+    .messages-container::-webkit-scrollbar-thumb:hover {
+      background: #a8a8a8;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">読み込み中...</span>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container">
+    <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body" id="errorToastBody">
+          エラーが発生しました
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <div class="chat-header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h1 style="margin: 0;">💬 チーム チャット</h1>
+        <div class="channel-info">
+          📢 全体チャンネル
+          <span id="debugInfo" style="font-size: 10px; opacity: 0.7; margin-left: 8px;"></span>
+        </div>
+        <!-- GAS版のみ：送信者名選択 -->
+        <div id="userSelectContainer" style="display: none; margin-top: 8px;">
+          <label style="font-size: 12px; opacity: 0.9; margin-right: 4px;">送信者:</label>
+          <select id="userSelect" style="background: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.5); padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+            <option value="">選択してください</option>
+          </select>
+        </div>
+      </div>
+      <button id="refreshButton" style="background: rgba(255,255,255,0.2); border: 1px solid white; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;">
+        <span id="refreshIcon">🔄</span> <span id="refreshText">更新</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Messages Container -->
+  <div class="messages-container" id="messagesContainer">
+    <div class="pull-to-refresh" id="pullToRefresh">
+      ↓ 離して更新
+    </div>
+    <div class="empty-state" id="emptyState">
+      <div class="empty-state-icon">💬</div>
+      <p>メッセージはまだありません</p>
+      <p class="text-muted" style="font-size: 0.875rem;">最初のメッセージを送信してみましょう！</p>
+    </div>
+  </div>
+
+  <!-- Input Container -->
+  <div class="input-container">
+    <div class="input-row">
+      <textarea
+        class="message-input"
+        id="messageInput"
+        placeholder="メッセージを入力..."
+        rows="1"
+        maxlength="1000"></textarea>
+      <button class="send-button" id="sendButton" onclick="sendMessage()">
+        送信
+      </button>
+    </div>
+    <div class="char-counter" id="charCounter">0 / 1000</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // グローバル変数
+    let currentChannel = '全体';
+    let pollingInterval = null;
+    let lastMessageId = null;
+    let fcmToken = '<?= fcmToken ?>'; // GASテンプレート変数から取得
+    let userName = null; // GAS版で選択されたユーザー名
+    const BASE_URL = '<?= GAS_BASE_URL ?>'; // PWA版API呼び出し用のGAS Web App URL
+
+    // デバッグ用：BASE_URLの値を確認
+    console.log('[Chat UI] BASE_URL:', BASE_URL);
+    console.log('[Chat UI] BASE_URL type:', typeof BASE_URL);
+    console.log('[Chat UI] BASE_URL length:', BASE_URL ? BASE_URL.length : 0);
+
+    // BASE_URLが未定義または空の場合はエラー
+    if (!BASE_URL || BASE_URL === '' || BASE_URL === 'undefined') {
+      const errorMsg = 'チャット画面を開けませんでした: GAS_BASE_URL is not defined';
+      console.error('[Chat UI] ' + errorMsg);
+      alert(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    // Pull-to-Refresh用
+    let touchStartY = 0;
+    let isPulling = false;
+
+    // ユーザー名選択ダイアログを表示（GAS版のみ）
+    // GAS版：ユーザーリストを読み込んでドロップダウンに表示
+    function loadUserList() {
+      console.log('[loadUserList] ユーザーリスト読み込み開始');
+
+      // ドロップダウンを表示
+      const userSelectContainer = document.getElementById('userSelectContainer');
+      const userSelect = document.getElementById('userSelect');
+
+      if (userSelectContainer) {
+        userSelectContainer.style.display = 'block';
+      }
+
+      // localStorageから前回選択したユーザー名を取得
+      const savedUserName = localStorage.getItem('reborn_chat_user_name');
+
+      // FCM通知登録シートからユーザーリストを取得
+      google.script.run
+        .withSuccessHandler(function(users) {
+          console.log('[loadUserList] ユーザー取得成功:', users);
+
+          if (!users || users.length === 0) {
+            console.error('[loadUserList] ユーザーが見つかりません');
+            return;
+          }
+
+          // ドロップダウンに追加
+          userSelect.innerHTML = '<option value="">選択してください</option>';
+          users.forEach(function(user) {
+            const option = document.createElement('option');
+            option.value = user.userName;
+            option.textContent = user.userName + ' (' + user.permission + ')';
+
+            // 前回選択したユーザーを自動選択
+            if (savedUserName && user.userName === savedUserName) {
+              option.selected = true;
+              userName = user.userName;
+              console.log('[loadUserList] 前回選択したユーザーを自動選択:', userName);
+            }
+
+            userSelect.appendChild(option);
+          });
+
+          // 選択変更時のイベントリスナー
+          userSelect.addEventListener('change', function() {
+            userName = this.value;
+            localStorage.setItem('reborn_chat_user_name', userName);
+            console.log('[loadUserList] ユーザー名を選択:', userName);
+          });
+        })
+        .withFailureHandler(function(error) {
+          console.error('[loadUserList] エラー:', error);
+        })
+        .getActiveUsers();
+    }
+
+    // 初期化
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('[Chat UI] 初期化開始');
+      console.log('[Chat UI] FCMトークン:', fcmToken ? fcmToken.substring(0, 20) + '...' : 'なし');
+
+      // GAS版の場合、ユーザー名選択ドロップダウンを表示
+      if (!fcmToken) {
+        console.log('[Chat UI] GAS版として初期化 - ユーザー名選択ドロップダウン表示');
+        loadUserList();
+        initializeChat();
+        return;
+      }
+
+      // PWA版の場合、そのまま初期化
+      console.log('[Chat UI] PWA版として初期化');
+      initializeChat();
+    });
+
+    // チャット初期化処理
+    function initializeChat() {
+      console.log('[Chat UI] チャット初期化開始');
+
+      // 更新ボタンのイベントリスナー登録
+      const refreshButton = document.getElementById('refreshButton');
+      if (refreshButton) {
+        refreshButton.addEventListener('click', function() {
+          console.log('[Refresh Button] クリックされました');
+          manualRefresh();
+        });
+        console.log('[Chat UI] 更新ボタンのイベントリスナー登録完了');
+      } else {
+        console.error('[Chat UI] 更新ボタンが見つかりません');
+      }
+
+      // Pull-to-Refresh設定
+      // 一旦無効化：touchイベントが問題を起こす可能性があるため
+      // setupPullToRefresh();
+      console.log('[Chat UI] Pull-to-Refreshは無効化（更新ボタンを使用）');
+
+      // メッセージ入力の自動リサイズ
+      const messageInput = document.getElementById('messageInput');
+      messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        updateCharCounter();
+      });
+
+      // Enterキーで送信（Shift+Enterで改行）
+      messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
+      // 初回メッセージ読み込み
+      loadMessages(false); // エラー時は表示
+
+      // ポーリング開始（10秒ごと、タイムアウト7秒）
+      startPolling();
+      console.log('[Chat UI] ポーリング有効化（10秒ごと自動更新、タイムアウト7秒）');
+
+      console.log('[Chat UI] 初期化完了');
+    }
+
+    // 文字数カウンター更新
+    function updateCharCounter() {
+      const messageInput = document.getElementById('messageInput');
+      const charCounter = document.getElementById('charCounter');
+      const length = messageInput.value.length;
+
+      charCounter.textContent = `${length} / 1000`;
+
+      if (length > 950) {
+        charCounter.classList.add('error');
+        charCounter.classList.remove('warning');
+      } else if (length > 800) {
+        charCounter.classList.add('warning');
+        charCounter.classList.remove('error');
+      } else {
+        charCounter.classList.remove('warning', 'error');
+      }
+    }
+
+    // メッセージ送信
+    // 🔥 Firestoreにメッセージを保存する関数
+    async function saveMessageToFirestore(messageText, channelId, senderName) {
+      console.log('[Firestore] メッセージ保存開始:', messageText);
+
+      try {
+        // Firebase SDKを動的インポート
+        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+        const { getFirestore, collection, addDoc, doc, updateDoc, setDoc, serverTimestamp, increment } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        // Firebase設定
+        const firebaseConfig = {
+          apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+          authDomain: "reborn-chat.firebaseapp.com",
+          projectId: "reborn-chat",
+          storageBucket: "reborn-chat.firebasestorage.app",
+          messagingSenderId: "345706548795",
+          appId: "1:345706548795:web:058a553da6b4b74db5161e"
+        };
+
+        // Firebase初期化
+        const app = initializeApp(firebaseConfig, 'chat-message-sender-' + Date.now());
+        const db = getFirestore(app);
+
+        // ルームIDを決定
+        let roomId;
+        if (channelId === '全体' || !channelId) {
+          roomId = 'room_default_all';
+        } else if (channelId === 'システム通知') {
+          roomId = 'room_system_notifications';
+        } else {
+          roomId = channelId; // カスタムルームID
+        }
+
+        // 1. messagesコレクションにメッセージを追加
+        await addDoc(collection(db, 'messages'), {
+          roomId: roomId,
+          text: messageText,
+          userName: senderName,
+          timestamp: serverTimestamp(),
+          deletedBy: []
+        });
+
+        console.log('[Firestore] messagesコレクションに保存完了');
+
+        // 2. roomsコレクションのlastMessageを更新
+        const roomRef = doc(db, 'rooms', roomId);
+        await updateDoc(roomRef, {
+          lastMessage: messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText,
+          lastMessageAt: serverTimestamp(),
+          lastMessageBy: senderName
+        });
+
+        console.log('[Firestore] rooms lastMessage更新完了');
+
+        // 3. 全ユーザーの未読カウントを更新（送信者以外）
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(async function(userNames) {
+              console.log('[Firestore] ユーザー一覧取得:', userNames);
+
+              // 送信者以外のユーザーの未読カウントを+1
+              const updatePromises = userNames
+                .filter(name => name && name !== senderName && name !== 'システム')
+                .map(async (name) => {
+                  try {
+                    const unreadRef = doc(db, `rooms/${roomId}/unreadCounts/${name}`);
+                    await setDoc(unreadRef, {
+                      userId: name,
+                      unreadCount: increment(1),
+                      lastUpdated: serverTimestamp()
+                    }, { merge: true });
+
+                    console.log(`[Firestore] ${name} の未読カウント+1完了`);
+                  } catch (err) {
+                    console.error(`[Firestore] ${name} の未読カウント更新エラー:`, err);
+                  }
+                });
+
+              await Promise.all(updatePromises);
+              console.log('[Firestore] 全ユーザーの未読カウント更新完了');
+            })
+            .withFailureHandler(function(error) {
+              console.error('[Firestore] ユーザー一覧取得エラー:', error);
+            })
+            .getAllUserNames();
+        }
+
+        console.log('[Firestore] メッセージ保存完了');
+      } catch (error) {
+        console.error('[Firestore] メッセージ保存エラー:', error);
+        throw error;
+      }
+    }
+
+    function sendMessage() {
+      const messageInput = document.getElementById('messageInput');
+      const message = messageInput.value.trim();
+
+      if (!message) {
+        return;
+      }
+
+      if (message.length > 1000) {
+        showError('メッセージが長すぎます（最大1000文字）');
+        return;
+      }
+
+      // GAS版：ユーザー名が選択されているか確認
+      if (!fcmToken && !userName) {
+        showError('送信者を選択してください');
+        return;
+      }
+
+      console.log('[sendMessage] メッセージ送信: ' + message);
+      console.log('[sendMessage] 送信者: ' + userName);
+      showLoading(true);
+      disableSendButton(true);
+
+      google.script.run
+        .withSuccessHandler(async function(result) {
+          console.log('[sendMessage] 送信成功:', result);
+
+          if (result.success) {
+            // 🔥 Firestoreにも保存（PWA版の未読カウント・通知対応）
+            try {
+              await saveMessageToFirestore(message, currentChannel, userName);
+            } catch (firestoreError) {
+              console.error('[sendMessage] Firestore保存エラー:', firestoreError);
+              // Firestoreエラーでも処理は継続（GAS版には保存済み）
+            }
+
+            // 入力欄をクリア
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            updateCharCounter();
+
+            // すぐにメッセージを再読込
+            loadMessages(false); // エラー時は表示
+          } else {
+            showError(result.message || 'メッセージ送信に失敗しました');
+          }
+
+          showLoading(false);
+          disableSendButton(false);
+        })
+        .withFailureHandler(function(error) {
+          console.error('[sendMessage] エラー:', error);
+          showLoading(false);
+          disableSendButton(false);
+          showError('エラー: ' + error.message);
+        })
+        .sendMessage(message, currentChannel, fcmToken, userName);
+    }
+
+    // メッセージ読み込み
+    function loadMessages(silent, callback) {
+      const timestamp = new Date().toLocaleTimeString();
+      const callId = 'load_' + Date.now();
+      console.log('[loadMessages] (' + callId + ') メッセージ取得開始 @ ' + timestamp + ' (silent=' + silent + ', callback=' + (callback ? 'あり' : 'なし') + ')');
+      console.log('[loadMessages] (' + callId + ') google.script.run exists:', typeof google !== 'undefined' && typeof google.script !== 'undefined' && typeof google.script.run !== 'undefined');
+      console.log('[loadMessages] (' + callId + ') currentChannel:', currentChannel);
+
+      // デバッグ情報表示
+      const debugInfo = document.getElementById('debugInfo');
+      if (debugInfo) {
+        debugInfo.textContent = '読込中 ' + timestamp;
+      }
+
+      // タイムアウト処理（7秒）
+      const timeoutId = setTimeout(function() {
+        console.error('[loadMessages] (' + callId + ') ⏰ タイムアウト（7秒経過）');
+        if (debugInfo) {
+          debugInfo.textContent = 'タイムアウト ' + new Date().toLocaleTimeString();
+          debugInfo.style.color = '#ff6b6b';
+        }
+        if (!silent) {
+          showError('タイムアウト: サーバーからの応答がありません（7秒）');
+        }
+        if (callback) {
+          console.log('[loadMessages] (' + callId + ') タイムアウト後コールバック実行');
+          callback();
+        }
+      }, 7000);
+
+      try {
+        google.script.run
+          .withSuccessHandler(function(messages) {
+            clearTimeout(timeoutId);
+            console.log('[loadMessages] (' + callId + ') ✅ 取得成功 @ ' + timestamp + ':', messages ? messages.length : 0, '件');
+            console.log('[loadMessages] (' + callId + ') messages type:', typeof messages);
+            console.log('[loadMessages] (' + callId + ') messages:', JSON.stringify(messages).substring(0, 200));
+
+            if (debugInfo) {
+              debugInfo.textContent = '✅ ' + (messages ? messages.length : 0) + '件 ' + new Date().toLocaleTimeString();
+              debugInfo.style.color = '#51cf66';
+            }
+
+            displayMessages(messages);
+            if (callback) {
+              console.log('[loadMessages] (' + callId + ') 成功コールバック実行');
+              callback();
+            }
+          })
+          .withFailureHandler(function(error) {
+            clearTimeout(timeoutId);
+            console.error('[loadMessages] (' + callId + ') ❌ エラー @ ' + timestamp + ':', error);
+            console.error('[loadMessages] (' + callId + ') エラー詳細:', JSON.stringify(error));
+            console.error('[loadMessages] (' + callId + ') エラーtype:', typeof error);
+            console.error('[loadMessages] (' + callId + ') エラーmessage:', error ? error.message : 'なし');
+            console.error('[loadMessages] (' + callId + ') エラーstack:', error ? error.stack : 'なし');
+
+            if (debugInfo) {
+              debugInfo.textContent = '❌ エラー ' + new Date().toLocaleTimeString();
+              debugInfo.style.color = '#ff6b6b';
+            }
+
+            // ポーリング中のエラーはサイレント処理（ユーザーに表示しない）
+            if (!silent) {
+              showError('メッセージの読み込みに失敗しました: ' + (error ? error.message : '不明なエラー'));
+            }
+            if (callback) {
+              console.log('[loadMessages] (' + callId + ') エラー後コールバック実行');
+              callback();
+            }
+          })
+          .getMessages(currentChannel, 100);
+        console.log('[loadMessages] (' + callId + ') google.script.run.getMessages() 呼び出し完了');
+      } catch (callError) {
+        clearTimeout(timeoutId);
+        console.error('[loadMessages] (' + callId + ') 💥 呼び出し時例外:', callError);
+        console.error('[loadMessages] (' + callId + ') 例外詳細:', callError.message);
+        console.error('[loadMessages] (' + callId + ') 例外stack:', callError.stack);
+
+        if (debugInfo) {
+          debugInfo.textContent = '💥 例外 ' + new Date().toLocaleTimeString();
+          debugInfo.style.color = '#ff6b6b';
+        }
+
+        if (!silent) {
+          showError('エラー: ' + callError.message);
+        }
+        if (callback) {
+          console.log('[loadMessages] (' + callId + ') 例外後コールバック実行');
+          callback();
+        }
+      }
+    }
+
+    // メッセージ表示
+    function displayMessages(messages) {
+      console.log('[displayMessages] 開始 - メッセージ数:', messages ? messages.length : 0);
+
+      const container = document.getElementById('messagesContainer');
+      const emptyState = document.getElementById('emptyState');
+
+      console.log('[displayMessages] DOM要素取得:', {
+        container: container ? 'あり' : 'なし',
+        emptyState: emptyState ? 'あり' : 'なし'
+      });
+
+      if (!container) {
+        console.error('[displayMessages] エラー: messagesContainer要素が見つかりません');
+        return;
+      }
+
+      if (!messages || messages.length === 0) {
+        if (emptyState) {
+          emptyState.style.display = 'block';
+        } else {
+          console.warn('[displayMessages] emptyState要素が見つかりません（空メッセージ表示不可）');
+        }
+        return;
+      }
+
+      if (emptyState) {
+        emptyState.style.display = 'none';
+      }
+
+      // 現在のスクロール位置を保存
+      const wasAtBottom = isScrolledToBottom();
+
+      // 既存メッセージIDのセットを作成
+      const existingMessageIds = new Set();
+      const existingMessages = container.querySelectorAll('.message-item');
+      existingMessages.forEach(function(msgEl) {
+        existingMessageIds.add(msgEl.dataset.messageId);
+      });
+
+      // 新しいメッセージのみを追加（差分更新）
+      let newMessageCount = 0;
+      messages.forEach(function(msg) {
+        if (!existingMessageIds.has(msg.messageId)) {
+          const messageDiv = createMessageElement(msg);
+          container.appendChild(messageDiv);
+          newMessageCount++;
+        }
+      });
+
+      console.log('[displayMessages] 新規メッセージ追加:', newMessageCount + '件');
+
+      // 最新のメッセージIDを保存
+      if (messages.length > 0) {
+        lastMessageId = messages[messages.length - 1].messageId;
+      }
+
+      // 自動スクロール（最初の読み込み時 or 最下部にいた場合）
+      if (wasAtBottom === null || wasAtBottom) {
+        scrollToBottom();
+      }
+    }
+
+    // メッセージ要素を作成
+    function createMessageElement(msg) {
+      const div = document.createElement('div');
+      div.className = 'message-item';
+      div.dataset.messageId = msg.messageId;
+
+      // 権限バッジのクラス
+      const permissionClass = getPermissionClass(msg.senderPermission);
+
+      div.innerHTML = `
+        <div class="message-header">
+          <span class="message-sender">${escapeHtml(msg.sender)}</span>
+          <span class="message-permission ${permissionClass}">${escapeHtml(msg.senderPermission)}</span>
+          <span class="message-timestamp">${formatTimestamp(msg.timestamp)}</span>
+        </div>
+        <div class="message-body">${escapeHtml(msg.message)}</div>
+      `;
+
+      return div;
+    }
+
+    // 権限バッジのクラスを取得
+    function getPermissionClass(permission) {
+      if (permission === 'オーナー') return 'permission-owner';
+      if (permission === 'スタッフ') return 'permission-staff';
+      if (permission === '外注') return 'permission-outsource';
+      if (permission === 'システム') return 'permission-system';
+      return 'permission-staff';
+    }
+
+    // タイムスタンプをフォーマット
+    function formatTimestamp(timestamp) {
+      if (!timestamp) return '';
+
+      // YYYY-MM-DD HH:mm:ss 形式から表示用に変換
+      const match = timestamp.match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+      if (match) {
+        const [_, year, month, day, hour, minute] = match;
+        return `${month}/${day} ${hour}:${minute}`;
+      }
+
+      return timestamp;
+    }
+
+    // HTMLエスケープ
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // スクロール位置チェック
+    function isScrolledToBottom() {
+      const container = document.getElementById('messagesContainer');
+      const threshold = 100; // 100px以内なら「最下部」とみなす
+      return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+    }
+
+    // 最下部にスクロール
+    function scrollToBottom() {
+      const container = document.getElementById('messagesContainer');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // ポーリング開始・停止は後方で定義（getNewMessages API使用版）
+    // beforeunloadイベントリスナーも後方で定義
+
+    // ページがアクティブになった時にメッセージ再読込（PWA対応）
+    window.addEventListener('focus', function() {
+      console.log('[Focus] ページがアクティブになりました');
+      loadMessages(false); // エラー時は表示（ユーザーアクションによる読み込み）
+    });
+
+    // Visibility API: ページが表示された時にメッセージ再読込（PWA対応）
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) {
+        console.log('[Visibility] ページが表示されました');
+        loadMessages(false); // エラー時は表示（ユーザーアクションによる読み込み）
+      }
+    });
+
+    // 手動更新（更新ボタン）
+    function manualRefresh() {
+      const refreshTime = new Date().toLocaleTimeString();
+      console.log('[Manual Refresh] ===== 更新ボタンクリック @ ' + refreshTime + ' =====');
+
+      // 視覚フィードバック
+      const refreshButton = document.getElementById('refreshButton');
+      const refreshIcon = document.getElementById('refreshIcon');
+      const refreshText = document.getElementById('refreshText');
+
+      console.log('[Manual Refresh] UI要素取得:', {
+        button: refreshButton ? 'あり' : 'なし',
+        icon: refreshIcon ? 'あり' : 'なし',
+        text: refreshText ? 'あり' : 'なし'
+      });
+
+      if (refreshButton) {
+        refreshButton.style.background = 'rgba(255,255,255,0.4)';
+        refreshButton.disabled = true;
+        console.log('[Manual Refresh] ボタン無効化');
+      }
+
+      if (refreshIcon) {
+        refreshIcon.style.display = 'inline-block';
+        refreshIcon.style.animation = 'spin 1s linear infinite';
+        console.log('[Manual Refresh] スピンアニメーション開始');
+      }
+
+      if (refreshText) {
+        refreshText.textContent = '読込中...';
+        console.log('[Manual Refresh] テキスト変更: 読込中...');
+      }
+
+      // 強制UIリセット（8秒後）
+      let resetDone = false;
+      const forceResetTimer = setTimeout(function() {
+        if (resetDone) return;
+        console.warn('[Manual Refresh] ⚠️ 強制UIリセット（8秒タイムアウト）');
+        resetDone = true;
+
+        if (refreshButton) {
+          refreshButton.style.background = 'rgba(255,255,255,0.2)';
+          refreshButton.disabled = false;
+        }
+        if (refreshIcon) {
+          refreshIcon.style.animation = '';
+        }
+        if (refreshText) {
+          refreshText.textContent = '更新';
+        }
+      }, 8000);
+
+      // UIリセット関数
+      function resetUI() {
+        if (resetDone) return;
+        resetDone = true;
+        clearTimeout(forceResetTimer);
+
+        if (refreshButton) {
+          refreshButton.style.background = 'rgba(255,255,255,0.2)';
+          refreshButton.disabled = false;
+          console.log('[Manual Refresh] ボタン有効化');
+        }
+
+        if (refreshIcon) {
+          refreshIcon.style.animation = '';
+          console.log('[Manual Refresh] スピンアニメーション停止');
+        }
+
+        if (refreshText) {
+          refreshText.textContent = '更新';
+          console.log('[Manual Refresh] テキスト変更: 更新');
+        }
+
+        console.log('[Manual Refresh] ===== 更新完了 =====');
+      }
+
+      // メッセージ読み込み
+      console.log('[Manual Refresh] loadMessages() 呼び出し開始');
+      loadMessages(false, function() {
+        console.log('[Manual Refresh] ===== コールバック実行 @ ' + new Date().toLocaleTimeString() + ' =====');
+        resetUI();
+      });
+      console.log('[Manual Refresh] loadMessages() 呼び出し完了（非同期処理中）');
+    }
+
+    // Pull-to-Refresh設定
+    function setupPullToRefresh() {
+      const container = document.getElementById('messagesContainer');
+      const pullIndicator = document.getElementById('pullToRefresh');
+
+      container.addEventListener('touchstart', function(e) {
+        // スクロール位置が一番上の時のみPull-to-Refresh有効
+        if (container.scrollTop === 0) {
+          touchStartY = e.touches[0].clientY;
+        }
+      });
+
+      container.addEventListener('touchmove', function(e) {
+        if (touchStartY === 0) return;
+
+        const touchY = e.touches[0].clientY;
+        const pullDistance = touchY - touchStartY;
+
+        // 下方向に引っ張っている & 距離が50px以上
+        if (pullDistance > 0 && container.scrollTop === 0) {
+          isPulling = true;
+
+          if (pullDistance > 60) {
+            pullIndicator.classList.add('visible');
+            pullIndicator.textContent = '↑ 離して更新';
+          } else {
+            pullIndicator.textContent = '↓ 下に引っ張って更新';
+          }
+        }
+      });
+
+      container.addEventListener('touchend', function() {
+        if (isPulling) {
+          isPulling = false;
+          pullIndicator.classList.remove('visible');
+          pullIndicator.textContent = '↓ 離して更新';
+
+          console.log('[Pull-to-Refresh] 手動更新実行');
+          loadMessages(false); // 手動更新
+        }
+        touchStartY = 0;
+      });
+    }
+
+    // ローディング表示
+    function showLoading(show) {
+      const overlay = document.getElementById('loadingOverlay');
+      overlay.style.display = show ? 'flex' : 'none';
+    }
+
+    // 送信ボタンの有効/無効
+    function disableSendButton(disabled) {
+      const sendButton = document.getElementById('sendButton');
+      sendButton.disabled = disabled;
+    }
+
+    // エラー表示
+    function showError(message) {
+      console.error('[Error]', message);
+      const toast = new bootstrap.Toast(document.getElementById('errorToast'));
+      document.getElementById('errorToastBody').textContent = message;
+      toast.show();
+    }
+
+    // 📡 Polling: 新着メッセージ取得（FCMフォールバック）
+    let lastPollingCheck = Date.now();
+
+    function startPolling() {
+      console.log('[Polling] 開始: 30秒間隔で新着確認');
+
+      // 既存のインターバルをクリア
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+
+      // 30秒ごとに新着チェック
+      pollingInterval = setInterval(() => {
+        // GAS版では全メッセージ再読み込み（シンプルな方式）
+        if (!fcmToken) {
+          console.log('[Polling] GAS版 - メッセージ再読み込み');
+          loadMessages(true); // silent=true（エラー表示しない）
+          return;
+        }
+
+        // PWA版では新着メッセージのみ取得（効率的な方式）
+        (async () => {
+          try {
+            const userName = localStorage.getItem('reborn_user_name');
+            if (!userName) {
+              console.log('[Polling] PWA版 - ユーザー名未設定、スキップ');
+              return;
+            }
+
+            const url = BASE_URL + '?action=getNewMessages' +
+              '&lastCheckTime=' + lastPollingCheck +
+              '&userName=' + encodeURIComponent(userName) +
+              '&channelId=' + encodeURIComponent(currentChannel);
+
+            console.log('[Polling] PWA版 - 新着確認中... lastCheckTime:', new Date(lastPollingCheck).toLocaleString('ja-JP'));
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success && data.count > 0) {
+              console.log('[Polling] ✅ 新着メッセージ: ' + data.count + '件');
+
+              // 新着メッセージをUIに追加
+              data.messages.forEach(msg => {
+                appendMessage(msg, false); // 自動スクロールなし（Polling時）
+              });
+
+              // バッジ更新（新着件数分）
+              if (typeof updateBadge === 'function') {
+                updateBadge(data.count);
+              }
+
+              // 最新のタイムスタンプを更新
+              if (data.messages.length > 0) {
+                const latestMsg = data.messages[data.messages.length - 1];
+                if (latestMsg.timestampMs) {
+                  lastPollingCheck = latestMsg.timestampMs + 1; // 次回は この後から取得
+                }
+              }
+            } else {
+              console.log('[Polling] 新着なし');
+            }
+
+            // サーバー時刻で最終確認時刻を更新
+            if (data.serverTime) {
+              lastPollingCheck = data.serverTime;
+            }
+
+          } catch (error) {
+            console.error('[Polling] PWA版エラー:', error);
+          }
+        })();
+      }, 30000); // 30秒
+    }
+
+    function stopPolling() {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        console.log('[Polling] 停止');
+      }
+    }
+
+    // ページを離れる時にPolling停止
+    window.addEventListener('beforeunload', () => {
+      stopPolling();
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    .section-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #333;
+      font-size: 14px;
+    }
+    .search-box {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+      transition: border-color 0.3s;
+    }
+    .search-box:focus {
+      outline: none;
+      border-color: #4285f4;
+    }
+    select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .btn-primary {
+      background: #4285f4;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #3367d6;
+    }
+    .btn-secondary {
+      background: #f1f3f4;
+      color: #5f6368;
+    }
+    .btn-secondary:hover {
+      background: #e8eaed;
+    }
+    .search-result {
+      margin-top: 10px;
+      padding: 10px;
+      background: #e8f0fe;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #1967d2;
+      display: none;
+    }
+    .divider {
+      height: 1px;
+      background: #e0e0e0;
+      margin: 20px 0;
+    }
+    .info-text {
+      font-size: 12px;
+      color: #5f6368;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- リアルタイム検索 -->
+    <div class="section">
+      <div class="section-title">🔍 キーワード検索</div>
+      <input type="text" id="searchBox" class="search-box" placeholder="管理番号、商品名、ブランドで検索...">
+      <div class="info-text">入力するとリアルタイムで絞り込まれます</div>
+      <div id="searchResult" class="search-result"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 複合条件フィルタ -->
+    <div class="section">
+      <div class="section-title">📋 詳細絞り込み</div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; color: #5f6368;">棚番号</label>
+        <select id="shelfSelect">
+          <option value="全て">全て</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; color: #5f6368;">ステータス</label>
+        <select id="statusSelect">
+          <option value="全て">全て</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; color: #5f6368;">担当者</label>
+        <select id="staffSelect">
+          <option value="全て">全て</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; color: #5f6368;">ブランド</label>
+        <input type="text" id="brandInput" class="search-box" placeholder="ブランド名を入力...">
+      </div>
+    </div>
+
+    <!-- ボタン -->
+    <div class="button-group">
+      <button class="btn btn-secondary" onclick="applyFilter()">絞り込み</button>
+      <button class="btn btn-primary" onclick="clearAllFilters()">クリア</button>
+    </div>
+  </div>
+
+  <script>
+    let searchTimeout;
+
+    // 初期化
+    window.onload = function() {
+      loadFilterOptions();
+    };
+
+    // フィルタ用選択肢を読み込み
+    function loadFilterOptions() {
+      google.script.run
+        .withSuccessHandler(function(options) {
+          // 棚番号
+          const shelfSelect = document.getElementById('shelfSelect');
+          shelfSelect.innerHTML = options.shelves.map(s => `<option value="${s}">${s}</option>`).join('');
+
+          // ステータス
+          const statusSelect = document.getElementById('statusSelect');
+          statusSelect.innerHTML = options.statuses.map(s => `<option value="${s}">${s}</option>`).join('');
+
+          // 担当者
+          const staffSelect = document.getElementById('staffSelect');
+          staffSelect.innerHTML = options.staff.map(s => `<option value="${s}">${s}</option>`).join('');
+        })
+        .getFilterOptions();
+    }
+
+    // リアルタイム検索
+    document.addEventListener('DOMContentLoaded', function() {
+      const searchBox = document.getElementById('searchBox');
+      const searchResult = document.getElementById('searchResult');
+
+      searchBox.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const keyword = this.value.trim();
+
+        if (keyword === '') {
+          searchResult.style.display = 'none';
+          google.script.run.clearFilter();
+          return;
+        }
+
+        searchTimeout = setTimeout(function() {
+          google.script.run
+            .withSuccessHandler(function(result) {
+              if (result.startsWith('OK')) {
+                searchResult.textContent = result.replace('OK: ', '');
+                searchResult.style.display = 'block';
+              } else {
+                searchResult.textContent = result.replace('NG: ', '');
+                searchResult.style.display = 'block';
+                searchResult.style.background = '#fce8e6';
+                searchResult.style.color = '#c5221f';
+              }
+            })
+            .searchProducts(keyword);
+        }, 300); // 300ms待ってから検索
+      });
+    });
+
+    // 複合条件フィルタを適用
+    function applyFilter() {
+      const conditions = {
+        shelf: document.getElementById('shelfSelect').value,
+        status: document.getElementById('statusSelect').value,
+        staff: document.getElementById('staffSelect').value,
+        brand: document.getElementById('brandInput').value
+      };
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.startsWith('OK')) {
+            alert('✅ ' + result.replace('OK: ', ''));
+            google.script.host.close();
+          } else {
+            alert('❌ ' + result.replace('NG: ', ''));
+          }
+        })
+        .applyComplexFilter(conditions);
+    }
+
+    // フィルタをクリア
+    function clearAllFilters() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          alert('✅ すべてのフィルタを解除しました');
+          google.script.host.close();
+        })
+        .clearFilter();
+    }
+  </script>
+</body>
+</html>

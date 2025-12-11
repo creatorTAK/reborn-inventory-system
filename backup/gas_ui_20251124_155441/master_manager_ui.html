@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body { font-family: system-ui, sans-serif; padding: 12px; font-size: 13px; background: #f8fafc; margin: 0; }
+@media (min-width: 768px) { body { background: transparent; padding: 8px; } }
+.page-title { margin: 0 0 16px 0; font-size: 1.25rem; font-weight: 600; color: #212529; }
+@media (min-width: 768px) { .page-title { display: none; } }
+.header { background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%); color: white; padding: 16px; margin: -16px -16px 20px -16px; border-radius: 0 0 12px 12px; }
+.header h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.header p { margin: 8px 0 0 0; font-size: 13px; opacity: 0.9; }
+.section { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e5e7eb; }
+.section-title { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #f3f4f6; }
+.category-selector { margin-bottom: 16px; }
+.category-selector select { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white; }
+.category-selector select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+.keyword-list { max-height: 200px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb; }
+.keyword-item { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+.keyword-item:last-child { border-bottom: none; }
+.keyword-item:hover { background: #f0f9ff; }
+.keyword-text { flex: 1; font-size: 13px; color: #374151; }
+.keyword-actions { display: flex; gap: 4px; }
+.btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: all 0.2s; }
+.btn-primary { background: #3b82f6; color: white; }
+.btn-primary:hover { background: #2563eb; }
+.btn-danger { background: #ef4444; color: white; }
+.btn-danger:hover { background: #dc2626; }
+.btn-warning { background: #f59e0b; color: white; }
+.btn-warning:hover { background: #d97706; }
+.btn-secondary { background: #6b7280; color: white; }
+.btn-secondary:hover { background: #4b5563; }
+.btn-small { padding: 4px 8px; font-size: 11px; }
+.input-group { margin-bottom: 12px; }
+.input-group label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 500; color: #374151; }
+.input-group input, .input-group textarea { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box; }
+.input-group input:focus, .input-group textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+.actions { display: flex; gap: 8px; margin-top: 12px; }
+.actions .btn { flex: 1; }
+.message { margin: 12px 0; padding: 12px; border-radius: 6px; font-size: 13px; }
+.message.success { background: #d1fae5; color: #065f46; border: 1px solid #10b981; }
+.message.error { background: #fee2e2; color: #991b1b; border: 1px solid #ef4444; }
+.message.info { background: #dbeafe; color: #1e40af; border: 1px solid #3b82f6; }
+.stats { background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; padding: 12px; margin-bottom: 16px; }
+.stats-item { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+.stats-item:last-child { margin-bottom: 0; }
+.stats-label { color: #0c4a6e; font-weight: 500; }
+.stats-value { color: #0369a1; font-weight: 600; }
+.search-box { margin-bottom: 12px; }
+.search-box input { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box; }
+.empty-state { text-align: center; padding: 32px 16px; color: #6b7280; }
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+.loading { text-align: center; padding: 20px; color: #6b7280; }
+.tab-container { margin-bottom: 16px; }
+.tabs { display: flex; background: #f3f4f6; border-radius: 8px; padding: 4px; }
+.tab { flex: 1; padding: 8px 12px; text-align: center; font-size: 12px; font-weight: 500; cursor: pointer; border-radius: 6px; transition: all 0.2s; }
+.tab.active { background: white; color: #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.tab:not(.active) { color: #6b7280; }
+.tab:not(.active):hover { color: #374151; }
+.bulk-import { margin-top: 16px; }
+.bulk-import textarea { resize: vertical; min-height: 80px; }
+</style>
+</head>
+<body>
+<h4 class="page-title">📚 マスタデータ管理</h4>
+
+<!-- 統計情報 -->
+<div class="stats" id="statsSection" style="display: none;">
+<div class="stats-item">
+<span class="stats-label">選択中のカテゴリ</span>
+<span class="stats-value" id="currentCategory">-</span>
+</div>
+<div class="stats-item">
+<span class="stats-label">キーワード数</span>
+<span class="stats-value" id="keywordCount">0</span>
+</div>
+</div>
+
+<!-- カテゴリ選択 -->
+<div class="section">
+<div class="section-title">カテゴリ選択</div>
+<div class="category-selector">
+<select id="categorySelect">
+<option value="">-- カテゴリを選択 --</option>
+</select>
+</div>
+</div>
+
+<!-- タブ -->
+<div class="tab-container">
+<div class="tabs">
+<div class="tab active" onclick="switchTab('manage')">管理</div>
+<div class="tab" onclick="switchTab('bulk')">一括</div>
+<div class="tab" onclick="switchTab('cleanup')">整理</div>
+</div>
+</div>
+
+<!-- 管理タブ -->
+<div id="manageTab" class="tab-content">
+<!-- キーワード追加 -->
+<div class="section">
+<div class="section-title">キーワード追加</div>
+<div class="input-group">
+<label>新しいキーワード</label>
+<input type="text" id="newKeyword" placeholder="追加するキーワードを入力">
+</div>
+<div class="actions">
+<button class="btn btn-primary" onclick="addKeyword()">追加</button>
+</div>
+</div>
+
+<!-- キーワード一覧 -->
+<div class="section">
+<div class="section-title">キーワード一覧</div>
+<div class="search-box">
+<input type="text" id="searchKeyword" placeholder="キーワードを検索..." oninput="filterKeywords()">
+</div>
+<div id="keywordList" class="keyword-list">
+<div class="empty-state">
+<div class="icon">📋</div>
+<p>カテゴリを選択してください</p>
+</div>
+</div>
+</div>
+</div>
+
+<!-- 一括操作タブ -->
+<div id="bulkTab" class="tab-content" style="display: none;">
+<div class="section">
+<div class="section-title">一括インポート</div>
+<div class="input-group">
+<label>キーワード一覧（1行または1項目につき1つ）</label>
+<textarea id="bulkKeywords" placeholder="キーワード1&#10;キーワード2&#10;キーワード3&#10;&#10;または&#10;&#10;キーワード1, キーワード2, キーワード3"></textarea>
+</div>
+<div class="actions">
+<button class="btn btn-primary" onclick="bulkImport()">一括追加</button>
+</div>
+</div>
+</div>
+
+<!-- 整理タブ -->
+<div id="cleanupTab" class="tab-content" style="display: none;">
+<div class="section">
+<div class="section-title">データ整理</div>
+<p style="font-size: 12px; color: #6b7280; margin-bottom: 16px;">
+重複するキーワードの削除や空行の整理を行います。
+</p>
+<div class="actions">
+<button class="btn btn-warning" onclick="cleanupData()">整理実行</button>
+</div>
+</div>
+</div>
+
+<!-- メッセージ表示 -->
+<div id="message" class="message" style="display: none;"></div>
+
+<!-- 編集モーダル（簡易版） -->
+<div id="editModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
+<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 24px; border-radius: 12px; min-width: 300px;">
+<h3 style="margin: 0 0 16px 0; font-size: 16px;">キーワード編集</h3>
+<div class="input-group">
+<label>変更後のキーワード</label>
+<input type="text" id="editKeyword" placeholder="新しいキーワードを入力">
+</div>
+<div class="actions">
+<button class="btn btn-primary" onclick="saveEdit()">保存</button>
+<button class="btn btn-secondary" onclick="cancelEdit()">キャンセル</button>
+</div>
+</div>
+</div>
+
+<script>
+let currentMasterData = {};
+let currentCategory = '';
+let currentKeywords = [];
+let editingKeyword = '';
+let filteredKeywords = [];
+
+// 初期化
+function initialize() {
+  // Google Apps Script環境かどうかをチェック
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    showMessage('このUIはGoogle Apps Script環境でのみ動作します', 'info');
+    return;
+  }
+  
+  showMessage('マスタデータを読み込み中...', 'info');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        currentMasterData = result.categories;
+        populateCategorySelect();
+        hideMessage();
+      } else {
+        showMessage(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      showMessage(`読み込みエラー: ${error.message}`, 'error');
+    })
+    .getMasterDataByCategory();
+}
+
+// カテゴリセレクトボックスの設定
+function populateCategorySelect() {
+  const select = document.getElementById('categorySelect');
+  select.innerHTML = '<option value="">-- カテゴリを選択 --</option>';
+  
+  const categories = Object.keys(currentMasterData).sort();
+  categories.forEach(category => {
+    const option = document.createElement('option');
+    option.value = category;
+    option.textContent = `${category} (${currentMasterData[category].length}件)`;
+    select.appendChild(option);
+  });
+  
+  select.addEventListener('change', function() {
+    selectCategory(this.value);
+  });
+}
+
+// カテゴリ選択
+function selectCategory(category) {
+  currentCategory = category;
+  if (category) {
+    currentKeywords = currentMasterData[category] || [];
+    filteredKeywords = [...currentKeywords];
+    updateStats();
+    displayKeywords();
+    document.getElementById('statsSection').style.display = 'block';
+    document.getElementById('searchKeyword').value = '';
+  } else {
+    currentKeywords = [];
+    filteredKeywords = [];
+    document.getElementById('keywordList').innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>カテゴリを選択してください</p></div>';
+    document.getElementById('statsSection').style.display = 'none';
+  }
+}
+
+// 統計情報更新
+function updateStats() {
+  document.getElementById('currentCategory').textContent = currentCategory;
+  document.getElementById('keywordCount').textContent = currentKeywords.length;
+}
+
+// キーワード表示
+function displayKeywords() {
+  const container = document.getElementById('keywordList');
+  const keywords = filteredKeywords.length > 0 ? filteredKeywords : currentKeywords;
+  
+  if (keywords.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">📝</div><p>キーワードがありません</p></div>';
+    return;
+  }
+  
+  container.innerHTML = '';
+  keywords.forEach(keyword => {
+    const item = document.createElement('div');
+    item.className = 'keyword-item';
+    item.innerHTML = `
+      <span class="keyword-text">${escapeHtml(keyword)}</span>
+      <div class="keyword-actions">
+        <button class="btn btn-warning btn-small" onclick="editKeyword('${escapeHtml(keyword)}')">編集</button>
+        <button class="btn btn-danger btn-small" onclick="deleteKeyword('${escapeHtml(keyword)}')">削除</button>
+      </div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+// キーワード検索・フィルタ
+function filterKeywords() {
+  const searchTerm = document.getElementById('searchKeyword').value.trim().toLowerCase();
+  if (searchTerm === '') {
+    filteredKeywords = [...currentKeywords];
+  } else {
+    filteredKeywords = currentKeywords.filter(keyword => 
+      keyword.toLowerCase().includes(searchTerm)
+    );
+  }
+  displayKeywords();
+}
+
+// キーワード追加
+function addKeyword() {
+  if (!currentCategory) {
+    showMessage('カテゴリを選択してください', 'error');
+    return;
+  }
+  
+  const newKeyword = document.getElementById('newKeyword').value.trim();
+  if (!newKeyword) {
+    showMessage('キーワードを入力してください', 'error');
+    return;
+  }
+  
+  console.log(`キーワード追加開始: "${newKeyword}" → "${currentCategory}"`);
+  showMessage('追加中...', 'info');
+  
+  google.script.run
+    .withSuccessHandler(function(result) {
+      console.log('追加成功:', result);
+      if (result && result.success) {
+        showMessage(result.message, 'success');
+        document.getElementById('newKeyword').value = '';
+        refreshCurrentCategory();
+      } else {
+        const errorMsg = result ? result.message : '不明なエラーが発生しました';
+        showMessage(`追加失敗: ${errorMsg}`, 'error');
+        console.error('追加失敗:', result);
+      }
+    })
+    .withFailureHandler(function(error) {
+      console.error('追加エラー:', error);
+      showMessage(`エラー: ${error.message || error}`, 'error');
+    })
+    .addKeywordToMaster(currentCategory, newKeyword);
+}
+
+// キーワード削除
+function deleteKeyword(keyword) {
+  if (!confirm(`「${keyword}」を削除しますか？`)) {
+    return;
+  }
+  
+  showMessage('削除中...', 'info');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        showMessage(result.message, 'success');
+        refreshCurrentCategory();
+      } else {
+        showMessage(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      showMessage(`エラー: ${error.message}`, 'error');
+    })
+    .deleteKeywordFromMaster(currentCategory, keyword);
+}
+
+// キーワード編集
+function editKeyword(keyword) {
+  editingKeyword = keyword;
+  document.getElementById('editKeyword').value = keyword;
+  document.getElementById('editModal').style.display = 'block';
+}
+
+function saveEdit() {
+  const newKeyword = document.getElementById('editKeyword').value.trim();
+  if (!newKeyword) {
+    showMessage('新しいキーワードを入力してください', 'error');
+    return;
+  }
+  
+  showMessage('更新中...', 'info');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        showMessage(result.message, 'success');
+        cancelEdit();
+        refreshCurrentCategory();
+      } else {
+        showMessage(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      showMessage(`エラー: ${error.message}`, 'error');
+    })
+    .editKeywordInMaster(currentCategory, editingKeyword, newKeyword);
+}
+
+function cancelEdit() {
+  document.getElementById('editModal').style.display = 'none';
+  editingKeyword = '';
+}
+
+// 一括インポート
+function bulkImport() {
+  if (!currentCategory) {
+    showMessage('カテゴリを選択してください', 'error');
+    return;
+  }
+  
+  const bulkText = document.getElementById('bulkKeywords').value.trim();
+  if (!bulkText) {
+    showMessage('インポートするキーワードを入力してください', 'error');
+    return;
+  }
+  
+  showMessage('一括追加中...', 'info');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        const msg = `追加: ${result.added}件, 重複: ${result.duplicates}件, エラー: ${result.errors}件`;
+        showMessage(msg, 'success');
+        document.getElementById('bulkKeywords').value = '';
+        refreshCurrentCategory();
+      } else {
+        showMessage(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      showMessage(`エラー: ${error.message}`, 'error');
+    })
+    .bulkImportKeywords(currentCategory, bulkText);
+}
+
+// データ整理
+function cleanupData() {
+  if (!currentCategory) {
+    showMessage('カテゴリを選択してください', 'error');
+    return;
+  }
+  
+  if (!confirm(`「${currentCategory}」のデータを整理しますか？`)) {
+    return;
+  }
+  
+  showMessage('整理中...', 'info');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result.success) {
+        const msg = `整理完了: 重複削除 ${result.removedDuplicates}件, 空行削除 ${result.removedEmpty}件`;
+        showMessage(msg, 'success');
+        refreshCurrentCategory();
+      } else {
+        showMessage(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      showMessage(`エラー: ${error.message}`, 'error');
+    })
+    .cleanupMasterData(currentCategory);
+}
+
+// タブ切り替え
+function switchTab(tabName) {
+  // タブボタンの状態更新
+  document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // タブコンテンツの表示切り替え
+  document.querySelectorAll('.tab-content').forEach(content => content.style.display = 'none');
+  document.getElementById(tabName + 'Tab').style.display = 'block';
+}
+
+// 現在のカテゴリデータを再読み込み
+function refreshCurrentCategory() {
+  if (currentCategory) {
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          currentMasterData = result.categories;
+          populateCategorySelect();
+          selectCategory(currentCategory);
+        }
+      })
+      .withFailureHandler(function(error) {
+        console.error('再読み込みエラー:', error);
+      })
+      .getMasterDataByCategory();
+  }
+}
+
+// メッセージ表示
+function showMessage(text, type) {
+  const msgEl = document.getElementById('message');
+  msgEl.textContent = text;
+  msgEl.className = 'message';
+  if (type) msgEl.classList.add(type);
+  msgEl.style.display = text ? 'block' : 'none';
+}
+
+function hideMessage() {
+  document.getElementById('message').style.display = 'none';
+}
+
+// HTMLエスケープ
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// 初期化実行
+document.addEventListener('DOMContentLoaded', initialize);
+</script>
+</body>
+</html>
