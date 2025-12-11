@@ -304,7 +304,8 @@ async function getProductListFromFirestore(filters = {}) {
         status: data.status || '',
         // brand: オブジェクト {nameEn, nameKana} または文字列に対応
         brand: data.brand?.nameEn || (typeof data.brand === 'string' ? data.brand : ''),
-        // category: オブジェクト {major, middle, minor...} または文字列に対応（メルカリ出品用に全階層取得）
+        // category: オブジェクト {superCategory, major, middle, minor...} または文字列に対応（メルカリ出品用に全階層取得）
+        superCategory: data.category?.superCategory || '',  // 特大分類（メルカリトップカテゴリー）
         category: data.category?.major || (typeof data.category === 'string' ? data.category : ''),
         categoryMiddle: data.category?.middle || '',
         categoryMinor: data.category?.minor || '',
@@ -408,7 +409,8 @@ async function getProductByManagementNumber(managementNumber) {
         status: data.status || '',
         // brand: オブジェクト {nameEn, nameKana} または文字列に対応
         brand: data.brand?.nameEn || (typeof data.brand === 'string' ? data.brand : ''),
-        // category: オブジェクト {major, middle, minor...} または文字列に対応（メルカリ出品用に全階層取得）
+        // category: オブジェクト {superCategory, major, middle, minor...} または文字列に対応（メルカリ出品用に全階層取得）
+        superCategory: data.category?.superCategory || '',  // 特大分類（メルカリトップカテゴリー）
         category: data.category?.major || (typeof data.category === 'string' ? data.category : ''),
         categoryMiddle: data.category?.middle || '',
         categoryMinor: data.category?.minor || '',

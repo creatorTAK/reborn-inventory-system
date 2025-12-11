@@ -822,7 +822,7 @@ window.continueProductRegistration = function() {
   'セールスワード(カテゴリ)','セールスワード',
   'ブランド(英語)','ブランド(カナ)',
   '商品名(タイトル)',
-  '大分類(カテゴリ)','中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2',
+  '特大分類','大分類(カテゴリ)','中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2',
   'サイズ','商品の状態',
   'アイテム名',
   '商品の説明',  // 保存対象に含める（リセット時の処理はresetFormとは別）
@@ -6667,6 +6667,34 @@ window.continueProductRegistration = function() {
     }
   }
 
+  // 特大分類（メルカリトップカテゴリー）の変更ハンドラ
+  function onL0Changed() {
+    // 全ての下位プルダウンをリセット
+    resetSelect('大分類(カテゴリ)');
+    resetSelect('中分類(カテゴリ)');
+    resetSelect('小分類(カテゴリ)');
+    resetSelect('細分類(カテゴリ)');
+    resetSelect('細分類2');
+    resetSelect('アイテム名', false);
+    // 細分類行を非表示
+    const saibunruiRow = document.getElementById('saibunruiRow');
+    if (saibunruiRow) saibunruiRow.style.display = 'none';
+    const saibunrui2Container = document.getElementById('saibunrui2Container');
+    if (saibunrui2Container) saibunrui2Container.style.display = 'none';
+
+    const l0 = (document.getElementById('特大分類')?.value || '').trim();
+    if (l0) {
+      // 特大分類が選択されたら大分類を有効化して選択肢を表示
+      // ※現在のマスタデータは特大分類フィールドがないため、全ての大分類を表示
+      // 将来的にマスタデータに特大分類を追加すれば、フィルタリングが可能
+      const l1s = uniqKeepOrder(CAT_ROWS.map(r => r.大分類));
+      fillSelectSafe(document.getElementById('大分類(カテゴリ)'), l1s);
+      debug.log('特大分類選択: ' + l0 + ', 大分類選択肢: ' + l1s.length + '件');
+    }
+    refreshItems();
+    updateNamePreview();
+  }
+
   function onL1Changed() {
     resetSelect('中分類(カテゴリ)');
     resetSelect('小分類(カテゴリ)');
@@ -8457,16 +8485,22 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
           細分類2:String(r.細分類2||'').trim(),
           アイテム名:String(r.アイテム名||'').trim(),
         }));
-        const l1s = uniqKeepOrder(CAT_ROWS.map(r=>r.大分類));
-        fillSelectSafe(document.getElementById('大分類(カテゴリ)'), l1s);
+        // 特大分類が選択されるまで大分類は空のまま（特大分類選択後に選択肢が表示される）
+        // const l1s = uniqKeepOrder(CAT_ROWS.map(r=>r.大分類));
+        // fillSelectSafe(document.getElementById('大分類(カテゴリ)'), l1s);
 
         // カテゴリプルダウンのイベントリスナーを設定
+        const l0Select = document.getElementById('特大分類');
         const l1Select = document.getElementById('大分類(カテゴリ)');
         const l2Select = document.getElementById('中分類(カテゴリ)');
         const l3Select = document.getElementById('小分類(カテゴリ)');
         const l4Select = document.getElementById('細分類(カテゴリ)');
         const l5Select = document.getElementById('細分類2');
         const itemSelect = document.getElementById('アイテム名');
+        if (l0Select) {
+          l0Select.addEventListener('change', onL0Changed);
+          debug.log('特大分類のイベントリスナーを設定しました');
+        }
         if (l1Select) {
           l1Select.addEventListener('change', onL1Changed);
           debug.log('大分類のイベントリスナーを設定しました');
@@ -9613,6 +9647,7 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
       nameKana: formData['ブランド(カナ)'] || ''
     },
     category: {
+      superCategory: formData['特大分類'] || '',  // メルカリトップカテゴリー
       major: formData['大分類(カテゴリ)'] || formData['大分類'] || '',
       middle: formData['中分類(カテゴリ)'] || formData['中分類'] || '',
       minor: formData['小分類(カテゴリ)'] || formData['小分類'] || '',
