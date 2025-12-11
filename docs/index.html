@@ -1287,19 +1287,23 @@
           return;
         }
 
-        if (typeof goBackInHistory === 'function') {
-          goBackInHistory();
-          console.log('[parent] ✅ goBackInHistory() 呼び出し完了');
-        } else {
-          console.warn('[parent] ⚠️ goBackInHistory未定義、100ms遅延実行');
-          setTimeout(function() {
-            if (typeof goBackInHistory === 'function') {
-              goBackInHistory();
-            } else if (typeof navigateToPage === 'function') {
-              navigateToPage('home', { skipHistory: true });
-            }
-          }, 100);
-        }
+        // goBackInHistoryが定義されるまで待つ（最大500ms）
+        var tryGoBack = function(attempt) {
+          if (typeof goBackInHistory === 'function') {
+            goBackInHistory();
+            console.log('[parent] ✅ goBackInHistory() 呼び出し完了');
+          } else if (typeof navigateToPage === 'function') {
+            navigateToPage('home', { skipHistory: true });
+            console.log('[parent] ✅ フォールバック: navigateToPage(home)');
+          } else if (attempt < 5) {
+            console.log('[parent] ⚠️ 関数未定義、100ms後に再試行 (attempt=' + (attempt+1) + ')');
+            setTimeout(function() { tryGoBack(attempt + 1); }, 100);
+          } else {
+            console.error('[parent] ❌ 関数が定義されません。強制的にホームへ');
+            window.location.href = '/?page=home&t=' + Date.now();
+          }
+        };
+        tryGoBack(0);
         console.log('[parent] ========== requestBack処理完了 ==========');
         return;
       }
@@ -1313,19 +1317,20 @@
           return;
         }
 
-        if (typeof goBackInHistory === 'function') {
-          goBackInHistory();
-          console.log('[parent] ✅ goBackInHistory() 呼び出し完了');
-        } else {
-          console.warn('[parent] ⚠️ goBackInHistory未定義、100ms遅延実行');
-          setTimeout(function() {
-            if (typeof goBackInHistory === 'function') {
-              goBackInHistory();
-            } else if (typeof navigateToPage === 'function') {
-              navigateToPage('home', { skipHistory: true });
-            }
-          }, 100);
-        }
+        var tryGoBack2 = function(attempt) {
+          if (typeof goBackInHistory === 'function') {
+            goBackInHistory();
+            console.log('[parent] ✅ goBackInHistory() 呼び出し完了');
+          } else if (typeof navigateToPage === 'function') {
+            navigateToPage('home', { skipHistory: true });
+            console.log('[parent] ✅ フォールバック: navigateToPage(home)');
+          } else if (attempt < 5) {
+            setTimeout(function() { tryGoBack2(attempt + 1); }, 100);
+          } else {
+            window.location.href = '/?page=home&t=' + Date.now();
+          }
+        };
+        tryGoBack2(0);
         console.log('[parent] ========== goBack処理完了 ==========');
         return;
       }
@@ -1405,19 +1410,20 @@
           return;
         }
 
-        if (typeof goBackInHistory === 'function') {
-          goBackInHistory();
-          console.log('[parent EARLY] ✅ goBackInHistory() 呼び出し完了');
-        } else {
-          console.warn('[parent EARLY] ⚠️ goBackInHistory() がまだ定義されていません。遅延実行します。');
-          setTimeout(function() {
-            if (typeof goBackInHistory === 'function') {
-              goBackInHistory();
-            } else if (typeof navigateToPage === 'function') {
-              navigateToPage('home', { skipHistory: true });
-            }
-          }, 100);
-        }
+        var tryGoBack3 = function(attempt) {
+          if (typeof goBackInHistory === 'function') {
+            goBackInHistory();
+            console.log('[parent EARLY] ✅ goBackInHistory() 呼び出し完了');
+          } else if (typeof navigateToPage === 'function') {
+            navigateToPage('home', { skipHistory: true });
+            console.log('[parent EARLY] ✅ フォールバック: navigateToPage(home)');
+          } else if (attempt < 5) {
+            setTimeout(function() { tryGoBack3(attempt + 1); }, 100);
+          } else {
+            window.location.href = '/?page=home&t=' + Date.now();
+          }
+        };
+        tryGoBack3(0);
         console.log('[parent EARLY] ========== navigateToHome処理完了 ==========');
       } else {
         console.log('[parent] ⚠️ 未知のメッセージタイプ:', payload.type);
