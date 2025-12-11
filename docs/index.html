@@ -1276,28 +1276,58 @@
       // ========== メッセージ処理 ==========
       const payload = e.data || {};
       console.log('[parent] payload.type:', payload.type);
-      console.log('[parent] payload.type typeof:', typeof payload.type);
-      console.log('[parent] payload.type === "goBack":', payload.type === 'goBack');
-      console.log('[parent] payload.type.trim() === "goBack":', payload.type && payload.type.trim && payload.type.trim() === 'goBack');
 
-      // goBack: トップメニュー（home）に戻る
-      if (payload.type === 'goBack' || (payload.type && payload.type.trim && payload.type.trim() === 'goBack')) {
-        console.log('[parent] ========== goBack処理開始 ==========');
-        console.log('[parent] ✅ 戻る要求を受信 → トップメニューへ');
+      // requestBack: 子から「戻りたい」という要求（親が履歴を見て判断）
+      if (payload.type === 'requestBack') {
+        console.log('[parent] ========== requestBack処理開始 ==========');
 
-        if (typeof navigateToPage === 'function') {
-          navigateToPage('home', { skipHistory: true });
-          console.log('[parent] ✅ navigateToPage(home) 呼び出し完了');
+        // 親が遷移中なら無視（重複防止）
+        if (typeof isNavigatingProgrammatically !== 'undefined' && isNavigatingProgrammatically) {
+          console.log('[parent] ⚠️ 遷移中のため requestBack を無視');
+          return;
+        }
+
+        if (typeof goBackInHistory === 'function') {
+          goBackInHistory();
+          console.log('[parent] ✅ goBackInHistory() 呼び出し完了');
         } else {
-          console.warn('[parent] ⚠️ navigateToPage未定義、100ms遅延実行');
+          console.warn('[parent] ⚠️ goBackInHistory未定義、100ms遅延実行');
           setTimeout(function() {
-            if (typeof navigateToPage === 'function') {
+            if (typeof goBackInHistory === 'function') {
+              goBackInHistory();
+            } else if (typeof navigateToPage === 'function') {
+              navigateToPage('home', { skipHistory: true });
+            }
+          }, 100);
+        }
+        console.log('[parent] ========== requestBack処理完了 ==========');
+        return;
+      }
+
+      // goBack: 旧形式（後方互換性のため残す）→ requestBackと同じ処理
+      if (payload.type === 'goBack' || (payload.type && payload.type.trim && payload.type.trim() === 'goBack')) {
+        console.log('[parent] ========== goBack処理開始（旧形式） ==========');
+
+        if (typeof isNavigatingProgrammatically !== 'undefined' && isNavigatingProgrammatically) {
+          console.log('[parent] ⚠️ 遷移中のため goBack を無視');
+          return;
+        }
+
+        if (typeof goBackInHistory === 'function') {
+          goBackInHistory();
+          console.log('[parent] ✅ goBackInHistory() 呼び出し完了');
+        } else {
+          console.warn('[parent] ⚠️ goBackInHistory未定義、100ms遅延実行');
+          setTimeout(function() {
+            if (typeof goBackInHistory === 'function') {
+              goBackInHistory();
+            } else if (typeof navigateToPage === 'function') {
               navigateToPage('home', { skipHistory: true });
             }
           }, 100);
         }
         console.log('[parent] ========== goBack処理完了 ==========');
-        return; // 早期リターン
+        return;
       }
 
       // forceFullReload: キャッシュクリア後の全体リロード
@@ -1367,20 +1397,24 @@
         }
         console.log('[parent EARLY] ========== navigate処理完了 ==========');
       } else if (payload.type === 'navigateToHome') {
+        // 旧形式（後方互換性のため残す）→ goBackInHistoryを使用
         console.log('[parent EARLY] ========== navigateToHome処理開始 ==========');
-        console.log('[parent EARLY] ✅ 戻る要求を受信 → トップメニューへ');
 
-        if (typeof navigateToPage === 'function') {
-          navigateToPage('home', { skipHistory: true });
-          console.log('[parent EARLY] ✅ navigateToPage(home) 呼び出し完了');
+        if (typeof isNavigatingProgrammatically !== 'undefined' && isNavigatingProgrammatically) {
+          console.log('[parent EARLY] ⚠️ 遷移中のため navigateToHome を無視');
+          return;
+        }
+
+        if (typeof goBackInHistory === 'function') {
+          goBackInHistory();
+          console.log('[parent EARLY] ✅ goBackInHistory() 呼び出し完了');
         } else {
-          console.warn('[parent EARLY] ⚠️ navigateToPage() がまだ定義されていません。遅延実行します。');
+          console.warn('[parent EARLY] ⚠️ goBackInHistory() がまだ定義されていません。遅延実行します。');
           setTimeout(function() {
-            if (typeof navigateToPage === 'function') {
+            if (typeof goBackInHistory === 'function') {
+              goBackInHistory();
+            } else if (typeof navigateToPage === 'function') {
               navigateToPage('home', { skipHistory: true });
-              console.log('[parent EARLY] ✅ navigateToPage(home) 遅延呼び出し完了');
-            } else {
-              console.error('[parent EARLY] ❌ navigateToPage が見つかりません');
             }
           }, 100);
         }
@@ -4802,6 +4836,7 @@
     // ナビゲーション履歴管理
     const navigationHistory = ['home'];
     let currentPageIndex = 0;
+    let isNavigatingProgrammatically = false; // 親が遷移中かどうか（子からのメッセージの重複登録防止）
 
     // 履歴に追加（重複防止、最大10件）
     function pushToHistory(page) {
@@ -4822,12 +4857,13 @@
       console.log('📚 [履歴] 追加:', page, '履歴:', navigationHistory, 'index:', currentPageIndex);
     }
 
-    // 戻る処理
+    // 戻る処理（履歴を使って1つ前のページに戻る）
     function goBackInHistory() {
+      console.log('📚 [履歴] goBackInHistory呼び出し - 現在:', navigationHistory, 'index:', currentPageIndex);
       if (currentPageIndex > 0) {
         currentPageIndex--;
         const previousPage = navigationHistory[currentPageIndex];
-        console.log('📚 [履歴] 戻る:', previousPage, '履歴:', navigationHistory, 'index:', currentPageIndex);
+        console.log('📚 [履歴] 戻る → ', previousPage);
         navigateToPage(previousPage, { skipHistory: true, skipSkeleton: true });
       } else {
         console.log('📚 [履歴] これ以上戻れません。ホームへ移動');
@@ -4849,9 +4885,16 @@
         pushToHistory(page);
       }
 
+      // 🚫 遷移中フラグをセット（子からの不要なメッセージを無視するため）
+      isNavigatingProgrammatically = true;
+      setTimeout(() => {
+        isNavigatingProgrammatically = false;
+        console.log('📚 [履歴] 遷移中フラグ解除');
+      }, 200);
+
       // 📊 パフォーマンス計測開始
       const startTime = performance.now();
-      console.log('⏱️ [計測開始] ページ遷移:', page);
+      console.log('⏱️ [計測開始] ページ遷移:', page, '履歴:', navigationHistory, 'index:', currentPageIndex);
 
       // UI-013: ドロワーを先に閉じる（スケルトンUI表示を妨げないように）
       closeDrawer();
@@ -5288,28 +5331,59 @@
         return;
       }
 
-      // 🔙 戻る要求の処理（トップメニューへ）
-      if (data.type === 'goBack') {
+      // 🔙 requestBack: 子から「戻りたい」という要求（親が履歴を見て判断）
+      if (data.type === 'requestBack') {
         console.log('========================================');
-        console.log('🔙 [postMessage MAIN] goBack 要求を受信 → トップメニューへ');
+        console.log('🔙 [postMessage MAIN] requestBack 要求を受信');
         console.log('========================================');
-        if (typeof navigateToPage === 'function') {
-          navigateToPage('home', { skipHistory: true });
-          console.log('[postMessage MAIN] ✅ navigateToPage(home) 呼び出し完了');
+
+        // 親が遷移中なら無視（重複防止）
+        if (isNavigatingProgrammatically) {
+          console.log('[postMessage MAIN] ⚠️ 遷移中のため requestBack を無視');
+          return;
+        }
+
+        if (typeof goBackInHistory === 'function') {
+          goBackInHistory();
+          console.log('[postMessage MAIN] ✅ goBackInHistory() 呼び出し完了');
         }
         return;
       }
 
-      // 🏠 戻る要求の処理（トップメニューへ）
+      // 🔙 goBack: 旧形式（後方互換性）
+      if (data.type === 'goBack') {
+        console.log('========================================');
+        console.log('🔙 [postMessage MAIN] goBack 要求を受信（旧形式）');
+        console.log('========================================');
+
+        if (isNavigatingProgrammatically) {
+          console.log('[postMessage MAIN] ⚠️ 遷移中のため goBack を無視');
+          return;
+        }
+
+        if (typeof goBackInHistory === 'function') {
+          goBackInHistory();
+          console.log('[postMessage MAIN] ✅ goBackInHistory() 呼び出し完了');
+        }
+        return;
+      }
+
+      // 🏠 navigateToHome: 旧形式（後方互換性）
       if (data.type === 'navigateToHome') {
         console.log('========================================');
-        console.log('🏠 [postMessage MAIN] navigateToHome 要求を受信 → トップメニューへ');
+        console.log('🏠 [postMessage MAIN] navigateToHome 要求を受信（旧形式）');
         console.log('========================================');
-        if (typeof navigateToPage === 'function') {
-          navigateToPage('home', { skipHistory: true });
-          console.log('[postMessage MAIN] ✅ navigateToPage(home) 呼び出し完了');
+
+        if (isNavigatingProgrammatically) {
+          console.log('[postMessage MAIN] ⚠️ 遷移中のため navigateToHome を無視');
+          return;
+        }
+
+        if (typeof goBackInHistory === 'function') {
+          goBackInHistory();
+          console.log('[postMessage MAIN] ✅ goBackInHistory() 呼び出し完了');
         } else {
-          console.error('[postMessage MAIN] ❌ navigateToPage() 未定義');
+          console.error('[postMessage MAIN] ❌ goBackInHistory() 未定義');
         }
         return;
       }

@@ -19,14 +19,16 @@ function navigateInPWA(url) {
 }
 
 async function goBack() {
-    console.log('[sidebar_product] >>> goBack() called at', new Date().toISOString());
+    console.log('[goBack] >>> called at', new Date().toISOString());
     const isInIframe = window.self !== window.top;
-    console.log('[sidebar_product] isInIframe:', isInIframe);
-    
+    console.log('[goBack] isInIframe:', isInIframe);
+
     if (isInIframe) {
-          window.top.postMessage({ type: 'navigateToHome' }, '*');
-        } else {
-          google.script.host.close();
+      // 親に「戻りたい」という要求だけ送る（親が履歴を見て判断）
+      window.top.postMessage({ type: 'requestBack' }, '*');
+      console.log('[goBack] ✅ requestBack sent to parent');
+    } else {
+      google.script.host.close();
     }
   }
   
