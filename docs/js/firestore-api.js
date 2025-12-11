@@ -304,14 +304,22 @@ async function getProductListFromFirestore(filters = {}) {
         status: data.status || '',
         // brand: オブジェクト {nameEn, nameKana} または文字列に対応
         brand: data.brand?.nameEn || (typeof data.brand === 'string' ? data.brand : ''),
-        // category: オブジェクト {major, middle, minor...} または文字列に対応
+        // category: オブジェクト {major, middle, minor...} または文字列に対応（メルカリ出品用に全階層取得）
         category: data.category?.major || (typeof data.category === 'string' ? data.category : ''),
+        categoryMiddle: data.category?.middle || '',
+        categoryMinor: data.category?.minor || '',
+        categoryDetail1: data.category?.detail1 || '',
+        categoryDetail2: data.category?.detail2 || '',
         itemName: data.itemName || '',
         person: data.person || data.assignedTo || '',
         // size: オブジェクト {display, actual} または文字列に対応
         size: data.size?.display || (typeof data.size === 'string' ? data.size : ''),
-        color: data.color || '',
+        // color/material: attributes内または旧フラット構造に対応
+        color: data.attributes?.color || data.color || '',
+        material: data.attributes?.material || data.material || '',
         productName: data.productName || '',
+        // 商品説明: description または productDescription フィールドに対応
+        productDescription: data.description || data.productDescription || '',
         // purchase/listing: ネスト構造または旧フラット構造に対応
         purchaseDate: data.purchase?.date || data.purchaseDate || '',
         purchaseAmount: data.purchase?.amount || data.purchaseAmount || 0,
@@ -400,14 +408,19 @@ async function getProductByManagementNumber(managementNumber) {
         status: data.status || '',
         // brand: オブジェクト {nameEn, nameKana} または文字列に対応
         brand: data.brand?.nameEn || (typeof data.brand === 'string' ? data.brand : ''),
-        // category: オブジェクト {major, middle, minor...} または文字列に対応
+        // category: オブジェクト {major, middle, minor...} または文字列に対応（メルカリ出品用に全階層取得）
         category: data.category?.major || (typeof data.category === 'string' ? data.category : ''),
+        categoryMiddle: data.category?.middle || '',
+        categoryMinor: data.category?.minor || '',
+        categoryDetail1: data.category?.detail1 || '',
+        categoryDetail2: data.category?.detail2 || '',
         itemName: data.itemName || '',
         person: data.person || data.assignedTo || '',
         // size: オブジェクト {display, actual} または文字列に対応
         size: data.size?.display || (typeof data.size === 'string' ? data.size : ''),
-        color: data.color || '',
-        material: data.material || '',
+        // color/material: attributes内または旧フラット構造に対応
+        color: data.attributes?.color || data.color || '',
+        material: data.attributes?.material || data.material || '',
         productName: data.productName || '',
         // 商品説明: description または productDescription フィールドに対応
         productDescription: data.description || data.productDescription || '',
