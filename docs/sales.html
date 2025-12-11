@@ -7,7 +7,7 @@
   <title>売上／売掛 - FURIRA</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=209">
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -362,29 +362,87 @@
 
       <!-- 分析タブ -->
       <div class="tab-pane fade" id="analysis-content" role="tabpanel">
-        <!-- KPIサマリー -->
-        <div class="summary-grid">
-          <div class="summary-card">
-            <div class="summary-label">売上高</div>
-            <div class="summary-value" id="analysis-revenue">-</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-label">利益</div>
-            <div class="summary-value positive" id="analysis-profit">-</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-label">利益率</div>
-            <div class="summary-value" id="analysis-profit-rate">-</div>
-          </div>
-          <div class="summary-card">
-            <div class="summary-label">販売数</div>
-            <div class="summary-value" id="analysis-count">-</div>
+        <!-- 期間切り替え -->
+        <div class="filter-section mb-3">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <label class="form-label mb-0 me-2"><i class="bi bi-calendar3"></i> 期間:</label>
+            <div class="btn-group" role="group">
+              <input type="radio" class="btn-check" name="analysisPeriod" id="periodMonth" value="month" checked>
+              <label class="btn btn-outline-primary btn-sm" for="periodMonth">月単位</label>
+              <input type="radio" class="btn-check" name="analysisPeriod" id="periodYear" value="year">
+              <label class="btn btn-outline-primary btn-sm" for="periodYear">年単位</label>
+              <input type="radio" class="btn-check" name="analysisPeriod" id="periodAll" value="all">
+              <label class="btn btn-outline-primary btn-sm" for="periodAll">全期間</label>
+            </div>
+            <select class="form-select form-select-sm" id="analysisYearSelect" style="width: auto;">
+            </select>
+            <select class="form-select form-select-sm" id="analysisMonthSelect" style="width: auto;">
+              <option value="">全月</option>
+              <option value="01">1月</option>
+              <option value="02">2月</option>
+              <option value="03">3月</option>
+              <option value="04">4月</option>
+              <option value="05">5月</option>
+              <option value="06">6月</option>
+              <option value="07">7月</option>
+              <option value="08">8月</option>
+              <option value="09">9月</option>
+              <option value="10">10月</option>
+              <option value="11">11月</option>
+              <option value="12">12月</option>
+            </select>
           </div>
         </div>
 
-        <!-- 月別売上推移 -->
+        <!-- 売上KPIサマリー -->
         <div class="sales-table-container mb-3">
-          <h6 class="mb-3"><i class="bi bi-graph-up"></i> 月別売上推移</h6>
+          <h6 class="mb-2 text-primary"><i class="bi bi-cash-stack"></i> 売上実績</h6>
+          <div class="summary-grid">
+            <div class="summary-card">
+              <div class="summary-label">累計売上高</div>
+              <div class="summary-value" id="analysis-revenue">-</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">累計利益額</div>
+              <div class="summary-value positive" id="analysis-profit">-</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">利益率</div>
+              <div class="summary-value" id="analysis-profit-rate">-</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">累計販売数</div>
+              <div class="summary-value" id="analysis-count">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 在庫KPIサマリー -->
+        <div class="sales-table-container mb-3">
+          <h6 class="mb-2 text-success"><i class="bi bi-box-seam"></i> 在庫状況（現在）</h6>
+          <div class="summary-grid">
+            <div class="summary-card">
+              <div class="summary-label">総出品数</div>
+              <div class="summary-value" id="analysis-listing-count">-</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">総在庫数</div>
+              <div class="summary-value" id="analysis-stock-count">-</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">総在庫金額</div>
+              <div class="summary-value" id="analysis-stock-value">-</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">平均単価</div>
+              <div class="summary-value" id="analysis-avg-price">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 売上推移グラフ -->
+        <div class="sales-table-container mb-3">
+          <h6 class="mb-3"><i class="bi bi-graph-up"></i> <span id="chartTitle">月別売上推移</span></h6>
           <canvas id="monthlyChart" height="200"></canvas>
         </div>
 
@@ -1618,6 +1676,8 @@
 
     let monthlyChart = null;
     let allSalesDataForAnalysis = [];
+    let allProductsForAnalysis = [];
+    let analysisDataLoaded = false;
 
     /**
      * 分析タブがアクティブになったら呼ばれる
@@ -1627,13 +1687,87 @@
     });
 
     /**
+     * 期間切り替えイベント
+     */
+    document.querySelectorAll('input[name="analysisPeriod"]').forEach(radio => {
+      radio.addEventListener('change', function() {
+        updateAnalysisPeriodUI();
+        renderAnalysisTab();
+      });
+    });
+
+    document.getElementById('analysisYearSelect').addEventListener('change', function() {
+      renderAnalysisTab();
+    });
+
+    document.getElementById('analysisMonthSelect').addEventListener('change', function() {
+      renderAnalysisTab();
+    });
+
+    /**
+     * 期間UIの表示/非表示を更新
+     */
+    function updateAnalysisPeriodUI() {
+      const period = document.querySelector('input[name="analysisPeriod"]:checked').value;
+      const yearSelect = document.getElementById('analysisYearSelect');
+      const monthSelect = document.getElementById('analysisMonthSelect');
+
+      if (period === 'all') {
+        yearSelect.style.display = 'none';
+        monthSelect.style.display = 'none';
+      } else if (period === 'year') {
+        yearSelect.style.display = 'block';
+        monthSelect.style.display = 'none';
+      } else {
+        yearSelect.style.display = 'block';
+        monthSelect.style.display = 'block';
+      }
+    }
+
+    /**
+     * 年セレクトボックスを初期化
+     */
+    function initYearSelect() {
+      const yearSelect = document.getElementById('analysisYearSelect');
+      const currentYear = new Date().getFullYear();
+      yearSelect.innerHTML = '';
+
+      for (let y = currentYear; y >= currentYear - 5; y--) {
+        const option = document.createElement('option');
+        option.value = y;
+        option.textContent = y + '年';
+        yearSelect.appendChild(option);
+      }
+    }
+
+    /**
      * 分析データを読み込み
      */
     async function loadAnalysisData() {
+      if (analysisDataLoaded) {
+        renderAnalysisTab();
+        return;
+      }
+
       showLoading();
       try {
-        // 全期間のデータを取得
-        allSalesDataForAnalysis = await SalesApi.getSalesData('', '');
+        // 売上データと商品データを並行取得
+        const [salesData, productsSnapshot] = await Promise.all([
+          SalesApi.getSalesData('', ''),
+          firebase.firestore().collection('products').get()
+        ]);
+
+        allSalesDataForAnalysis = salesData;
+        allProductsForAnalysis = [];
+        productsSnapshot.forEach(doc => {
+          allProductsForAnalysis.push({ id: doc.id, ...doc.data() });
+        });
+
+        // 年セレクト初期化
+        initYearSelect();
+        updateAnalysisPeriodUI();
+
+        analysisDataLoaded = true;
         renderAnalysisTab();
       } catch (error) {
         console.error('分析データ読み込みエラー:', error);
@@ -1643,12 +1777,43 @@
     }
 
     /**
+     * 選択期間でフィルタしたデータを取得
+     */
+    function getFilteredSalesData() {
+      const period = document.querySelector('input[name="analysisPeriod"]:checked').value;
+      const selectedYear = document.getElementById('analysisYearSelect').value;
+      const selectedMonth = document.getElementById('analysisMonthSelect').value;
+
+      if (period === 'all') {
+        return allSalesDataForAnalysis;
+      }
+
+      return allSalesDataForAnalysis.filter(item => {
+        const saleDate = item.saleDate || '';
+        if (!saleDate) return false;
+
+        const year = saleDate.slice(0, 4);
+        const month = saleDate.slice(5, 7);
+
+        if (period === 'year') {
+          return year === selectedYear;
+        } else {
+          // month
+          if (selectedMonth) {
+            return year === selectedYear && month === selectedMonth;
+          }
+          return year === selectedYear;
+        }
+      });
+    }
+
+    /**
      * 分析タブを描画
      */
     function renderAnalysisTab() {
-      const data = allSalesDataForAnalysis;
+      const data = getFilteredSalesData();
 
-      // KPIサマリー
+      // 売上KPIサマリー
       const totalRevenue = data.reduce((sum, item) => sum + (item.saleAmount || 0), 0);
       const totalProfit = data.reduce((sum, item) => sum + (item.finalProfit || 0), 0);
       const profitRate = totalRevenue > 0 ? (totalProfit / totalRevenue * 100) : 0;
@@ -1659,14 +1824,67 @@
       document.getElementById('analysis-profit-rate').textContent = formatPercent(profitRate);
       document.getElementById('analysis-count').textContent = totalCount + '件';
 
-      // 月別売上推移グラフ
-      renderMonthlyChart(data);
+      // 在庫KPIサマリー（商品データから算出 - 現在の状態）
+      renderInventoryKPI();
+
+      // 売上推移グラフ
+      renderSalesChart(data);
 
       // 販売先別ランキング
       renderPlatformRanking(data);
 
       // 商品ランキング
       renderProductRanking(data);
+    }
+
+    /**
+     * 在庫KPIを描画
+     */
+    function renderInventoryKPI() {
+      const products = allProductsForAnalysis;
+
+      // 出品中の商品（statusがactiveまたは在庫>0）
+      const activeProducts = products.filter(p =>
+        p.status === 'active' || p.status === '出品中' || (p.quantity > 0 && p.status !== 'sold')
+      );
+
+      // 総出品数
+      const listingCount = activeProducts.length;
+
+      // 総在庫数（quantity合計）
+      const totalStock = products.reduce((sum, p) => sum + (parseInt(p.quantity) || 0), 0);
+
+      // 総在庫金額（在庫数 × 仕入価格）
+      const totalStockValue = products.reduce((sum, p) => {
+        const qty = parseInt(p.quantity) || 0;
+        const cost = parseFloat(p.purchasePrice) || parseFloat(p.costPrice) || 0;
+        return sum + (qty * cost);
+      }, 0);
+
+      // 平均単価（在庫金額 / 在庫数）
+      const avgPrice = totalStock > 0 ? totalStockValue / totalStock : 0;
+
+      document.getElementById('analysis-listing-count').textContent = listingCount + '件';
+      document.getElementById('analysis-stock-count').textContent = totalStock + '点';
+      document.getElementById('analysis-stock-value').textContent = formatCurrency(totalStockValue);
+      document.getElementById('analysis-avg-price').textContent = formatCurrency(avgPrice);
+    }
+
+    /**
+     * 売上推移グラフを描画
+     */
+    function renderSalesChart(data) {
+      const period = document.querySelector('input[name="analysisPeriod"]:checked').value;
+
+      // 期間に応じてグラフタイトルを変更
+      const chartTitle = document.getElementById('chartTitle');
+      if (period === 'year' || period === 'all') {
+        chartTitle.textContent = '月別売上推移';
+        renderMonthlyChart(data);
+      } else {
+        chartTitle.textContent = '日別売上推移';
+        renderDailyChart(data);
+      }
     }
 
     /**
@@ -1685,15 +1903,50 @@
         monthlyData[month].profit += item.finalProfit || 0;
       });
 
-      // 直近12ヶ月分のデータを用意
+      // データを用意
       const months = Object.keys(monthlyData).sort().slice(-12);
       const salesData = months.map(m => monthlyData[m]?.sales || 0);
       const profitData = months.map(m => monthlyData[m]?.profit || 0);
       const labels = months.map(m => {
         const [y, mo] = m.split('-');
-        return `${mo}月`;
+        return `${y}/${mo}`;
       });
 
+      renderChart(labels, salesData, profitData);
+    }
+
+    /**
+     * 日別売上推移グラフを描画
+     */
+    function renderDailyChart(data) {
+      // 日別集計
+      const dailyData = {};
+      data.forEach(item => {
+        const date = item.saleDate || '';
+        if (!date) return;
+        if (!dailyData[date]) {
+          dailyData[date] = { sales: 0, profit: 0 };
+        }
+        dailyData[date].sales += item.saleAmount || 0;
+        dailyData[date].profit += item.finalProfit || 0;
+      });
+
+      // データを用意
+      const dates = Object.keys(dailyData).sort().slice(-31);
+      const salesData = dates.map(d => dailyData[d]?.sales || 0);
+      const profitData = dates.map(d => dailyData[d]?.profit || 0);
+      const labels = dates.map(d => {
+        const parts = d.split('-');
+        return `${parts[1]}/${parts[2]}`;
+      });
+
+      renderChart(labels, salesData, profitData);
+    }
+
+    /**
+     * チャート描画共通処理
+     */
+    function renderChart(labels, salesData, profitData) {
       // 既存のチャートを破棄
       if (monthlyChart) {
         monthlyChart.destroy();
