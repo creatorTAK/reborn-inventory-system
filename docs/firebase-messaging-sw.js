@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v217';  // マイページ表示設定UIをアバター+ユーザー名に改善
+const CACHE_VERSION = 'v218';  // マイページサイドバー追加、権限管理メニュー更新、ユーザー名表示修正
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
