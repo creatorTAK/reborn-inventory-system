@@ -164,6 +164,11 @@
       </button>
       <span class="header-title">売上／売掛</span>
     </div>
+    <div class="header-right">
+      <button class="btn btn-sm btn-outline-light" onclick="openExportModal()" title="データ出力">
+        <i class="bi bi-download"></i> 出力
+      </button>
+    </div>
   </div>
 
   <div class="content-container">
@@ -177,6 +182,11 @@
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="receivable-tab" data-bs-toggle="tab" data-bs-target="#receivable-content" type="button" role="tab">
           📋 売掛管理
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="schedule-tab" data-bs-toggle="tab" data-bs-target="#schedule-content" type="button" role="tab">
+          📅 回収予定
         </button>
       </li>
     </ul>
@@ -272,6 +282,12 @@
           </div>
         </div>
 
+        <!-- 滞留債権アラート -->
+        <div class="alert alert-danger mb-3" id="overdueAlert" style="display: none;">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <strong>滞留債権アラート:</strong> <span id="overdueAlertText"></span>
+        </div>
+
         <!-- 売掛一覧テーブル -->
         <div class="sales-table-container">
           <div class="table-responsive">
@@ -282,13 +298,50 @@
                   <th>管理番号</th>
                   <th>販売先</th>
                   <th class="text-end">売上金額</th>
+                  <th>経過日数</th>
                   <th>ステータス</th>
                   <th>操作</th>
                 </tr>
               </thead>
               <tbody id="receivableTableBody">
                 <tr>
-                  <td colspan="6" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                  <td colspan="7" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 回収予定タブ -->
+      <div class="tab-pane fade" id="schedule-content" role="tabpanel">
+        <!-- 販売先別残高 -->
+        <h6 class="mb-3"><i class="bi bi-shop"></i> 販売先別売掛残高</h6>
+        <div class="summary-grid mb-4" id="platformBalanceGrid">
+          <!-- 動的に生成 -->
+        </div>
+
+        <!-- 回収予定カレンダー風表示 -->
+        <h6 class="mb-3"><i class="bi bi-calendar3"></i> 入金予定スケジュール</h6>
+        <div class="alert alert-info small mb-3">
+          <i class="bi bi-info-circle"></i> 入金予定日は販売先ごとの一般的な入金サイクルに基づく推定です。
+          メルカリ/ラクマは即日〜3日、その他は売上から約14日後を目安としています。
+        </div>
+        <div class="sales-table-container">
+          <div class="table-responsive">
+            <table class="sales-table">
+              <thead>
+                <tr>
+                  <th>入金予定日</th>
+                  <th>販売先</th>
+                  <th>件数</th>
+                  <th class="text-end">入金予定額</th>
+                  <th>状態</th>
+                </tr>
+              </thead>
+              <tbody id="scheduleTableBody">
+                <tr>
+                  <td colspan="5" class="text-center text-muted py-4">データを読み込んでいます...</td>
                 </tr>
               </tbody>
             </table>
@@ -331,6 +384,72 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
           <button type="button" class="btn btn-primary" onclick="savePayment()">入金を記録</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 帳簿出力モーダル -->
+  <div class="modal fade" id="exportModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">📊 売上帳出力（確定申告用）</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-bold">出力形式</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="exportFormat" id="formatCSV" value="csv" checked>
+              <label class="btn btn-outline-primary" for="formatCSV">CSV</label>
+              <input type="radio" class="btn-check" name="exportFormat" id="formatExcel" value="excel">
+              <label class="btn btn-outline-primary" for="formatExcel">Excel形式</label>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">出力期間</label>
+            <select class="form-select" id="exportPeriod" onchange="updateExportDates()">
+              <option value="month">月別</option>
+              <option value="quarter">四半期</option>
+              <option value="year">年度（確定申告用）</option>
+              <option value="custom">カスタム</option>
+            </select>
+          </div>
+          <div class="row g-2 mb-3" id="exportDateRange">
+            <div class="col-6">
+              <label class="form-label">開始日</label>
+              <input type="date" class="form-control" id="exportStartDate">
+            </div>
+            <div class="col-6">
+              <label class="form-label">終了日</label>
+              <input type="date" class="form-control" id="exportEndDate">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">出力内容</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="exportSalesDetail" checked>
+              <label class="form-check-label" for="exportSalesDetail">売上明細</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="exportReceivable" checked>
+              <label class="form-check-label" for="exportReceivable">売掛金一覧</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="exportSummary" checked>
+              <label class="form-check-label" for="exportSummary">月別サマリー（集計表）</label>
+            </div>
+          </div>
+          <div class="alert alert-info small mb-0">
+            <i class="bi bi-info-circle"></i> 確定申告用には「年度」を選択し、全ての出力内容をチェックしてください。
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-primary" onclick="exportData()">
+            <i class="bi bi-download"></i> ダウンロード
+          </button>
         </div>
       </div>
     </div>
@@ -527,25 +646,39 @@
       const unpaidItems = currentSalesData.filter(item => item.paymentStatus !== 'paid');
 
       if (unpaidItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">未入金の売上はありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">未入金の売上はありません</td></tr>';
         updateReceivableSummary(0, 0);
+        document.getElementById('overdueAlert').style.display = 'none';
         return;
       }
 
       let html = '';
       let totalUnpaid = 0;
+      let overdueCount = 0;
+      let overdueAmount = 0;
+      const OVERDUE_DAYS = 14; // 14日以上で滞留
 
       unpaidItems.forEach(item => {
         const paymentBadge = getPaymentBadge(item.paymentStatus);
         const unpaidAmount = item.saleAmount - (item.paymentAmount || 0);
         totalUnpaid += unpaidAmount;
 
+        const daysPassed = item.saleDate ? Math.floor((new Date() - new Date(item.saleDate)) / (1000 * 60 * 60 * 24)) : 0;
+        const isOverdue = daysPassed >= OVERDUE_DAYS;
+        if (isOverdue) {
+          overdueCount++;
+          overdueAmount += unpaidAmount;
+        }
+
+        const daysClass = isOverdue ? 'text-danger fw-bold' : (daysPassed >= 7 ? 'text-warning' : '');
+
         html += `
-          <tr>
+          <tr class="${isOverdue ? 'table-danger' : ''}">
             <td>${item.saleDate || '-'}</td>
             <td>${item.managementNumber}</td>
             <td>${item.salePlatform || '-'}</td>
             <td class="text-end">${formatCurrency(item.saleAmount)}</td>
+            <td class="${daysClass}">${daysPassed}日</td>
             <td>${paymentBadge}</td>
             <td>
               <button class="btn btn-sm btn-outline-primary" onclick="openPaymentModal('${item.id}', '${item.managementNumber}', ${item.saleAmount})">
@@ -558,6 +691,104 @@
 
       tbody.innerHTML = html;
       updateReceivableSummary(totalUnpaid, unpaidItems.length);
+
+      // 滞留債権アラート表示
+      const alertDiv = document.getElementById('overdueAlert');
+      if (overdueCount > 0) {
+        document.getElementById('overdueAlertText').textContent =
+          `${overdueCount}件（${formatCurrency(overdueAmount)}）が${OVERDUE_DAYS}日以上経過しています。早急に確認してください。`;
+        alertDiv.style.display = 'block';
+      } else {
+        alertDiv.style.display = 'none';
+      }
+
+      // 回収予定タブも更新
+      renderScheduleTab(unpaidItems);
+    }
+
+    function renderScheduleTab(unpaidItems) {
+      // 販売先別残高を計算
+      const platformBalances = {};
+      unpaidItems.forEach(item => {
+        const platform = item.salePlatform || '未設定';
+        if (!platformBalances[platform]) {
+          platformBalances[platform] = { count: 0, amount: 0 };
+        }
+        platformBalances[platform].count++;
+        platformBalances[platform].amount += item.saleAmount - (item.paymentAmount || 0);
+      });
+
+      // 販売先別残高カード
+      const grid = document.getElementById('platformBalanceGrid');
+      if (Object.keys(platformBalances).length === 0) {
+        grid.innerHTML = '<div class="col-12 text-center text-muted">未入金の売上はありません</div>';
+      } else {
+        let html = '';
+        Object.keys(platformBalances).sort().forEach(platform => {
+          const b = platformBalances[platform];
+          html += `
+            <div class="summary-card">
+              <div class="summary-label">${platform}</div>
+              <div class="summary-value">${formatCurrency(b.amount)}</div>
+              <div class="small text-muted">${b.count}件</div>
+            </div>
+          `;
+        });
+        grid.innerHTML = html;
+      }
+
+      // 入金予定スケジュール（販売先ごとの入金サイクル）
+      const scheduleMap = {};
+      unpaidItems.forEach(item => {
+        const platform = item.salePlatform || '未設定';
+        const saleDate = item.saleDate ? new Date(item.saleDate) : new Date();
+
+        // 入金予定日を推定（販売先別サイクル）
+        let expectedDays = 14; // デフォルト14日
+        if (platform.includes('メルカリ') || platform.includes('ラクマ')) {
+          expectedDays = 3; // 即日〜3日
+        } else if (platform.includes('Yahoo')) {
+          expectedDays = 7; // 約1週間
+        }
+
+        const expectedDate = new Date(saleDate);
+        expectedDate.setDate(expectedDate.getDate() + expectedDays);
+        const expectedDateStr = expectedDate.toISOString().slice(0, 10);
+
+        const key = `${expectedDateStr}_${platform}`;
+        if (!scheduleMap[key]) {
+          scheduleMap[key] = { date: expectedDateStr, platform, count: 0, amount: 0 };
+        }
+        scheduleMap[key].count++;
+        scheduleMap[key].amount += item.saleAmount - (item.paymentAmount || 0);
+      });
+
+      const tbody = document.getElementById('scheduleTableBody');
+      if (Object.keys(scheduleMap).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">入金予定はありません</td></tr>';
+        return;
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      let html = '';
+      Object.values(scheduleMap).sort((a, b) => a.date.localeCompare(b.date)).forEach(schedule => {
+        const isOverdue = schedule.date < today;
+        const statusBadge = isOverdue
+          ? '<span class="status-badge status-unpaid">期日超過</span>'
+          : '<span class="status-badge status-paid">予定</span>';
+
+        html += `
+          <tr class="${isOverdue ? 'table-warning' : ''}">
+            <td>${schedule.date}</td>
+            <td>${schedule.platform}</td>
+            <td>${schedule.count}件</td>
+            <td class="text-end">${formatCurrency(schedule.amount)}</td>
+            <td>${statusBadge}</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
     }
 
     function getPaymentBadge(status) {
@@ -660,6 +891,208 @@
         window.top.postMessage({ type: 'navigateToHome' }, '*');
       } else {
         window.location.href = '/menu_home.html';
+      }
+    }
+
+    // ============================================
+    // 帳簿出力機能（確定申告対応）
+    // ============================================
+
+    function openExportModal() {
+      // 今月をデフォルトに
+      updateExportDates();
+      const modal = new bootstrap.Modal(document.getElementById('exportModal'));
+      modal.show();
+    }
+
+    function updateExportDates() {
+      const period = document.getElementById('exportPeriod').value;
+      const now = new Date();
+      let startDate, endDate;
+
+      switch (period) {
+        case 'month':
+          // 今月
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          break;
+        case 'quarter':
+          // 今四半期
+          const quarter = Math.floor(now.getMonth() / 3);
+          startDate = new Date(now.getFullYear(), quarter * 3, 1);
+          endDate = new Date(now.getFullYear(), (quarter + 1) * 3, 0);
+          break;
+        case 'year':
+          // 今年度（1月〜12月）
+          startDate = new Date(now.getFullYear(), 0, 1);
+          endDate = new Date(now.getFullYear(), 11, 31);
+          break;
+        case 'custom':
+          // カスタム（変更しない）
+          return;
+      }
+
+      document.getElementById('exportStartDate').value = startDate.toISOString().slice(0, 10);
+      document.getElementById('exportEndDate').value = endDate.toISOString().slice(0, 10);
+    }
+
+    async function exportData() {
+      const format = document.querySelector('input[name="exportFormat"]:checked').value;
+      const startDate = document.getElementById('exportStartDate').value;
+      const endDate = document.getElementById('exportEndDate').value;
+      const includeSalesDetail = document.getElementById('exportSalesDetail').checked;
+      const includeReceivable = document.getElementById('exportReceivable').checked;
+      const includeSummary = document.getElementById('exportSummary').checked;
+
+      if (!startDate || !endDate) {
+        alert('出力期間を設定してください');
+        return;
+      }
+
+      showLoading();
+
+      try {
+        // 期間内の全データを取得
+        const allSalesData = await SalesApi.getSalesData('', '');
+        const filteredData = allSalesData.filter(item => {
+          const saleDate = item.saleDate || '';
+          return saleDate >= startDate && saleDate <= endDate;
+        });
+
+        let csvContent = '';
+
+        // 1. 売上明細
+        if (includeSalesDetail) {
+          csvContent += '【売上明細】\n';
+          csvContent += '販売日,管理番号,商品名,販売先,売上金額,原価,利益,利益率,入金ステータス,入金日,入金額\n';
+          filteredData.forEach(item => {
+            csvContent += [
+              item.saleDate || '',
+              item.managementNumber || '',
+              `"${(item.productName || '').replace(/"/g, '""')}"`,
+              item.salePlatform || '',
+              item.saleAmount || 0,
+              item.purchaseAmount || 0,
+              item.finalProfit || 0,
+              (item.profitRate || 0).toFixed(1) + '%',
+              getPaymentStatusText(item.paymentStatus),
+              item.paymentDate || '',
+              item.paymentAmount || 0
+            ].join(',') + '\n';
+          });
+          csvContent += '\n';
+        }
+
+        // 2. 売掛金一覧
+        if (includeReceivable) {
+          const receivables = filteredData.filter(item => item.paymentStatus !== 'paid');
+          csvContent += '【売掛金一覧】\n';
+          csvContent += '販売日,管理番号,販売先,売上金額,入金済額,未入金額,経過日数\n';
+          receivables.forEach(item => {
+            const unpaidAmount = item.saleAmount - (item.paymentAmount || 0);
+            const daysPassed = item.saleDate ? Math.floor((new Date() - new Date(item.saleDate)) / (1000 * 60 * 60 * 24)) : 0;
+            csvContent += [
+              item.saleDate || '',
+              item.managementNumber || '',
+              item.salePlatform || '',
+              item.saleAmount || 0,
+              item.paymentAmount || 0,
+              unpaidAmount,
+              daysPassed + '日'
+            ].join(',') + '\n';
+          });
+          csvContent += '\n';
+        }
+
+        // 3. 月別サマリー
+        if (includeSummary) {
+          const monthlySummary = {};
+          filteredData.forEach(item => {
+            const month = (item.saleDate || '').slice(0, 7);
+            if (!month) return;
+            if (!monthlySummary[month]) {
+              monthlySummary[month] = { count: 0, sales: 0, cost: 0, profit: 0, received: 0 };
+            }
+            monthlySummary[month].count++;
+            monthlySummary[month].sales += item.saleAmount || 0;
+            monthlySummary[month].cost += item.purchaseAmount || 0;
+            monthlySummary[month].profit += item.finalProfit || 0;
+            if (item.paymentStatus === 'paid') {
+              monthlySummary[month].received += item.saleAmount;
+            } else {
+              monthlySummary[month].received += item.paymentAmount || 0;
+            }
+          });
+
+          csvContent += '【月別集計（確定申告用）】\n';
+          csvContent += '年月,販売件数,売上高,売上原価,売上総利益,利益率,入金済額,売掛残高\n';
+
+          let totalCount = 0, totalSales = 0, totalCost = 0, totalProfit = 0, totalReceived = 0;
+          Object.keys(monthlySummary).sort().forEach(month => {
+            const m = monthlySummary[month];
+            const profitRate = m.sales > 0 ? (m.profit / m.sales * 100).toFixed(1) : '0.0';
+            const receivable = m.sales - m.received;
+            csvContent += [
+              month,
+              m.count,
+              m.sales,
+              m.cost,
+              m.profit,
+              profitRate + '%',
+              m.received,
+              receivable
+            ].join(',') + '\n';
+            totalCount += m.count;
+            totalSales += m.sales;
+            totalCost += m.cost;
+            totalProfit += m.profit;
+            totalReceived += m.received;
+          });
+
+          // 合計行
+          const totalProfitRate = totalSales > 0 ? (totalProfit / totalSales * 100).toFixed(1) : '0.0';
+          csvContent += [
+            '【合計】',
+            totalCount,
+            totalSales,
+            totalCost,
+            totalProfit,
+            totalProfitRate + '%',
+            totalReceived,
+            totalSales - totalReceived
+          ].join(',') + '\n';
+        }
+
+        // ファイル名
+        const fileName = `売上帳_${startDate}_${endDate}.csv`;
+
+        // BOM付きUTF-8でダウンロード
+        const bom = '\uFEFF';
+        const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.click();
+
+        // モーダルを閉じる
+        const modal = bootstrap.Modal.getInstance(document.getElementById('exportModal'));
+        modal.hide();
+
+        alert('✅ ダウンロードが完了しました');
+
+      } catch (error) {
+        console.error('出力エラー:', error);
+        alert('出力に失敗しました: ' + error.message);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function getPaymentStatusText(status) {
+      switch (status) {
+        case 'paid': return '入金済';
+        case 'partial': return '一部入金';
+        default: return '未入金';
       }
     }
   </script>
