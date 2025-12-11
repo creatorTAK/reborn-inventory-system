@@ -190,6 +190,9 @@
       <span class="header-title">仕入／買掛</span>
     </div>
     <div class="header-right">
+      <button class="btn btn-sm btn-outline-light me-2" onclick="openPaymentNoticeModal()" title="支払通知書発行">
+        <i class="bi bi-file-text"></i> 支払通知
+      </button>
       <button class="btn btn-sm btn-outline-light" onclick="openExportModal()" title="データ出力">
         <i class="bi bi-download"></i> 出力
       </button>
@@ -503,7 +506,128 @@
     </div>
   </div>
 
+  <!-- 支払通知書発行モーダル -->
+  <div class="modal fade" id="paymentNoticeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title">📄 支払通知書発行</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">支払先（仕入先）</label>
+              <input type="text" class="form-control" id="paymentNoticeSupplier" placeholder="支払先名を入力">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">支払日</label>
+              <input type="date" class="form-control" id="paymentNoticeDate">
+            </div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">通知番号</label>
+              <input type="text" class="form-control" id="paymentNoticeNumber" placeholder="自動生成">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">支払方法</label>
+              <select class="form-select" id="paymentNoticeMethod">
+                <option value="振込">銀行振込</option>
+                <option value="現金">現金</option>
+                <option value="クレジット">クレジットカード</option>
+                <option value="その他">その他</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">支払明細</label>
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered" id="paymentNoticeItemsTable">
+                <thead class="table-light">
+                  <tr>
+                    <th>仕入日</th>
+                    <th>内容</th>
+                    <th class="text-end" style="width: 120px;">金額</th>
+                    <th style="width: 40px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="paymentNoticeItemsBody">
+                  <!-- 動的に追加 -->
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="4">
+                      <button type="button" class="btn btn-sm btn-outline-warning" onclick="addPaymentNoticeItem()">
+                        <i class="bi bi-plus"></i> 行を追加
+                      </button>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label">小計</label>
+              <div class="input-group">
+                <span class="input-group-text">¥</span>
+                <input type="text" class="form-control text-end" id="paymentNoticeSubtotal" readonly>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">支払合計</label>
+              <div class="input-group">
+                <span class="input-group-text">¥</span>
+                <input type="text" class="form-control text-end fw-bold" id="paymentNoticeTotal" readonly>
+              </div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">備考</label>
+            <textarea class="form-control" id="paymentNoticeNote" rows="2" placeholder="振込先口座情報など"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-outline-warning" onclick="previewPaymentNotice()">
+            <i class="bi bi-eye"></i> プレビュー
+          </button>
+          <button type="button" class="btn btn-warning" onclick="downloadPaymentNoticePDF()">
+            <i class="bi bi-download"></i> PDF出力
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 支払通知書プレビューモーダル -->
+  <div class="modal fade" id="paymentNoticePreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title">📄 支払通知書プレビュー</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-0">
+          <div id="paymentNoticePreviewContent" style="background: white; padding: 40px;">
+            <!-- プレビュー内容が動的に生成される -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+          <button type="button" class="btn btn-warning" onclick="downloadPaymentNoticePDF()">
+            <i class="bi bi-download"></i> PDF出力
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- html2canvas & jsPDF for PDF generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Firebase SDK -->
   <script type="module">
@@ -1252,6 +1376,252 @@
         default: return '未払';
       }
     }
+
+    // ================= 支払通知書発行機能 =================
+
+    /**
+     * 支払通知書発行モーダルを開く
+     */
+    window.openPaymentNoticeModal = function(items = []) {
+      // 初期値設定
+      const today = new Date();
+      document.getElementById('paymentNoticeDate').value = today.toISOString().slice(0, 10);
+
+      // 通知番号自動生成
+      const noticeNumber = 'PAY-' + today.getFullYear() +
+        String(today.getMonth() + 1).padStart(2, '0') +
+        String(today.getDate()).padStart(2, '0') + '-' +
+        String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+      document.getElementById('paymentNoticeNumber').value = noticeNumber;
+
+      // 明細をクリアして追加
+      const tbody = document.getElementById('paymentNoticeItemsBody');
+      tbody.innerHTML = '';
+
+      if (items.length > 0) {
+        items.forEach(item => {
+          addPaymentNoticeItemRow(item.purchaseDate || '', item.productName || '', item.purchaseAmount || 0);
+        });
+        if (items[0].purchaseSupplier) {
+          document.getElementById('paymentNoticeSupplier').value = items[0].purchaseSupplier + ' 様';
+        }
+      } else {
+        addPaymentNoticeItemRow('', '', 0);
+      }
+
+      updatePaymentNoticeTotals();
+
+      const modal = new bootstrap.Modal(document.getElementById('paymentNoticeModal'));
+      modal.show();
+    };
+
+    /**
+     * 支払通知書明細行を追加
+     */
+    window.addPaymentNoticeItem = function() {
+      addPaymentNoticeItemRow('', '', 0);
+    };
+
+    function addPaymentNoticeItemRow(date, description, amount) {
+      const tbody = document.getElementById('paymentNoticeItemsBody');
+
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td><input type="date" class="form-control form-control-sm" value="${date}" onchange="updatePaymentNoticeTotals()"></td>
+        <td><input type="text" class="form-control form-control-sm" value="${description}" onchange="updatePaymentNoticeTotals()"></td>
+        <td><input type="number" class="form-control form-control-sm text-end" value="${amount}" min="0" onchange="updatePaymentNoticeTotals()"></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removePaymentNoticeItem(this)"><i class="bi bi-trash"></i></button></td>
+      `;
+      tbody.appendChild(row);
+    }
+
+    /**
+     * 支払通知書明細行を削除
+     */
+    window.removePaymentNoticeItem = function(btn) {
+      const row = btn.closest('tr');
+      row.remove();
+      updatePaymentNoticeTotals();
+    };
+
+    /**
+     * 支払通知書合計を更新
+     */
+    window.updatePaymentNoticeTotals = function() {
+      const tbody = document.getElementById('paymentNoticeItemsBody');
+      const rows = tbody.querySelectorAll('tr');
+      let subtotal = 0;
+
+      rows.forEach(row => {
+        const amountInput = row.querySelector('input[type="number"]');
+        const amount = parseInt(amountInput?.value) || 0;
+        subtotal += amount;
+      });
+
+      document.getElementById('paymentNoticeSubtotal').value = subtotal.toLocaleString();
+      document.getElementById('paymentNoticeTotal').value = subtotal.toLocaleString();
+    };
+
+    /**
+     * 支払通知書プレビュー
+     */
+    window.previewPaymentNotice = function() {
+      const html = generatePaymentNoticeHtml();
+      document.getElementById('paymentNoticePreviewContent').innerHTML = html;
+
+      const noticeModal = bootstrap.Modal.getInstance(document.getElementById('paymentNoticeModal'));
+      noticeModal.hide();
+
+      setTimeout(() => {
+        const previewModal = new bootstrap.Modal(document.getElementById('paymentNoticePreviewModal'));
+        previewModal.show();
+      }, 300);
+    };
+
+    /**
+     * 支払通知書HTMLを生成
+     */
+    function generatePaymentNoticeHtml() {
+      const supplier = document.getElementById('paymentNoticeSupplier').value || '御中';
+      const paymentDate = document.getElementById('paymentNoticeDate').value;
+      const noticeNumber = document.getElementById('paymentNoticeNumber').value;
+      const paymentMethod = document.getElementById('paymentNoticeMethod').value;
+      const note = document.getElementById('paymentNoticeNote').value;
+      const total = document.getElementById('paymentNoticeTotal').value;
+
+      // 明細を取得
+      const tbody = document.getElementById('paymentNoticeItemsBody');
+      const rows = tbody.querySelectorAll('tr');
+      let itemsHtml = '';
+
+      rows.forEach((row, index) => {
+        const inputs = row.querySelectorAll('input');
+        const date = inputs[0]?.value || '';
+        const description = inputs[1]?.value || '';
+        const amount = parseInt(inputs[2]?.value) || 0;
+
+        if (description) {
+          itemsHtml += `
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;">${index + 1}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${date}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${description}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">¥${amount.toLocaleString()}</td>
+            </tr>
+          `;
+        }
+      });
+
+      return `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 800px; margin: 0 auto; color: #333;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="font-size: 28px; font-weight: bold; margin: 0; letter-spacing: 8px;">支払通知書</h1>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+            <div>
+              <p style="font-size: 18px; font-weight: bold; margin: 0 0 5px 0; border-bottom: 2px solid #333; padding-bottom: 5px;">
+                ${supplier}
+              </p>
+              <p style="margin: 10px 0 0 0; font-size: 14px;">下記の通りお支払いいたしますのでご査収ください。</p>
+            </div>
+            <div style="text-align: right; font-size: 14px;">
+              <p style="margin: 0;">発行日: ${paymentDate}</p>
+              <p style="margin: 5px 0;">通知番号: ${noticeNumber}</p>
+              <p style="margin: 5px 0;">支払方法: ${paymentMethod}</p>
+            </div>
+          </div>
+
+          <div style="background: #fff7ed; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: center; border: 2px solid #f59e0b;">
+            <p style="margin: 0 0 5px 0; font-size: 14px; color: #92400e;">お支払金額</p>
+            <p style="margin: 0; font-size: 32px; font-weight: bold; color: #b45309;">¥${total}</p>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <thead>
+              <tr style="background: #fef3c7;">
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: center; width: 40px;">No</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: center; width: 100px;">仕入日</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">内容</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: right; width: 120px;">金額</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 30px;">
+            <table style="border-collapse: collapse; width: 250px;">
+              <tr style="font-weight: bold; font-size: 16px; border-top: 2px solid #333;">
+                <td style="padding: 8px; text-align: right;">合計金額</td>
+                <td style="padding: 8px; text-align: right;">¥${total}</td>
+              </tr>
+            </table>
+          </div>
+
+          ${note ? `
+          <div style="margin-bottom: 30px;">
+            <p style="font-weight: bold; margin: 0 0 10px 0;">備考</p>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; white-space: pre-wrap;">${note}</div>
+          </div>
+          ` : ''}
+
+          <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: right;">
+            <p style="font-weight: bold; margin: 0 0 10px 0;">発行者</p>
+            <p style="margin: 0;">フリラ</p>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Furira</p>
+          </div>
+        </div>
+      `;
+    }
+
+    /**
+     * 支払通知書PDF出力
+     */
+    window.downloadPaymentNoticePDF = async function() {
+      showLoading();
+
+      try {
+        const html = generatePaymentNoticeHtml();
+        const previewContent = document.getElementById('paymentNoticePreviewContent');
+        previewContent.innerHTML = html;
+        previewContent.style.display = 'block';
+
+        const canvas = await html2canvas(previewContent, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgData = canvas.toDataURL('image/png');
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+        const noticeNumber = document.getElementById('paymentNoticeNumber').value;
+        const supplier = document.getElementById('paymentNoticeSupplier').value.replace(/\s/g, '_');
+        pdf.save(`支払通知書_${noticeNumber}_${supplier}.pdf`);
+
+        alert('✅ 支払通知書PDFをダウンロードしました');
+
+        const previewModal = bootstrap.Modal.getInstance(document.getElementById('paymentNoticePreviewModal'));
+        if (previewModal) previewModal.hide();
+        const noticeModal = bootstrap.Modal.getInstance(document.getElementById('paymentNoticeModal'));
+        if (noticeModal) noticeModal.hide();
+
+      } catch (error) {
+        console.error('PDF出力エラー:', error);
+        alert('PDF出力に失敗しました: ' + error.message);
+      } finally {
+        hideLoading();
+      }
+    };
   </script>
 </body>
 </html>

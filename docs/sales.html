@@ -165,6 +165,9 @@
       <span class="header-title">売上／売掛</span>
     </div>
     <div class="header-right">
+      <button class="btn btn-sm btn-outline-light me-2" onclick="openInvoiceModal()" title="請求書発行">
+        <i class="bi bi-file-text"></i> 請求書
+      </button>
       <button class="btn btn-sm btn-outline-light" onclick="openExportModal()" title="データ出力">
         <i class="bi bi-download"></i> 出力
       </button>
@@ -455,7 +458,131 @@
     </div>
   </div>
 
+  <!-- 請求書発行モーダル -->
+  <div class="modal fade" id="invoiceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">📄 請求書発行</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">請求先</label>
+              <input type="text" class="form-control" id="invoiceCustomer" placeholder="請求先名を入力">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">請求日</label>
+              <input type="date" class="form-control" id="invoiceDate">
+            </div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">支払期限</label>
+              <input type="date" class="form-control" id="invoiceDueDate">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">請求番号</label>
+              <input type="text" class="form-control" id="invoiceNumber" placeholder="自動生成">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">請求明細</label>
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered" id="invoiceItemsTable">
+                <thead class="table-light">
+                  <tr>
+                    <th>商品名</th>
+                    <th class="text-end" style="width: 80px;">数量</th>
+                    <th class="text-end" style="width: 120px;">単価</th>
+                    <th class="text-end" style="width: 120px;">金額</th>
+                    <th style="width: 40px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="invoiceItemsBody">
+                  <!-- 動的に追加 -->
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="5">
+                      <button type="button" class="btn btn-sm btn-outline-primary" onclick="addInvoiceItem()">
+                        <i class="bi bi-plus"></i> 行を追加
+                      </button>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label">小計</label>
+              <div class="input-group">
+                <span class="input-group-text">¥</span>
+                <input type="text" class="form-control text-end" id="invoiceSubtotal" readonly>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">消費税（10%）</label>
+              <div class="input-group">
+                <span class="input-group-text">¥</span>
+                <input type="text" class="form-control text-end" id="invoiceTax" readonly>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">合計金額</label>
+              <div class="input-group">
+                <span class="input-group-text">¥</span>
+                <input type="text" class="form-control text-end fw-bold" id="invoiceTotal" readonly>
+              </div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">備考</label>
+            <textarea class="form-control" id="invoiceNote" rows="2" placeholder="振込先情報など"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-outline-primary" onclick="previewInvoice()">
+            <i class="bi bi-eye"></i> プレビュー
+          </button>
+          <button type="button" class="btn btn-primary" onclick="downloadInvoicePDF()">
+            <i class="bi bi-download"></i> PDF出力
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 請求書プレビューモーダル -->
+  <div class="modal fade" id="invoicePreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">📄 請求書プレビュー</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-0">
+          <div id="invoicePreviewContent" style="background: white; padding: 40px;">
+            <!-- プレビュー内容が動的に生成される -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+          <button type="button" class="btn btn-primary" onclick="downloadInvoicePDF()">
+            <i class="bi bi-download"></i> PDF出力
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- html2canvas & jsPDF for PDF generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <!-- Firebase SDK -->
   <script type="module">
@@ -1095,6 +1222,314 @@
         default: return '未入金';
       }
     }
+
+    // ================= 請求書発行機能 =================
+
+    let currentInvoiceData = null;
+
+    /**
+     * 請求書発行モーダルを開く
+     */
+    window.openInvoiceModal = function(items = []) {
+      currentInvoiceData = items;
+
+      // 初期値設定
+      const today = new Date();
+      document.getElementById('invoiceDate').value = today.toISOString().slice(0, 10);
+
+      // 支払期限：30日後
+      const dueDate = new Date(today);
+      dueDate.setDate(dueDate.getDate() + 30);
+      document.getElementById('invoiceDueDate').value = dueDate.toISOString().slice(0, 10);
+
+      // 請求番号自動生成
+      const invoiceNumber = 'INV-' + today.getFullYear() +
+        String(today.getMonth() + 1).padStart(2, '0') +
+        String(today.getDate()).padStart(2, '0') + '-' +
+        String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+      document.getElementById('invoiceNumber').value = invoiceNumber;
+
+      // 明細をクリアして追加
+      const tbody = document.getElementById('invoiceItemsBody');
+      tbody.innerHTML = '';
+
+      if (items.length > 0) {
+        // 選択された商品を明細に追加
+        items.forEach(item => {
+          addInvoiceItemRow(item.productName || '', 1, item.salesPrice || 0);
+        });
+        // 請求先を推定（販売先名）
+        if (items[0].platform) {
+          document.getElementById('invoiceCustomer').value = items[0].platform + ' 御中';
+        }
+      } else {
+        // 空の行を1つ追加
+        addInvoiceItemRow('', 1, 0);
+      }
+
+      updateInvoiceTotals();
+
+      const modal = new bootstrap.Modal(document.getElementById('invoiceModal'));
+      modal.show();
+    };
+
+    /**
+     * 請求書明細行を追加
+     */
+    window.addInvoiceItem = function() {
+      addInvoiceItemRow('', 1, 0);
+    };
+
+    function addInvoiceItemRow(name, quantity, unitPrice) {
+      const tbody = document.getElementById('invoiceItemsBody');
+      const rowIndex = tbody.children.length;
+      const amount = quantity * unitPrice;
+
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td><input type="text" class="form-control form-control-sm" value="${name}" onchange="updateInvoiceTotals()"></td>
+        <td><input type="number" class="form-control form-control-sm text-end" value="${quantity}" min="1" onchange="updateInvoiceTotals()"></td>
+        <td><input type="number" class="form-control form-control-sm text-end" value="${unitPrice}" min="0" onchange="updateInvoiceTotals()"></td>
+        <td class="text-end">${amount.toLocaleString()}</td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="removeInvoiceItem(this)"><i class="bi bi-trash"></i></button></td>
+      `;
+      tbody.appendChild(row);
+    }
+
+    /**
+     * 請求書明細行を削除
+     */
+    window.removeInvoiceItem = function(btn) {
+      const row = btn.closest('tr');
+      row.remove();
+      updateInvoiceTotals();
+    };
+
+    /**
+     * 請求書合計を更新
+     */
+    window.updateInvoiceTotals = function() {
+      const tbody = document.getElementById('invoiceItemsBody');
+      const rows = tbody.querySelectorAll('tr');
+      let subtotal = 0;
+
+      rows.forEach(row => {
+        const inputs = row.querySelectorAll('input[type="number"]');
+        const quantity = parseInt(inputs[0]?.value) || 0;
+        const unitPrice = parseInt(inputs[1]?.value) || 0;
+        const amount = quantity * unitPrice;
+        subtotal += amount;
+
+        // 金額セルを更新
+        const amountCell = row.querySelector('td:nth-child(4)');
+        if (amountCell) {
+          amountCell.textContent = amount.toLocaleString();
+        }
+      });
+
+      const tax = Math.floor(subtotal * 0.1);
+      const total = subtotal + tax;
+
+      document.getElementById('invoiceSubtotal').value = subtotal.toLocaleString();
+      document.getElementById('invoiceTax').value = tax.toLocaleString();
+      document.getElementById('invoiceTotal').value = total.toLocaleString();
+    };
+
+    /**
+     * 請求書プレビュー
+     */
+    window.previewInvoice = function() {
+      const invoiceHtml = generateInvoiceHtml();
+      document.getElementById('invoicePreviewContent').innerHTML = invoiceHtml;
+
+      // 請求書モーダルを閉じてプレビューモーダルを開く
+      const invoiceModal = bootstrap.Modal.getInstance(document.getElementById('invoiceModal'));
+      invoiceModal.hide();
+
+      setTimeout(() => {
+        const previewModal = new bootstrap.Modal(document.getElementById('invoicePreviewModal'));
+        previewModal.show();
+      }, 300);
+    };
+
+    /**
+     * 請求書HTMLを生成
+     */
+    function generateInvoiceHtml() {
+      const customer = document.getElementById('invoiceCustomer').value || '御中';
+      const invoiceDate = document.getElementById('invoiceDate').value;
+      const dueDate = document.getElementById('invoiceDueDate').value;
+      const invoiceNumber = document.getElementById('invoiceNumber').value;
+      const note = document.getElementById('invoiceNote').value;
+      const subtotal = document.getElementById('invoiceSubtotal').value;
+      const tax = document.getElementById('invoiceTax').value;
+      const total = document.getElementById('invoiceTotal').value;
+
+      // 明細を取得
+      const tbody = document.getElementById('invoiceItemsBody');
+      const rows = tbody.querySelectorAll('tr');
+      let itemsHtml = '';
+
+      rows.forEach((row, index) => {
+        const inputs = row.querySelectorAll('input');
+        const name = inputs[0]?.value || '';
+        const quantity = inputs[1]?.value || '0';
+        const unitPrice = parseInt(inputs[2]?.value) || 0;
+        const amount = row.querySelector('td:nth-child(4)')?.textContent || '0';
+
+        if (name) {
+          itemsHtml += `
+            <tr>
+              <td style="padding: 8px; border: 1px solid #ddd;">${index + 1}</td>
+              <td style="padding: 8px; border: 1px solid #ddd;">${name}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${quantity}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">¥${unitPrice.toLocaleString()}</td>
+              <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">¥${amount}</td>
+            </tr>
+          `;
+        }
+      });
+
+      return `
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 800px; margin: 0 auto; color: #333;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="font-size: 28px; font-weight: bold; margin: 0; letter-spacing: 8px;">請 求 書</h1>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+            <div>
+              <p style="font-size: 18px; font-weight: bold; margin: 0 0 5px 0; border-bottom: 2px solid #333; padding-bottom: 5px;">
+                ${customer}
+              </p>
+              <p style="margin: 10px 0 0 0; font-size: 14px;">下記の通りご請求申し上げます。</p>
+            </div>
+            <div style="text-align: right; font-size: 14px;">
+              <p style="margin: 0;">請求日: ${invoiceDate}</p>
+              <p style="margin: 5px 0;">請求番号: ${invoiceNumber}</p>
+              <p style="margin: 5px 0;">支払期限: ${dueDate}</p>
+            </div>
+          </div>
+
+          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: center;">
+            <p style="margin: 0 0 5px 0; font-size: 14px; color: #666;">ご請求金額</p>
+            <p style="margin: 0; font-size: 32px; font-weight: bold;">¥${total}</p>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">（税込）</p>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <thead>
+              <tr style="background: #f8f9fa;">
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: center; width: 40px;">No</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">品名</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: right; width: 80px;">数量</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: right; width: 100px;">単価</th>
+                <th style="padding: 10px; border: 1px solid #ddd; text-align: right; width: 120px;">金額</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 30px;">
+            <table style="border-collapse: collapse; width: 300px;">
+              <tr>
+                <td style="padding: 8px; text-align: right;">小計</td>
+                <td style="padding: 8px; text-align: right; width: 120px;">¥${subtotal}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; text-align: right;">消費税（10%）</td>
+                <td style="padding: 8px; text-align: right;">¥${tax}</td>
+              </tr>
+              <tr style="font-weight: bold; font-size: 16px; border-top: 2px solid #333;">
+                <td style="padding: 8px; text-align: right;">合計</td>
+                <td style="padding: 8px; text-align: right;">¥${total}</td>
+              </tr>
+            </table>
+          </div>
+
+          ${note ? `
+          <div style="margin-bottom: 30px;">
+            <p style="font-weight: bold; margin: 0 0 10px 0;">備考</p>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; white-space: pre-wrap;">${note}</div>
+          </div>
+          ` : ''}
+
+          <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: right;">
+            <p style="font-weight: bold; margin: 0 0 10px 0;">発行者</p>
+            <p style="margin: 0;">フリラ</p>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Furira</p>
+          </div>
+        </div>
+      `;
+    }
+
+    /**
+     * 請求書PDF出力
+     */
+    window.downloadInvoicePDF = async function() {
+      showLoading();
+
+      try {
+        // プレビュー用のHTMLを一時的に表示
+        const invoiceHtml = generateInvoiceHtml();
+        const previewContent = document.getElementById('invoicePreviewContent');
+        previewContent.innerHTML = invoiceHtml;
+        previewContent.style.display = 'block';
+
+        // html2canvasでキャンバスに変換
+        const canvas = await html2canvas(previewContent, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+
+        // jsPDFでPDF生成
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgData = canvas.toDataURL('image/png');
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+        // ファイル名
+        const invoiceNumber = document.getElementById('invoiceNumber').value;
+        const customer = document.getElementById('invoiceCustomer').value.replace(/\s/g, '_');
+        pdf.save(`請求書_${invoiceNumber}_${customer}.pdf`);
+
+        alert('✅ 請求書PDFをダウンロードしました');
+
+        // モーダルを閉じる
+        const previewModal = bootstrap.Modal.getInstance(document.getElementById('invoicePreviewModal'));
+        if (previewModal) previewModal.hide();
+        const invoiceModal = bootstrap.Modal.getInstance(document.getElementById('invoiceModal'));
+        if (invoiceModal) invoiceModal.hide();
+
+      } catch (error) {
+        console.error('PDF出力エラー:', error);
+        alert('PDF出力に失敗しました: ' + error.message);
+      } finally {
+        hideLoading();
+      }
+    };
+
+    /**
+     * 複数の売掛から請求書を作成
+     */
+    window.createInvoiceFromReceivables = function() {
+      // 未入金の売掛データを取得してモーダルを開く
+      if (window.allSalesDataCache) {
+        const unpaidItems = window.allSalesDataCache.filter(item =>
+          item.paymentStatus !== 'paid' && item.salesPrice > 0
+        );
+        openInvoiceModal(unpaidItems);
+      } else {
+        openInvoiceModal([]);
+      }
+    };
   </script>
 </body>
 </html>
