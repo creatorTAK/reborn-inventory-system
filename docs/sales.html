@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <base target="_top">
-  <title>売上管理・分析 - FURIRA</title>
+  <title>売上／売掛 - FURIRA</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
@@ -21,97 +21,101 @@
       margin: 0 auto;
     }
 
-    /* 期間選択 */
-    .period-selector {
+    /* タブ */
+    .nav-tabs-custom {
+      background: white;
+      border-radius: 12px;
+      padding: 8px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .nav-tabs-custom .nav-link {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      color: #6b7280;
+      font-weight: 500;
+    }
+    .nav-tabs-custom .nav-link.active {
+      background: #3b82f6;
+      color: white;
+    }
+
+    /* フィルタセクション */
+    .filter-section {
       background: white;
       padding: 16px;
       border-radius: 12px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
 
-    /* KPIカード */
-    .kpi-grid {
+    /* サマリーカード */
+    .summary-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 12px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
-    .kpi-card {
+    .summary-card {
       background: white;
       padding: 16px;
       border-radius: 12px;
       text-align: center;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      transition: transform 0.2s;
     }
-    .kpi-card:hover {
-      transform: translateY(-2px);
-    }
-    .kpi-label {
+    .summary-label {
       font-size: 0.75rem;
       color: #6b7280;
       margin-bottom: 4px;
     }
-    .kpi-value {
-      font-size: 1.5rem;
+    .summary-value {
+      font-size: 1.25rem;
       font-weight: 700;
       color: #1f2937;
     }
-    .kpi-value.positive {
-      color: #10b981;
-    }
-    .kpi-value.negative {
-      color: #ef4444;
-    }
-    .kpi-unit {
-      font-size: 0.875rem;
-      color: #6b7280;
-    }
+    .summary-value.positive { color: #10b981; }
+    .summary-value.negative { color: #ef4444; }
 
-    /* セクションカード */
-    .section-card {
+    /* 売上一覧テーブル */
+    .sales-table-container {
       background: white;
       border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 20px;
+      padding: 16px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
-    .section-title {
-      font-size: 1rem;
-      font-weight: 600;
-      color: #374151;
-      margin-bottom: 16px;
-      padding-bottom: 8px;
-      border-bottom: 2px solid #e5e7eb;
-    }
-
-    /* 指標テーブル */
-    .metrics-table {
+    .sales-table {
       width: 100%;
-    }
-    .metrics-table th {
-      background: #f9fafb;
-      padding: 12px 8px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #6b7280;
-      text-align: center;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    .metrics-table td {
-      padding: 12px 8px;
-      text-align: center;
-      border-bottom: 1px solid #f3f4f6;
       font-size: 0.875rem;
     }
-    .metrics-table .category-header {
-      background: #f0f9ff;
+    .sales-table th {
+      background: #f9fafb;
+      padding: 12px 8px;
       font-weight: 600;
-      color: #0369a1;
-      text-align: left;
-      padding-left: 12px;
+      color: #374151;
+      border-bottom: 2px solid #e5e7eb;
+      white-space: nowrap;
     }
+    .sales-table td {
+      padding: 12px 8px;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: middle;
+    }
+    .sales-table tr:hover {
+      background: #f9fafb;
+    }
+
+    /* 売掛ステータスバッジ */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .status-paid { background: #d1fae5; color: #065f46; }
+    .status-unpaid { background: #fee2e2; color: #991b1b; }
+    .status-partial { background: #fef3c7; color: #92400e; }
 
     /* ローディング */
     .loading-overlay {
@@ -129,11 +133,14 @@
 
     /* レスポンシブ */
     @media (max-width: 576px) {
-      .kpi-grid {
+      .summary-grid {
         grid-template-columns: repeat(2, 1fr);
       }
-      .kpi-value {
-        font-size: 1.25rem;
+      .sales-table {
+        font-size: 0.75rem;
+      }
+      .sales-table th, .sales-table td {
+        padding: 8px 4px;
       }
     }
   </style>
@@ -155,183 +162,178 @@
       <button class="header-back-btn" onclick="goBack()">
         <i class="bi bi-chevron-left"></i>
       </button>
-      <span class="header-title">売上管理・分析</span>
+      <span class="header-title">売上／売掛</span>
     </div>
   </div>
 
   <div class="content-container">
-    <!-- 期間選択 -->
-    <div class="period-selector">
-      <div class="row align-items-center g-2">
-        <div class="col-auto">
-          <label class="form-label mb-0 small fw-bold">期間:</label>
+    <!-- タブ -->
+    <ul class="nav nav-tabs-custom" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales-content" type="button" role="tab">
+          💵 売上一覧
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="receivable-tab" data-bs-toggle="tab" data-bs-target="#receivable-content" type="button" role="tab">
+          📋 売掛管理
+        </button>
+      </li>
+    </ul>
+
+    <!-- タブコンテンツ -->
+    <div class="tab-content">
+      <!-- 売上一覧タブ -->
+      <div class="tab-pane fade show active" id="sales-content" role="tabpanel">
+        <!-- フィルタ -->
+        <div class="filter-section">
+          <div class="row g-2 align-items-center">
+            <div class="col-auto">
+              <label class="form-label mb-0 small fw-bold">期間:</label>
+            </div>
+            <div class="col-auto">
+              <input type="month" class="form-control form-control-sm" id="salesMonth" onchange="loadSalesData()">
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0 small fw-bold">販売先:</label>
+            </div>
+            <div class="col-auto">
+              <select class="form-select form-select-sm" id="salesPlatformFilter" onchange="loadSalesData()">
+                <option value="">すべて</option>
+                <option value="メルカリ">メルカリ</option>
+                <option value="メルカリShops">メルカリShops</option>
+                <option value="ラクマ">ラクマ</option>
+                <option value="Yahoo!フリマ">Yahoo!フリマ</option>
+              </select>
+            </div>
+          </div>
         </div>
-        <div class="col-auto">
-          <select class="form-select form-select-sm" id="periodType" onchange="onPeriodTypeChange()">
-            <option value="month">月別</option>
-            <option value="year">年別</option>
-            <option value="custom">カスタム</option>
-          </select>
+
+        <!-- サマリー -->
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-label">販売件数</div>
+            <div class="summary-value" id="summary-count">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">売上合計</div>
+            <div class="summary-value" id="summary-sales">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">利益合計</div>
+            <div class="summary-value positive" id="summary-profit">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">平均利益率</div>
+            <div class="summary-value" id="summary-profitRate">-</div>
+          </div>
         </div>
-        <div class="col-auto" id="monthSelector">
-          <input type="month" class="form-control form-control-sm" id="selectedMonth" onchange="loadSalesData()">
+
+        <!-- 売上一覧テーブル -->
+        <div class="sales-table-container">
+          <div class="table-responsive">
+            <table class="sales-table">
+              <thead>
+                <tr>
+                  <th>販売日</th>
+                  <th>管理番号</th>
+                  <th>商品名</th>
+                  <th>販売先</th>
+                  <th class="text-end">売上</th>
+                  <th class="text-end">利益</th>
+                  <th>入金</th>
+                </tr>
+              </thead>
+              <tbody id="salesTableBody">
+                <tr>
+                  <td colspan="7" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div class="col-auto d-none" id="yearSelector">
-          <select class="form-select form-select-sm" id="selectedYear" onchange="loadSalesData()">
-          </select>
+      </div>
+
+      <!-- 売掛管理タブ -->
+      <div class="tab-pane fade" id="receivable-content" role="tabpanel">
+        <!-- サマリー -->
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-label">売掛残高</div>
+            <div class="summary-value negative" id="receivable-balance">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">未入金件数</div>
+            <div class="summary-value" id="receivable-count">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">今月入金予定</div>
+            <div class="summary-value" id="receivable-expected">-</div>
+          </div>
         </div>
-        <div class="col-auto d-none" id="customSelector">
-          <input type="date" class="form-control form-control-sm" id="startDate">
-          <span class="mx-1">〜</span>
-          <input type="date" class="form-control form-control-sm" id="endDate">
-          <button class="btn btn-sm btn-primary ms-2" onclick="loadSalesData()">適用</button>
+
+        <!-- 売掛一覧テーブル -->
+        <div class="sales-table-container">
+          <div class="table-responsive">
+            <table class="sales-table">
+              <thead>
+                <tr>
+                  <th>販売日</th>
+                  <th>管理番号</th>
+                  <th>販売先</th>
+                  <th class="text-end">売上金額</th>
+                  <th>ステータス</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="receivableTableBody">
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- 主要KPI -->
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-label">売上高</div>
-        <div class="kpi-value" id="kpi-sales">-</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">粗利益</div>
-        <div class="kpi-value" id="kpi-grossProfit">-</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">営業利益</div>
-        <div class="kpi-value" id="kpi-operatingProfit">-</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">粗利益率</div>
-        <div class="kpi-value" id="kpi-grossProfitRate">-</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">営業利益率</div>
-        <div class="kpi-value" id="kpi-operatingProfitRate">-</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">成約率</div>
-        <div class="kpi-value" id="kpi-conversionRate">-</div>
-      </div>
-    </div>
-
-    <!-- 仕入・出品・販売 セクション -->
-    <div class="section-card">
-      <h5 class="section-title">📊 仕入・出品・販売 サマリー</h5>
-      <div class="table-responsive">
-        <table class="metrics-table">
-          <thead>
-            <tr>
-              <th></th>
-              <th>仕入</th>
-              <th>出品</th>
-              <th>販売</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="category-header">件数</td>
-              <td id="metric-purchaseCount">-</td>
-              <td id="metric-listingCount">-</td>
-              <td id="metric-salesCount">-</td>
-            </tr>
-            <tr>
-              <td class="category-header">金額</td>
-              <td id="metric-purchaseAmount">-</td>
-              <td id="metric-listingAmount">-</td>
-              <td id="metric-salesAmount">-</td>
-            </tr>
-            <tr>
-              <td class="category-header">平均単価</td>
-              <td id="metric-avgPurchase">-</td>
-              <td id="metric-avgListing">-</td>
-              <td id="metric-avgSales">-</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 経費・利益 セクション -->
-    <div class="section-card">
-      <h5 class="section-title">💰 経費・利益 詳細</h5>
-      <div class="table-responsive">
-        <table class="metrics-table">
-          <thead>
-            <tr>
-              <th>項目</th>
-              <th>金額</th>
-              <th>売上比</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="category-header">売上高</td>
-              <td id="detail-sales">-</td>
-              <td>100%</td>
-            </tr>
-            <tr>
-              <td class="category-header">売上原価（仕入）</td>
-              <td id="detail-cogs">-</td>
-              <td id="detail-cogsRate">-</td>
-            </tr>
-            <tr>
-              <td class="category-header">粗利益</td>
-              <td id="detail-grossProfit">-</td>
-              <td id="detail-grossProfitRate">-</td>
-            </tr>
-            <tr>
-              <td class="category-header">販売手数料</td>
-              <td id="detail-platformFee">-</td>
-              <td id="detail-platformFeeRate">-</td>
-            </tr>
-            <tr>
-              <td class="category-header">送料</td>
-              <td id="detail-shippingFee">-</td>
-              <td id="detail-shippingFeeRate">-</td>
-            </tr>
-            <tr>
-              <td class="category-header">梱包資材費</td>
-              <td id="detail-packagingCost">-</td>
-              <td id="detail-packagingCostRate">-</td>
-            </tr>
-            <tr style="background: #f0fdf4; font-weight: 600;">
-              <td class="category-header">営業利益</td>
-              <td id="detail-operatingProfit">-</td>
-              <td id="detail-operatingProfitRate">-</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 在庫回転 セクション -->
-    <div class="section-card">
-      <h5 class="section-title">📦 在庫状況</h5>
-      <div class="kpi-grid">
-        <div class="kpi-card">
-          <div class="kpi-label">現在庫数</div>
-          <div class="kpi-value" id="stock-count">-</div>
-          <div class="kpi-unit">点</div>
+  <!-- 入金記録モーダル -->
+  <div class="modal fade" id="paymentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">💰 入金記録</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-        <div class="kpi-card">
-          <div class="kpi-label">現在庫額</div>
-          <div class="kpi-value" id="stock-value">-</div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">管理番号</label>
+            <input type="text" class="form-control" id="paymentManagementNumber" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">売上金額</label>
+            <input type="text" class="form-control" id="paymentSalesAmount" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">入金日</label>
+            <input type="date" class="form-control" id="paymentDate">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">入金額</label>
+            <input type="number" class="form-control" id="paymentAmount" placeholder="入金額を入力">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">備考</label>
+            <textarea class="form-control" id="paymentNote" rows="2" placeholder="振込手数料など"></textarea>
+          </div>
         </div>
-        <div class="kpi-card">
-          <div class="kpi-label">平均在庫日数</div>
-          <div class="kpi-value" id="avg-stock-days">-</div>
-          <div class="kpi-unit">日</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-label">平均利益単価</div>
-          <div class="kpi-value" id="avg-profit-per-item">-</div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-primary" onclick="savePayment()">入金を記録</button>
         </div>
       </div>
     </div>
-
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -339,9 +341,8 @@
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-    // Firebase設定
     const firebaseConfig = {
       apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
       authDomain: "furira.jp",
@@ -355,100 +356,94 @@
     const db = getFirestore(app);
 
     /**
-     * 売上データを集計
+     * 販売済み商品一覧を取得
      */
-    async function calculateSalesMetrics(startDate, endDate) {
-      console.log('📊 [売上分析] データ集計開始:', startDate, '〜', endDate);
+    async function getSalesData(yearMonth, platform) {
+      console.log('💵 [売上] データ取得開始:', yearMonth, platform);
 
       const productsRef = collection(db, 'products');
       const snapshot = await getDocs(productsRef);
 
-      // 初期化
-      const metrics = {
-        // 仕入
-        purchaseCount: 0,
-        purchaseAmount: 0,
-        // 出品
-        listingCount: 0,
-        listingAmount: 0,
-        // 販売
-        salesCount: 0,
-        salesAmount: 0,
-        // 経費
-        platformFee: 0,
-        shippingFee: 0,
-        packagingCost: 0,
-        // 在庫
-        stockCount: 0,
-        stockValue: 0,
-        // 利益
-        finalProfit: 0,
-        // 在庫日数合計（平均計算用）
-        totalStockDays: 0
-      };
+      const salesList = [];
+      let startDate = '';
+      let endDate = '';
 
-      snapshot.forEach(doc => {
-        const data = doc.data();
+      if (yearMonth) {
+        startDate = yearMonth + '-01';
+        const nextMonth = new Date(yearMonth + '-01');
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        nextMonth.setDate(0);
+        endDate = nextMonth.toISOString().slice(0, 10);
+      }
 
-        // 仕入日でフィルタ（仕入情報）
-        const purchaseDate = data.purchase?.date || data.purchaseDate || '';
-        if (purchaseDate >= startDate && purchaseDate <= endDate) {
-          metrics.purchaseCount++;
-          metrics.purchaseAmount += parseFloat(data.purchase?.amount || data.purchaseAmount || 0);
-        }
+      snapshot.forEach(docSnapshot => {
+        const data = docSnapshot.data();
 
-        // 出品日でフィルタ（出品情報）
-        const listingDate = data.listing?.date || data.listingDate || '';
-        if (listingDate >= startDate && listingDate <= endDate) {
-          metrics.listingCount++;
-          metrics.listingAmount += parseFloat(data.listing?.amount || data.listingAmount || 0);
-        }
+        // 販売済みのみ
+        if (data.status !== '販売済') return;
 
-        // 販売日でフィルタ（販売情報）
         const saleDate = data.saleDate || '';
-        if (saleDate >= startDate && saleDate <= endDate) {
-          metrics.salesCount++;
-          metrics.salesAmount += parseFloat(data.saleAmount || 0);
-          metrics.platformFee += parseFloat(data.platformFee || 0);
-          metrics.shippingFee += parseFloat(data.shippingFee || 0);
-          metrics.packagingCost += parseFloat(data.packagingCostTotal || 0);
-          metrics.finalProfit += parseFloat(data.finalProfit || 0);
+        const salePlatform = data.salePlatform || '';
 
-          // 在庫日数計算（出品日から販売日まで）
-          if (listingDate && saleDate) {
-            const days = Math.floor((new Date(saleDate) - new Date(listingDate)) / (1000 * 60 * 60 * 24));
-            if (days >= 0) metrics.totalStockDays += days;
-          }
-        }
+        // 期間フィルタ
+        if (yearMonth && (saleDate < startDate || saleDate > endDate)) return;
 
-        // 現在庫（ステータスが在庫中または出品中）
-        const status = data.status || '';
-        if (status === '在庫中' || status === '出品中') {
-          metrics.stockCount++;
-          metrics.stockValue += parseFloat(data.purchase?.amount || data.purchaseAmount || 0);
-        }
+        // 販売先フィルタ
+        if (platform && salePlatform !== platform) return;
+
+        salesList.push({
+          id: docSnapshot.id,
+          managementNumber: data.managementNumber || '',
+          productName: data.productName || '',
+          saleDate: saleDate,
+          salePlatform: salePlatform,
+          saleAmount: parseFloat(data.saleAmount || 0),
+          finalProfit: parseFloat(data.finalProfit || 0),
+          profitRate: parseFloat(data.profitRate || 0),
+          paymentStatus: data.paymentStatus || 'unpaid', // paid, unpaid, partial
+          paymentDate: data.paymentDate || '',
+          paymentAmount: parseFloat(data.paymentAmount || 0)
+        });
       });
 
-      console.log('📊 [売上分析] 集計結果:', metrics);
-      return metrics;
+      // 販売日降順でソート
+      salesList.sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''));
+
+      console.log('💵 [売上] 取得完了:', salesList.length + '件');
+      return salesList;
+    }
+
+    /**
+     * 入金ステータスを更新
+     */
+    async function updatePaymentStatus(productId, paymentData) {
+      const productRef = doc(db, 'products', productId);
+      await updateDoc(productRef, {
+        paymentStatus: paymentData.status,
+        paymentDate: paymentData.date,
+        paymentAmount: paymentData.amount,
+        paymentNote: paymentData.note,
+        updatedAt: serverTimestamp()
+      });
     }
 
     // グローバルに公開
     window.SalesApi = {
-      calculateSalesMetrics
+      getSalesData,
+      updatePaymentStatus
     };
 
-    console.log('✅ [売上分析] Firebase初期化完了');
+    console.log('✅ [売上] Firebase初期化完了');
 
-    // 初期データ読み込み
     window.addEventListener('load', () => {
-      initializePeriodSelector();
-      loadSalesData();
+      initializePage();
     });
   </script>
 
   <script>
-    // ローディング表示
+    let currentSalesData = [];
+    let selectedProductForPayment = null;
+
     function showLoading() {
       document.getElementById('loadingOverlay').style.display = 'flex';
     }
@@ -456,138 +451,39 @@
       document.getElementById('loadingOverlay').style.display = 'none';
     }
 
-    // 期間セレクタ初期化
-    function initializePeriodSelector() {
-      // 今月をデフォルトに
-      const now = new Date();
-      const yearMonth = now.toISOString().slice(0, 7); // YYYY-MM
-      document.getElementById('selectedMonth').value = yearMonth;
-
-      // 年セレクタ（過去5年分）
-      const yearSelect = document.getElementById('selectedYear');
-      const currentYear = now.getFullYear();
-      for (let y = currentYear; y >= currentYear - 5; y--) {
-        const option = document.createElement('option');
-        option.value = y;
-        option.textContent = y + '年';
-        yearSelect.appendChild(option);
-      }
-    }
-
-    // 期間タイプ変更
-    function onPeriodTypeChange() {
-      const type = document.getElementById('periodType').value;
-      document.getElementById('monthSelector').classList.toggle('d-none', type !== 'month');
-      document.getElementById('yearSelector').classList.toggle('d-none', type !== 'year');
-      document.getElementById('customSelector').classList.toggle('d-none', type !== 'custom');
-
-      if (type !== 'custom') {
-        loadSalesData();
-      }
-    }
-
-    // 期間を取得
-    function getSelectedPeriod() {
-      const type = document.getElementById('periodType').value;
-      let startDate, endDate;
-
-      if (type === 'month') {
-        const month = document.getElementById('selectedMonth').value;
-        startDate = month + '-01';
-        const nextMonth = new Date(month + '-01');
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        nextMonth.setDate(0); // 月末
-        endDate = nextMonth.toISOString().slice(0, 10);
-      } else if (type === 'year') {
-        const year = document.getElementById('selectedYear').value;
-        startDate = year + '-01-01';
-        endDate = year + '-12-31';
-      } else {
-        startDate = document.getElementById('startDate').value;
-        endDate = document.getElementById('endDate').value;
-      }
-
-      return { startDate, endDate };
-    }
-
-    // 金額フォーマット
     function formatCurrency(amount) {
       if (amount === null || amount === undefined || isNaN(amount)) return '-';
       return '¥' + Math.round(amount).toLocaleString();
     }
 
-    // パーセントフォーマット
     function formatPercent(value) {
       if (value === null || value === undefined || isNaN(value)) return '-';
       return value.toFixed(1) + '%';
     }
 
-    // 売上データ読み込み
+    function initializePage() {
+      // 今月をデフォルトに
+      const now = new Date();
+      document.getElementById('salesMonth').value = now.toISOString().slice(0, 7);
+
+      // 入金日のデフォルト
+      document.getElementById('paymentDate').value = now.toISOString().slice(0, 10);
+
+      loadSalesData();
+    }
+
     async function loadSalesData() {
       showLoading();
 
       try {
-        const { startDate, endDate } = getSelectedPeriod();
+        const yearMonth = document.getElementById('salesMonth').value;
+        const platform = document.getElementById('salesPlatformFilter').value;
 
-        if (!startDate || !endDate) {
-          hideLoading();
-          return;
-        }
+        currentSalesData = await SalesApi.getSalesData(yearMonth, platform);
 
-        const metrics = await SalesApi.calculateSalesMetrics(startDate, endDate);
-
-        // 計算
-        const cogs = metrics.purchaseAmount; // 売上原価（販売した商品の仕入金額）
-        const grossProfit = metrics.salesAmount - cogs;
-        const grossProfitRate = metrics.salesAmount > 0 ? (grossProfit / metrics.salesAmount) * 100 : 0;
-        const totalExpenses = metrics.platformFee + metrics.shippingFee + metrics.packagingCost;
-        const operatingProfit = grossProfit - totalExpenses;
-        const operatingProfitRate = metrics.salesAmount > 0 ? (operatingProfit / metrics.salesAmount) * 100 : 0;
-        const conversionRate = metrics.listingCount > 0 ? (metrics.salesCount / metrics.listingCount) * 100 : 0;
-        const avgStockDays = metrics.salesCount > 0 ? Math.round(metrics.totalStockDays / metrics.salesCount) : 0;
-        const avgProfitPerItem = metrics.salesCount > 0 ? Math.round(metrics.finalProfit / metrics.salesCount) : 0;
-
-        // 主要KPI更新
-        document.getElementById('kpi-sales').textContent = formatCurrency(metrics.salesAmount);
-        document.getElementById('kpi-grossProfit').textContent = formatCurrency(grossProfit);
-        document.getElementById('kpi-grossProfit').className = 'kpi-value ' + (grossProfit >= 0 ? 'positive' : 'negative');
-        document.getElementById('kpi-operatingProfit').textContent = formatCurrency(operatingProfit);
-        document.getElementById('kpi-operatingProfit').className = 'kpi-value ' + (operatingProfit >= 0 ? 'positive' : 'negative');
-        document.getElementById('kpi-grossProfitRate').textContent = formatPercent(grossProfitRate);
-        document.getElementById('kpi-operatingProfitRate').textContent = formatPercent(operatingProfitRate);
-        document.getElementById('kpi-conversionRate').textContent = formatPercent(conversionRate);
-
-        // サマリーテーブル更新
-        document.getElementById('metric-purchaseCount').textContent = metrics.purchaseCount + '件';
-        document.getElementById('metric-listingCount').textContent = metrics.listingCount + '件';
-        document.getElementById('metric-salesCount').textContent = metrics.salesCount + '件';
-        document.getElementById('metric-purchaseAmount').textContent = formatCurrency(metrics.purchaseAmount);
-        document.getElementById('metric-listingAmount').textContent = formatCurrency(metrics.listingAmount);
-        document.getElementById('metric-salesAmount').textContent = formatCurrency(metrics.salesAmount);
-        document.getElementById('metric-avgPurchase').textContent = formatCurrency(metrics.purchaseCount > 0 ? metrics.purchaseAmount / metrics.purchaseCount : 0);
-        document.getElementById('metric-avgListing').textContent = formatCurrency(metrics.listingCount > 0 ? metrics.listingAmount / metrics.listingCount : 0);
-        document.getElementById('metric-avgSales').textContent = formatCurrency(metrics.salesCount > 0 ? metrics.salesAmount / metrics.salesCount : 0);
-
-        // 経費・利益詳細更新
-        document.getElementById('detail-sales').textContent = formatCurrency(metrics.salesAmount);
-        document.getElementById('detail-cogs').textContent = formatCurrency(cogs);
-        document.getElementById('detail-cogsRate').textContent = formatPercent(metrics.salesAmount > 0 ? (cogs / metrics.salesAmount) * 100 : 0);
-        document.getElementById('detail-grossProfit').textContent = formatCurrency(grossProfit);
-        document.getElementById('detail-grossProfitRate').textContent = formatPercent(grossProfitRate);
-        document.getElementById('detail-platformFee').textContent = formatCurrency(metrics.platformFee);
-        document.getElementById('detail-platformFeeRate').textContent = formatPercent(metrics.salesAmount > 0 ? (metrics.platformFee / metrics.salesAmount) * 100 : 0);
-        document.getElementById('detail-shippingFee').textContent = formatCurrency(metrics.shippingFee);
-        document.getElementById('detail-shippingFeeRate').textContent = formatPercent(metrics.salesAmount > 0 ? (metrics.shippingFee / metrics.salesAmount) * 100 : 0);
-        document.getElementById('detail-packagingCost').textContent = formatCurrency(metrics.packagingCost);
-        document.getElementById('detail-packagingCostRate').textContent = formatPercent(metrics.salesAmount > 0 ? (metrics.packagingCost / metrics.salesAmount) * 100 : 0);
-        document.getElementById('detail-operatingProfit').textContent = formatCurrency(operatingProfit);
-        document.getElementById('detail-operatingProfitRate').textContent = formatPercent(operatingProfitRate);
-
-        // 在庫状況更新
-        document.getElementById('stock-count').textContent = metrics.stockCount;
-        document.getElementById('stock-value').textContent = formatCurrency(metrics.stockValue);
-        document.getElementById('avg-stock-days').textContent = avgStockDays;
-        document.getElementById('avg-profit-per-item').textContent = formatCurrency(avgProfitPerItem);
+        renderSalesTable();
+        renderReceivableTable();
+        updateSummary();
 
       } catch (error) {
         console.error('売上データ読み込みエラー:', error);
@@ -597,7 +493,167 @@
       }
     }
 
-    // 戻るボタン
+    function renderSalesTable() {
+      const tbody = document.getElementById('salesTableBody');
+
+      if (currentSalesData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">該当する売上データがありません</td></tr>';
+        return;
+      }
+
+      let html = '';
+      currentSalesData.forEach(item => {
+        const paymentBadge = getPaymentBadge(item.paymentStatus);
+        html += `
+          <tr>
+            <td>${item.saleDate || '-'}</td>
+            <td>${item.managementNumber}</td>
+            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.productName}</td>
+            <td>${item.salePlatform || '-'}</td>
+            <td class="text-end">${formatCurrency(item.saleAmount)}</td>
+            <td class="text-end ${item.finalProfit >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(item.finalProfit)}</td>
+            <td>${paymentBadge}</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    function renderReceivableTable() {
+      const tbody = document.getElementById('receivableTableBody');
+
+      // 未入金のもののみ
+      const unpaidItems = currentSalesData.filter(item => item.paymentStatus !== 'paid');
+
+      if (unpaidItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">未入金の売上はありません</td></tr>';
+        updateReceivableSummary(0, 0);
+        return;
+      }
+
+      let html = '';
+      let totalUnpaid = 0;
+
+      unpaidItems.forEach(item => {
+        const paymentBadge = getPaymentBadge(item.paymentStatus);
+        const unpaidAmount = item.saleAmount - (item.paymentAmount || 0);
+        totalUnpaid += unpaidAmount;
+
+        html += `
+          <tr>
+            <td>${item.saleDate || '-'}</td>
+            <td>${item.managementNumber}</td>
+            <td>${item.salePlatform || '-'}</td>
+            <td class="text-end">${formatCurrency(item.saleAmount)}</td>
+            <td>${paymentBadge}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-primary" onclick="openPaymentModal('${item.id}', '${item.managementNumber}', ${item.saleAmount})">
+                入金記録
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+      updateReceivableSummary(totalUnpaid, unpaidItems.length);
+    }
+
+    function getPaymentBadge(status) {
+      switch (status) {
+        case 'paid':
+          return '<span class="status-badge status-paid">入金済</span>';
+        case 'partial':
+          return '<span class="status-badge status-partial">一部入金</span>';
+        default:
+          return '<span class="status-badge status-unpaid">未入金</span>';
+      }
+    }
+
+    function updateSummary() {
+      const count = currentSalesData.length;
+      const totalSales = currentSalesData.reduce((sum, item) => sum + item.saleAmount, 0);
+      const totalProfit = currentSalesData.reduce((sum, item) => sum + item.finalProfit, 0);
+      const avgProfitRate = count > 0 ? currentSalesData.reduce((sum, item) => sum + item.profitRate, 0) / count : 0;
+
+      document.getElementById('summary-count').textContent = count + '件';
+      document.getElementById('summary-sales').textContent = formatCurrency(totalSales);
+      document.getElementById('summary-profit').textContent = formatCurrency(totalProfit);
+      document.getElementById('summary-profitRate').textContent = formatPercent(avgProfitRate);
+    }
+
+    function updateReceivableSummary(totalUnpaid, count) {
+      document.getElementById('receivable-balance').textContent = formatCurrency(totalUnpaid);
+      document.getElementById('receivable-count').textContent = count + '件';
+      // 今月入金予定は将来実装（現時点では売掛残高と同じ）
+      document.getElementById('receivable-expected').textContent = formatCurrency(totalUnpaid);
+    }
+
+    function openPaymentModal(productId, managementNumber, saleAmount) {
+      selectedProductForPayment = { id: productId, managementNumber, saleAmount };
+
+      document.getElementById('paymentManagementNumber').value = managementNumber;
+      document.getElementById('paymentSalesAmount').value = formatCurrency(saleAmount);
+      document.getElementById('paymentAmount').value = Math.round(saleAmount);
+      document.getElementById('paymentNote').value = '';
+
+      const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
+      modal.show();
+    }
+
+    async function savePayment() {
+      if (!selectedProductForPayment) return;
+
+      const paymentDate = document.getElementById('paymentDate').value;
+      const paymentAmount = parseFloat(document.getElementById('paymentAmount').value) || 0;
+      const paymentNote = document.getElementById('paymentNote').value;
+
+      if (!paymentDate) {
+        alert('入金日を入力してください');
+        return;
+      }
+
+      if (paymentAmount <= 0) {
+        alert('入金額を入力してください');
+        return;
+      }
+
+      showLoading();
+
+      try {
+        // ステータス判定
+        let status = 'unpaid';
+        if (paymentAmount >= selectedProductForPayment.saleAmount) {
+          status = 'paid';
+        } else if (paymentAmount > 0) {
+          status = 'partial';
+        }
+
+        await SalesApi.updatePaymentStatus(selectedProductForPayment.id, {
+          status: status,
+          date: paymentDate,
+          amount: paymentAmount,
+          note: paymentNote
+        });
+
+        // モーダルを閉じる
+        const modal = bootstrap.Modal.getInstance(document.getElementById('paymentModal'));
+        modal.hide();
+
+        alert('✅ 入金を記録しました');
+
+        // データ再読み込み
+        await loadSalesData();
+
+      } catch (error) {
+        console.error('入金記録エラー:', error);
+        alert('入金の記録に失敗しました: ' + error.message);
+      } finally {
+        hideLoading();
+      }
+    }
+
     function goBack() {
       const isInIframe = window.self !== window.top;
       if (isInIframe) {
