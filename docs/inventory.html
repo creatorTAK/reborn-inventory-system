@@ -1226,7 +1226,7 @@
             }
           </div>
           <div class="col-12">
-            <label class="form-label fw-bold small">カテゴリー（メルカリ出品用）</label>
+            <label class="form-label fw-bold small">カテゴリー</label>
             <div class="form-control-plaintext" style="font-size: 13px; line-height: 1.6; text-align: right; color: #374151;">
               ${[product.category, product.categoryMiddle, product.categoryMinor, product.categoryDetail1, product.categoryDetail2, product.itemName]
                 .filter(v => v && v.trim())
@@ -1247,8 +1247,8 @@
             ${createField(product.material, 'productMaterial')}
           </div>
           <div class="col-12">
-            <label class="form-label fw-bold small" id="descToggleLabel" style="cursor: pointer; display: flex; align-items: center; gap: 4px; user-select: none;">
-              商品の説明 <span id="descToggleIcon" style="font-size: 12px;">▼ 全文表示</span>
+            <label class="form-label fw-bold small" id="descToggleLabel" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+              商品の説明 <span id="descToggleIcon" style="font-size: 12px; color: #6b7280;">▼ 全文表示</span>
             </label>
             <div id="descriptionDetailContainer" style="max-height: 100px; overflow: hidden; position: relative;">
               ${isEditable
@@ -1357,7 +1357,7 @@
         });
       }
 
-      // 画像ギャラリーのイベントリスナーを設定
+      // 画像ギャラリーのイベントリスナーを設定（重複防止フラグ付き）
       const thumbnailContainer = document.getElementById('thumbnailContainer');
       const lightbox = document.getElementById('imageLightbox');
       const lightboxImg = document.getElementById('lightboxImage');
@@ -1366,104 +1366,118 @@
       const lightboxNext = document.querySelector('.lightbox-next');
       const lightboxClose = document.querySelector('.lightbox-close');
 
-      // ライトボックスで画像を表示する関数
-      function showLightboxImage(index) {
-        const images = window._currentProductImages;
-        if (!images || !images[index]) return;
+      // グローバル関数として定義（重複登録防止のため）
+      if (!window._lightboxFunctionsInitialized) {
+        // ライトボックスで画像を表示する関数
+        window.showLightboxImage = function(index) {
+          const images = window._currentProductImages;
+          const lb = document.getElementById('imageLightbox');
+          const lbImg = document.getElementById('lightboxImage');
+          const lbCounter = document.getElementById('lightboxCounter');
+          const lbPrev = document.querySelector('.lightbox-prev');
+          const lbNext = document.querySelector('.lightbox-next');
+          if (!images || !images[index]) return;
 
-        lightbox.dataset.currentIndex = index;
-        lightboxImg.src = images[index];
-        lightboxCounter.textContent = `${index + 1}/${images.length}`;
+          lb.dataset.currentIndex = index;
+          lbImg.src = images[index];
+          lbCounter.textContent = `${index + 1}/${images.length}`;
 
-        // ナビゲーション矢印の表示/非表示
-        if (lightboxPrev) lightboxPrev.style.display = images.length > 1 ? 'block' : 'none';
-        if (lightboxNext) lightboxNext.style.display = images.length > 1 ? 'block' : 'none';
+          // ナビゲーション矢印の表示/非表示
+          if (lbPrev) lbPrev.style.display = images.length > 1 ? 'block' : 'none';
+          if (lbNext) lbNext.style.display = images.length > 1 ? 'block' : 'none';
+        };
+
+        // 次の画像
+        window.showNextImage = function() {
+          const images = window._currentProductImages;
+          const lb = document.getElementById('imageLightbox');
+          if (!images) return;
+          let currentIndex = parseInt(lb.dataset.currentIndex || 0, 10);
+          currentIndex = (currentIndex + 1) % images.length;
+          window.showLightboxImage(currentIndex);
+        };
+
+        // 前の画像
+        window.showPrevImage = function() {
+          const images = window._currentProductImages;
+          const lb = document.getElementById('imageLightbox');
+          if (!images) return;
+          let currentIndex = parseInt(lb.dataset.currentIndex || 0, 10);
+          currentIndex = (currentIndex - 1 + images.length) % images.length;
+          window.showLightboxImage(currentIndex);
+        };
+
+        // ライトボックスを閉じる
+        window.closeLightbox = function() {
+          document.getElementById('imageLightbox').style.display = 'none';
+        };
+
+        window._lightboxFunctionsInitialized = true;
       }
 
-      // 次の画像
-      function showNextImage() {
-        const images = window._currentProductImages;
-        if (!images) return;
-        let currentIndex = parseInt(lightbox.dataset.currentIndex || 0, 10);
-        currentIndex = (currentIndex + 1) % images.length;
-        showLightboxImage(currentIndex);
-      }
-
-      // 前の画像
-      function showPrevImage() {
-        const images = window._currentProductImages;
-        if (!images) return;
-        let currentIndex = parseInt(lightbox.dataset.currentIndex || 0, 10);
-        currentIndex = (currentIndex - 1 + images.length) % images.length;
-        showLightboxImage(currentIndex);
-      }
-
-      // ライトボックスを閉じる
-      function closeLightbox() {
-        lightbox.style.display = 'none';
-      }
-
-      if (lightbox) {
+      // イベントリスナーは一度だけ登録
+      if (lightbox && !window._lightboxListenersInitialized) {
         // 閉じるボタン
         if (lightboxClose) {
-          lightboxClose.addEventListener('click', closeLightbox);
+          lightboxClose.addEventListener('click', window.closeLightbox);
         }
         // 背景クリックで閉じる
         lightbox.addEventListener('click', function(e) {
           if (e.target === lightbox) {
-            closeLightbox();
+            window.closeLightbox();
           }
         });
         // 前へ・次へボタン
         if (lightboxPrev) {
           lightboxPrev.addEventListener('click', function(e) {
             e.stopPropagation();
-            showPrevImage();
+            window.showPrevImage();
           });
         }
         if (lightboxNext) {
           lightboxNext.addEventListener('click', function(e) {
             e.stopPropagation();
-            showNextImage();
+            window.showNextImage();
           });
         }
 
         // スワイプ対応（タッチイベント）
         let touchStartX = 0;
-        let touchEndX = 0;
 
         lightbox.addEventListener('touchstart', function(e) {
           touchStartX = e.changedTouches[0].screenX;
         }, { passive: true });
 
         lightbox.addEventListener('touchend', function(e) {
-          touchEndX = e.changedTouches[0].screenX;
+          const touchEndX = e.changedTouches[0].screenX;
           const swipeThreshold = 50;
           const diff = touchStartX - touchEndX;
 
           if (Math.abs(diff) > swipeThreshold) {
             if (diff > 0) {
-              // 左スワイプ → 次の画像
-              showNextImage();
+              window.showNextImage();
             } else {
-              // 右スワイプ → 前の画像
-              showPrevImage();
+              window.showPrevImage();
             }
           }
         }, { passive: true });
 
         // キーボード操作
         document.addEventListener('keydown', function(e) {
-          if (lightbox.style.display !== 'flex') return;
-          if (e.key === 'ArrowRight') showNextImage();
-          if (e.key === 'ArrowLeft') showPrevImage();
-          if (e.key === 'Escape') closeLightbox();
+          const lb = document.getElementById('imageLightbox');
+          if (lb.style.display !== 'flex') return;
+          if (e.key === 'ArrowRight') window.showNextImage();
+          if (e.key === 'ArrowLeft') window.showPrevImage();
+          if (e.key === 'Escape') window.closeLightbox();
         });
+
+        window._lightboxListenersInitialized = true;
       }
 
-      // サムネイルクリック → ライトボックスで表示
+      // サムネイルクリック → ライトボックスで表示（イベント委譲で対応）
       if (thumbnailContainer) {
-        thumbnailContainer.addEventListener('click', function(e) {
+        // 既存のリスナーを削除するために新しい要素にcloneする代わりに、直接onclickを使用
+        thumbnailContainer.onclick = function(e) {
           let thumbWrapper = e.target.closest('.thumb-wrapper');
           if (!thumbWrapper && e.target.classList.contains('product-thumbnail')) {
             thumbWrapper = e.target.parentElement;
@@ -1474,12 +1488,11 @@
             const images = window._currentProductImages;
 
             if (images && images[clickedIndex]) {
-              // ライトボックスを開いて画像を表示
-              showLightboxImage(clickedIndex);
-              lightbox.style.display = 'flex';
+              window.showLightboxImage(clickedIndex);
+              document.getElementById('imageLightbox').style.display = 'flex';
             }
           }
-        });
+        };
       }
     }
 
