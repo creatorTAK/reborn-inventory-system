@@ -1783,20 +1783,7 @@
      */
     async function loadShippingMethodMaster() {
       try {
-        const snapshot = await window.db.collection('shippingMethods')
-          .orderBy('category', 'asc')
-          .get();
-
-        shippingMethodMaster = [];
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          shippingMethodMaster.push({
-            method1: data.category,
-            method2: data.detail,
-            fee: data.price
-          });
-        });
-
+        shippingMethodMaster = await FirestoreApi.getShippingMethodMaster();
         populateShippingMethod1();
       } catch (error) {
         console.error('発送方法マスタの読み込みエラー:', error);
@@ -1809,30 +1796,9 @@
      */
     async function loadPackagingMaterialsMaster() {
       try {
-        const snapshot = await window.db.collection('packagingMaterials')
-          .orderBy('category', 'asc')
-          .get();
-
-        packagingMaterialsByCategory = {};
-        const categoriesSet = new Set();
-
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          const category = data.category || 'その他';
-          categoriesSet.add(category);
-
-          if (!packagingMaterialsByCategory[category]) {
-            packagingMaterialsByCategory[category] = [];
-          }
-          packagingMaterialsByCategory[category].push({
-            id: doc.id,
-            name: data.name,
-            price: data.price || 0,
-            category: category
-          });
-        });
-
-        packagingMaterialCategories = Array.from(categoriesSet).sort((a, b) => a.localeCompare(b, 'ja'));
+        const result = await FirestoreApi.getPackagingMaterialsMaster();
+        packagingMaterialsByCategory = result.data;
+        packagingMaterialCategories = result.categories;
 
         // データ読み込み完了後に梱包資材選択欄を描画
         renderPackagingMaterials();
@@ -2573,6 +2539,63 @@
     }
 
     /**
+     * 発送方法マスタを取得
+     */
+    async function getShippingMethodMaster() {
+      try {
+        const snapshot = await getDocs(collection(db, 'shippingMethods'));
+        const methods = [];
+        snapshot.forEach(docSnapshot => {
+          const data = docSnapshot.data();
+          methods.push({
+            method1: data.category,
+            method2: data.detail,
+            fee: data.price
+          });
+        });
+        // category順でソート
+        methods.sort((a, b) => (a.method1 || '').localeCompare(b.method1 || '', 'ja'));
+        return methods;
+      } catch (error) {
+        console.error('[Firestore API] 発送方法マスタ取得エラー:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * 梱包資材マスタを取得（カテゴリ別）
+     */
+    async function getPackagingMaterialsMaster() {
+      try {
+        const snapshot = await getDocs(collection(db, 'packagingMaterials'));
+        const byCategory = {};
+        const categoriesSet = new Set();
+
+        snapshot.forEach(docSnapshot => {
+          const data = docSnapshot.data();
+          const category = data.category || 'その他';
+          categoriesSet.add(category);
+
+          if (!byCategory[category]) {
+            byCategory[category] = [];
+          }
+          byCategory[category].push({
+            id: docSnapshot.id,
+            name: data.name,
+            price: data.price || 0,
+            category: category
+          });
+        });
+
+        const categories = Array.from(categoriesSet).sort((a, b) => a.localeCompare(b, 'ja'));
+        return { data: byCategory, categories: categories };
+      } catch (error) {
+        console.error('[Firestore API] 梱包資材マスタ取得エラー:', error);
+        throw error;
+      }
+    }
+
+    /**
      * 販売記録を保存（商品ドキュメントを更新）
      */
     async function saveSalesRecordToFirestore(salesData) {
@@ -2626,6 +2649,8 @@
     window.FirestoreApi = {
       getProductList,
       getProductByManagementNumber,
+      getShippingMethodMaster,
+      getPackagingMaterialsMaster,
       saveSalesRecord: saveSalesRecordToFirestore
     };
 
