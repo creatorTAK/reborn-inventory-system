@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v179';  // バッジを黒枠グレー背景に変更 + 閉じるボタン位置調整
+const CACHE_VERSION = 'v180';  // サムネイル横スクロール表示に変更
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
