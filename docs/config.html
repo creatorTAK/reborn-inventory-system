@@ -8014,9 +8014,15 @@ ${prompt || '（未設定）'}
       if (!container) return;
 
       try {
-        // ユーザー一覧を取得（Firestore）
-        const usersRef = collection(db, 'users');
-        const snapshot = await getDocs(usersRef);
+        // Firestoreの準備を待つ
+        if (!window.db || !window.firestoreReady) {
+          console.log('Firestore未初期化、1秒後に再試行');
+          setTimeout(() => loadMypageUserList(), 1000);
+          return;
+        }
+
+        // ユーザー一覧を取得（Firestore v8 compat SDK）
+        const snapshot = await window.db.collection('users').get();
 
         const users = [];
         snapshot.forEach(docSnap => {
