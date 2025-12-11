@@ -752,7 +752,7 @@
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     const firebaseConfig = {
       apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
@@ -778,34 +778,50 @@
       return products;
     }
 
-    // 経費データ取得
+    // 経費データ取得（localStorageから）
     async function getExpenses(startDate, endDate) {
-      const expensesRef = collection(db, 'expenses');
-      const snapshot = await getDocs(expensesRef);
-      const expenses = [];
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        const expenseDate = data.date || '';
-        if (expenseDate >= startDate && expenseDate <= endDate) {
-          expenses.push({ id: doc.id, ...data });
-        }
-      });
-      return expenses.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      try {
+        const expenses = JSON.parse(localStorage.getItem('reborn_expenses') || '[]');
+        return expenses
+          .filter(e => {
+            const expenseDate = e.date || '';
+            return expenseDate >= startDate && expenseDate <= endDate;
+          })
+          .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      } catch (error) {
+        console.error('経費データ取得エラー:', error);
+        return [];
+      }
     }
 
-    // 経費追加
+    // 経費追加（localStorageへ）
     async function addExpenseToFirestore(expenseData) {
-      const expensesRef = collection(db, 'expenses');
-      await addDoc(expensesRef, {
-        ...expenseData,
-        createdAt: serverTimestamp()
-      });
+      try {
+        const expenses = JSON.parse(localStorage.getItem('reborn_expenses') || '[]');
+        const newExpense = {
+          ...expenseData,
+          id: 'exp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+          createdAt: new Date().toISOString()
+        };
+        expenses.push(newExpense);
+        localStorage.setItem('reborn_expenses', JSON.stringify(expenses));
+        return newExpense;
+      } catch (error) {
+        console.error('経費追加エラー:', error);
+        throw error;
+      }
     }
 
-    // 経費削除
+    // 経費削除（localStorageから）
     async function deleteExpenseFromFirestore(expenseId) {
-      const expenseRef = doc(db, 'expenses', expenseId);
-      await deleteDoc(expenseRef);
+      try {
+        const expenses = JSON.parse(localStorage.getItem('reborn_expenses') || '[]');
+        const filtered = expenses.filter(e => e.id !== expenseId);
+        localStorage.setItem('reborn_expenses', JSON.stringify(filtered));
+      } catch (error) {
+        console.error('経費削除エラー:', error);
+        throw error;
+      }
     }
 
     // グローバルに公開
