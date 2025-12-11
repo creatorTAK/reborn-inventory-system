@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v236';  // product.html戻るボタンにonclick追加
+const CACHE_VERSION = 'v237';  // 履歴管理をシンプル方式に変更（1つ前のページだけ記憶）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）

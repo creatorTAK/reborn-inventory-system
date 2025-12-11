@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- Cache Bust: 2025-12-12 v226 - キャッシュ問題根本解決 -->
+  <!-- Cache Bust: 2025-12-12 v237 - 履歴管理をシンプル方式に変更 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -4831,42 +4831,15 @@
       return crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
     }
 
-    // ナビゲーション履歴管理
-    const navigationHistory = ['home'];
-    let currentPageIndex = 0;
-    let isNavigatingProgrammatically = false; // 親が遷移中かどうか（子からのメッセージの重複登録防止）
+    // ナビゲーション履歴管理（シンプル方式：1つ前のページだけ記憶）
+    let previousPage = 'home';  // 直前にいたページ
+    let currentPage = 'home';   // 現在のページ
 
-    // 履歴に追加（重複防止、最大10件）
-    function pushToHistory(page) {
-      // 現在位置より後ろの履歴を削除（ブラウザの履歴と同じ動作）
-      navigationHistory.splice(currentPageIndex + 1);
-
-      // 同じページへの連続遷移は無視
-      if (navigationHistory[currentPageIndex] !== page) {
-        navigationHistory.push(page);
-        currentPageIndex = navigationHistory.length - 1;
-
-        // 最大10件に制限
-        if (navigationHistory.length > 10) {
-          navigationHistory.shift();
-          currentPageIndex--;
-        }
-      }
-      console.log('📚 [履歴] 追加:', page, '履歴:', navigationHistory, 'index:', currentPageIndex);
-    }
-
-    // 戻る処理（履歴を使って1つ前のページに戻る）
+    // 戻る処理（直前のページに戻る）
     function goBackInHistory() {
-      console.log('📚 [履歴] goBackInHistory呼び出し - 現在:', navigationHistory, 'index:', currentPageIndex);
-      if (currentPageIndex > 0) {
-        currentPageIndex--;
-        const previousPage = navigationHistory[currentPageIndex];
-        console.log('📚 [履歴] 戻る → ', previousPage);
-        navigateToPage(previousPage, { skipHistory: true, skipSkeleton: true });
-      } else {
-        console.log('📚 [履歴] これ以上戻れません。ホームへ移動');
-        navigateToPage('home', { skipHistory: true, skipSkeleton: true });
-      }
+      console.log('📚 [履歴] goBackInHistory呼び出し - 現在:', currentPage, '→ 戻り先:', previousPage);
+      const destination = previousPage || 'home';
+      navigateToPage(destination, { skipHistory: true, skipSkeleton: true });
     }
 
     // ページ遷移（ドロワーメニューから）
@@ -4878,21 +4851,16 @@
       const skipSkeleton = options.skipSkeleton || false;
       const skipHistory = options.skipHistory || false;
 
-      // 📚 履歴管理（戻る操作からの遷移では追加しない）
-      if (!skipHistory) {
-        pushToHistory(page);
+      // 📚 履歴管理（シンプル方式：1つ前のページだけ記憶）
+      if (!skipHistory && page !== currentPage) {
+        previousPage = currentPage;
+        console.log('📚 [履歴] 更新: previousPage =', previousPage, ', currentPage =', page);
       }
-
-      // 🚫 遷移中フラグをセット（子からの不要なメッセージを無視するため）
-      isNavigatingProgrammatically = true;
-      setTimeout(() => {
-        isNavigatingProgrammatically = false;
-        console.log('📚 [履歴] 遷移中フラグ解除');
-      }, 200);
+      currentPage = page;
 
       // 📊 パフォーマンス計測開始
       const startTime = performance.now();
-      console.log('⏱️ [計測開始] ページ遷移:', page, '履歴:', navigationHistory, 'index:', currentPageIndex);
+      console.log('⏱️ [計測開始] ページ遷移:', page, '戻り先:', previousPage);
 
       // UI-013: ドロワーを先に閉じる（スケルトンUI表示を妨げないように）
       closeDrawer();
