@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- Cache Bust: 2025-12-12 v223 - goBackハンドラー修正 -->
+  <!-- Cache Bust: 2025-12-12 v224 - goBack最優先処理 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -1276,6 +1276,34 @@
       // ========== メッセージ処理 ==========
       const payload = e.data || {};
       console.log('[parent] payload.type:', payload.type);
+      console.log('[parent] payload.type typeof:', typeof payload.type);
+      console.log('[parent] payload.type === "goBack":', payload.type === 'goBack');
+      console.log('[parent] payload.type.trim() === "goBack":', payload.type && payload.type.trim && payload.type.trim() === 'goBack');
+
+      // goBackを最優先で処理（履歴ベースの戻る）
+      if (payload.type === 'goBack' || (payload.type && payload.type.trim && payload.type.trim() === 'goBack')) {
+        console.log('[parent] ========== goBack処理開始（最優先） ==========');
+        console.log('[parent] ✅ 戻る要求を受信（履歴ベース）');
+
+        if (typeof goBackInHistory === 'function') {
+          goBackInHistory();
+          console.log('[parent] ✅ goBackInHistory() 呼び出し完了');
+        } else if (typeof navigateToPage === 'function') {
+          console.warn('[parent] ⚠️ goBackInHistory未定義、navigateToPage(home)にフォールバック');
+          navigateToPage('home');
+        } else {
+          console.warn('[parent] ⚠️ 関数未定義、100ms遅延実行');
+          setTimeout(function() {
+            if (typeof goBackInHistory === 'function') {
+              goBackInHistory();
+            } else if (typeof navigateToPage === 'function') {
+              navigateToPage('home');
+            }
+          }, 100);
+        }
+        console.log('[parent] ========== goBack処理完了 ==========');
+        return; // 早期リターン
+      }
 
       if (payload.type === 'showChatRoomsList') {
         console.log('[parent] ✅ showChatRoomsList 要求を受信');
@@ -1333,30 +1361,6 @@
           }, 100);
         }
         console.log('[parent EARLY] ========== navigate処理完了 ==========');
-      } else if (payload.type === 'goBack') {
-        // 📚 履歴を使って前のページに戻る
-        console.log('[parent EARLY] ========== goBack処理開始 ==========');
-        console.log('[parent EARLY] ✅ 戻る要求を受信（履歴ベース）');
-
-        if (typeof goBackInHistory === 'function') {
-          goBackInHistory();
-          console.log('[parent EARLY] ✅ goBackInHistory() 呼び出し完了');
-        } else {
-          console.warn('[parent EARLY] ⚠️ goBackInHistory() がまだ定義されていません。遅延実行します。');
-          setTimeout(function() {
-            if (typeof goBackInHistory === 'function') {
-              goBackInHistory();
-              console.log('[parent EARLY] ✅ goBackInHistory() 遅延呼び出し完了');
-            } else {
-              console.error('[parent EARLY] ❌ goBackInHistory() が見つかりません');
-              // フォールバック: ホームに戻る
-              if (typeof navigateToPage === 'function') {
-                navigateToPage('home');
-              }
-            }
-          }, 100);
-        }
-        console.log('[parent EARLY] ========== goBack処理完了 ==========');
       } else if (payload.type === 'navigateToHome') {
         console.log('[parent EARLY] ========== navigateToHome処理開始 ==========');
         console.log('[parent EARLY] ✅ トップメニューに戻る要求を受信');
