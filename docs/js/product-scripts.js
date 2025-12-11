@@ -2629,6 +2629,12 @@ window.continueProductRegistration = function() {
           listingDestField.insertAdjacentHTML('beforeend', `<option value="${defaultListingDest}">${defaultListingDest}</option>`);
         }
         listingDestField.value = defaultListingDest;
+
+        // 販売タイプの表示/非表示を更新（メルカリの場合は表示）
+        if (typeof handleSalesChannelChange === 'function') {
+          handleSalesChannelChange();
+          console.log('✅ デフォルト出品先設定後に販売タイプを更新');
+        }
       }
     }
   }
