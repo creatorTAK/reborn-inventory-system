@@ -9906,9 +9906,9 @@ function handleSalesChannelChange() {
   } else {
     salesTypeContainer.style.display = 'none';
     // メルカリ以外の場合は「価格を設定する」にリセット
-    const fixedRadio = document.querySelector('input[name="salesType"][value="fixed"]');
-    if (fixedRadio) {
-      fixedRadio.checked = true;
+    const salesTypeSelect = document.getElementById('salesType');
+    if (salesTypeSelect) {
+      salesTypeSelect.value = 'fixed';
       handleSalesTypeChange(); // オークション表示もリセット
     }
     console.log('✅ 販売タイプ非表示（メルカリ以外）');
@@ -9919,15 +9919,15 @@ function handleSalesChannelChange() {
  * 販売タイプの変更時に出品金額の表示を変更する
  */
 function handleSalesTypeChange() {
-  const selectedType = document.querySelector('input[name="salesType"]:checked');
+  const salesTypeSelect = document.getElementById('salesType');
   const auctionSuffix = document.getElementById('auction-suffix');
   const listingPriceInput = document.getElementById('出品金額');
 
-  if (!selectedType || !auctionSuffix || !listingPriceInput) {
+  if (!salesTypeSelect || !auctionSuffix || !listingPriceInput) {
     return;
   }
 
-  if (selectedType.value === 'auction') {
+  if (salesTypeSelect.value === 'auction') {
     // オークション形式：〜を表示
     auctionSuffix.style.display = 'inline';
     listingPriceInput.style.paddingRight = '30px'; // 〜の分だけ右余白
@@ -9944,8 +9944,8 @@ function handleSalesTypeChange() {
  * 販売タイプを取得（保存時に使用）
  */
 function getSalesType() {
-  const selectedType = document.querySelector('input[name="salesType"]:checked');
-  return selectedType ? selectedType.value : 'fixed';
+  const salesTypeSelect = document.getElementById('salesType');
+  return salesTypeSelect ? salesTypeSelect.value : 'fixed';
 }
 
 /**
@@ -9959,12 +9959,10 @@ function initSalesTypeControl() {
     console.log('✅ 出品先変更イベントリスナーを設定');
   }
 
-  // 販売タイプのラジオボタン変更イベント
-  const salesTypeRadios = document.querySelectorAll('input[name="salesType"]');
-  salesTypeRadios.forEach(radio => {
-    radio.addEventListener('change', handleSalesTypeChange);
-  });
-  if (salesTypeRadios.length > 0) {
+  // 販売タイプのセレクトボックス変更イベント
+  const salesTypeSelect = document.getElementById('salesType');
+  if (salesTypeSelect) {
+    salesTypeSelect.addEventListener('change', handleSalesTypeChange);
     console.log('✅ 販売タイプ変更イベントリスナーを設定');
   }
 
