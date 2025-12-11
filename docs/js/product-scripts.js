@@ -9874,3 +9874,110 @@ window.handleProductImageUpload = handleProductImageUpload;
 window.displayProductImagesPreview = displayProductImagesPreview;
 window.removeProductImage = removeProductImage;
 window.clearAllProductImages = clearAllProductImages;
+
+// ============================================
+// 販売タイプ制御（メルカリ選択時のみ表示）
+// ============================================
+
+/**
+ * 出品先の変更時に販売タイプの表示/非表示を切り替える
+ */
+function handleSalesChannelChange() {
+  const salesChannelSelect = document.getElementById('出品先');
+  const salesTypeContainer = document.getElementById('sales-type-container');
+
+  if (!salesChannelSelect || !salesTypeContainer) {
+    console.warn('⚠️ 販売タイプ制御: 必要な要素が見つかりません');
+    return;
+  }
+
+  const selectedValue = salesChannelSelect.value;
+
+  // メルカリが選択された場合のみ販売タイプを表示
+  if (selectedValue === 'メルカリ') {
+    salesTypeContainer.style.display = 'block';
+    console.log('✅ 販売タイプ表示（メルカリ選択）');
+  } else {
+    salesTypeContainer.style.display = 'none';
+    // メルカリ以外の場合は「価格を設定する」にリセット
+    const fixedRadio = document.querySelector('input[name="salesType"][value="fixed"]');
+    if (fixedRadio) {
+      fixedRadio.checked = true;
+      handleSalesTypeChange(); // オークション表示もリセット
+    }
+    console.log('✅ 販売タイプ非表示（メルカリ以外）');
+  }
+}
+
+/**
+ * 販売タイプの変更時に出品金額の表示を変更する
+ */
+function handleSalesTypeChange() {
+  const selectedType = document.querySelector('input[name="salesType"]:checked');
+  const auctionSuffix = document.getElementById('auction-suffix');
+  const listingPriceInput = document.getElementById('出品金額');
+
+  if (!selectedType || !auctionSuffix || !listingPriceInput) {
+    return;
+  }
+
+  if (selectedType.value === 'auction') {
+    // オークション形式：〜を表示
+    auctionSuffix.style.display = 'inline';
+    listingPriceInput.style.paddingRight = '30px'; // 〜の分だけ右余白
+    console.log('✅ オークション形式選択 - 金額に〜を表示');
+  } else {
+    // 価格を設定する：〜を非表示
+    auctionSuffix.style.display = 'none';
+    listingPriceInput.style.paddingRight = '';
+    console.log('✅ 価格設定選択 - 通常表示');
+  }
+}
+
+/**
+ * 販売タイプを取得（保存時に使用）
+ */
+function getSalesType() {
+  const selectedType = document.querySelector('input[name="salesType"]:checked');
+  return selectedType ? selectedType.value : 'fixed';
+}
+
+/**
+ * 販売タイプのイベントリスナーを設定
+ */
+function initSalesTypeControl() {
+  // 出品先の変更イベント
+  const salesChannelSelect = document.getElementById('出品先');
+  if (salesChannelSelect) {
+    salesChannelSelect.addEventListener('change', handleSalesChannelChange);
+    console.log('✅ 出品先変更イベントリスナーを設定');
+  }
+
+  // 販売タイプのラジオボタン変更イベント
+  const salesTypeRadios = document.querySelectorAll('input[name="salesType"]');
+  salesTypeRadios.forEach(radio => {
+    radio.addEventListener('change', handleSalesTypeChange);
+  });
+  if (salesTypeRadios.length > 0) {
+    console.log('✅ 販売タイプ変更イベントリスナーを設定');
+  }
+
+  // 初期状態を設定
+  handleSalesChannelChange();
+}
+
+// グローバルスコープに公開
+window.handleSalesChannelChange = handleSalesChannelChange;
+window.handleSalesTypeChange = handleSalesTypeChange;
+window.getSalesType = getSalesType;
+window.initSalesTypeControl = initSalesTypeControl;
+
+// ページ読み込み時に初期化（遅延実行でDOM準備後に実行）
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    // 出品先の選択肢が読み込まれた後に実行するため、少し遅延
+    setTimeout(initSalesTypeControl, 500);
+  });
+} else {
+  setTimeout(initSalesTypeControl, 500);
+}
