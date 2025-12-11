@@ -480,9 +480,9 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // タスク記録を取得
-    async function getTaskRecords(year, month) {
-      const recordsRef = collection(db, 'taskRecords');
+    // 報酬記録を取得（compensationRecords コレクション）
+    async function getCompensationRecords(year, month) {
+      const recordsRef = collection(db, 'compensationRecords');
       const snapshot = await getDocs(recordsRef);
       const records = [];
       snapshot.forEach(docSnap => {
@@ -492,12 +492,18 @@
 
       // 期間フィルタリング
       return records.filter(r => {
-        if (!r.completedAt) return false;
-        const date = r.completedAt.toDate ? r.completedAt.toDate() : new Date(r.completedAt);
+        if (!r.completedAt && !r.recordedAt) return false;
+        const dateStr = r.completedAt || r.recordedAt;
+        const date = typeof dateStr === 'string' ? new Date(dateStr) : (dateStr.toDate ? dateStr.toDate() : new Date(dateStr));
         if (date.getFullYear() !== year) return false;
         if (month !== 'all' && (date.getMonth() + 1) !== parseInt(month)) return false;
         return true;
       });
+    }
+
+    // 旧API互換
+    async function getTaskRecords(year, month) {
+      return getCompensationRecords(year, month);
     }
 
     // 支払記録を取得
@@ -589,6 +595,7 @@
     // グローバル公開
     window.CompensationApi = {
       getTaskRecords,
+      getCompensationRecords,
       getPaymentRecords,
       getProductTaskCounts,
       getCompensationSettings,
@@ -664,8 +671,12 @@
         // 設定を取得
         compensationSettings = window.CompensationApi.getCompensationSettings();
 
-        // 商品データから担当者別タスク数を取得
-        currentStaffStats = await window.CompensationApi.getProductTaskCounts(year, month);
+        // 報酬記録を取得（compensationRecords）
+        currentRecords = await window.CompensationApi.getCompensationRecords(year, month);
+        console.log('📊 [報酬管理] 報酬記録取得:', currentRecords.length, '件');
+
+        // 報酬記録から担当者別統計を計算
+        currentStaffStats = calculateStaffStatsFromRecords(currentRecords);
 
         // 支払記録を取得
         currentPayments = await window.CompensationApi.getPaymentRecords(year);
@@ -684,6 +695,39 @@
       } finally {
         hideLoading();
       }
+    }
+
+    // 報酬記録から担当者別統計を計算
+    function calculateStaffStatsFromRecords(records) {
+      const staffStats = {};
+      records.forEach(r => {
+        const staffEmail = r.staffEmail || 'unknown';
+        const staffName = r.staffName || staffEmail.split('@')[0] || '不明';
+
+        if (!staffStats[staffName]) {
+          staffStats[staffName] = {
+            email: staffEmail,
+            listing: 0,
+            shipping: 0,
+            photography: 0,
+            inspection: 0,
+            totalAmount: 0,
+            records: []
+          };
+        }
+
+        // タスクタイプに応じてカウント
+        const taskType = r.taskTypeKey || r.taskType?.replace('_approval', '').replace('_task', '') || 'listing';
+        if (staffStats[staffName][taskType] !== undefined) {
+          staffStats[staffName][taskType]++;
+        }
+
+        // 金額を加算
+        staffStats[staffName].totalAmount += r.unitPrice || 0;
+        staffStats[staffName].records.push(r);
+      });
+
+      return staffStats;
     }
 
     function updatePeriodDisplay() {
@@ -710,16 +754,15 @@
         inspection: { count: 0, rate: rates.inspection, amount: 0 }
       };
 
-      // 担当者別統計から集計
-      Object.values(currentStaffStats).forEach(stats => {
-        Object.entries(stats).forEach(([task, count]) => {
-          if (taskBreakdown[task]) {
-            taskBreakdown[task].count += count;
-            taskBreakdown[task].amount = taskBreakdown[task].count * taskBreakdown[task].rate;
-            totalTasks += count;
-            totalAmount += count * taskBreakdown[task].rate;
-          }
-        });
+      // 報酬記録から直接集計
+      currentRecords.forEach(r => {
+        const taskType = r.taskTypeKey || 'listing';
+        if (taskBreakdown[taskType]) {
+          taskBreakdown[taskType].count++;
+          taskBreakdown[taskType].amount += r.unitPrice || rates[taskType] || 0;
+          totalTasks++;
+          totalAmount += r.unitPrice || rates[taskType] || 0;
+        }
       });
 
       // 支払済み金額を計算
@@ -808,31 +851,46 @@
     }
 
     function renderDetail() {
-      const rates = compensationSettings.taskRates || { listing: 100, shipping: 100, photography: 50, inspection: 30 };
-      const taskNames = { listing: '商品出品', shipping: '梱包・発送', photography: '商品撮影', inspection: '検品作業' };
+      const taskNames = {
+        listing: '商品出品',
+        shipping: '梱包・発送',
+        photography: '商品撮影',
+        inspection: '検品作業',
+        listing_approval: '出品確認',
+        shipping_task: '梱包・発送'
+      };
 
-      // 簡易的な明細を生成（商品データベースから直接生成する場合は別途実装が必要）
+      // 報酬記録を明細として表示
       let html = '';
-      let recordCount = 0;
 
-      Object.entries(currentStaffStats).forEach(([staffName, stats]) => {
-        Object.entries(stats).forEach(([task, count]) => {
-          if (count > 0 && rates[task]) {
-            for (let i = 0; i < Math.min(count, 10); i++) { // 最大10件まで表示
-              html += `
-                <tr>
-                  <td>-</td>
-                  <td>${staffName}</td>
-                  <td>${taskNames[task]}</td>
-                  <td>-</td>
-                  <td class="text-end">${formatCurrency(rates[task])}</td>
-                  <td><span class="status-badge unpaid">未払い</span></td>
-                </tr>
-              `;
-              recordCount++;
-            }
-          }
-        });
+      // 日付でソート（新しい順）
+      const sortedRecords = [...currentRecords].sort((a, b) => {
+        const dateA = new Date(a.completedAt || a.recordedAt || 0);
+        const dateB = new Date(b.completedAt || b.recordedAt || 0);
+        return dateB - dateA;
+      });
+
+      sortedRecords.forEach(r => {
+        const dateStr = r.completedAt || r.recordedAt;
+        const date = dateStr ? new Date(dateStr) : null;
+        const displayDate = date ? date.toLocaleDateString('ja-JP') : '-';
+        const staffName = r.staffName || '不明';
+        const taskType = r.taskTypeKey || r.taskType || 'listing';
+        const taskName = taskNames[taskType] || r.description || 'タスク';
+        const productInfo = r.managementNumber || '-';
+        const amount = r.unitPrice || 0;
+        const isPaid = r.paidAt ? true : false;
+
+        html += `
+          <tr>
+            <td>${displayDate}</td>
+            <td>${staffName}</td>
+            <td>${taskName}</td>
+            <td>${productInfo}</td>
+            <td class="text-end">${formatCurrency(amount)}</td>
+            <td><span class="status-badge ${isPaid ? 'paid' : 'unpaid'}">${isPaid ? '支払済' : '未払い'}</span></td>
+          </tr>
+        `;
       });
 
       if (!html) {

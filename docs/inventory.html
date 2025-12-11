@@ -1652,6 +1652,11 @@
         hideLoading();
         alert('商品情報を更新しました');
 
+        // 出品中への変更時に管理者へ確認タスクを追加
+        if (statusChanged && newStatus === '出品中' && oldStatus !== '出品中') {
+          addListingApprovalTask(currentProduct);
+        }
+
         // モーダルを閉じる
         const modalElement = document.getElementById('productDetailModal');
         const modal = bootstrap.Modal.getInstance(modalElement);
@@ -1659,6 +1664,85 @@
 
         // 一覧を再読み込み
         loadDashboardAndSearch();
+      }
+    }
+
+    /**
+     * 出品確認タスクを管理者に追加
+     * @param {Object} product - 商品データ
+     */
+    async function addListingApprovalTask(product) {
+      try {
+        console.log('📝 [ListingTask] 出品確認タスク追加開始:', product.managementNumber);
+
+        // 担当者情報
+        const staffName = product.createdBy || localStorage.getItem('reborn_user_name') || '不明';
+        const staffEmail = product.createdByEmail || localStorage.getItem('reborn_user_email') || '';
+
+        // タスクデータ
+        const taskData = {
+          type: 'listing_approval',
+          title: '出品確認',
+          description: `${staffName}さんが商品を出品しました。\n管理番号: ${product.managementNumber}\n確認してOKなら完了にしてください。`,
+          link: 'inventory',
+          relatedData: {
+            productId: product.id || product.productId,
+            managementNumber: product.managementNumber,
+            staffName: staffName,
+            staffEmail: staffEmail,
+            listingAmount: product.listingAmount || product.listing?.amount || 0
+          }
+        };
+
+        // 親ウィンドウにタスク追加を依頼（postMessage経由）
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: 'addTaskToOwners',
+            taskData: taskData
+          }, '*');
+          console.log('📝 [ListingTask] タスク追加依頼を親ウィンドウに送信');
+        } else {
+          // 直接アクセスの場合はFirestoreに直接追加
+          await addTaskToOwnersDirectly(taskData);
+        }
+      } catch (error) {
+        console.error('❌ [ListingTask] タスク追加エラー:', error);
+      }
+    }
+
+    /**
+     * 管理者にタスクを直接追加（iframe外からアクセス時）
+     */
+    async function addTaskToOwnersDirectly(taskData) {
+      try {
+        const { collection, query, where, getDocs, addDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        // 管理者を取得
+        const usersRef = collection(db, 'users');
+        const ownersQuery = query(usersRef, where('permissionId', '==', 'owner'));
+        const ownersSnapshot = await getDocs(ownersQuery);
+
+        if (ownersSnapshot.empty) {
+          console.warn('[Todo] 管理者が見つかりません');
+          return;
+        }
+
+        // 各管理者にタスクを追加
+        for (const ownerDoc of ownersSnapshot.docs) {
+          const ownerEmail = ownerDoc.data().userEmail;
+          const tasksRef = collection(db, 'userTasks', ownerEmail, 'tasks');
+
+          await addDoc(tasksRef, {
+            ...taskData,
+            createdAt: serverTimestamp(),
+            completed: false,
+            read: false
+          });
+
+          console.log('[Todo] タスク追加完了:', ownerEmail, taskData.type);
+        }
+      } catch (error) {
+        console.error('[Todo] タスク追加エラー:', error);
       }
     }
 
@@ -2609,10 +2693,12 @@
         const snapshot = await getDocs(productsRef);
 
         let productDocId = null;
+        let productData = null;
         snapshot.forEach((docSnapshot) => {
           const data = docSnapshot.data();
           if (data.managementNumber === salesData.managementNumber) {
             productDocId = docSnapshot.id;
+            productData = data;
           }
         });
 
@@ -2640,10 +2726,67 @@
         });
 
         console.log('✅ [FIRESTORE] 販売記録保存完了');
+
+        // 担当者に発送タスクを追加
+        if (productData) {
+          await addShippingTaskToStaff(productData, salesData, productDocId);
+        }
+
         return { success: true };
       } catch (error) {
         console.error('[Firestore API] 販売記録保存エラー:', error);
         return { success: false, error: error.message };
+      }
+    }
+
+    /**
+     * 担当者に発送タスクを追加
+     * @param {Object} productData - 商品データ
+     * @param {Object} salesData - 販売データ
+     * @param {string} productDocId - 商品ドキュメントID
+     */
+    async function addShippingTaskToStaff(productData, salesData, productDocId) {
+      try {
+        console.log('📦 [ShippingTask] 発送タスク追加開始:', salesData.managementNumber);
+
+        // 担当者情報
+        const staffName = productData.createdBy || '不明';
+        const staffEmail = productData.createdByEmail || null;
+
+        if (!staffEmail) {
+          console.warn('⚠️ [ShippingTask] 担当者のメールが不明のためスキップ');
+          return;
+        }
+
+        // タスクデータ
+        const taskData = {
+          type: 'shipping_task',
+          title: '梱包・発送',
+          description: `商品が売れました！梱包して発送してください。\n管理番号: ${salesData.managementNumber}\n売上: ¥${Number(salesData.salesAmount).toLocaleString()}`,
+          link: 'inventory',
+          relatedData: {
+            productId: productDocId,
+            managementNumber: salesData.managementNumber,
+            staffName: staffName,
+            staffEmail: staffEmail,
+            saleAmount: salesData.salesAmount,
+            salePlatform: salesData.salesPlatform
+          }
+        };
+
+        // 担当者のタスクに追加
+        const tasksRef = collection(db, 'userTasks', staffEmail, 'tasks');
+        await addDoc(tasksRef, {
+          ...taskData,
+          createdAt: serverTimestamp(),
+          completed: false,
+          read: false
+        });
+
+        console.log('✅ [ShippingTask] 発送タスク追加完了:', staffEmail);
+      } catch (error) {
+        console.error('❌ [ShippingTask] 発送タスク追加エラー:', error);
+        // エラーでも販売記録自体は成功させる
       }
     }
 

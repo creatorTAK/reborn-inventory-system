@@ -355,18 +355,31 @@
       }
     }
 
-    // タスクをレンダリング（未完了タスク用 - チェックボックスなし）
+    // タスクをレンダリング（未完了タスク用）
     function renderTask(task) {
       const typeLabel = getTypeLabel(task.type);
       const typeBadgeClass = task.type || 'default';
       const createdAt = task.createdAt ? formatDate(task.createdAt.toDate()) : '';
-      
+
       // ユーザー承認タスクで写真がある場合は画像を表示、なければアイコン
       let iconHtml;
       if (task.type === 'pending_user_approval' && task.relatedData?.pendingUserPhoto) {
         iconHtml = `<img src="${escapeHtml(task.relatedData.pendingUserPhoto)}" alt="ユーザー" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">`;
       } else {
         iconHtml = getTypeIcon(task.type);
+      }
+
+      // 完了ボタンを表示するタスクタイプ（報酬対象タスク）
+      const completableTaskTypes = ['listing_approval', 'shipping_task'];
+      const showCompleteButton = completableTaskTypes.includes(task.type);
+
+      // アクションボタン
+      let actionButtons = '';
+      if (task.link) {
+        actionButtons += `<div class="task-action" onclick="handleTaskClick('${task.id}', '${task.link}')"><i class="bi bi-arrow-right-circle"></i> 対応する</div>`;
+      }
+      if (showCompleteButton) {
+        actionButtons += `<div class="task-action complete-btn" onclick="completeTask('${task.id}')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 完了</div>`;
       }
 
       return `
@@ -380,18 +393,44 @@
                 <span class="type-badge ${typeBadgeClass}">${typeLabel}</span>
                 <span>${createdAt}</span>
               </div>
-              ${task.link ? `<div class="task-action" onclick="handleTaskClick('${task.id}', '${task.link}')"><i class="bi bi-arrow-right-circle"></i> 対応する</div>` : ''}
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                ${actionButtons}
+              </div>
             </div>
           </div>
         </div>
       `;
     }
 
+    /**
+     * タスクを完了にする（報酬トリガー発動）
+     */
+    async function completeTask(taskId) {
+      if (!confirm('このタスクを完了にしますか？\n（報酬が自動記録されます）')) return;
+
+      try {
+        const taskRef = db.collection('userTasks').doc(userEmail).collection('tasks').doc(taskId);
+        await taskRef.update({
+          completed: true,
+          completedAt: new Date().toISOString()
+        });
+
+        console.log('✅ [Task] タスク完了:', taskId);
+        alert('タスクを完了しました');
+        loadTasks(); // 再読み込み
+      } catch (error) {
+        console.error('❌ [Task] タスク完了エラー:', error);
+        alert('タスクの完了に失敗しました');
+      }
+    }
+
     // タスクタイプのアイコンを取得
     function getTypeIcon(type) {
       const icons = {
         'pending_user_approval': '👤',
-        'inventory_alert': '📦'
+        'inventory_alert': '📦',
+        'listing_approval': '📤',
+        'shipping_task': '📦'
       };
       return icons[type] || '📋';
     }
@@ -400,7 +439,9 @@
     function getTypeLabel(type) {
       const labels = {
         'pending_user_approval': 'ユーザー承認',
-        'inventory_alert': '在庫アラート'
+        'inventory_alert': '在庫アラート',
+        'listing_approval': '出品確認',
+        'shipping_task': '梱包・発送'
       };
       return labels[type] || 'タスク';
     }

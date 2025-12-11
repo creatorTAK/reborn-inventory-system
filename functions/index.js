@@ -7,7 +7,7 @@
  * v2.1: 個別チャット通知高速化（memberEmails優先使用）
  */
 
-const {onDocumentCreated} = require('firebase-functions/v2/firestore');
+const {onDocumentCreated, onDocumentUpdated} = require('firebase-functions/v2/firestore');
 const {onObjectFinalized} = require('firebase-functions/v2/storage');
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
@@ -1130,3 +1130,132 @@ exports.generateThumbnail = onObjectFinalized({
     return { success: false, error: error.message };
   }
 });
+
+// ============================================
+// 💰 外注報酬自動記録システム
+// ============================================
+
+/**
+ * タスク完了時の報酬自動記録
+ * Firestoreトリガー: userTasks/{userEmail}/tasks/{taskId} 更新時
+ *
+ * 対象タスクタイプ:
+ * - listing_approval: 出品確認タスク（担当者が出品 → 管理者が確認完了）
+ * - shipping_task: 発送タスク（商品が売れた → 担当者が発送完了）
+ */
+exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId}', async (event) => {
+  const beforeData = event.data.before.data();
+  const afterData = event.data.after.data();
+  const userEmail = event.params.userEmail;
+  const taskId = event.params.taskId;
+
+  // 完了状態の変化をチェック（未完了→完了に変わった場合のみ処理）
+  if (beforeData.completed === true || afterData.completed !== true) {
+    return null; // 既に完了済み、または完了以外の更新は無視
+  }
+
+  console.log('💰 [onTaskCompleted] タスク完了検知:', {
+    taskId,
+    userEmail,
+    taskType: afterData.type,
+    title: afterData.title
+  });
+
+  // 報酬対象のタスクタイプをチェック
+  const compensationTaskTypes = ['listing_approval', 'shipping_task'];
+  if (!compensationTaskTypes.includes(afterData.type)) {
+    console.log('⏭️ [onTaskCompleted] 報酬対象外のタスクタイプ:', afterData.type);
+    return null;
+  }
+
+  try {
+    // 報酬設定を取得
+    const settingsDoc = await db.collection('settings').doc('compensation').get();
+    const settings = settingsDoc.exists ? settingsDoc.data() : getDefaultCompensationSettings();
+
+    // タスクタイプに応じた報酬額を決定
+    let taskTypeKey = '';
+    let unitPrice = 0;
+    let description = '';
+
+    if (afterData.type === 'listing_approval') {
+      taskTypeKey = 'listing';
+      unitPrice = settings.taskRates?.listing || 100;
+      description = '出品作業報酬';
+    } else if (afterData.type === 'shipping_task') {
+      taskTypeKey = 'shipping';
+      unitPrice = settings.taskRates?.shipping || 100;
+      description = '梱包発送報酬';
+    }
+
+    // 担当スタッフ（タスクを実行した人ではなく、実際の作業者）を取得
+    const staffEmail = afterData.relatedData?.staffEmail ||
+                       afterData.relatedData?.assignedTo ||
+                       afterData.relatedData?.createdByEmail ||
+                       null;
+    const staffName = afterData.relatedData?.staffName ||
+                      afterData.relatedData?.assignedToName ||
+                      afterData.relatedData?.createdBy ||
+                      '不明';
+
+    if (!staffEmail) {
+      console.warn('⚠️ [onTaskCompleted] 担当スタッフのメールが不明:', afterData);
+      return null;
+    }
+
+    // 報酬記録を作成
+    const now = new Date();
+    const compensationRecord = {
+      taskId: taskId,
+      taskType: afterData.type,
+      taskTypeKey: taskTypeKey,
+      staffEmail: staffEmail,
+      staffName: staffName,
+      unitPrice: unitPrice,
+      description: description,
+      productId: afterData.relatedData?.productId || null,
+      managementNumber: afterData.relatedData?.managementNumber || null,
+      completedAt: afterData.completedAt || now.toISOString(),
+      recordedAt: now.toISOString(),
+      yearMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+      approvedBy: userEmail // タスクを完了させた管理者
+    };
+
+    // Firestoreに報酬記録を保存
+    await db.collection('compensationRecords').add(compensationRecord);
+
+    console.log('✅ [onTaskCompleted] 報酬記録完了:', {
+      staffName,
+      staffEmail,
+      taskTypeKey,
+      unitPrice,
+      productId: compensationRecord.productId
+    });
+
+    return { success: true, compensation: compensationRecord };
+
+  } catch (error) {
+    console.error('❌ [onTaskCompleted] 報酬記録エラー:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * デフォルトの報酬設定
+ */
+function getDefaultCompensationSettings() {
+  return {
+    taskRates: {
+      listing: 100,
+      shipping: 100,
+      photography: 50,
+      inspection: 30
+    },
+    options: {
+      autoRecordListing: true,
+      autoRecordShipping: true,
+      cutoffDay: '末日',
+      recordAsExpense: true
+    }
+  };
+}
