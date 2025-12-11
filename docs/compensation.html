@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>報酬管理 - FURIRA</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+    }
+    .content-container {
+      padding: 16px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    /* タブ */
+    .nav-tabs-custom {
+      background: white;
+      border-radius: 12px;
+      padding: 8px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .nav-tabs-custom .nav-link {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      color: #6b7280;
+      font-weight: 500;
+    }
+    .nav-tabs-custom .nav-link.active {
+      background: #40B4E5;
+      color: white;
+    }
+
+    /* カード */
+    .card-section {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .card-section h6 {
+      color: #374151;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    /* サマリーグリッド */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .summary-card {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .summary-card.highlight {
+      background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+      color: white;
+    }
+    .summary-card.highlight .summary-label { color: rgba(255,255,255,0.8); }
+    .summary-card.highlight .summary-value { color: white; }
+    .summary-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .summary-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    /* テーブル */
+    .data-table {
+      width: 100%;
+      font-size: 0.875rem;
+    }
+    .data-table th {
+      background: #f9fafb;
+      padding: 12px 8px;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 2px solid #e5e7eb;
+      white-space: nowrap;
+    }
+    .data-table td {
+      padding: 12px 8px;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: middle;
+    }
+    .data-table tr:hover { background: #f9fafb; }
+
+    /* スタッフカード */
+    .staff-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .staff-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .staff-info {
+      flex: 1;
+    }
+    .staff-name {
+      font-weight: 600;
+      color: #1f2937;
+      font-size: 14px;
+    }
+    .staff-role {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .staff-stats {
+      text-align: right;
+    }
+    .staff-amount {
+      font-size: 18px;
+      font-weight: 700;
+      color: #40B4E5;
+    }
+    .staff-tasks {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    /* ステータスバッジ */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .status-badge.unpaid {
+      background: #fef3c7;
+      color: #b45309;
+    }
+    .status-badge.paid {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    /* ローディング */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    /* 期間選択 */
+    .period-selector {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* レスポンシブ */
+    @media (max-width: 576px) {
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      .staff-card { flex-wrap: wrap; }
+      .staff-stats { width: 100%; text-align: left; margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb; }
+    }
+  </style>
+</head>
+<body>
+  <!-- ローディング -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="text-center">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-2 text-muted">データを読み込んでいます...</p>
+    </div>
+  </div>
+
+  <!-- 統一ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" onclick="goBack()">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <span style="font-size: 20px;">💰</span>
+        報酬管理
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-sm btn-outline-primary" onclick="openExportModal()" title="エクスポート">
+          <i class="bi bi-download"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content-container">
+    <!-- 期間選択 -->
+    <div class="card-section">
+      <div class="period-selector">
+        <label class="form-label mb-0 small fw-bold">対象期間:</label>
+        <select class="form-select form-select-sm" id="periodYear" style="width: auto;" onchange="loadCompensationData()">
+          <!-- 動的に生成 -->
+        </select>
+        <select class="form-select form-select-sm" id="periodMonth" style="width: auto;" onchange="loadCompensationData()">
+          <option value="all">全月</option>
+          <option value="1">1月</option>
+          <option value="2">2月</option>
+          <option value="3">3月</option>
+          <option value="4">4月</option>
+          <option value="5">5月</option>
+          <option value="6">6月</option>
+          <option value="7">7月</option>
+          <option value="8">8月</option>
+          <option value="9">9月</option>
+          <option value="10">10月</option>
+          <option value="11">11月</option>
+          <option value="12">12月</option>
+        </select>
+        <span class="text-muted small" id="periodDisplay"></span>
+      </div>
+    </div>
+
+    <!-- タブ -->
+    <ul class="nav nav-tabs-custom" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#summary-tab" type="button">
+          📊 サマリー
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#staff-tab" type="button">
+          👤 担当者別
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#detail-tab" type="button">
+          📝 明細
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#payment-tab" type="button">
+          💳 支払管理
+        </button>
+      </li>
+    </ul>
+
+    <!-- タブコンテンツ -->
+    <div class="tab-content">
+      <!-- サマリータブ -->
+      <div class="tab-pane fade show active" id="summary-tab" role="tabpanel">
+        <!-- KPIサマリー -->
+        <div class="summary-grid">
+          <div class="summary-card highlight">
+            <div class="summary-label">報酬総額</div>
+            <div class="summary-value" id="kpi-total">¥0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">未払い</div>
+            <div class="summary-value" id="kpi-unpaid">¥0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">支払済</div>
+            <div class="summary-value" id="kpi-paid">¥0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">対象件数</div>
+            <div class="summary-value" id="kpi-count">0件</div>
+          </div>
+        </div>
+
+        <!-- タスク種別内訳 -->
+        <div class="card-section">
+          <h6><i class="bi bi-pie-chart"></i> タスク種別内訳</h6>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>タスク</th>
+                  <th class="text-end">件数</th>
+                  <th class="text-end">単価</th>
+                  <th class="text-end">金額</th>
+                </tr>
+              </thead>
+              <tbody id="taskBreakdownBody">
+                <tr><td colspan="4" class="text-center text-muted py-4">データがありません</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 月別推移 -->
+        <div class="card-section">
+          <h6><i class="bi bi-graph-up"></i> 月別推移</h6>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>月</th>
+                  <th class="text-end">件数</th>
+                  <th class="text-end">報酬額</th>
+                </tr>
+              </thead>
+              <tbody id="monthlyTrendBody">
+                <tr><td colspan="3" class="text-center text-muted py-4">データがありません</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 担当者別タブ -->
+      <div class="tab-pane fade" id="staff-tab" role="tabpanel">
+        <div id="staffList">
+          <div class="text-center text-muted py-4">データを読み込んでいます...</div>
+        </div>
+      </div>
+
+      <!-- 明細タブ -->
+      <div class="tab-pane fade" id="detail-tab" role="tabpanel">
+        <!-- フィルター -->
+        <div class="card-section">
+          <div class="row g-2">
+            <div class="col-6 col-md-3">
+              <select class="form-select form-select-sm" id="filterStaff" onchange="filterRecords()">
+                <option value="">全担当者</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-3">
+              <select class="form-select form-select-sm" id="filterTask" onchange="filterRecords()">
+                <option value="">全タスク</option>
+                <option value="listing">商品出品</option>
+                <option value="shipping">梱包・発送</option>
+                <option value="photography">商品撮影</option>
+                <option value="inspection">検品作業</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-3">
+              <select class="form-select form-select-sm" id="filterStatus" onchange="filterRecords()">
+                <option value="">全ステータス</option>
+                <option value="unpaid">未払い</option>
+                <option value="paid">支払済</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-3">
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="resetFilters()">
+                <i class="bi bi-x-circle"></i> リセット
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 明細テーブル -->
+        <div class="card-section">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>日付</th>
+                  <th>担当者</th>
+                  <th>タスク</th>
+                  <th>商品</th>
+                  <th class="text-end">金額</th>
+                  <th>ステータス</th>
+                </tr>
+              </thead>
+              <tbody id="detailBody">
+                <tr><td colspan="6" class="text-center text-muted py-4">データがありません</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 支払管理タブ -->
+      <div class="tab-pane fade" id="payment-tab" role="tabpanel">
+        <!-- 支払処理 -->
+        <div class="card-section">
+          <h6><i class="bi bi-cash-stack"></i> 支払処理</h6>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label small">担当者</label>
+              <select class="form-select form-select-sm" id="paymentStaff">
+                <option value="">選択してください</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">支払日</label>
+              <input type="date" class="form-control form-control-sm" id="paymentDate">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small">支払金額</label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">¥</span>
+                <input type="number" class="form-control" id="paymentAmount" readonly>
+              </div>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+              <button class="btn btn-primary btn-sm w-100" onclick="processPayment()">
+                <i class="bi bi-check-circle"></i> 支払処理
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 支払履歴 -->
+        <div class="card-section">
+          <h6><i class="bi bi-clock-history"></i> 支払履歴</h6>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>支払日</th>
+                  <th>担当者</th>
+                  <th class="text-end">支払額</th>
+                  <th>件数</th>
+                  <th>メモ</th>
+                </tr>
+              </thead>
+              <tbody id="paymentHistoryBody">
+                <tr><td colspan="5" class="text-center text-muted py-4">支払履歴がありません</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, getDocs, doc, getDoc, setDoc, updateDoc, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+      authDomain: "furira.jp",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "345706548795",
+      appId: "1:345706548795:web:058a553da6b4b74db5161e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // タスク記録を取得
+    async function getTaskRecords(year, month) {
+      const recordsRef = collection(db, 'taskRecords');
+      const snapshot = await getDocs(recordsRef);
+      const records = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        records.push({ id: docSnap.id, ...data });
+      });
+
+      // 期間フィルタリング
+      return records.filter(r => {
+        if (!r.completedAt) return false;
+        const date = r.completedAt.toDate ? r.completedAt.toDate() : new Date(r.completedAt);
+        if (date.getFullYear() !== year) return false;
+        if (month !== 'all' && (date.getMonth() + 1) !== parseInt(month)) return false;
+        return true;
+      });
+    }
+
+    // 支払記録を取得
+    async function getPaymentRecords(year) {
+      const paymentsRef = collection(db, 'compensationPayments');
+      const snapshot = await getDocs(paymentsRef);
+      const payments = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        payments.push({ id: docSnap.id, ...data });
+      });
+
+      return payments.filter(p => {
+        if (!p.paymentDate) return false;
+        const date = new Date(p.paymentDate);
+        return date.getFullYear() === year;
+      });
+    }
+
+    // 商品データから担当者別タスク数を計算
+    async function getProductTaskCounts(year, month) {
+      const productsRef = collection(db, 'products');
+      const snapshot = await getDocs(productsRef);
+      const products = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        products.push({ id: docSnap.id, ...data });
+      });
+
+      // 期間フィルタリング
+      const filtered = products.filter(p => {
+        const date = p.createdAt?.toDate ? p.createdAt.toDate() : (p.createdAt ? new Date(p.createdAt) : null);
+        if (!date) return false;
+        if (date.getFullYear() !== year) return false;
+        if (month !== 'all' && (date.getMonth() + 1) !== parseInt(month)) return false;
+        return true;
+      });
+
+      // 担当者別に集計
+      const staffStats = {};
+      filtered.forEach(p => {
+        const staff = p.assignedTo || p.createdBy || '不明';
+        if (!staffStats[staff]) {
+          staffStats[staff] = { listing: 0, shipping: 0, photography: 0, inspection: 0 };
+        }
+        // 出品タスク
+        if (p.status === '出品中' || p.status === '販売済み') {
+          staffStats[staff].listing++;
+        }
+        // 発送タスク
+        if (p.status === '販売済み' && p.shippingCompleted) {
+          staffStats[staff].shipping++;
+        }
+      });
+
+      return staffStats;
+    }
+
+    // 報酬設定を取得
+    function getCompensationSettings() {
+      try {
+        const config = JSON.parse(localStorage.getItem('config') || '{}');
+        return config.報酬設定 || {
+          taskRates: { listing: 100, shipping: 100, photography: 50, inspection: 30 },
+          customTasks: [],
+          options: { autoRecordListing: true, autoRecordShipping: true, cutoffDay: '末日', recordAsExpense: true }
+        };
+      } catch {
+        return {
+          taskRates: { listing: 100, shipping: 100, photography: 50, inspection: 30 },
+          customTasks: [],
+          options: {}
+        };
+      }
+    }
+
+    // 支払処理
+    async function savePayment(paymentData) {
+      const paymentId = 'pay_' + Date.now();
+      const paymentRef = doc(db, 'compensationPayments', paymentId);
+      await setDoc(paymentRef, {
+        ...paymentData,
+        id: paymentId,
+        createdAt: new Date().toISOString()
+      });
+      return paymentId;
+    }
+
+    // グローバル公開
+    window.CompensationApi = {
+      getTaskRecords,
+      getPaymentRecords,
+      getProductTaskCounts,
+      getCompensationSettings,
+      savePayment
+    };
+
+    console.log('✅ [報酬管理] Firebase初期化完了');
+
+    window.addEventListener('load', () => {
+      initializePage();
+    });
+  </script>
+
+  <script>
+    let currentRecords = [];
+    let currentPayments = [];
+    let currentStaffStats = {};
+    let compensationSettings = {};
+
+    function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
+    function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
+
+    function formatCurrency(amount) {
+      if (amount === null || amount === undefined || isNaN(amount)) return '¥0';
+      return '¥' + Math.round(amount).toLocaleString();
+    }
+
+    function formatDate(date) {
+      if (!date) return '-';
+      const d = date.toDate ? date.toDate() : new Date(date);
+      return d.toLocaleDateString('ja-JP');
+    }
+
+    function goBack() {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'navigate', page: 'menu' }, '*');
+      } else {
+        window.history.back();
+      }
+    }
+
+    function initializePage() {
+      // 年度選択を生成
+      const yearSelect = document.getElementById('periodYear');
+      const thisYear = new Date().getFullYear();
+      for (let y = thisYear; y >= thisYear - 3; y--) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y + '年';
+        if (y === thisYear) opt.selected = true;
+        yearSelect.appendChild(opt);
+      }
+
+      // 現在月を選択
+      const monthSelect = document.getElementById('periodMonth');
+      const thisMonth = new Date().getMonth() + 1;
+      monthSelect.value = thisMonth.toString();
+
+      // 支払日をデフォルト設定
+      document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
+
+      // データ読み込み
+      loadCompensationData();
+    }
+
+    async function loadCompensationData() {
+      showLoading();
+
+      try {
+        const year = parseInt(document.getElementById('periodYear').value);
+        const month = document.getElementById('periodMonth').value;
+
+        // 設定を取得
+        compensationSettings = window.CompensationApi.getCompensationSettings();
+
+        // 商品データから担当者別タスク数を取得
+        currentStaffStats = await window.CompensationApi.getProductTaskCounts(year, month);
+
+        // 支払記録を取得
+        currentPayments = await window.CompensationApi.getPaymentRecords(year);
+
+        // 表示を更新
+        updatePeriodDisplay();
+        renderSummary();
+        renderStaffList();
+        renderDetail();
+        renderPaymentHistory();
+        populateStaffSelects();
+
+      } catch (error) {
+        console.error('データ読み込みエラー:', error);
+        alert('データの読み込みに失敗しました');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function updatePeriodDisplay() {
+      const year = document.getElementById('periodYear').value;
+      const month = document.getElementById('periodMonth').value;
+      const display = document.getElementById('periodDisplay');
+
+      if (month === 'all') {
+        display.textContent = `${year}年 全期間`;
+      } else {
+        display.textContent = `${year}年${month}月`;
+      }
+    }
+
+    function renderSummary() {
+      const rates = compensationSettings.taskRates || { listing: 100, shipping: 100, photography: 50, inspection: 30 };
+
+      let totalTasks = 0;
+      let totalAmount = 0;
+      const taskBreakdown = {
+        listing: { count: 0, rate: rates.listing, amount: 0 },
+        shipping: { count: 0, rate: rates.shipping, amount: 0 },
+        photography: { count: 0, rate: rates.photography, amount: 0 },
+        inspection: { count: 0, rate: rates.inspection, amount: 0 }
+      };
+
+      // 担当者別統計から集計
+      Object.values(currentStaffStats).forEach(stats => {
+        Object.entries(stats).forEach(([task, count]) => {
+          if (taskBreakdown[task]) {
+            taskBreakdown[task].count += count;
+            taskBreakdown[task].amount = taskBreakdown[task].count * taskBreakdown[task].rate;
+            totalTasks += count;
+            totalAmount += count * taskBreakdown[task].rate;
+          }
+        });
+      });
+
+      // 支払済み金額を計算
+      const paidAmount = currentPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const unpaidAmount = Math.max(0, totalAmount - paidAmount);
+
+      // KPI更新
+      document.getElementById('kpi-total').textContent = formatCurrency(totalAmount);
+      document.getElementById('kpi-unpaid').textContent = formatCurrency(unpaidAmount);
+      document.getElementById('kpi-paid').textContent = formatCurrency(paidAmount);
+      document.getElementById('kpi-count').textContent = totalTasks + '件';
+
+      // タスク種別内訳
+      const taskNames = {
+        listing: '商品出品',
+        shipping: '梱包・発送',
+        photography: '商品撮影',
+        inspection: '検品作業'
+      };
+
+      let breakdownHtml = '';
+      Object.entries(taskBreakdown).forEach(([task, data]) => {
+        if (data.count > 0) {
+          breakdownHtml += `
+            <tr>
+              <td>${taskNames[task]}</td>
+              <td class="text-end">${data.count}件</td>
+              <td class="text-end">${formatCurrency(data.rate)}</td>
+              <td class="text-end fw-bold">${formatCurrency(data.amount)}</td>
+            </tr>
+          `;
+        }
+      });
+
+      if (!breakdownHtml) {
+        breakdownHtml = '<tr><td colspan="4" class="text-center text-muted py-4">データがありません</td></tr>';
+      } else {
+        breakdownHtml += `
+          <tr style="background: #f9fafb; font-weight: 600;">
+            <td>合計</td>
+            <td class="text-end">${totalTasks}件</td>
+            <td class="text-end">-</td>
+            <td class="text-end">${formatCurrency(totalAmount)}</td>
+          </tr>
+        `;
+      }
+
+      document.getElementById('taskBreakdownBody').innerHTML = breakdownHtml;
+    }
+
+    function renderStaffList() {
+      const rates = compensationSettings.taskRates || { listing: 100, shipping: 100, photography: 50, inspection: 30 };
+      const staffList = document.getElementById('staffList');
+
+      if (Object.keys(currentStaffStats).length === 0) {
+        staffList.innerHTML = '<div class="text-center text-muted py-4">対象期間のデータがありません</div>';
+        return;
+      }
+
+      let html = '';
+      Object.entries(currentStaffStats).forEach(([staffName, stats]) => {
+        const totalTasks = stats.listing + stats.shipping + stats.photography + stats.inspection;
+        const totalAmount = (stats.listing * rates.listing) +
+                           (stats.shipping * rates.shipping) +
+                           (stats.photography * rates.photography) +
+                           (stats.inspection * rates.inspection);
+
+        html += `
+          <div class="staff-card">
+            <div class="staff-avatar">👤</div>
+            <div class="staff-info">
+              <div class="staff-name">${staffName}</div>
+              <div class="staff-role">
+                出品: ${stats.listing}件 / 発送: ${stats.shipping}件
+              </div>
+            </div>
+            <div class="staff-stats">
+              <div class="staff-amount">${formatCurrency(totalAmount)}</div>
+              <div class="staff-tasks">${totalTasks}件のタスク</div>
+            </div>
+          </div>
+        `;
+      });
+
+      staffList.innerHTML = html;
+    }
+
+    function renderDetail() {
+      const rates = compensationSettings.taskRates || { listing: 100, shipping: 100, photography: 50, inspection: 30 };
+      const taskNames = { listing: '商品出品', shipping: '梱包・発送', photography: '商品撮影', inspection: '検品作業' };
+
+      // 簡易的な明細を生成（商品データベースから直接生成する場合は別途実装が必要）
+      let html = '';
+      let recordCount = 0;
+
+      Object.entries(currentStaffStats).forEach(([staffName, stats]) => {
+        Object.entries(stats).forEach(([task, count]) => {
+          if (count > 0 && rates[task]) {
+            for (let i = 0; i < Math.min(count, 10); i++) { // 最大10件まで表示
+              html += `
+                <tr>
+                  <td>-</td>
+                  <td>${staffName}</td>
+                  <td>${taskNames[task]}</td>
+                  <td>-</td>
+                  <td class="text-end">${formatCurrency(rates[task])}</td>
+                  <td><span class="status-badge unpaid">未払い</span></td>
+                </tr>
+              `;
+              recordCount++;
+            }
+          }
+        });
+      });
+
+      if (!html) {
+        html = '<tr><td colspan="6" class="text-center text-muted py-4">データがありません</td></tr>';
+      }
+
+      document.getElementById('detailBody').innerHTML = html;
+    }
+
+    function renderPaymentHistory() {
+      const tbody = document.getElementById('paymentHistoryBody');
+
+      if (currentPayments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">支払履歴がありません</td></tr>';
+        return;
+      }
+
+      let html = '';
+      currentPayments.forEach(payment => {
+        html += `
+          <tr>
+            <td>${formatDate(payment.paymentDate)}</td>
+            <td>${payment.staffName || '-'}</td>
+            <td class="text-end fw-bold">${formatCurrency(payment.amount)}</td>
+            <td>${payment.taskCount || '-'}件</td>
+            <td>${payment.memo || '-'}</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    function populateStaffSelects() {
+      const staffNames = Object.keys(currentStaffStats);
+
+      // フィルター用
+      const filterStaff = document.getElementById('filterStaff');
+      filterStaff.innerHTML = '<option value="">全担当者</option>';
+      staffNames.forEach(name => {
+        filterStaff.innerHTML += `<option value="${name}">${name}</option>`;
+      });
+
+      // 支払用
+      const paymentStaff = document.getElementById('paymentStaff');
+      paymentStaff.innerHTML = '<option value="">選択してください</option>';
+      staffNames.forEach(name => {
+        paymentStaff.innerHTML += `<option value="${name}">${name}</option>`;
+      });
+
+      // 支払担当者選択時に金額を計算
+      paymentStaff.addEventListener('change', function() {
+        const rates = compensationSettings.taskRates || { listing: 100, shipping: 100, photography: 50, inspection: 30 };
+        const stats = currentStaffStats[this.value];
+        if (stats) {
+          const amount = (stats.listing * rates.listing) +
+                        (stats.shipping * rates.shipping) +
+                        (stats.photography * rates.photography) +
+                        (stats.inspection * rates.inspection);
+          document.getElementById('paymentAmount').value = amount;
+        } else {
+          document.getElementById('paymentAmount').value = 0;
+        }
+      });
+    }
+
+    function filterRecords() {
+      // 簡易フィルタリング（実装は明細データが増えてから拡張）
+      renderDetail();
+    }
+
+    function resetFilters() {
+      document.getElementById('filterStaff').value = '';
+      document.getElementById('filterTask').value = '';
+      document.getElementById('filterStatus').value = '';
+      filterRecords();
+    }
+
+    async function processPayment() {
+      const staffName = document.getElementById('paymentStaff').value;
+      const paymentDate = document.getElementById('paymentDate').value;
+      const amount = parseInt(document.getElementById('paymentAmount').value) || 0;
+
+      if (!staffName) {
+        alert('担当者を選択してください');
+        return;
+      }
+
+      if (amount <= 0) {
+        alert('支払金額がありません');
+        return;
+      }
+
+      if (!confirm(`${staffName}さんに${formatCurrency(amount)}を支払い済みとして記録しますか？`)) {
+        return;
+      }
+
+      showLoading();
+
+      try {
+        await window.CompensationApi.savePayment({
+          staffName: staffName,
+          paymentDate: paymentDate,
+          amount: amount,
+          taskCount: currentStaffStats[staffName] ?
+            Object.values(currentStaffStats[staffName]).reduce((a, b) => a + b, 0) : 0,
+          memo: ''
+        });
+
+        alert('支払処理が完了しました');
+        loadCompensationData();
+
+      } catch (error) {
+        console.error('支払処理エラー:', error);
+        alert('支払処理に失敗しました');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function openExportModal() {
+      // CSVエクスポート機能（将来実装）
+      alert('CSVエクスポート機能は準備中です');
+    }
+  </script>
+</body>
+</html>
