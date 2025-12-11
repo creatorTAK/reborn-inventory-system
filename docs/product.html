@@ -100,6 +100,14 @@
       </div>
     </div>
 
+    <!-- QRコード生成ボタン -->
+    <div id="qrCodeSection" style="margin-top: 12px; display: none;">
+      <button type="button" onclick="showQRCodeModal()" class="qr-code-btn" style="width: 100%; padding: 10px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <i class="bi bi-qr-code" style="font-size: 18px;"></i>
+        QRコード表示・印刷
+      </button>
+    </div>
+
     <!-- 担当者 -->
     <div style="margin-top: 12px;">
       <label>担当者</label>
@@ -1406,6 +1414,178 @@ style="display:none;">削除</button>
 
   // デフォルトセールスワード適用はproduct-scripts.jsに統合（重複削除）
 
+</script>
+
+<!-- QRコード生成ライブラリ -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
+<!-- QRコードモーダル -->
+<div id="qrCodeModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; align-items: center; justify-content: center;">
+  <div style="background: white; border-radius: 16px; padding: 24px; max-width: 360px; width: 90%; text-align: center;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <h5 style="margin: 0; font-weight: 600;">QRコード</h5>
+      <button onclick="closeQRCodeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280;">×</button>
+    </div>
+
+    <div id="qrCodeContainer" style="margin: 16px auto; padding: 16px; background: white; border: 2px solid #e5e7eb; border-radius: 12px;">
+      <canvas id="qrCodeCanvas"></canvas>
+    </div>
+
+    <div id="qrCodeInfo" style="margin-bottom: 16px; text-align: left; background: #f9fafb; border-radius: 8px; padding: 12px;">
+      <div style="font-size: 12px; color: #6b7280;">管理番号</div>
+      <div id="qrMgmtNumber" style="font-weight: 700; font-size: 18px; color: #1f2937;"></div>
+      <div id="qrProductName" style="font-size: 13px; color: #374151; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></div>
+    </div>
+
+    <div style="display: flex; gap: 8px;">
+      <button onclick="downloadQRCode()" style="flex: 1; padding: 12px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+        <i class="bi bi-download"></i> 保存
+      </button>
+      <button onclick="printQRCode()" style="flex: 1; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+        <i class="bi bi-printer"></i> 印刷
+      </button>
+    </div>
+
+    <div style="margin-top: 12px; font-size: 11px; color: #9ca3af;">
+      棚卸時にスマホでスキャンすると<br>商品情報を素早く呼び出せます
+    </div>
+  </div>
+</div>
+
+<script>
+  // QRコード表示セクションを管理番号が確定したら表示
+  function updateQRCodeSectionVisibility() {
+    const mgmtNumber = document.getElementById('管理番号')?.value;
+    const qrSection = document.getElementById('qrCodeSection');
+    if (qrSection) {
+      qrSection.style.display = mgmtNumber ? 'block' : 'none';
+    }
+  }
+
+  // 管理番号フィールドの変更を監視
+  const mgmtNumberInput = document.getElementById('管理番号');
+  if (mgmtNumberInput) {
+    // MutationObserverでvalue変更を検知
+    const observer = new MutationObserver(() => updateQRCodeSectionVisibility());
+    observer.observe(mgmtNumberInput, { attributes: true, attributeFilter: ['value'] });
+
+    // 入力イベントでも検知
+    mgmtNumberInput.addEventListener('input', updateQRCodeSectionVisibility);
+    mgmtNumberInput.addEventListener('change', updateQRCodeSectionVisibility);
+
+    // 初期チェック（遅延実行）
+    setTimeout(updateQRCodeSectionVisibility, 1000);
+  }
+
+  // QRコードモーダル表示
+  function showQRCodeModal() {
+    const mgmtNumber = document.getElementById('管理番号')?.value;
+    if (!mgmtNumber) {
+      alert('管理番号がありません');
+      return;
+    }
+
+    const productName = document.getElementById('商品名')?.value ||
+                       document.getElementById('productName')?.value ||
+                       '';
+    const brand = document.getElementById('ブランド')?.value || '';
+
+    // QRコードデータ
+    const qrData = JSON.stringify({
+      type: 'product',
+      managementNumber: mgmtNumber,
+      name: (brand + ' ' + productName).trim().slice(0, 50)
+    });
+
+    // QRコード生成
+    const canvas = document.getElementById('qrCodeCanvas');
+    QRCode.toCanvas(canvas, qrData, {
+      width: 200,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    }, function(error) {
+      if (error) {
+        console.error('QRコード生成エラー:', error);
+        alert('QRコードの生成に失敗しました');
+        return;
+      }
+    });
+
+    // 情報表示
+    document.getElementById('qrMgmtNumber').textContent = mgmtNumber;
+    document.getElementById('qrProductName').textContent = (brand + ' ' + productName).trim() || '-';
+
+    // モーダル表示
+    document.getElementById('qrCodeModal').style.display = 'flex';
+  }
+
+  function closeQRCodeModal() {
+    document.getElementById('qrCodeModal').style.display = 'none';
+  }
+
+  // QRコード画像ダウンロード
+  function downloadQRCode() {
+    const canvas = document.getElementById('qrCodeCanvas');
+    const mgmtNumber = document.getElementById('qrMgmtNumber').textContent;
+
+    const link = document.createElement('a');
+    link.download = `QR_${mgmtNumber}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+
+  // QRコード印刷
+  function printQRCode() {
+    const canvas = document.getElementById('qrCodeCanvas');
+    const mgmtNumber = document.getElementById('qrMgmtNumber').textContent;
+    const productName = document.getElementById('qrProductName').textContent;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>QRコード - ${mgmtNumber}</title>
+        <style>
+          @page { size: 62mm 29mm; margin: 0; }
+          body {
+            margin: 0;
+            padding: 4mm;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            display: flex;
+            align-items: center;
+            gap: 4mm;
+          }
+          .qr-code { width: 20mm; height: 20mm; }
+          .info { flex: 1; }
+          .mgmt-number { font-size: 14pt; font-weight: bold; }
+          .product-name { font-size: 8pt; color: #666; margin-top: 2mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30mm; }
+        </style>
+      </head>
+      <body>
+        <img src="${canvas.toDataURL('image/png')}" class="qr-code">
+        <div class="info">
+          <div class="mgmt-number">${mgmtNumber}</div>
+          <div class="product-name">${productName}</div>
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.onload = function() {
+      printWindow.print();
+      printWindow.close();
+    };
+  }
+
+  // モーダル外クリックで閉じる
+  document.getElementById('qrCodeModal')?.addEventListener('click', function(e) {
+    if (e.target === this) closeQRCodeModal();
+  });
 </script>
 
 </body>

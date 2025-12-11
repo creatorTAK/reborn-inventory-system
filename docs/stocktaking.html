@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>棚卸 - FURIRA</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=203">
+  <!-- html5-qrcode for QR scanning -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- QRCode.js for QR generation -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+    }
+    .content-container {
+      padding: 16px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    /* タブ */
+    .nav-tabs-custom {
+      background: white;
+      border-radius: 12px;
+      padding: 8px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .nav-tabs-custom .nav-link {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      color: #6b7280;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+    .nav-tabs-custom .nav-link.active {
+      background: #10b981;
+      color: white;
+    }
+
+    /* カード */
+    .card-section {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .card-section h6 {
+      color: #374151;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    /* サマリーグリッド */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .summary-card {
+      background: white;
+      padding: 12px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .summary-card.highlight {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+    }
+    .summary-card.highlight .summary-label { color: rgba(255,255,255,0.8); }
+    .summary-card.highlight .summary-value { color: white; }
+    .summary-card.warning { border: 2px solid #f59e0b; }
+    .summary-card.danger { border: 2px solid #ef4444; }
+    .summary-label {
+      font-size: 0.7rem;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .summary-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    /* 棚卸リスト */
+    .check-item {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .check-item:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .check-item.active {
+      border: 2px solid #10b981;
+    }
+    .check-status {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .check-status.draft { background: #e5e7eb; color: #374151; }
+    .check-status.in-progress { background: #fef3c7; color: #92400e; }
+    .check-status.completed { background: #d1fae5; color: #065f46; }
+    .check-status.adjusted { background: #dbeafe; color: #1e40af; }
+
+    /* プログレスバー */
+    .progress-bar-custom {
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+    .progress-bar-custom .fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #059669);
+      transition: width 0.3s;
+    }
+
+    /* QRスキャナー */
+    #qr-reader {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    #qr-reader video {
+      border-radius: 12px;
+    }
+    .scan-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .scan-overlay.active { display: flex; }
+    .scan-header {
+      color: white;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .scan-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    /* カウント入力 */
+    .count-input-card {
+      background: #f0fdf4;
+      border: 2px solid #10b981;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .count-input-card .product-info {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .count-input-card .product-image {
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #e5e7eb;
+    }
+    .count-input-card .product-details {
+      flex: 1;
+    }
+    .count-input-card .product-name {
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 4px;
+    }
+    .count-input-card .product-meta {
+      font-size: 0.8rem;
+      color: #6b7280;
+    }
+    .count-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .count-label {
+      font-size: 0.875rem;
+      color: #374151;
+      min-width: 80px;
+    }
+    .count-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+    .count-input {
+      width: 80px;
+      text-align: center;
+      font-size: 1.25rem;
+      font-weight: 700;
+      border: 2px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px;
+    }
+    .count-input:focus {
+      border-color: #10b981;
+      outline: none;
+    }
+    .diff-badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .diff-badge.match { background: #d1fae5; color: #065f46; }
+    .diff-badge.over { background: #dbeafe; color: #1e40af; }
+    .diff-badge.under { background: #fee2e2; color: #991b1b; }
+
+    /* 差異リスト */
+    .diff-item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .diff-item:last-child { border-bottom: none; }
+    .diff-item .item-info { flex: 1; }
+    .diff-item .item-name { font-weight: 600; font-size: 0.9rem; }
+    .diff-item .item-meta { font-size: 0.75rem; color: #6b7280; }
+    .diff-item .diff-values {
+      text-align: right;
+    }
+
+    /* テーブル */
+    .data-table {
+      width: 100%;
+      font-size: 0.8rem;
+    }
+    .data-table th {
+      background: #f9fafb;
+      padding: 10px 8px;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 2px solid #e5e7eb;
+      white-space: nowrap;
+    }
+    .data-table td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: middle;
+    }
+    .data-table tr:hover { background: #f9fafb; }
+
+    /* ローディング */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9998;
+    }
+
+    /* モーダル */
+    .modal-content { border-radius: 16px; }
+    .modal-header { border-bottom: none; padding-bottom: 0; }
+    .modal-footer { border-top: none; padding-top: 0; }
+
+    /* FAB */
+    .fab-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+    }
+    .fab-button {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      border: none;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+      font-size: 24px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .fab-button:active { transform: scale(0.95); }
+
+    /* レスポンシブ */
+    @media (max-width: 576px) {
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <!-- ローディング -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="text-center">
+      <div class="spinner-border text-success" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-2 text-muted">データを読み込んでいます...</p>
+    </div>
+  </div>
+
+  <!-- QRスキャンオーバーレイ -->
+  <div class="scan-overlay" id="scanOverlay">
+    <button class="scan-close" onclick="stopScanner()">×</button>
+    <div class="scan-header">
+      <h5>QRコードをスキャン</h5>
+      <p class="small text-muted mb-0">商品のQRコードをカメラに向けてください</p>
+    </div>
+    <div id="qr-reader"></div>
+    <button class="btn btn-outline-light mt-3" onclick="stopScanner()">キャンセル</button>
+  </div>
+
+  <!-- 統一ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <button class="back-button" onclick="goBack()">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <div class="header-title">
+        <span style="font-size: 20px;">📋</span>
+        棚卸
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-sm btn-outline-primary" onclick="openNewCheckModal()" title="新規棚卸">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content-container">
+    <!-- タブ -->
+    <ul class="nav nav-tabs-custom" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#list-tab" type="button">
+          📋 一覧
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#count-tab" type="button" id="count-tab-btn">
+          📝 カウント
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#diff-tab" type="button">
+          📊 差異分析
+        </button>
+      </li>
+    </ul>
+
+    <!-- タブコンテンツ -->
+    <div class="tab-content">
+      <!-- 一覧タブ -->
+      <div class="tab-pane fade show active" id="list-tab" role="tabpanel">
+        <!-- 進行中の棚卸 -->
+        <div class="card-section">
+          <h6><i class="bi bi-clock-history"></i> 進行中</h6>
+          <div id="inProgressList">
+            <div class="text-center text-muted py-3">進行中の棚卸はありません</div>
+          </div>
+        </div>
+
+        <!-- 完了済み -->
+        <div class="card-section">
+          <h6><i class="bi bi-check-circle"></i> 完了済み</h6>
+          <div id="completedList">
+            <div class="text-center text-muted py-3">完了した棚卸はありません</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- カウントタブ -->
+      <div class="tab-pane fade" id="count-tab" role="tabpanel">
+        <!-- 現在の棚卸情報 -->
+        <div id="noActiveCheck" class="card-section text-center py-4">
+          <i class="bi bi-clipboard-x text-muted" style="font-size: 48px;"></i>
+          <p class="text-muted mt-2 mb-3">アクティブな棚卸がありません</p>
+          <button class="btn btn-success" onclick="openNewCheckModal()">
+            <i class="bi bi-plus-lg"></i> 新規棚卸を開始
+          </button>
+        </div>
+
+        <div id="activeCheckPanel" style="display: none;">
+          <!-- 進捗サマリー -->
+          <div class="summary-grid">
+            <div class="summary-card highlight">
+              <div class="summary-label">進捗</div>
+              <div class="summary-value" id="count-progress">0%</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">完了</div>
+              <div class="summary-value" id="count-done">0</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">残り</div>
+              <div class="summary-value" id="count-remaining">0</div>
+            </div>
+            <div class="summary-card warning">
+              <div class="summary-label">差異</div>
+              <div class="summary-value" id="count-diff">0</div>
+            </div>
+          </div>
+
+          <!-- スキャン/検索 -->
+          <div class="card-section">
+            <div class="row g-2">
+              <div class="col">
+                <button class="btn btn-success w-100" onclick="startScanner()">
+                  <i class="bi bi-qr-code-scan"></i> QRスキャン
+                </button>
+              </div>
+              <div class="col">
+                <div class="input-group">
+                  <input type="text" class="form-control" id="searchInput" placeholder="管理番号で検索">
+                  <button class="btn btn-outline-secondary" onclick="searchProduct()">
+                    <i class="bi bi-search"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- カウント入力エリア -->
+          <div id="countInputArea">
+            <!-- 商品選択後に表示 -->
+          </div>
+
+          <!-- 未カウントリスト -->
+          <div class="card-section">
+            <h6><i class="bi bi-list-ul"></i> 未カウント商品</h6>
+            <div id="uncountedList" style="max-height: 300px; overflow-y: auto;">
+              <div class="text-center text-muted py-3">データを読み込んでいます...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 差異分析タブ -->
+      <div class="tab-pane fade" id="diff-tab" role="tabpanel">
+        <div id="noDiffData" class="card-section text-center py-4">
+          <i class="bi bi-bar-chart text-muted" style="font-size: 48px;"></i>
+          <p class="text-muted mt-2">棚卸を完了すると差異分析が表示されます</p>
+        </div>
+
+        <div id="diffPanel" style="display: none;">
+          <!-- 差異サマリー -->
+          <div class="summary-grid">
+            <div class="summary-card">
+              <div class="summary-label">総アイテム</div>
+              <div class="summary-value" id="diff-total">0</div>
+            </div>
+            <div class="summary-card highlight">
+              <div class="summary-label">一致</div>
+              <div class="summary-value" id="diff-match">0</div>
+            </div>
+            <div class="summary-card warning">
+              <div class="summary-label">過剰</div>
+              <div class="summary-value" id="diff-over">0</div>
+            </div>
+            <div class="summary-card danger">
+              <div class="summary-label">不足</div>
+              <div class="summary-value" id="diff-under">0</div>
+            </div>
+          </div>
+
+          <!-- 差異金額 -->
+          <div class="card-section">
+            <h6><i class="bi bi-currency-yen"></i> 差異金額</h6>
+            <div class="row text-center">
+              <div class="col-6">
+                <div class="text-muted small">過剰（棚卸増）</div>
+                <div class="text-primary fw-bold fs-5" id="diff-over-amount">¥0</div>
+              </div>
+              <div class="col-6">
+                <div class="text-muted small">不足（棚卸減）</div>
+                <div class="text-danger fw-bold fs-5" id="diff-under-amount">¥0</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 差異詳細 -->
+          <div class="card-section">
+            <h6><i class="bi bi-exclamation-triangle"></i> 差異詳細</h6>
+            <div id="diffDetailList" style="max-height: 400px; overflow-y: auto;">
+              <div class="text-center text-muted py-3">差異データがありません</div>
+            </div>
+          </div>
+
+          <!-- アクション -->
+          <div class="card-section">
+            <div class="row g-2">
+              <div class="col-6">
+                <button class="btn btn-outline-success w-100" onclick="exportDiffReport()">
+                  <i class="bi bi-download"></i> レポート出力
+                </button>
+              </div>
+              <div class="col-6">
+                <button class="btn btn-success w-100" onclick="applyAdjustment()">
+                  <i class="bi bi-check-lg"></i> 在庫調整を適用
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAB（カウント中のみ） -->
+  <div class="fab-container" id="fabContainer" style="display: none;">
+    <button class="fab-button" onclick="startScanner()">
+      <i class="bi bi-qr-code-scan"></i>
+    </button>
+  </div>
+
+  <!-- 新規棚卸モーダル -->
+  <div class="modal fade" id="newCheckModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-plus-circle"></i> 新規棚卸</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-bold">棚卸名称</label>
+            <input type="text" class="form-control" id="checkName" placeholder="例: 2025年12月棚卸">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">実施日</label>
+            <input type="date" class="form-control" id="checkDate">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">対象</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="targetProducts" checked>
+              <label class="form-check-label" for="targetProducts">商品在庫</label>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">カウント方式</label>
+            <select class="form-select" id="countMethod">
+              <option value="all">全数棚卸（全商品をカウント）</option>
+              <option value="category">カテゴリ別（特定カテゴリのみ）</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-success" onclick="createNewCheck()">
+            <i class="bi bi-play-fill"></i> 開始
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, addDoc, deleteDoc, query, where, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+      authDomain: "furira.jp",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "345706548795",
+      appId: "1:345706548795:web:058a553da6b4b74db5161e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // API公開
+    window.StocktakingApi = {
+      db,
+      // 商品一覧取得
+      async getProducts() {
+        const snapshot = await getDocs(collection(db, 'products'));
+        const products = [];
+        snapshot.forEach(doc => products.push({ id: doc.id, ...doc.data() }));
+        return products;
+      },
+      // 棚卸一覧取得
+      async getChecks() {
+        const snapshot = await getDocs(collection(db, 'inventoryChecks'));
+        const checks = [];
+        snapshot.forEach(doc => checks.push({ id: doc.id, ...doc.data() }));
+        return checks.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      },
+      // 棚卸作成
+      async createCheck(data) {
+        const docRef = await addDoc(collection(db, 'inventoryChecks'), {
+          ...data,
+          status: 'in_progress',
+          progress: 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        return docRef.id;
+      },
+      // 棚卸更新
+      async updateCheck(checkId, data) {
+        await updateDoc(doc(db, 'inventoryChecks', checkId), {
+          ...data,
+          updatedAt: serverTimestamp()
+        });
+      },
+      // カウント結果取得
+      async getCheckItems(checkId) {
+        const snapshot = await getDocs(collection(db, 'inventoryChecks', checkId, 'items'));
+        const items = [];
+        snapshot.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+        return items;
+      },
+      // カウント結果保存
+      async saveCountItem(checkId, productId, data) {
+        await setDoc(doc(db, 'inventoryChecks', checkId, 'items', productId), {
+          ...data,
+          countedAt: serverTimestamp()
+        });
+      },
+      // 商品の在庫数更新
+      async updateProductQuantity(productId, quantity) {
+        await updateDoc(doc(db, 'products', productId), {
+          quantity: quantity,
+          updatedAt: serverTimestamp()
+        });
+      }
+    };
+
+    console.log('✅ [棚卸] Firebase初期化完了');
+
+    window.addEventListener('load', () => {
+      initializePage();
+    });
+  </script>
+
+  <script>
+    let allProducts = [];
+    let allChecks = [];
+    let activeCheck = null;
+    let checkItems = {};
+    let currentProduct = null;
+    let html5QrCode = null;
+
+    function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
+    function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
+
+    function formatCurrency(amount) {
+      if (amount === null || amount === undefined || isNaN(amount)) return '¥0';
+      return '¥' + Math.round(amount).toLocaleString();
+    }
+
+    function formatDate(timestamp) {
+      if (!timestamp) return '-';
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleDateString('ja-JP');
+    }
+
+    async function initializePage() {
+      showLoading();
+      try {
+        // デフォルト日付
+        document.getElementById('checkDate').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('checkName').value = `${new Date().getFullYear()}年${new Date().getMonth() + 1}月棚卸`;
+
+        await loadData();
+      } catch (error) {
+        console.error('初期化エラー:', error);
+        alert('データの読み込みに失敗しました');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    async function loadData() {
+      allProducts = await StocktakingApi.getProducts();
+      allChecks = await StocktakingApi.getChecks();
+
+      // 進行中の棚卸があれば設定
+      activeCheck = allChecks.find(c => c.status === 'in_progress');
+      if (activeCheck) {
+        const items = await StocktakingApi.getCheckItems(activeCheck.id);
+        checkItems = {};
+        items.forEach(item => checkItems[item.id] = item);
+      }
+
+      renderCheckList();
+      updateCountTab();
+      updateDiffTab();
+    }
+
+    function renderCheckList() {
+      // 進行中
+      const inProgress = allChecks.filter(c => c.status === 'in_progress');
+      const inProgressHtml = inProgress.length > 0 ? inProgress.map(c => `
+        <div class="check-item ${activeCheck?.id === c.id ? 'active' : ''}" onclick="selectCheck('${c.id}')">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-bold">${c.name || '棚卸'}</div>
+              <div class="small text-muted">実施日: ${c.checkDate || '-'}</div>
+            </div>
+            <span class="check-status in-progress">進行中</span>
+          </div>
+          <div class="progress-bar-custom">
+            <div class="fill" style="width: ${c.progress || 0}%"></div>
+          </div>
+          <div class="small text-muted">${c.progress || 0}% 完了</div>
+        </div>
+      `).join('') : '<div class="text-center text-muted py-3">進行中の棚卸はありません</div>';
+      document.getElementById('inProgressList').innerHTML = inProgressHtml;
+
+      // 完了済み
+      const completed = allChecks.filter(c => c.status === 'completed' || c.status === 'adjusted');
+      const completedHtml = completed.length > 0 ? completed.map(c => `
+        <div class="check-item" onclick="viewCheckReport('${c.id}')">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-bold">${c.name || '棚卸'}</div>
+              <div class="small text-muted">完了日: ${formatDate(c.completedAt)}</div>
+            </div>
+            <span class="check-status ${c.status}">${c.status === 'adjusted' ? '調整済' : '完了'}</span>
+          </div>
+          <div class="small text-muted mt-1">差異: ${c.diffCount || 0}件</div>
+        </div>
+      `).join('') : '<div class="text-center text-muted py-3">完了した棚卸はありません</div>';
+      document.getElementById('completedList').innerHTML = completedHtml;
+    }
+
+    async function selectCheck(checkId) {
+      activeCheck = allChecks.find(c => c.id === checkId);
+      if (activeCheck) {
+        const items = await StocktakingApi.getCheckItems(checkId);
+        checkItems = {};
+        items.forEach(item => checkItems[item.id] = item);
+
+        updateCountTab();
+        // カウントタブに切り替え
+        const tab = document.querySelector('[data-bs-target="#count-tab"]');
+        bootstrap.Tab.getOrCreateInstance(tab).show();
+      }
+    }
+
+    function updateCountTab() {
+      if (!activeCheck) {
+        document.getElementById('noActiveCheck').style.display = 'block';
+        document.getElementById('activeCheckPanel').style.display = 'none';
+        document.getElementById('fabContainer').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('noActiveCheck').style.display = 'none';
+      document.getElementById('activeCheckPanel').style.display = 'block';
+      document.getElementById('fabContainer').style.display = 'block';
+
+      // 進捗計算
+      const total = allProducts.filter(p => p.status !== '販売済').length;
+      const counted = Object.keys(checkItems).length;
+      const remaining = total - counted;
+      const progress = total > 0 ? Math.round((counted / total) * 100) : 0;
+      const diffCount = Object.values(checkItems).filter(item => item.diff !== 0).length;
+
+      document.getElementById('count-progress').textContent = progress + '%';
+      document.getElementById('count-done').textContent = counted;
+      document.getElementById('count-remaining').textContent = remaining;
+      document.getElementById('count-diff').textContent = diffCount;
+
+      // 未カウントリスト
+      const uncounted = allProducts.filter(p => p.status !== '販売済' && !checkItems[p.id]);
+      const uncountedHtml = uncounted.length > 0 ? uncounted.slice(0, 50).map(p => `
+        <div class="diff-item" onclick="selectProduct('${p.id}')">
+          <div class="item-info">
+            <div class="item-name">${p.managementNumber || '-'}</div>
+            <div class="item-meta">${p.productName || '-'}</div>
+          </div>
+          <div class="text-muted small">帳簿: ${p.quantity || 1}点</div>
+        </div>
+      `).join('') : '<div class="text-center text-muted py-3">すべてカウント済みです</div>';
+      document.getElementById('uncountedList').innerHTML = uncountedHtml;
+
+      // 棚卸の進捗を更新
+      if (activeCheck.progress !== progress) {
+        StocktakingApi.updateCheck(activeCheck.id, { progress });
+      }
+    }
+
+    function selectProduct(productId) {
+      currentProduct = allProducts.find(p => p.id === productId);
+      if (!currentProduct) return;
+
+      const existingCount = checkItems[productId];
+      const bookQty = currentProduct.quantity || 1;
+      const actualQty = existingCount?.actualQuantity ?? '';
+
+      document.getElementById('countInputArea').innerHTML = `
+        <div class="count-input-card">
+          <div class="product-info">
+            <img src="${currentProduct.images?.[0] || '/images/no-image.png'}" class="product-image" onerror="this.src='/images/no-image.png'">
+            <div class="product-details">
+              <div class="product-name">${currentProduct.productName || '-'}</div>
+              <div class="product-meta">
+                管理番号: ${currentProduct.managementNumber || '-'}<br>
+                ${currentProduct.brand || ''} ${currentProduct.category || ''}
+              </div>
+            </div>
+          </div>
+          <div class="count-row">
+            <span class="count-label">帳簿在庫:</span>
+            <span class="count-value">${bookQty}点</span>
+          </div>
+          <div class="count-row">
+            <span class="count-label">実在庫:</span>
+            <input type="number" class="count-input" id="actualQtyInput" value="${actualQty}" min="0" placeholder="0" autofocus>
+            <span class="count-label">点</span>
+            <span class="diff-badge" id="diffBadge" style="display: none;"></span>
+          </div>
+          <div class="mt-3">
+            <input type="text" class="form-control form-control-sm" id="countNote" placeholder="備考（任意）" value="${existingCount?.note || ''}">
+          </div>
+          <div class="mt-3 d-flex gap-2">
+            <button class="btn btn-outline-secondary flex-fill" onclick="clearCountInput()">
+              キャンセル
+            </button>
+            <button class="btn btn-success flex-fill" onclick="saveCount('${productId}')">
+              <i class="bi bi-check-lg"></i> 保存
+            </button>
+          </div>
+        </div>
+      `;
+
+      // 差異表示更新
+      document.getElementById('actualQtyInput').addEventListener('input', function() {
+        updateDiffBadge(bookQty, this.value);
+      });
+      if (actualQty !== '') {
+        updateDiffBadge(bookQty, actualQty);
+      }
+
+      // フォーカス
+      setTimeout(() => document.getElementById('actualQtyInput').focus(), 100);
+    }
+
+    function updateDiffBadge(bookQty, actualQty) {
+      const badge = document.getElementById('diffBadge');
+      const actual = parseInt(actualQty) || 0;
+      const diff = actual - bookQty;
+
+      if (actualQty === '' || actualQty === null) {
+        badge.style.display = 'none';
+        return;
+      }
+
+      badge.style.display = 'inline-block';
+      if (diff === 0) {
+        badge.className = 'diff-badge match';
+        badge.textContent = '一致';
+      } else if (diff > 0) {
+        badge.className = 'diff-badge over';
+        badge.textContent = `+${diff}`;
+      } else {
+        badge.className = 'diff-badge under';
+        badge.textContent = `${diff}`;
+      }
+    }
+
+    function clearCountInput() {
+      document.getElementById('countInputArea').innerHTML = '';
+      currentProduct = null;
+    }
+
+    async function saveCount(productId) {
+      const actualQty = parseInt(document.getElementById('actualQtyInput').value);
+      const note = document.getElementById('countNote').value;
+
+      if (isNaN(actualQty) || actualQty < 0) {
+        alert('実在庫数を入力してください');
+        return;
+      }
+
+      const product = allProducts.find(p => p.id === productId);
+      const bookQty = product?.quantity || 1;
+      const diff = actualQty - bookQty;
+
+      showLoading();
+      try {
+        await StocktakingApi.saveCountItem(activeCheck.id, productId, {
+          productId,
+          managementNumber: product?.managementNumber || '',
+          productName: product?.productName || '',
+          bookQuantity: bookQty,
+          actualQuantity: actualQty,
+          diff,
+          note,
+          purchaseAmount: product?.purchase?.amount || product?.purchaseAmount || 0
+        });
+
+        // ローカル更新
+        checkItems[productId] = {
+          id: productId,
+          bookQuantity: bookQty,
+          actualQuantity: actualQty,
+          diff,
+          note
+        };
+
+        clearCountInput();
+        updateCountTab();
+        updateDiffTab();
+
+        // 全完了チェック
+        const total = allProducts.filter(p => p.status !== '販売済').length;
+        if (Object.keys(checkItems).length >= total) {
+          if (confirm('すべての商品のカウントが完了しました。差異分析タブを開きますか？')) {
+            const tab = document.querySelector('[data-bs-target="#diff-tab"]');
+            bootstrap.Tab.getOrCreateInstance(tab).show();
+          }
+        }
+      } catch (error) {
+        console.error('保存エラー:', error);
+        alert('保存に失敗しました');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function updateDiffTab() {
+      const items = Object.values(checkItems);
+      if (items.length === 0) {
+        document.getElementById('noDiffData').style.display = 'block';
+        document.getElementById('diffPanel').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('noDiffData').style.display = 'none';
+      document.getElementById('diffPanel').style.display = 'block';
+
+      const total = items.length;
+      const match = items.filter(i => i.diff === 0).length;
+      const over = items.filter(i => i.diff > 0).length;
+      const under = items.filter(i => i.diff < 0).length;
+
+      document.getElementById('diff-total').textContent = total;
+      document.getElementById('diff-match').textContent = match;
+      document.getElementById('diff-over').textContent = over;
+      document.getElementById('diff-under').textContent = under;
+
+      // 差異金額計算
+      let overAmount = 0, underAmount = 0;
+      items.forEach(item => {
+        const amount = (item.purchaseAmount || 0) * Math.abs(item.diff);
+        if (item.diff > 0) overAmount += amount;
+        else if (item.diff < 0) underAmount += amount;
+      });
+
+      document.getElementById('diff-over-amount').textContent = formatCurrency(overAmount);
+      document.getElementById('diff-under-amount').textContent = formatCurrency(underAmount);
+
+      // 差異詳細（差異ありのみ）
+      const diffItems = items.filter(i => i.diff !== 0).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+      const diffHtml = diffItems.length > 0 ? diffItems.map(item => `
+        <div class="diff-item">
+          <div class="item-info">
+            <div class="item-name">${item.managementNumber || '-'}</div>
+            <div class="item-meta">${item.productName || '-'}</div>
+          </div>
+          <div class="diff-values">
+            <div>帳簿: ${item.bookQuantity} → 実: ${item.actualQuantity}</div>
+            <span class="diff-badge ${item.diff > 0 ? 'over' : 'under'}">${item.diff > 0 ? '+' : ''}${item.diff}</span>
+          </div>
+        </div>
+      `).join('') : '<div class="text-center text-muted py-3">差異なし（すべて一致）</div>';
+      document.getElementById('diffDetailList').innerHTML = diffHtml;
+    }
+
+    // QRスキャナー
+    function startScanner() {
+      document.getElementById('scanOverlay').classList.add('active');
+
+      html5QrCode = new Html5Qrcode("qr-reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        onScanSuccess,
+        onScanFailure
+      ).catch(err => {
+        console.error('スキャナー起動エラー:', err);
+        alert('カメラの起動に失敗しました。カメラへのアクセスを許可してください。');
+        stopScanner();
+      });
+    }
+
+    function stopScanner() {
+      document.getElementById('scanOverlay').classList.remove('active');
+      if (html5QrCode) {
+        html5QrCode.stop().catch(err => console.log('スキャナー停止:', err));
+        html5QrCode = null;
+      }
+    }
+
+    function onScanSuccess(decodedText) {
+      console.log('QRスキャン成功:', decodedText);
+      stopScanner();
+
+      // QRコードから管理番号を抽出
+      let managementNumber = decodedText;
+      try {
+        const qrData = JSON.parse(decodedText);
+        if (qrData.managementNumber) {
+          managementNumber = qrData.managementNumber;
+        }
+      } catch (e) {
+        // JSON以外はそのまま使用
+      }
+
+      // 商品検索
+      const product = allProducts.find(p =>
+        p.managementNumber === managementNumber || p.id === managementNumber
+      );
+
+      if (product) {
+        selectProduct(product.id);
+      } else {
+        alert('商品が見つかりません: ' + managementNumber);
+      }
+    }
+
+    function onScanFailure(error) {
+      // スキャン失敗は無視（継続スキャン）
+    }
+
+    function searchProduct() {
+      const query = document.getElementById('searchInput').value.trim();
+      if (!query) return;
+
+      const product = allProducts.find(p =>
+        p.managementNumber?.toLowerCase().includes(query.toLowerCase()) ||
+        p.productName?.toLowerCase().includes(query.toLowerCase())
+      );
+
+      if (product) {
+        selectProduct(product.id);
+        document.getElementById('searchInput').value = '';
+      } else {
+        alert('商品が見つかりません');
+      }
+    }
+
+    // 新規棚卸作成
+    function openNewCheckModal() {
+      new bootstrap.Modal(document.getElementById('newCheckModal')).show();
+    }
+
+    async function createNewCheck() {
+      const name = document.getElementById('checkName').value.trim();
+      const checkDate = document.getElementById('checkDate').value;
+
+      if (!name) {
+        alert('棚卸名称を入力してください');
+        return;
+      }
+
+      showLoading();
+      try {
+        const checkId = await StocktakingApi.createCheck({
+          name,
+          checkDate,
+          method: document.getElementById('countMethod').value,
+          targetProducts: document.getElementById('targetProducts').checked
+        });
+
+        bootstrap.Modal.getInstance(document.getElementById('newCheckModal')).hide();
+
+        // リロード
+        await loadData();
+        await selectCheck(checkId);
+
+        alert('✅ 棚卸を開始しました');
+      } catch (error) {
+        console.error('作成エラー:', error);
+        alert('棚卸の作成に失敗しました');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    // 在庫調整適用
+    async function applyAdjustment() {
+      if (!activeCheck) return;
+
+      const diffItems = Object.values(checkItems).filter(i => i.diff !== 0);
+      if (diffItems.length === 0) {
+        alert('調整が必要な差異はありません');
+        return;
+      }
+
+      if (!confirm(`${diffItems.length}件の在庫を調整します。よろしいですか？\n\nこの操作は元に戻せません。`)) {
+        return;
+      }
+
+      showLoading();
+      try {
+        // 各商品の在庫数を更新
+        for (const item of diffItems) {
+          await StocktakingApi.updateProductQuantity(item.productId || item.id, item.actualQuantity);
+        }
+
+        // 棚卸ステータスを完了に
+        await StocktakingApi.updateCheck(activeCheck.id, {
+          status: 'adjusted',
+          completedAt: new Date(),
+          diffCount: diffItems.length
+        });
+
+        alert('✅ 在庫調整が完了しました');
+
+        // リロード
+        await loadData();
+      } catch (error) {
+        console.error('調整エラー:', error);
+        alert('在庫調整に失敗しました');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    // レポート出力
+    function exportDiffReport() {
+      const items = Object.values(checkItems);
+      const bom = '\uFEFF';
+      let csv = `棚卸レポート - ${activeCheck?.name || '棚卸'}\n`;
+      csv += `実施日: ${activeCheck?.checkDate || '-'}\n\n`;
+      csv += '管理番号,商品名,帳簿在庫,実在庫,差異,備考\n';
+
+      items.forEach(item => {
+        csv += [
+          item.managementNumber || '',
+          `"${(item.productName || '').replace(/"/g, '""')}"`,
+          item.bookQuantity,
+          item.actualQuantity,
+          item.diff,
+          `"${(item.note || '').replace(/"/g, '""')}"`
+        ].join(',') + '\n';
+      });
+
+      const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `棚卸レポート_${activeCheck?.checkDate || 'report'}.csv`;
+      link.click();
+    }
+
+    function viewCheckReport(checkId) {
+      // TODO: 完了した棚卸のレポート表示
+      alert('レポート表示機能は準備中です');
+    }
+
+    function goBack() {
+      const isInIframe = window.self !== window.top;
+      if (isInIframe) {
+        window.top.postMessage({ type: 'navigateToHome' }, '*');
+      } else {
+        window.location.href = '/menu_home.html';
+      }
+    }
+
+    // Enter キーで検索
+    document.getElementById('searchInput')?.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') searchProduct();
+    });
+  </script>
+</body>
+</html>
