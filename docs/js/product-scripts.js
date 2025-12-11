@@ -2540,7 +2540,7 @@ window.continueProductRegistration = function() {
     if (!sel) return;
     if (Array.isArray(values) && values.length) {
       const prev = sel.value;
-      sel.innerHTML = '<option value="">--</option>';
+      sel.innerHTML = '<option value="">--選択してください--</option>';
       values.forEach(v=> sel.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`));
       sel.disabled = false;
       if (prev && values.includes(prev)) sel.value = prev;
@@ -2550,7 +2550,7 @@ window.continueProductRegistration = function() {
   function resetSelect(id, disable=true) {
     const sel = document.getElementById(id);
     if (!sel) return;
-    sel.innerHTML = '<option value="">--</option>';
+    sel.innerHTML = '<option value="">--選択してください--</option>';
     sel.value = '';
     if (disable) sel.disabled = true;
   }
