@@ -8006,23 +8006,46 @@ ${prompt || '（未設定）'}
     // マイページ表示設定関連の関数
     // ============================================
 
+    // マイページユーザー一覧読み込みのリトライカウンター
+    let mypageUserListRetryCount = 0;
+    const MYPAGE_USER_LIST_MAX_RETRIES = 5;
+
     /**
      * マイページ対象ユーザー一覧を読み込み
      */
     async function loadMypageUserList() {
       const container = document.getElementById('mypageUserList');
-      if (!container) return;
+      if (!container) {
+        console.log('[MYPAGE] コンテナが見つかりません');
+        return;
+      }
+
+      console.log('[MYPAGE] ユーザー一覧読み込み開始, db:', !!window.db, 'firestoreReady:', window.firestoreReady);
 
       try {
         // Firestoreの準備を待つ
-        if (!window.db || !window.firestoreReady) {
-          console.log('Firestore未初期化、1秒後に再試行');
-          setTimeout(() => loadMypageUserList(), 1000);
-          return;
+        if (!window.db) {
+          mypageUserListRetryCount++;
+          if (mypageUserListRetryCount <= MYPAGE_USER_LIST_MAX_RETRIES) {
+            console.log('[MYPAGE] Firestore未初期化、1秒後に再試行 (' + mypageUserListRetryCount + '/' + MYPAGE_USER_LIST_MAX_RETRIES + ')');
+            container.innerHTML = '<div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">Firestoreを初期化中...</div>';
+            setTimeout(() => loadMypageUserList(), 1000);
+            return;
+          } else {
+            console.error('[MYPAGE] Firestore初期化タイムアウト');
+            container.innerHTML = '<div style="font-size: 12px; color: #ef4444; padding: 12px; text-align: center;">Firestoreの初期化に失敗しました</div>';
+            return;
+          }
         }
+
+        // リトライカウンターをリセット
+        mypageUserListRetryCount = 0;
+
+        console.log('[MYPAGE] Firestoreからユーザー一覧を取得中...');
 
         // ユーザー一覧を取得（Firestore v8 compat SDK）
         const snapshot = await window.db.collection('users').get();
+        console.log('[MYPAGE] 取得完了, ドキュメント数:', snapshot.size);
 
         const users = [];
         snapshot.forEach(docSnap => {
@@ -8046,6 +8069,7 @@ ${prompt || '（未設定）'}
 
         // ユーザーリストを描画
         const allowedUsers = window.mypageAllowedUsers || [];
+        console.log('[MYPAGE] allowedUsers:', allowedUsers);
 
         container.innerHTML = users.map(user => {
           const isChecked = allowedUsers.length === 0 || allowedUsers.includes(user.email);
@@ -8063,10 +8087,10 @@ ${prompt || '（未設定）'}
           `;
         }).join('');
 
-        console.log('マイページ対象ユーザー一覧を読み込み:', users.length, '人');
+        console.log('[MYPAGE] ✅ ユーザー一覧描画完了:', users.length, '人');
       } catch (error) {
-        console.error('ユーザー一覧の読み込みエラー:', error);
-        container.innerHTML = '<div style="font-size: 12px; color: #ef4444; padding: 12px; text-align: center;">ユーザー一覧の読み込みに失敗しました</div>';
+        console.error('[MYPAGE] ❌ ユーザー一覧の読み込みエラー:', error);
+        container.innerHTML = '<div style="font-size: 12px; color: #ef4444; padding: 12px; text-align: center;">ユーザー一覧の読み込みに失敗しました<br><small>' + escapeHtml(error.message) + '</small></div>';
       }
     }
 
