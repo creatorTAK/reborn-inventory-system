@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- Cache Bust: 2025-12-02 v3.1 - 通知セクション動的生成版 -->
+  <!-- Cache Bust: 2025-12-11 v3.2 - 棚卸ナビゲーション修正 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -75,6 +75,34 @@
     window.REBORN_CONFIG = {
       GAS_BASE_URL: "/gas-proxy"
     };
+
+    // v207: 古いService Workerキャッシュを強制クリア
+    (function() {
+      const REQUIRED_VERSION = 'v207';
+      const lastVersion = localStorage.getItem('sw_version');
+      if (lastVersion !== REQUIRED_VERSION) {
+        console.log('[Cache] バージョン更新検知:', lastVersion, '->', REQUIRED_VERSION);
+        localStorage.setItem('sw_version', REQUIRED_VERSION);
+        // 全キャッシュをクリア
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            names.forEach(function(name) {
+              console.log('[Cache] キャッシュ削除:', name);
+              caches.delete(name);
+            });
+          });
+        }
+        // Service Workerを更新
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(reg) {
+              reg.update();
+              console.log('[SW] Service Worker更新リクエスト');
+            });
+          });
+        }
+      }
+    })();
   </script>
 
   <!-- REBORN Brand Colors -->
