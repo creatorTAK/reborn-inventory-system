@@ -732,7 +732,7 @@ window.continueProductRegistration = function() {
     const fillSel = (id, arr) => {
       const sel = document.getElementById(id);
       if (!sel) return;
-      sel.innerHTML = '<option value="">--</option>';
+      sel.innerHTML = '<option value="">--選択してください--</option>';
       (arr || []).forEach(v => sel.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`));
     };
 
@@ -1029,7 +1029,7 @@ window.continueProductRegistration = function() {
 
     // 箇所のドロップダウンを設定
     if (locationSelect) {
-      locationSelect.innerHTML = '<option value="">--</option>';
+      locationSelect.innerHTML = '<option value="">--選択してください--</option>';
       MATERIAL_LOCATIONS.forEach(loc => {
         locationSelect.insertAdjacentHTML('beforeend', `<option value="${loc}">${loc}</option>`);
       });
@@ -1045,14 +1045,14 @@ window.continueProductRegistration = function() {
         const percentSelect = document.getElementById(`素材${index}_％${rowIndex}`);
 
         if (typeSelect) {
-          typeSelect.innerHTML = '<option value="">--</option>';
+          typeSelect.innerHTML = '<option value="">--選択してください--</option>';
           MATERIAL_TYPES.forEach(type => {
             typeSelect.insertAdjacentHTML('beforeend', `<option value="${type}">${type}</option>`);
           });
         }
 
         if (percentSelect) {
-          percentSelect.innerHTML = '<option value="">--%</option>';
+          percentSelect.innerHTML = '<option value="">--選択してください--</option>';
           for (let p = 1; p <= 100; p++) {
             percentSelect.insertAdjacentHTML('beforeend', `<option value="${p}%">${p}%</option>`);
           }
@@ -1303,7 +1303,7 @@ window.continueProductRegistration = function() {
     const colorSelect = document.getElementById(`カラー${index}`);
 
     if (colorSelect) {
-      colorSelect.innerHTML = '<option value="">--</option>';
+      colorSelect.innerHTML = '<option value="">--選択してください--</option>';
       COLOR_OPTIONS.forEach(color => {
         colorSelect.insertAdjacentHTML('beforeend', `<option value="${color}">${color}</option>`);
       });
@@ -3528,7 +3528,7 @@ window.continueProductRegistration = function() {
       return;
     }
     console.log('✅ prefix1 要素を発見:', p1);
-    p1.innerHTML = '<option value="">--</option>';
+    p1.innerHTML = '<option value="">--選択してください--</option>';
     console.log('📝 デフォルトオプション設定完了');
 
     let optionsAdded = 0;
@@ -3554,7 +3554,7 @@ window.continueProductRegistration = function() {
     }
 
     const v1 = p1.value;
-    shelf.innerHTML = '<option value="">--</option>';
+    shelf.innerHTML = '<option value="">--選択してください--</option>';
 
     if (!v1) {
       console.log('⚠️ prefix1 の値が空です');
@@ -8580,7 +8580,7 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         const fillSel=(id,arr)=>{
           const sel=document.getElementById(id);
           if(!sel) return;
-          sel.innerHTML='<option value="">--</option>';
+          sel.innerHTML='<option value="">--選択してください--</option>';
           (arr||[]).forEach(v=> sel.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`));
         };
 
