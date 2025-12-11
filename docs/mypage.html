@@ -557,9 +557,21 @@
       showLoading(false);
     }
 
-    // 報酬設定を取得
+    // 報酬設定を取得（localStorageからconfig経由）
     async function loadCompensationSettings() {
       try {
+        // localStorageからconfig読み込み
+        const configStr = localStorage.getItem('config');
+        if (configStr) {
+          const config = JSON.parse(configStr);
+          if (config.報酬設定) {
+            compensationSettings = config.報酬設定;
+            console.log('報酬設定を読み込み:', compensationSettings);
+            return;
+          }
+        }
+
+        // Firestoreからも取得試行
         const docRef = doc(db, 'settings', 'compensation');
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
@@ -567,24 +579,41 @@
         } else {
           // デフォルト設定
           compensationSettings = {
-            listing: 100,
-            shipping: 100,
-            photography: 50,
-            inspection: 30
+            taskRates: { listing: 100, shipping: 100, photography: 50, inspection: 30 },
+            mypage: { enabled: true, allowedUsers: [] }
           };
         }
       } catch (error) {
         console.error('報酬設定取得エラー:', error);
-        compensationSettings = { listing: 100, shipping: 100 };
+        compensationSettings = {
+          taskRates: { listing: 100, shipping: 100 },
+          mypage: { enabled: true, allowedUsers: [] }
+        };
       }
     }
 
     // 報酬対象者かチェック
     async function checkEligibility() {
-      // 外注スタッフ（outsourcing）または owner 以外は対象
-      // ここでは簡易的に全員を対象とする（必要に応じて条件を追加）
-      // 実際の運用では permissionId が 'outsourcing' のみ対象など
-      return true;
+      // マイページ機能が無効の場合
+      if (compensationSettings.mypage && compensationSettings.mypage.enabled === false) {
+        console.log('マイページ機能が無効です');
+        return false;
+      }
+
+      // allowedUsersが設定されている場合、リストに含まれているかチェック
+      const allowedUsers = compensationSettings.mypage?.allowedUsers || [];
+
+      // allowedUsersが空（未設定）の場合は全員許可
+      if (allowedUsers.length === 0) {
+        console.log('マイページ: 全員許可（allowedUsers未設定）');
+        return true;
+      }
+
+      // 現在のユーザーがリストに含まれているかチェック
+      const isAllowed = allowedUsers.includes(currentUser.email);
+      console.log('マイページ権限チェック:', currentUser.email, 'allowed:', isAllowed);
+
+      return isAllowed;
     }
 
     // ユーザーの目標を取得
@@ -899,12 +928,20 @@
 
     // 基本情報を開く
     window.openBasicInfo = function() {
-      window.parent.postMessage({ type: 'navigateTo', page: 'config-basic' }, '*');
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'navigate', page: 'config-basic' }, '*');
+      } else {
+        window.location.href = '/config.html?tab=system';
+      }
     };
 
     // 戻る
     window.goBack = function() {
-      window.parent.postMessage({ type: 'navigateTo', page: 'home' }, '*');
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'navigate', page: 'home' }, '*');
+      } else {
+        window.history.back();
+      }
     };
 
     // ローディング表示

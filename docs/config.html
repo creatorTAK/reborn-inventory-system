@@ -4078,6 +4078,43 @@ ${descFormattedNumber}`;
                 </div>
               </div>
 
+              <!-- マイページ表示設定 -->
+              <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <h4 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 12px 0;">👤 マイページ表示設定</h4>
+                <div style="font-size: 11px; color: #6b7280; margin-bottom: 12px;">
+                  ユーザーアイコンをタップした際に表示されるマイページ（報酬確認・ランキング・目標設定）の表示対象を設定します。
+                </div>
+
+                <!-- マイページ有効/無効 -->
+                <div style="margin-bottom: 16px;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+                    <input type="checkbox" id="mypageEnabled" checked style="width: 16px; height: 16px; accent-color: #40B4E5;">
+                    <span style="font-size: 13px; color: #4b5563; font-weight: 500;">マイページ機能を有効にする</span>
+                  </label>
+                </div>
+
+                <!-- 表示対象ユーザー選択 -->
+                <div id="mypageUserSettings" style="padding-left: 24px; border-left: 2px solid #e5e7eb;">
+                  <div style="font-weight: 500; font-size: 13px; color: #374151; margin-bottom: 10px;">表示対象ユーザー</div>
+
+                  <div style="display: flex; flex-direction: column; gap: 8px;" id="mypageUserList">
+                    <!-- ユーザー一覧が動的に追加される -->
+                    <div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">
+                      ユーザー一覧を読み込んでいます...
+                    </div>
+                  </div>
+
+                  <div style="margin-top: 12px; display: flex; gap: 8px;">
+                    <button type="button" onclick="selectAllMypageUsers()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #374151; cursor: pointer;">
+                      全員選択
+                    </button>
+                    <button type="button" onclick="deselectAllMypageUsers()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #374151; cursor: pointer;">
+                      全員解除
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <!-- 報酬管理画面へのリンク -->
               <div style="background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
                 <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -7870,7 +7907,8 @@ ${prompt || '（未設定）'}
           autoRecordShipping: document.getElementById('autoRecordShipping')?.checked ?? true,
           cutoffDay: document.getElementById('compensationCutoffDay')?.value || '末日',
           recordAsExpense: document.getElementById('recordAsExpense')?.checked ?? true
-        }
+        },
+        mypage: collectMypageSettings()
       };
 
       console.log('報酬設定を収集:', result);
@@ -7953,6 +7991,122 @@ ${prompt || '（未設定）'}
         const recordAsExpense = document.getElementById('recordAsExpense');
         if (recordAsExpense) recordAsExpense.checked = settings.options.recordAsExpense ?? true;
       }
+
+      // マイページ設定を読み込み
+      if (settings.mypage) {
+        const mypageEnabled = document.getElementById('mypageEnabled');
+        if (mypageEnabled) mypageEnabled.checked = settings.mypage.enabled ?? true;
+
+        // マイページ対象ユーザーを設定（ユーザー一覧読み込み後に適用）
+        window.mypageAllowedUsers = settings.mypage.allowedUsers || [];
+      }
+    }
+
+    // ============================================
+    // マイページ表示設定関連の関数
+    // ============================================
+
+    /**
+     * マイページ対象ユーザー一覧を読み込み
+     */
+    async function loadMypageUserList() {
+      const container = document.getElementById('mypageUserList');
+      if (!container) return;
+
+      try {
+        // ユーザー一覧を取得（Firestore）
+        const usersRef = collection(db, 'users');
+        const snapshot = await getDocs(usersRef);
+
+        const users = [];
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          users.push({
+            email: docSnap.id,
+            name: data.name || data.displayName || docSnap.id,
+            permissionId: data.permissionId || 'staff',
+            permissionDisplay: data.permissionDisplay || 'スタッフ'
+          });
+        });
+
+        // 権限でソート（オーナー → 管理者 → スタッフ）
+        const permissionOrder = { owner: 1, admin: 2, staff: 3, outsourcing: 4 };
+        users.sort((a, b) => (permissionOrder[a.permissionId] || 99) - (permissionOrder[b.permissionId] || 99));
+
+        if (users.length === 0) {
+          container.innerHTML = '<div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">ユーザーが登録されていません</div>';
+          return;
+        }
+
+        // ユーザーリストを描画
+        const allowedUsers = window.mypageAllowedUsers || [];
+
+        container.innerHTML = users.map(user => {
+          const isChecked = allowedUsers.length === 0 || allowedUsers.includes(user.email);
+          const permissionBadge = getPermissionBadgeStyle(user.permissionId);
+
+          return `
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+              <input type="checkbox" class="mypage-user-checkbox" data-email="${escapeHtml(user.email)}" ${isChecked ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #40B4E5;">
+              <div style="flex: 1;">
+                <div style="font-size: 13px; color: #374151; font-weight: 500;">${escapeHtml(user.name)}</div>
+                <div style="font-size: 11px; color: #6b7280;">${escapeHtml(user.email)}</div>
+              </div>
+              <span style="${permissionBadge}">${escapeHtml(user.permissionDisplay)}</span>
+            </label>
+          `;
+        }).join('');
+
+        console.log('マイページ対象ユーザー一覧を読み込み:', users.length, '人');
+      } catch (error) {
+        console.error('ユーザー一覧の読み込みエラー:', error);
+        container.innerHTML = '<div style="font-size: 12px; color: #ef4444; padding: 12px; text-align: center;">ユーザー一覧の読み込みに失敗しました</div>';
+      }
+    }
+
+    /**
+     * 権限バッジのスタイルを取得
+     */
+    function getPermissionBadgeStyle(permissionId) {
+      const styles = {
+        owner: 'background: #fef3c7; color: #b45309; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;',
+        admin: 'background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;',
+        staff: 'background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;',
+        outsourcing: 'background: #f3e8ff; color: #7c3aed; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;'
+      };
+      return styles[permissionId] || styles.staff;
+    }
+
+    /**
+     * マイページ対象ユーザーを全選択
+     */
+    function selectAllMypageUsers() {
+      document.querySelectorAll('.mypage-user-checkbox').forEach(cb => cb.checked = true);
+    }
+
+    /**
+     * マイページ対象ユーザーを全解除
+     */
+    function deselectAllMypageUsers() {
+      document.querySelectorAll('.mypage-user-checkbox').forEach(cb => cb.checked = false);
+    }
+
+    /**
+     * マイページ設定を収集
+     */
+    function collectMypageSettings() {
+      const enabled = document.getElementById('mypageEnabled')?.checked ?? true;
+
+      // チェックされたユーザーのメールアドレスを収集
+      const allowedUsers = [];
+      document.querySelectorAll('.mypage-user-checkbox:checked').forEach(cb => {
+        allowedUsers.push(cb.dataset.email);
+      });
+
+      return {
+        enabled: enabled,
+        allowedUsers: allowedUsers
+      };
     }
 
     /**
@@ -9207,16 +9361,22 @@ ${prompt || '（未設定）'}
     // 報酬設定タブのイベントリスナー
     const compensationTab = document.getElementById('system-compensation-tab');
     if (compensationTab) {
-      compensationTab.addEventListener('shown.bs.tab', function() {
+      compensationTab.addEventListener('shown.bs.tab', async function() {
         const config = JSON.parse(localStorage.getItem('config') || '{}');
         loadCompensationSettings(config);
+        // マイページ対象ユーザー一覧を読み込み
+        await loadMypageUserList();
       });
     }
 
     // ページ読み込み時に報酬設定を初期化
-    setTimeout(function() {
+    setTimeout(async function() {
       const config = JSON.parse(localStorage.getItem('config') || '{}');
       loadCompensationSettings(config);
+      // マイページ対象ユーザー一覧を読み込み（報酬設定タブが表示されている場合）
+      if (document.getElementById('system-compensation')?.classList.contains('active')) {
+        await loadMypageUserList();
+      }
     }, 250);
 
     // システム設定タブ（#system）が最初から表示されている場合の対応
