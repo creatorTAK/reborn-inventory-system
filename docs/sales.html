@@ -164,7 +164,7 @@
       </button>
       <div class="header-title">
         <span style="font-size: 20px;">💵</span>
-        売上／売掛
+        販売管理
       </div>
       <div class="header-actions">
         <button class="btn btn-sm btn-outline-primary me-1" onclick="openInvoiceModal()" title="請求書発行">
@@ -182,17 +182,22 @@
     <ul class="nav nav-tabs-custom" role="tablist">
       <li class="nav-item" role="presentation">
         <button class="nav-link active" id="sales-tab" data-bs-toggle="tab" data-bs-target="#sales-content" type="button" role="tab">
-          💵 売上一覧
+          💵 売上
         </button>
       </li>
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="receivable-tab" data-bs-toggle="tab" data-bs-target="#receivable-content" type="button" role="tab">
-          📋 売掛管理
+          📋 売掛
         </button>
       </li>
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="schedule-tab" data-bs-toggle="tab" data-bs-target="#schedule-content" type="button" role="tab">
-          📅 回収予定
+          📅 回収
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-content" type="button" role="tab">
+          📈 分析
         </button>
       </li>
     </ul>
@@ -348,6 +353,79 @@
               <tbody id="scheduleTableBody">
                 <tr>
                   <td colspan="5" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 分析タブ -->
+      <div class="tab-pane fade" id="analysis-content" role="tabpanel">
+        <!-- KPIサマリー -->
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-label">売上高</div>
+            <div class="summary-value" id="analysis-revenue">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">利益</div>
+            <div class="summary-value positive" id="analysis-profit">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">利益率</div>
+            <div class="summary-value" id="analysis-profit-rate">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">販売数</div>
+            <div class="summary-value" id="analysis-count">-</div>
+          </div>
+        </div>
+
+        <!-- 月別売上推移 -->
+        <div class="sales-table-container mb-3">
+          <h6 class="mb-3"><i class="bi bi-graph-up"></i> 月別売上推移</h6>
+          <canvas id="monthlyChart" height="200"></canvas>
+        </div>
+
+        <!-- 販売先別ランキング -->
+        <div class="sales-table-container mb-3">
+          <h6 class="mb-3"><i class="bi bi-trophy"></i> 販売先別売上</h6>
+          <div class="table-responsive">
+            <table class="sales-table">
+              <thead>
+                <tr>
+                  <th>販売先</th>
+                  <th class="text-end">販売数</th>
+                  <th class="text-end">売上</th>
+                  <th class="text-end">利益</th>
+                </tr>
+              </thead>
+              <tbody id="platformRankingBody">
+                <tr>
+                  <td colspan="4" class="text-center text-muted py-3">データを読み込んでいます...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 商品ランキング -->
+        <div class="sales-table-container">
+          <h6 class="mb-3"><i class="bi bi-star"></i> 売上TOP10商品</h6>
+          <div class="table-responsive">
+            <table class="sales-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>商品名</th>
+                  <th class="text-end">売上</th>
+                  <th class="text-end">利益</th>
+                </tr>
+              </thead>
+              <tbody id="productRankingBody">
+                <tr>
+                  <td colspan="4" class="text-center text-muted py-3">データを読み込んでいます...</td>
                 </tr>
               </tbody>
             </table>
@@ -583,6 +661,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Chart.js for graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <!-- html2canvas & jsPDF for PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1533,6 +1613,203 @@
         openInvoiceModal([]);
       }
     };
+
+    // ================= 分析タブ機能 =================
+
+    let monthlyChart = null;
+    let allSalesDataForAnalysis = [];
+
+    /**
+     * 分析タブがアクティブになったら呼ばれる
+     */
+    document.getElementById('analysis-tab').addEventListener('shown.bs.tab', async function() {
+      await loadAnalysisData();
+    });
+
+    /**
+     * 分析データを読み込み
+     */
+    async function loadAnalysisData() {
+      showLoading();
+      try {
+        // 全期間のデータを取得
+        allSalesDataForAnalysis = await SalesApi.getSalesData('', '');
+        renderAnalysisTab();
+      } catch (error) {
+        console.error('分析データ読み込みエラー:', error);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    /**
+     * 分析タブを描画
+     */
+    function renderAnalysisTab() {
+      const data = allSalesDataForAnalysis;
+
+      // KPIサマリー
+      const totalRevenue = data.reduce((sum, item) => sum + (item.saleAmount || 0), 0);
+      const totalProfit = data.reduce((sum, item) => sum + (item.finalProfit || 0), 0);
+      const profitRate = totalRevenue > 0 ? (totalProfit / totalRevenue * 100) : 0;
+      const totalCount = data.length;
+
+      document.getElementById('analysis-revenue').textContent = formatCurrency(totalRevenue);
+      document.getElementById('analysis-profit').textContent = formatCurrency(totalProfit);
+      document.getElementById('analysis-profit-rate').textContent = formatPercent(profitRate);
+      document.getElementById('analysis-count').textContent = totalCount + '件';
+
+      // 月別売上推移グラフ
+      renderMonthlyChart(data);
+
+      // 販売先別ランキング
+      renderPlatformRanking(data);
+
+      // 商品ランキング
+      renderProductRanking(data);
+    }
+
+    /**
+     * 月別売上推移グラフを描画
+     */
+    function renderMonthlyChart(data) {
+      // 月別集計
+      const monthlyData = {};
+      data.forEach(item => {
+        const month = (item.saleDate || '').slice(0, 7);
+        if (!month) return;
+        if (!monthlyData[month]) {
+          monthlyData[month] = { sales: 0, profit: 0 };
+        }
+        monthlyData[month].sales += item.saleAmount || 0;
+        monthlyData[month].profit += item.finalProfit || 0;
+      });
+
+      // 直近12ヶ月分のデータを用意
+      const months = Object.keys(monthlyData).sort().slice(-12);
+      const salesData = months.map(m => monthlyData[m]?.sales || 0);
+      const profitData = months.map(m => monthlyData[m]?.profit || 0);
+      const labels = months.map(m => {
+        const [y, mo] = m.split('-');
+        return `${mo}月`;
+      });
+
+      // 既存のチャートを破棄
+      if (monthlyChart) {
+        monthlyChart.destroy();
+      }
+
+      const ctx = document.getElementById('monthlyChart').getContext('2d');
+      monthlyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '売上',
+              data: salesData,
+              backgroundColor: 'rgba(59, 130, 246, 0.7)',
+              borderColor: 'rgba(59, 130, 246, 1)',
+              borderWidth: 1
+            },
+            {
+              label: '利益',
+              data: profitData,
+              backgroundColor: 'rgba(16, 185, 129, 0.7)',
+              borderColor: 'rgba(16, 185, 129, 1)',
+              borderWidth: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return '¥' + value.toLocaleString();
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    /**
+     * 販売先別ランキングを描画
+     */
+    function renderPlatformRanking(data) {
+      const platformStats = {};
+      data.forEach(item => {
+        const platform = item.salePlatform || '未設定';
+        if (!platformStats[platform]) {
+          platformStats[platform] = { count: 0, sales: 0, profit: 0 };
+        }
+        platformStats[platform].count++;
+        platformStats[platform].sales += item.saleAmount || 0;
+        platformStats[platform].profit += item.finalProfit || 0;
+      });
+
+      const sorted = Object.entries(platformStats)
+        .sort((a, b) => b[1].sales - a[1].sales);
+
+      const tbody = document.getElementById('platformRankingBody');
+      if (sorted.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">データがありません</td></tr>';
+        return;
+      }
+
+      let html = '';
+      sorted.forEach(([platform, stats]) => {
+        html += `
+          <tr>
+            <td>${platform}</td>
+            <td class="text-end">${stats.count}件</td>
+            <td class="text-end">${formatCurrency(stats.sales)}</td>
+            <td class="text-end ${stats.profit >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(stats.profit)}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    /**
+     * 商品ランキングを描画（TOP10）
+     */
+    function renderProductRanking(data) {
+      // 売上金額で降順ソート
+      const sorted = [...data]
+        .filter(item => item.saleAmount > 0)
+        .sort((a, b) => (b.saleAmount || 0) - (a.saleAmount || 0))
+        .slice(0, 10);
+
+      const tbody = document.getElementById('productRankingBody');
+      if (sorted.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">データがありません</td></tr>';
+        return;
+      }
+
+      let html = '';
+      sorted.forEach((item, index) => {
+        html += `
+          <tr>
+            <td>${index + 1}</td>
+            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.productName || '-'}</td>
+            <td class="text-end">${formatCurrency(item.saleAmount)}</td>
+            <td class="text-end ${item.finalProfit >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(item.finalProfit)}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
   </script>
 </body>
 </html>
