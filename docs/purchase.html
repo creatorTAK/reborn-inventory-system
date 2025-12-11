@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <base target="_top">
+  <title>仕入／買掛 - FURIRA</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+    }
+    .content-container {
+      padding: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* タブ */
+    .nav-tabs-custom {
+      background: white;
+      border-radius: 12px;
+      padding: 8px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .nav-tabs-custom .nav-link {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      color: #6b7280;
+      font-weight: 500;
+    }
+    .nav-tabs-custom .nav-link.active {
+      background: #f59e0b;
+      color: white;
+    }
+
+    /* フィルタセクション */
+    .filter-section {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    /* サマリーカード */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .summary-card {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .summary-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .summary-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #1f2937;
+    }
+    .summary-value.warning { color: #f59e0b; }
+    .summary-value.danger { color: #ef4444; }
+
+    /* テーブル */
+    .data-table-container {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .data-table {
+      width: 100%;
+      font-size: 0.875rem;
+    }
+    .data-table th {
+      background: #f9fafb;
+      padding: 12px 8px;
+      font-weight: 600;
+      color: #374151;
+      border-bottom: 2px solid #e5e7eb;
+      white-space: nowrap;
+    }
+    .data-table td {
+      padding: 12px 8px;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: middle;
+    }
+    .data-table tr:hover {
+      background: #f9fafb;
+    }
+
+    /* ステータスバッジ */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .status-paid { background: #d1fae5; color: #065f46; }
+    .status-unpaid { background: #fee2e2; color: #991b1b; }
+    .status-partial { background: #fef3c7; color: #92400e; }
+
+    /* 仕入先グループ */
+    .supplier-group {
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    .supplier-header {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .supplier-header h6 {
+      margin: 0;
+      font-weight: 600;
+    }
+    .supplier-body {
+      padding: 16px;
+    }
+
+    /* ローディング */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255,255,255,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    /* レスポンシブ */
+    @media (max-width: 576px) {
+      .summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .data-table {
+        font-size: 0.75rem;
+      }
+      .data-table th, .data-table td {
+        padding: 8px 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- ローディングオーバーレイ -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="text-center">
+      <div class="spinner-border text-warning" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-2 text-muted">データを読み込んでいます...</p>
+    </div>
+  </div>
+
+  <!-- ヘッダー -->
+  <div class="reborn-header">
+    <div class="header-left">
+      <button class="header-back-btn" onclick="goBack()">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <span class="header-title">仕入／買掛</span>
+    </div>
+  </div>
+
+  <div class="content-container">
+    <!-- タブ -->
+    <ul class="nav nav-tabs-custom" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="purchase-tab" data-bs-toggle="tab" data-bs-target="#purchase-content" type="button" role="tab">
+          💰 仕入一覧
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="payable-tab" data-bs-toggle="tab" data-bs-target="#payable-content" type="button" role="tab">
+          📋 買掛管理
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="supplier-tab" data-bs-toggle="tab" data-bs-target="#supplier-content" type="button" role="tab">
+          🏪 仕入先別
+        </button>
+      </li>
+    </ul>
+
+    <!-- タブコンテンツ -->
+    <div class="tab-content">
+      <!-- 仕入一覧タブ -->
+      <div class="tab-pane fade show active" id="purchase-content" role="tabpanel">
+        <!-- フィルタ -->
+        <div class="filter-section">
+          <div class="row g-2 align-items-center">
+            <div class="col-auto">
+              <label class="form-label mb-0 small fw-bold">期間:</label>
+            </div>
+            <div class="col-auto">
+              <input type="month" class="form-control form-control-sm" id="purchaseMonth" onchange="loadPurchaseData()">
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0 small fw-bold">仕入先:</label>
+            </div>
+            <div class="col-auto">
+              <select class="form-select form-select-sm" id="supplierFilter" onchange="loadPurchaseData()">
+                <option value="">すべて</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- サマリー -->
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-label">仕入件数</div>
+            <div class="summary-value" id="summary-purchaseCount">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">仕入合計</div>
+            <div class="summary-value" id="summary-purchaseAmount">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">平均仕入単価</div>
+            <div class="summary-value" id="summary-avgPurchase">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">支払済</div>
+            <div class="summary-value" id="summary-paidAmount">-</div>
+          </div>
+        </div>
+
+        <!-- 仕入一覧テーブル -->
+        <div class="data-table-container">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>仕入日</th>
+                  <th>管理番号</th>
+                  <th>商品名</th>
+                  <th>仕入先</th>
+                  <th class="text-end">仕入金額</th>
+                  <th>支払</th>
+                </tr>
+              </thead>
+              <tbody id="purchaseTableBody">
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 買掛管理タブ -->
+      <div class="tab-pane fade" id="payable-content" role="tabpanel">
+        <!-- サマリー -->
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-label">買掛残高</div>
+            <div class="summary-value danger" id="payable-balance">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">未払件数</div>
+            <div class="summary-value" id="payable-count">-</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">今月支払予定</div>
+            <div class="summary-value warning" id="payable-expected">-</div>
+          </div>
+        </div>
+
+        <!-- 買掛一覧テーブル -->
+        <div class="data-table-container">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>仕入日</th>
+                  <th>管理番号</th>
+                  <th>仕入先</th>
+                  <th class="text-end">仕入金額</th>
+                  <th>ステータス</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="payableTableBody">
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 仕入先別タブ -->
+      <div class="tab-pane fade" id="supplier-content" role="tabpanel">
+        <div id="supplierGroups">
+          <div class="text-center text-muted py-4">データを読み込んでいます...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 支払記録モーダル -->
+  <div class="modal fade" id="paymentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">💳 支払記録</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">管理番号</label>
+            <input type="text" class="form-control" id="paymentManagementNumber" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">仕入先</label>
+            <input type="text" class="form-control" id="paymentSupplier" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">仕入金額</label>
+            <input type="text" class="form-control" id="paymentPurchaseAmount" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">支払日</label>
+            <input type="date" class="form-control" id="paymentDate">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">支払額</label>
+            <input type="number" class="form-control" id="paymentAmount" placeholder="支払額を入力">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">支払方法</label>
+            <select class="form-select" id="paymentMethod">
+              <option value="現金">現金</option>
+              <option value="銀行振込">銀行振込</option>
+              <option value="クレジットカード">クレジットカード</option>
+              <option value="電子マネー">電子マネー</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">備考</label>
+            <textarea class="form-control" id="paymentNote" rows="2" placeholder="振込手数料など"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-warning" onclick="savePayment()">支払を記録</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+      authDomain: "furira.jp",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "345706548795",
+      appId: "1:345706548795:web:058a553da6b4b74db5161e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    /**
+     * 仕入先一覧を取得
+     */
+    async function getSuppliers() {
+      const suppliersRef = collection(db, 'suppliers');
+      const snapshot = await getDocs(suppliersRef);
+      const suppliers = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.name) suppliers.push(data.name);
+      });
+      return suppliers.sort((a, b) => a.localeCompare(b, 'ja'));
+    }
+
+    /**
+     * 仕入データを取得
+     */
+    async function getPurchaseData(yearMonth, supplier) {
+      console.log('💰 [仕入] データ取得開始:', yearMonth, supplier);
+
+      const productsRef = collection(db, 'products');
+      const snapshot = await getDocs(productsRef);
+
+      const purchaseList = [];
+      let startDate = '';
+      let endDate = '';
+
+      if (yearMonth) {
+        startDate = yearMonth + '-01';
+        const nextMonth = new Date(yearMonth + '-01');
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        nextMonth.setDate(0);
+        endDate = nextMonth.toISOString().slice(0, 10);
+      }
+
+      snapshot.forEach(docSnapshot => {
+        const data = docSnapshot.data();
+
+        const purchaseDate = data.purchase?.date || data.purchaseDate || '';
+        const purchaseSupplier = data.supplier || '';
+        const purchaseAmount = parseFloat(data.purchase?.amount || data.purchaseAmount || 0);
+
+        // 仕入金額がない場合はスキップ
+        if (!purchaseAmount || purchaseAmount <= 0) return;
+
+        // 期間フィルタ
+        if (yearMonth && (purchaseDate < startDate || purchaseDate > endDate)) return;
+
+        // 仕入先フィルタ
+        if (supplier && purchaseSupplier !== supplier) return;
+
+        purchaseList.push({
+          id: docSnapshot.id,
+          managementNumber: data.managementNumber || '',
+          productName: data.productName || '',
+          purchaseDate: purchaseDate,
+          supplier: purchaseSupplier,
+          purchaseAmount: purchaseAmount,
+          purchasePaymentStatus: data.purchasePaymentStatus || 'unpaid', // paid, unpaid, partial
+          purchasePaymentDate: data.purchasePaymentDate || '',
+          purchasePaymentAmount: parseFloat(data.purchasePaymentAmount || 0),
+          purchasePaymentMethod: data.purchasePaymentMethod || ''
+        });
+      });
+
+      // 仕入日降順でソート
+      purchaseList.sort((a, b) => (b.purchaseDate || '').localeCompare(a.purchaseDate || ''));
+
+      console.log('💰 [仕入] 取得完了:', purchaseList.length + '件');
+      return purchaseList;
+    }
+
+    /**
+     * 支払ステータスを更新
+     */
+    async function updatePurchasePaymentStatus(productId, paymentData) {
+      const productRef = doc(db, 'products', productId);
+      await updateDoc(productRef, {
+        purchasePaymentStatus: paymentData.status,
+        purchasePaymentDate: paymentData.date,
+        purchasePaymentAmount: paymentData.amount,
+        purchasePaymentMethod: paymentData.method,
+        purchasePaymentNote: paymentData.note,
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    // グローバルに公開
+    window.PurchaseApi = {
+      getSuppliers,
+      getPurchaseData,
+      updatePurchasePaymentStatus
+    };
+
+    console.log('✅ [仕入] Firebase初期化完了');
+
+    window.addEventListener('load', () => {
+      initializePage();
+    });
+  </script>
+
+  <script>
+    let currentPurchaseData = [];
+    let selectedProductForPayment = null;
+
+    function showLoading() {
+      document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+    function hideLoading() {
+      document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    function formatCurrency(amount) {
+      if (amount === null || amount === undefined || isNaN(amount)) return '-';
+      return '¥' + Math.round(amount).toLocaleString();
+    }
+
+    async function initializePage() {
+      // 今月をデフォルトに
+      const now = new Date();
+      document.getElementById('purchaseMonth').value = now.toISOString().slice(0, 7);
+      document.getElementById('paymentDate').value = now.toISOString().slice(0, 10);
+
+      // 仕入先選択肢を読み込み
+      try {
+        const suppliers = await PurchaseApi.getSuppliers();
+        const select = document.getElementById('supplierFilter');
+        suppliers.forEach(supplier => {
+          const option = document.createElement('option');
+          option.value = supplier;
+          option.textContent = supplier;
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error('仕入先読み込みエラー:', error);
+      }
+
+      loadPurchaseData();
+    }
+
+    async function loadPurchaseData() {
+      showLoading();
+
+      try {
+        const yearMonth = document.getElementById('purchaseMonth').value;
+        const supplier = document.getElementById('supplierFilter').value;
+
+        currentPurchaseData = await PurchaseApi.getPurchaseData(yearMonth, supplier);
+
+        renderPurchaseTable();
+        renderPayableTable();
+        renderSupplierGroups();
+        updateSummary();
+
+      } catch (error) {
+        console.error('仕入データ読み込みエラー:', error);
+        alert('データの読み込みに失敗しました: ' + error.message);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function renderPurchaseTable() {
+      const tbody = document.getElementById('purchaseTableBody');
+
+      if (currentPurchaseData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">該当する仕入データがありません</td></tr>';
+        return;
+      }
+
+      let html = '';
+      currentPurchaseData.forEach(item => {
+        const paymentBadge = getPaymentBadge(item.purchasePaymentStatus);
+        html += `
+          <tr>
+            <td>${item.purchaseDate || '-'}</td>
+            <td>${item.managementNumber}</td>
+            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.productName}</td>
+            <td>${item.supplier || '-'}</td>
+            <td class="text-end">${formatCurrency(item.purchaseAmount)}</td>
+            <td>${paymentBadge}</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    function renderPayableTable() {
+      const tbody = document.getElementById('payableTableBody');
+
+      // 未払いのもののみ
+      const unpaidItems = currentPurchaseData.filter(item => item.purchasePaymentStatus !== 'paid');
+
+      if (unpaidItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">未払いの仕入はありません</td></tr>';
+        updatePayableSummary(0, 0);
+        return;
+      }
+
+      let html = '';
+      let totalUnpaid = 0;
+
+      unpaidItems.forEach(item => {
+        const paymentBadge = getPaymentBadge(item.purchasePaymentStatus);
+        const unpaidAmount = item.purchaseAmount - (item.purchasePaymentAmount || 0);
+        totalUnpaid += unpaidAmount;
+
+        html += `
+          <tr>
+            <td>${item.purchaseDate || '-'}</td>
+            <td>${item.managementNumber}</td>
+            <td>${item.supplier || '-'}</td>
+            <td class="text-end">${formatCurrency(item.purchaseAmount)}</td>
+            <td>${paymentBadge}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-warning" onclick="openPaymentModal('${item.id}', '${item.managementNumber}', '${item.supplier || ''}', ${item.purchaseAmount})">
+                支払記録
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+      updatePayableSummary(totalUnpaid, unpaidItems.length);
+    }
+
+    function renderSupplierGroups() {
+      const container = document.getElementById('supplierGroups');
+
+      // 仕入先別にグループ化
+      const groupedBySupplier = {};
+      currentPurchaseData.forEach(item => {
+        const supplier = item.supplier || '未設定';
+        if (!groupedBySupplier[supplier]) {
+          groupedBySupplier[supplier] = {
+            items: [],
+            totalAmount: 0,
+            paidAmount: 0
+          };
+        }
+        groupedBySupplier[supplier].items.push(item);
+        groupedBySupplier[supplier].totalAmount += item.purchaseAmount;
+        if (item.purchasePaymentStatus === 'paid') {
+          groupedBySupplier[supplier].paidAmount += item.purchaseAmount;
+        } else {
+          groupedBySupplier[supplier].paidAmount += item.purchasePaymentAmount || 0;
+        }
+      });
+
+      if (Object.keys(groupedBySupplier).length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4">該当する仕入データがありません</div>';
+        return;
+      }
+
+      let html = '';
+      Object.keys(groupedBySupplier).sort((a, b) => a.localeCompare(b, 'ja')).forEach(supplier => {
+        const group = groupedBySupplier[supplier];
+        const unpaidAmount = group.totalAmount - group.paidAmount;
+
+        html += `
+          <div class="supplier-group">
+            <div class="supplier-header" data-bs-toggle="collapse" data-bs-target="#supplier-${encodeURIComponent(supplier)}">
+              <div>
+                <h6>🏪 ${supplier}</h6>
+                <small>${group.items.length}件 / ${formatCurrency(group.totalAmount)}</small>
+              </div>
+              <div class="text-end">
+                ${unpaidAmount > 0 ? `<span class="badge bg-danger">未払: ${formatCurrency(unpaidAmount)}</span>` : '<span class="badge bg-success">支払完了</span>'}
+              </div>
+            </div>
+            <div class="collapse" id="supplier-${encodeURIComponent(supplier)}">
+              <div class="supplier-body">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>仕入日</th>
+                      <th>管理番号</th>
+                      <th class="text-end">金額</th>
+                      <th>支払</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+        `;
+
+        group.items.forEach(item => {
+          const paymentBadge = getPaymentBadge(item.purchasePaymentStatus);
+          html += `
+            <tr>
+              <td>${item.purchaseDate || '-'}</td>
+              <td>${item.managementNumber}</td>
+              <td class="text-end">${formatCurrency(item.purchaseAmount)}</td>
+              <td>${paymentBadge}</td>
+            </tr>
+          `;
+        });
+
+        html += `
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function getPaymentBadge(status) {
+      switch (status) {
+        case 'paid':
+          return '<span class="status-badge status-paid">支払済</span>';
+        case 'partial':
+          return '<span class="status-badge status-partial">一部支払</span>';
+        default:
+          return '<span class="status-badge status-unpaid">未払</span>';
+      }
+    }
+
+    function updateSummary() {
+      const count = currentPurchaseData.length;
+      const totalAmount = currentPurchaseData.reduce((sum, item) => sum + item.purchaseAmount, 0);
+      const avgAmount = count > 0 ? totalAmount / count : 0;
+      const paidAmount = currentPurchaseData.reduce((sum, item) => {
+        if (item.purchasePaymentStatus === 'paid') return sum + item.purchaseAmount;
+        return sum + (item.purchasePaymentAmount || 0);
+      }, 0);
+
+      document.getElementById('summary-purchaseCount').textContent = count + '件';
+      document.getElementById('summary-purchaseAmount').textContent = formatCurrency(totalAmount);
+      document.getElementById('summary-avgPurchase').textContent = formatCurrency(avgAmount);
+      document.getElementById('summary-paidAmount').textContent = formatCurrency(paidAmount);
+    }
+
+    function updatePayableSummary(totalUnpaid, count) {
+      document.getElementById('payable-balance').textContent = formatCurrency(totalUnpaid);
+      document.getElementById('payable-count').textContent = count + '件';
+      document.getElementById('payable-expected').textContent = formatCurrency(totalUnpaid);
+    }
+
+    function openPaymentModal(productId, managementNumber, supplier, purchaseAmount) {
+      selectedProductForPayment = { id: productId, managementNumber, supplier, purchaseAmount };
+
+      document.getElementById('paymentManagementNumber').value = managementNumber;
+      document.getElementById('paymentSupplier').value = supplier || '-';
+      document.getElementById('paymentPurchaseAmount').value = formatCurrency(purchaseAmount);
+      document.getElementById('paymentAmount').value = Math.round(purchaseAmount);
+      document.getElementById('paymentNote').value = '';
+
+      const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
+      modal.show();
+    }
+
+    async function savePayment() {
+      if (!selectedProductForPayment) return;
+
+      const paymentDate = document.getElementById('paymentDate').value;
+      const paymentAmount = parseFloat(document.getElementById('paymentAmount').value) || 0;
+      const paymentMethod = document.getElementById('paymentMethod').value;
+      const paymentNote = document.getElementById('paymentNote').value;
+
+      if (!paymentDate) {
+        alert('支払日を入力してください');
+        return;
+      }
+
+      if (paymentAmount <= 0) {
+        alert('支払額を入力してください');
+        return;
+      }
+
+      showLoading();
+
+      try {
+        // ステータス判定
+        let status = 'unpaid';
+        if (paymentAmount >= selectedProductForPayment.purchaseAmount) {
+          status = 'paid';
+        } else if (paymentAmount > 0) {
+          status = 'partial';
+        }
+
+        await PurchaseApi.updatePurchasePaymentStatus(selectedProductForPayment.id, {
+          status: status,
+          date: paymentDate,
+          amount: paymentAmount,
+          method: paymentMethod,
+          note: paymentNote
+        });
+
+        // モーダルを閉じる
+        const modal = bootstrap.Modal.getInstance(document.getElementById('paymentModal'));
+        modal.hide();
+
+        alert('✅ 支払を記録しました');
+
+        // データ再読み込み
+        await loadPurchaseData();
+
+      } catch (error) {
+        console.error('支払記録エラー:', error);
+        alert('支払の記録に失敗しました: ' + error.message);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function goBack() {
+      const isInIframe = window.self !== window.top;
+      if (isInIframe) {
+        window.top.postMessage({ type: 'navigateToHome' }, '*');
+      } else {
+        window.location.href = '/menu_home.html';
+      }
+    }
+  </script>
+</body>
+</html>
