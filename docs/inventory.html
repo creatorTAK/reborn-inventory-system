@@ -1732,21 +1732,21 @@
     function openSalesRecordModal(managementNumber) {
       showLoading();
 
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result && result.success && result.data) {
-            currentSalesProduct = result.data;
+      // 🔥 Firestore API経由で商品データを取得
+      FirestoreApi.getProductByManagementNumber(managementNumber)
+        .then(function(product) {
+          if (product) {
+            currentSalesProduct = product;
             initSalesRecordModal();
           } else {
             hideLoading();
-            showError('商品データの取得に失敗しました: ' + (result.message || result.error || '不明なエラー'));
+            showError('商品データの取得に失敗しました: 商品が見つかりません');
           }
         })
-        .withFailureHandler(function(error) {
+        .catch(function(error) {
           hideLoading();
-          showError('商品データの取得エラー: ' + (error ? (error.message || error) : 'Unknown error'));
-        })
-        .getProductByManagementNumberAPI(managementNumber);
+          showError('商品データの取得エラー: ' + (error.message || error));
+        });
     }
 
     /**
@@ -1779,43 +1779,67 @@
     }
 
     /**
-     * 発送方法マスタ読み込み
+     * 発送方法マスタ読み込み（Firestore版）
      */
-    function loadShippingMethodMaster() {
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result && result.success) {
-            shippingMethodMaster = result.data || [];
-            populateShippingMethod1();
-          } else {
-            showError('発送方法マスタの読み込みに失敗しました: ' + (result.message || '不明なエラー'));
-          }
-        })
-        .withFailureHandler(function(error) {
-          showError('発送方法マスタの読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
-        })
-        .getShippingMethodMasterAPI();
+    async function loadShippingMethodMaster() {
+      try {
+        const snapshot = await window.db.collection('shippingMethods')
+          .orderBy('category', 'asc')
+          .get();
+
+        shippingMethodMaster = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          shippingMethodMaster.push({
+            method1: data.category,
+            method2: data.detail,
+            fee: data.price
+          });
+        });
+
+        populateShippingMethod1();
+      } catch (error) {
+        console.error('発送方法マスタの読み込みエラー:', error);
+        showError('発送方法マスタの読み込みに失敗しました: ' + (error.message || error));
+      }
     }
 
     /**
-     * 備品在庫リスト読み込み（カテゴリ別）
+     * 備品在庫リスト読み込み（カテゴリ別・Firestore版）
      */
-    function loadPackagingMaterialsMaster() {
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result && result.success) {
-            packagingMaterialsByCategory = result.data || {}; // カテゴリ別データ
-            packagingMaterialCategories = result.categories || []; // カテゴリ一覧
-            // データ読み込み完了後に梱包資材選択欄を描画
-            renderPackagingMaterials();
-          } else {
-            showError('備品在庫リストの読み込みに失敗しました: ' + (result.message || '不明なエラー'));
+    async function loadPackagingMaterialsMaster() {
+      try {
+        const snapshot = await window.db.collection('packagingMaterials')
+          .orderBy('category', 'asc')
+          .get();
+
+        packagingMaterialsByCategory = {};
+        const categoriesSet = new Set();
+
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const category = data.category || 'その他';
+          categoriesSet.add(category);
+
+          if (!packagingMaterialsByCategory[category]) {
+            packagingMaterialsByCategory[category] = [];
           }
-        })
-        .withFailureHandler(function(error) {
-          showError('備品在庫リストの読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
-        })
-        .getPackagingMaterialsByCategoryAPI(); // 新APIに変更
+          packagingMaterialsByCategory[category].push({
+            id: doc.id,
+            name: data.name,
+            price: data.price || 0,
+            category: category
+          });
+        });
+
+        packagingMaterialCategories = Array.from(categoriesSet).sort((a, b) => a.localeCompare(b, 'ja'));
+
+        // データ読み込み完了後に梱包資材選択欄を描画
+        renderPackagingMaterials();
+      } catch (error) {
+        console.error('備品在庫リストの読み込みエラー:', error);
+        showError('備品在庫リストの読み込みに失敗しました: ' + (error.message || error));
+      }
     }
 
     /**
@@ -2305,9 +2329,9 @@
       // ローディング表示（バックグラウンド処理中）
       showLoading();
 
-      // バックグラウンドで保存処理を実行
-      google.script.run
-        .withSuccessHandler(function(result) {
+      // 🔥 Firestore APIで保存処理を実行
+      FirestoreApi.saveSalesRecord(salesData)
+        .then(function(result) {
           hideLoading();
           if (result && result.success) {
             // 【PERF-001 UX改善】保存完了後、画面を再読み込みして最新状態を表示
@@ -2323,20 +2347,19 @@
             }, 100);
           }
         })
-        .withFailureHandler(function(error) {
+        .catch(function(error) {
           hideLoading();
           setTimeout(function() {
             alert('❌ 保存エラー: ' + (error ? (error.message || error) : 'Unknown error') + '\n\n再度販売記録を登録してください。');
           }, 100);
-        })
-        .saveSalesRecordAPI(salesData);
+        });
     }
   </script>
 
   <!-- Firebase SDK (ARCH-001 Phase 3) -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase設定
     const firebaseConfig = {
@@ -2549,10 +2572,61 @@
       }
     }
 
+    /**
+     * 販売記録を保存（商品ドキュメントを更新）
+     */
+    async function saveSalesRecordToFirestore(salesData) {
+      try {
+        console.log('🔥 [FIRESTORE] 販売記録保存開始:', salesData.managementNumber);
+
+        // 商品ドキュメントを検索して更新
+        const productsRef = collection(db, 'products');
+        const snapshot = await getDocs(productsRef);
+
+        let productDocId = null;
+        snapshot.forEach((docSnapshot) => {
+          const data = docSnapshot.data();
+          if (data.managementNumber === salesData.managementNumber) {
+            productDocId = docSnapshot.id;
+          }
+        });
+
+        if (!productDocId) {
+          throw new Error('商品が見つかりません: ' + salesData.managementNumber);
+        }
+
+        // 商品ドキュメントを更新
+        const productRef = doc(db, 'products', productDocId);
+        await updateDoc(productRef, {
+          status: '販売済',
+          saleDate: salesData.salesDate,
+          saleAmount: salesData.salesAmount,
+          salePlatform: salesData.salesPlatform,
+          shippingMethod1: salesData.shippingMethod1,
+          shippingMethod2: salesData.shippingMethod2,
+          shippingFee: salesData.shippingFee,
+          packagingMaterials: salesData.packagingMaterials,
+          packagingCostTotal: salesData.packagingCostTotal,
+          platformFee: salesData.platformFee,
+          paymentFee: salesData.paymentFee,
+          finalProfit: salesData.finalProfit,
+          profitRate: salesData.profitRate,
+          updatedAt: serverTimestamp()
+        });
+
+        console.log('✅ [FIRESTORE] 販売記録保存完了');
+        return { success: true };
+      } catch (error) {
+        console.error('[Firestore API] 販売記録保存エラー:', error);
+        return { success: false, error: error.message };
+      }
+    }
+
     // グローバルに公開
     window.FirestoreApi = {
       getProductList,
-      getProductByManagementNumber
+      getProductByManagementNumber,
+      saveSalesRecord: saveSalesRecordToFirestore
     };
 
     console.log('✅ [DEBUG] FirestoreApi初期化完了');
