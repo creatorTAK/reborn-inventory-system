@@ -1087,20 +1087,20 @@ window.continueProductRegistration = function() {
       <div class="material-fields">
         <label>箇所:
           <select id="素材${materialCount}_箇所" class="material-location">
-            <option value="">--</option>
+            <option value="">--選択してください--</option>
           </select>
         </label>
-        
+
         <div class="material-composition" data-material-index="${materialCount}">
           <div class="composition-row" data-row-index="1">
             <label>種類:
               <select id="素材${materialCount}_種類1" class="material-type">
-                <option value="">--</option>
+                <option value="">--選択してください--</option>
               </select>
             </label>
             <label>割合:
               <select id="素材${materialCount}_％1" class="material-percent">
-                <option value="">--%</option>
+                <option value="">--選択してください--</option>
               </select>
             </label>
             <button type="button" class="remove-composition-btn" onclick="removeCompositionRow(${materialCount}, 1)" style="display:none;">×</button>
@@ -1200,12 +1200,12 @@ window.continueProductRegistration = function() {
     newRow.innerHTML = `
       <label>種類:
         <select id="素材${materialIndex}_種類${newRowIndex}" class="material-type">
-          <option value="">--</option>
+          <option value="">--選択してください--</option>
         </select>
       </label>
       <label>割合:
         <select id="素材${materialIndex}_％${newRowIndex}" class="material-percent">
-          <option value="">--%</option>
+          <option value="">--選択してください--</option>
         </select>
       </label>
       <button type="button" class="remove-composition-btn" onclick="removeCompositionRow(${materialIndex}, ${newRowIndex})">×</button>
@@ -1342,7 +1342,7 @@ window.continueProductRegistration = function() {
       <div class="color-fields">
         <label>色:
           <select id="カラー${colorCount}" class="color-select">
-            <option value="">--</option>
+            <option value="">--選択してください--</option>
           </select>
         </label>
       </div>
@@ -3478,13 +3478,13 @@ window.continueProductRegistration = function() {
         <div>
           <span class="small">頭文字</span>
           <select id="prefix1" class="tight">
-            <option value="">--</option>
+            <option value="">--選択してください--</option>
           </select>
         </div>
         <div>
           <span class="small">棚番号</span>
           <select id="棚番号" class="tight" disabled>
-            <option value="">--</option>
+            <option value="">--選択してください--</option>
           </select>
         </div>
       </div>
