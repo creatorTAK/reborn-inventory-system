@@ -9639,7 +9639,7 @@ ${prompt || '（未設定）'}
     }
   }
 
-  // Service Workerを強制更新してキャッシュをクリア
+  // Service Workerを強制更新してキャッシュをクリア（強化版）
   async function forceUpdateServiceWorker() {
     const btn = event.target;
     const originalText = btn.textContent;
@@ -9647,28 +9647,43 @@ ${prompt || '（未設定）'}
     btn.disabled = true;
 
     try {
+      console.log('🔄 キャッシュ強制クリア開始...');
+
       // 1. 全キャッシュを削除
       const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map(name => caches.delete(name)));
+      console.log('📦 削除するキャッシュ:', cacheNames);
+      await Promise.all(cacheNames.map(name => {
+        console.log('🗑️ キャッシュ削除:', name);
+        return caches.delete(name);
+      }));
       console.log('✅ 全キャッシュを削除しました');
 
-      // 2. Service Workerを更新
+      // 2. Service Workerを完全に登録解除して再登録
       if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.getRegistration();
-        if (registration) {
-          await registration.update();
-          console.log('✅ Service Workerを更新しました');
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        console.log('📋 登録されているService Worker数:', registrations.length);
 
-          // skipWaitingを送信
-          if (registration.waiting) {
-            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
+        for (const registration of registrations) {
+          console.log('🔄 Service Worker登録解除:', registration.scope);
+          await registration.unregister();
         }
+        console.log('✅ 全Service Workerを登録解除しました');
       }
 
-      // 3. ページをリロード
-      alert('キャッシュをクリアしました。ページを再読み込みします。');
-      window.location.reload(true);
+      // 3. localStorageのキャッシュ関連データをクリア（任意）
+      // localStorage.removeItem('sw-version'); // 必要に応じて
+
+      // 4. 親ウィンドウ（index.html）に通知して全体リロード
+      const isInIframe = window.self !== window.top;
+      if (isInIframe) {
+        console.log('📤 親ウィンドウに全体リロードを通知');
+        window.parent.postMessage({ type: 'forceFullReload' }, '*');
+      } else {
+        // 直接開かれている場合はトップレベルをリロード
+        console.log('🔄 ページを完全リロード');
+        alert('キャッシュをクリアしました。アプリを再読み込みします。');
+        window.location.href = '/index.html?cache_bust=' + Date.now();
+      }
 
     } catch (error) {
       console.error('Force update error:', error);

@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v225';  // 販売タイプ（オークション/価格設定）機能追加
+const CACHE_VERSION = 'v226';  // キャッシュ問題根本解決 - HTML/JS/CSSはキャッシュバイパス
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -549,6 +549,8 @@ self.addEventListener('activate', (event) => {
 
 // ================================================================================
 // Fetch イベントハンドラ（キャッシュ戦略）
+// ⚠️ 2025-12-12 重要な変更: HTML/JS/CSSはキャッシュを完全にバイパス
+// キャッシュ問題の根本解決のため、動的コンテンツはService Workerを通さない
 // ================================================================================
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
@@ -563,54 +565,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML: Network First（常にネットワーク優先、オフライン時のみキャッシュ）
-  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/' || !url.pathname.includes('.')) {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          // 成功したらキャッシュを更新
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(event.request, clone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          // オフライン時はキャッシュから返す
-          return caches.match(event.request).then(cached => {
-            return cached || caches.match('/index.html');
-          });
-        })
-    );
+  // ⚠️ HTML/JS/CSS: キャッシュを完全にバイパス（Service Workerは介入しない）
+  // これにより、ブラウザは常にサーバーから最新版を取得する
+  if (event.request.mode === 'navigate' ||
+      url.pathname.endsWith('.html') ||
+      url.pathname === '/' ||
+      !url.pathname.includes('.') ||
+      url.pathname.match(/\.(js|css)$/)) {
+    // Service Workerは何もしない = ブラウザのデフォルト動作（サーバーにリクエスト）
     return;
   }
 
-  // JS/CSS: Network First（常に最新版を取得、オフライン時のみキャッシュ）
-  // ⚠️ 重要: Cache Firstだと更新が反映されないため、Network Firstに変更（2025-12-10）
-  if (url.pathname.match(/\.(js|css)$/)) {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          // 成功したらキャッシュを更新して返す
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(event.request, clone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          // オフライン時のみキャッシュから返す
-          return caches.match(event.request);
-        })
-    );
-    return;
-  }
-
-  // 画像: Cache First（長期キャッシュ）
+  // 画像: Cache First（長期キャッシュ）- 画像のみキャッシュを使用
   if (url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/)) {
     event.respondWith(
       caches.match(event.request).then(cached => {
@@ -626,6 +592,16 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         });
+      })
+    );
+    return;
+  }
+
+  // manifest.json: キャッシュから返す（PWAに必要）
+  if (url.pathname === '/manifest.json') {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        return cached || fetch(event.request);
       })
     );
     return;
