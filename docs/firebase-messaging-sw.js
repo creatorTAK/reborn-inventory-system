@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v220';  // サイドメニュー業務管理アコーディオン追加
+const CACHE_VERSION = 'v221';  // 戻るボタンを履歴ベースに改善（前のページに戻る）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
