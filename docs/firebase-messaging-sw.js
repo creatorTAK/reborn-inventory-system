@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v249';  // 在庫詳細の販売情報に販売先を追加
+const CACHE_VERSION = 'v250';  // ボタンのhover/active色を水色系に統一
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
