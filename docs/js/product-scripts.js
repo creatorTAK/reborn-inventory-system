@@ -6883,6 +6883,13 @@ window.continueProductRegistration = function() {
 
   async function onSave() {
     console.log('[DEBUG] onSave() called');
+    
+    // 仕入商品との紐付けチェック（QR未スキャンの場合は警告）
+    if (typeof checkInvIdBeforeSave === 'function' && !checkInvIdBeforeSave()) {
+      console.log('[DEBUG] Save cancelled - no invId linked');
+      return;
+    }
+    
     updateNamePreview();
     updateDesc();
     const d = collect();
