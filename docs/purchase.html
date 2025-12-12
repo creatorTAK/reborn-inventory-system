@@ -543,6 +543,29 @@
       font-size: 1.1rem;
     }
 
+    /* 検品情報セクション */
+    .qr-result-section {
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      border-radius: 8px;
+      padding: 12px;
+      margin: 12px 0;
+    }
+    .qr-result-section-title {
+      font-weight: 600;
+      color: #059669;
+      font-size: 0.95rem;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #86efac;
+    }
+    .qr-result-section .qr-result-row {
+      padding: 6px 0;
+    }
+    .qr-result-section .qr-result-row:last-child {
+      border-bottom: none;
+    }
+
     /* スキャン履歴 */
     .qr-history-item {
       background: #f9fafb;
@@ -568,6 +591,74 @@
     .qr-history-item .history-time {
       font-size: 0.75rem;
       color: #9ca3af;
+    }
+
+    /* 検品情報セクション */
+    .inspection-section {
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+    }
+    .inspection-section-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .inspection-section-header i {
+      color: #22c55e;
+    }
+    .inspection-section-header span {
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: #166534;
+    }
+    .inspection-section-header .toggle-icon {
+      margin-left: auto;
+      color: #6b7280;
+    }
+    .inspection-fields {
+      display: grid;
+      gap: 10px;
+    }
+    .inspection-fields .form-label {
+      font-size: 0.75rem;
+      margin-bottom: 2px;
+      color: #374151;
+    }
+    .inspection-fields .form-control,
+    .inspection-fields .form-select {
+      font-size: 0.85rem;
+      padding: 6px 10px;
+    }
+
+    /* 付属品チェックボックス */
+    .accessories-checkboxes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .accessory-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.8rem;
+      background: white;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    .accessory-checkbox input {
+      width: 14px;
+      height: 14px;
+    }
+    .accessory-checkbox.checked {
+      background: #dcfce7;
+      border-color: #22c55e;
     }
 
     /* フローティングスキャンボタン */
@@ -2680,10 +2771,43 @@
     }
 
     // 個別商品を追加
+    // 検品情報のカテゴリ選択肢
+    const INSPECTION_CATEGORIES = [
+      'ファッション', 'ベビー・キッズ', 'ゲーム・おもちゃ・グッズ', 'ホビー・楽器・アート',
+      'チケット', '本・雑誌・漫画', 'CD・DVD・ブルーレイ', 'スマホ・タブレット・パソコン',
+      'テレビ・オーディオ・カメラ', '生活家電・空調', 'スポーツ', 'アウトドア・釣り・旅行用品',
+      'コスメ・美容', 'ダイエット・健康', '食品・飲料・酒', 'キッチン・日用品・その他',
+      '家具・インテリア', 'ペット用品', 'DIY・工具', '車・バイク・自転車', 'その他'
+    ];
+
+    // 商品状態の選択肢
+    const INSPECTION_CONDITIONS = [
+      '新品、未使用',
+      '未使用に近い',
+      '目立った傷や汚れなし',
+      'やや傷や汚れあり',
+      '傷や汚れあり',
+      '全体的に状態が悪い'
+    ];
+
+    // 付属品の選択肢
+    const INSPECTION_ACCESSORIES = ['箱', '保存袋', '保証書', 'ギャランティカード', 'タグ', 'その他付属品'];
+
     function addEntryItem() {
       const itemId = Date.now();
       const itemNumber = entryItems.length + 1;
-      entryItems.push({ id: itemId, supplier: '', amount: 0, memo: '' });
+      entryItems.push({
+        id: itemId,
+        supplier: '',
+        amount: 0,
+        memo: '',
+        // 検品情報
+        category: '',
+        brand: '',
+        condition: '',
+        accessories: [],
+        note: ''
+      });
 
       const container = document.getElementById('entryItemsContainer');
       const itemDiv = document.createElement('div');
@@ -2711,14 +2835,82 @@
             </div>
           </div>
         </div>
-        <div class="mt-2">
-          <label class="form-label">メモ</label>
-          <input type="text" class="form-control" id="entry-memo-${itemId}" placeholder="例：時計、バッグ等" onchange="updateEntryItem(${itemId})">
+
+        <!-- 検品情報セクション -->
+        <div class="inspection-section">
+          <div class="inspection-section-header" onclick="toggleInspectionSection(${itemId})">
+            <i class="bi bi-clipboard-check"></i>
+            <span>検品情報（商品登録時に自動反映）</span>
+            <i class="bi bi-chevron-down toggle-icon" id="inspection-toggle-${itemId}"></i>
+          </div>
+          <div class="inspection-fields" id="inspection-fields-${itemId}">
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label">カテゴリ</label>
+                <select class="form-select" id="entry-category-${itemId}" onchange="updateEntryItem(${itemId})">
+                  <option value="">--選択--</option>
+                  ${INSPECTION_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label">ブランド</label>
+                <input type="text" class="form-control" id="entry-brand-${itemId}" placeholder="ブランド名" onchange="updateEntryItem(${itemId})">
+              </div>
+            </div>
+            <div>
+              <label class="form-label">商品状態</label>
+              <select class="form-select" id="entry-condition-${itemId}" onchange="updateEntryItem(${itemId})">
+                <option value="">--選択--</option>
+                ${INSPECTION_CONDITIONS.map(c => `<option value="${c}">${c}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label class="form-label">付属品</label>
+              <div class="accessories-checkboxes" id="entry-accessories-${itemId}">
+                ${INSPECTION_ACCESSORIES.map(acc => `
+                  <label class="accessory-checkbox">
+                    <input type="checkbox" value="${acc}" onchange="updateAccessoryCheckbox(this, ${itemId})">
+                    ${acc}
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+            <div>
+              <label class="form-label">特記事項</label>
+              <input type="text" class="form-control" id="entry-note-${itemId}" placeholder="傷の位置、汚れなど" onchange="updateEntryItem(${itemId})">
+            </div>
+          </div>
         </div>
       `;
       container.appendChild(itemDiv);
       updateEntryTotal();
       updateEntryItemNumbers();
+    }
+
+    // 検品セクションの開閉
+    function toggleInspectionSection(itemId) {
+      const fields = document.getElementById(`inspection-fields-${itemId}`);
+      const icon = document.getElementById(`inspection-toggle-${itemId}`);
+      if (fields.style.display === 'none') {
+        fields.style.display = 'grid';
+        icon.classList.remove('bi-chevron-right');
+        icon.classList.add('bi-chevron-down');
+      } else {
+        fields.style.display = 'none';
+        icon.classList.remove('bi-chevron-down');
+        icon.classList.add('bi-chevron-right');
+      }
+    }
+
+    // 付属品チェックボックスの更新
+    function updateAccessoryCheckbox(checkbox, itemId) {
+      const label = checkbox.parentElement;
+      if (checkbox.checked) {
+        label.classList.add('checked');
+      } else {
+        label.classList.remove('checked');
+      }
+      updateEntryItem(itemId);
     }
 
     // 個別商品を削除
@@ -2738,6 +2930,17 @@
         item.supplier = document.getElementById(`entry-supplier-${itemId}`)?.value || '';
         item.amount = parseInt(document.getElementById(`entry-amount-${itemId}`)?.value) || 0;
         item.memo = document.getElementById(`entry-memo-${itemId}`)?.value || '';
+        // 検品情報
+        item.category = document.getElementById(`entry-category-${itemId}`)?.value || '';
+        item.brand = document.getElementById(`entry-brand-${itemId}`)?.value || '';
+        item.condition = document.getElementById(`entry-condition-${itemId}`)?.value || '';
+        item.note = document.getElementById(`entry-note-${itemId}`)?.value || '';
+        // 付属品（チェックされたもの）
+        const accessoriesContainer = document.getElementById(`entry-accessories-${itemId}`);
+        if (accessoriesContainer) {
+          const checked = accessoriesContainer.querySelectorAll('input:checked');
+          item.accessories = Array.from(checked).map(cb => cb.value);
+        }
       }
       updateEntryTotal();
     }
@@ -2894,6 +3097,18 @@
         item.supplier = document.getElementById(`entry-supplier-${item.id}`)?.value || '';
         item.amount = parseInt(document.getElementById(`entry-amount-${item.id}`)?.value) || 0;
         item.memo = document.getElementById(`entry-memo-${item.id}`)?.value || '';
+        // 検品情報を取得
+        item.category = document.getElementById(`entry-category-${item.id}`)?.value || '';
+        item.brand = document.getElementById(`entry-brand-${item.id}`)?.value || '';
+        item.condition = document.getElementById(`entry-condition-${item.id}`)?.value || '';
+        item.note = document.getElementById(`entry-note-${item.id}`)?.value || '';
+        const accessoriesContainer = document.getElementById(`entry-accessories-${item.id}`);
+        if (accessoriesContainer) {
+          const checked = accessoriesContainer.querySelectorAll('input:checked');
+          item.accessories = Array.from(checked).map(cb => cb.value);
+        } else {
+          item.accessories = [];
+        }
         if (!item.supplier) { alert(`商品 #${entryItems.indexOf(item) + 1} の仕入先を選択してください`); return; }
         if (item.amount <= 0) { alert(`商品 #${entryItems.indexOf(item) + 1} の金額を入力してください`); return; }
         validItems.push(item);
@@ -2931,7 +3146,7 @@
 
       validItems.forEach((item, index) => {
         const slot = slots[index];
-        // QRコードに埋め込むJSON（短縮キーで容量節約）
+        // QRコードに埋め込むJSON（短縮キーで容量節約、検品情報含む）
         const qrJson = {
           s: slot.slotId,           // slotId
           n: slot.slotNumber,       // number
@@ -2940,7 +3155,13 @@
           amt: item.amount,         // amount
           asg: assignee.substring(0, 10), // assignee (10文字まで)
           m: (item.memo || '').substring(0, 15), // memo (15文字まで)
-          t: validItems.length      // total count
+          t: validItems.length,     // total count
+          // 検品情報
+          cat: item.category || '',                    // category
+          br: (item.brand || '').substring(0, 20),     // brand (20文字まで)
+          cnd: item.condition || '',                   // condition
+          acc: item.accessories || [],                 // accessories array
+          nt: (item.note || '').substring(0, 30)       // note (30文字まで)
         };
         const qrContent = JSON.stringify(qrJson);
 
@@ -2954,9 +3175,11 @@
         const label = document.createElement('div');
         label.className = 'qr-entry-item-label';
         let labelText = `#${slot.slotNumber}/${validItems.length}<br>¥${item.amount.toLocaleString()}<br>${item.supplier}`;
+        if (item.category) labelText += `<br>${item.category}`;
+        if (item.brand) labelText += `<br>${item.brand}`;
+        if (item.condition) labelText += `<br>${item.condition}`;
         if (item.memo) labelText += `<br>${item.memo}`;
         label.innerHTML = labelText;
-        qrItem.appendChild(label);
 
         qrGrid.appendChild(qrItem);
 
@@ -2978,7 +3201,13 @@
           supplier: item.supplier,
           assignee: assignee,
           memo: item.memo || '',
-          totalCount: validItems.length
+          totalCount: validItems.length,
+          // 検品情報
+          category: item.category || '',
+          brand: item.brand || '',
+          condition: item.condition || '',
+          accessories: item.accessories || [],
+          note: item.note || ''
         });
       });
 
@@ -3404,6 +3633,15 @@
       const amount = qrData.amt || 0;
       const assignee = qrData.asg || '-';
       const memo = qrData.m || '';
+      // 検品情報
+      const category = qrData.cat || '';
+      const brand = qrData.br || '';
+      const condition = qrData.cnd || '';
+      const accessories = qrData.acc || [];
+      const note = qrData.nt || '';
+
+      // 検品情報があるかチェック
+      const hasInspectionData = category || brand || condition || accessories.length > 0 || note;
 
       resultDiv.innerHTML = `
         <div class="qr-result-card">
@@ -3435,6 +3673,43 @@
           <div class="qr-result-row">
             <span class="qr-result-label">メモ</span>
             <span class="qr-result-value">${memo}</span>
+          </div>
+          ` : ''}
+          ${hasInspectionData ? `
+          <div class="qr-result-section">
+            <div class="qr-result-section-title">
+              <i class="bi bi-clipboard-check me-1"></i>検品情報
+            </div>
+            ${category ? `
+            <div class="qr-result-row">
+              <span class="qr-result-label">カテゴリ</span>
+              <span class="qr-result-value">${category}</span>
+            </div>
+            ` : ''}
+            ${brand ? `
+            <div class="qr-result-row">
+              <span class="qr-result-label">ブランド</span>
+              <span class="qr-result-value">${brand}</span>
+            </div>
+            ` : ''}
+            ${condition ? `
+            <div class="qr-result-row">
+              <span class="qr-result-label">状態</span>
+              <span class="qr-result-value">${condition}</span>
+            </div>
+            ` : ''}
+            ${accessories.length > 0 ? `
+            <div class="qr-result-row">
+              <span class="qr-result-label">付属品</span>
+              <span class="qr-result-value">${accessories.join('、')}</span>
+            </div>
+            ` : ''}
+            ${note ? `
+            <div class="qr-result-row">
+              <span class="qr-result-label">特記事項</span>
+              <span class="qr-result-value">${note}</span>
+            </div>
+            ` : ''}
           </div>
           ` : ''}
           <div class="qr-result-row">

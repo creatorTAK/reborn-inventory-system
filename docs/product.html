@@ -1676,7 +1676,33 @@ style="display:none;">削除</button>
   }
 
   function onQRScanSuccess(decodedText) {
-    // QRコードからinvIdを抽出
+    console.log('📷 QRスキャン成功:', decodedText);
+    
+    // JSON形式の仕入QRコードかチェック
+    let qrData = null;
+    try {
+      qrData = JSON.parse(decodedText);
+    } catch (e) {
+      // JSON形式でない場合は従来の処理
+    }
+
+    // スキャナー停止
+    stopQRScanner();
+    closeQRScanner();
+
+    // 仕入QRコード（検品情報付き）の場合
+    if (qrData && qrData.s && qrData.n) {
+      console.log('📦 仕入QRコード検出（検品情報付き）:', qrData);
+      
+      // 仕入商品IDをセット
+      setInvId(qrData.s);
+      
+      // 仕入情報を自動反映
+      applyPurchaseQRData(qrData);
+      return;
+    }
+
+    // 従来の処理（URLベースのinvId抽出）
     let invId = decodedText;
     try {
       const url = new URL(decodedText);
@@ -1685,12 +1711,183 @@ style="display:none;">削除</button>
       // URLでない場合はそのまま使用
     }
 
-    // スキャナー停止
-    stopQRScanner();
-    closeQRScanner();
-
     // 仕入商品IDをセット
     setInvId(invId);
+  }
+
+  // 仕入QRコードのデータを商品登録フォームに自動反映
+  function applyPurchaseQRData(qrData) {
+    console.log('🔄 検品情報を自動反映中...');
+    
+    // 仕入日
+    if (qrData.d) {
+      const purchaseDateEl = document.getElementById('仕入日');
+      if (purchaseDateEl) purchaseDateEl.value = qrData.d;
+    }
+    
+    // 仕入金額
+    if (qrData.amt) {
+      const purchaseAmountEl = document.getElementById('仕入金額');
+      if (purchaseAmountEl) purchaseAmountEl.value = qrData.amt;
+    }
+    
+    // 仕入先
+    if (qrData.sup) {
+      const supplierEl = document.getElementById('仕入先');
+      if (supplierEl) {
+        // selectの選択肢から一致するものを探す
+        const options = supplierEl.options;
+        for (let i = 0; i < options.length; i++) {
+          if (options[i].value === qrData.sup || options[i].text.includes(qrData.sup)) {
+            supplierEl.selectedIndex = i;
+            break;
+          }
+        }
+      }
+    }
+    
+    // カテゴリ（特大分類）
+    if (qrData.cat) {
+      const categoryEl = document.getElementById('特大分類');
+      if (categoryEl) {
+        const options = categoryEl.options;
+        for (let i = 0; i < options.length; i++) {
+          if (options[i].value === qrData.cat) {
+            categoryEl.selectedIndex = i;
+            // カテゴリ変更イベントを発火（連動プルダウン用）
+            categoryEl.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+          }
+        }
+      }
+    }
+    
+    // ブランド
+    if (qrData.br) {
+      const brandEl = document.getElementById('ブランド(英語)');
+      if (brandEl) brandEl.value = qrData.br;
+      // 商品名用ブランドフィールドにも反映
+      const brandNameEl = document.getElementById('商品名_ブランド(英語)');
+      if (brandNameEl) brandNameEl.value = qrData.br;
+    }
+    
+    // 商品の状態
+    if (qrData.cnd) {
+      const conditionEl = document.getElementById('商品の状態');
+      if (conditionEl) {
+        const options = conditionEl.options;
+        for (let i = 0; i < options.length; i++) {
+          if (options[i].value === qrData.cnd || options[i].text === qrData.cnd) {
+            conditionEl.selectedIndex = i;
+            conditionEl.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+          }
+        }
+      }
+    }
+    
+    // 付属品情報（特記事項に追加）
+    if (qrData.acc && qrData.acc.length > 0) {
+      const accessoriesText = '【付属品】' + qrData.acc.join('、');
+      // 商品状態詳細に追加
+      const conditionDetailEl = document.getElementById('商品状態詳細');
+      if (conditionDetailEl) {
+        const current = conditionDetailEl.value;
+        conditionDetailEl.value = current ? current + '\n' + accessoriesText : accessoriesText;
+      }
+    }
+    
+    // 特記事項（検品メモ）
+    if (qrData.nt) {
+      const conditionDetailEl = document.getElementById('商品状態詳細');
+      if (conditionDetailEl) {
+        const current = conditionDetailEl.value;
+        const noteText = '【検品メモ】' + qrData.nt;
+        conditionDetailEl.value = current ? current + '\n' + noteText : noteText;
+      }
+    }
+    
+    // メモ
+    if (qrData.m) {
+      const conditionDetailEl = document.getElementById('商品状態詳細');
+      if (conditionDetailEl && qrData.m) {
+        const current = conditionDetailEl.value;
+        const memoText = '【仕入メモ】' + qrData.m;
+        conditionDetailEl.value = current ? current + '\n' + memoText : memoText;
+      }
+    }
+    
+    // 反映完了通知
+    showInspectionDataAppliedNotification(qrData);
+    
+    console.log('✅ 検品情報の自動反映完了');
+  }
+
+  // 検品情報反映完了の通知表示
+  function showInspectionDataAppliedNotification(qrData) {
+    // 反映された項目をカウント
+    const appliedItems = [];
+    if (qrData.d) appliedItems.push('仕入日');
+    if (qrData.amt) appliedItems.push('仕入金額');
+    if (qrData.sup) appliedItems.push('仕入先');
+    if (qrData.cat) appliedItems.push('カテゴリ');
+    if (qrData.br) appliedItems.push('ブランド');
+    if (qrData.cnd) appliedItems.push('商品状態');
+    if (qrData.acc && qrData.acc.length > 0) appliedItems.push('付属品');
+    if (qrData.nt) appliedItems.push('検品メモ');
+    
+    // 通知要素を作成
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      padding: 16px 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      z-index: 20000;
+      font-weight: 600;
+      text-align: center;
+      max-width: 90%;
+      animation: slideDown 0.3s ease-out;
+    `;
+    notification.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <i class="bi bi-check-circle-fill" style="font-size: 24px;"></i>
+        <div>
+          <div>検品情報を自動反映しました</div>
+          <div style="font-size: 12px; font-weight: 400; margin-top: 4px; opacity: 0.9;">
+            ${appliedItems.join('、')}
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // アニメーション用スタイルを追加
+    if (!document.getElementById('inspection-notification-style')) {
+      const style = document.createElement('style');
+      style.id = 'inspection-notification-style';
+      style.textContent = `
+        @keyframes slideDown {
+          from { transform: translateX(-50%) translateY(-100%); opacity: 0; }
+          to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(notification);
+    
+    // 3秒後に自動で消す
+    setTimeout(() => {
+      notification.style.transition = 'opacity 0.3s, transform 0.3s';
+      notification.style.opacity = '0';
+      notification.style.transform = 'translateX(-50%) translateY(-20px)';
+      setTimeout(() => notification.remove(), 300);
+    }, 3000);
   }
 
   function onQRScanFailure(error) {
