@@ -1405,6 +1405,101 @@
       }
     }
 
+    /**
+     * 仕入バッチを保存
+     * @param {Object} batchData - バッチデータ
+     * @returns {string} バッチID
+     */
+    async function savePurchaseBatch(batchData) {
+      try {
+        const { setDoc, addDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        // バッチIDを生成
+        const dateStr = batchData.purchaseDate.replace(/-/g, '');
+        const randomStr = Math.random().toString(36).substring(2, 8);
+        const batchId = `BATCH-${dateStr}-${randomStr}`;
+
+        // バッチを保存
+        const batchRef = doc(db, 'purchaseBatches', batchId);
+        await setDoc(batchRef, {
+          batchId: batchId,
+          purchaseDate: batchData.purchaseDate,
+          supplier: batchData.supplier,
+          totalAmount: batchData.totalAmount,
+          itemCount: batchData.itemCount,
+          assignee: batchData.assignee || '',
+          memo: batchData.memo || '',
+          status: 'pending', // pending / shipped / received
+          createdAt: serverTimestamp()
+        });
+
+        // スロットを保存
+        const slots = [];
+        for (let i = 1; i <= batchData.itemCount; i++) {
+          const slotId = `${batchId}-${String(i).padStart(3, '0')}`;
+          const slotData = {
+            slotId: slotId,
+            batchId: batchId,
+            slotNumber: i,
+            amount: batchData.items ? batchData.items[i-1]?.amount || 0 : Math.round(batchData.totalAmount / batchData.itemCount),
+            memo: batchData.items ? batchData.items[i-1]?.memo || '' : '',
+            supplier: batchData.supplier,
+            purchaseDate: batchData.purchaseDate,
+            assignee: batchData.assignee || '',
+            productId: null, // 商品登録後に紐付く
+            status: 'unregistered', // unregistered / registered
+            createdAt: serverTimestamp()
+          };
+
+          const slotRef = doc(db, 'purchaseSlots', slotId);
+          await setDoc(slotRef, slotData);
+          slots.push(slotData);
+        }
+
+        console.log('📦 [仕入バッチ] 保存完了:', batchId, 'スロット数:', slots.length);
+        return { batchId, slots };
+      } catch (error) {
+        console.error('仕入バッチ保存エラー:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * スロット情報を取得（QRスキャン時用）
+     */
+    async function getSlotBySlotId(slotId) {
+      try {
+        const { getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const slotRef = doc(db, 'purchaseSlots', slotId);
+        const slotSnap = await getDoc(slotRef);
+        if (slotSnap.exists()) {
+          return slotSnap.data();
+        }
+        return null;
+      } catch (error) {
+        console.error('スロット取得エラー:', error);
+        return null;
+      }
+    }
+
+    /**
+     * スロットを商品に紐付け
+     */
+    async function linkSlotToProduct(slotId, productId) {
+      try {
+        const slotRef = doc(db, 'purchaseSlots', slotId);
+        await updateDoc(slotRef, {
+          productId: productId,
+          status: 'registered',
+          registeredAt: serverTimestamp()
+        });
+        return true;
+      } catch (error) {
+        console.error('スロット紐付けエラー:', error);
+        return false;
+      }
+    }
+
     // グローバルに公開
     window.PurchaseApi = {
       getSuppliers,
@@ -1413,7 +1508,10 @@
       getEntrySuppliersData,
       getEntryAssigneesData,
       getEntryLabelSettings,
-      saveEntryLabelSettingsToFirestore
+      saveEntryLabelSettingsToFirestore,
+      savePurchaseBatch,
+      getSlotBySlotId,
+      linkSlotToProduct
     };
 
     console.log('✅ [仕入] Firebase初期化完了');
@@ -2493,48 +2591,75 @@
     }
 
     // QRコード生成（入力モードに応じて分岐）
-    function generateEntryQRCodes() {
+    async function generateEntryQRCodes() {
       if (currentEntryMode === 'batch') {
-        generateEntryQRCodesBatch();
+        await generateEntryQRCodesBatch();
       } else {
-        generateEntryQRCodesIndividual();
+        await generateEntryQRCodesIndividual();
       }
     }
 
     // 一括入力モードのQRコード生成
-    function generateEntryQRCodesBatch() {
+    async function generateEntryQRCodesBatch() {
       const purchaseDate = document.getElementById('entryPurchaseDate').value;
       const supplier = document.getElementById('entrySupplier').value;
       const itemCount = parseInt(document.getElementById('entryItemCount').value) || 0;
+      const totalAmount = parseInt(document.getElementById('entryTotalAmount').value) || 0;
       const assignee = document.getElementById('entryAssignee').value;
+      const memo = document.getElementById('entryMemo')?.value || '';
 
       if (!purchaseDate || !supplier || !itemCount || !assignee) {
         alert('必須項目を入力してください');
         return;
       }
 
-      const dateStr = purchaseDate.replace(/-/g, '');
-      const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const purchaseId = `PUR-${dateStr}-${randomStr}`;
+      // Firestoreにバッチ＆スロットを保存
+      let batchResult;
+      try {
+        batchResult = await window.PurchaseApi.savePurchaseBatch({
+          purchaseDate,
+          supplier,
+          totalAmount,
+          itemCount,
+          assignee,
+          memo
+        });
+      } catch (error) {
+        alert('保存に失敗しました: ' + error.message);
+        return;
+      }
+
+      const { batchId, slots } = batchResult;
+      const perItemAmount = Math.round(totalAmount / itemCount);
 
       entryGeneratedQRData = [];
       const qrGrid = document.getElementById('qrEntryGrid');
       qrGrid.innerHTML = '';
 
-      for (let i = 1; i <= itemCount; i++) {
-        const invId = `INV-${dateStr}-${randomStr}-${String(i).padStart(3, '0')}`;
-        const qrContent = `https://furira.jp/scan?inv=${invId}`;
+      for (let i = 0; i < slots.length; i++) {
+        const slot = slots[i];
+        // QRコードに埋め込むJSON（短縮キーで容量節約）
+        const qrJson = {
+          s: slot.slotId,           // slotId
+          n: slot.slotNumber,       // number
+          d: purchaseDate,          // date
+          sup: supplier.substring(0, 10), // supplier (10文字まで)
+          amt: perItemAmount,       // amount
+          asg: assignee.substring(0, 10), // assignee (10文字まで)
+          t: itemCount              // total count
+        };
+        const qrContent = JSON.stringify(qrJson);
 
         const qrItem = document.createElement('div');
         qrItem.className = 'qr-entry-item';
 
         const qrContainer = document.createElement('div');
-        qrContainer.id = `qr-entry-${i}`;
+        qrContainer.id = `qr-entry-${i + 1}`;
         qrItem.appendChild(qrContainer);
 
         const label = document.createElement('div');
         label.className = 'qr-entry-item-label';
-        label.textContent = `#${i}`;
+        label.innerHTML = `#${slot.slotNumber}/${itemCount}<br>¥${perItemAmount.toLocaleString()}<br>${supplier}`;
         qrItem.appendChild(label);
 
         qrGrid.appendChild(qrItem);
@@ -2548,12 +2673,21 @@
           correctLevel: QRCode.CorrectLevel.M
         });
 
-        entryGeneratedQRData.push({ id: invId, content: qrContent, index: i, dataUrl: null });
+        entryGeneratedQRData.push({
+          slotId: slot.slotId,
+          slotNumber: slot.slotNumber,
+          content: qrContent,
+          dataUrl: null,
+          amount: perItemAmount,
+          supplier: supplier,
+          assignee: assignee,
+          totalCount: itemCount
+        });
       }
 
       document.getElementById('qrEntryPreview').style.display = 'block';
       document.getElementById('qrEntryCount').textContent = itemCount + '枚';
-      document.getElementById('entryPurchaseId').textContent = purchaseId;
+      document.getElementById('entryPurchaseId').textContent = batchId;
       document.getElementById('entryAfterActions').style.display = 'block';
 
       setTimeout(() => {
@@ -2569,7 +2703,7 @@
     }
 
     // 個別入力モードのQRコード生成
-    function generateEntryQRCodesIndividual() {
+    async function generateEntryQRCodesIndividual() {
       const purchaseDate = document.getElementById('entryPurchaseDate').value;
       const assignee = document.getElementById('entryAssigneeIndividual').value;
 
@@ -2580,6 +2714,7 @@
       for (const item of entryItems) {
         item.supplier = document.getElementById(`entry-supplier-${item.id}`)?.value || '';
         item.amount = parseInt(document.getElementById(`entry-amount-${item.id}`)?.value) || 0;
+        item.memo = document.getElementById(`entry-memo-${item.id}`)?.value || '';
         if (!item.supplier) { alert(`商品 #${entryItems.indexOf(item) + 1} の仕入先を選択してください`); return; }
         if (item.amount <= 0) { alert(`商品 #${entryItems.indexOf(item) + 1} の金額を入力してください`); return; }
         validItems.push(item);
@@ -2587,29 +2722,61 @@
 
       if (validItems.length === 0) { alert('商品を追加してください'); return; }
 
-      const dateStr = purchaseDate.replace(/-/g, '');
-      const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const purchaseId = `PUR-${dateStr}-${randomStr}`;
+      const totalAmount = validItems.reduce((sum, item) => sum + item.amount, 0);
+      // 個別入力の場合、仕入先は最初の商品のものを使用（混在している場合は「複数」）
+      const uniqueSuppliers = [...new Set(validItems.map(item => item.supplier))];
+      const batchSupplier = uniqueSuppliers.length === 1 ? uniqueSuppliers[0] : '複数仕入先';
+
+      // Firestoreにバッチ＆スロットを保存
+      let batchResult;
+      try {
+        batchResult = await window.PurchaseApi.savePurchaseBatch({
+          purchaseDate,
+          supplier: batchSupplier,
+          totalAmount,
+          itemCount: validItems.length,
+          assignee,
+          memo: '',
+          items: validItems.map(item => ({ amount: item.amount, memo: item.memo, supplier: item.supplier }))
+        });
+      } catch (error) {
+        alert('保存に失敗しました: ' + error.message);
+        return;
+      }
+
+      const { batchId, slots } = batchResult;
 
       entryGeneratedQRData = [];
       const qrGrid = document.getElementById('qrEntryGrid');
       qrGrid.innerHTML = '';
 
       validItems.forEach((item, index) => {
-        const i = index + 1;
-        const invId = `INV-${dateStr}-${randomStr}-${String(i).padStart(3, '0')}`;
-        const qrContent = `https://furira.jp/scan?inv=${invId}`;
+        const slot = slots[index];
+        // QRコードに埋め込むJSON（短縮キーで容量節約）
+        const qrJson = {
+          s: slot.slotId,           // slotId
+          n: slot.slotNumber,       // number
+          d: purchaseDate,          // date
+          sup: item.supplier.substring(0, 10), // supplier (10文字まで)
+          amt: item.amount,         // amount
+          asg: assignee.substring(0, 10), // assignee (10文字まで)
+          m: (item.memo || '').substring(0, 15), // memo (15文字まで)
+          t: validItems.length      // total count
+        };
+        const qrContent = JSON.stringify(qrJson);
 
         const qrItem = document.createElement('div');
         qrItem.className = 'qr-entry-item';
 
         const qrContainer = document.createElement('div');
-        qrContainer.id = `qr-entry-${i}`;
+        qrContainer.id = `qr-entry-${index + 1}`;
         qrItem.appendChild(qrContainer);
 
         const label = document.createElement('div');
         label.className = 'qr-entry-item-label';
-        label.innerHTML = `#${i}<br>¥${item.amount.toLocaleString()}<br>${item.supplier}`;
+        let labelText = `#${slot.slotNumber}/${validItems.length}<br>¥${item.amount.toLocaleString()}<br>${item.supplier}`;
+        if (item.memo) labelText += `<br>${item.memo}`;
+        label.innerHTML = labelText;
         qrItem.appendChild(label);
 
         qrGrid.appendChild(qrItem);
@@ -2623,12 +2790,22 @@
           correctLevel: QRCode.CorrectLevel.M
         });
 
-        entryGeneratedQRData.push({ id: invId, content: qrContent, index: i, dataUrl: null, amount: item.amount, supplier: item.supplier });
+        entryGeneratedQRData.push({
+          slotId: slot.slotId,
+          slotNumber: slot.slotNumber,
+          content: qrContent,
+          dataUrl: null,
+          amount: item.amount,
+          supplier: item.supplier,
+          assignee: assignee,
+          memo: item.memo || '',
+          totalCount: validItems.length
+        });
       });
 
       document.getElementById('qrEntryPreview').style.display = 'block';
       document.getElementById('qrEntryCount').textContent = validItems.length + '枚';
-      document.getElementById('entryPurchaseId').textContent = purchaseId;
+      document.getElementById('entryPurchaseId').textContent = batchId;
       document.getElementById('entryAfterActions').style.display = 'block';
 
       setTimeout(() => {
