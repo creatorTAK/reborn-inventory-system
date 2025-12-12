@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- Cache Bust: 2025-12-12 v241 - 戻る操作の履歴管理を修正 -->
+  <!-- Cache Bust: 2025-12-12 v242 - 履歴管理をスタック方式（最大3件）に変更 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -4831,24 +4831,34 @@
       return crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
     }
 
-    // ナビゲーション履歴管理（シンプル方式：1つ前のページだけ記憶）
-    let previousPage = 'home';  // 直前にいたページ
-    let currentPage = 'home';   // 現在のページ
+    // ナビゲーション履歴管理（スタック方式：最大3件）
+    const navHistory = ['home'];  // 履歴スタック
 
-    // 戻る処理（直前のページに戻る）
-    function goBackInHistory() {
-      console.log('📚 [履歴] goBackInHistory呼び出し - 現在:', currentPage, '→ 戻り先:', previousPage);
-      const destination = previousPage || 'home';
+    // 履歴に追加（進む時）
+    function pushHistory(page) {
+      // 同じページへの連続遷移は無視
+      if (navHistory[navHistory.length - 1] === page) return;
       
-      // 戻る操作: 現在のページが「前のページ」になり、戻り先が「現在のページ」になる
-      // ただし、戻り先がホームなら「前のページ」もホームにする
-      if (destination === 'home') {
-        previousPage = 'home';
-      } else {
-        previousPage = currentPage;
+      navHistory.push(page);
+      // 最大3件に制限
+      if (navHistory.length > 3) {
+        navHistory.shift();
       }
-      currentPage = destination;
-      console.log('📚 [履歴] 戻る後: previousPage =', previousPage, ', currentPage =', destination);
+      console.log('📚 [履歴] push:', page, '→', navHistory);
+    }
+
+    // 戻る処理
+    function goBackInHistory() {
+      console.log('📚 [履歴] goBack呼び出し - 現在:', navHistory);
+      
+      // 現在のページを削除
+      if (navHistory.length > 1) {
+        navHistory.pop();
+      }
+      
+      // 1つ前のページに遷移（なければホーム）
+      const destination = navHistory[navHistory.length - 1] || 'home';
+      console.log('📚 [履歴] 戻り先:', destination, '→', navHistory);
       
       navigateToPage(destination, { skipHistory: true, skipSkeleton: true });
     }
@@ -4862,17 +4872,14 @@
       const skipSkeleton = options.skipSkeleton || false;
       const skipHistory = options.skipHistory || false;
 
-      // 📚 履歴管理（シンプル方式：1つ前のページだけ記憶）
-      // skipHistory時は goBackInHistory で既に更新済みなのでスキップ
-      if (!skipHistory && page !== currentPage) {
-        previousPage = currentPage;
-        currentPage = page;
-        console.log('📚 [履歴] 更新: previousPage =', previousPage, ', currentPage =', page);
+      // 📚 履歴管理（スタック方式）
+      if (!skipHistory) {
+        pushHistory(page);
       }
 
       // 📊 パフォーマンス計測開始
       const startTime = performance.now();
-      console.log('⏱️ [計測開始] ページ遷移:', page, '戻り先:', previousPage);
+      console.log('⏱️ [計測開始] ページ遷移:', page, '履歴:', navHistory);
 
       // UI-013: ドロワーを先に閉じる（スケルトンUI表示を妨げないように）
       closeDrawer();
@@ -5667,12 +5674,8 @@
     function openChatRooms() {
       console.log('[Chat FAB] チャット一覧を開く');
 
-      // 📚 履歴管理：現在のページを記憶してからチャットに遷移
-      if (currentPage !== 'chat') {
-        previousPage = currentPage;
-        currentPage = 'chat';
-        console.log('📚 [履歴] チャット遷移: previousPage =', previousPage);
-      }
+      // 📚 履歴管理：チャットに遷移
+      pushHistory('chat');
 
       const userName = localStorage.getItem('reborn_user_name') || '';
       const userEmail = localStorage.getItem('reborn_user_email') || '';
@@ -5770,12 +5773,8 @@
     function openTodoList() {
       console.log('[Todo] やることリストを開く');
 
-      // 📚 履歴管理：現在のページを記憶してからTodoに遷移
-      if (currentPage !== 'todo') {
-        previousPage = currentPage;
-        currentPage = 'todo';
-        console.log('📚 [履歴] Todo遷移: previousPage =', previousPage);
-      }
+      // 📚 履歴管理：Todoに遷移
+      pushHistory('todo');
 
       const userName = localStorage.getItem('reborn_user_name') || '';
       const userEmail = localStorage.getItem('reborn_user_email') || '';
