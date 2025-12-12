@@ -535,9 +535,9 @@ const masterCategories = {
       },
 
       assignee: {
-        label: '発送先（外注）',
+        label: '発送先',
         collection: 'assignees',
-        description: '外注先・発送先担当者を管理',
+        description: '発送先担当者を管理',
         fields: [
           {
             name: 'name',
