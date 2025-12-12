@@ -159,18 +159,130 @@
     word-break: break-all;
   }
   
+  /* ラベル設定カード */
+  .label-preset-btn {
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+  .label-preset-btn:hover {
+    border-color: #4ECDC4;
+    background: #f0faf9;
+  }
+  .label-preset-btn.active {
+    border-color: #4ECDC4;
+    background: #e8f8f6;
+  }
+  .label-preset-btn .preset-name {
+    font-weight: 600;
+    color: #333;
+  }
+  .label-preset-btn .preset-info {
+    font-size: 0.75rem;
+    color: #666;
+    margin-top: 4px;
+  }
+  .custom-settings {
+    display: none;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 12px;
+  }
+  .custom-settings.show {
+    display: block;
+  }
+  .custom-settings .form-label {
+    font-size: 0.75rem;
+    margin-bottom: 4px;
+  }
+  .custom-settings .form-control {
+    padding: 8px;
+    font-size: 0.875rem;
+  }
+
+  /* ラベルシートプレビュー */
+  .label-sheet-preview {
+    background: white;
+    border: 1px solid #ccc;
+    margin: 16px auto;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  .label-cell {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .label-cell canvas, .label-cell img {
+    max-width: 100%;
+    max-height: 100%;
+  }
+  .label-cell-empty {
+    background: #f5f5f5;
+    border: 1px dashed #ccc;
+  }
+
+  /* 印刷モード選択 */
+  .print-mode-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .print-mode-tab {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    text-align: center;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+  }
+  .print-mode-tab:hover {
+    border-color: #4ECDC4;
+  }
+  .print-mode-tab.active {
+    border-color: #4ECDC4;
+    background: #e8f8f6;
+    color: #2a8a82;
+  }
+  .print-mode-tab i {
+    display: block;
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+  }
+
   /* 印刷用スタイル */
   @media print {
     body {
       background: white;
+      margin: 0;
+      padding: 0;
     }
-    .header, .card:not(.print-area), .btn, .no-print {
+    .header, .card:not(.print-area), .btn, .no-print, .content > *:not(.print-area) {
       display: none !important;
+    }
+    .content {
+      max-width: none;
+      padding: 0;
+      margin: 0;
     }
     .print-area {
       box-shadow: none;
       padding: 0;
+      margin: 0;
+      border-radius: 0;
     }
+    /* 通常印刷モード */
     .qr-grid {
       grid-template-columns: repeat(4, 1fr);
       gap: 8px;
@@ -183,6 +295,26 @@
     .qr-item canvas {
       width: 80px !important;
       height: 80px !important;
+    }
+    /* ラベルシート印刷モード */
+    .label-sheet-print-area {
+      width: 210mm;
+      height: 297mm;
+      margin: 0;
+      padding: 0;
+      page-break-after: always;
+    }
+    .label-sheet-print-area:last-child {
+      page-break-after: auto;
+    }
+    .label-sheet-preview {
+      border: none;
+      box-shadow: none;
+      margin: 0;
+    }
+    @page {
+      size: A4;
+      margin: 0;
     }
   }
   
@@ -297,32 +429,164 @@
   </div>
   
   <!-- QRコードプレビュー -->
-  <div class="card qr-preview-container print-area" id="qrPreview">
+  <div class="card qr-preview-container" id="qrPreview">
     <div class="card-title">
       <i class="bi bi-grid-3x3"></i> QRコードプレビュー
       <span class="badge bg-success ms-2" id="qrCount">0枚</span>
     </div>
-    
-    <div class="d-flex gap-2 mb-3 no-print">
-      <button class="btn btn-outline-primary flex-fill" onclick="printQRCodes()">
-        <i class="bi bi-printer"></i> 印刷
-      </button>
-      <button class="btn btn-outline-primary flex-fill" onclick="downloadQRCodes()">
-        <i class="bi bi-download"></i> PDF保存
-      </button>
+
+    <!-- 印刷モード選択 -->
+    <div class="print-mode-tabs no-print">
+      <div class="print-mode-tab active" onclick="setPrintMode('simple')" id="printModeSimple">
+        <i class="bi bi-grid-3x3-gap"></i>
+        シンプル印刷
+      </div>
+      <div class="print-mode-tab" onclick="setPrintMode('label')" id="printModeLabel">
+        <i class="bi bi-layout-wtf"></i>
+        ラベルシート印刷
+      </div>
     </div>
-    
-    <div class="qr-grid" id="qrGrid">
-      <!-- QRコードがここに生成される -->
+
+    <!-- シンプル印刷モード -->
+    <div id="simplePrintSection">
+      <div class="d-flex gap-2 mb-3 no-print">
+        <button class="btn btn-outline-primary flex-fill" onclick="printSimple()">
+          <i class="bi bi-printer"></i> 印刷
+        </button>
+        <button class="btn btn-outline-primary flex-fill" onclick="downloadQRCodes()">
+          <i class="bi bi-download"></i> PDF保存
+        </button>
+      </div>
+
+      <div class="qr-grid print-area" id="qrGrid">
+        <!-- QRコードがここに生成される -->
+      </div>
     </div>
-    
+
+    <!-- ラベルシート印刷モード -->
+    <div id="labelPrintSection" style="display: none;">
+      <!-- ラベル設定 -->
+      <div class="mb-3 no-print">
+        <label class="form-label fw-bold">ラベルシートを選択</label>
+        <div class="row g-2" id="labelPresets">
+          <div class="col-6">
+            <div class="label-preset-btn active" onclick="selectLabelPreset('70face')" data-preset="70face">
+              <div class="preset-name">70面</div>
+              <div class="preset-info">20×20mm / A4</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="label-preset-btn" onclick="selectLabelPreset('24face')" data-preset="24face">
+              <div class="preset-name">24面</div>
+              <div class="preset-info">66×33.9mm / A4</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="label-preset-btn" onclick="selectLabelPreset('44face')" data-preset="44face">
+              <div class="preset-name">44面</div>
+              <div class="preset-info">48.3×25.4mm / A4</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="label-preset-btn" onclick="selectLabelPreset('custom')" data-preset="custom">
+              <div class="preset-name">カスタム</div>
+              <div class="preset-info">自由設定</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- カスタム設定パネル -->
+        <div class="custom-settings" id="customSettings">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">ラベル幅 (mm)</label>
+              <input type="number" class="form-control" id="labelWidth" value="20" min="10" max="100" onchange="updateLabelPreview()">
+            </div>
+            <div class="col-6">
+              <label class="form-label">ラベル高さ (mm)</label>
+              <input type="number" class="form-control" id="labelHeight" value="20" min="10" max="100" onchange="updateLabelPreview()">
+            </div>
+            <div class="col-6">
+              <label class="form-label">列数</label>
+              <input type="number" class="form-control" id="labelCols" value="7" min="1" max="15" onchange="updateLabelPreview()">
+            </div>
+            <div class="col-6">
+              <label class="form-label">行数</label>
+              <input type="number" class="form-control" id="labelRows" value="10" min="1" max="20" onchange="updateLabelPreview()">
+            </div>
+            <div class="col-6">
+              <label class="form-label">上余白 (mm)</label>
+              <input type="number" class="form-control" id="marginTop" value="30.5" min="0" max="50" step="0.5" onchange="updateLabelPreview()">
+            </div>
+            <div class="col-6">
+              <label class="form-label">左余白 (mm)</label>
+              <input type="number" class="form-control" id="marginLeft" value="4" min="0" max="50" step="0.5" onchange="updateLabelPreview()">
+            </div>
+            <div class="col-6">
+              <label class="form-label">横間隔 (mm)</label>
+              <input type="number" class="form-control" id="gapX" value="10" min="0" max="20" step="0.5" onchange="updateLabelPreview()">
+            </div>
+            <div class="col-6">
+              <label class="form-label">縦間隔 (mm)</label>
+              <input type="number" class="form-control" id="gapY" value="3" min="0" max="20" step="0.5" onchange="updateLabelPreview()">
+            </div>
+          </div>
+          <div class="mt-2">
+            <button class="btn btn-sm btn-outline-secondary" onclick="saveLabelSettings()">
+              <i class="bi bi-save"></i> 設定を保存
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ラベル情報表示 -->
+      <div class="alert alert-info py-2 no-print">
+        <small>
+          <i class="bi bi-info-circle"></i>
+          <span id="labelInfo">70面ラベル: 1シートあたり70枚印刷可能</span>
+          <br>
+          <span id="sheetInfo">必要シート数: 1枚</span>
+        </small>
+      </div>
+
+      <!-- 印刷開始位置 -->
+      <div class="mb-3 no-print">
+        <label class="form-label">印刷開始位置</label>
+        <div class="input-group">
+          <input type="number" class="form-control" id="startPosition" value="1" min="1">
+          <span class="input-group-text">番目から印刷</span>
+        </div>
+        <small class="text-muted">途中から印刷する場合に使用（使いかけのシートを有効活用）</small>
+      </div>
+
+      <!-- 印刷ボタン -->
+      <div class="d-grid gap-2 mb-3 no-print">
+        <button class="btn btn-primary" onclick="printLabelSheet()">
+          <i class="bi bi-printer"></i> ラベルシート印刷
+        </button>
+      </div>
+
+      <!-- ラベルシートプレビュー -->
+      <div class="text-center no-print">
+        <small class="text-muted mb-2 d-block">プレビュー（縮小表示）</small>
+      </div>
+      <div id="labelSheetContainer">
+        <!-- ラベルシートプレビューがここに生成される -->
+      </div>
+    </div>
+
     <div class="mt-3 no-print">
       <small class="text-muted">
-        <i class="bi bi-info-circle"></i> 
+        <i class="bi bi-info-circle"></i>
         QRコードを印刷して、各商品に貼り付けてください。
         外注スタッフがスキャンすると商品登録画面が開きます。
       </small>
     </div>
+  </div>
+
+  <!-- ラベルシート印刷用の隠しエリア -->
+  <div id="labelPrintArea" class="print-area" style="display: none;">
+    <!-- 印刷時にここにラベルシートが複製される -->
   </div>
   
   <!-- 登録完了後のアクション -->
@@ -589,16 +853,490 @@
     document.getElementById('qrPreview').scrollIntoView({ behavior: 'smooth' });
   }
   
-  // 印刷
-  function printQRCodes() {
+  // シンプル印刷
+  function printSimple() {
+    // シンプル印刷モードを設定
+    document.getElementById('qrGrid').classList.add('print-area');
+    document.getElementById('labelPrintArea').style.display = 'none';
     window.print();
   }
-  
+
   // PDF保存（簡易版：印刷ダイアログからPDF保存）
   function downloadQRCodes() {
     alert('印刷ダイアログで「PDFとして保存」を選択してください');
-    window.print();
+    printSimple();
   }
+
+  // ========================================
+  // ラベルシート印刷機能
+  // ========================================
+
+  // 現在の印刷モード
+  let currentPrintMode = 'simple';
+
+  // 生成されたQRコードデータを保持
+  let generatedQRData = [];
+
+  // ラベルプリセット定義
+  const labelPresets = {
+    '70face': {
+      name: '70面',
+      labelWidth: 20,
+      labelHeight: 20,
+      cols: 7,
+      rows: 10,
+      marginTop: 30.5,
+      marginLeft: 4,
+      gapX: 10,
+      gapY: 3,
+      perSheet: 70
+    },
+    '24face': {
+      name: '24面',
+      labelWidth: 66,
+      labelHeight: 33.9,
+      cols: 3,
+      rows: 8,
+      marginTop: 8.5,
+      marginLeft: 5,
+      gapX: 2.5,
+      gapY: 0,
+      perSheet: 24
+    },
+    '44face': {
+      name: '44面',
+      labelWidth: 48.3,
+      labelHeight: 25.4,
+      cols: 4,
+      rows: 11,
+      marginTop: 12.7,
+      marginLeft: 7,
+      gapX: 2.5,
+      gapY: 0,
+      perSheet: 44
+    },
+    'custom': {
+      name: 'カスタム',
+      labelWidth: 20,
+      labelHeight: 20,
+      cols: 7,
+      rows: 10,
+      marginTop: 30.5,
+      marginLeft: 4,
+      gapX: 10,
+      gapY: 3,
+      perSheet: 70
+    }
+  };
+
+  // 現在のラベル設定
+  let currentLabelSettings = { ...labelPresets['70face'] };
+
+  // 印刷モード切替
+  function setPrintMode(mode) {
+    currentPrintMode = mode;
+
+    // タブのアクティブ状態を切替
+    document.getElementById('printModeSimple').classList.toggle('active', mode === 'simple');
+    document.getElementById('printModeLabel').classList.toggle('active', mode === 'label');
+
+    // セクションの表示切替
+    document.getElementById('simplePrintSection').style.display = mode === 'simple' ? 'block' : 'none';
+    document.getElementById('labelPrintSection').style.display = mode === 'label' ? 'block' : 'none';
+
+    // ラベルモードの場合はプレビューを更新
+    if (mode === 'label' && generatedQRData.length > 0) {
+      updateLabelPreview();
+    }
+  }
+
+  // ラベルプリセット選択
+  function selectLabelPreset(presetKey) {
+    // ボタンのアクティブ状態を切替
+    document.querySelectorAll('.label-preset-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.preset === presetKey);
+    });
+
+    // カスタム設定パネルの表示
+    document.getElementById('customSettings').classList.toggle('show', presetKey === 'custom');
+
+    // 設定を適用
+    if (presetKey !== 'custom') {
+      currentLabelSettings = { ...labelPresets[presetKey] };
+      // カスタム入力欄も更新
+      updateCustomInputs();
+    } else {
+      // カスタムの場合は入力値から設定を読み取る
+      readCustomInputs();
+    }
+
+    // ラベル情報とプレビューを更新
+    updateLabelInfo();
+    updateLabelPreview();
+  }
+
+  // カスタム入力欄を更新
+  function updateCustomInputs() {
+    document.getElementById('labelWidth').value = currentLabelSettings.labelWidth;
+    document.getElementById('labelHeight').value = currentLabelSettings.labelHeight;
+    document.getElementById('labelCols').value = currentLabelSettings.cols;
+    document.getElementById('labelRows').value = currentLabelSettings.rows;
+    document.getElementById('marginTop').value = currentLabelSettings.marginTop;
+    document.getElementById('marginLeft').value = currentLabelSettings.marginLeft;
+    document.getElementById('gapX').value = currentLabelSettings.gapX;
+    document.getElementById('gapY').value = currentLabelSettings.gapY;
+  }
+
+  // カスタム入力値を読み取る
+  function readCustomInputs() {
+    currentLabelSettings.labelWidth = parseFloat(document.getElementById('labelWidth').value) || 20;
+    currentLabelSettings.labelHeight = parseFloat(document.getElementById('labelHeight').value) || 20;
+    currentLabelSettings.cols = parseInt(document.getElementById('labelCols').value) || 7;
+    currentLabelSettings.rows = parseInt(document.getElementById('labelRows').value) || 10;
+    currentLabelSettings.marginTop = parseFloat(document.getElementById('marginTop').value) || 0;
+    currentLabelSettings.marginLeft = parseFloat(document.getElementById('marginLeft').value) || 0;
+    currentLabelSettings.gapX = parseFloat(document.getElementById('gapX').value) || 0;
+    currentLabelSettings.gapY = parseFloat(document.getElementById('gapY').value) || 0;
+    currentLabelSettings.perSheet = currentLabelSettings.cols * currentLabelSettings.rows;
+  }
+
+  // ラベル情報を更新
+  function updateLabelInfo() {
+    const perSheet = currentLabelSettings.cols * currentLabelSettings.rows;
+    const qrCount = generatedQRData.length;
+    const startPos = parseInt(document.getElementById('startPosition')?.value) || 1;
+    const effectivePerSheet = perSheet - (startPos - 1);
+    const sheetsNeeded = qrCount > 0 ? Math.ceil((qrCount + startPos - 1) / perSheet) : 1;
+
+    document.getElementById('labelInfo').textContent =
+      `${currentLabelSettings.name || 'カスタム'}ラベル: 1シートあたり${perSheet}枚印刷可能`;
+    document.getElementById('sheetInfo').textContent =
+      `必要シート数: ${sheetsNeeded}枚（${qrCount}個のQRコード）`;
+  }
+
+  // ラベルシートプレビューを更新
+  function updateLabelPreview() {
+    // カスタムモードの場合は入力値を読み取る
+    if (document.querySelector('.label-preset-btn[data-preset="custom"].active')) {
+      readCustomInputs();
+    }
+
+    updateLabelInfo();
+
+    if (generatedQRData.length === 0) {
+      document.getElementById('labelSheetContainer').innerHTML =
+        '<div class="text-center text-muted py-4">QRコードを生成するとプレビューが表示されます</div>';
+      return;
+    }
+
+    const container = document.getElementById('labelSheetContainer');
+    container.innerHTML = '';
+
+    const { labelWidth, labelHeight, cols, rows, marginTop, marginLeft, gapX, gapY } = currentLabelSettings;
+    const perSheet = cols * rows;
+    const startPos = parseInt(document.getElementById('startPosition')?.value) || 1;
+
+    // A4サイズ (210mm x 297mm)
+    const a4Width = 210;
+    const a4Height = 297;
+
+    // プレビュースケール（画面に収まるように縮小）
+    const maxPreviewWidth = 350;
+    const scale = maxPreviewWidth / a4Width;
+
+    // 必要シート数を計算
+    const totalQR = generatedQRData.length;
+    const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
+
+    let qrIndex = 0;
+
+    for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
+      // シートコンテナ
+      const sheetDiv = document.createElement('div');
+      sheetDiv.className = 'label-sheet-preview';
+      sheetDiv.style.width = (a4Width * scale) + 'px';
+      sheetDiv.style.height = (a4Height * scale) + 'px';
+      sheetDiv.style.marginBottom = '16px';
+
+      // 各ラベルセルを配置
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const cellIndex = row * cols + col;
+          const globalIndex = sheet * perSheet + cellIndex;
+
+          // 開始位置より前はスキップ（空のセルとして表示）
+          const isBeforeStart = globalIndex < startPos - 1;
+          const hasQR = !isBeforeStart && qrIndex < totalQR;
+
+          // セル位置を計算
+          const x = marginLeft + col * (labelWidth + gapX);
+          const y = marginTop + row * (labelHeight + gapY);
+
+          const cell = document.createElement('div');
+          cell.className = 'label-cell' + (hasQR ? '' : ' label-cell-empty');
+          cell.style.left = (x * scale) + 'px';
+          cell.style.top = (y * scale) + 'px';
+          cell.style.width = (labelWidth * scale) + 'px';
+          cell.style.height = (labelHeight * scale) + 'px';
+
+          if (hasQR) {
+            // QRコードを配置
+            const qrData = generatedQRData[qrIndex];
+            const img = document.createElement('img');
+            img.src = qrData.dataUrl;
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            cell.appendChild(img);
+            qrIndex++;
+          }
+
+          sheetDiv.appendChild(cell);
+        }
+      }
+
+      // シート番号ラベル
+      const sheetLabel = document.createElement('div');
+      sheetLabel.className = 'text-center text-muted mt-1';
+      sheetLabel.style.fontSize = '0.75rem';
+      sheetLabel.textContent = `シート ${sheet + 1} / ${sheetsNeeded}`;
+
+      const wrapper = document.createElement('div');
+      wrapper.appendChild(sheetDiv);
+      wrapper.appendChild(sheetLabel);
+      container.appendChild(wrapper);
+    }
+  }
+
+  // ラベルシート印刷
+  function printLabelSheet() {
+    if (generatedQRData.length === 0) {
+      alert('先にQRコードを生成してください');
+      return;
+    }
+
+    // カスタムモードの場合は入力値を読み取る
+    if (document.querySelector('.label-preset-btn[data-preset="custom"].active')) {
+      readCustomInputs();
+    }
+
+    const { labelWidth, labelHeight, cols, rows, marginTop, marginLeft, gapX, gapY } = currentLabelSettings;
+    const perSheet = cols * rows;
+    const startPos = parseInt(document.getElementById('startPosition')?.value) || 1;
+
+    // A4サイズ (mm)
+    const a4Width = 210;
+    const a4Height = 297;
+
+    // 印刷用エリアを準備
+    const printArea = document.getElementById('labelPrintArea');
+    printArea.innerHTML = '';
+    printArea.style.display = 'block';
+
+    // シンプル印刷エリアを非表示
+    document.getElementById('qrGrid').classList.remove('print-area');
+
+    const totalQR = generatedQRData.length;
+    const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
+
+    let qrIndex = 0;
+
+    for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
+      // シートコンテナ（実寸）
+      const sheetDiv = document.createElement('div');
+      sheetDiv.className = 'label-sheet-print-area';
+      sheetDiv.style.width = a4Width + 'mm';
+      sheetDiv.style.height = a4Height + 'mm';
+      sheetDiv.style.position = 'relative';
+      sheetDiv.style.background = 'white';
+
+      // 各ラベルセルを配置
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const cellIndex = row * cols + col;
+          const globalIndex = sheet * perSheet + cellIndex;
+
+          // 開始位置より前はスキップ
+          const isBeforeStart = globalIndex < startPos - 1;
+          const hasQR = !isBeforeStart && qrIndex < totalQR;
+
+          if (!hasQR) continue;
+
+          // セル位置を計算
+          const x = marginLeft + col * (labelWidth + gapX);
+          const y = marginTop + row * (labelHeight + gapY);
+
+          const cell = document.createElement('div');
+          cell.style.position = 'absolute';
+          cell.style.left = x + 'mm';
+          cell.style.top = y + 'mm';
+          cell.style.width = labelWidth + 'mm';
+          cell.style.height = labelHeight + 'mm';
+          cell.style.display = 'flex';
+          cell.style.alignItems = 'center';
+          cell.style.justifyContent = 'center';
+
+          // QRコードを配置
+          const qrData = generatedQRData[qrIndex];
+          const img = document.createElement('img');
+          img.src = qrData.dataUrl;
+          // QRコードをラベルサイズに合わせる（パディング考慮）
+          const qrSize = Math.min(labelWidth, labelHeight) * 0.9;
+          img.style.width = qrSize + 'mm';
+          img.style.height = qrSize + 'mm';
+          cell.appendChild(img);
+
+          sheetDiv.appendChild(cell);
+          qrIndex++;
+        }
+      }
+
+      printArea.appendChild(sheetDiv);
+    }
+
+    // 印刷実行
+    setTimeout(() => {
+      window.print();
+      // 印刷後にリセット
+      setTimeout(() => {
+        printArea.style.display = 'none';
+      }, 1000);
+    }, 100);
+  }
+
+  // ラベル設定を保存
+  async function saveLabelSettings() {
+    readCustomInputs();
+    try {
+      await db.collection('settings').doc('labelSettings').set({
+        ...currentLabelSettings,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      alert('ラベル設定を保存しました');
+    } catch (error) {
+      console.error('ラベル設定保存エラー:', error);
+      alert('設定の保存に失敗しました');
+    }
+  }
+
+  // ラベル設定を読み込み
+  async function loadLabelSettings() {
+    try {
+      const doc = await db.collection('settings').doc('labelSettings').get();
+      if (doc.exists) {
+        const saved = doc.data();
+        labelPresets['custom'] = { ...saved, name: 'カスタム' };
+        console.log('[LABEL] 保存済み設定を読み込みました');
+      }
+    } catch (error) {
+      console.error('ラベル設定読み込みエラー:', error);
+    }
+  }
+
+  // QRコード生成時にデータを保持するよう修正
+  const originalGenerateQRCodes = generateQRCodes;
+  generateQRCodes = function() {
+    const purchaseDate = document.getElementById('purchaseDate').value;
+    const supplier = document.getElementById('supplier').value;
+    const itemCount = parseInt(document.getElementById('itemCount').value) || 0;
+    const totalAmount = parseInt(document.getElementById('totalAmount').value) || 0;
+    const assignee = document.getElementById('assignee').value;
+
+    // バリデーション
+    if (!purchaseDate || !supplier || !itemCount || !assignee) {
+      alert('必須項目を入力してください');
+      return;
+    }
+
+    // 仕入IDを生成（日付ベース）
+    const dateStr = purchaseDate.replace(/-/g, '');
+    const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const purchaseId = `PUR-${dateStr}-${randomStr}`;
+
+    // QRデータをリセット
+    generatedQRData = [];
+
+    // QRコード生成
+    const qrGrid = document.getElementById('qrGrid');
+    qrGrid.innerHTML = '';
+
+    for (let i = 1; i <= itemCount; i++) {
+      // 仕入商品ID
+      const invId = `INV-${dateStr}-${randomStr}-${String(i).padStart(3, '0')}`;
+
+      // QRコードの内容（URL）
+      const qrContent = `https://furira.jp/scan?inv=${invId}`;
+
+      // QRコード要素を作成
+      const qrItem = document.createElement('div');
+      qrItem.className = 'qr-item';
+
+      const qrContainer = document.createElement('div');
+      qrContainer.id = `qr-${i}`;
+      qrItem.appendChild(qrContainer);
+
+      const label = document.createElement('div');
+      label.className = 'qr-item-label';
+      label.textContent = `#${i}`;
+      qrItem.appendChild(label);
+
+      qrGrid.appendChild(qrItem);
+
+      // QRコード描画（qrcodejs ライブラリ）
+      new QRCode(qrContainer, {
+        text: qrContent,
+        width: 100,
+        height: 100,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      // QRコードデータを保持（canvasからdataURL取得は少し遅延が必要）
+      generatedQRData.push({
+        id: invId,
+        content: qrContent,
+        index: i,
+        dataUrl: null // 後で設定
+      });
+    }
+
+    // プレビュー表示
+    document.getElementById('qrPreview').classList.add('show');
+    document.getElementById('qrCount').textContent = itemCount + '枚';
+    document.getElementById('purchaseId').textContent = purchaseId;
+
+    // 完了メッセージ
+    document.getElementById('afterActions').style.display = 'block';
+
+    // QRコードのcanvasからdataURLを取得（少し遅延）
+    setTimeout(() => {
+      for (let i = 0; i < generatedQRData.length; i++) {
+        const canvas = document.querySelector(`#qr-${i + 1} canvas`);
+        if (canvas) {
+          generatedQRData[i].dataUrl = canvas.toDataURL('image/png');
+        }
+      }
+      // ラベルプレビューを更新
+      if (currentPrintMode === 'label') {
+        updateLabelPreview();
+      }
+      updateLabelInfo();
+    }, 500);
+
+    // スクロール
+    document.getElementById('qrPreview').scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // 初期化時にラベル設定を読み込み
+  document.addEventListener('DOMContentLoaded', function() {
+    loadLabelSettings();
+    // 開始位置変更時にプレビュー更新
+    document.getElementById('startPosition')?.addEventListener('change', function() {
+      updateLabelInfo();
+      updateLabelPreview();
+    });
+  });
 </script>
 
 </body>
