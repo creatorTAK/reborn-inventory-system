@@ -3727,6 +3727,34 @@ ${descFormattedNumber}`;
         <button type="button" onclick="clearProcureListingDefaults()" style="width: 100%; padding: 10px; background: white; border: 2px solid #ef4444; border-radius: 8px; color: #ef4444; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 16px; transition: all 0.2s;" onmouseover="this.style.background='#fef2f2';" onmouseout="this.style.background='white';">
           🗑️ すべてクリア
         </button>
+
+        <!-- 仕入先マスタセクション -->
+        <div style="margin-bottom: 24px; padding: 16px; background: white; border-radius: 8px; border: 2px solid #e5e7eb;">
+          <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+            <span>🏭 仕入先マスタ</span>
+            <button type="button" onclick="openAddSupplierModal()" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+              ＋ 追加
+            </button>
+          </div>
+          <div id="supplierList" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Firestoreから読み込まれた仕入先リストがここに表示される -->
+            <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">読み込み中...</div>
+          </div>
+        </div>
+
+        <!-- 発送先（外注）マスタセクション -->
+        <div style="margin-bottom: 24px; padding: 16px; background: white; border-radius: 8px; border: 2px solid #e5e7eb;">
+          <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+            <span>📦 発送先（外注）マスタ</span>
+            <button type="button" onclick="openAddAssigneeModal()" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+              ＋ 追加
+            </button>
+          </div>
+          <div id="assigneeList" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Firestoreから読み込まれた発送先リストがここに表示される -->
+            <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">読み込み中...</div>
+          </div>
+        </div>
           </div>
 
           <!-- 権限設定タブ (PERM-001 Phase 2) -->
@@ -10809,6 +10837,216 @@ ${prompt || '（未設定）'}
       console.error('[USER] ❌ 削除エラー:', error);
       alert('エラー: ' + error.message);
     }
+  }
+
+  // ================================================================================
+  // 仕入先・発送先マスタ管理
+  // ================================================================================
+
+  // 仕入先マスタを読み込み
+  async function loadSupplierMaster() {
+    try {
+      const snapshot = await window.db.collection('masters').doc('suppliers').get();
+      const data = snapshot.exists ? snapshot.data() : { items: [] };
+      const items = data.items || [];
+
+      renderSupplierList(items);
+
+      // デフォルト仕入先のドロップダウンも更新
+      const defaultSelect = document.getElementById('デフォルト仕入先');
+      if (defaultSelect) {
+        const currentValue = defaultSelect.value;
+        defaultSelect.innerHTML = '<option value="">-- 選択してください --</option>';
+        items.forEach(item => {
+          const option = document.createElement('option');
+          option.value = item.name;
+          option.textContent = item.name;
+          defaultSelect.appendChild(option);
+        });
+        defaultSelect.value = currentValue;
+      }
+
+      return items;
+    } catch (error) {
+      console.error('[MASTER] 仕入先マスタ読み込みエラー:', error);
+      return [];
+    }
+  }
+
+  // 仕入先リストを描画
+  function renderSupplierList(items) {
+    const container = document.getElementById('supplierList');
+    if (!container) return;
+
+    if (items.length === 0) {
+      container.innerHTML = '<div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">仕入先が登録されていません</div>';
+      return;
+    }
+
+    container.innerHTML = items.map((item, index) => `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb;">
+        <span style="font-size: 14px; color: #374151;">${escapeHtml(item.name)}</span>
+        <button type="button" onclick="deleteSupplier(${index})" style="padding: 4px 8px; background: #fee2e2; color: #dc2626; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">
+          削除
+        </button>
+      </div>
+    `).join('');
+  }
+
+  // 仕入先追加モーダルを開く
+  window.openAddSupplierModal = function() {
+    const name = prompt('仕入先名を入力してください:');
+    if (name && name.trim()) {
+      addSupplier(name.trim());
+    }
+  }
+
+  // 仕入先を追加
+  async function addSupplier(name) {
+    try {
+      const snapshot = await window.db.collection('masters').doc('suppliers').get();
+      const data = snapshot.exists ? snapshot.data() : { items: [] };
+      const items = data.items || [];
+
+      // 重複チェック
+      if (items.some(item => item.name === name)) {
+        alert('この仕入先は既に登録されています');
+        return;
+      }
+
+      items.push({ name, createdAt: new Date().toISOString() });
+
+      await window.db.collection('masters').doc('suppliers').set({ items });
+      console.log('[MASTER] ✅ 仕入先を追加:', name);
+
+      loadSupplierMaster();
+    } catch (error) {
+      console.error('[MASTER] 仕入先追加エラー:', error);
+      alert('エラー: ' + error.message);
+    }
+  }
+
+  // 仕入先を削除
+  window.deleteSupplier = async function(index) {
+    if (!confirm('この仕入先を削除しますか？')) return;
+
+    try {
+      const snapshot = await window.db.collection('masters').doc('suppliers').get();
+      const data = snapshot.exists ? snapshot.data() : { items: [] };
+      const items = data.items || [];
+
+      items.splice(index, 1);
+
+      await window.db.collection('masters').doc('suppliers').set({ items });
+      console.log('[MASTER] ✅ 仕入先を削除');
+
+      loadSupplierMaster();
+    } catch (error) {
+      console.error('[MASTER] 仕入先削除エラー:', error);
+      alert('エラー: ' + error.message);
+    }
+  }
+
+  // 発送先マスタを読み込み
+  async function loadAssigneeMaster() {
+    try {
+      const snapshot = await window.db.collection('masters').doc('assignees').get();
+      const data = snapshot.exists ? snapshot.data() : { items: [] };
+      const items = data.items || [];
+
+      renderAssigneeList(items);
+      return items;
+    } catch (error) {
+      console.error('[MASTER] 発送先マスタ読み込みエラー:', error);
+      return [];
+    }
+  }
+
+  // 発送先リストを描画
+  function renderAssigneeList(items) {
+    const container = document.getElementById('assigneeList');
+    if (!container) return;
+
+    if (items.length === 0) {
+      container.innerHTML = '<div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">発送先が登録されていません</div>';
+      return;
+    }
+
+    container.innerHTML = items.map((item, index) => `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb;">
+        <div>
+          <span style="font-size: 14px; color: #374151;">${escapeHtml(item.name)}</span>
+          ${item.note ? `<span style="font-size: 11px; color: #6b7280; margin-left: 8px;">(${escapeHtml(item.note)})</span>` : ''}
+        </div>
+        <button type="button" onclick="deleteAssignee(${index})" style="padding: 4px 8px; background: #fee2e2; color: #dc2626; border: none; border-radius: 4px; font-size: 11px; cursor: pointer;">
+          削除
+        </button>
+      </div>
+    `).join('');
+  }
+
+  // 発送先追加モーダルを開く
+  window.openAddAssigneeModal = function() {
+    const name = prompt('発送先（外注名）を入力してください:');
+    if (name && name.trim()) {
+      const note = prompt('備考（担当範囲など、省略可）:', '');
+      addAssignee(name.trim(), note ? note.trim() : '');
+    }
+  }
+
+  // 発送先を追加
+  async function addAssignee(name, note) {
+    try {
+      const snapshot = await window.db.collection('masters').doc('assignees').get();
+      const data = snapshot.exists ? snapshot.data() : { items: [] };
+      const items = data.items || [];
+
+      // 重複チェック
+      if (items.some(item => item.name === name)) {
+        alert('この発送先は既に登録されています');
+        return;
+      }
+
+      items.push({ name, note, createdAt: new Date().toISOString() });
+
+      await window.db.collection('masters').doc('assignees').set({ items });
+      console.log('[MASTER] ✅ 発送先を追加:', name);
+
+      loadAssigneeMaster();
+    } catch (error) {
+      console.error('[MASTER] 発送先追加エラー:', error);
+      alert('エラー: ' + error.message);
+    }
+  }
+
+  // 発送先を削除
+  window.deleteAssignee = async function(index) {
+    if (!confirm('この発送先を削除しますか？')) return;
+
+    try {
+      const snapshot = await window.db.collection('masters').doc('assignees').get();
+      const data = snapshot.exists ? snapshot.data() : { items: [] };
+      const items = data.items || [];
+
+      items.splice(index, 1);
+
+      await window.db.collection('masters').doc('assignees').set({ items });
+      console.log('[MASTER] ✅ 発送先を削除');
+
+      loadAssigneeMaster();
+    } catch (error) {
+      console.error('[MASTER] 発送先削除エラー:', error);
+      alert('エラー: ' + error.message);
+    }
+  }
+
+  // 仕入・出品タブが表示されたときにマスタを読み込み
+  const procureTab = document.getElementById('system-procure-tab');
+  if (procureTab) {
+    procureTab.addEventListener('shown.bs.tab', function() {
+      loadSupplierMaster();
+      loadAssigneeMaster();
+    });
   }
 </script>
 
