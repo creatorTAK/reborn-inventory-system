@@ -12,6 +12,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- html5-qrcode（QRコードスキャン用） -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- Algolia SDK（ブランド検索用） -->
+  <script src="https://cdn.jsdelivr.net/npm/algoliasearch@4/dist/algoliasearch-lite.umd.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -659,6 +661,84 @@
     .accessory-checkbox.checked {
       background: #dcfce7;
       border-color: #22c55e;
+    }
+
+    /* ブランドサジェスト用スタイル */
+    .brand-field {
+      position: relative;
+    }
+    .suggest {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 2px);
+      background: white;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+      max-height: 240px;
+      overflow: auto;
+      z-index: 10000;
+    }
+    .suggest.suggest-above {
+      top: auto;
+      bottom: calc(100% + 2px);
+      box-shadow: 0 -10px 25px rgba(0, 0, 0, 0.15);
+    }
+    .suggest[hidden] { display: none; }
+    .sug-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid #f3f4f6;
+      transition: background-color 0.1s ease;
+    }
+    .sug-item.brand-item {
+      padding: 10px 12px;
+      line-height: 1.3;
+    }
+    .brand-english {
+      font-weight: 600;
+      color: #1f2937;
+      font-size: 13px;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .brand-kana {
+      font-size: 11px;
+      color: #6b7280;
+      font-weight: 400;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sug-item.brand-item:hover .brand-english,
+    .sug-item.brand-item.active .brand-english {
+      color: #5b21b6;
+    }
+    .sug-item.brand-item:hover .brand-kana,
+    .sug-item.brand-item.active .brand-kana {
+      color: #7c3aed;
+    }
+    .sug-item:hover,
+    .sug-item.active {
+      background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+      color: #5b21b6;
+      font-weight: 500;
+    }
+    .sug-item:last-child {
+      border-bottom: none;
+    }
+
+    /* 7階層カテゴリプルダウン用 */
+    .inspection-category-selects select {
+      margin-top: 6px;
+    }
+    .inspection-category-selects select:disabled {
+      background-color: #f3f4f6;
+      cursor: not-allowed;
     }
 
     /* フローティングスキャンボタン */
@@ -1758,6 +1838,33 @@
       }
     }
 
+    /**
+     * カテゴリマスタを取得（7階層連動用）
+     */
+    async function getCategoryMaster() {
+      try {
+        const { getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const catRef = doc(db, 'categories', 'masterData');
+        const docSnap = await getDoc(catRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const rows = data.rows || [];
+          return rows.map(r => ({
+            大分類: String(r.大分類 || '').trim(),
+            中分類: String(r.中分類 || '').trim(),
+            小分類: String(r.小分類 || '').trim(),
+            細分類: String(r.細分類 || '').trim(),
+            細分類2: String(r.細分類2 || '').trim(),
+            アイテム名: String(r.アイテム名 || '').trim()
+          }));
+        }
+        return [];
+      } catch (error) {
+        console.error('❌ カテゴリマスタ取得エラー:', error);
+        return [];
+      }
+    }
+
     // グローバルに公開
     window.PurchaseApi = {
       getSuppliers,
@@ -1769,7 +1876,8 @@
       saveEntryLabelSettingsToFirestore,
       savePurchaseBatch,
       getSlotBySlotId,
-      linkSlotToProduct
+      linkSlotToProduct,
+      getCategoryMaster
     };
 
     console.log('✅ [仕入] Firebase初期化完了');
@@ -2664,6 +2772,7 @@
     let entryAssigneesData = [];
     let currentEntryMode = 'batch'; // 'batch' or 'individual'
     let entryItems = []; // 個別入力の商品リスト
+    let entryCategoryRows = []; // 7階層カテゴリマスタデータ
     let entryGeneratedQRData = [];
     let currentEntryPrintMode = 'simple';
     let currentEntryLabelSettings = {
@@ -2735,6 +2844,15 @@
         document.getElementById('entryAssigneeIndividual').innerHTML = '<option value="">読み込みエラー</option>';
       }
 
+      // カテゴリマスタを読み込み（7階層連動用）
+      try {
+        entryCategoryRows = await window.PurchaseApi.getCategoryMaster();
+        console.log('📥 [仕入登録] カテゴリマスタ読み込み完了:', entryCategoryRows.length, '件');
+      } catch (error) {
+        console.error('カテゴリマスタ読み込みエラー:', error);
+        entryCategoryRows = [];
+      }
+
       // 最初の1件を追加
       addEntryItem();
 
@@ -2801,12 +2919,22 @@
         supplier: '',
         amount: 0,
         memo: '',
-        // 検品情報
-        category: '',
-        brand: '',
-        condition: '',
-        accessories: [],
-        note: ''
+        // 検品情報（商品登録と同じ順番: カテゴリ → サイズ → 商品の状態 → ブランド → 付属品 → 特記事項）
+        category: {
+          superCategory: '',  // 特大分類
+          major: '',          // 大分類
+          middle: '',         // 中分類
+          small: '',          // 小分類
+          fine: '',           // 細分類
+          fine2: '',          // 細分類2
+          itemName: ''        // アイテム名
+        },
+        size: '',             // サイズ
+        condition: '',        // 商品の状態
+        brand: '',            // ブランド
+        brandKana: '',        // ブランド(カナ)
+        accessories: [],      // 付属品
+        note: ''              // 特記事項
       });
 
       const container = document.getElementById('entryItemsContainer');
@@ -2844,27 +2972,58 @@
             <i class="bi bi-chevron-down toggle-icon" id="inspection-toggle-${itemId}"></i>
           </div>
           <div class="inspection-fields" id="inspection-fields-${itemId}">
-            <div class="row g-2">
-              <div class="col-6">
-                <label class="form-label">カテゴリ</label>
-                <select class="form-select" id="entry-category-${itemId}" onchange="updateEntryItem(${itemId})">
-                  <option value="">--選択--</option>
-                  ${INSPECTION_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
-                </select>
-              </div>
-              <div class="col-6">
-                <label class="form-label">ブランド</label>
-                <input type="text" class="form-control" id="entry-brand-${itemId}" placeholder="ブランド名" onchange="updateEntryItem(${itemId})">
-              </div>
+            <!-- 1. カテゴリ（7階層プルダウン） -->
+            <div class="inspection-category-selects">
+              <label class="form-label">カテゴリ</label>
+              <select class="form-select" id="entry-cat-l0-${itemId}" onchange="onEntryCatL0Changed(${itemId})">
+                <option value="">--選択してください--</option>
+                ${INSPECTION_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+              </select>
+              <select class="form-select" id="entry-cat-l1-${itemId}" onchange="onEntryCatL1Changed(${itemId})" disabled>
+                <option value="">--選択してください--</option>
+              </select>
+              <select class="form-select" id="entry-cat-l2-${itemId}" onchange="onEntryCatL2Changed(${itemId})" disabled>
+                <option value="">--選択してください--</option>
+              </select>
+              <select class="form-select" id="entry-cat-l3-${itemId}" onchange="onEntryCatL3Changed(${itemId})" disabled>
+                <option value="">--選択してください--</option>
+              </select>
+              <select class="form-select" id="entry-cat-l4-${itemId}" onchange="onEntryCatL4Changed(${itemId})" disabled style="display:none;">
+                <option value="">--選択してください--</option>
+              </select>
+              <select class="form-select" id="entry-cat-l5-${itemId}" onchange="onEntryCatL5Changed(${itemId})" disabled style="display:none;">
+                <option value="">--選択してください--</option>
+              </select>
+              <select class="form-select" id="entry-cat-item-${itemId}" onchange="updateEntryItem(${itemId})" disabled>
+                <option value="">--選択してください--</option>
+              </select>
             </div>
-            <div>
-              <label class="form-label">商品状態</label>
+
+            <!-- 2. サイズ -->
+            <div style="margin-top: 10px;">
+              <label class="form-label">サイズ</label>
+              <input type="text" class="form-control" id="entry-size-${itemId}" placeholder="S, M, L, 26.5cm など" onchange="updateEntryItem(${itemId})">
+            </div>
+
+            <!-- 3. 商品の状態 -->
+            <div style="margin-top: 10px;">
+              <label class="form-label">商品の状態</label>
               <select class="form-select" id="entry-condition-${itemId}" onchange="updateEntryItem(${itemId})">
-                <option value="">--選択--</option>
+                <option value="">--選択してください--</option>
                 ${INSPECTION_CONDITIONS.map(c => `<option value="${c}">${c}</option>`).join('')}
               </select>
             </div>
-            <div>
+
+            <!-- 4. ブランド（Algolia検索） -->
+            <div class="brand-field" style="margin-top: 10px;">
+              <label class="form-label">ブランド</label>
+              <input type="text" class="form-control" id="entry-brand-${itemId}" autocomplete="off" placeholder="入力すると候補が表示されます" oninput="onEntryBrandInput(${itemId})" onchange="updateEntryItem(${itemId})">
+              <div class="suggest" id="suggest-entry-brand-${itemId}" hidden></div>
+              <input type="hidden" id="entry-brand-kana-${itemId}">
+            </div>
+
+            <!-- 5. 付属品 -->
+            <div style="margin-top: 10px;">
               <label class="form-label">付属品</label>
               <div class="accessories-checkboxes" id="entry-accessories-${itemId}">
                 ${INSPECTION_ACCESSORIES.map(acc => `
@@ -2875,7 +3034,9 @@
                 `).join('')}
               </div>
             </div>
-            <div>
+
+            <!-- 6. 特記事項 -->
+            <div style="margin-top: 10px;">
               <label class="form-label">特記事項</label>
               <input type="text" class="form-control" id="entry-note-${itemId}" placeholder="傷の位置、汚れなど" onchange="updateEntryItem(${itemId})">
             </div>
@@ -2885,6 +3046,9 @@
       container.appendChild(itemDiv);
       updateEntryTotal();
       updateEntryItemNumbers();
+
+      // ブランドサジェストをアタッチ
+      setTimeout(() => attachEntryBrandSuggest(itemId), 100);
     }
 
     // 検品セクションの開閉
@@ -2930,9 +3094,19 @@
         item.supplier = document.getElementById(`entry-supplier-${itemId}`)?.value || '';
         item.amount = parseInt(document.getElementById(`entry-amount-${itemId}`)?.value) || 0;
         item.memo = document.getElementById(`entry-memo-${itemId}`)?.value || '';
-        // 検品情報
-        item.category = document.getElementById(`entry-category-${itemId}`)?.value || '';
+        // 検品情報（7階層カテゴリ対応）
+        item.category = {
+          superCategory: document.getElementById(`entry-cat-l0-${itemId}`)?.value || '',
+          major: document.getElementById(`entry-cat-l1-${itemId}`)?.value || '',
+          middle: document.getElementById(`entry-cat-l2-${itemId}`)?.value || '',
+          small: document.getElementById(`entry-cat-l3-${itemId}`)?.value || '',
+          fine: document.getElementById(`entry-cat-l4-${itemId}`)?.value || '',
+          fine2: document.getElementById(`entry-cat-l5-${itemId}`)?.value || '',
+          itemName: document.getElementById(`entry-cat-item-${itemId}`)?.value || ''
+        };
+        item.size = document.getElementById(`entry-size-${itemId}`)?.value || '';
         item.brand = document.getElementById(`entry-brand-${itemId}`)?.value || '';
+        item.brandKana = document.getElementById(`entry-brand-kana-${itemId}`)?.value || '';
         item.condition = document.getElementById(`entry-condition-${itemId}`)?.value || '';
         item.note = document.getElementById(`entry-note-${itemId}`)?.value || '';
         // 付属品（チェックされたもの）
@@ -2943,6 +3117,329 @@
         }
       }
       updateEntryTotal();
+    }
+
+    // ========================================
+    // 7階層カテゴリ連動関数
+    // ========================================
+
+    // ユーティリティ: 重複を排除して順序を維持
+    function uniqKeepOrder(arr) {
+      return [...new Set(arr.filter(x => x && x.trim() !== ''))];
+    }
+
+    // ユーティリティ: セレクトを安全に埋める
+    function fillSelectSafe(sel, values) {
+      if (!sel) return;
+      if (Array.isArray(values) && values.length) {
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">--選択してください--</option>';
+        values.forEach(v => sel.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`));
+        sel.disabled = false;
+        if (prev && values.includes(prev)) sel.value = prev;
+      }
+    }
+
+    // ユーティリティ: セレクトをリセット
+    function resetEntrySelect(id, disable = true) {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      sel.innerHTML = '<option value="">--選択してください--</option>';
+      sel.value = '';
+      if (disable) sel.disabled = true;
+    }
+
+    // 特大分類（L0）変更ハンドラ
+    function onEntryCatL0Changed(itemId) {
+      resetEntrySelect(`entry-cat-l1-${itemId}`);
+      resetEntrySelect(`entry-cat-l2-${itemId}`);
+      resetEntrySelect(`entry-cat-l3-${itemId}`);
+      resetEntrySelect(`entry-cat-l4-${itemId}`);
+      resetEntrySelect(`entry-cat-l5-${itemId}`);
+      resetEntrySelect(`entry-cat-item-${itemId}`, false);
+
+      // 細分類・細分類2を非表示
+      const l4El = document.getElementById(`entry-cat-l4-${itemId}`);
+      const l5El = document.getElementById(`entry-cat-l5-${itemId}`);
+      if (l4El) l4El.style.display = 'none';
+      if (l5El) l5El.style.display = 'none';
+
+      const l0 = document.getElementById(`entry-cat-l0-${itemId}`)?.value?.trim() || '';
+      if (l0 && entryCategoryRows.length > 0) {
+        const l1s = uniqKeepOrder(entryCategoryRows.map(r => r.大分類));
+        fillSelectSafe(document.getElementById(`entry-cat-l1-${itemId}`), l1s);
+        console.log(`[仕入] 特大分類選択: ${l0}, 大分類選択肢: ${l1s.length}件`);
+      }
+      updateEntryItem(itemId);
+    }
+
+    // 大分類（L1）変更ハンドラ
+    function onEntryCatL1Changed(itemId) {
+      resetEntrySelect(`entry-cat-l2-${itemId}`);
+      resetEntrySelect(`entry-cat-l3-${itemId}`);
+      resetEntrySelect(`entry-cat-l4-${itemId}`);
+      resetEntrySelect(`entry-cat-l5-${itemId}`);
+      resetEntrySelect(`entry-cat-item-${itemId}`, false);
+
+      const l4El = document.getElementById(`entry-cat-l4-${itemId}`);
+      const l5El = document.getElementById(`entry-cat-l5-${itemId}`);
+      if (l4El) l4El.style.display = 'none';
+      if (l5El) l5El.style.display = 'none';
+
+      const l1 = document.getElementById(`entry-cat-l1-${itemId}`)?.value?.trim() || '';
+      if (l1) {
+        const mids = uniqKeepOrder(entryCategoryRows.filter(r => r.大分類 === l1).map(r => r.中分類));
+        fillSelectSafe(document.getElementById(`entry-cat-l2-${itemId}`), mids);
+      }
+      updateEntryItem(itemId);
+    }
+
+    // 中分類（L2）変更ハンドラ
+    function onEntryCatL2Changed(itemId) {
+      resetEntrySelect(`entry-cat-l3-${itemId}`);
+      resetEntrySelect(`entry-cat-l4-${itemId}`);
+      resetEntrySelect(`entry-cat-l5-${itemId}`);
+      resetEntrySelect(`entry-cat-item-${itemId}`, false);
+
+      const l4El = document.getElementById(`entry-cat-l4-${itemId}`);
+      const l5El = document.getElementById(`entry-cat-l5-${itemId}`);
+      if (l4El) l4El.style.display = 'none';
+      if (l5El) l5El.style.display = 'none';
+
+      const l1 = document.getElementById(`entry-cat-l1-${itemId}`)?.value?.trim() || '';
+      const l2 = document.getElementById(`entry-cat-l2-${itemId}`)?.value?.trim() || '';
+      if (l2) {
+        const smalls = uniqKeepOrder(entryCategoryRows.filter(r => r.大分類 === l1 && r.中分類 === l2).map(r => r.小分類));
+        fillSelectSafe(document.getElementById(`entry-cat-l3-${itemId}`), smalls);
+      }
+      updateEntryItem(itemId);
+    }
+
+    // 小分類（L3）変更ハンドラ
+    function onEntryCatL3Changed(itemId) {
+      resetEntrySelect(`entry-cat-l4-${itemId}`);
+      resetEntrySelect(`entry-cat-l5-${itemId}`);
+      resetEntrySelect(`entry-cat-item-${itemId}`, false);
+
+      const l1 = document.getElementById(`entry-cat-l1-${itemId}`)?.value?.trim() || '';
+      const l2 = document.getElementById(`entry-cat-l2-${itemId}`)?.value?.trim() || '';
+      const l3 = document.getElementById(`entry-cat-l3-${itemId}`)?.value?.trim() || '';
+      const l4El = document.getElementById(`entry-cat-l4-${itemId}`);
+      const l5El = document.getElementById(`entry-cat-l5-${itemId}`);
+
+      if (l3) {
+        const fines = uniqKeepOrder(entryCategoryRows.filter(r => r.大分類 === l1 && r.中分類 === l2 && r.小分類 === l3).map(r => r.細分類));
+        fillSelectSafe(document.getElementById(`entry-cat-l4-${itemId}`), fines);
+        if (fines.length > 0 && l4El) {
+          l4El.style.display = '';
+        } else if (l4El) {
+          l4El.style.display = 'none';
+        }
+      } else {
+        if (l4El) l4El.style.display = 'none';
+      }
+      if (l5El) l5El.style.display = 'none';
+      updateEntryItem(itemId);
+    }
+
+    // 細分類（L4）変更ハンドラ
+    function onEntryCatL4Changed(itemId) {
+      resetEntrySelect(`entry-cat-l5-${itemId}`);
+      resetEntrySelect(`entry-cat-item-${itemId}`, false);
+
+      const l1 = document.getElementById(`entry-cat-l1-${itemId}`)?.value?.trim() || '';
+      const l2 = document.getElementById(`entry-cat-l2-${itemId}`)?.value?.trim() || '';
+      const l3 = document.getElementById(`entry-cat-l3-${itemId}`)?.value?.trim() || '';
+      const l4 = document.getElementById(`entry-cat-l4-${itemId}`)?.value?.trim() || '';
+      const l5El = document.getElementById(`entry-cat-l5-${itemId}`);
+
+      if (l4) {
+        const fine2s = uniqKeepOrder(entryCategoryRows.filter(r => r.大分類 === l1 && r.中分類 === l2 && r.小分類 === l3 && r.細分類 === l4).map(r => r.細分類2));
+        fillSelectSafe(document.getElementById(`entry-cat-l5-${itemId}`), fine2s);
+        if (fine2s.length > 0 && l5El) {
+          l5El.style.display = '';
+        } else if (l5El) {
+          l5El.style.display = 'none';
+        }
+      } else {
+        if (l5El) l5El.style.display = 'none';
+      }
+      updateEntryItem(itemId);
+    }
+
+    // 細分類2（L5）変更ハンドラ
+    function onEntryCatL5Changed(itemId) {
+      resetEntrySelect(`entry-cat-item-${itemId}`, false);
+      refreshEntryItems(itemId);
+      updateEntryItem(itemId);
+    }
+
+    // アイテム名の選択肢を更新
+    function refreshEntryItems(itemId) {
+      const l1 = document.getElementById(`entry-cat-l1-${itemId}`)?.value?.trim() || '';
+      const l2 = document.getElementById(`entry-cat-l2-${itemId}`)?.value?.trim() || '';
+      const l3 = document.getElementById(`entry-cat-l3-${itemId}`)?.value?.trim() || '';
+      const l4 = document.getElementById(`entry-cat-l4-${itemId}`)?.value?.trim() || '';
+      const l5 = document.getElementById(`entry-cat-l5-${itemId}`)?.value?.trim() || '';
+
+      let filtered = entryCategoryRows;
+      if (l1) filtered = filtered.filter(r => r.大分類 === l1);
+      if (l2) filtered = filtered.filter(r => r.中分類 === l2);
+      if (l3) filtered = filtered.filter(r => r.小分類 === l3);
+      if (l4) filtered = filtered.filter(r => r.細分類 === l4);
+      if (l5) filtered = filtered.filter(r => r.細分類2 === l5);
+
+      const items = uniqKeepOrder(filtered.map(r => r.アイテム名));
+      fillSelectSafe(document.getElementById(`entry-cat-item-${itemId}`), items);
+    }
+
+    // ========================================
+    // Algoliaブランドサジェスト関数
+    // ========================================
+
+    // HTMLエスケープ
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // ひらがなをカタカナに変換
+    function hiraganaToKatakana(str) {
+      return str.replace(/[\u3041-\u3096]/g, function(match) {
+        const chr = match.charCodeAt(0) + 0x60;
+        return String.fromCharCode(chr);
+      });
+    }
+
+    // ブランドサジェストをアタッチ
+    function attachEntryBrandSuggest(itemId) {
+      const input = document.getElementById(`entry-brand-${itemId}`);
+      const panel = document.getElementById(`suggest-entry-brand-${itemId}`);
+
+      if (!input || !panel) {
+        console.warn(`[仕入] ブランドサジェスト要素が見つかりません: ${itemId}`);
+        return;
+      }
+
+      // Algolia SDKがロードされているか確認
+      if (typeof window.algoliasearch === 'undefined') {
+        console.warn('[仕入] Algolia SDKがまだロードされていません');
+        return;
+      }
+
+      // Algoliaクライアント初期化
+      const ALGOLIA_APP_ID = 'P68RUXXTYN';
+      const ALGOLIA_SEARCH_KEY = '12758e11bbd889f72177b459d296ed50';
+      const ALGOLIA_INDEX_NAME = 'brands';
+
+      let searchClient;
+      try {
+        searchClient = window.algoliasearch(ALGOLIA_APP_ID, ALGOLIA_SEARCH_KEY);
+      } catch (error) {
+        console.error('[仕入] Algoliaクライアント初期化エラー:', error);
+        return;
+      }
+
+      const index = searchClient.initIndex(ALGOLIA_INDEX_NAME);
+      let debounceTimer = null;
+
+      // 入力イベント
+      input.addEventListener('input', async (e) => {
+        const query = e.target.value.trim();
+        if (query.length < 1) {
+          panel.style.display = 'none';
+          return;
+        }
+
+        // デバウンス
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+          try {
+            const convertedQuery = hiraganaToKatakana(query);
+            const { hits } = await index.search(convertedQuery, {
+              hitsPerPage: 15,
+              attributesToRetrieve: ['id', 'name', 'nameKana', 'usageCount']
+            });
+
+            showEntryBrandSuggestions(itemId, hits, input, panel);
+          } catch (error) {
+            console.error('[仕入] ブランド検索エラー:', error);
+          }
+        }, 300);
+      });
+
+      // フォーカスアウト時にパネルを閉じる
+      input.addEventListener('blur', () => {
+        setTimeout(() => {
+          panel.style.display = 'none';
+        }, 200);
+      });
+
+      console.log(`✅ [仕入] ブランドサジェストアタッチ完了: ${itemId}`);
+    }
+
+    // ブランドサジェストを表示
+    function showEntryBrandSuggestions(itemId, brands, input, panel) {
+      if (brands.length === 0) {
+        panel.style.display = 'none';
+        return;
+      }
+
+      panel.innerHTML = '';
+
+      // 入力欄の位置でパネル位置を決定
+      const inputRect = input.getBoundingClientRect();
+      const screenHeight = window.innerHeight;
+      const isInLowerHalf = inputRect.top > screenHeight * 0.5;
+
+      if (isInLowerHalf) {
+        panel.classList.add('suggest-above');
+      } else {
+        panel.classList.remove('suggest-above');
+      }
+
+      brands.forEach((brand) => {
+        const div = document.createElement('div');
+        div.className = 'sug-item brand-item';
+
+        const escapedNameEn = escapeHtml(brand.name || '');
+        const escapedNameKana = escapeHtml(brand.nameKana || '');
+
+        div.innerHTML = `
+          <div class="brand-english">${escapedNameEn}</div>
+          <div class="brand-kana">${escapedNameKana}</div>
+        `;
+
+        div.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+        });
+
+        div.addEventListener('click', () => {
+          input.value = brand.name || brand.nameKana || '';
+          const kanaInput = document.getElementById(`entry-brand-kana-${itemId}`);
+          if (kanaInput) kanaInput.value = brand.nameKana || '';
+
+          panel.style.display = 'none';
+          input.blur();
+
+          setTimeout(() => {
+            updateEntryItem(itemId);
+          }, 100);
+        });
+
+        panel.appendChild(div);
+      });
+
+      panel.style.display = 'block';
+    }
+
+    // ブランド入力イベント（既存のoninput用）
+    function onEntryBrandInput(itemId) {
+      // attachEntryBrandSuggestで処理されるため、ここでは何もしない
     }
 
     // 商品番号を再採番
@@ -3097,9 +3594,18 @@
         item.supplier = document.getElementById(`entry-supplier-${item.id}`)?.value || '';
         item.amount = parseInt(document.getElementById(`entry-amount-${item.id}`)?.value) || 0;
         item.memo = document.getElementById(`entry-memo-${item.id}`)?.value || '';
-        // 検品情報を取得
-        item.category = document.getElementById(`entry-category-${item.id}`)?.value || '';
+        // 検品情報を取得（7階層カテゴリ対応）
+        item.category = {
+          superCategory: document.getElementById(`entry-cat-l0-${item.id}`)?.value || '',
+          major: document.getElementById(`entry-cat-l1-${item.id}`)?.value || '',
+          middle: document.getElementById(`entry-cat-l2-${item.id}`)?.value || '',
+          small: document.getElementById(`entry-cat-l3-${item.id}`)?.value || '',
+          fine: document.getElementById(`entry-cat-l4-${item.id}`)?.value || '',
+          fine2: document.getElementById(`entry-cat-l5-${item.id}`)?.value || '',
+          itemName: document.getElementById(`entry-cat-item-${item.id}`)?.value || ''
+        };
         item.brand = document.getElementById(`entry-brand-${item.id}`)?.value || '';
+        item.brandKana = document.getElementById(`entry-brand-kana-${item.id}`)?.value || '';
         item.condition = document.getElementById(`entry-condition-${item.id}`)?.value || '';
         item.note = document.getElementById(`entry-note-${item.id}`)?.value || '';
         const accessoriesContainer = document.getElementById(`entry-accessories-${item.id}`);
@@ -3146,7 +3652,7 @@
 
       validItems.forEach((item, index) => {
         const slot = slots[index];
-        // QRコードに埋め込むJSON（短縮キーで容量節約、検品情報含む）
+        // QRコードに埋め込むJSON（短縮キーで容量節約、7階層カテゴリ対応）
         const qrJson = {
           s: slot.slotId,           // slotId
           n: slot.slotNumber,       // number
@@ -3156,9 +3662,11 @@
           asg: assignee.substring(0, 10), // assignee (10文字まで)
           m: (item.memo || '').substring(0, 15), // memo (15文字まで)
           t: validItems.length,     // total count
-          // 検品情報
-          cat: item.category || '',                    // category
+          // 検品情報（7階層カテゴリ）
+          cat: item.category || {},                    // category object (7階層)
+          sz: (item.size || '').substring(0, 20),      // size (20文字まで)
           br: (item.brand || '').substring(0, 20),     // brand (20文字まで)
+          brk: (item.brandKana || '').substring(0, 20), // brandKana (20文字まで)
           cnd: item.condition || '',                   // condition
           acc: item.accessories || [],                 // accessories array
           nt: (item.note || '').substring(0, 30)       // note (30文字まで)
@@ -3174,8 +3682,10 @@
 
         const label = document.createElement('div');
         label.className = 'qr-entry-item-label';
+        // カテゴリ表示用：アイテム名 > 大分類の順で取得
+        const categoryDisplay = item.category?.itemName || item.category?.major || item.category?.superCategory || '';
         let labelText = `#${slot.slotNumber}/${validItems.length}<br>¥${item.amount.toLocaleString()}<br>${item.supplier}`;
-        if (item.category) labelText += `<br>${item.category}`;
+        if (categoryDisplay) labelText += `<br>${categoryDisplay}`;
         if (item.brand) labelText += `<br>${item.brand}`;
         if (item.condition) labelText += `<br>${item.condition}`;
         if (item.memo) labelText += `<br>${item.memo}`;
@@ -3202,9 +3712,10 @@
           assignee: assignee,
           memo: item.memo || '',
           totalCount: validItems.length,
-          // 検品情報
-          category: item.category || '',
+          // 検品情報（7階層カテゴリ）
+          category: item.category || {},
           brand: item.brand || '',
+          brandKana: item.brandKana || '',
           condition: item.condition || '',
           accessories: item.accessories || [],
           note: item.note || ''
@@ -3633,15 +4144,34 @@
       const amount = qrData.amt || 0;
       const assignee = qrData.asg || '-';
       const memo = qrData.m || '';
-      // 検品情報
-      const category = qrData.cat || '';
+      // 検品情報（7階層カテゴリ対応）
+      const categoryObj = qrData.cat || {};
+      // カテゴリ表示用：7階層から表示可能なものを取得
+      let categoryDisplay = '';
+      if (typeof categoryObj === 'object') {
+        // 新形式（7階層オブジェクト）
+        categoryDisplay = [
+          categoryObj.superCategory,
+          categoryObj.major,
+          categoryObj.middle,
+          categoryObj.small,
+          categoryObj.fine,
+          categoryObj.fine2,
+          categoryObj.itemName
+        ].filter(x => x).join(' > ');
+      } else {
+        // 旧形式（文字列）
+        categoryDisplay = categoryObj;
+      }
+      const size = qrData.sz || '';
       const brand = qrData.br || '';
+      const brandKana = qrData.brk || '';
       const condition = qrData.cnd || '';
       const accessories = qrData.acc || [];
       const note = qrData.nt || '';
 
       // 検品情報があるかチェック
-      const hasInspectionData = category || brand || condition || accessories.length > 0 || note;
+      const hasInspectionData = categoryDisplay || size || brand || condition || accessories.length > 0 || note;
 
       resultDiv.innerHTML = `
         <div class="qr-result-card">
@@ -3680,16 +4210,22 @@
             <div class="qr-result-section-title">
               <i class="bi bi-clipboard-check me-1"></i>検品情報
             </div>
-            ${category ? `
+            ${categoryDisplay ? `
             <div class="qr-result-row">
               <span class="qr-result-label">カテゴリ</span>
-              <span class="qr-result-value">${category}</span>
+              <span class="qr-result-value">${categoryDisplay}</span>
+            </div>
+            ` : ''}
+            ${size ? `
+            <div class="qr-result-row">
+              <span class="qr-result-label">サイズ</span>
+              <span class="qr-result-value">${size}</span>
             </div>
             ` : ''}
             ${brand ? `
             <div class="qr-result-row">
               <span class="qr-result-label">ブランド</span>
-              <span class="qr-result-value">${brand}</span>
+              <span class="qr-result-value">${brand}${brandKana ? ' (' + brandKana + ')' : ''}</span>
             </div>
             ` : ''}
             ${condition ? `
@@ -3793,6 +4329,22 @@
       `).join('');
     }
   </script>
+
+<!-- Algoliaブランド検索モジュール（検品情報用） -->
+<script type="module">
+  import('https://reborn-inventory-system.pages.dev/js/firestore-api.js').then(module => {
+    window.searchBrands = module.searchBrands || module.default?.searchBrands;
+    window.incrementBrandUsageCount = module.incrementBrandUsageCount || module.default?.incrementBrandUsageCount;
+    window.preloadBrandsInBackground = module.preloadBrandsInBackground || module.default?.preloadBrandsInBackground;
+    window.searchBrandsFromCache = module.searchBrandsFromCache || module.default?.searchBrandsFromCache;
+    return import('https://reborn-inventory-system.pages.dev/js/brand-suggest-algolia.js?v=96-keyboard-auto-match');
+  }).then(() => {
+    window.algoliaBrandModulesLoaded = true;
+    console.log('✅ [仕入] Algoliaブランド検索モジュール読み込み完了');
+  }).catch(error => {
+    console.error('❌ Algoliaモジュール読み込みエラー:', error);
+  });
+</script>
 
 <!-- QR確認 フローティングボタン -->
 <button class="qr-floating-btn" onclick="openQRCheckScanner()" title="QRコードをスキャン">
