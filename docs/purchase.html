@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="https://www.reborn-inventory.com/css/reborn-theme.css?v=0bd1a9b">
   <!-- QRCode.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- html5-qrcode（QRコードスキャン用） -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -474,6 +476,129 @@
       border: 1px dashed #ccc;
     }
 
+    /* ========================================
+       QR確認タブ用スタイル
+       ======================================== */
+
+    /* QR確認カード */
+    .qr-check-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    /* スキャン結果表示 */
+    .qr-result-card {
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+      border: 2px solid #22c55e;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    .qr-result-card.error {
+      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+      border-color: #ef4444;
+    }
+    .qr-result-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    .qr-result-header i {
+      font-size: 1.5rem;
+      color: #22c55e;
+    }
+    .qr-result-card.error .qr-result-header i {
+      color: #ef4444;
+    }
+    .qr-result-header span {
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+    .qr-result-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+    .qr-result-row:last-child {
+      border-bottom: none;
+    }
+    .qr-result-label {
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+    .qr-result-value {
+      font-weight: 600;
+      color: #1f2937;
+      font-size: 0.95rem;
+    }
+    .qr-result-value.highlight {
+      color: #059669;
+      font-size: 1.1rem;
+    }
+
+    /* スキャン履歴 */
+    .qr-history-item {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .qr-history-item .history-info {
+      flex: 1;
+    }
+    .qr-history-item .history-number {
+      font-weight: 600;
+      color: #4ECDC4;
+    }
+    .qr-history-item .history-amount {
+      font-size: 0.9rem;
+      color: #374151;
+    }
+    .qr-history-item .history-time {
+      font-size: 0.75rem;
+      color: #9ca3af;
+    }
+
+    /* フローティングスキャンボタン */
+    .qr-floating-btn {
+      position: fixed;
+      bottom: 70px;
+      right: 20px;
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: white;
+      border: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      cursor: pointer;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .qr-floating-btn:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+    }
+    .qr-floating-btn img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
     /* 印刷用スタイル（仕入登録） */
     @media print {
       .entry-card:not(.qr-entry-preview), .entry-mode-tabs, .entry-print-mode-tabs,
@@ -559,6 +684,11 @@
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="payable-tab" data-bs-toggle="tab" data-bs-target="#payable-content" type="button" role="tab">
           📋 買掛管理
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="qrcheck-tab" data-bs-toggle="tab" data-bs-target="#qrcheck-content" type="button" role="tab">
+          📷 QR確認
         </button>
       </li>
       <li class="nav-item" role="presentation">
@@ -943,6 +1073,37 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- QR確認タブ -->
+      <div class="tab-pane fade" id="qrcheck-content" role="tabpanel">
+        <div class="qr-check-card">
+          <h6 class="mb-3"><i class="bi bi-qr-code-scan"></i> QRコード情報確認</h6>
+          <p class="text-muted small mb-3">
+            仕入商品に貼るQRコードをスキャンして、埋め込まれた情報を確認できます。<br>
+            正しい商品にQRコードを貼り付けてください。
+          </p>
+
+          <!-- スキャンボタン -->
+          <div class="text-center mb-3">
+            <button class="btn btn-entry-teal btn-lg" onclick="openQRCheckScanner()">
+              <i class="bi bi-camera-fill me-2"></i>QRコードをスキャン
+            </button>
+          </div>
+
+          <!-- スキャン結果表示エリア -->
+          <div id="qrCheckResult" style="display: none;">
+            <!-- 結果はJavaScriptで動的に表示 -->
+          </div>
+
+          <!-- スキャン履歴 -->
+          <div id="qrCheckHistorySection" style="display: none;" class="mt-4">
+            <h6 class="mb-3"><i class="bi bi-clock-history"></i> スキャン履歴（直近10件）</h6>
+            <div id="qrCheckHistory">
+              <!-- 履歴はJavaScriptで動的に表示 -->
+            </div>
           </div>
         </div>
       </div>
@@ -3124,6 +3285,239 @@
         }
       });
     });
+
+    // ========================================
+    // QR確認スキャン機能
+    // ========================================
+    let qrCheckScanner = null;
+    let qrCheckHistory = [];
+    const MAX_HISTORY = 10;
+
+    // QRスキャナーを開く
+    function openQRCheckScanner() {
+      const modal = document.getElementById('qrCheckScannerModal');
+      modal.style.display = 'flex';
+      setTimeout(() => startQRCheckScanner(), 100);
+    }
+
+    // QRスキャナーを閉じる
+    function closeQRCheckScanner() {
+      const modal = document.getElementById('qrCheckScannerModal');
+      modal.style.display = 'none';
+      stopQRCheckScanner();
+    }
+
+    // スキャナー開始
+    function startQRCheckScanner() {
+      const readerElement = document.getElementById('qrCheckReader');
+      if (!readerElement) return;
+
+      if (typeof Html5Qrcode === 'undefined') {
+        alert('QRスキャナーの読み込みに失敗しました。ページを再読み込みしてください。');
+        return;
+      }
+
+      qrCheckScanner = new Html5Qrcode("qrCheckReader");
+      qrCheckScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        onQRCheckScanSuccess,
+        onQRCheckScanFailure
+      ).catch(err => {
+        console.error("QRスキャナー起動エラー:", err);
+        alert('カメラを起動できませんでした。カメラのアクセス許可を確認してください。');
+        closeQRCheckScanner();
+      });
+    }
+
+    // スキャナー停止
+    function stopQRCheckScanner() {
+      if (qrCheckScanner) {
+        qrCheckScanner.stop().catch(err => console.log("Scanner stop error:", err));
+        qrCheckScanner = null;
+      }
+    }
+
+    // スキャン成功時
+    function onQRCheckScanSuccess(decodedText) {
+      console.log('📷 [QR確認] スキャン成功:', decodedText);
+      stopQRCheckScanner();
+      closeQRCheckScanner();
+
+      // JSON解析を試みる
+      let qrData = null;
+      try {
+        qrData = JSON.parse(decodedText);
+      } catch (e) {
+        // JSON形式でない場合
+        showQRCheckError('このQRコードは仕入管理用ではありません。');
+        return;
+      }
+
+      // 仕入バッチのQRコードかチェック
+      if (!qrData.s || !qrData.n) {
+        showQRCheckError('このQRコードは仕入管理用ではありません。');
+        return;
+      }
+
+      // 結果を表示
+      showQRCheckResult(qrData);
+
+      // 履歴に追加
+      addToQRCheckHistory(qrData);
+    }
+
+    // スキャン失敗時（継続してスキャン）
+    function onQRCheckScanFailure(error) {
+      // 継続してスキャン（エラーは無視）
+    }
+
+    // スキャン結果を表示
+    function showQRCheckResult(qrData) {
+      const resultDiv = document.getElementById('qrCheckResult');
+      resultDiv.style.display = 'block';
+
+      const slotId = qrData.s || '-';
+      const slotNumber = qrData.n || '-';
+      const totalCount = qrData.t || '-';
+      const purchaseDate = qrData.d || '-';
+      const supplier = qrData.sup || '-';
+      const amount = qrData.amt || 0;
+      const assignee = qrData.asg || '-';
+      const memo = qrData.m || '';
+
+      resultDiv.innerHTML = `
+        <div class="qr-result-card">
+          <div class="qr-result-header">
+            <i class="bi bi-check-circle-fill"></i>
+            <span>QRコード情報</span>
+          </div>
+          <div class="qr-result-row">
+            <span class="qr-result-label">連番</span>
+            <span class="qr-result-value highlight">#${slotNumber} / ${totalCount}</span>
+          </div>
+          <div class="qr-result-row">
+            <span class="qr-result-label">金額</span>
+            <span class="qr-result-value highlight">¥${Number(amount).toLocaleString()}</span>
+          </div>
+          <div class="qr-result-row">
+            <span class="qr-result-label">仕入先</span>
+            <span class="qr-result-value">${supplier}</span>
+          </div>
+          <div class="qr-result-row">
+            <span class="qr-result-label">仕入日</span>
+            <span class="qr-result-value">${purchaseDate}</span>
+          </div>
+          <div class="qr-result-row">
+            <span class="qr-result-label">発送先</span>
+            <span class="qr-result-value">${assignee}</span>
+          </div>
+          ${memo ? `
+          <div class="qr-result-row">
+            <span class="qr-result-label">メモ</span>
+            <span class="qr-result-value">${memo}</span>
+          </div>
+          ` : ''}
+          <div class="qr-result-row">
+            <span class="qr-result-label">スロットID</span>
+            <span class="qr-result-value" style="font-size: 0.75rem; color: #9ca3af;">${slotId}</span>
+          </div>
+        </div>
+        <div class="text-center mt-3">
+          <button class="btn btn-entry-teal" onclick="openQRCheckScanner()">
+            <i class="bi bi-camera-fill me-2"></i>次をスキャン
+          </button>
+        </div>
+      `;
+
+      // 結果が表示されている場所にスクロール
+      resultDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // エラー表示
+    function showQRCheckError(message) {
+      const resultDiv = document.getElementById('qrCheckResult');
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = `
+        <div class="qr-result-card error">
+          <div class="qr-result-header">
+            <i class="bi bi-x-circle-fill"></i>
+            <span>エラー</span>
+          </div>
+          <p class="mb-0">${message}</p>
+        </div>
+        <div class="text-center mt-3">
+          <button class="btn btn-entry-teal" onclick="openQRCheckScanner()">
+            <i class="bi bi-camera-fill me-2"></i>再スキャン
+          </button>
+        </div>
+      `;
+    }
+
+    // 履歴に追加
+    function addToQRCheckHistory(qrData) {
+      const historyItem = {
+        slotNumber: qrData.n,
+        totalCount: qrData.t,
+        amount: qrData.amt,
+        supplier: qrData.sup,
+        time: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+      };
+
+      // 先頭に追加
+      qrCheckHistory.unshift(historyItem);
+
+      // 最大件数を超えたら削除
+      if (qrCheckHistory.length > MAX_HISTORY) {
+        qrCheckHistory.pop();
+      }
+
+      // 履歴表示を更新
+      updateQRCheckHistoryDisplay();
+    }
+
+    // 履歴表示を更新
+    function updateQRCheckHistoryDisplay() {
+      const historySection = document.getElementById('qrCheckHistorySection');
+      const historyContainer = document.getElementById('qrCheckHistory');
+
+      if (qrCheckHistory.length === 0) {
+        historySection.style.display = 'none';
+        return;
+      }
+
+      historySection.style.display = 'block';
+      historyContainer.innerHTML = qrCheckHistory.map(item => `
+        <div class="qr-history-item">
+          <div class="history-info">
+            <span class="history-number">#${item.slotNumber}/${item.totalCount}</span>
+            <span class="history-amount ms-2">¥${Number(item.amount).toLocaleString()}</span>
+            <span class="ms-2">${item.supplier}</span>
+          </div>
+          <span class="history-time">${item.time}</span>
+        </div>
+      `).join('');
+    }
   </script>
+
+<!-- QR確認 フローティングボタン -->
+<button class="qr-floating-btn" onclick="openQRCheckScanner()" title="QRコードをスキャン">
+  <img src="/images/qr-scan-icon.png" alt="QRスキャン">
+</button>
+
+<!-- QR確認スキャナーモーダル -->
+<div id="qrCheckScannerModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; justify-content: center; align-items: center;">
+  <div style="background: white; border-radius: 16px; width: 90%; max-width: 400px; overflow: hidden;">
+    <div style="padding: 16px; background: linear-gradient(135deg, #4ECDC4, #44A08D); color: white; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-weight: 600;"><i class="bi bi-qr-code-scan"></i> QRコード情報確認</span>
+      <button onclick="closeQRCheckScanner()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+    </div>
+    <div id="qrCheckReader" style="width: 100%;"></div>
+    <div style="padding: 16px; text-align: center;">
+      <p style="font-size: 14px; color: #6b7280; margin-bottom: 0;">仕入商品のQRコードをカメラにかざしてください</p>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
