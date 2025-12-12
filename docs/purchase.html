@@ -2856,76 +2856,136 @@
     async function initializeEntryTab() {
       console.log('📥 [仕入登録] 初期化開始');
 
-      // PurchaseApiが利用可能になるまで待機
-      if (!window.PurchaseApi) {
-        console.log('📥 [仕入登録] PurchaseApi待機中...');
-        setTimeout(initializeEntryTab, 100);
-        return;
-      }
-
-      // 今日の日付をセット（一括入力用 + 個別入力デフォルト用）
+      // 今日の日付を即座にセット（API待機不要）
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('entryPurchaseDate').value = today;
       document.getElementById('defaultPurchaseDate').value = today;
 
-      // 仕入先マスタを読み込み（PurchaseApi経由）
-      try {
-        entrySuppliersData = await window.PurchaseApi.getEntrySuppliersData();
+      // 商品アイテム#1を即座に追加（マスタ読み込み待たない）
+      addEntryItem();
+      console.log('📥 [仕入登録] 商品アイテム#1追加完了');
 
+      // PurchaseApiが利用可能になるまで待機
+      if (!window.PurchaseApi) {
+        console.log('📥 [仕入登録] PurchaseApi待機中...');
+        setTimeout(() => loadEntryMasterData(), 100);
+        return;
+      }
+
+      // マスタデータを非同期で読み込み
+      loadEntryMasterData();
+    }
+
+    // マスタデータを並列で読み込み（UIをブロックしない）
+    async function loadEntryMasterData() {
+      if (!window.PurchaseApi) {
+        setTimeout(() => loadEntryMasterData(), 100);
+        return;
+      }
+
+      console.log('📥 [仕入登録] マスタデータ読み込み開始');
+
+      // 並列でマスタデータを読み込み
+      const [suppliersResult, assigneesResult, categoryResult, optionsResult] = await Promise.allSettled([
+        window.PurchaseApi.getEntrySuppliersData(),
+        window.PurchaseApi.getEntryAssigneesData(),
+        window.PurchaseApi.getCategoryMaster(),
+        window.PurchaseApi.getMasterOptions()
+      ]);
+
+      // 仕入先マスタ
+      if (suppliersResult.status === 'fulfilled') {
+        entrySuppliersData = suppliersResult.value;
         const supplierSelect = document.getElementById('entrySupplier');
         supplierSelect.innerHTML = '<option value="">--選択してください--</option>';
         entrySuppliersData.forEach(item => {
           supplierSelect.innerHTML += `<option value="${item.name}">${item.name}</option>`;
         });
+        // 既存の商品アイテムの仕入先プルダウンも更新
+        updateAllEntryItemSuppliers();
         console.log('📥 [仕入登録] 仕入先読み込み完了:', entrySuppliersData.length, '件');
-      } catch (error) {
-        console.error('仕入先読み込みエラー:', error);
+      } else {
+        console.error('仕入先読み込みエラー:', suppliersResult.reason);
         document.getElementById('entrySupplier').innerHTML = '<option value="">読み込みエラー</option>';
       }
 
-      // 発送先マスタを読み込み（PurchaseApi経由）
-      try {
-        entryAssigneesData = await window.PurchaseApi.getEntryAssigneesData();
-
+      // 発送先マスタ
+      if (assigneesResult.status === 'fulfilled') {
+        entryAssigneesData = assigneesResult.value;
         const assigneeSelect = document.getElementById('entryAssignee');
         assigneeSelect.innerHTML = '<option value="">--選択してください--</option>';
         entryAssigneesData.forEach(item => {
           assigneeSelect.innerHTML += `<option value="${item.name}">${item.note ? item.name + '（' + item.note + '）' : item.name}</option>`;
         });
-
         document.getElementById('entryAssigneeIndividual').innerHTML = assigneeSelect.innerHTML;
+        // 既存の商品アイテムの発送先プルダウンも更新
+        updateAllEntryItemAssignees();
         console.log('📥 [仕入登録] 発送先読み込み完了:', entryAssigneesData.length, '件');
-      } catch (error) {
-        console.error('発送先読み込みエラー:', error);
+      } else {
+        console.error('発送先読み込みエラー:', assigneesResult.reason);
         document.getElementById('entryAssignee').innerHTML = '<option value="">読み込みエラー</option>';
         document.getElementById('entryAssigneeIndividual').innerHTML = '<option value="">読み込みエラー</option>';
       }
 
-      // カテゴリマスタを読み込み（7階層連動用）
-      try {
-        entryCategoryRows = await window.PurchaseApi.getCategoryMaster();
+      // カテゴリマスタ
+      if (categoryResult.status === 'fulfilled') {
+        entryCategoryRows = categoryResult.value;
         console.log('📥 [仕入登録] カテゴリマスタ読み込み完了:', entryCategoryRows.length, '件');
-      } catch (error) {
-        console.error('カテゴリマスタ読み込みエラー:', error);
+      } else {
+        console.error('カテゴリマスタ読み込みエラー:', categoryResult.reason);
         entryCategoryRows = [];
       }
 
-      // マスターオプションを読み込み（サイズ等のプルダウン用）
-      try {
-        entryMasterOptions = await window.PurchaseApi.getMasterOptions();
+      // マスターオプション
+      if (optionsResult.status === 'fulfilled') {
+        entryMasterOptions = optionsResult.value;
+        // 既存の商品アイテムのサイズプルダウンも更新
+        updateAllEntryItemSizes();
         console.log('📥 [仕入登録] マスターオプション読み込み完了');
-      } catch (error) {
-        console.error('マスターオプション読み込みエラー:', error);
+      } else {
+        console.error('マスターオプション読み込みエラー:', optionsResult.reason);
         entryMasterOptions = {};
       }
-
-      // 最初の1件を追加
-      addEntryItem();
 
       // ラベル設定読み込み
       loadEntryLabelSettings();
 
       console.log('📥 [仕入登録] 初期化完了');
+    }
+
+    // 既存の商品アイテムの仕入先プルダウンを更新
+    function updateAllEntryItemSuppliers() {
+      entryItems.forEach(item => {
+        const select = document.getElementById(`entry-supplier-${item.id}`);
+        if (select) {
+          const currentValue = select.value;
+          select.innerHTML = createEntrySupplierOptionsHTML();
+          select.value = currentValue;
+        }
+      });
+    }
+
+    // 既存の商品アイテムの発送先プルダウンを更新
+    function updateAllEntryItemAssignees() {
+      entryItems.forEach(item => {
+        const select = document.getElementById(`entry-assignee-${item.id}`);
+        if (select) {
+          const currentValue = select.value;
+          select.innerHTML = createEntryAssigneeOptionsHTML(currentValue);
+        }
+      });
+    }
+
+    // 既存の商品アイテムのサイズプルダウンを更新
+    function updateAllEntryItemSizes() {
+      entryItems.forEach(item => {
+        const select = document.getElementById(`entry-size-${item.id}`);
+        if (select) {
+          const currentValue = select.value;
+          select.innerHTML = '<option value="">--選択してください--</option>' + getEntrySizeOptions();
+          select.value = currentValue;
+        }
+      });
     }
 
     // 入力モード切替
