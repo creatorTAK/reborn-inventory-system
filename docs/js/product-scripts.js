@@ -675,7 +675,8 @@ window.continueProductRegistration = function() {
     'デフォルト仕入先': '',
     '出品日_今日': false,
     'デフォルト出品日': '',
-    'デフォルト出品先': ''
+    'デフォルト出品先': '',
+    'デフォルト販売タイプ': 'fixed'
   };
 
   // 設定マスタから仕入・出品デフォルトを読み込む
@@ -2636,6 +2637,20 @@ window.continueProductRegistration = function() {
         if (typeof handleSalesChannelChange === 'function') {
           handleSalesChannelChange();
           console.log('✅ デフォルト出品先設定後に販売タイプを更新');
+        }
+
+        // デフォルト販売タイプを設定（メルカリの場合のみ）
+        const defaultSalesType = PROCURE_LISTING_DEFAULTS['デフォルト販売タイプ'];
+        if (defaultSalesType && defaultListingDest === 'メルカリ') {
+          const salesTypeSelect = document.getElementById('salesType');
+          if (salesTypeSelect) {
+            salesTypeSelect.value = defaultSalesType;
+            // 販売タイプに応じたUI更新
+            if (typeof handleSalesTypeChange === 'function') {
+              handleSalesTypeChange();
+            }
+            console.log('✅ デフォルト販売タイプを設定:', defaultSalesType);
+          }
         }
       }
     }
