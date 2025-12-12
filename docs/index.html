@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- Cache Bust: 2025-12-12 v243 - デバッグ用アラート追加 -->
+  <!-- Cache Bust: 2025-12-12 v244 - requestBackの重複ハンドラを削除 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -4849,9 +4849,6 @@
 
     // 戻る処理
     function goBackInHistory() {
-      // デバッグ用アラート（問題解決後に削除）
-      alert('goBackInHistory v242\n履歴: ' + JSON.stringify(navHistory));
-      
       console.log('📚 [履歴] goBack呼び出し - 現在:', navHistory);
       
       // 現在のページを削除
@@ -4862,8 +4859,6 @@
       // 1つ前のページに遷移（なければホーム）
       const destination = navHistory[navHistory.length - 1] || 'home';
       console.log('📚 [履歴] 戻り先:', destination, '→', navHistory);
-      
-      alert('戻り先: ' + destination);
       
       navigateToPage(destination, { skipHistory: true, skipSkeleton: true });
     }
@@ -5321,52 +5316,11 @@
         return;
       }
 
-      // 🔙 requestBack: 子から「戻りたい」という要求（親が履歴を見て判断）
-      if (data.type === 'requestBack') {
-        console.log('========================================');
-        console.log('🔙 [postMessage MAIN] requestBack 要求を受信');
-        console.log('========================================');
+      // 🔙 requestBack / goBack / navigateToHome は EARLY リスナー (1281行目付近) で処理
+      // ここでは処理しない（重複呼び出し防止）
 
-        // 注: isNavigatingProgrammaticallyチェックは無効化（戻るボタンは明示的アクション）
-
-        if (typeof goBackInHistory === 'function') {
-          goBackInHistory();
-          console.log('[postMessage MAIN] ✅ goBackInHistory() 呼び出し完了');
-        }
-        return;
-      }
-
-      // 🔙 goBack: 旧形式（後方互換性）
-      if (data.type === 'goBack') {
-        console.log('========================================');
-        console.log('🔙 [postMessage MAIN] goBack 要求を受信（旧形式）');
-        console.log('========================================');
-
-        // 注: isNavigatingProgrammaticallyチェックは無効化（戻るボタンは明示的アクション）
-
-        if (typeof goBackInHistory === 'function') {
-          goBackInHistory();
-          console.log('[postMessage MAIN] ✅ goBackInHistory() 呼び出し完了');
-        }
-        return;
-      }
-
-      // 🏠 navigateToHome: 旧形式（後方互換性）
-      if (data.type === 'navigateToHome') {
-        console.log('========================================');
-        console.log('🏠 [postMessage MAIN] navigateToHome 要求を受信（旧形式）');
-        console.log('========================================');
-
-        // 注: isNavigatingProgrammaticallyチェックは無効化（戻るボタンは明示的アクション）
-
-        if (typeof goBackInHistory === 'function') {
-          goBackInHistory();
-          console.log('[postMessage MAIN] ✅ goBackInHistory() 呼び出し完了');
-        } else {
-          console.error('[postMessage MAIN] ❌ goBackInHistory() 未定義');
-        }
-        return;
-      }
+      // 🔙 requestBack / goBack / navigateToHome は EARLY リスナーで処理済み
+      // （重複呼び出し防止のためここでは処理しない）
 
       if (data.type === 'navigateToChat') {
         console.log('========================================');
