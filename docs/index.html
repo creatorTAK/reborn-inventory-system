@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- Cache Bust: 2025-12-12 v240 - 戻る操作後のpreviousPageリセット -->
+  <!-- Cache Bust: 2025-12-12 v241 - 戻る操作の履歴管理を修正 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -4840,11 +4840,15 @@
       console.log('📚 [履歴] goBackInHistory呼び出し - 現在:', currentPage, '→ 戻り先:', previousPage);
       const destination = previousPage || 'home';
       
-      // 戻る操作後は「前のページ」をホームにリセット
-      // （A→B→戻る→A の後、Aから戻るとホームに行く）
-      previousPage = 'home';
+      // 戻る操作: 現在のページが「前のページ」になり、戻り先が「現在のページ」になる
+      // ただし、戻り先がホームなら「前のページ」もホームにする
+      if (destination === 'home') {
+        previousPage = 'home';
+      } else {
+        previousPage = currentPage;
+      }
       currentPage = destination;
-      console.log('📚 [履歴] 戻る後: previousPage = home, currentPage =', destination);
+      console.log('📚 [履歴] 戻る後: previousPage =', previousPage, ', currentPage =', destination);
       
       navigateToPage(destination, { skipHistory: true, skipSkeleton: true });
     }
@@ -4859,11 +4863,12 @@
       const skipHistory = options.skipHistory || false;
 
       // 📚 履歴管理（シンプル方式：1つ前のページだけ記憶）
+      // skipHistory時は goBackInHistory で既に更新済みなのでスキップ
       if (!skipHistory && page !== currentPage) {
         previousPage = currentPage;
+        currentPage = page;
         console.log('📚 [履歴] 更新: previousPage =', previousPage, ', currentPage =', page);
       }
-      currentPage = page;
 
       // 📊 パフォーマンス計測開始
       const startTime = performance.now();
