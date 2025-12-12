@@ -267,6 +267,27 @@
       margin-bottom: 10px;
       position: relative;
     }
+    /* デフォルト設定セクション */
+    .default-settings-section {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .default-settings-header {
+      display: flex;
+      align-items: center;
+      font-weight: 600;
+      color: #0369a1;
+      font-size: 0.9rem;
+    }
+    .default-settings-header i {
+      margin-right: 6px;
+    }
+    .default-settings-section .form-control,
+    .default-settings-section .form-select {
+      font-size: 16px; /* iOSズームイン防止 */
+    }
     .entry-item-header {
       display: flex;
       justify-content: space-between;
@@ -945,12 +966,25 @@
 
           <!-- 個別入力モード -->
           <div id="individualEntrySection">
-            <div class="mb-3">
-              <label class="form-label">発送先 <span class="text-danger">*</span></label>
-              <select class="form-select" id="entryAssigneeIndividual">
-                <option value="">読み込み中...</option>
-              </select>
-              <small class="text-muted">全商品共通の発送先</small>
+            <!-- デフォルト設定（新規追加時の初期値） -->
+            <div class="default-settings-section mb-3">
+              <div class="default-settings-header">
+                <i class="bi bi-gear"></i>
+                <span>デフォルト設定</span>
+                <small class="text-muted ms-2">（新規追加時の初期値）</small>
+              </div>
+              <div class="row g-2 mt-2">
+                <div class="col-6">
+                  <label class="form-label">仕入日</label>
+                  <input type="date" class="form-control" id="defaultPurchaseDate">
+                </div>
+                <div class="col-6">
+                  <label class="form-label">発送先</label>
+                  <select class="form-select" id="entryAssigneeIndividual">
+                    <option value="">読み込み中...</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             <div class="mb-3">
@@ -2826,9 +2860,10 @@
         return;
       }
 
-      // 今日の日付をセット
+      // 今日の日付をセット（一括入力用 + 個別入力デフォルト用）
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('entryPurchaseDate').value = today;
+      document.getElementById('defaultPurchaseDate').value = today;
 
       // 仕入先マスタを読み込み（PurchaseApi経由）
       try {
@@ -2917,6 +2952,16 @@
       return html;
     }
 
+    // 発送先セレクトボックスのHTMLを生成
+    function createEntryAssigneeOptionsHTML(selectedValue = '') {
+      let html = '<option value="">--選択--</option>';
+      entryAssigneesData.forEach(item => {
+        const selected = item.name === selectedValue ? ' selected' : '';
+        html += `<option value="${item.name}"${selected}>${item.name}</option>`;
+      });
+      return html;
+    }
+
     // 個別商品を追加
     // 検品情報のカテゴリ選択肢
     const INSPECTION_CATEGORIES = [
@@ -2954,8 +2999,15 @@
     function addEntryItem() {
       const itemId = Date.now();
       const itemNumber = entryItems.length + 1;
+
+      // デフォルト設定から初期値を取得
+      const defaultPurchaseDate = document.getElementById('defaultPurchaseDate')?.value || '';
+      const defaultAssignee = document.getElementById('entryAssigneeIndividual')?.value || '';
+
       entryItems.push({
         id: itemId,
+        purchaseDate: defaultPurchaseDate,  // 仕入日
+        assignee: defaultAssignee,          // 発送先
         supplier: '',
         amount: 0,
         memo: '',
@@ -2987,6 +3039,19 @@
           <button type="button" class="entry-item-delete" onclick="removeEntryItem(${itemId})" ${entryItems.length === 1 ? 'disabled style="opacity:0.3"' : ''}>
             <i class="bi bi-trash"></i>
           </button>
+        </div>
+        <!-- 仕入日・発送先（商品ごとに変更可能） -->
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label">仕入日 <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" id="entry-purchase-date-${itemId}" value="${defaultPurchaseDate}" onchange="updateEntryItem(${itemId})">
+          </div>
+          <div class="col-6">
+            <label class="form-label">発送先 <span class="text-danger">*</span></label>
+            <select class="form-select" id="entry-assignee-${itemId}" onchange="updateEntryItem(${itemId})">
+              ${createEntryAssigneeOptionsHTML(defaultAssignee)}
+            </select>
+          </div>
         </div>
         <div class="row g-2">
           <div class="col-6">
@@ -3134,6 +3199,9 @@
     function updateEntryItem(itemId) {
       const item = entryItems.find(i => i.id === itemId);
       if (item) {
+        // 仕入日・発送先
+        item.purchaseDate = document.getElementById(`entry-purchase-date-${itemId}`)?.value || '';
+        item.assignee = document.getElementById(`entry-assignee-${itemId}`)?.value || '';
         item.supplier = document.getElementById(`entry-supplier-${itemId}`)?.value || '';
         item.amount = parseInt(document.getElementById(`entry-amount-${itemId}`)?.value) || 0;
         item.memo = document.getElementById(`entry-memo-${itemId}`)?.value || '';
@@ -3636,14 +3704,12 @@
 
     // 個別入力モードのQRコード生成
     async function generateEntryQRCodesIndividual() {
-      const purchaseDate = document.getElementById('entryPurchaseDate').value;
-      const assignee = document.getElementById('entryAssigneeIndividual').value;
-
-      if (!purchaseDate) { alert('仕入日を入力してください'); return; }
-      if (!assignee) { alert('発送先を選択してください'); return; }
-
       const validItems = [];
       for (const item of entryItems) {
+        const itemIndex = entryItems.indexOf(item) + 1;
+        // 仕入日・発送先を各商品から取得
+        item.purchaseDate = document.getElementById(`entry-purchase-date-${item.id}`)?.value || '';
+        item.assignee = document.getElementById(`entry-assignee-${item.id}`)?.value || '';
         item.supplier = document.getElementById(`entry-supplier-${item.id}`)?.value || '';
         item.amount = parseInt(document.getElementById(`entry-amount-${item.id}`)?.value) || 0;
         item.memo = document.getElementById(`entry-memo-${item.id}`)?.value || '';
@@ -3668,29 +3734,42 @@
         } else {
           item.accessories = [];
         }
-        if (!item.supplier) { alert(`商品 #${entryItems.indexOf(item) + 1} の仕入先を選択してください`); return; }
-        if (item.amount <= 0) { alert(`商品 #${entryItems.indexOf(item) + 1} の金額を入力してください`); return; }
+        // バリデーション
+        if (!item.purchaseDate) { alert(`商品 #${itemIndex} の仕入日を入力してください`); return; }
+        if (!item.assignee) { alert(`商品 #${itemIndex} の発送先を選択してください`); return; }
+        if (!item.supplier) { alert(`商品 #${itemIndex} の仕入先を選択してください`); return; }
+        if (item.amount <= 0) { alert(`商品 #${itemIndex} の金額を入力してください`); return; }
         validItems.push(item);
       }
 
       if (validItems.length === 0) { alert('商品を追加してください'); return; }
 
       const totalAmount = validItems.reduce((sum, item) => sum + item.amount, 0);
-      // 個別入力の場合、仕入先は最初の商品のものを使用（混在している場合は「複数」）
+      // 個別入力の場合、仕入先・発送先・仕入日は最初の商品のものを使用（混在している場合は「複数」）
       const uniqueSuppliers = [...new Set(validItems.map(item => item.supplier))];
       const batchSupplier = uniqueSuppliers.length === 1 ? uniqueSuppliers[0] : '複数仕入先';
+      const uniqueAssignees = [...new Set(validItems.map(item => item.assignee))];
+      const batchAssignee = uniqueAssignees.length === 1 ? uniqueAssignees[0] : '複数発送先';
+      const uniqueDates = [...new Set(validItems.map(item => item.purchaseDate))];
+      const batchPurchaseDate = uniqueDates.length === 1 ? uniqueDates[0] : validItems[0].purchaseDate;
 
       // Firestoreにバッチ＆スロットを保存
       let batchResult;
       try {
         batchResult = await window.PurchaseApi.savePurchaseBatch({
-          purchaseDate,
+          purchaseDate: batchPurchaseDate,
           supplier: batchSupplier,
           totalAmount,
           itemCount: validItems.length,
-          assignee,
+          assignee: batchAssignee,
           memo: '',
-          items: validItems.map(item => ({ amount: item.amount, memo: item.memo, supplier: item.supplier }))
+          items: validItems.map(item => ({
+            amount: item.amount,
+            memo: item.memo,
+            supplier: item.supplier,
+            purchaseDate: item.purchaseDate,
+            assignee: item.assignee
+          }))
         });
       } catch (error) {
         alert('保存に失敗しました: ' + error.message);
@@ -3706,13 +3785,14 @@
       validItems.forEach((item, index) => {
         const slot = slots[index];
         // QRコードに埋め込むJSON（短縮キーで容量節約、7階層カテゴリ対応）
+        // 各商品の仕入日・発送先を使用
         const qrJson = {
           s: slot.slotId,           // slotId
           n: slot.slotNumber,       // number
-          d: purchaseDate,          // date
+          d: item.purchaseDate,     // date (各商品の仕入日)
           sup: item.supplier.substring(0, 10), // supplier (10文字まで)
           amt: item.amount,         // amount
-          asg: assignee.substring(0, 10), // assignee (10文字まで)
+          asg: item.assignee.substring(0, 10), // assignee (各商品の発送先、10文字まで)
           m: (item.memo || '').substring(0, 15), // memo (15文字まで)
           t: validItems.length,     // total count
           // 検品情報（7階層カテゴリ）
@@ -4070,7 +4150,9 @@
       document.getElementById('qrEntryPreview').style.display = 'none';
       document.getElementById('entryAfterActions').style.display = 'none';
       document.getElementById('qrEntryGrid').innerHTML = '';
-      document.getElementById('entryPurchaseDate').value = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('entryPurchaseDate').value = today;
+      document.getElementById('defaultPurchaseDate').value = today;  // 個別入力デフォルト
       document.getElementById('entrySupplier').value = '';
       document.getElementById('entryItemCount').value = '1';
       document.getElementById('entryTotalAmount').value = '';
@@ -4082,7 +4164,7 @@
       document.getElementById('entryItemsContainer').innerHTML = '';
       addEntryItem();
       entryGeneratedQRData = [];
-      setEntryMode('batch');
+      setEntryMode('individual');  // デフォルトを個別入力に変更
     }
 
     // 仕入登録タブの初期化（デフォルトでアクティブなので即時実行）
