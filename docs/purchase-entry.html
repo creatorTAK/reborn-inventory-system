@@ -402,13 +402,17 @@
     });
   });
 
-  // マスタデータ読み込み
+  // マスタデータ読み込み（Firestoreトップレベルコレクションから）
   async function loadMasterData() {
     try {
-      // 仕入先マスタを読み込み
-      const suppliersSnap = await db.collection('masters').doc('suppliers').get();
-      const suppliersData = suppliersSnap.exists ? suppliersSnap.data() : { items: [] };
-      const suppliers = suppliersData.items || [];
+      // 仕入先マスタを読み込み（suppliersコレクション）
+      const suppliersSnap = await db.collection('suppliers').get();
+      const suppliers = [];
+      suppliersSnap.forEach(doc => {
+        suppliers.push({ id: doc.id, ...doc.data() });
+      });
+      // 名前順でソート
+      suppliers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
 
       const supplierSelect = document.getElementById('supplier');
       supplierSelect.innerHTML = '<option value="">--選択してください--</option>';
@@ -416,6 +420,7 @@
         const option = document.createElement('option');
         option.value = item.name;
         option.textContent = item.name;
+        option.dataset.id = item.id;
         supplierSelect.appendChild(option);
       });
       // 新規追加オプションを最後に追加
@@ -424,10 +429,14 @@
       newOption.textContent = '+ 新規追加...';
       supplierSelect.appendChild(newOption);
 
-      // 発送先マスタを読み込み
-      const assigneesSnap = await db.collection('masters').doc('assignees').get();
-      const assigneesData = assigneesSnap.exists ? assigneesSnap.data() : { items: [] };
-      const assignees = assigneesData.items || [];
+      // 発送先マスタを読み込み（assigneesコレクション）
+      const assigneesSnap = await db.collection('assignees').get();
+      const assignees = [];
+      assigneesSnap.forEach(doc => {
+        assignees.push({ id: doc.id, ...doc.data() });
+      });
+      // 名前順でソート
+      assignees.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
 
       const assigneeSelect = document.getElementById('assignee');
       assigneeSelect.innerHTML = '<option value="">--選択してください--</option>';
@@ -435,6 +444,7 @@
         const option = document.createElement('option');
         option.value = item.name;
         option.textContent = item.note ? `${item.name}（${item.note}）` : item.name;
+        option.dataset.id = item.id;
         assigneeSelect.appendChild(option);
       });
       // 「自分で管理」オプションを最後に追加
@@ -466,34 +476,35 @@
     document.getElementById('pricePerItem').textContent = '¥' + perItem.toLocaleString();
   }
   
-  // 新規仕入先追加（Firestoreにも保存）
+  // 新規仕入先追加（Firestoreトップレベルコレクションに保存）
   async function addNewSupplier() {
     const name = document.getElementById('newSupplierName').value.trim();
     if (name) {
       try {
-        // Firestoreに保存
-        const snapshot = await db.collection('masters').doc('suppliers').get();
-        const data = snapshot.exists ? snapshot.data() : { items: [] };
-        const items = data.items || [];
-
-        // 重複チェック
-        if (items.some(item => item.name === name)) {
+        // 重複チェック（suppliersコレクションを検索）
+        const existingSnap = await db.collection('suppliers').where('name', '==', name).get();
+        if (!existingSnap.empty) {
           alert('この仕入先は既に登録されています');
           return;
         }
 
-        items.push({ name, createdAt: new Date().toISOString() });
-        await db.collection('masters').doc('suppliers').set({ items });
+        // Firestoreに保存（新規ドキュメントとして追加）
+        const docRef = await db.collection('suppliers').add({
+          name,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
         // セレクトボックスに追加
         const select = document.getElementById('supplier');
         const option = document.createElement('option');
         option.value = name;
         option.textContent = name;
+        option.dataset.id = docRef.id;
         select.insertBefore(option, select.querySelector('option[value="__new__"]'));
         select.value = name;
 
-        console.log('[MASTER] 仕入先を追加:', name);
+        console.log('[MASTER] 仕入先を追加:', name, 'ID:', docRef.id);
       } catch (error) {
         console.error('[MASTER] 仕入先追加エラー:', error);
         // エラー時もローカルに追加（利便性のため）
