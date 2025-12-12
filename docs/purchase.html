@@ -2269,16 +2269,19 @@
 
     // 仕入登録タブの初期化
     async function initializeEntryTab() {
+      console.log('📥 [仕入登録] 初期化開始');
+
       // 今日の日付をセット
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('entryPurchaseDate').value = today;
 
-      // 仕入先マスタを読み込み
+      // 仕入先マスタを読み込み（モジュラー版SDK使用）
       try {
-        const suppliersSnap = await db.collection('suppliers').get();
+        const suppliersRef = collection(db, 'suppliers');
+        const suppliersSnap = await getDocs(suppliersRef);
         entrySuppliersData = [];
-        suppliersSnap.forEach(doc => {
-          entrySuppliersData.push({ id: doc.id, ...doc.data() });
+        suppliersSnap.forEach(docSnap => {
+          entrySuppliersData.push({ id: docSnap.id, ...docSnap.data() });
         });
         entrySuppliersData.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
 
@@ -2287,16 +2290,19 @@
         entrySuppliersData.forEach(item => {
           supplierSelect.innerHTML += `<option value="${item.name}">${item.name}</option>`;
         });
+        console.log('📥 [仕入登録] 仕入先読み込み完了:', entrySuppliersData.length, '件');
       } catch (error) {
         console.error('仕入先読み込みエラー:', error);
+        document.getElementById('entrySupplier').innerHTML = '<option value="">読み込みエラー</option>';
       }
 
-      // 発送先マスタを読み込み
+      // 発送先マスタを読み込み（モジュラー版SDK使用）
       try {
-        const assigneesSnap = await db.collection('assignees').get();
+        const assigneesRef = collection(db, 'assignees');
+        const assigneesSnap = await getDocs(assigneesRef);
         entryAssigneesData = [];
-        assigneesSnap.forEach(doc => {
-          entryAssigneesData.push({ id: doc.id, ...doc.data() });
+        assigneesSnap.forEach(docSnap => {
+          entryAssigneesData.push({ id: docSnap.id, ...docSnap.data() });
         });
         entryAssigneesData.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
 
@@ -2308,8 +2314,11 @@
         assigneeSelect.innerHTML += '<option value="自分で管理">自分で管理</option>';
 
         document.getElementById('entryAssigneeIndividual').innerHTML = assigneeSelect.innerHTML;
+        console.log('📥 [仕入登録] 発送先読み込み完了:', entryAssigneesData.length, '件');
       } catch (error) {
         console.error('発送先読み込みエラー:', error);
+        document.getElementById('entryAssignee').innerHTML = '<option value="">読み込みエラー</option>';
+        document.getElementById('entryAssigneeIndividual').innerHTML = '<option value="">読み込みエラー</option>';
       }
 
       // 最初の1件を追加
@@ -2317,6 +2326,8 @@
 
       // ラベル設定読み込み
       loadEntryLabelSettings();
+
+      console.log('📥 [仕入登録] 初期化完了');
     }
 
     // 入力モード切替
@@ -2850,8 +2861,12 @@
       setEntryMode('batch');
     }
 
-    // タブ切替時に仕入登録タブを初期化
+    // 仕入登録タブの初期化（デフォルトでアクティブなので即時実行）
     document.addEventListener('DOMContentLoaded', function() {
+      // デフォルトでアクティブなタブなので即時初期化
+      initializeEntryTab();
+
+      // 他のタブから戻ってきた時用
       document.getElementById('entry-tab')?.addEventListener('shown.bs.tab', function() {
         if (entrySuppliersData.length === 0) {
           initializeEntryTab();
