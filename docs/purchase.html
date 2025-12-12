@@ -764,6 +764,12 @@
                 <option value="">読み込み中...</option>
               </select>
             </div>
+
+            <div class="mb-3">
+              <label class="form-label">メモ（任意）</label>
+              <input type="text" class="form-control" id="entryMemo" placeholder="例：セール品、まとめ買い等">
+              <small class="text-muted">QRコードに埋め込まれます（全商品共通）</small>
+            </div>
           </div>
 
           <!-- 個別入力モード -->
@@ -2705,6 +2711,10 @@
             </div>
           </div>
         </div>
+        <div class="mt-2">
+          <label class="form-label">メモ</label>
+          <input type="text" class="form-control" id="entry-memo-${itemId}" placeholder="例：時計、バッグ等" onchange="updateEntryItem(${itemId})">
+        </div>
       `;
       container.appendChild(itemDiv);
       updateEntryTotal();
@@ -2727,6 +2737,7 @@
       if (item) {
         item.supplier = document.getElementById(`entry-supplier-${itemId}`)?.value || '';
         item.amount = parseInt(document.getElementById(`entry-amount-${itemId}`)?.value) || 0;
+        item.memo = document.getElementById(`entry-memo-${itemId}`)?.value || '';
       }
       updateEntryTotal();
     }
@@ -2809,6 +2820,10 @@
           asg: assignee.substring(0, 10), // assignee (10文字まで)
           t: itemCount              // total count
         };
+        // メモがある場合は追加
+        if (memo) {
+          qrJson.m = memo.substring(0, 15); // memo (15文字まで)
+        }
         const qrContent = JSON.stringify(qrJson);
 
         const qrItem = document.createElement('div');
@@ -2820,7 +2835,9 @@
 
         const label = document.createElement('div');
         label.className = 'qr-entry-item-label';
-        label.innerHTML = `#${slot.slotNumber}/${itemCount}<br>¥${perItemAmount.toLocaleString()}<br>${supplier}`;
+        let labelText = `#${slot.slotNumber}/${itemCount}<br>¥${perItemAmount.toLocaleString()}<br>${supplier}`;
+        if (memo) labelText += `<br>${memo}`;
+        label.innerHTML = labelText;
         qrItem.appendChild(label);
 
         qrGrid.appendChild(qrItem);
@@ -2842,6 +2859,7 @@
           amount: perItemAmount,
           supplier: supplier,
           assignee: assignee,
+          memo: memo || '',
           totalCount: itemCount
         });
       }
@@ -3266,6 +3284,7 @@
       document.getElementById('entryPricePerItem').textContent = '¥0';
       document.getElementById('entryAssignee').value = '';
       document.getElementById('entryAssigneeIndividual').value = '';
+      document.getElementById('entryMemo').value = '';
       entryItems = [];
       document.getElementById('entryItemsContainer').innerHTML = '';
       addEntryItem();
