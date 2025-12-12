@@ -83,6 +83,26 @@
 <!-- メルカリ用コンテンツ -->
 <div id="platform-content-mercari" class="platform-content">
 <div class="content-container">
+
+<!-- QRコード読み取りセクション -->
+<div class="group qr-scan-section" id="qrScanSection">
+  <div class="group-title"><span class="group-emoji">📷</span> 仕入商品スキャン</div>
+  <div class="form-section">
+    <div id="qrScanStatus" style="display: none; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+      <!-- スキャン状態が表示される -->
+    </div>
+    <button type="button" onclick="openQRScanner()" class="qr-scan-btn" id="qrScanBtn" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px;">
+      <i class="bi bi-qr-code-scan" style="font-size: 20px;"></i>
+      QRコードを読み取る
+    </button>
+    <p style="margin-top: 8px; font-size: 12px; color: #6b7280; text-align: center;">
+      仕入商品のQRコードをスキャンして紐付け
+    </p>
+    <!-- 仕入商品ID（非表示フィールド） -->
+    <input type="hidden" id="invId" name="invId" value="">
+  </div>
+</div>
+
 <div class="group management-section">
   <div class="group-title"><span class="group-emoji">🏷️</span> 管理番号</div>
 
@@ -1598,7 +1618,155 @@ style="display:none;">削除</button>
   document.getElementById('qrCodeModal')?.addEventListener('click', function(e) {
     if (e.target === this) closeQRCodeModal();
   });
+
+  // ========================================
+  // QRコード読み取り機能（仕入商品紐付け）
+  // ========================================
+  let qrScanner = null;
+
+  function openQRScanner() {
+    const modal = document.getElementById('qrScannerModal');
+    if (modal) {
+      modal.style.display = 'flex';
+      startQRScanner();
+    }
+  }
+
+  function closeQRScanner() {
+    const modal = document.getElementById('qrScannerModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+    stopQRScanner();
+  }
+
+  function startQRScanner() {
+    const readerElement = document.getElementById('qrReader');
+    if (!readerElement) return;
+
+    // html5-qrcodeライブラリを動的に読み込み
+    if (typeof Html5Qrcode === 'undefined') {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+      script.onload = function() {
+        initQRScanner();
+      };
+      document.head.appendChild(script);
+    } else {
+      initQRScanner();
+    }
+  }
+
+  function initQRScanner() {
+    qrScanner = new Html5Qrcode("qrReader");
+    qrScanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      onQRScanSuccess,
+      onQRScanFailure
+    ).catch(err => {
+      console.error("カメラ起動失敗:", err);
+      document.getElementById('qrReader').innerHTML = `
+        <div style="text-align: center; padding: 20px; color: #ef4444;">
+          <i class="bi bi-camera-video-off" style="font-size: 48px;"></i>
+          <p>カメラにアクセスできません</p>
+          <button onclick="manualInvIdInput()" style="margin-top: 12px; padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer;">
+            手動で入力
+          </button>
+        </div>
+      `;
+    });
+  }
+
+  function stopQRScanner() {
+    if (qrScanner) {
+      qrScanner.stop().catch(err => console.log("Scanner stop error:", err));
+      qrScanner = null;
+    }
+  }
+
+  function onQRScanSuccess(decodedText) {
+    // QRコードからinvIdを抽出
+    let invId = decodedText;
+    try {
+      const url = new URL(decodedText);
+      invId = url.searchParams.get('inv') || decodedText;
+    } catch (e) {
+      // URLでない場合はそのまま使用
+    }
+
+    // スキャナー停止
+    stopQRScanner();
+    closeQRScanner();
+
+    // 仕入商品IDをセット
+    setInvId(invId);
+  }
+
+  function onQRScanFailure(error) {
+    // 継続してスキャン（エラーは無視）
+  }
+
+  function setInvId(invId) {
+    document.getElementById('invId').value = invId;
+    
+    // ステータス表示を更新
+    const statusDiv = document.getElementById('qrScanStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#d1fae5';
+    statusDiv.style.border = '1px solid #10b981';
+    statusDiv.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-check-circle-fill" style="color: #10b981; font-size: 20px;"></i>
+        <div>
+          <div style="font-weight: 600; color: #065f46;">仕入商品と紐付け済み</div>
+          <div style="font-size: 12px; color: #047857;">${invId}</div>
+        </div>
+      </div>
+    `;
+
+    // ボタンのテキストを変更
+    const btn = document.getElementById('qrScanBtn');
+    btn.innerHTML = '<i class="bi bi-check-lg" style="font-size: 20px;"></i> 紐付け完了（再スキャン）';
+    btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+
+    // TODO: Firestoreから仕入情報を取得して表示（管理者のみ）
+    console.log('仕入商品ID:', invId);
+  }
+
+  function manualInvIdInput() {
+    const invId = prompt('仕入商品IDを入力してください\n例: INV-20251212-XXXX-001');
+    if (invId && invId.trim()) {
+      closeQRScanner();
+      setInvId(invId.trim());
+    }
+  }
+
+  function clearInvId() {
+    document.getElementById('invId').value = '';
+    document.getElementById('qrScanStatus').style.display = 'none';
+    const btn = document.getElementById('qrScanBtn');
+    btn.innerHTML = '<i class="bi bi-qr-code-scan" style="font-size: 20px;"></i> QRコードを読み取る';
+    btn.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+  }
 </script>
+
+<!-- QRスキャナーモーダル -->
+<div id="qrScannerModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; justify-content: center; align-items: center;">
+  <div style="background: white; border-radius: 16px; width: 90%; max-width: 400px; overflow: hidden;">
+    <div style="padding: 16px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-weight: 600;"><i class="bi bi-qr-code-scan"></i> QRコードをスキャン</span>
+      <button onclick="closeQRScanner()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+    </div>
+    <div id="qrReader" style="width: 100%;"></div>
+    <div style="padding: 16px; text-align: center;">
+      <p style="font-size: 14px; color: #6b7280; margin-bottom: 12px;">商品タグのQRコードをカメラにかざしてください</p>
+      <button onclick="manualInvIdInput()" style="padding: 10px 20px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer;">
+        <i class="bi bi-keyboard"></i> 手動で入力
+      </button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
