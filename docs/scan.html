@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>QRスキャン - FURIRA</title>
+
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<!-- html5-qrcode -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f5f5f5;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+  
+  /* ヘッダー */
+  .header {
+    background: linear-gradient(135deg, #4ECDC4 0%, #44A08D 100%);
+    color: white;
+    padding: 16px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .header-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+  .back-button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+  }
+  
+  /* コンテンツ */
+  .content {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  
+  /* カード */
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: none;
+  }
+  .card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  /* スキャナー */
+  #reader {
+    width: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  #reader video {
+    border-radius: 12px;
+  }
+  
+  /* スキャン結果 */
+  .scan-result {
+    display: none;
+  }
+  .scan-result.show {
+    display: block;
+  }
+  .scan-success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .scan-success-icon {
+    font-size: 3rem;
+    color: #28a745;
+    text-align: center;
+    display: block;
+    margin-bottom: 8px;
+  }
+  
+  /* フォーム */
+  .form-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #555;
+    margin-bottom: 6px;
+  }
+  .form-control, .form-select {
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    padding: 12px;
+    font-size: 1rem;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: #4ECDC4;
+    box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.1);
+  }
+  
+  /* ボタン */
+  .btn-primary {
+    background: linear-gradient(135deg, #4ECDC4 0%, #44A08D 100%);
+    border: none;
+    border-radius: 8px;
+    padding: 14px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #3dbdb5 0%, #3a9080 100%);
+  }
+  .btn-secondary {
+    background: #6c757d;
+    border: none;
+    border-radius: 8px;
+    padding: 14px 24px;
+    font-size: 1rem;
+  }
+  .btn-outline-secondary {
+    border: 2px solid #6c757d;
+    color: #6c757d;
+    border-radius: 8px;
+    padding: 12px 20px;
+  }
+  
+  /* 仕入情報（管理者のみ表示） */
+  .purchase-info {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    font-size: 0.875rem;
+  }
+  .purchase-info.hidden {
+    display: none;
+  }
+  .purchase-info-label {
+    color: #856404;
+    font-weight: 500;
+  }
+  
+  /* モード切替 */
+  .mode-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .mode-tab {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 500;
+    color: #666;
+    transition: all 0.2s;
+  }
+  .mode-tab.active {
+    border-color: #4ECDC4;
+    background: #e8f8f6;
+    color: #4ECDC4;
+  }
+  .mode-tab i {
+    display: block;
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+  }
+  
+  /* 手動入力 */
+  .manual-input {
+    display: none;
+  }
+  .manual-input.show {
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<div class="header">
+  <div class="header-content">
+    <button class="back-button" onclick="history.back()">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+    <div class="header-title">
+      <i class="bi bi-qr-code-scan"></i> QRスキャン
+    </div>
+    <div style="width: 40px;"></div>
+  </div>
+</div>
+
+<!-- コンテンツ -->
+<div class="content">
+  
+  <!-- モード切替 -->
+  <div class="mode-tabs">
+    <div class="mode-tab active" onclick="switchMode('scan')">
+      <i class="bi bi-camera"></i>
+      カメラ
+    </div>
+    <div class="mode-tab" onclick="switchMode('manual')">
+      <i class="bi bi-keyboard"></i>
+      手動入力
+    </div>
+  </div>
+  
+  <!-- スキャナー -->
+  <div class="card" id="scannerCard">
+    <div class="card-title">
+      <i class="bi bi-camera-video"></i> QRコードをスキャン
+    </div>
+    <div id="reader"></div>
+    <p class="text-muted mt-3 mb-0 small">
+      <i class="bi bi-info-circle"></i> 
+      商品タグのQRコードをカメラにかざしてください
+    </p>
+  </div>
+  
+  <!-- 手動入力 -->
+  <div class="card manual-input" id="manualInput">
+    <div class="card-title">
+      <i class="bi bi-keyboard"></i> 仕入商品IDを入力
+    </div>
+    <div class="mb-3">
+      <input type="text" class="form-control" id="manualInvId" placeholder="例: INV-20251212-XXXX-001">
+    </div>
+    <button class="btn btn-primary w-100" onclick="processManualInput()">
+      <i class="bi bi-search"></i> 検索
+    </button>
+  </div>
+  
+  <!-- スキャン結果 -->
+  <div class="scan-result" id="scanResult">
+    <div class="scan-success">
+      <i class="bi bi-check-circle-fill scan-success-icon"></i>
+      <div class="text-center">
+        <strong>スキャン成功！</strong><br>
+        <span id="scannedInvId"></span>
+      </div>
+    </div>
+    
+    <!-- 仕入情報（管理者のみ） -->
+    <div class="purchase-info" id="purchaseInfo">
+      <div class="purchase-info-label">
+        <i class="bi bi-lock-fill"></i> 仕入情報（管理者のみ表示）
+      </div>
+      <div class="mt-2">
+        <div><strong>仕入日:</strong> <span id="info-purchaseDate">2025/12/12</span></div>
+        <div><strong>仕入先:</strong> <span id="info-supplier">〇〇古着市場</span></div>
+        <div><strong>仕入単価:</strong> <span id="info-price">¥500</span></div>
+      </div>
+    </div>
+    
+    <!-- 商品登録フォーム -->
+    <div class="card">
+      <div class="card-title">
+        <i class="bi bi-pencil-square"></i> 商品情報を入力
+      </div>
+      
+      <div class="mb-3">
+        <label class="form-label">管理番号 <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="managementNumber" placeholder="例: AB-1001">
+        <small class="text-muted">あなたの棚に合わせて採番してください</small>
+      </div>
+      
+      <div class="mb-3">
+        <label class="form-label">商品名 <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="productName" placeholder="例: ナイキ スウェットパーカー">
+      </div>
+      
+      <div class="row">
+        <div class="col-6">
+          <div class="mb-3">
+            <label class="form-label">ブランド</label>
+            <input type="text" class="form-control" id="brand" placeholder="NIKE">
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="mb-3">
+            <label class="form-label">カテゴリ</label>
+            <select class="form-select" id="category">
+              <option value="">--選択--</option>
+              <option value="トップス">トップス</option>
+              <option value="ボトムス">ボトムス</option>
+              <option value="アウター">アウター</option>
+              <option value="ワンピース">ワンピース</option>
+              <option value="バッグ">バッグ</option>
+              <option value="シューズ">シューズ</option>
+              <option value="アクセサリー">アクセサリー</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div class="col-6">
+          <div class="mb-3">
+            <label class="form-label">サイズ</label>
+            <input type="text" class="form-control" id="size" placeholder="M">
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="mb-3">
+            <label class="form-label">カラー</label>
+            <input type="text" class="form-control" id="color" placeholder="ブラック">
+          </div>
+        </div>
+      </div>
+      
+      <div class="mb-3">
+        <label class="form-label">写真</label>
+        <div class="d-grid">
+          <button class="btn btn-outline-secondary" onclick="openCamera()">
+            <i class="bi bi-camera"></i> 写真を撮影
+          </button>
+        </div>
+        <div id="photoPreview" class="mt-2"></div>
+      </div>
+      
+      <div class="d-grid gap-2 mt-4">
+        <button class="btn btn-primary btn-lg" onclick="registerProduct()">
+          <i class="bi bi-check-lg"></i> 商品を登録
+        </button>
+        <button class="btn btn-outline-secondary" onclick="resetScan()">
+          <i class="bi bi-arrow-counterclockwise"></i> 次の商品をスキャン
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  let html5QrCode = null;
+  let currentInvId = null;
+  let isAdmin = true; // TODO: 実際の権限チェック
+  
+  // 初期化
+  document.addEventListener('DOMContentLoaded', function() {
+    // URLパラメータチェック（QRコードからの直接アクセス）
+    const urlParams = new URLSearchParams(window.location.search);
+    const invId = urlParams.get('inv');
+    
+    if (invId) {
+      // QRコードからのアクセス
+      processScannedCode(invId);
+    } else {
+      // スキャナー起動
+      startScanner();
+    }
+    
+    // 管理者でなければ仕入情報を非表示
+    if (!isAdmin) {
+      document.getElementById('purchaseInfo').classList.add('hidden');
+    }
+  });
+  
+  // スキャナー起動
+  function startScanner() {
+    html5QrCode = new Html5Qrcode("reader");
+    
+    html5QrCode.start(
+      { facingMode: "environment" },
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 }
+      },
+      onScanSuccess,
+      onScanFailure
+    ).catch(err => {
+      console.error("カメラの起動に失敗:", err);
+      document.getElementById('reader').innerHTML = `
+        <div class="text-center text-danger p-4">
+          <i class="bi bi-camera-video-off" style="font-size: 3rem;"></i>
+          <p class="mt-2">カメラにアクセスできません</p>
+          <p class="small">手動入力モードをお使いください</p>
+        </div>
+      `;
+    });
+  }
+  
+  // スキャン成功
+  function onScanSuccess(decodedText, decodedResult) {
+    // URLからinvパラメータを抽出
+    let invId = decodedText;
+    try {
+      const url = new URL(decodedText);
+      invId = url.searchParams.get('inv') || decodedText;
+    } catch (e) {
+      // URLでない場合はそのまま使用
+    }
+    
+    // スキャナー停止
+    if (html5QrCode) {
+      html5QrCode.stop();
+    }
+    
+    processScannedCode(invId);
+  }
+  
+  // スキャン失敗（継続してスキャン）
+  function onScanFailure(error) {
+    // 無視（継続）
+  }
+  
+  // スキャン結果処理
+  function processScannedCode(invId) {
+    currentInvId = invId;
+    
+    // 表示更新
+    document.getElementById('scannedInvId').textContent = invId;
+    document.getElementById('scannerCard').style.display = 'none';
+    document.getElementById('manualInput').classList.remove('show');
+    document.getElementById('scanResult').classList.add('show');
+    
+    // TODO: Firestoreから仕入情報を取得
+    // 今はダミーデータ
+    document.getElementById('info-purchaseDate').textContent = '2025/12/12';
+    document.getElementById('info-supplier').textContent = '〇〇古着市場';
+    document.getElementById('info-price').textContent = '¥500';
+    
+    // 効果音（オプション）
+    try {
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleUI...');
+      audio.volume = 0.3;
+      audio.play().catch(() => {});
+    } catch (e) {}
+  }
+  
+  // 手動入力処理
+  function processManualInput() {
+    const invId = document.getElementById('manualInvId').value.trim();
+    if (invId) {
+      processScannedCode(invId);
+    } else {
+      alert('仕入商品IDを入力してください');
+    }
+  }
+  
+  // モード切替
+  function switchMode(mode) {
+    document.querySelectorAll('.mode-tab').forEach(tab => tab.classList.remove('active'));
+    
+    if (mode === 'scan') {
+      document.querySelector('.mode-tab:first-child').classList.add('active');
+      document.getElementById('scannerCard').style.display = 'block';
+      document.getElementById('manualInput').classList.remove('show');
+      if (!html5QrCode) {
+        startScanner();
+      }
+    } else {
+      document.querySelector('.mode-tab:last-child').classList.add('active');
+      document.getElementById('scannerCard').style.display = 'none';
+      document.getElementById('manualInput').classList.add('show');
+      if (html5QrCode) {
+        html5QrCode.stop().catch(() => {});
+        html5QrCode = null;
+      }
+    }
+  }
+  
+  // リセット
+  function resetScan() {
+    currentInvId = null;
+    document.getElementById('scanResult').classList.remove('show');
+    document.getElementById('scannerCard').style.display = 'block';
+    
+    // フォームクリア
+    document.getElementById('managementNumber').value = '';
+    document.getElementById('productName').value = '';
+    document.getElementById('brand').value = '';
+    document.getElementById('category').value = '';
+    document.getElementById('size').value = '';
+    document.getElementById('color').value = '';
+    document.getElementById('photoPreview').innerHTML = '';
+    
+    // スキャナー再起動
+    startScanner();
+  }
+  
+  // カメラ起動（写真撮影）
+  function openCamera() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('photoPreview').innerHTML = `
+            <img src="${e.target.result}" class="img-thumbnail" style="max-height: 150px;">
+          `;
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  }
+  
+  // 商品登録
+  function registerProduct() {
+    const managementNumber = document.getElementById('managementNumber').value.trim();
+    const productName = document.getElementById('productName').value.trim();
+    
+    if (!managementNumber || !productName) {
+      alert('管理番号と商品名は必須です');
+      return;
+    }
+    
+    // TODO: Firestoreに保存
+    const productData = {
+      invId: currentInvId,
+      managementNumber: managementNumber,
+      productName: productName,
+      brand: document.getElementById('brand').value.trim(),
+      category: document.getElementById('category').value,
+      size: document.getElementById('size').value.trim(),
+      color: document.getElementById('color').value.trim(),
+      registeredAt: new Date().toISOString()
+    };
+    
+    console.log('登録データ:', productData);
+    
+    // 成功メッセージ
+    alert(`商品を登録しました！\n\n管理番号: ${managementNumber}\n商品名: ${productName}`);
+    
+    // 次の商品へ
+    resetScan();
+  }
+</script>
+
+</body>
+</html>

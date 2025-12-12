@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>仕入登録 - FURIRA</title>
+
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<!-- Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<!-- QRCode.js -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
+<style>
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f5f5f5;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+  
+  /* ヘッダー */
+  .header {
+    background: linear-gradient(135deg, #4ECDC4 0%, #44A08D 100%);
+    color: white;
+    padding: 16px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .header-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+  .back-button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+  }
+  
+  /* コンテンツ */
+  .content {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  
+  /* カード */
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: none;
+  }
+  .card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  /* フォーム */
+  .form-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #555;
+    margin-bottom: 6px;
+  }
+  .form-control, .form-select {
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    padding: 12px;
+    font-size: 1rem;
+  }
+  .form-control:focus, .form-select:focus {
+    border-color: #4ECDC4;
+    box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.1);
+  }
+  
+  /* ボタン */
+  .btn-primary {
+    background: linear-gradient(135deg, #4ECDC4 0%, #44A08D 100%);
+    border: none;
+    border-radius: 8px;
+    padding: 14px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #3dbdb5 0%, #3a9080 100%);
+  }
+  .btn-secondary {
+    background: #6c757d;
+    border: none;
+    border-radius: 8px;
+    padding: 14px 24px;
+    font-size: 1rem;
+  }
+  .btn-outline-primary {
+    border: 2px solid #4ECDC4;
+    color: #4ECDC4;
+    border-radius: 8px;
+    padding: 12px 20px;
+  }
+  .btn-outline-primary:hover {
+    background: #4ECDC4;
+    color: white;
+  }
+  
+  /* QRコードプレビュー */
+  .qr-preview-container {
+    display: none;
+  }
+  .qr-preview-container.show {
+    display: block;
+  }
+  .qr-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .qr-item {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+  }
+  .qr-item canvas {
+    max-width: 100%;
+    height: auto;
+  }
+  .qr-item-label {
+    font-size: 0.75rem;
+    color: #666;
+    margin-top: 8px;
+    word-break: break-all;
+  }
+  
+  /* 印刷用スタイル */
+  @media print {
+    body {
+      background: white;
+    }
+    .header, .card:not(.print-area), .btn, .no-print {
+      display: none !important;
+    }
+    .print-area {
+      box-shadow: none;
+      padding: 0;
+    }
+    .qr-grid {
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .qr-item {
+      border: 1px solid #000;
+      padding: 8px;
+      page-break-inside: avoid;
+    }
+    .qr-item canvas {
+      width: 80px !important;
+      height: 80px !important;
+    }
+  }
+  
+  /* 仕入先追加モーダル */
+  .supplier-list {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .supplier-item {
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+  }
+  .supplier-item:hover {
+    background: #f5f5f5;
+  }
+  
+  /* 金額入力 */
+  .price-per-item {
+    background: #f0f9f8;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 12px;
+  }
+  .price-per-item-label {
+    font-size: 0.875rem;
+    color: #666;
+  }
+  .price-per-item-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #4ECDC4;
+  }
+</style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<div class="header">
+  <div class="header-content">
+    <button class="back-button" onclick="history.back()">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+    <div class="header-title">
+      <i class="bi bi-box-seam"></i> 仕入登録
+    </div>
+    <div style="width: 40px;"></div>
+  </div>
+</div>
+
+<!-- コンテンツ -->
+<div class="content">
+  <!-- 仕入情報入力 -->
+  <div class="card">
+    <div class="card-title">
+      <i class="bi bi-clipboard-data"></i> 仕入情報
+    </div>
+    
+    <div class="mb-3">
+      <label class="form-label">仕入日 <span class="text-danger">*</span></label>
+      <input type="date" class="form-control" id="purchaseDate">
+    </div>
+    
+    <div class="mb-3">
+      <label class="form-label">仕入先 <span class="text-danger">*</span></label>
+      <select class="form-select" id="supplier">
+        <option value="">--選択してください--</option>
+        <option value="〇〇古着市場">〇〇古着市場</option>
+        <option value="△△リサイクル">△△リサイクル</option>
+        <option value="ネット仕入れ">ネット仕入れ</option>
+        <option value="__new__">+ 新規追加...</option>
+      </select>
+    </div>
+    
+    <div class="row">
+      <div class="col-6">
+        <div class="mb-3">
+          <label class="form-label">仕入点数 <span class="text-danger">*</span></label>
+          <input type="number" class="form-control" id="itemCount" min="1" max="100" value="1" onchange="calculatePerItem()">
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="mb-3">
+          <label class="form-label">仕入合計金額 <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <span class="input-group-text">¥</span>
+            <input type="number" class="form-control" id="totalAmount" min="0" onchange="calculatePerItem()">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="price-per-item">
+      <div class="price-per-item-label">1点あたりの仕入単価（参考）</div>
+      <div class="price-per-item-value" id="pricePerItem">¥0</div>
+    </div>
+    
+    <div class="mb-3 mt-3">
+      <label class="form-label">メモ（任意）</label>
+      <textarea class="form-control" id="memo" rows="2" placeholder="仕入れに関するメモ"></textarea>
+    </div>
+    
+    <div class="mb-3">
+      <label class="form-label">発送先（外注） <span class="text-danger">*</span></label>
+      <select class="form-select" id="assignee">
+        <option value="">--選択してください--</option>
+        <option value="Aさん">Aさん（AA-AZ担当）</option>
+        <option value="Bさん">Bさん（BA-BZ担当）</option>
+        <option value="自分">自分で管理</option>
+      </select>
+    </div>
+  </div>
+  
+  <!-- QRコード生成ボタン -->
+  <div class="d-grid gap-2 no-print">
+    <button class="btn btn-primary btn-lg" onclick="generateQRCodes()">
+      <i class="bi bi-qr-code"></i> QRコードを生成
+    </button>
+  </div>
+  
+  <!-- QRコードプレビュー -->
+  <div class="card qr-preview-container print-area" id="qrPreview">
+    <div class="card-title">
+      <i class="bi bi-grid-3x3"></i> QRコードプレビュー
+      <span class="badge bg-success ms-2" id="qrCount">0枚</span>
+    </div>
+    
+    <div class="d-flex gap-2 mb-3 no-print">
+      <button class="btn btn-outline-primary flex-fill" onclick="printQRCodes()">
+        <i class="bi bi-printer"></i> 印刷
+      </button>
+      <button class="btn btn-outline-primary flex-fill" onclick="downloadQRCodes()">
+        <i class="bi bi-download"></i> PDF保存
+      </button>
+    </div>
+    
+    <div class="qr-grid" id="qrGrid">
+      <!-- QRコードがここに生成される -->
+    </div>
+    
+    <div class="mt-3 no-print">
+      <small class="text-muted">
+        <i class="bi bi-info-circle"></i> 
+        QRコードを印刷して、各商品に貼り付けてください。
+        外注スタッフがスキャンすると商品登録画面が開きます。
+      </small>
+    </div>
+  </div>
+  
+  <!-- 登録完了後のアクション -->
+  <div class="card no-print" id="afterActions" style="display: none;">
+    <div class="card-title">
+      <i class="bi bi-check-circle text-success"></i> 仕入登録完了
+    </div>
+    <p class="mb-3">仕入ID: <strong id="purchaseId"></strong></p>
+    <div class="d-grid gap-2">
+      <button class="btn btn-primary" onclick="location.reload()">
+        <i class="bi bi-plus-circle"></i> 続けて仕入登録
+      </button>
+      <button class="btn btn-secondary" onclick="location.href='purchase.html'">
+        <i class="bi bi-list"></i> 仕入一覧に戻る
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 新規仕入先追加モーダル -->
+<div class="modal fade" id="newSupplierModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">新規仕入先を追加</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" class="form-control" id="newSupplierName" placeholder="仕入先名を入力">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+        <button type="button" class="btn btn-primary" onclick="addNewSupplier()">追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  // 初期化
+  document.addEventListener('DOMContentLoaded', function() {
+    // 今日の日付をセット
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('purchaseDate').value = today;
+    
+    // 仕入先選択の監視
+    document.getElementById('supplier').addEventListener('change', function() {
+      if (this.value === '__new__') {
+        const modal = new bootstrap.Modal(document.getElementById('newSupplierModal'));
+        modal.show();
+        this.value = '';
+      }
+    });
+  });
+  
+  // 1点あたり単価計算
+  function calculatePerItem() {
+    const count = parseInt(document.getElementById('itemCount').value) || 1;
+    const total = parseInt(document.getElementById('totalAmount').value) || 0;
+    const perItem = Math.round(total / count);
+    document.getElementById('pricePerItem').textContent = '¥' + perItem.toLocaleString();
+  }
+  
+  // 新規仕入先追加
+  function addNewSupplier() {
+    const name = document.getElementById('newSupplierName').value.trim();
+    if (name) {
+      const select = document.getElementById('supplier');
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.insertBefore(option, select.querySelector('option[value="__new__"]'));
+      select.value = name;
+      
+      bootstrap.Modal.getInstance(document.getElementById('newSupplierModal')).hide();
+      document.getElementById('newSupplierName').value = '';
+    }
+  }
+  
+  // QRコード生成
+  function generateQRCodes() {
+    const purchaseDate = document.getElementById('purchaseDate').value;
+    const supplier = document.getElementById('supplier').value;
+    const itemCount = parseInt(document.getElementById('itemCount').value) || 0;
+    const totalAmount = parseInt(document.getElementById('totalAmount').value) || 0;
+    const assignee = document.getElementById('assignee').value;
+    
+    // バリデーション
+    if (!purchaseDate || !supplier || !itemCount || !assignee) {
+      alert('必須項目を入力してください');
+      return;
+    }
+    
+    // 仕入IDを生成（日付ベース）
+    const dateStr = purchaseDate.replace(/-/g, '');
+    const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const purchaseId = `PUR-${dateStr}-${randomStr}`;
+    
+    // QRコード生成
+    const qrGrid = document.getElementById('qrGrid');
+    qrGrid.innerHTML = '';
+    
+    for (let i = 1; i <= itemCount; i++) {
+      // 仕入商品ID
+      const invId = `INV-${dateStr}-${randomStr}-${String(i).padStart(3, '0')}`;
+      
+      // QRコードの内容（URL）
+      const qrContent = `https://furira.jp/scan?inv=${invId}`;
+      
+      // QRコード要素を作成
+      const qrItem = document.createElement('div');
+      qrItem.className = 'qr-item';
+      
+      const canvas = document.createElement('canvas');
+      canvas.id = `qr-${i}`;
+      qrItem.appendChild(canvas);
+      
+      const label = document.createElement('div');
+      label.className = 'qr-item-label';
+      label.textContent = `#${i}`;
+      qrItem.appendChild(label);
+      
+      qrGrid.appendChild(qrItem);
+      
+      // QRコード描画
+      QRCode.toCanvas(canvas, qrContent, {
+        width: 100,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      });
+    }
+    
+    // プレビュー表示
+    document.getElementById('qrPreview').classList.add('show');
+    document.getElementById('qrCount').textContent = itemCount + '枚';
+    document.getElementById('purchaseId').textContent = purchaseId;
+    
+    // 完了メッセージ
+    document.getElementById('afterActions').style.display = 'block';
+    
+    // スクロール
+    document.getElementById('qrPreview').scrollIntoView({ behavior: 'smooth' });
+  }
+  
+  // 印刷
+  function printQRCodes() {
+    window.print();
+  }
+  
+  // PDF保存（簡易版：印刷ダイアログからPDF保存）
+  function downloadQRCodes() {
+    alert('印刷ダイアログで「PDFとして保存」を選択してください');
+    window.print();
+  }
+</script>
+
+</body>
+</html>
