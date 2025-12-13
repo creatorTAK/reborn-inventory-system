@@ -890,6 +890,30 @@
       color: #6b7280;
       margin-top: 4px;
     }
+    .damage-marker-object-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: #e0f2fe;
+      border: 1px solid #7dd3fc;
+      border-radius: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .object-controls-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #0369a1;
+    }
+    .damage-marker-btn.danger {
+      background: #fee2e2;
+      border-color: #fca5a5;
+      color: #dc2626;
+    }
+    .damage-marker-btn.danger:hover {
+      background: #fecaca;
+    }
 
     /* ブランドサジェスト用スタイル */
     .brand-field {
@@ -3801,17 +3825,14 @@
 
                 <!-- ツールバー -->
                 <div class="damage-marker-tools" id="damage-marker-tools-${itemId}" style="display: none;">
-                  <button type="button" class="damage-marker-tool active" data-tool="pen" onclick="setDamageMarkerTool(${itemId}, 'pen')" title="ペン">
-                    <i class="bi bi-pencil"></i>
-                  </button>
-                  <button type="button" class="damage-marker-tool" data-tool="circle" onclick="setDamageMarkerTool(${itemId}, 'circle')" title="丸">
+                  <button type="button" class="damage-marker-tool active" data-tool="circle" onclick="setDamageMarkerTool(${itemId}, 'circle')" title="丸">
                     <i class="bi bi-circle"></i>
                   </button>
                   <button type="button" class="damage-marker-tool" data-tool="text" onclick="setDamageMarkerTool(${itemId}, 'text')" title="テキスト">
                     <i class="bi bi-fonts"></i>
                   </button>
-                  <button type="button" class="damage-marker-tool" data-tool="eraser" onclick="setDamageMarkerTool(${itemId}, 'eraser')" title="消しゴム">
-                    <i class="bi bi-eraser"></i>
+                  <button type="button" class="damage-marker-tool" data-tool="pen" onclick="setDamageMarkerTool(${itemId}, 'pen')" title="ペン">
+                    <i class="bi bi-pencil"></i>
                   </button>
                   <div class="damage-marker-colors">
                     <button type="button" class="damage-marker-color red active" onclick="setDamageMarkerColor(${itemId}, '#ef4444')"></button>
@@ -3825,6 +3846,20 @@
                   <button type="button" class="damage-marker-btn" onclick="clearDamageMarker(${itemId})">クリア</button>
                   <button type="button" class="damage-marker-btn" onclick="undoDamageMarker(${itemId})">元に戻す</button>
                   <button type="button" class="damage-marker-btn primary" onclick="saveDamageMarker(${itemId})">保存</button>
+                </div>
+
+                <!-- 選択オブジェクト操作パネル -->
+                <div class="damage-marker-object-controls" id="damage-marker-object-controls-${itemId}" style="display: none;">
+                  <span class="object-controls-label">選択中:</span>
+                  <button type="button" class="damage-marker-btn" onclick="shrinkSelectedObject(${itemId})">
+                    <i class="bi bi-dash-circle"></i> 縮小
+                  </button>
+                  <button type="button" class="damage-marker-btn" onclick="enlargeSelectedObject(${itemId})">
+                    <i class="bi bi-plus-circle"></i> 拡大
+                  </button>
+                  <button type="button" class="damage-marker-btn danger" onclick="deleteSelectedObject(${itemId})">
+                    <i class="bi bi-trash"></i> 削除
+                  </button>
                 </div>
 
                 <!-- 保存済みプレビュー -->
@@ -5318,9 +5353,9 @@
     }
 
     // ========================================
-    // 傷・汚れマーキング機能
+    // 傷・汚れマーキング機能（オブジェクト方式）
     // ========================================
-    const damageMarkerState = new Map(); // itemId -> { canvas, ctx, isDrawing, tool, color, history, baseImage }
+    const damageMarkerState = new Map(); // itemId -> state object
 
     // 利用可能な衣類画像
     const CLOTHING_IMAGES = {
@@ -5352,10 +5387,10 @@
       const selectedItem = select.value;
 
       if (!selectedItem) {
-        // 選択解除時は非表示
         document.getElementById(`damage-marker-wrapper-${itemId}`).style.display = 'none';
         document.getElementById(`damage-marker-tools-${itemId}`).style.display = 'none';
         document.getElementById(`damage-marker-actions-${itemId}`).style.display = 'none';
+        document.getElementById(`damage-marker-object-controls-${itemId}`).style.display = 'none';
         return;
       }
 
@@ -5366,11 +5401,10 @@
         return;
       }
 
-      // Canvas初期化
       initDamageMarkerCanvas(itemId, imagePath);
     }
 
-    // Canvas初期化
+    // Canvas初期化（オブジェクト方式）
     function initDamageMarkerCanvas(itemId, imagePath) {
       const canvas = document.getElementById(`damage-marker-canvas-${itemId}`);
       const ctx = canvas.getContext('2d');
@@ -5378,7 +5412,6 @@
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        // Canvasサイズを画像に合わせる（最大300px）
         const maxSize = 300;
         let width = img.width;
         let height = img.height;
@@ -5391,158 +5424,398 @@
 
         canvas.width = width;
         canvas.height = height;
-        ctx.drawImage(img, 0, 0, width, height);
 
-        // 状態を保存
-        damageMarkerState.set(itemId, {
+        // オブジェクト方式の状態管理
+        const state = {
           canvas,
           ctx,
-          isDrawing: false,
-          tool: 'pen',
-          color: '#ef4444',
-          lineWidth: 3,
-          history: [ctx.getImageData(0, 0, canvas.width, canvas.height)],
-          historyIndex: 0,
           baseImage: img,
           baseWidth: width,
-          baseHeight: height
-        });
+          baseHeight: height,
+          objects: [], // { type: 'circle'|'text'|'pen', x, y, radius?, text?, fontSize?, color, points?, selected }
+          selectedObject: null,
+          tool: 'circle',
+          color: '#ef4444',
+          isDragging: false,
+          dragStart: { x: 0, y: 0 },
+          history: [],
+          historyIndex: -1
+        };
+
+        damageMarkerState.set(itemId, state);
+        saveMarkerHistory(itemId);
+        renderDamageMarker(itemId);
 
         // UI表示
         document.getElementById(`damage-marker-wrapper-${itemId}`).style.display = 'block';
         document.getElementById(`damage-marker-tools-${itemId}`).style.display = 'flex';
         document.getElementById(`damage-marker-actions-${itemId}`).style.display = 'flex';
 
-        // イベントリスナー設定
         setupDamageMarkerEvents(itemId);
       };
-      img.onerror = () => {
-        alert('画像の読み込みに失敗しました');
-      };
+      img.onerror = () => alert('画像の読み込みに失敗しました');
       img.src = imagePath;
+    }
+
+    // 全オブジェクトを再描画
+    function renderDamageMarker(itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state) return;
+
+      const { ctx, canvas, baseImage, baseWidth, baseHeight, objects, selectedObject } = state;
+
+      // クリアしてベース画像を描画
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(baseImage, 0, 0, baseWidth, baseHeight);
+
+      // 各オブジェクトを描画
+      objects.forEach((obj, index) => {
+        ctx.save();
+
+        if (obj.type === 'circle') {
+          ctx.beginPath();
+          ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
+          ctx.strokeStyle = obj.color;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // 選択状態の場合、ハンドル表示
+          if (selectedObject === index) {
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(obj.x, obj.y, obj.radius + 5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // リサイズハンドル
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(obj.x + obj.radius + 5, obj.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+        } else if (obj.type === 'text') {
+          ctx.font = `${obj.fontSize}px sans-serif`;
+          ctx.fillStyle = obj.color;
+          ctx.fillText(obj.text, obj.x, obj.y);
+
+          // 選択状態の場合、境界ボックス表示
+          if (selectedObject === index) {
+            const metrics = ctx.measureText(obj.text);
+            const textWidth = metrics.width;
+            const textHeight = obj.fontSize;
+
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(obj.x - 2, obj.y - textHeight, textWidth + 4, textHeight + 4);
+            ctx.setLineDash([]);
+
+            // リサイズハンドル（右下）
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = '#333';
+            ctx.beginPath();
+            ctx.arc(obj.x + textWidth + 2, obj.y + 2, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+        } else if (obj.type === 'pen' && obj.points && obj.points.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(obj.points[0].x, obj.points[0].y);
+          for (let i = 1; i < obj.points.length; i++) {
+            ctx.lineTo(obj.points[i].x, obj.points[i].y);
+          }
+          ctx.strokeStyle = obj.color;
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      });
     }
 
     // イベントリスナー設定
     function setupDamageMarkerEvents(itemId) {
       const canvas = document.getElementById(`damage-marker-canvas-${itemId}`);
-      const state = damageMarkerState.get(itemId);
-      if (!state) return;
 
-      // 既存のリスナーを削除
-      canvas.onmousedown = null;
-      canvas.onmousemove = null;
-      canvas.onmouseup = null;
-      canvas.ontouchstart = null;
-      canvas.ontouchmove = null;
-      canvas.ontouchend = null;
-
-      // マウスイベント
-      canvas.onmousedown = (e) => startDrawing(e, itemId);
-      canvas.onmousemove = (e) => draw(e, itemId);
-      canvas.onmouseup = () => stopDrawing(itemId);
-      canvas.onmouseleave = () => stopDrawing(itemId);
-
-      // タッチイベント
-      canvas.ontouchstart = (e) => {
-        e.preventDefault();
-        startDrawing(e.touches[0], itemId);
+      const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const clientX = e.clientX || (e.touches && e.touches[0]?.clientX);
+        const clientY = e.clientY || (e.touches && e.touches[0]?.clientY);
+        return {
+          x: (clientX - rect.left) * scaleX,
+          y: (clientY - rect.top) * scaleY
+        };
       };
-      canvas.ontouchmove = (e) => {
+
+      const handleStart = (e) => {
         e.preventDefault();
-        draw(e.touches[0], itemId);
-      };
-      canvas.ontouchend = () => stopDrawing(itemId);
-    }
+        const state = damageMarkerState.get(itemId);
+        if (!state) return;
 
-    // 描画開始
-    function startDrawing(e, itemId) {
-      const state = damageMarkerState.get(itemId);
-      if (!state) return;
+        const pos = getPos(e);
 
-      state.isDrawing = true;
-      const pos = getCanvasPosition(e, state.canvas);
+        // まず既存オブジェクトのヒットテスト
+        const hitIndex = hitTestObjects(state, pos);
 
-      if (state.tool === 'text') {
-        // テキスト入力
-        const text = prompt('テキストを入力してください:');
-        if (text) {
-          state.ctx.font = '14px sans-serif';
-          state.ctx.fillStyle = state.color;
-          state.ctx.fillText(text, pos.x, pos.y);
-          saveHistory(itemId);
+        if (hitIndex !== -1) {
+          // オブジェクトを選択
+          state.selectedObject = hitIndex;
+          state.isDragging = true;
+          state.dragStart = pos;
+          state.dragType = hitTestResizeHandle(state, hitIndex, pos) ? 'resize' : 'move';
+          renderDamageMarker(itemId);
+          showObjectControls(itemId);
+          return;
         }
-        state.isDrawing = false;
-      } else if (state.tool === 'circle') {
-        // 丸を描く
-        state.ctx.beginPath();
-        state.ctx.arc(pos.x, pos.y, 10, 0, Math.PI * 2);
-        state.ctx.strokeStyle = state.color;
-        state.ctx.lineWidth = 2;
-        state.ctx.stroke();
-        saveHistory(itemId);
-        state.isDrawing = false;
-      } else {
-        // ペンまたは消しゴム
-        state.ctx.beginPath();
-        state.ctx.moveTo(pos.x, pos.y);
-      }
-    }
 
-    // 描画中
-    function draw(e, itemId) {
-      const state = damageMarkerState.get(itemId);
-      if (!state || !state.isDrawing) return;
+        // 選択解除
+        if (state.selectedObject !== null) {
+          state.selectedObject = null;
+          hideObjectControls(itemId);
+          renderDamageMarker(itemId);
+        }
 
-      const pos = getCanvasPosition(e, state.canvas);
-
-      if (state.tool === 'eraser') {
-        state.ctx.globalCompositeOperation = 'destination-out';
-        state.ctx.lineWidth = 20;
-      } else {
-        state.ctx.globalCompositeOperation = 'source-over';
-        state.ctx.strokeStyle = state.color;
-        state.ctx.lineWidth = state.lineWidth;
-      }
-
-      state.ctx.lineTo(pos.x, pos.y);
-      state.ctx.lineCap = 'round';
-      state.ctx.lineJoin = 'round';
-      state.ctx.stroke();
-    }
-
-    // 描画終了
-    function stopDrawing(itemId) {
-      const state = damageMarkerState.get(itemId);
-      if (!state || !state.isDrawing) return;
-
-      state.isDrawing = false;
-      state.ctx.globalCompositeOperation = 'source-over';
-      saveHistory(itemId);
-    }
-
-    // Canvas座標取得
-    function getCanvasPosition(e, canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY
+        // 新規オブジェクト作成
+        if (state.tool === 'circle') {
+          state.objects.push({
+            type: 'circle',
+            x: pos.x,
+            y: pos.y,
+            radius: 15,
+            color: state.color
+          });
+          state.selectedObject = state.objects.length - 1;
+          saveMarkerHistory(itemId);
+          renderDamageMarker(itemId);
+          showObjectControls(itemId);
+        } else if (state.tool === 'text') {
+          const text = prompt('テキストを入力してください:');
+          if (text) {
+            state.objects.push({
+              type: 'text',
+              x: pos.x,
+              y: pos.y,
+              text: text,
+              fontSize: 14,
+              color: state.color
+            });
+            state.selectedObject = state.objects.length - 1;
+            saveMarkerHistory(itemId);
+            renderDamageMarker(itemId);
+            showObjectControls(itemId);
+          }
+        } else if (state.tool === 'pen') {
+          state.currentPen = {
+            type: 'pen',
+            points: [pos],
+            color: state.color
+          };
+          state.isDrawingPen = true;
+        }
       };
+
+      const handleMove = (e) => {
+        e.preventDefault();
+        const state = damageMarkerState.get(itemId);
+        if (!state) return;
+
+        const pos = getPos(e);
+
+        // ペン描画中
+        if (state.isDrawingPen && state.currentPen) {
+          state.currentPen.points.push(pos);
+          renderDamageMarker(itemId);
+          // 現在のペンを一時描画
+          const ctx = state.ctx;
+          const points = state.currentPen.points;
+          if (points.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+              ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.strokeStyle = state.currentPen.color;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+          }
+          return;
+        }
+
+        // オブジェクトドラッグ中
+        if (state.isDragging && state.selectedObject !== null) {
+          const obj = state.objects[state.selectedObject];
+          const dx = pos.x - state.dragStart.x;
+          const dy = pos.y - state.dragStart.y;
+
+          if (state.dragType === 'resize') {
+            // リサイズ
+            if (obj.type === 'circle') {
+              const dist = Math.sqrt(Math.pow(pos.x - obj.x, 2) + Math.pow(pos.y - obj.y, 2));
+              obj.radius = Math.max(8, dist - 5);
+            } else if (obj.type === 'text') {
+              obj.fontSize = Math.max(10, obj.fontSize + dy * 0.5);
+            }
+          } else {
+            // 移動
+            obj.x += dx;
+            obj.y += dy;
+          }
+
+          state.dragStart = pos;
+          renderDamageMarker(itemId);
+        }
+      };
+
+      const handleEnd = (e) => {
+        const state = damageMarkerState.get(itemId);
+        if (!state) return;
+
+        if (state.isDrawingPen && state.currentPen && state.currentPen.points.length > 1) {
+          state.objects.push(state.currentPen);
+          saveMarkerHistory(itemId);
+        }
+        state.isDrawingPen = false;
+        state.currentPen = null;
+
+        if (state.isDragging) {
+          state.isDragging = false;
+          saveMarkerHistory(itemId);
+        }
+
+        renderDamageMarker(itemId);
+      };
+
+      // イベント登録
+      canvas.onmousedown = handleStart;
+      canvas.onmousemove = handleMove;
+      canvas.onmouseup = handleEnd;
+      canvas.onmouseleave = handleEnd;
+
+      canvas.ontouchstart = handleStart;
+      canvas.ontouchmove = handleMove;
+      canvas.ontouchend = handleEnd;
+    }
+
+    // オブジェクトのヒットテスト
+    function hitTestObjects(state, pos) {
+      for (let i = state.objects.length - 1; i >= 0; i--) {
+        const obj = state.objects[i];
+        if (obj.type === 'circle') {
+          const dist = Math.sqrt(Math.pow(pos.x - obj.x, 2) + Math.pow(pos.y - obj.y, 2));
+          if (dist <= obj.radius + 10) return i;
+        } else if (obj.type === 'text') {
+          state.ctx.font = `${obj.fontSize}px sans-serif`;
+          const metrics = state.ctx.measureText(obj.text);
+          if (pos.x >= obj.x - 5 && pos.x <= obj.x + metrics.width + 5 &&
+              pos.y >= obj.y - obj.fontSize - 5 && pos.y <= obj.y + 5) {
+            return i;
+          }
+        } else if (obj.type === 'pen' && obj.points) {
+          for (const pt of obj.points) {
+            const dist = Math.sqrt(Math.pow(pos.x - pt.x, 2) + Math.pow(pos.y - pt.y, 2));
+            if (dist <= 10) return i;
+          }
+        }
+      }
+      return -1;
+    }
+
+    // リサイズハンドルのヒットテスト
+    function hitTestResizeHandle(state, index, pos) {
+      const obj = state.objects[index];
+      if (obj.type === 'circle') {
+        const handleX = obj.x + obj.radius + 5;
+        const handleY = obj.y;
+        const dist = Math.sqrt(Math.pow(pos.x - handleX, 2) + Math.pow(pos.y - handleY, 2));
+        return dist <= 10;
+      } else if (obj.type === 'text') {
+        state.ctx.font = `${obj.fontSize}px sans-serif`;
+        const metrics = state.ctx.measureText(obj.text);
+        const handleX = obj.x + metrics.width + 2;
+        const handleY = obj.y + 2;
+        const dist = Math.sqrt(Math.pow(pos.x - handleX, 2) + Math.pow(pos.y - handleY, 2));
+        return dist <= 10;
+      }
+      return false;
+    }
+
+    // オブジェクト操作パネル表示
+    function showObjectControls(itemId) {
+      const controls = document.getElementById(`damage-marker-object-controls-${itemId}`);
+      if (controls) controls.style.display = 'flex';
+    }
+
+    // オブジェクト操作パネル非表示
+    function hideObjectControls(itemId) {
+      const controls = document.getElementById(`damage-marker-object-controls-${itemId}`);
+      if (controls) controls.style.display = 'none';
+    }
+
+    // 選択オブジェクト拡大
+    function enlargeSelectedObject(itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state || state.selectedObject === null) return;
+
+      const obj = state.objects[state.selectedObject];
+      if (obj.type === 'circle') {
+        obj.radius = Math.min(100, obj.radius + 5);
+      } else if (obj.type === 'text') {
+        obj.fontSize = Math.min(48, obj.fontSize + 2);
+      }
+      saveMarkerHistory(itemId);
+      renderDamageMarker(itemId);
+    }
+
+    // 選択オブジェクト縮小
+    function shrinkSelectedObject(itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state || state.selectedObject === null) return;
+
+      const obj = state.objects[state.selectedObject];
+      if (obj.type === 'circle') {
+        obj.radius = Math.max(5, obj.radius - 5);
+      } else if (obj.type === 'text') {
+        obj.fontSize = Math.max(8, obj.fontSize - 2);
+      }
+      saveMarkerHistory(itemId);
+      renderDamageMarker(itemId);
+    }
+
+    // 選択オブジェクト削除
+    function deleteSelectedObject(itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state || state.selectedObject === null) return;
+
+      state.objects.splice(state.selectedObject, 1);
+      state.selectedObject = null;
+      hideObjectControls(itemId);
+      saveMarkerHistory(itemId);
+      renderDamageMarker(itemId);
     }
 
     // 履歴保存
-    function saveHistory(itemId) {
+    function saveMarkerHistory(itemId) {
       const state = damageMarkerState.get(itemId);
       if (!state) return;
 
-      // 現在位置以降の履歴を削除
+      // 現在位置以降を削除
       state.history = state.history.slice(0, state.historyIndex + 1);
-      // 新しい状態を追加
-      state.history.push(state.ctx.getImageData(0, 0, state.canvas.width, state.canvas.height));
+      // 新しい状態を追加（ディープコピー）
+      state.history.push(JSON.parse(JSON.stringify(state.objects)));
       state.historyIndex = state.history.length - 1;
 
-      // 履歴を最大20件に制限
+      // 最大20件
       if (state.history.length > 20) {
         state.history.shift();
         state.historyIndex--;
@@ -5556,7 +5829,13 @@
 
       state.tool = tool;
 
-      // ボタンのアクティブ状態を更新
+      // 選択解除
+      if (state.selectedObject !== null) {
+        state.selectedObject = null;
+        hideObjectControls(itemId);
+        renderDamageMarker(itemId);
+      }
+
       const toolButtons = document.querySelectorAll(`#damage-marker-tools-${itemId} .damage-marker-tool`);
       toolButtons.forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tool === tool);
@@ -5570,7 +5849,13 @@
 
       state.color = color;
 
-      // ボタンのアクティブ状態を更新
+      // 選択中のオブジェクトの色も変更
+      if (state.selectedObject !== null) {
+        state.objects[state.selectedObject].color = color;
+        saveMarkerHistory(itemId);
+        renderDamageMarker(itemId);
+      }
+
       const colorButtons = document.querySelectorAll(`#damage-marker-tools-${itemId} .damage-marker-color`);
       colorButtons.forEach(btn => {
         const btnColor = btn.classList.contains('red') ? '#ef4444' :
@@ -5579,16 +5864,18 @@
       });
     }
 
-    // クリア（ベース画像に戻す）
+    // クリア
     function clearDamageMarker(itemId) {
       const state = damageMarkerState.get(itemId);
       if (!state) return;
 
       if (!confirm('描いた内容をすべて消去しますか？')) return;
 
-      state.ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
-      state.ctx.drawImage(state.baseImage, 0, 0, state.baseWidth, state.baseHeight);
-      saveHistory(itemId);
+      state.objects = [];
+      state.selectedObject = null;
+      hideObjectControls(itemId);
+      saveMarkerHistory(itemId);
+      renderDamageMarker(itemId);
     }
 
     // 元に戻す
@@ -5597,7 +5884,10 @@
       if (!state || state.historyIndex <= 0) return;
 
       state.historyIndex--;
-      state.ctx.putImageData(state.history[state.historyIndex], 0, 0);
+      state.objects = JSON.parse(JSON.stringify(state.history[state.historyIndex]));
+      state.selectedObject = null;
+      hideObjectControls(itemId);
+      renderDamageMarker(itemId);
     }
 
     // 保存
@@ -5605,25 +5895,26 @@
       const state = damageMarkerState.get(itemId);
       if (!state) return;
 
-      // Canvas内容をBase64に変換
+      // 選択解除して最終描画
+      state.selectedObject = null;
+      hideObjectControls(itemId);
+      renderDamageMarker(itemId);
+
       const dataUrl = state.canvas.toDataURL('image/png');
 
-      // entryItemsに保存
       const item = entryItems.find(i => i.id === itemId);
       if (item) {
         item.damageMarkerImage = dataUrl;
         item.damageMarkerType = document.getElementById(`damage-marker-item-${itemId}`).value;
+        item.damageMarkerObjects = JSON.parse(JSON.stringify(state.objects));
       }
 
-      // プレビュー表示
       const previewContainer = document.getElementById(`damage-marker-preview-${itemId}`);
       const previewImg = document.getElementById(`damage-marker-preview-img-${itemId}`);
       previewImg.src = dataUrl;
       previewContainer.style.display = 'block';
 
-      // 下書き保存
       saveEntryDraft();
-
       alert('マーキングを保存しました');
     }
   </script>
