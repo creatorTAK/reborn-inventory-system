@@ -2939,10 +2939,11 @@
     let entryDraftSaveTimer = null;
 
     // 下書きを保存
-    function saveEntryDraft() {
+    function saveEntryDraft(immediate = false) {
       // タイマーで遅延保存（入力のたびに即座に保存しない）
       if (entryDraftSaveTimer) clearTimeout(entryDraftSaveTimer);
-      entryDraftSaveTimer = setTimeout(() => {
+      
+      const doSave = () => {
         const draft = {
           savedAt: new Date().toISOString(),
           mode: currentEntryMode,
@@ -2960,7 +2961,13 @@
         } catch (e) {
           console.error('下書き保存エラー:', e);
         }
-      }, 500);
+      };
+
+      if (immediate) {
+        doSave();
+      } else {
+        entryDraftSaveTimer = setTimeout(doSave, 500);
+      }
     }
 
     // 下書きを読み込み
@@ -3665,7 +3672,7 @@
       document.getElementById(`entry-item-${itemId}`)?.remove();
       updateEntryTotal();
       updateEntryItemNumbers();
-      saveEntryDraft(); // 自動保存
+      saveEntryDraft(true); // 即時保存（削除は遅延なしで確実に保存）
     }
 
     // 個別商品の情報を更新
