@@ -5563,6 +5563,11 @@
 
         const pos = getPos(e);
 
+        // タッチ開始位置と時間を記録（スクロール判定用）
+        state.touchStartPos = pos;
+        state.touchStartTime = Date.now();
+        state.pendingNewObject = false;
+
         // まず既存オブジェクトのヒットテスト
         const hitIndex = hitTestObjects(state, pos);
 
@@ -5585,42 +5590,20 @@
           return; // 選択解除のみ、新規作成はしない
         }
 
-        // 新規オブジェクト作成（選択中のオブジェクトがない場合のみ）
-        if (state.tool === 'circle') {
-          state.objects.push({
-            type: 'circle',
-            x: pos.x,
-            y: pos.y,
-            radius: 15,
-            color: state.color
-          });
-          state.selectedObject = state.objects.length - 1;
-          saveMarkerHistory(itemId);
-          renderDamageMarker(itemId);
-          showObjectControls(itemId);
-        } else if (state.tool === 'text') {
-          const text = prompt('テキストを入力してください:');
-          if (text) {
-            state.objects.push({
-              type: 'text',
-              x: pos.x,
-              y: pos.y,
-              text: text,
-              fontSize: 14,
-              color: state.color
-            });
-            state.selectedObject = state.objects.length - 1;
-            saveMarkerHistory(itemId);
-            renderDamageMarker(itemId);
-            showObjectControls(itemId);
-          }
-        } else if (state.tool === 'pen') {
+        // ペン描画は即座に開始（スクロールとの区別は不要）
+        if (state.tool === 'pen') {
           state.currentPen = {
             type: 'pen',
             points: [pos],
             color: state.color
           };
           state.isDrawingPen = true;
+          return;
+        }
+
+        // 円・テキストは新規作成をpendingにする（handleEndで判定）
+        if (state.tool === 'circle' || state.tool === 'text') {
+          state.pendingNewObject = true;
         }
       };
 
@@ -5682,6 +5665,9 @@
         const state = damageMarkerState.get(itemId);
         if (!state) return;
 
+        const pos = getPos(e);
+
+        // ペン描画終了
         if (state.isDrawingPen && state.currentPen && state.currentPen.points.length > 1) {
           state.objects.push(state.currentPen);
           saveMarkerHistory(itemId);
@@ -5689,10 +5675,55 @@
         state.isDrawingPen = false;
         state.currentPen = null;
 
+        // ドラッグ終了
         if (state.isDragging) {
           state.isDragging = false;
           saveMarkerHistory(itemId);
         }
+
+        // 新規オブジェクト作成（タップ判定：移動距離が小さい場合のみ）
+        if (state.pendingNewObject && state.touchStartPos) {
+          const dx = pos.x - state.touchStartPos.x;
+          const dy = pos.y - state.touchStartPos.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const duration = Date.now() - (state.touchStartTime || 0);
+
+          // 移動距離10px以下 かつ 500ms以下をタップと判定
+          if (distance <= 10 && duration <= 500) {
+            if (state.tool === 'circle') {
+              state.objects.push({
+                type: 'circle',
+                x: state.touchStartPos.x,
+                y: state.touchStartPos.y,
+                radius: 15,
+                color: state.color
+              });
+              state.selectedObject = state.objects.length - 1;
+              saveMarkerHistory(itemId);
+              showObjectControls(itemId);
+            } else if (state.tool === 'text') {
+              const text = prompt('テキストを入力してください:');
+              if (text) {
+                state.objects.push({
+                  type: 'text',
+                  x: state.touchStartPos.x,
+                  y: state.touchStartPos.y,
+                  text: text,
+                  fontSize: 14,
+                  color: state.color
+                });
+                state.selectedObject = state.objects.length - 1;
+                saveMarkerHistory(itemId);
+                showObjectControls(itemId);
+              }
+            }
+          }
+        }
+
+        // 状態リセット
+        state.pendingNewObject = false;
+        state.touchStartPos = null;
+        state.touchStartTime = null;
 
         renderDamageMarker(itemId);
       };
