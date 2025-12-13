@@ -1980,6 +1980,9 @@
       document.getElementById('purchaseMonth').value = now.toISOString().slice(0, 7);
       document.getElementById('paymentDate').value = now.toISOString().slice(0, 10);
 
+      // 仕入登録タブを初期化（PurchaseApiが確実に利用可能な状態）
+      initializeEntryTab();
+
       // 仕入先選択肢を読み込み
       try {
         const suppliers = await PurchaseApi.getSuppliers();
@@ -2880,23 +2883,12 @@
       addEntryItem();
       console.log('📥 [仕入登録] 商品アイテム#1追加完了');
 
-      // PurchaseApiが利用可能になるまで待機
-      if (!window.PurchaseApi) {
-        console.log('📥 [仕入登録] PurchaseApi待機中...');
-        setTimeout(() => loadEntryMasterData(), 100);
-        return;
-      }
-
-      // マスタデータを非同期で読み込み
+      // マスタデータを非同期で読み込み（initializePage()から呼ばれるのでPurchaseApiは確実に存在）
       loadEntryMasterData();
     }
 
     // マスタデータを並列で読み込み（UIをブロックしない）
     async function loadEntryMasterData() {
-      if (!window.PurchaseApi) {
-        setTimeout(() => loadEntryMasterData(), 100);
-        return;
-      }
 
       console.log('📥 [仕入登録] マスタデータ読み込み開始');
 
@@ -4301,12 +4293,9 @@
       setEntryMode('individual');  // デフォルトを個別入力に変更
     }
 
-    // 仕入登録タブの初期化（デフォルトでアクティブなので即時実行）
+    // 仕入登録タブの初期化（他のタブから戻ってきた時用）
     document.addEventListener('DOMContentLoaded', function() {
-      // デフォルトでアクティブなタブなので即時初期化
-      initializeEntryTab();
-
-      // 他のタブから戻ってきた時用
+      // 他のタブから戻ってきた時用（初期化はinitializePage()内で実行）
       document.getElementById('entry-tab')?.addEventListener('shown.bs.tab', function() {
         if (entrySuppliersData.length === 0) {
           initializeEntryTab();
