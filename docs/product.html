@@ -625,6 +625,15 @@
         ></textarea>
         <div id="suggest-商品状態詳細" class="suggest" hidden></div>
       </div>
+
+      <!-- 傷・汚れマーキング画像（仕入QRスキャン時に表示） -->
+      <div id="damageMarkerPreviewSection" style="display: none; margin-top: 12px; padding: 12px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span style="font-size: 14px; font-weight: 600; color: #92400e;">📍 傷・汚れマーキング</span>
+          <span id="damageMarkerTypeLabel" style="font-size: 12px; color: #78716c;"></span>
+        </div>
+        <img id="damageMarkerPreviewImg" src="" alt="傷・汚れマーキング" style="max-width: 100%; border-radius: 6px; border: 1px solid #e5e7eb;">
+      </div>
     </div>
   </div>
 
@@ -1929,11 +1938,45 @@ style="display:none;">削除</button>
         conditionDetailEl.value = current ? current + '\n' + memoText : memoText;
       }
     }
+
+    // 傷・汚れマーキング画像をFirestoreから取得
+    if (qrData.s && window.db) {
+      loadDamageMarkerFromFirestore(qrData.s);
+    }
     
     // 反映完了通知
     showInspectionDataAppliedNotification(qrData);
     
     console.log('✅ 検品情報の自動反映完了');
+  }
+
+  // Firestoreから傷・汚れマーキング画像を取得して表示
+  async function loadDamageMarkerFromFirestore(slotId) {
+    try {
+      console.log('📍 マーキング画像取得中:', slotId);
+      const slotDoc = await window.db.collection('purchaseSlots').doc(slotId).get();
+      
+      if (slotDoc.exists) {
+        const slotData = slotDoc.data();
+        
+        if (slotData.damageMarkerImage) {
+          console.log('✅ マーキング画像を検出');
+          const previewSection = document.getElementById('damageMarkerPreviewSection');
+          const previewImg = document.getElementById('damageMarkerPreviewImg');
+          const typeLabel = document.getElementById('damageMarkerTypeLabel');
+          
+          previewImg.src = slotData.damageMarkerImage;
+          typeLabel.textContent = slotData.damageMarkerType || '';
+          previewSection.style.display = 'block';
+        } else {
+          console.log('ℹ️ マーキング画像なし');
+        }
+      } else {
+        console.log('⚠️ スロットが見つかりません:', slotId);
+      }
+    } catch (error) {
+      console.error('❌ マーキング画像取得エラー:', error);
+    }
   }
 
   // 検品情報反映完了の通知表示
