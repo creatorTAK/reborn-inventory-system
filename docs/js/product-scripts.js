@@ -6714,7 +6714,7 @@ window.continueProductRegistration = function() {
       fillSelectSafe(document.getElementById('大分類(カテゴリ)'), l1s);
       debug.log('特大分類選択: ' + l0 + ', 大分類選択肢: ' + l1s.length + '件');
     }
-    refreshItems();
+    // アイテム名は最下層まで選択されてから有効化
     updateNamePreview();
   }
 
@@ -6735,7 +6735,8 @@ window.continueProductRegistration = function() {
       const mids = uniqKeepOrder(CAT_ROWS.filter(r=>r.大分類===l1).map(r=>r.中分類));
       fillSelectSafe(document.getElementById('中分類(カテゴリ)'), mids);
     }
-    refreshItems();
+    // アイテム名は最下層まで選択されてから有効化
+    updateNamePreview();
   }
 
   function onL2Changed() {
@@ -6761,7 +6762,8 @@ window.continueProductRegistration = function() {
     // === 靴の場合、サイズプルダウンを靴用サイズに切り替え ===
     updateSizeOptions(l2);
 
-    refreshItems();
+    // アイテム名は最下層まで選択されてから有効化
+    updateNamePreview();
   }
 
   function onL3Changed() {
@@ -6781,8 +6783,10 @@ window.continueProductRegistration = function() {
       // 細分類の選択肢がある場合のみ表示
       if (mins.length > 0 && saibunruiRow) {
         saibunruiRow.style.display = '';
-      } else if (saibunruiRow) {
-        saibunruiRow.style.display = 'none';
+      } else {
+        // 細分類がない場合はアイテム名を直接表示
+        if (saibunruiRow) saibunruiRow.style.display = 'none';
+        refreshItems();
       }
     } else {
       // 小分類が未選択の場合は非表示
@@ -6790,7 +6794,7 @@ window.continueProductRegistration = function() {
     }
     // 細分類2も非表示にリセット
     if (saibunrui2Container) saibunrui2Container.style.display = 'none';
-    refreshItems();
+    updateNamePreview();
   }
 
   function onL4Changed() {
@@ -6809,14 +6813,16 @@ window.continueProductRegistration = function() {
       // 細分類2の選択肢がある場合のみ表示
       if (fin2.length > 0 && saibunrui2Container) {
         saibunrui2Container.style.display = '';
-      } else if (saibunrui2Container) {
-        saibunrui2Container.style.display = 'none';
+      } else {
+        // 細分類2がない場合はアイテム名を直接表示
+        if (saibunrui2Container) saibunrui2Container.style.display = 'none';
+        refreshItems();
       }
     } else {
       // 細分類1が未選択の場合は非表示
       if (saibunrui2Container) saibunrui2Container.style.display = 'none';
     }
-    refreshItems();
+    updateNamePreview();
   }
 
   function onL5Changed() {
