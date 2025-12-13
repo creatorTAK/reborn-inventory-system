@@ -752,6 +752,145 @@
       border-color: #22c55e;
     }
 
+    /* 傷・汚れマーキング機能 */
+    .damage-marker-section {
+      margin-top: 12px;
+      padding: 12px;
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 8px;
+    }
+    .damage-marker-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .damage-marker-header .title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: #92400e;
+    }
+    .damage-marker-header .title i {
+      color: #f59e0b;
+    }
+    .damage-marker-toggle {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #f59e0b;
+      background: white;
+      color: #92400e;
+      cursor: pointer;
+    }
+    .damage-marker-toggle:hover {
+      background: #fef3c7;
+    }
+    .damage-marker-canvas-container {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .damage-marker-canvas-container.active {
+      display: flex;
+    }
+    .damage-marker-item-select {
+      width: 100%;
+      max-width: 300px;
+    }
+    .damage-marker-canvas-wrapper {
+      position: relative;
+      border: 2px solid #d1d5db;
+      border-radius: 8px;
+      background: white;
+      overflow: hidden;
+      touch-action: none;
+    }
+    .damage-marker-canvas {
+      display: block;
+    }
+    .damage-marker-tools {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .damage-marker-tool {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      background: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+    .damage-marker-tool.active {
+      background: #fef3c7;
+      border-color: #f59e0b;
+    }
+    .damage-marker-tool:hover {
+      background: #f3f4f6;
+    }
+    .damage-marker-colors {
+      display: flex;
+      gap: 4px;
+    }
+    .damage-marker-color {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+    }
+    .damage-marker-color.active {
+      border-color: #374151;
+    }
+    .damage-marker-color.red { background: #ef4444; }
+    .damage-marker-color.blue { background: #3b82f6; }
+    .damage-marker-color.black { background: #1f2937; }
+    .damage-marker-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .damage-marker-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border: 1px solid #d1d5db;
+      background: white;
+    }
+    .damage-marker-btn.primary {
+      background: #f59e0b;
+      border-color: #f59e0b;
+      color: white;
+    }
+    .damage-marker-btn:hover {
+      opacity: 0.9;
+    }
+    .damage-marker-preview {
+      margin-top: 8px;
+      text-align: center;
+    }
+    .damage-marker-preview img {
+      max-width: 150px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+    }
+    .damage-marker-preview-label {
+      font-size: 0.7rem;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
     /* ブランドサジェスト用スタイル */
     .brand-field {
       position: relative;
@@ -3630,6 +3769,71 @@
               <label class="form-label">特記事項</label>
               <input type="text" class="form-control" id="entry-note-${itemId}" placeholder="傷の位置、汚れなど" onchange="updateEntryItem(${itemId})">
             </div>
+
+            <!-- 7. 傷・汚れマーキング -->
+            <div class="damage-marker-section">
+              <div class="damage-marker-header">
+                <div class="title">
+                  <i class="bi bi-pencil-square"></i>
+                  <span>傷・汚れマーキング</span>
+                </div>
+                <button type="button" class="damage-marker-toggle" onclick="toggleDamageMarker(${itemId})">
+                  <span id="damage-marker-toggle-text-${itemId}">開く</span>
+                </button>
+              </div>
+
+              <div class="damage-marker-canvas-container" id="damage-marker-container-${itemId}">
+                <!-- アイテム選択 -->
+                <select class="form-select damage-marker-item-select" id="damage-marker-item-${itemId}" onchange="loadDamageMarkerImage(${itemId})">
+                  <option value="">-- アイテムを選択 --</option>
+                  <option value="tshirt_front">Tシャツ（前面）</option>
+                  <option value="tshirt_back">Tシャツ（背面）</option>
+                  <option value="pants_front">パンツ（前面）</option>
+                  <option value="pants_back">パンツ（背面）</option>
+                  <option value="hoodie_front">パーカー（前面）</option>
+                  <option value="hoodie_back">パーカー（背面）</option>
+                </select>
+
+                <!-- Canvasエリア -->
+                <div class="damage-marker-canvas-wrapper" id="damage-marker-wrapper-${itemId}" style="display: none;">
+                  <canvas id="damage-marker-canvas-${itemId}" class="damage-marker-canvas" width="300" height="300"></canvas>
+                </div>
+
+                <!-- ツールバー -->
+                <div class="damage-marker-tools" id="damage-marker-tools-${itemId}" style="display: none;">
+                  <button type="button" class="damage-marker-tool active" data-tool="pen" onclick="setDamageMarkerTool(${itemId}, 'pen')" title="ペン">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button type="button" class="damage-marker-tool" data-tool="circle" onclick="setDamageMarkerTool(${itemId}, 'circle')" title="丸">
+                    <i class="bi bi-circle"></i>
+                  </button>
+                  <button type="button" class="damage-marker-tool" data-tool="text" onclick="setDamageMarkerTool(${itemId}, 'text')" title="テキスト">
+                    <i class="bi bi-fonts"></i>
+                  </button>
+                  <button type="button" class="damage-marker-tool" data-tool="eraser" onclick="setDamageMarkerTool(${itemId}, 'eraser')" title="消しゴム">
+                    <i class="bi bi-eraser"></i>
+                  </button>
+                  <div class="damage-marker-colors">
+                    <button type="button" class="damage-marker-color red active" onclick="setDamageMarkerColor(${itemId}, '#ef4444')"></button>
+                    <button type="button" class="damage-marker-color blue" onclick="setDamageMarkerColor(${itemId}, '#3b82f6')"></button>
+                    <button type="button" class="damage-marker-color black" onclick="setDamageMarkerColor(${itemId}, '#1f2937')"></button>
+                  </div>
+                </div>
+
+                <!-- アクションボタン -->
+                <div class="damage-marker-actions" id="damage-marker-actions-${itemId}" style="display: none;">
+                  <button type="button" class="damage-marker-btn" onclick="clearDamageMarker(${itemId})">クリア</button>
+                  <button type="button" class="damage-marker-btn" onclick="undoDamageMarker(${itemId})">元に戻す</button>
+                  <button type="button" class="damage-marker-btn primary" onclick="saveDamageMarker(${itemId})">保存</button>
+                </div>
+
+                <!-- 保存済みプレビュー -->
+                <div class="damage-marker-preview" id="damage-marker-preview-${itemId}" style="display: none;">
+                  <img id="damage-marker-preview-img-${itemId}" src="" alt="保存済みマーキング">
+                  <div class="damage-marker-preview-label">保存済み</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -5111,6 +5315,316 @@
           <span class="history-time">${item.time}</span>
         </div>
       `).join('');
+    }
+
+    // ========================================
+    // 傷・汚れマーキング機能
+    // ========================================
+    const damageMarkerState = new Map(); // itemId -> { canvas, ctx, isDrawing, tool, color, history, baseImage }
+
+    // 利用可能な衣類画像
+    const CLOTHING_IMAGES = {
+      tshirt_front: '/images/clothing/tshirt_front.png',
+      tshirt_back: '/images/clothing/tshirt_back.png',
+      pants_front: '/images/clothing/pants_front.png',
+      pants_back: '/images/clothing/pants_back.png',
+      hoodie_front: '/images/clothing/hoodie_front.png',
+      hoodie_back: '/images/clothing/hoodie_back.png'
+    };
+
+    // マーキングパネルの開閉
+    function toggleDamageMarker(itemId) {
+      const container = document.getElementById(`damage-marker-container-${itemId}`);
+      const toggleText = document.getElementById(`damage-marker-toggle-text-${itemId}`);
+
+      if (container.classList.contains('active')) {
+        container.classList.remove('active');
+        toggleText.textContent = '開く';
+      } else {
+        container.classList.add('active');
+        toggleText.textContent = '閉じる';
+      }
+    }
+
+    // 衣類画像の読み込み
+    function loadDamageMarkerImage(itemId) {
+      const select = document.getElementById(`damage-marker-item-${itemId}`);
+      const selectedItem = select.value;
+
+      if (!selectedItem) {
+        // 選択解除時は非表示
+        document.getElementById(`damage-marker-wrapper-${itemId}`).style.display = 'none';
+        document.getElementById(`damage-marker-tools-${itemId}`).style.display = 'none';
+        document.getElementById(`damage-marker-actions-${itemId}`).style.display = 'none';
+        return;
+      }
+
+      const imagePath = CLOTHING_IMAGES[selectedItem];
+      if (!imagePath) {
+        alert('この衣類の画像はまだ準備中です');
+        select.value = '';
+        return;
+      }
+
+      // Canvas初期化
+      initDamageMarkerCanvas(itemId, imagePath);
+    }
+
+    // Canvas初期化
+    function initDamageMarkerCanvas(itemId, imagePath) {
+      const canvas = document.getElementById(`damage-marker-canvas-${itemId}`);
+      const ctx = canvas.getContext('2d');
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        // Canvasサイズを画像に合わせる（最大300px）
+        const maxSize = 300;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
+          width *= ratio;
+          height *= ratio;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // 状態を保存
+        damageMarkerState.set(itemId, {
+          canvas,
+          ctx,
+          isDrawing: false,
+          tool: 'pen',
+          color: '#ef4444',
+          lineWidth: 3,
+          history: [ctx.getImageData(0, 0, canvas.width, canvas.height)],
+          historyIndex: 0,
+          baseImage: img,
+          baseWidth: width,
+          baseHeight: height
+        });
+
+        // UI表示
+        document.getElementById(`damage-marker-wrapper-${itemId}`).style.display = 'block';
+        document.getElementById(`damage-marker-tools-${itemId}`).style.display = 'flex';
+        document.getElementById(`damage-marker-actions-${itemId}`).style.display = 'flex';
+
+        // イベントリスナー設定
+        setupDamageMarkerEvents(itemId);
+      };
+      img.onerror = () => {
+        alert('画像の読み込みに失敗しました');
+      };
+      img.src = imagePath;
+    }
+
+    // イベントリスナー設定
+    function setupDamageMarkerEvents(itemId) {
+      const canvas = document.getElementById(`damage-marker-canvas-${itemId}`);
+      const state = damageMarkerState.get(itemId);
+      if (!state) return;
+
+      // 既存のリスナーを削除
+      canvas.onmousedown = null;
+      canvas.onmousemove = null;
+      canvas.onmouseup = null;
+      canvas.ontouchstart = null;
+      canvas.ontouchmove = null;
+      canvas.ontouchend = null;
+
+      // マウスイベント
+      canvas.onmousedown = (e) => startDrawing(e, itemId);
+      canvas.onmousemove = (e) => draw(e, itemId);
+      canvas.onmouseup = () => stopDrawing(itemId);
+      canvas.onmouseleave = () => stopDrawing(itemId);
+
+      // タッチイベント
+      canvas.ontouchstart = (e) => {
+        e.preventDefault();
+        startDrawing(e.touches[0], itemId);
+      };
+      canvas.ontouchmove = (e) => {
+        e.preventDefault();
+        draw(e.touches[0], itemId);
+      };
+      canvas.ontouchend = () => stopDrawing(itemId);
+    }
+
+    // 描画開始
+    function startDrawing(e, itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state) return;
+
+      state.isDrawing = true;
+      const pos = getCanvasPosition(e, state.canvas);
+
+      if (state.tool === 'text') {
+        // テキスト入力
+        const text = prompt('テキストを入力してください:');
+        if (text) {
+          state.ctx.font = '14px sans-serif';
+          state.ctx.fillStyle = state.color;
+          state.ctx.fillText(text, pos.x, pos.y);
+          saveHistory(itemId);
+        }
+        state.isDrawing = false;
+      } else if (state.tool === 'circle') {
+        // 丸を描く
+        state.ctx.beginPath();
+        state.ctx.arc(pos.x, pos.y, 10, 0, Math.PI * 2);
+        state.ctx.strokeStyle = state.color;
+        state.ctx.lineWidth = 2;
+        state.ctx.stroke();
+        saveHistory(itemId);
+        state.isDrawing = false;
+      } else {
+        // ペンまたは消しゴム
+        state.ctx.beginPath();
+        state.ctx.moveTo(pos.x, pos.y);
+      }
+    }
+
+    // 描画中
+    function draw(e, itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state || !state.isDrawing) return;
+
+      const pos = getCanvasPosition(e, state.canvas);
+
+      if (state.tool === 'eraser') {
+        state.ctx.globalCompositeOperation = 'destination-out';
+        state.ctx.lineWidth = 20;
+      } else {
+        state.ctx.globalCompositeOperation = 'source-over';
+        state.ctx.strokeStyle = state.color;
+        state.ctx.lineWidth = state.lineWidth;
+      }
+
+      state.ctx.lineTo(pos.x, pos.y);
+      state.ctx.lineCap = 'round';
+      state.ctx.lineJoin = 'round';
+      state.ctx.stroke();
+    }
+
+    // 描画終了
+    function stopDrawing(itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state || !state.isDrawing) return;
+
+      state.isDrawing = false;
+      state.ctx.globalCompositeOperation = 'source-over';
+      saveHistory(itemId);
+    }
+
+    // Canvas座標取得
+    function getCanvasPosition(e, canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+
+    // 履歴保存
+    function saveHistory(itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state) return;
+
+      // 現在位置以降の履歴を削除
+      state.history = state.history.slice(0, state.historyIndex + 1);
+      // 新しい状態を追加
+      state.history.push(state.ctx.getImageData(0, 0, state.canvas.width, state.canvas.height));
+      state.historyIndex = state.history.length - 1;
+
+      // 履歴を最大20件に制限
+      if (state.history.length > 20) {
+        state.history.shift();
+        state.historyIndex--;
+      }
+    }
+
+    // ツール選択
+    function setDamageMarkerTool(itemId, tool) {
+      const state = damageMarkerState.get(itemId);
+      if (!state) return;
+
+      state.tool = tool;
+
+      // ボタンのアクティブ状態を更新
+      const toolButtons = document.querySelectorAll(`#damage-marker-tools-${itemId} .damage-marker-tool`);
+      toolButtons.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === tool);
+      });
+    }
+
+    // 色選択
+    function setDamageMarkerColor(itemId, color) {
+      const state = damageMarkerState.get(itemId);
+      if (!state) return;
+
+      state.color = color;
+
+      // ボタンのアクティブ状態を更新
+      const colorButtons = document.querySelectorAll(`#damage-marker-tools-${itemId} .damage-marker-color`);
+      colorButtons.forEach(btn => {
+        const btnColor = btn.classList.contains('red') ? '#ef4444' :
+                         btn.classList.contains('blue') ? '#3b82f6' : '#1f2937';
+        btn.classList.toggle('active', btnColor === color);
+      });
+    }
+
+    // クリア（ベース画像に戻す）
+    function clearDamageMarker(itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state) return;
+
+      if (!confirm('描いた内容をすべて消去しますか？')) return;
+
+      state.ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
+      state.ctx.drawImage(state.baseImage, 0, 0, state.baseWidth, state.baseHeight);
+      saveHistory(itemId);
+    }
+
+    // 元に戻す
+    function undoDamageMarker(itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state || state.historyIndex <= 0) return;
+
+      state.historyIndex--;
+      state.ctx.putImageData(state.history[state.historyIndex], 0, 0);
+    }
+
+    // 保存
+    function saveDamageMarker(itemId) {
+      const state = damageMarkerState.get(itemId);
+      if (!state) return;
+
+      // Canvas内容をBase64に変換
+      const dataUrl = state.canvas.toDataURL('image/png');
+
+      // entryItemsに保存
+      const item = entryItems.find(i => i.id === itemId);
+      if (item) {
+        item.damageMarkerImage = dataUrl;
+        item.damageMarkerType = document.getElementById(`damage-marker-item-${itemId}`).value;
+      }
+
+      // プレビュー表示
+      const previewContainer = document.getElementById(`damage-marker-preview-${itemId}`);
+      const previewImg = document.getElementById(`damage-marker-preview-img-${itemId}`);
+      previewImg.src = dataUrl;
+      previewContainer.style.display = 'block';
+
+      // 下書き保存
+      saveEntryDraft();
+
+      alert('マーキングを保存しました');
     }
   </script>
 
