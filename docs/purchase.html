@@ -979,10 +979,25 @@
                   <input type="date" class="form-control" id="defaultPurchaseDate">
                 </div>
                 <div class="col-6">
+                  <label class="form-label">仕入先</label>
+                  <select class="form-select" id="defaultSupplier">
+                    <option value="">--選択--</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row g-2 mt-2">
+                <div class="col-6">
                   <label class="form-label">発送先</label>
                   <select class="form-select" id="entryAssigneeIndividual">
-                    <option value="">読み込み中...</option>
+                    <option value="">--選択--</option>
                   </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label">仕入金額</label>
+                  <div class="input-group">
+                    <span class="input-group-text">¥</span>
+                    <input type="number" class="form-control" id="defaultAmount" min="0" placeholder="0">
+                  </div>
                 </div>
               </div>
             </div>
@@ -2901,6 +2916,8 @@
         entrySuppliersData.forEach(item => {
           supplierSelect.innerHTML += `<option value="${item.name}">${item.name}</option>`;
         });
+        // デフォルト仕入先プルダウンも更新
+        document.getElementById('defaultSupplier').innerHTML = supplierSelect.innerHTML;
         // 既存の商品アイテムの仕入先プルダウンも更新
         updateAllEntryItemSuppliers();
         console.log('📥 [仕入登録] 仕入先読み込み完了:', entrySuppliersData.length, '件');
@@ -3006,10 +3023,11 @@
     }
 
     // 仕入先セレクトボックスのHTMLを生成
-    function createEntrySupplierOptionsHTML() {
+    function createEntrySupplierOptionsHTML(selectedValue = '') {
       let html = '<option value="">--選択--</option>';
       entrySuppliersData.forEach(item => {
-        html += `<option value="${item.name}">${item.name}</option>`;
+        const selected = item.name === selectedValue ? ' selected' : '';
+        html += `<option value="${item.name}"${selected}>${item.name}</option>`;
       });
       return html;
     }
@@ -3064,14 +3082,16 @@
 
       // デフォルト設定から初期値を取得
       const defaultPurchaseDate = document.getElementById('defaultPurchaseDate')?.value || '';
+      const defaultSupplier = document.getElementById('defaultSupplier')?.value || '';
       const defaultAssignee = document.getElementById('entryAssigneeIndividual')?.value || '';
+      const defaultAmount = parseInt(document.getElementById('defaultAmount')?.value || '0', 10);
 
       entryItems.push({
         id: itemId,
         purchaseDate: defaultPurchaseDate,  // 仕入日
         assignee: defaultAssignee,          // 発送先
-        supplier: '',
-        amount: 0,
+        supplier: defaultSupplier,          // 仕入先
+        amount: defaultAmount,
         memo: '',
         // 検品情報（商品登録と同じ順番: カテゴリ → サイズ → 商品の状態 → ブランド → 付属品 → 特記事項）
         category: {
@@ -3123,14 +3143,14 @@
           <div class="col-6">
             <label class="form-label">仕入先 <span class="text-danger">*</span></label>
             <select class="form-select" id="entry-supplier-${itemId}" onchange="updateEntryItem(${itemId})">
-              ${createEntrySupplierOptionsHTML()}
+              ${createEntrySupplierOptionsHTML(defaultSupplier)}
             </select>
           </div>
           <div class="col-6">
-            <label class="form-label">金額 <span class="text-danger">*</span></label>
+            <label class="form-label">仕入金額 <span class="text-danger">*</span></label>
             <div class="input-group">
               <span class="input-group-text">¥</span>
-              <input type="number" class="form-control" id="entry-amount-${itemId}" min="0" onchange="updateEntryItem(${itemId})">
+              <input type="number" class="form-control" id="entry-amount-${itemId}" min="0" value="${defaultAmount || ''}" onchange="updateEntryItem(${itemId})">
             </div>
           </div>
         </div>
