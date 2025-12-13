@@ -2958,10 +2958,32 @@
     function saveEntryDraft(immediate = false) {
       // タイマーで遅延保存（入力のたびに即座に保存しない）
       if (entryDraftSaveTimer) clearTimeout(entryDraftSaveTimer);
-      
+
       const doSave = () => {
         // 0件の場合は下書きを削除
         if (entryItems.length === 0) {
+          clearEntryDraft();
+          return;
+        }
+
+        // 有効なデータが入力されているかチェック（空のデフォルト状態は保存しない）
+        const hasValidData = entryItems.some(item => {
+          // カテゴリが選択されている
+          const hasCategory = item.category?.major || item.category?.superCategory;
+          // ブランドが入力されている
+          const hasBrand = item.brand && item.brand.trim() !== '';
+          // 商品の状態が選択されている
+          const hasCondition = item.condition && item.condition !== '';
+          // 仕入金額が入力されている
+          const hasAmount = item.amount && item.amount > 0;
+          // 仕入先が選択されている
+          const hasSupplier = item.supplier && item.supplier !== '';
+
+          return hasCategory || hasBrand || hasCondition || hasAmount || hasSupplier;
+        });
+
+        if (!hasValidData) {
+          console.log('📥 [仕入登録] 有効なデータなし、下書き保存スキップ');
           clearEntryDraft();
           return;
         }
