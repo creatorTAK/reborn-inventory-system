@@ -9815,7 +9815,8 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
       if (window.currentDamageMarker && window.currentDamageMarker.image) {
         return {
           image: window.currentDamageMarker.image,
-          type: window.currentDamageMarker.type || null
+          type: window.currentDamageMarker.type || null,
+          note: window.currentDamageMarker.note || null
         };
       }
       return null;
