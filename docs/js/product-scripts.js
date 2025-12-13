@@ -9807,6 +9807,18 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
         console.error('[convertFormToFirestoreDoc] JSON_データのパースエラー:', e);
         return { imageUrls: [] };
       }
+    })(),
+
+    // 傷・汚れマーキング画像
+    damageMarker: (() => {
+      // window.currentDamageMarkerから取得（QRスキャン時にセットされる）
+      if (window.currentDamageMarker && window.currentDamageMarker.image) {
+        return {
+          image: window.currentDamageMarker.image,
+          type: window.currentDamageMarker.type || null
+        };
+      }
+      return null;
     })()
   };
 
