@@ -2932,6 +2932,221 @@
       'custom': { name: 'カスタム', labelWidth: 20, labelHeight: 20, cols: 7, rows: 10, marginTop: 30.5, marginLeft: 23, gapX: 4, gapY: 4, perSheet: 70 }
     };
 
+    // ========================================
+    // 下書き保存・復元機能
+    // ========================================
+    const ENTRY_DRAFT_KEY = 'reborn_entry_draft';
+    let entryDraftSaveTimer = null;
+
+    // 下書きを保存
+    function saveEntryDraft() {
+      // タイマーで遅延保存（入力のたびに即座に保存しない）
+      if (entryDraftSaveTimer) clearTimeout(entryDraftSaveTimer);
+      entryDraftSaveTimer = setTimeout(() => {
+        const draft = {
+          savedAt: new Date().toISOString(),
+          mode: currentEntryMode,
+          items: entryItems.map(item => ({...item})),
+          defaults: {
+            purchaseDate: document.getElementById('defaultPurchaseDate')?.value || '',
+            supplier: document.getElementById('defaultSupplier')?.value || '',
+            assignee: document.getElementById('defaultAssignee')?.value || '',
+            amount: document.getElementById('defaultAmount')?.value || ''
+          }
+        };
+        try {
+          localStorage.setItem(ENTRY_DRAFT_KEY, JSON.stringify(draft));
+          console.log('📥 [仕入登録] 下書き保存完了:', entryItems.length, '件');
+        } catch (e) {
+          console.error('下書き保存エラー:', e);
+        }
+      }, 500);
+    }
+
+    // 下書きを読み込み
+    function loadEntryDraft() {
+      try {
+        const json = localStorage.getItem(ENTRY_DRAFT_KEY);
+        if (!json) return null;
+        return JSON.parse(json);
+      } catch (e) {
+        console.error('下書き読み込みエラー:', e);
+        return null;
+      }
+    }
+
+    // 下書きを削除
+    function clearEntryDraft() {
+      localStorage.removeItem(ENTRY_DRAFT_KEY);
+      console.log('📥 [仕入登録] 下書きを削除しました');
+    }
+
+    // 下書きから復元
+    function restoreEntryDraft(draft) {
+      if (!draft || !draft.items || draft.items.length === 0) return;
+
+      console.log('📥 [仕入登録] 下書きから復元開始');
+
+      // モード設定
+      if (draft.mode) {
+        setEntryMode(draft.mode);
+      }
+
+      // デフォルト設定を復元
+      if (draft.defaults) {
+        if (draft.defaults.purchaseDate) document.getElementById('defaultPurchaseDate').value = draft.defaults.purchaseDate;
+        if (draft.defaults.supplier) document.getElementById('defaultSupplier').value = draft.defaults.supplier;
+        if (draft.defaults.assignee) document.getElementById('defaultAssignee').value = draft.defaults.assignee;
+        if (draft.defaults.amount) document.getElementById('defaultAmount').value = draft.defaults.amount;
+      }
+
+      // 既存の商品を全て削除
+      entryItems = [];
+      document.getElementById('entryItemsContainer').innerHTML = '';
+
+      // 商品を復元
+      draft.items.forEach((savedItem, index) => {
+        addEntryItem();
+        const item = entryItems[entryItems.length - 1];
+
+        // DOMの更新はマスタデータ読み込み後に実行するため、一旦データだけ保持
+        Object.assign(item, savedItem);
+        item.id = item.id; // IDはaddEntryItemで新規発行されるので上書き
+      });
+
+      // マスタデータ読み込み後にUIを復元
+      setTimeout(() => {
+        restoreEntryItemsUI(draft.items);
+      }, 1000);
+
+      console.log('📥 [仕入登録] 下書きから復元完了:', draft.items.length, '件');
+    }
+
+    // 商品アイテムのUIを復元
+    function restoreEntryItemsUI(savedItems) {
+      savedItems.forEach((savedItem, index) => {
+        if (index >= entryItems.length) return;
+        const item = entryItems[index];
+        const itemId = item.id;
+
+        // 基本情報
+        const purchaseDateEl = document.getElementById(`entry-purchase-date-${itemId}`);
+        if (purchaseDateEl && savedItem.purchaseDate) purchaseDateEl.value = savedItem.purchaseDate;
+
+        const supplierEl = document.getElementById(`entry-supplier-${itemId}`);
+        if (supplierEl && savedItem.supplier) supplierEl.value = savedItem.supplier;
+
+        const assigneeEl = document.getElementById(`entry-assignee-${itemId}`);
+        if (assigneeEl && savedItem.assignee) assigneeEl.value = savedItem.assignee;
+
+        const amountEl = document.getElementById(`entry-amount-${itemId}`);
+        if (amountEl && savedItem.amount) amountEl.value = savedItem.amount;
+
+        // カテゴリー（連動プルダウンなので順次設定）
+        if (savedItem.category) {
+          const cat = savedItem.category;
+          if (cat.superCategory) {
+            const l0El = document.getElementById(`entry-cat-l0-${itemId}`);
+            if (l0El) {
+              l0El.value = cat.superCategory;
+              onEntryCatL0Changed(itemId);
+              setTimeout(() => {
+                if (cat.major) {
+                  const l1El = document.getElementById(`entry-cat-l1-${itemId}`);
+                  if (l1El) { l1El.value = cat.major; onEntryCatL1Changed(itemId); }
+                  setTimeout(() => {
+                    if (cat.middle) {
+                      const l2El = document.getElementById(`entry-cat-l2-${itemId}`);
+                      if (l2El) { l2El.value = cat.middle; onEntryCatL2Changed(itemId); }
+                      setTimeout(() => {
+                        if (cat.small) {
+                          const l3El = document.getElementById(`entry-cat-l3-${itemId}`);
+                          if (l3El) { l3El.value = cat.small; onEntryCatL3Changed(itemId); }
+                          setTimeout(() => {
+                            if (cat.fine) {
+                              const l4El = document.getElementById(`entry-cat-l4-${itemId}`);
+                              if (l4El) { l4El.value = cat.fine; onEntryCatL4Changed(itemId); }
+                            }
+                            if (cat.itemName) {
+                              const itemNameEl = document.getElementById(`entry-cat-item-${itemId}`);
+                              if (itemNameEl) itemNameEl.value = cat.itemName;
+                            }
+                          }, 100);
+                        }
+                      }, 100);
+                    }
+                  }, 100);
+                }
+              }, 100);
+            }
+          }
+        }
+
+        // サイズ
+        if (savedItem.size) {
+          const sizeEl = document.getElementById(`entry-size-${itemId}`);
+          if (sizeEl) sizeEl.value = savedItem.size;
+        }
+
+        // 商品の状態
+        if (savedItem.condition) {
+          const conditionEl = document.getElementById(`entry-condition-${itemId}`);
+          if (conditionEl) conditionEl.value = savedItem.condition;
+        }
+
+        // ブランド
+        if (savedItem.brand) {
+          const brandEl = document.getElementById(`entry-brand-${itemId}`);
+          if (brandEl) brandEl.value = savedItem.brand;
+        }
+        if (savedItem.brandKana) {
+          const brandKanaEl = document.getElementById(`entry-brand-kana-${itemId}`);
+          if (brandKanaEl) brandKanaEl.value = savedItem.brandKana;
+        }
+
+        // 特記事項
+        if (savedItem.note) {
+          const noteEl = document.getElementById(`entry-note-${itemId}`);
+          if (noteEl) noteEl.value = savedItem.note;
+        }
+
+        // 付属品
+        if (savedItem.accessories && savedItem.accessories.length > 0) {
+          const accessoriesContainer = document.getElementById(`entry-accessories-${itemId}`);
+          if (accessoriesContainer) {
+            savedItem.accessories.forEach(acc => {
+              const checkbox = accessoriesContainer.querySelector(`input[value="${acc}"]`);
+              if (checkbox) {
+                checkbox.checked = true;
+                checkbox.parentElement.classList.add('checked');
+              }
+            });
+          }
+        }
+
+        // データを更新
+        Object.assign(item, savedItem);
+        updateEntryItemSummary(itemId);
+      });
+      updateEntryTotal();
+    }
+
+    // 下書き復元確認ダイアログを表示
+    function showDraftRestoreDialog(draft) {
+      const savedAt = new Date(draft.savedAt);
+      const timeStr = savedAt.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const itemCount = draft.items.length;
+
+      if (confirm(`前回の下書き（${timeStr}保存、${itemCount}件）があります。\n\n復元しますか？\n\n※「キャンセル」を押すと新規入力になります`)) {
+        restoreEntryDraft(draft);
+      } else {
+        clearEntryDraft();
+        // 新規入力用に商品アイテム#1を追加
+        addEntryItem();
+        console.log('📥 [仕入登録] 下書き破棄 → 商品アイテム#1追加完了');
+      }
+    }
+
     // 仕入登録タブの初期化
     async function initializeEntryTab() {
       console.log('📥 [仕入登録] 初期化開始');
@@ -2941,9 +3156,16 @@
       document.getElementById('entryPurchaseDate').value = today;
       document.getElementById('defaultPurchaseDate').value = today;
 
-      // 商品アイテム#1を即座に追加（マスタ読み込み待たない）
-      addEntryItem();
-      console.log('📥 [仕入登録] 商品アイテム#1追加完了');
+      // 下書きがあるかチェック
+      const draft = loadEntryDraft();
+      if (draft && draft.items && draft.items.length > 0) {
+        // 下書きがある場合は復元ダイアログを表示
+        showDraftRestoreDialog(draft);
+      } else {
+        // 下書きがない場合は通常通り新規の商品アイテム#1を追加
+        addEntryItem();
+        console.log('📥 [仕入登録] 商品アイテム#1追加完了');
+      }
 
       // マスタデータを非同期で読み込み（initializePage()から呼ばれるのでPurchaseApiは確実に存在）
       loadEntryMasterData();
@@ -3359,6 +3581,9 @@
 
       // ブランドサジェストをアタッチ
       setTimeout(() => attachEntryBrandSuggest(itemId), 100);
+
+      // 自動保存
+      saveEntryDraft();
     }
 
     // 全ての商品を折りたたむ
@@ -3432,6 +3657,7 @@
       document.getElementById(`entry-item-${itemId}`)?.remove();
       updateEntryTotal();
       updateEntryItemNumbers();
+      saveEntryDraft(); // 自動保存
     }
 
     // 個別商品の情報を更新
@@ -3468,6 +3694,7 @@
       }
       updateEntryTotal();
       updateEntryItemSummary(itemId);
+      saveEntryDraft(); // 自動保存
     }
 
     // ========================================
@@ -4139,6 +4366,9 @@
         updateEntryLabelInfo();
       }, 500);
 
+      // QRコード発行成功後、下書きを削除
+      clearEntryDraft();
+
       document.getElementById('qrEntryPreview').scrollIntoView({ behavior: 'smooth' });
     }
 
@@ -4435,6 +4665,7 @@
       addEntryItem();
       entryGeneratedQRData = [];
       setEntryMode('individual');  // デフォルトを個別入力に変更
+      clearEntryDraft();  // 下書きを削除
     }
 
     // 仕入登録タブの初期化（他のタブから戻ってきた時用）
