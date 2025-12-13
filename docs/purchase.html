@@ -971,16 +971,16 @@
               <div class="default-settings-header">
                 <i class="bi bi-gear"></i>
                 <span>デフォルト設定</span>
-                <small class="text-muted ms-2">（新規追加時の初期値）</small>
+                <small class="text-muted ms-2">（変更すると全商品に反映）</small>
               </div>
               <div class="row g-2 mt-2">
                 <div class="col-6">
                   <label class="form-label">仕入日</label>
-                  <input type="date" class="form-control" id="defaultPurchaseDate">
+                  <input type="date" class="form-control" id="defaultPurchaseDate" onchange="applyDefaultToAllItems('purchaseDate')">
                 </div>
                 <div class="col-6">
                   <label class="form-label">仕入先</label>
-                  <select class="form-select" id="defaultSupplier">
+                  <select class="form-select" id="defaultSupplier" onchange="applyDefaultToAllItems('supplier')">
                     <option value="">--選択--</option>
                   </select>
                 </div>
@@ -988,7 +988,7 @@
               <div class="row g-2 mt-2">
                 <div class="col-6">
                   <label class="form-label">発送先</label>
-                  <select class="form-select" id="entryAssigneeIndividual">
+                  <select class="form-select" id="entryAssigneeIndividual" onchange="applyDefaultToAllItems('assignee')">
                     <option value="">--選択--</option>
                   </select>
                 </div>
@@ -996,7 +996,7 @@
                   <label class="form-label">仕入金額</label>
                   <div class="input-group">
                     <span class="input-group-text">¥</span>
-                    <input type="number" class="form-control" id="defaultAmount" min="0" placeholder="0">
+                    <input type="number" class="form-control" id="defaultAmount" min="0" placeholder="0" onchange="applyDefaultToAllItems('amount')">
                   </div>
                 </div>
               </div>
@@ -3003,6 +3003,54 @@
           select.value = currentValue;
         }
       });
+    }
+
+    // デフォルト設定を全商品に反映
+    function applyDefaultToAllItems(field) {
+      const defaultPurchaseDate = document.getElementById('defaultPurchaseDate')?.value || '';
+      const defaultSupplier = document.getElementById('defaultSupplier')?.value || '';
+      const defaultAssignee = document.getElementById('entryAssigneeIndividual')?.value || '';
+      const defaultAmount = document.getElementById('defaultAmount')?.value || '';
+
+      entryItems.forEach(item => {
+        switch (field) {
+          case 'purchaseDate':
+            const dateInput = document.getElementById(`entry-purchase-date-${item.id}`);
+            if (dateInput) {
+              dateInput.value = defaultPurchaseDate;
+              item.purchaseDate = defaultPurchaseDate;
+            }
+            break;
+          case 'supplier':
+            const supplierSelect = document.getElementById(`entry-supplier-${item.id}`);
+            if (supplierSelect) {
+              supplierSelect.value = defaultSupplier;
+              item.supplier = defaultSupplier;
+            }
+            break;
+          case 'assignee':
+            const assigneeSelect = document.getElementById(`entry-assignee-${item.id}`);
+            if (assigneeSelect) {
+              assigneeSelect.value = defaultAssignee;
+              item.assignee = defaultAssignee;
+            }
+            break;
+          case 'amount':
+            const amountInput = document.getElementById(`entry-amount-${item.id}`);
+            if (amountInput) {
+              amountInput.value = defaultAmount;
+              item.amount = parseInt(defaultAmount, 10) || 0;
+            }
+            break;
+        }
+      });
+
+      // 合計金額を再計算
+      if (field === 'amount') {
+        updateEntryTotal();
+      }
+
+      console.log(`📥 [デフォルト設定] ${field} を全商品に反映`);
     }
 
     // 入力モード切替
