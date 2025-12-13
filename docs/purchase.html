@@ -2954,12 +2954,45 @@
     const ENTRY_DRAFT_KEY = 'reborn_entry_draft';
     let entryDraftSaveTimer = null;
 
+    // 商品に有効な入力があるかチェック
+    function hasValidEntryData(item) {
+      // デフォルト値以外の入力があるかチェック
+      const defaultPurchaseDate = document.getElementById('defaultPurchaseDate')?.value || '';
+      const defaultSupplier = document.getElementById('defaultSupplier')?.value || '';
+      const defaultAssignee = document.getElementById('entryAssigneeIndividual')?.value || '';
+      const defaultAmount = parseInt(document.getElementById('defaultAmount')?.value || '0', 10);
+
+      // デフォルト値と異なる値があれば有効
+      if (item.purchaseDate && item.purchaseDate !== defaultPurchaseDate) return true;
+      if (item.supplier && item.supplier !== defaultSupplier) return true;
+      if (item.assignee && item.assignee !== defaultAssignee) return true;
+      if (item.amount && item.amount !== defaultAmount) return true;
+      
+      // 検品情報に入力があれば有効
+      if (item.category?.superCategory || item.category?.major || item.category?.itemName) return true;
+      if (item.size) return true;
+      if (item.condition) return true;
+      if (item.brand) return true;
+      if (item.accessories && item.accessories.length > 0) return true;
+      if (item.note) return true;
+      if (item.memo) return true;
+
+      return false;
+    }
+
     // 下書きを保存
     function saveEntryDraft(immediate = false) {
       // タイマーで遅延保存（入力のたびに即座に保存しない）
       if (entryDraftSaveTimer) clearTimeout(entryDraftSaveTimer);
       
       const doSave = () => {
+        // 1件だけで入力が空の場合は下書きを削除
+        if (entryItems.length === 1 && !hasValidEntryData(entryItems[0])) {
+          clearEntryDraft();
+          console.log('📥 [仕入登録] 入力なしのため下書き削除');
+          return;
+        }
+
         const draft = {
           savedAt: new Date().toISOString(),
           mode: currentEntryMode,
