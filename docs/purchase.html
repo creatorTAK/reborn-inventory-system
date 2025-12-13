@@ -2954,42 +2954,15 @@
     const ENTRY_DRAFT_KEY = 'reborn_entry_draft';
     let entryDraftSaveTimer = null;
 
-    // 商品に有効な入力があるかチェック
-    function hasValidEntryData(item) {
-      // デフォルト値以外の入力があるかチェック
-      const defaultPurchaseDate = document.getElementById('defaultPurchaseDate')?.value || '';
-      const defaultSupplier = document.getElementById('defaultSupplier')?.value || '';
-      const defaultAssignee = document.getElementById('entryAssigneeIndividual')?.value || '';
-      const defaultAmount = parseInt(document.getElementById('defaultAmount')?.value || '0', 10);
-
-      // デフォルト値と異なる値があれば有効
-      if (item.purchaseDate && item.purchaseDate !== defaultPurchaseDate) return true;
-      if (item.supplier && item.supplier !== defaultSupplier) return true;
-      if (item.assignee && item.assignee !== defaultAssignee) return true;
-      if (item.amount && item.amount !== defaultAmount) return true;
-      
-      // 検品情報に入力があれば有効
-      if (item.category?.superCategory || item.category?.major || item.category?.itemName) return true;
-      if (item.size) return true;
-      if (item.condition) return true;
-      if (item.brand) return true;
-      if (item.accessories && item.accessories.length > 0) return true;
-      if (item.note) return true;
-      if (item.memo) return true;
-
-      return false;
-    }
-
     // 下書きを保存
     function saveEntryDraft(immediate = false) {
       // タイマーで遅延保存（入力のたびに即座に保存しない）
       if (entryDraftSaveTimer) clearTimeout(entryDraftSaveTimer);
       
       const doSave = () => {
-        // 1件だけで入力が空の場合は下書きを削除
-        if (entryItems.length === 1 && !hasValidEntryData(entryItems[0])) {
+        // 0件の場合は下書きを削除
+        if (entryItems.length === 0) {
           clearEntryDraft();
-          console.log('📥 [仕入登録] 入力なしのため下書き削除');
           return;
         }
 
@@ -3517,7 +3490,7 @@
           <button type="button" class="item-reset" onclick="event.stopPropagation(); resetEntryItem(${itemId})" title="この商品をリセット">
             <i class="bi bi-arrow-counterclockwise"></i>
           </button>
-          <button type="button" class="item-delete" onclick="event.stopPropagation(); removeEntryItem(${itemId})" ${entryItems.length === 1 ? 'disabled style="opacity:0.3"' : ''}>
+          <button type="button" class="item-delete" onclick="event.stopPropagation(); removeEntryItem(${itemId})">
             <i class="bi bi-trash"></i>
           </button>
         </div>
@@ -3801,19 +3774,24 @@
     // 個別商品を削除
     function removeEntryItem(itemId) {
       console.log('🗑️ [仕入登録] 削除開始 itemId:', itemId, '現在の件数:', entryItems.length);
-      if (entryItems.length <= 1) {
-        console.log('🗑️ [仕入登録] 削除スキップ（最後の1件）');
-        return;
-      }
       const index = entryItems.findIndex(item => item.id === itemId);
       console.log('🗑️ [仕入登録] 削除対象index:', index);
       if (index > -1) entryItems.splice(index, 1);
       console.log('🗑️ [仕入登録] 削除後の件数:', entryItems.length);
       document.getElementById(`entry-item-${itemId}`)?.remove();
+      
+      // 0件になったらプレースホルダーを表示
+      if (entryItems.length === 0) {
+        const container = document.getElementById('entryItemsContainer');
+        container.innerHTML = '<div class="entry-item-placeholder text-center text-muted py-4">「商品を追加」ボタンで商品を追加してください</div>';
+        clearEntryDraft(); // 0件なら下書き削除
+      } else {
+        saveEntryDraft(true); // 即時保存
+      }
+      
       updateEntryTotal();
       updateEntryItemNumbers();
-      saveEntryDraft(true); // 即時保存（削除は遅延なしで確実に保存）
-      console.log('🗑️ [仕入登録] 削除完了、下書き保存済み');
+      console.log('🗑️ [仕入登録] 削除完了');
     }
 
     // 個別商品の情報を更新
@@ -4195,11 +4173,6 @@
       entryItems.forEach((item, index) => {
         const numberSpan = document.querySelector(`#entry-item-${item.id} .item-number`);
         if (numberSpan) numberSpan.textContent = `#${index + 1}`;
-        const deleteBtn = document.querySelector(`#entry-item-${item.id} .item-delete`);
-        if (deleteBtn) {
-          deleteBtn.disabled = entryItems.length === 1;
-          deleteBtn.style.opacity = entryItems.length === 1 ? '0.3' : '1';
-        }
       });
     }
 
