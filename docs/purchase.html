@@ -3960,15 +3960,41 @@
         } else {
           item.accessories = [];
         }
-        // バリデーション
-        if (!item.purchaseDate) { alert(`商品 #${itemIndex} の仕入日を入力してください`); return; }
-        if (!item.assignee) { alert(`商品 #${itemIndex} の発送先を選択してください`); return; }
-        if (!item.supplier) { alert(`商品 #${itemIndex} の仕入先を選択してください`); return; }
-        if (item.amount <= 0) { alert(`商品 #${itemIndex} の金額を入力してください`); return; }
+        // バリデーション結果を収集
+        const itemErrors = [];
+        if (!item.purchaseDate) itemErrors.push('仕入日');
+        if (!item.supplier) itemErrors.push('仕入先');
+        if (!item.assignee) itemErrors.push('発送先');
+        if (!item.amount || item.amount <= 0) itemErrors.push('仕入金額');
+
+        if (itemErrors.length > 0) {
+          item._errors = itemErrors;
+          item._itemIndex = itemIndex;
+        }
         validItems.push(item);
       }
 
       if (validItems.length === 0) { alert('商品を追加してください'); return; }
+
+      // 未入力チェック：エラーがある商品をまとめて警告
+      const itemsWithErrors = validItems.filter(item => item._errors && item._errors.length > 0);
+      if (itemsWithErrors.length > 0) {
+        const errorMessages = itemsWithErrors.map(item =>
+          `商品 #${item._itemIndex}：${item._errors.join('、')}`
+        );
+        alert(`⚠️ 必須項目が未入力です\n\n${errorMessages.join('\n')}\n\n上記の項目を入力してから登録してください。`);
+
+        // 最初のエラー商品を展開して表示
+        const firstErrorItem = itemsWithErrors[0];
+        const itemEl = document.getElementById(`entry-item-${firstErrorItem.id}`);
+        if (itemEl && !itemEl.classList.contains('expanded')) {
+          collapseAllEntryItems();
+          itemEl.classList.remove('collapsed');
+          itemEl.classList.add('expanded');
+          itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+      }
 
       const totalAmount = validItems.reduce((sum, item) => sum + item.amount, 0);
       // 個別入力の場合、仕入先・発送先・仕入日は最初の商品のものを使用（混在している場合は「複数」）
