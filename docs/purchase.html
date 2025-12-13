@@ -256,16 +256,90 @@
 
     /* 個別入力商品リスト */
     .entry-items-container {
-      max-height: 350px;
-      overflow-y: auto;
+      /* スクロールなし - アコーディオン方式 */
     }
     .entry-item {
       background: #f8f9fa;
       border: 1px solid #e9ecef;
       border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       position: relative;
+      overflow: hidden;
+    }
+    .entry-item.collapsed {
+      background: #fff;
+    }
+    /* アコーディオン概要ヘッダー */
+    .entry-item-summary {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      cursor: pointer;
+      gap: 8px;
+      background: #f8f9fa;
+      border-bottom: 1px solid transparent;
+    }
+    .entry-item.expanded .entry-item-summary {
+      border-bottom: 1px solid #e9ecef;
+      background: #4ECDC4;
+      color: white;
+    }
+    .entry-item-summary .item-number {
+      font-weight: 700;
+      color: #4ECDC4;
+      min-width: 28px;
+    }
+    .entry-item.expanded .entry-item-summary .item-number {
+      color: white;
+    }
+    .entry-item-summary .item-info {
+      flex: 1;
+      font-size: 0.8rem;
+      color: #6b7280;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .entry-item.expanded .entry-item-summary .item-info {
+      color: rgba(255,255,255,0.9);
+    }
+    .entry-item-summary .item-toggle {
+      color: #9ca3af;
+      transition: transform 0.2s;
+    }
+    .entry-item.expanded .entry-item-summary .item-toggle {
+      color: white;
+      transform: rotate(180deg);
+    }
+    .entry-item-summary .item-warning {
+      color: #f59e0b;
+      font-size: 0.85rem;
+    }
+    .entry-item.expanded .entry-item-summary .item-warning {
+      color: #fef3c7;
+    }
+    .entry-item-summary .item-delete {
+      background: none;
+      border: none;
+      color: #dc3545;
+      cursor: pointer;
+      padding: 4px;
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+    .entry-item-summary .item-delete:hover {
+      opacity: 1;
+    }
+    .entry-item.expanded .entry-item-summary .item-delete {
+      color: #fecaca;
+    }
+    /* アコーディオン詳細ボディ */
+    .entry-item-body {
+      display: none;
+      padding: 12px;
+    }
+    .entry-item.expanded .entry-item-body {
+      display: block;
     }
     /* デフォルト設定セクション */
     .default-settings-section {
@@ -288,29 +362,7 @@
     .default-settings-section .form-select {
       font-size: 16px; /* iOSズームイン防止 */
     }
-    .entry-item-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .entry-item-number {
-      font-weight: 600;
-      color: #4ECDC4;
-      font-size: 0.9rem;
-    }
-    .entry-item-delete {
-      background: none;
-      border: none;
-      color: #dc3545;
-      cursor: pointer;
-      padding: 4px 8px;
-      font-size: 1rem;
-    }
-    .entry-item-delete:hover {
-      background: #fee;
-      border-radius: 4px;
-    }
+    /* 旧スタイルは削除（アコーディオン方式に移行） */
     .entry-item .form-control,
     .entry-item .form-select {
       padding: 8px 10px;
@@ -3156,55 +3208,64 @@
       const placeholder = container.querySelector('.entry-item-placeholder');
       if (placeholder) placeholder.remove();
 
+      // 既存の商品を全て折りたたむ
+      collapseAllEntryItems();
+
       const itemDiv = document.createElement('div');
-      itemDiv.className = 'entry-item';
+      itemDiv.className = 'entry-item expanded';  // 新規追加は展開状態
       itemDiv.id = `entry-item-${itemId}`;
       itemDiv.innerHTML = `
-        <div class="entry-item-header">
-          <span class="entry-item-number">#${itemNumber}</span>
-          <button type="button" class="entry-item-delete" onclick="removeEntryItem(${itemId})" ${entryItems.length === 1 ? 'disabled style="opacity:0.3"' : ''}>
+        <!-- アコーディオン概要ヘッダー -->
+        <div class="entry-item-summary" onclick="toggleEntryItem(${itemId})">
+          <span class="item-number">#${itemNumber}</span>
+          <span class="item-info" id="entry-item-info-${itemId}">未入力</span>
+          <span class="item-warning" id="entry-item-warning-${itemId}" title="必須項目が未入力です"><i class="bi bi-exclamation-triangle-fill"></i></span>
+          <i class="bi bi-chevron-down item-toggle"></i>
+          <button type="button" class="item-delete" onclick="event.stopPropagation(); removeEntryItem(${itemId})" ${entryItems.length === 1 ? 'disabled style="opacity:0.3"' : ''}>
             <i class="bi bi-trash"></i>
           </button>
         </div>
-        <!-- 仕入日・仕入先・発送先・仕入金額（商品ごとに変更可能） -->
-        <div class="row g-2 mb-2">
-          <div class="col-6">
-            <label class="form-label">仕入日 <span class="text-danger">*</span></label>
-            <input type="date" class="form-control" id="entry-purchase-date-${itemId}" value="${defaultPurchaseDate}" onchange="updateEntryItem(${itemId})">
-          </div>
-          <div class="col-6">
-            <label class="form-label">仕入先 <span class="text-danger">*</span></label>
-            <select class="form-select" id="entry-supplier-${itemId}" onchange="updateEntryItem(${itemId})">
-              ${createEntrySupplierOptionsHTML(defaultSupplier)}
-            </select>
-          </div>
-        </div>
-        <div class="row g-2">
-          <div class="col-6">
-            <label class="form-label">発送先 <span class="text-danger">*</span></label>
-            <select class="form-select" id="entry-assignee-${itemId}" onchange="updateEntryItem(${itemId})">
-              ${createEntryAssigneeOptionsHTML(defaultAssignee)}
-            </select>
-          </div>
-          <div class="col-6">
-            <label class="form-label">仕入金額 <span class="text-danger">*</span></label>
-            <div class="input-group">
-              <span class="input-group-text">¥</span>
-              <input type="number" class="form-control" id="entry-amount-${itemId}" min="0" value="${defaultAmount || ''}" onchange="updateEntryItem(${itemId})">
+        <!-- アコーディオン詳細ボディ -->
+        <div class="entry-item-body">
+          <!-- 仕入日・仕入先・発送先・仕入金額 -->
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label">仕入日 <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" id="entry-purchase-date-${itemId}" value="${defaultPurchaseDate}" onchange="updateEntryItem(${itemId})">
+            </div>
+            <div class="col-6">
+              <label class="form-label">仕入先 <span class="text-danger">*</span></label>
+              <select class="form-select" id="entry-supplier-${itemId}" onchange="updateEntryItem(${itemId})">
+                ${createEntrySupplierOptionsHTML(defaultSupplier)}
+              </select>
             </div>
           </div>
-        </div>
-
-        <!-- 検品情報セクション -->
-        <div class="inspection-section">
-          <div class="inspection-section-header" onclick="toggleInspectionSection(${itemId})">
-            <i class="bi bi-clipboard-check"></i>
-            <span>検品情報（商品登録時に自動反映）</span>
-            <i class="bi bi-chevron-down toggle-icon" id="inspection-toggle-${itemId}"></i>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label">発送先 <span class="text-danger">*</span></label>
+              <select class="form-select" id="entry-assignee-${itemId}" onchange="updateEntryItem(${itemId})">
+                ${createEntryAssigneeOptionsHTML(defaultAssignee)}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">仕入金額 <span class="text-danger">*</span></label>
+              <div class="input-group">
+                <span class="input-group-text">¥</span>
+                <input type="number" class="form-control" id="entry-amount-${itemId}" min="0" value="${defaultAmount || ''}" onchange="updateEntryItem(${itemId})">
+              </div>
+            </div>
           </div>
-          <div class="inspection-fields" id="inspection-fields-${itemId}">
-            <!-- 1. カテゴリー（7階層プルダウン） -->
-            <div class="inspection-category-selects">
+
+          <!-- 検品情報（常に展開） -->
+          <div class="inspection-section-inline">
+            <div class="inspection-section-title">
+              <i class="bi bi-clipboard-check"></i>
+              <span>検品情報</span>
+              <small class="text-muted">（商品登録時に自動反映）</small>
+            </div>
+            
+            <!-- 1. カテゴリー -->
+            <div class="inspection-category-selects mt-2">
               <label class="form-label">カテゴリー</label>
               <select class="form-select" id="entry-cat-l0-${itemId}" onchange="onEntryCatL0Changed(${itemId})">
                 <option value="">--選択--</option>
@@ -3231,16 +3292,16 @@
             </div>
 
             <!-- 2. サイズ -->
-            <div style="margin-top: 10px;">
+            <div class="mt-2">
               <label class="form-label">サイズ</label>
-              <select class="form-select entry-cat-select" id="entry-size-${itemId}" onchange="updateEntryItem(${itemId})">
+              <select class="form-select" id="entry-size-${itemId}" onchange="updateEntryItem(${itemId})">
                 <option value="">--選択--</option>
                 ${getEntrySizeOptions()}
               </select>
             </div>
 
             <!-- 3. 商品の状態 -->
-            <div style="margin-top: 10px;">
+            <div class="mt-2">
               <label class="form-label">商品の状態</label>
               <select class="form-select" id="entry-condition-${itemId}" onchange="updateEntryItem(${itemId})">
                 <option value="">--選択--</option>
@@ -3248,8 +3309,8 @@
               </select>
             </div>
 
-            <!-- 4. ブランド（Algolia検索） -->
-            <div class="brand-field" style="margin-top: 10px;">
+            <!-- 4. ブランド -->
+            <div class="brand-field mt-2">
               <label class="form-label">ブランド</label>
               <input type="text" class="form-control" id="entry-brand-${itemId}" autocomplete="off" placeholder="入力すると候補が表示されます" oninput="onEntryBrandInput(${itemId})" onchange="updateEntryItem(${itemId})">
               <div class="suggest" id="suggest-entry-brand-${itemId}" hidden></div>
@@ -3257,7 +3318,7 @@
             </div>
 
             <!-- 5. 付属品 -->
-            <div style="margin-top: 10px;">
+            <div class="mt-2">
               <label class="form-label">付属品</label>
               <div class="accessories-checkboxes" id="entry-accessories-${itemId}">
                 ${INSPECTION_ACCESSORIES.map(acc => `
@@ -3270,7 +3331,7 @@
             </div>
 
             <!-- 6. 特記事項 -->
-            <div style="margin-top: 10px;">
+            <div class="mt-2">
               <label class="form-label">特記事項</label>
               <input type="text" class="form-control" id="entry-note-${itemId}" placeholder="傷の位置、汚れなど" onchange="updateEntryItem(${itemId})">
             </div>
@@ -3280,25 +3341,63 @@
       container.appendChild(itemDiv);
       updateEntryTotal();
       updateEntryItemNumbers();
+      updateEntryItemSummary(itemId);
 
       // ブランドサジェストをアタッチ
       setTimeout(() => attachEntryBrandSuggest(itemId), 100);
     }
 
-    // 検品セクションの開閉
-    function toggleInspectionSection(itemId) {
-      const fields = document.getElementById(`inspection-fields-${itemId}`);
-      const icon = document.getElementById(`inspection-toggle-${itemId}`);
-      if (fields.style.display === 'none') {
-        fields.style.display = 'grid';
-        icon.classList.remove('bi-chevron-right');
-        icon.classList.add('bi-chevron-down');
+    // 全ての商品を折りたたむ
+    function collapseAllEntryItems() {
+      document.querySelectorAll('.entry-item.expanded').forEach(item => {
+        item.classList.remove('expanded');
+        item.classList.add('collapsed');
+      });
+    }
+
+    // 商品アイテムの展開/折りたたみ切り替え
+    function toggleEntryItem(itemId) {
+      const item = document.getElementById(`entry-item-${itemId}`);
+      if (!item) return;
+      
+      if (item.classList.contains('expanded')) {
+        item.classList.remove('expanded');
+        item.classList.add('collapsed');
       } else {
-        fields.style.display = 'none';
-        icon.classList.remove('bi-chevron-down');
-        icon.classList.add('bi-chevron-right');
+        // 他を折りたたんで、このアイテムを展開
+        collapseAllEntryItems();
+        item.classList.remove('collapsed');
+        item.classList.add('expanded');
       }
     }
+
+    // 商品アイテムの概要を更新
+    function updateEntryItemSummary(itemId) {
+      const item = entryItems.find(i => i.id === itemId);
+      if (!item) return;
+
+      const infoEl = document.getElementById(`entry-item-info-${itemId}`);
+      const warningEl = document.getElementById(`entry-item-warning-${itemId}`);
+      
+      // 概要テキスト生成
+      const parts = [];
+      if (item.purchaseDate) {
+        const d = new Date(item.purchaseDate);
+        parts.push(`${d.getMonth()+1}/${d.getDate()}`);
+      }
+      if (item.supplier) parts.push(item.supplier);
+      if (item.assignee) parts.push(item.assignee);
+      if (item.amount > 0) parts.push(`¥${item.amount.toLocaleString()}`);
+      
+      infoEl.textContent = parts.length > 0 ? parts.join(' | ') : '未入力';
+      
+      // 必須項目チェック（仕入日、仕入先、発送先、仕入金額）
+      const hasWarning = !item.purchaseDate || !item.supplier || !item.assignee || !item.amount;
+      warningEl.style.display = hasWarning ? 'inline' : 'none';
+    }
+
+    // 検品セクションの開閉（旧：アコーディオン方式に移行したため不使用）
+    // function toggleInspectionSection(itemId) { ... }
 
     // 付属品チェックボックスの更新
     function updateAccessoryCheckbox(checkbox, itemId) {
@@ -3354,6 +3453,7 @@
         }
       }
       updateEntryTotal();
+      updateEntryItemSummary(itemId);
     }
 
     // ========================================
