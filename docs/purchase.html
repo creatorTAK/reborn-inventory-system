@@ -318,6 +318,22 @@
     .entry-item.expanded .entry-item-summary .item-warning {
       color: #fef3c7;
     }
+    .entry-item-summary .item-reset {
+      background: none;
+      border: none;
+      color: #6b7280;
+      cursor: pointer;
+      padding: 4px;
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+    .entry-item-summary .item-reset:hover {
+      opacity: 1;
+      color: #f59e0b;
+    }
+    .entry-item.expanded .entry-item-summary .item-reset {
+      color: #fef3c7;
+    }
     .entry-item-summary .item-delete {
       background: none;
       border: none;
@@ -3465,6 +3481,9 @@
           <span class="item-info" id="entry-item-info-${itemId}">未入力</span>
           <span class="item-warning" id="entry-item-warning-${itemId}" title="必須項目が未入力です"><i class="bi bi-exclamation-triangle-fill"></i></span>
           <i class="bi bi-chevron-down item-toggle"></i>
+          <button type="button" class="item-reset" onclick="event.stopPropagation(); resetEntryItem(${itemId})" title="この商品をリセット">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </button>
           <button type="button" class="item-delete" onclick="event.stopPropagation(); removeEntryItem(${itemId})" ${entryItems.length === 1 ? 'disabled style="opacity:0.3"' : ''}>
             <i class="bi bi-trash"></i>
           </button>
@@ -3667,6 +3686,83 @@
         label.classList.remove('checked');
       }
       updateEntryItem(itemId);
+    }
+
+    // 個別商品をリセット（入力値をクリア）
+    function resetEntryItem(itemId) {
+      const item = entryItems.find(i => i.id === itemId);
+      if (!item) return;
+
+      // デフォルト設定から初期値を取得
+      const defaultPurchaseDate = document.getElementById('defaultPurchaseDate')?.value || '';
+      const defaultSupplier = document.getElementById('defaultSupplier')?.value || '';
+      const defaultAssignee = document.getElementById('entryAssigneeIndividual')?.value || '';
+      const defaultAmount = parseInt(document.getElementById('defaultAmount')?.value || '0', 10);
+
+      // データをリセット
+      item.purchaseDate = defaultPurchaseDate;
+      item.supplier = defaultSupplier;
+      item.assignee = defaultAssignee;
+      item.amount = defaultAmount;
+      item.memo = '';
+      item.category = { superCategory: '', major: '', middle: '', small: '', fine: '', fine2: '', itemName: '' };
+      item.size = '';
+      item.condition = '';
+      item.brand = '';
+      item.brandKana = '';
+      item.accessories = [];
+      item.note = '';
+
+      // フォーム要素をリセット
+      const purchaseDateEl = document.getElementById(`entry-purchase-date-${itemId}`);
+      if (purchaseDateEl) purchaseDateEl.value = defaultPurchaseDate;
+
+      const supplierEl = document.getElementById(`entry-supplier-${itemId}`);
+      if (supplierEl) supplierEl.value = defaultSupplier;
+
+      const assigneeEl = document.getElementById(`entry-assignee-${itemId}`);
+      if (assigneeEl) assigneeEl.value = defaultAssignee;
+
+      const amountEl = document.getElementById(`entry-amount-${itemId}`);
+      if (amountEl) amountEl.value = defaultAmount || '';
+
+      // カテゴリーをリセット
+      const l0El = document.getElementById(`entry-cat-l0-${itemId}`);
+      if (l0El) { l0El.value = ''; onEntryCatL0Changed(itemId); }
+
+      // サイズをリセット
+      const sizeEl = document.getElementById(`entry-size-${itemId}`);
+      if (sizeEl) sizeEl.value = '';
+
+      // 商品の状態をリセット
+      const conditionEl = document.getElementById(`entry-condition-${itemId}`);
+      if (conditionEl) conditionEl.value = '';
+
+      // ブランドをリセット
+      const brandEl = document.getElementById(`entry-brand-${itemId}`);
+      if (brandEl) brandEl.value = '';
+      const brandKanaEl = document.getElementById(`entry-brand-kana-${itemId}`);
+      if (brandKanaEl) brandKanaEl.value = '';
+
+      // 付属品をリセット
+      const accessoriesContainer = document.getElementById(`entry-accessories-${itemId}`);
+      if (accessoriesContainer) {
+        accessoriesContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          cb.checked = false;
+          cb.parentElement.classList.remove('checked');
+        });
+      }
+
+      // 特記事項をリセット
+      const noteEl = document.getElementById(`entry-note-${itemId}`);
+      if (noteEl) noteEl.value = '';
+
+      // 表示を更新
+      updateEntryTotal();
+      updateEntryItemSummary(itemId);
+      saveEntryDraft(true);
+
+      console.log('🔄 [仕入登録] リセット完了 itemId:', itemId);
     }
 
     // 個別商品を削除
