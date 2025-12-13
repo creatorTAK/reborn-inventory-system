@@ -726,16 +726,13 @@ function callGeminiApiWithModel(prompt, aiConfig, productInfo, images, modelName
       }
     }
 
-    // thinkingConfig: 画像なしの場合はthinkingBudget: 0で思考機能を無効化
-    // gemini-2.5-flashは思考モデルのため、テキストのみの場合は負荷が高くなる
-    // 画像ありの場合は思考機能を活用して詳細な分析を行う
-    const hasImages = images.length > 0;
-    const thinkingConfig = hasImages
-      ? { thinkingBudget: 1024 }   // 画像あり: 思考機能有効
-      : { thinkingBudget: 0 };     // 画像なし: 思考機能無効（503エラー対策）
+    // thinkingConfig: 思考モードは常に無効化（コスト削減のため）
+    // 思考モード有効時の出力トークン料金: $3.50/1M（通常の5.8倍）
+    // 思考モード無効時の出力トークン料金: $0.60/1M
+    const thinkingConfig = { thinkingBudget: 0 };
 
     if (DEBUG_MODE) {
-      Logger.log(`[Gemini API] thinkingConfig: ${JSON.stringify(thinkingConfig)} (画像: ${hasImages ? 'あり' : 'なし'})`);
+      Logger.log(`[Gemini API] thinkingConfig: 無効（コスト削減モード）`);
     }
 
     // リクエストボディの構築
