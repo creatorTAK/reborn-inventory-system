@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- Cache Bust: 2025-12-12 v249 - 在庫詳細の販売情報に販売先を追加 -->
+  <!-- Cache Bust: 2025-12-14 v287 - ボトムナビゲーション導入 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -781,6 +781,140 @@
       50% { transform: scale(1.1); }
       100% { transform: scale(1); opacity: 1; }
     }
+
+    /* ========================================
+       ボトムナビゲーション (v287)
+       ======================================== */
+    #bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background: #ffffff;
+      border-top: 1px solid #E5E7EB;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 1000;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .bottom-nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      height: 100%;
+      text-decoration: none;
+      color: #9CA3AF;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: color 0.2s ease;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .bottom-nav-item:hover {
+      color: #6B7280;
+    }
+
+    .bottom-nav-item.active {
+      color: #40B4E5;
+    }
+
+    .bottom-nav-item i {
+      font-size: 22px;
+      margin-bottom: 2px;
+    }
+
+    .bottom-nav-item span {
+      font-size: 10px;
+      font-weight: 500;
+    }
+
+    /* センターカメラボタン（強調） */
+    .bottom-nav-item.camera-btn {
+      position: relative;
+    }
+
+    .bottom-nav-item.camera-btn .camera-circle {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      box-shadow: 0 4px 12px rgba(64, 180, 229, 0.4);
+      margin-bottom: 2px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .bottom-nav-item.camera-btn .camera-circle i {
+      font-size: 24px;
+      color: white;
+      margin-bottom: 0;
+    }
+
+    .bottom-nav-item.camera-btn:hover .camera-circle {
+      transform: scale(1.05);
+      box-shadow: 0 6px 16px rgba(64, 180, 229, 0.5);
+    }
+
+    .bottom-nav-item.camera-btn:active .camera-circle {
+      transform: scale(0.95);
+    }
+
+    .bottom-nav-item.camera-btn span {
+      color: #40B4E5;
+      font-weight: 600;
+    }
+
+    /* ボトムナビ分の余白をapp-screenに設定 */
+    #app-screen {
+      padding-bottom: calc(56px + env(safe-area-inset-bottom, 0));
+    }
+
+    /* バッジ（ボトムナビ用） */
+    .bottom-nav-badge {
+      position: absolute;
+      top: 2px;
+      right: 50%;
+      transform: translateX(14px);
+      min-width: 16px;
+      height: 16px;
+      background: #EF4444;
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 8px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0 4px;
+    }
+
+    .bottom-nav-badge.active {
+      display: flex;
+    }
+
+    /* セットアップ画面・インストール画面表示時はボトムナビを非表示 */
+    #setup-screen:not([style*="display: none"]) ~ #app-screen #bottom-nav,
+    #install-prompt-screen:not([style*="display: none"]) ~ #app-screen #bottom-nav,
+    body:has(#setup-screen[style*="display: flex"]) #bottom-nav,
+    body:has(#install-prompt-screen[style*="display: flex"]) #bottom-nav {
+      display: none;
+    }
+
+    /* ボトムナビ非表示用クラス */
+    #bottom-nav.hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -1231,6 +1365,45 @@
       id="gas-iframe"
       data-src="https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec?v=817&ts=20251112">
     </iframe>
+
+    <!-- ========================================
+         ボトムナビゲーション (v287)
+         ======================================== -->
+    <nav id="bottom-nav">
+      <!-- ホーム -->
+      <button class="bottom-nav-item active" data-page="home" onclick="bottomNavNavigate('home')" title="ホーム">
+        <i class="bi bi-house"></i>
+        <span>ホーム</span>
+      </button>
+
+      <!-- チャット -->
+      <button class="bottom-nav-item" data-page="chat" onclick="bottomNavNavigate('chat')" title="チャット">
+        <i class="bi bi-chat"></i>
+        <span>チャット</span>
+        <span class="bottom-nav-badge" id="bottom-nav-chat-badge">0</span>
+      </button>
+
+      <!-- カメラ（商品登録） -->
+      <button class="bottom-nav-item camera-btn" data-page="product" onclick="bottomNavNavigate('product')" title="商品登録">
+        <div class="camera-circle">
+          <i class="bi bi-camera"></i>
+        </div>
+        <span>登録</span>
+      </button>
+
+      <!-- タスク -->
+      <button class="bottom-nav-item" data-page="todo" onclick="bottomNavNavigate('todo')" title="やることリスト">
+        <i class="bi bi-check2-square"></i>
+        <span>タスク</span>
+        <span class="bottom-nav-badge" id="bottom-nav-todo-badge">0</span>
+      </button>
+
+      <!-- ヘルプ -->
+      <button class="bottom-nav-item" data-page="help" onclick="bottomNavNavigate('help')" title="ヘルプ">
+        <i class="bi bi-question-circle"></i>
+        <span>ヘルプ</span>
+      </button>
+    </nav>
   </div>
 
   <!-- ========================================
@@ -4967,6 +5140,11 @@
       const skipSkeleton = options.skipSkeleton || false;
       const skipHistory = options.skipHistory || false;
 
+      // v287: ボトムナビを同期
+      if (typeof syncBottomNavWithPage === 'function') {
+        syncBottomNavWithPage(page);
+      }
+
       // 📚 履歴管理（スタック方式）
       if (!skipHistory) {
         pushHistory(page);
@@ -5305,6 +5483,20 @@
         iframe.src = newSrc;
         document.getElementById('drawer-stocktaking')?.classList.add('active');
         console.log('📋 [棚卸] drawer-stocktaking active設定完了');
+      } else if (page === 'help') {
+        // ヘルプ (v287)
+        console.log('❓ [ヘルプ] navigateToPage: help ブランチに入りました');
+        const pwaBaseUrl = location.origin;
+        const userName = localStorage.getItem('reborn_user_name') || '';
+
+        const params = new URLSearchParams({
+          userName: userName,
+          sessionId: sessionId
+        });
+
+        const newSrc = pwaBaseUrl + '/help.html?' + params.toString();
+        console.log('❓ [ヘルプ] iframe.src を設定:', newSrc);
+        iframe.src = newSrc;
       } else {
         // マッチしなかったページ名をログ出力
         console.warn('⚠️ [navigateToPage] 未対応のページ:', page);
@@ -5744,6 +5936,11 @@
     function openChatRooms() {
       console.log('[Chat FAB] チャット一覧を開く');
 
+      // v287: ボトムナビを同期
+      if (typeof syncBottomNavWithPage === 'function') {
+        syncBottomNavWithPage('chat');
+      }
+
       // 📚 履歴管理：チャットに遷移
       pushHistory('chat');
 
@@ -5832,6 +6029,11 @@
 
       // アプリアイコンバッジも更新（チャット + Todo の合計）
       updateAppBadge();
+
+      // ボトムナビのバッジも更新 (v287)
+      if (typeof updateBottomNavChatBadge === 'function') {
+        updateBottomNavChatBadge(count);
+      }
     }
 
     // ==========================================
@@ -5842,6 +6044,11 @@
     // やることリストを開く
     function openTodoList() {
       console.log('[Todo] やることリストを開く');
+
+      // v287: ボトムナビを同期
+      if (typeof syncBottomNavWithPage === 'function') {
+        syncBottomNavWithPage('todo');
+      }
 
       // 📚 履歴管理：Todoに遷移
       pushHistory('todo');
@@ -5885,6 +6092,11 @@
 
       // アプリアイコンバッジも更新（チャット + Todo の合計）
       updateAppBadge();
+
+      // ボトムナビのバッジも更新 (v287)
+      if (typeof updateBottomNavTodoBadge === 'function') {
+        updateBottomNavTodoBadge(count);
+      }
     }
 
     // やることリストのリアルタイム監視を開始
@@ -5914,6 +6126,124 @@
         console.log('[Todo] リスナー登録完了');
       } catch (error) {
         console.error('[Todo] リスナー開始エラー:', error);
+      }
+    }
+
+    // ========================================
+    // ボトムナビゲーション (v287)
+    // ========================================
+
+    // 現在アクティブなボトムナビページを追跡
+    let currentBottomNavPage = 'home';
+
+    // ボトムナビ ナビゲーション関数
+    function bottomNavNavigate(page) {
+      console.log('[BottomNav] ナビゲーション:', page, '(現在:', currentBottomNavPage, ')');
+
+      // 同じページなら何もしない
+      if (page === currentBottomNavPage) {
+        console.log('[BottomNav] 同一ページのためスキップ');
+        return;
+      }
+
+      // アクティブ状態を更新
+      updateBottomNavActive(page);
+      currentBottomNavPage = page;
+
+      // ページ別の処理
+      switch (page) {
+        case 'home':
+          navigateToPage('home');
+          break;
+        case 'chat':
+          openChatRooms();
+          break;
+        case 'product':
+          navigateToPage('product');
+          break;
+        case 'todo':
+          openTodoList();
+          break;
+        case 'help':
+          navigateToPage('help');
+          break;
+        default:
+          console.warn('[BottomNav] 不明なページ:', page);
+          navigateToPage('home');
+      }
+    }
+
+    // ボトムナビのアクティブ状態を更新
+    function updateBottomNavActive(page) {
+      const navItems = document.querySelectorAll('.bottom-nav-item');
+      navItems.forEach(item => {
+        const itemPage = item.getAttribute('data-page');
+        if (itemPage === page) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      });
+    }
+
+    // ボトムナビのバッジを更新（チャット）
+    function updateBottomNavChatBadge(count) {
+      const badge = document.getElementById('bottom-nav-chat-badge');
+      if (badge) {
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : count.toString();
+          badge.classList.add('active');
+        } else {
+          badge.textContent = '0';
+          badge.classList.remove('active');
+        }
+      }
+    }
+
+    // ボトムナビのバッジを更新（タスク）
+    function updateBottomNavTodoBadge(count) {
+      const badge = document.getElementById('bottom-nav-todo-badge');
+      if (badge) {
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : count.toString();
+          badge.classList.add('active');
+        } else {
+          badge.textContent = '0';
+          badge.classList.remove('active');
+        }
+      }
+    }
+
+    // navigateToPageが呼ばれた時にボトムナビも同期する
+    // ※元のnavigateToPageを拡張するラッパー
+    const originalNavigateToPage = typeof navigateToPage === 'function' ? navigateToPage : null;
+
+    // ページ遷移時にボトムナビを同期（postMessageからも呼ばれる）
+    function syncBottomNavWithPage(page) {
+      // マッピング: 詳細ページなどはボトムナビでは親カテゴリを選択
+      const pageToNavMap = {
+        'home': 'home',
+        'menu_home': 'home',
+        'chat': 'chat',
+        'chat_list': 'chat',
+        'chat_room': 'chat',
+        'product': 'product',
+        'todo': 'todo',
+        'todo_list': 'todo',
+        'help': 'help',
+        // その他のページはボトムナビでは非選択
+      };
+
+      const navPage = pageToNavMap[page];
+      if (navPage) {
+        currentBottomNavPage = navPage;
+        updateBottomNavActive(navPage);
+      } else {
+        // マッピングにないページは全て非選択
+        document.querySelectorAll('.bottom-nav-item').forEach(item => {
+          item.classList.remove('active');
+        });
+        currentBottomNavPage = null;
       }
     }
 
