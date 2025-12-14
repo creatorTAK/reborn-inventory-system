@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v56-nav-history-5'; // 履歴最大5件対応
-const SW_VERSION = 'v56-nav-history-5'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v57-nav-history-5-force'; // 履歴最大5件対応（強制更新）
+const SW_VERSION = 'v57-nav-history-5-force'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
