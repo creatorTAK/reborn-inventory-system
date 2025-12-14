@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v55-goback-action'; // 戻るボタンナビゲーション修正
-const SW_VERSION = 'v55-goback-action'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v56-nav-history-5'; // 履歴最大5件対応
+const SW_VERSION = 'v56-nav-history-5'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
