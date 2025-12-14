@@ -159,6 +159,19 @@
       background-color: #3b82f6;
       border-color: #3b82f6;
     }
+
+    /* 期間プリセットボタン */
+    .period-preset,
+    .analysis-period-preset {
+      padding: 4px 10px;
+      font-size: 0.75rem;
+    }
+    .period-preset.active,
+    .analysis-period-preset.active {
+      background-color: #3b82f6;
+      border-color: #3b82f6;
+      color: white;
+    }
   </style>
 </head>
 <body>
@@ -224,13 +237,37 @@
       <div class="tab-pane fade show active" id="sales-content" role="tabpanel">
         <!-- フィルタ -->
         <div class="filter-section">
-          <div class="row g-2 align-items-center">
+          <!-- 期間プリセット -->
+          <div class="mb-2">
+            <label class="form-label mb-1 small fw-bold"><i class="bi bi-calendar3"></i> 期間:</label>
+            <div class="d-flex flex-wrap gap-1">
+              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="today">今日</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="week">今週</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm period-preset active" data-period="month">今月</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="lastMonth">先月</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="quarter">今四半期</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="year">今年</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="all">全期間</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="custom">カスタム</button>
+            </div>
+          </div>
+          <!-- カスタム日付範囲（初期非表示） -->
+          <div class="row g-2 align-items-center mb-2" id="customDateRange" style="display: none;">
             <div class="col-auto">
-              <label class="form-label mb-0 small fw-bold">期間:</label>
+              <label class="form-label mb-0 small">開始:</label>
             </div>
             <div class="col">
-              <input type="month" class="form-control form-control-sm" id="salesMonth" onchange="loadSalesData()">
+              <input type="date" class="form-control form-control-sm" id="salesStartDate" onchange="loadSalesData()">
             </div>
+            <div class="col-auto">
+              <label class="form-label mb-0 small">終了:</label>
+            </div>
+            <div class="col">
+              <input type="date" class="form-control form-control-sm" id="salesEndDate" onchange="loadSalesData()">
+            </div>
+          </div>
+          <!-- 販売先フィルタ -->
+          <div class="row g-2 align-items-center">
             <div class="col-auto">
               <label class="form-label mb-0 small fw-bold">販売先:</label>
             </div>
@@ -242,6 +279,9 @@
                 <option value="ラクマ">ラクマ</option>
                 <option value="Yahoo!フリマ">Yahoo!フリマ</option>
               </select>
+            </div>
+            <div class="col-auto">
+              <span class="text-muted small" id="periodDisplay"></span>
             </div>
           </div>
         </div>
@@ -378,35 +418,47 @@
 
       <!-- 分析タブ -->
       <div class="tab-pane fade" id="analysis-content" role="tabpanel">
-        <!-- 期間切り替え -->
+        <!-- 期間フィルタ -->
         <div class="filter-section mb-3">
-          <div class="d-flex align-items-center gap-2 flex-wrap">
-            <label class="form-label mb-0 me-2"><i class="bi bi-calendar3"></i> 期間:</label>
-            <div class="btn-group" role="group">
-              <input type="radio" class="btn-check" name="analysisPeriod" id="periodMonth" value="month" checked>
-              <label class="btn btn-outline-primary btn-sm" for="periodMonth">月単位</label>
-              <input type="radio" class="btn-check" name="analysisPeriod" id="periodYear" value="year">
-              <label class="btn btn-outline-primary btn-sm" for="periodYear">年単位</label>
-              <input type="radio" class="btn-check" name="analysisPeriod" id="periodAll" value="all">
-              <label class="btn btn-outline-primary btn-sm" for="periodAll">全期間</label>
+          <!-- 期間プリセット -->
+          <div class="mb-2">
+            <label class="form-label mb-1 small fw-bold"><i class="bi bi-calendar3"></i> 期間:</label>
+            <div class="d-flex flex-wrap gap-1">
+              <button type="button" class="btn btn-outline-secondary btn-sm analysis-period-preset" data-period="today">今日</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm analysis-period-preset" data-period="week">今週</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm analysis-period-preset active" data-period="month">今月</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm analysis-period-preset" data-period="lastMonth">先月</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm analysis-period-preset" data-period="quarter">今四半期</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm analysis-period-preset" data-period="year">今年</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm analysis-period-preset" data-period="all">全期間</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm analysis-period-preset" data-period="custom">カスタム</button>
             </div>
-            <select class="form-select form-select-sm" id="analysisYearSelect" style="width: auto;">
-            </select>
-            <select class="form-select form-select-sm" id="analysisMonthSelect" style="width: auto;">
-              <option value="">全月</option>
-              <option value="01">1月</option>
-              <option value="02">2月</option>
-              <option value="03">3月</option>
-              <option value="04">4月</option>
-              <option value="05">5月</option>
-              <option value="06">6月</option>
-              <option value="07">7月</option>
-              <option value="08">8月</option>
-              <option value="09">9月</option>
-              <option value="10">10月</option>
-              <option value="11">11月</option>
-              <option value="12">12月</option>
-            </select>
+          </div>
+          <!-- カスタム日付範囲（初期非表示） -->
+          <div class="row g-2 align-items-center mb-2" id="analysisCustomDateRange" style="display: none;">
+            <div class="col-auto">
+              <label class="form-label mb-0 small">開始:</label>
+            </div>
+            <div class="col">
+              <input type="date" class="form-control form-control-sm" id="analysisStartDate" onchange="loadAnalysisWithPreset()">
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0 small">終了:</label>
+            </div>
+            <div class="col">
+              <input type="date" class="form-control form-control-sm" id="analysisEndDate" onchange="loadAnalysisWithPreset()">
+            </div>
+          </div>
+          <!-- 表示単位 -->
+          <div class="d-flex align-items-center gap-2">
+            <label class="form-label mb-0 small fw-bold">表示:</label>
+            <div class="btn-group" role="group">
+              <input type="radio" class="btn-check" name="analysisDisplay" id="displayDaily" value="daily" checked>
+              <label class="btn btn-outline-primary btn-sm" for="displayDaily">日別</label>
+              <input type="radio" class="btn-check" name="analysisDisplay" id="displayMonthly" value="monthly">
+              <label class="btn btn-outline-primary btn-sm" for="displayMonthly">月別</label>
+            </div>
+            <span class="text-muted small" id="analysisPeriodDisplay"></span>
           </div>
         </div>
 
@@ -761,25 +813,15 @@
     const db = getFirestore(app);
 
     /**
-     * 販売済み商品一覧を取得
+     * 販売済み商品一覧を取得（日付範囲フィルタ対応）
      */
-    async function getSalesData(yearMonth, platform) {
-      console.log('💵 [売上] データ取得開始:', yearMonth, platform);
+    async function getSalesData(startDate, endDate, platform) {
+      console.log('💵 [売上] データ取得開始:', startDate, '~', endDate, platform);
 
       const productsRef = collection(db, 'products');
       const snapshot = await getDocs(productsRef);
 
       const salesList = [];
-      let startDate = '';
-      let endDate = '';
-
-      if (yearMonth) {
-        startDate = yearMonth + '-01';
-        const nextMonth = new Date(yearMonth + '-01');
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        nextMonth.setDate(0);
-        endDate = nextMonth.toISOString().slice(0, 10);
-      }
 
       snapshot.forEach(docSnapshot => {
         const data = docSnapshot.data();
@@ -791,7 +833,8 @@
         const salePlatform = data.salePlatform || '';
 
         // 期間フィルタ
-        if (yearMonth && (saleDate < startDate || saleDate > endDate)) return;
+        if (startDate && saleDate < startDate) return;
+        if (endDate && saleDate > endDate) return;
 
         // 販売先フィルタ
         if (platform && salePlatform !== platform) return;
@@ -866,13 +909,112 @@
       return value.toFixed(1) + '%';
     }
 
-    function initializePage() {
-      // 今月をデフォルトに
-      const now = new Date();
-      document.getElementById('salesMonth').value = now.toISOString().slice(0, 7);
+    // 現在選択中の期間プリセット
+    let currentPeriodPreset = 'month';
 
+    /**
+     * 期間プリセットから日付範囲を計算
+     */
+    function calculateDateRange(preset) {
+      const now = new Date();
+      const today = now.toISOString().slice(0, 10);
+      let startDate = '';
+      let endDate = today;
+
+      switch (preset) {
+        case 'today':
+          startDate = today;
+          break;
+        case 'week':
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - now.getDay()); // 日曜始まり
+          startDate = weekStart.toISOString().slice(0, 10);
+          break;
+        case 'month':
+          startDate = now.toISOString().slice(0, 7) + '-01';
+          break;
+        case 'lastMonth':
+          const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+          startDate = lastMonth.toISOString().slice(0, 10);
+          endDate = lastMonthEnd.toISOString().slice(0, 10);
+          break;
+        case 'quarter':
+          const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+          const quarterStart = new Date(now.getFullYear(), quarterMonth, 1);
+          startDate = quarterStart.toISOString().slice(0, 10);
+          break;
+        case 'year':
+          startDate = now.getFullYear() + '-01-01';
+          break;
+        case 'all':
+          startDate = '';
+          endDate = '';
+          break;
+        case 'custom':
+          startDate = document.getElementById('salesStartDate').value || '';
+          endDate = document.getElementById('salesEndDate').value || '';
+          break;
+      }
+      return { startDate, endDate };
+    }
+
+    /**
+     * 期間表示テキストを生成
+     */
+    function getPeriodDisplayText(preset, startDate, endDate) {
+      const formatDate = (d) => {
+        if (!d) return '';
+        const parts = d.split('-');
+        return `${parts[0]}/${parts[1]}/${parts[2]}`;
+      };
+
+      switch (preset) {
+        case 'today': return '今日';
+        case 'week': return '今週';
+        case 'month': return '今月';
+        case 'lastMonth': return '先月';
+        case 'quarter': return '今四半期';
+        case 'year': return '今年';
+        case 'all': return '全期間';
+        case 'custom':
+          if (startDate && endDate) return `${formatDate(startDate)} 〜 ${formatDate(endDate)}`;
+          if (startDate) return `${formatDate(startDate)} 〜`;
+          if (endDate) return `〜 ${formatDate(endDate)}`;
+          return 'カスタム';
+        default: return '';
+      }
+    }
+
+    function initializePage() {
       // 入金日のデフォルト
+      const now = new Date();
       document.getElementById('paymentDate').value = now.toISOString().slice(0, 10);
+
+      // カスタム日付のデフォルト値
+      const monthStart = now.toISOString().slice(0, 7) + '-01';
+      document.getElementById('salesStartDate').value = monthStart;
+      document.getElementById('salesEndDate').value = now.toISOString().slice(0, 10);
+
+      // 期間プリセットボタンのイベント設定（売上一覧用）
+      document.querySelectorAll('.period-preset').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const preset = this.dataset.period;
+          currentPeriodPreset = preset;
+
+          // アクティブ状態の切り替え
+          document.querySelectorAll('.period-preset').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+
+          // カスタム日付範囲の表示/非表示
+          document.getElementById('customDateRange').style.display = preset === 'custom' ? 'flex' : 'none';
+
+          loadSalesData();
+        });
+      });
+
+      // 分析タブの期間プリセットボタン設定
+      initAnalysisPeriodPresets();
 
       loadSalesData();
     }
@@ -881,10 +1023,13 @@
       showLoading();
 
       try {
-        const yearMonth = document.getElementById('salesMonth').value;
+        const { startDate, endDate } = calculateDateRange(currentPeriodPreset);
         const platform = document.getElementById('salesPlatformFilter').value;
 
-        currentSalesData = await SalesApi.getSalesData(yearMonth, platform);
+        // 期間表示を更新
+        document.getElementById('periodDisplay').textContent = getPeriodDisplayText(currentPeriodPreset, startDate, endDate);
+
+        currentSalesData = await SalesApi.getSalesData(startDate, endDate, platform);
 
         renderSalesTable();
         renderReceivableTable();
@@ -1238,12 +1383,8 @@
       showLoading();
 
       try {
-        // 期間内の全データを取得
-        const allSalesData = await SalesApi.getSalesData('', '');
-        const filteredData = allSalesData.filter(item => {
-          const saleDate = item.saleDate || '';
-          return saleDate >= startDate && saleDate <= endDate;
-        });
+        // 期間内のデータを取得
+        const filteredData = await SalesApi.getSalesData(startDate, endDate, '');
 
         let csvContent = '';
 
@@ -1697,6 +1838,56 @@
     let allProductsForAnalysis = [];
     let analysisDataLoaded = false;
 
+    // 分析タブの期間プリセット
+    let analysisPeriodPreset = 'month';
+
+    /**
+     * 分析用日付範囲を計算
+     */
+    function calculateAnalysisDateRange(preset) {
+      const now = new Date();
+      const today = now.toISOString().slice(0, 10);
+      let startDate = '';
+      let endDate = today;
+
+      switch (preset) {
+        case 'today':
+          startDate = today;
+          break;
+        case 'week':
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - now.getDay());
+          startDate = weekStart.toISOString().slice(0, 10);
+          break;
+        case 'month':
+          startDate = now.toISOString().slice(0, 7) + '-01';
+          break;
+        case 'lastMonth':
+          const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+          startDate = lastMonth.toISOString().slice(0, 10);
+          endDate = lastMonthEnd.toISOString().slice(0, 10);
+          break;
+        case 'quarter':
+          const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+          const quarterStart = new Date(now.getFullYear(), quarterMonth, 1);
+          startDate = quarterStart.toISOString().slice(0, 10);
+          break;
+        case 'year':
+          startDate = now.getFullYear() + '-01-01';
+          break;
+        case 'all':
+          startDate = '';
+          endDate = '';
+          break;
+        case 'custom':
+          startDate = document.getElementById('analysisStartDate').value || '';
+          endDate = document.getElementById('analysisEndDate').value || '';
+          break;
+      }
+      return { startDate, endDate };
+    }
+
     /**
      * 分析タブがアクティブになったら呼ばれる
      */
@@ -1705,58 +1896,43 @@
     });
 
     /**
-     * 期間切り替えイベント
+     * 分析タブの期間プリセットボタンイベント設定
      */
-    document.querySelectorAll('input[name="analysisPeriod"]').forEach(radio => {
-      radio.addEventListener('change', function() {
-        updateAnalysisPeriodUI();
-        renderAnalysisTab();
+    function initAnalysisPeriodPresets() {
+      document.querySelectorAll('.analysis-period-preset').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const preset = this.dataset.period;
+          analysisPeriodPreset = preset;
+
+          // アクティブ状態の切り替え
+          document.querySelectorAll('.analysis-period-preset').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+
+          // カスタム日付範囲の表示/非表示
+          document.getElementById('analysisCustomDateRange').style.display = preset === 'custom' ? 'flex' : 'none';
+
+          renderAnalysisTab();
+        });
       });
-    });
 
-    document.getElementById('analysisYearSelect').addEventListener('change', function() {
-      renderAnalysisTab();
-    });
+      // 表示単位切り替えイベント
+      document.querySelectorAll('input[name="analysisDisplay"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+          renderAnalysisTab();
+        });
+      });
 
-    document.getElementById('analysisMonthSelect').addEventListener('change', function() {
-      renderAnalysisTab();
-    });
-
-    /**
-     * 期間UIの表示/非表示を更新
-     */
-    function updateAnalysisPeriodUI() {
-      const period = document.querySelector('input[name="analysisPeriod"]:checked').value;
-      const yearSelect = document.getElementById('analysisYearSelect');
-      const monthSelect = document.getElementById('analysisMonthSelect');
-
-      if (period === 'all') {
-        yearSelect.style.display = 'none';
-        monthSelect.style.display = 'none';
-      } else if (period === 'year') {
-        yearSelect.style.display = 'block';
-        monthSelect.style.display = 'none';
-      } else {
-        yearSelect.style.display = 'block';
-        monthSelect.style.display = 'block';
-      }
+      // カスタム日付のデフォルト値
+      const now = new Date();
+      const monthStart = now.toISOString().slice(0, 7) + '-01';
+      document.getElementById('analysisStartDate').value = monthStart;
+      document.getElementById('analysisEndDate').value = now.toISOString().slice(0, 10);
     }
 
-    /**
-     * 年セレクトボックスを初期化
-     */
-    function initYearSelect() {
-      const yearSelect = document.getElementById('analysisYearSelect');
-      const currentYear = new Date().getFullYear();
-      yearSelect.innerHTML = '';
-
-      for (let y = currentYear; y >= currentYear - 5; y--) {
-        const option = document.createElement('option');
-        option.value = y;
-        option.textContent = y + '年';
-        yearSelect.appendChild(option);
-      }
-    }
+    // 分析カスタム日付変更時
+    window.loadAnalysisWithPreset = function() {
+      renderAnalysisTab();
+    };
 
     /**
      * 分析データを読み込み
@@ -1771,7 +1947,7 @@
       try {
         // 売上データと商品データを並行取得
         const [salesData, productsSnapshot] = await Promise.all([
-          SalesApi.getSalesData('', ''),
+          SalesApi.getSalesData('', '', ''),
           firebase.firestore().collection('products').get()
         ]);
 
@@ -1780,10 +1956,6 @@
         productsSnapshot.forEach(doc => {
           allProductsForAnalysis.push({ id: doc.id, ...doc.data() });
         });
-
-        // 年セレクト初期化
-        initYearSelect();
-        updateAnalysisPeriodUI();
 
         analysisDataLoaded = true;
         renderAnalysisTab();
@@ -1798,11 +1970,12 @@
      * 選択期間でフィルタしたデータを取得
      */
     function getFilteredSalesData() {
-      const period = document.querySelector('input[name="analysisPeriod"]:checked').value;
-      const selectedYear = document.getElementById('analysisYearSelect').value;
-      const selectedMonth = document.getElementById('analysisMonthSelect').value;
+      const { startDate, endDate } = calculateAnalysisDateRange(analysisPeriodPreset);
 
-      if (period === 'all') {
+      // 期間表示を更新
+      document.getElementById('analysisPeriodDisplay').textContent = getPeriodDisplayText(analysisPeriodPreset, startDate, endDate);
+
+      if (analysisPeriodPreset === 'all') {
         return allSalesDataForAnalysis;
       }
 
@@ -1810,18 +1983,10 @@
         const saleDate = item.saleDate || '';
         if (!saleDate) return false;
 
-        const year = saleDate.slice(0, 4);
-        const month = saleDate.slice(5, 7);
+        if (startDate && saleDate < startDate) return false;
+        if (endDate && saleDate > endDate) return false;
 
-        if (period === 'year') {
-          return year === selectedYear;
-        } else {
-          // month
-          if (selectedMonth) {
-            return year === selectedYear && month === selectedMonth;
-          }
-          return year === selectedYear;
-        }
+        return true;
       });
     }
 
@@ -1892,11 +2057,11 @@
      * 売上推移グラフを描画
      */
     function renderSalesChart(data) {
-      const period = document.querySelector('input[name="analysisPeriod"]:checked').value;
+      const displayMode = document.querySelector('input[name="analysisDisplay"]:checked').value;
 
-      // 期間に応じてグラフタイトルを変更
+      // 表示モードに応じてグラフタイトルを変更
       const chartTitle = document.getElementById('chartTitle');
-      if (period === 'year' || period === 'all') {
+      if (displayMode === 'monthly') {
         chartTitle.textContent = '月別売上推移';
         renderMonthlyChart(data);
       } else {
