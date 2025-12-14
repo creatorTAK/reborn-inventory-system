@@ -1408,13 +1408,6 @@
       </button>
     </nav>
 
-    <!-- v291: 商品登録用カメラ入力（hidden） -->
-    <input type="file"
-           id="productCameraInput"
-           accept="image/*"
-           capture="environment"
-           style="display: none;"
-           onchange="handleProductCameraCapture(event)">
   </div>
 
   <!-- ========================================
@@ -6155,8 +6148,8 @@
     function bottomNavNavigate(page) {
       console.log('[BottomNav] ナビゲーション:', page, '(現在:', currentBottomNavPage, ')');
 
-      // 同じページなら何もしない（productは常にカメラを起動）
-      if (page === currentBottomNavPage && page !== 'product') {
+      // 同じページなら何もしない
+      if (page === currentBottomNavPage) {
         console.log('[BottomNav] 同一ページのためスキップ');
         return;
       }
@@ -6174,8 +6167,7 @@
           openChatRooms();
           break;
         case 'product':
-          // v291: まずカメラを起動
-          triggerProductCamera();
+          navigateToPage('product');
           break;
         case 'todo':
           openTodoList();
@@ -6186,62 +6178,6 @@
         default:
           console.warn('[BottomNav] 不明なページ:', page);
           navigateToPage('home');
-      }
-    }
-
-    // v291: 商品登録用カメラを起動
-    function triggerProductCamera() {
-      console.log('[BottomNav] 📷 商品登録用カメラを起動');
-      const cameraInput = document.getElementById('productCameraInput');
-      if (cameraInput) {
-        // 前回の値をクリア（同じファイルを再選択できるように）
-        cameraInput.value = '';
-        cameraInput.click();
-      } else {
-        console.error('[BottomNav] カメラ入力要素が見つかりません');
-        navigateToPage('product');
-      }
-    }
-
-    // v291: カメラ撮影完了/キャンセル時のハンドラ
-    function handleProductCameraCapture(event) {
-      const files = event.target.files;
-
-      if (files && files.length > 0) {
-        // 撮影完了: 画像をsessionStorageに保存
-        const file = files[0];
-        console.log('[BottomNav] 📷 撮影完了:', file.name, file.type, file.size);
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          const base64Data = e.target.result;
-
-          // sessionStorageに保存
-          const imageData = {
-            name: file.name || 'camera_photo.jpg',
-            data: base64Data,
-            mimeType: file.type || 'image/jpeg',
-            timestamp: Date.now()
-          };
-
-          sessionStorage.setItem('pendingProductImage', JSON.stringify(imageData));
-          console.log('[BottomNav] ✅ 撮影画像をsessionStorageに保存');
-
-          // 商品登録画面に遷移
-          navigateToPage('product');
-        };
-
-        reader.onerror = function(error) {
-          console.error('[BottomNav] ❌ 画像読み込みエラー:', error);
-          // エラー時も商品登録画面に遷移
-          navigateToPage('product');
-        };
-
-        reader.readAsDataURL(file);
-      } else {
-        // キャンセル: そのまま商品登録画面に遷移
-        console.log('[BottomNav] 📷 カメラキャンセル - 商品登録画面に遷移');
-        navigateToPage('product');
       }
     }
 

@@ -5252,49 +5252,6 @@ window.continueProductRegistration = function() {
   }
 
   /**
-   * v291: sessionStorageから撮影画像を読み込む
-   * カメラで撮影された画像がある場合、AI生成用画像として追加
-   */
-  function loadPendingProductImage() {
-    try {
-      const pendingImageJson = sessionStorage.getItem('pendingProductImage');
-      if (!pendingImageJson) {
-        console.log('[product] 📷 撮影画像なし');
-        return;
-      }
-
-      const imageData = JSON.parse(pendingImageJson);
-      console.log('[product] 📷 撮影画像を読み込み:', imageData.name, imageData.mimeType);
-
-      // 既に3枚アップロードされている場合は追加しない
-      if (uploadedImages.length >= 3) {
-        console.log('[product] ⚠️ AI生成用画像は最大3枚です');
-        sessionStorage.removeItem('pendingProductImage');
-        return;
-      }
-
-      // uploadedImages配列に追加
-      uploadedImages.push({
-        name: imageData.name,
-        data: imageData.data,
-        mimeType: imageData.mimeType
-      });
-
-      // プレビューを更新
-      displayImagePreviews();
-
-      // sessionStorageから削除（1回のみ使用）
-      sessionStorage.removeItem('pendingProductImage');
-
-      console.log('[product] ✅ 撮影画像をAI生成用に追加しました');
-
-    } catch (error) {
-      console.error('[product] ❌ 撮影画像の読み込みエラー:', error);
-      sessionStorage.removeItem('pendingProductImage');
-    }
-  }
-
-  /**
    * 画像を自動リサイズ（横幅800px、JPEG品質70%）
    * @param {string} base64Data - 元のBase64画像データ
    * @param {string} fileName - ファイル名
@@ -5669,9 +5626,6 @@ window.continueProductRegistration = function() {
   // ページ読み込み時に設定を確認
   document.addEventListener('DOMContentLoaded', function() {
     checkProductImageBlockVisibility();
-
-    // v291: sessionStorageから撮影画像を読み込む
-    loadPendingProductImage();
   });
 
   // ================= AI生成機能 =================
