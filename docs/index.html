@@ -4881,7 +4881,17 @@
     }
 
     // 戻る処理
+    // 戻り処理中フラグ（iframe再ロードによる二重発火防止）
+    let isHandlingBack = false;
+
     function goBackInHistory() {
+      // ★ 親側でガード：iframeから複数回requestBackが来ても1回だけ処理
+      if (isHandlingBack) {
+        console.log('📚 [履歴] ⚠️ 戻り処理中のため無視');
+        return;
+      }
+      isHandlingBack = true;
+
       console.log('📚 [履歴] goBack呼び出し - 現在:', navHistory);
       
       // 現在のページを削除
@@ -4894,6 +4904,12 @@
       console.log('📚 [履歴] 戻り先:', destination, '→', navHistory);
       
       navigateToPage(destination, { skipHistory: true, skipSkeleton: true });
+
+      // 300ms後にフラグをリセット（次の戻り操作を許可）
+      setTimeout(() => {
+        isHandlingBack = false;
+        console.log('📚 [履歴] 戻り処理フラグをリセット');
+      }, 300);
     }
 
     // ページ遷移（ドロワーメニューから）
