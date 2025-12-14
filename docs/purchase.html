@@ -4601,20 +4601,15 @@
 
     // QRコード生成（入力モードに応じて分岐）
     async function generateEntryQRCodes() {
-      console.log('🔍 [QRデバッグ] generateEntryQRCodes開始 - currentEntryMode:', currentEntryMode);
       if (currentEntryMode === 'batch') {
-        console.log('🔍 [QRデバッグ] → batchモード実行');
         await generateEntryQRCodesBatch();
       } else {
-        console.log('🔍 [QRデバッグ] → individualモード実行');
         await generateEntryQRCodesIndividual();
       }
-      console.log('🔍 [QRデバッグ] generateEntryQRCodes完了');
     }
 
     // 一括入力モードのQRコード生成
     async function generateEntryQRCodesBatch() {
-      console.log('🔍 [QRデバッグ] generateEntryQRCodesBatch開始');
       const purchaseDate = document.getElementById('entryPurchaseDate').value;
       const supplier = document.getElementById('entrySupplier').value;
       const itemCount = parseInt(document.getElementById('entryItemCount').value) || 0;
@@ -4652,22 +4647,8 @@
 
       for (let i = 0; i < slots.length; i++) {
         const slot = slots[i];
-        // QRコードに埋め込むJSON（短縮キーで容量節約）
-        const qrJson = {
-          s: slot.slotId,           // slotId
-          n: slot.slotNumber,       // number
-          d: purchaseDate,          // date
-          sup: supplier.substring(0, 10), // supplier (10文字まで)
-          amt: perItemAmount,       // amount
-          asg: assignee.substring(0, 10), // assignee (10文字まで)
-          t: itemCount              // total count
-        };
-        // メモがある場合は追加
-        if (memo) {
-          qrJson.m = memo.substring(0, 15); // memo (15文字まで)
-        }
-        const qrContent = JSON.stringify(qrJson);
-        console.log('🔍 [QRデバッグ] batchモード - slot:', i+1, 'qrContent長さ:', qrContent.length, '内容:', qrContent);
+        // v296: QRコードにはslotIdのみ（詳細はFirestoreから取得）
+        const qrContent = slot.slotId;
 
         const qrItem = document.createElement('div');
         qrItem.className = 'qr-entry-item';
@@ -4685,20 +4666,14 @@
 
         qrGrid.appendChild(qrItem);
 
-        try {
-          new QRCode(qrContainer, {
-            text: qrContent,
-            width: 80,
-            height: 80,
-            colorDark: '#000000',
-            colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M
-          });
-          console.log('🔍 [QRデバッグ] batchモード - QR生成成功');
-        } catch (qrError) {
-          console.error('🔍 [QRデバッグ] batchモード - QR生成エラー:', qrError);
-          throw qrError;
-        }
+        new QRCode(qrContainer, {
+          text: qrContent,
+          width: 80,
+          height: 80,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
 
         entryGeneratedQRData.push({
           slotId: slot.slotId,
@@ -4732,7 +4707,6 @@
 
     // 個別入力モードのQRコード生成
     async function generateEntryQRCodesIndividual() {
-      console.log('🔍 [QRデバッグ] generateEntryQRCodesIndividual開始 - entryItems数:', entryItems.length);
       const validItems = [];
       for (const item of entryItems) {
         const itemIndex = entryItems.indexOf(item) + 1;
@@ -4849,28 +4823,8 @@
 
       validItems.forEach((item, index) => {
         const slot = slots[index];
-        // QRコードに埋め込むJSON（短縮キーで容量節約、7階層カテゴリ対応）
-        // 各商品の仕入日・発送先を使用
-        const qrJson = {
-          s: slot.slotId,           // slotId
-          n: slot.slotNumber,       // number
-          d: item.purchaseDate,     // date (各商品の仕入日)
-          sup: item.supplier.substring(0, 10), // supplier (10文字まで)
-          amt: item.amount,         // amount
-          asg: item.assignee.substring(0, 10), // assignee (各商品の発送先、10文字まで)
-          m: (item.memo || '').substring(0, 15), // memo (15文字まで)
-          t: validItems.length,     // total count
-          // 検品情報（7階層カテゴリ）
-          cat: item.category || {},                    // category object (7階層)
-          sz: (item.size || '').substring(0, 20),      // size (20文字まで)
-          br: (item.brand || '').substring(0, 20),     // brand (20文字まで)
-          brk: (item.brandKana || '').substring(0, 20), // brandKana (20文字まで)
-          cnd: item.condition || '',                   // condition
-          acc: item.accessories || [],                 // accessories array
-          nt: (item.note || '').substring(0, 30)       // note (30文字まで)
-        };
-        const qrContent = JSON.stringify(qrJson);
-        console.log('🔍 [QRデバッグ] 個別モード - qrContent長さ:', qrContent.length, '内容:', qrContent.substring(0, 500));
+        // v296: QRコードにはslotIdのみ（詳細はFirestoreから取得）
+        const qrContent = slot.slotId;
 
         const qrItem = document.createElement('div');
         qrItem.className = 'qr-entry-item';
@@ -4892,20 +4846,14 @@
 
         qrGrid.appendChild(qrItem);
 
-        try {
-          new QRCode(qrContainer, {
-            text: qrContent,
-            width: 80,
-            height: 80,
-            colorDark: '#000000',
-            colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M
-          });
-          console.log('🔍 [QRデバッグ] 個別モード - QR生成成功');
-        } catch (qrError) {
-          console.error('🔍 [QRデバッグ] 個別モード - QR生成エラー:', qrError);
-          throw qrError;
-        }
+        new QRCode(qrContainer, {
+          text: qrContent,
+          width: 80,
+          height: 80,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
 
         entryGeneratedQRData.push({
           slotId: slot.slotId,
