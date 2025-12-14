@@ -685,6 +685,8 @@ window.continueProductRegistration = function() {
     await loadSupplierAndSalesChannelOptions();
     // カテゴリコードマスタも読み込む（管理番号設定用）
     await loadCategoryCodesFromFirestore();
+    // 付属品チェックボックスを読み込む
+    await loadAccessoriesCheckboxes();
 
     // PWA版: localStorage/Firestoreから読み込み
     if (window.CACHED_CONFIG && window.CACHED_CONFIG['仕入出品デフォルト']) {
@@ -724,6 +726,152 @@ window.continueProductRegistration = function() {
         .getProcureListingDefaults();
     }
   }
+
+  // 付属品チェックボックスをFirestoreから読み込んで描画
+  async function loadAccessoriesCheckboxes() {
+    const container = document.getElementById('accessoriesCheckboxes');
+    if (!container) {
+      console.warn('⚠️ accessoriesCheckboxes要素が見つかりません');
+      return;
+    }
+
+    // デフォルトの付属品リスト（Firestoreから取得できない場合のフォールバック）
+    const defaultAccessories = [
+      { name: '箱', displayOrder: 1 },
+      { name: '保存袋', displayOrder: 2 },
+      { name: '保証書', displayOrder: 3 },
+      { name: 'ギャランティカード', displayOrder: 4 },
+      { name: 'タグ', displayOrder: 5 },
+      { name: 'その他', displayOrder: 99 }
+    ];
+
+    let accessories = defaultAccessories;
+
+    // Firestoreから付属品マスタを取得（あれば）
+    if (window.db) {
+      try {
+        const snapshot = await window.db.collection('accessories').orderBy('displayOrder', 'asc').get();
+        if (!snapshot.empty) {
+          accessories = [];
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.name) {
+              accessories.push({ name: data.name, displayOrder: data.displayOrder || 99 });
+            }
+          });
+          console.log('✅ 付属品マスタをFirestoreから読み込み:', accessories.length + '件');
+        } else {
+          console.log('ℹ️ 付属品マスタが空、デフォルト値を使用');
+        }
+      } catch (e) {
+        console.warn('⚠️ 付属品マスタ読み込みエラー、デフォルト値を使用:', e);
+      }
+    } else {
+      console.log('ℹ️ Firestore未初期化、デフォルト付属品を使用');
+    }
+
+    // チェックボックスを生成
+    container.innerHTML = accessories.map(acc => `
+      <label class="accessory-checkbox" style="display: flex; align-items: center; gap: 4px; font-size: 0.8rem; background: white; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; transition: all 0.2s;">
+        <input type="checkbox" value="${acc.name}" onchange="updateAccessoryCheckbox(this)">
+        ${acc.name}
+      </label>
+    `).join('');
+
+    console.log('✅ 付属品チェックボックスを描画:', accessories.length + '件');
+  }
+
+  // 付属品チェックボックス変更時の処理
+  window.updateAccessoryCheckbox = function(checkbox) {
+    const label = checkbox.parentElement;
+    if (checkbox.checked) {
+      label.style.background = '#dbeafe';
+      label.style.borderColor = '#3b82f6';
+      label.style.color = '#1d4ed8';
+    } else {
+      label.style.background = 'white';
+      label.style.borderColor = '#e5e7eb';
+      label.style.color = 'inherit';
+    }
+
+    // 「その他」チェックボックスの場合、フリーテキスト入力欄を表示/非表示
+    if (checkbox.value === 'その他') {
+      const otherInputContainer = document.getElementById('accessoryOtherInputContainer');
+      if (otherInputContainer) {
+        otherInputContainer.style.display = checkbox.checked ? 'block' : 'none';
+        if (!checkbox.checked) {
+          // チェックを外したらテキストもクリア
+          const otherText = document.getElementById('accessoryOtherText');
+          if (otherText) otherText.value = '';
+        }
+      }
+    }
+  };
+
+  // 付属品チェックボックスを外部から設定（QRスキャン連動用）
+  window.setAccessoriesFromQR = function(accessoriesArray) {
+    const container = document.getElementById('accessoriesCheckboxes');
+    if (!container || !accessoriesArray || accessoriesArray.length === 0) return;
+
+    // まず全てのチェックを外す
+    container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.checked = false;
+      const label = cb.parentElement;
+      label.style.background = 'white';
+      label.style.borderColor = '#e5e7eb';
+      label.style.color = 'inherit';
+    });
+
+    // QRコードからの付属品をチェック
+    accessoriesArray.forEach(accName => {
+      // 「その他付属品」→「その他」に変換（旧形式対応）
+      const normalizedName = accName === 'その他付属品' ? 'その他' : accName;
+
+      const checkbox = container.querySelector(`input[value="${normalizedName}"]`);
+      if (checkbox) {
+        checkbox.checked = true;
+        const label = checkbox.parentElement;
+        label.style.background = '#dbeafe';
+        label.style.borderColor = '#3b82f6';
+        label.style.color = '#1d4ed8';
+
+        // 「その他」の場合、フリーテキスト入力欄を表示
+        if (normalizedName === 'その他') {
+          const otherInputContainer = document.getElementById('accessoryOtherInputContainer');
+          if (otherInputContainer) {
+            otherInputContainer.style.display = 'block';
+          }
+        }
+      } else {
+        // マスタに存在しない付属品は「その他」として扱う
+        const otherCheckbox = container.querySelector('input[value="その他"]');
+        if (otherCheckbox) {
+          otherCheckbox.checked = true;
+          const label = otherCheckbox.parentElement;
+          label.style.background = '#dbeafe';
+          label.style.borderColor = '#3b82f6';
+          label.style.color = '#1d4ed8';
+
+          const otherInputContainer = document.getElementById('accessoryOtherInputContainer');
+          const otherTextInput = document.getElementById('accessoryOtherText');
+          if (otherInputContainer) {
+            otherInputContainer.style.display = 'block';
+          }
+          if (otherTextInput) {
+            // 既存のテキストに追加
+            const currentText = otherTextInput.value.trim();
+            if (currentText) {
+              otherTextInput.value = currentText + '、' + accName;
+            } else {
+              otherTextInput.value = accName;
+            }
+          }
+        }
+      }
+    });
+
+    console.log('✅ QRコードから付属品を設定:', accessoriesArray.join('、'));
+  };
 
   // 仕入先・出品先の選択肢をFirestoreから読み込む
   async function loadSupplierAndSalesChannelOptions() {
@@ -5765,6 +5913,27 @@ window.continueProductRegistration = function() {
 
     // 品番・型番を収集（Google Search Grounding用）
     productInfo.modelNumber = _val('品番型番') || '';
+
+    // 付属品を収集
+    const accessories = [];
+    const accessoriesContainer = document.getElementById('accessoriesCheckboxes');
+    if (accessoriesContainer) {
+      const checkedBoxes = accessoriesContainer.querySelectorAll('input[type="checkbox"]:checked');
+      checkedBoxes.forEach(cb => {
+        const accName = cb.value;
+        if (accName === 'その他') {
+          // その他の場合はフリーテキストを取得
+          const otherText = document.getElementById('accessoryOtherText')?.value?.trim();
+          if (otherText) {
+            accessories.push(otherText);
+          }
+        } else {
+          accessories.push(accName);
+        }
+      });
+    }
+    productInfo.accessories = accessories.join('、');
+    debug.log(`収集した付属品: "${productInfo.accessories}"`);
 
     return productInfo;
   }

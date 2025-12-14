@@ -244,6 +244,52 @@ const masterCategories = {
         ]
       },
       
+      accessory: {
+        label: '付属品',
+        collection: 'accessories',
+        description: '商品の付属品を管理（箱、保存袋、保証書など）',
+        fields: [
+          {
+            name: 'name',
+            label: '付属品名',
+            required: true,
+            type: 'text',
+            placeholder: '例: 箱',
+            validation: {
+              minLength: 1,
+              maxLength: 50
+            }
+          },
+          {
+            name: 'displayOrder',
+            label: '表示順',
+            required: false,
+            type: 'number',
+            placeholder: '例: 1',
+            validation: {
+              min: 1,
+              max: 100
+            }
+          }
+        ],
+        displayFields: ['name', 'displayOrder'],
+        searchFields: ['name'],
+        sortBy: 'displayOrder',
+        sortOrder: 'asc',
+        searchable: true,
+        usageCount: true,
+        bulkDelete: true,
+        maxDisplayResults: 50,
+        defaultData: [
+          { name: '箱', displayOrder: 1 },
+          { name: '保存袋', displayOrder: 2 },
+          { name: '保証書', displayOrder: 3 },
+          { name: 'ギャランティカード', displayOrder: 4 },
+          { name: 'タグ', displayOrder: 5 },
+          { name: 'その他', displayOrder: 99 }
+        ]
+      },
+
       attributeValue: {
         label: '商品属性値',
         collection: 'attributeValues',

@@ -3718,8 +3718,8 @@
       '全体的に状態が悪い'
     ];
 
-    // 付属品の選択肢
-    const INSPECTION_ACCESSORIES = ['箱', '保存袋', '保証書', 'ギャランティカード', 'タグ', 'その他付属品'];
+    // 付属品の選択肢（「その他」を選択するとフリーテキスト入力可能）
+    const INSPECTION_ACCESSORIES = ['箱', '保存袋', '保証書', 'ギャランティカード', 'タグ', 'その他'];
 
     // サイズ選択肢を生成（マスターオプションから取得）
     function getEntrySizeOptions() {
@@ -3899,6 +3899,13 @@
                   </label>
                 `).join('')}
               </div>
+              <!-- その他フリーテキスト入力 -->
+              <div id="entry-accessory-other-container-${itemId}" style="display: none; margin-top: 8px;">
+                <input type="text" class="form-control" id="entry-accessory-other-${itemId}"
+                       placeholder="その他の付属品（例: オリジナルハンガー、購入レシート）"
+                       onchange="updateEntryItem(${itemId})"
+                       style="font-size: 0.85rem;">
+              </div>
             </div>
 
             <!-- 6. メモ -->
@@ -4076,6 +4083,20 @@
       } else {
         label.classList.remove('checked');
       }
+
+      // 「その他」チェックボックスの場合、フリーテキスト入力欄を表示/非表示
+      if (checkbox.value === 'その他') {
+        const otherContainer = document.getElementById(`entry-accessory-other-container-${itemId}`);
+        if (otherContainer) {
+          otherContainer.style.display = checkbox.checked ? 'block' : 'none';
+          if (!checkbox.checked) {
+            // チェックを外したらテキストもクリア
+            const otherInput = document.getElementById(`entry-accessory-other-${itemId}`);
+            if (otherInput) otherInput.value = '';
+          }
+        }
+      }
+
       updateEntryItem(itemId);
     }
 
@@ -4208,7 +4229,14 @@
         const accessoriesContainer = document.getElementById(`entry-accessories-${itemId}`);
         if (accessoriesContainer) {
           const checked = accessoriesContainer.querySelectorAll('input:checked');
-          item.accessories = Array.from(checked).map(cb => cb.value);
+          item.accessories = Array.from(checked).map(cb => {
+            if (cb.value === 'その他') {
+              // 「その他」の場合はフリーテキストの値を取得
+              const otherText = document.getElementById(`entry-accessory-other-${itemId}`)?.value?.trim();
+              return otherText ? otherText : 'その他';
+            }
+            return cb.value;
+          });
         }
       }
       updateEntryTotal();
@@ -4715,7 +4743,14 @@
         const accessoriesContainer = document.getElementById(`entry-accessories-${item.id}`);
         if (accessoriesContainer) {
           const checked = accessoriesContainer.querySelectorAll('input:checked');
-          item.accessories = Array.from(checked).map(cb => cb.value);
+          item.accessories = Array.from(checked).map(cb => {
+            if (cb.value === 'その他') {
+              // 「その他」の場合はフリーテキストの値を取得
+              const otherText = document.getElementById(`entry-accessory-other-${item.id}`)?.value?.trim();
+              return otherText ? otherText : 'その他';
+            }
+            return cb.value;
+          });
         } else {
           item.accessories = [];
         }
