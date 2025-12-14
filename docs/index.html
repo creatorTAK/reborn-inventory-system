@@ -1933,12 +1933,36 @@
     document.addEventListener('DOMContentLoaded', async () => {
       console.log('⚡ DOMContentLoaded - 初期化開始');
 
-      // Service Worker登録
+      // Service Worker登録（v282: 更新検知＆自動リロード機能付き）
       if ('serviceWorker' in navigator) {
         try {
+          // 新しいSWが制御を取得したらページをリロード
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('🔄 [SW] 新しいService Workerが有効化されました - リロードします');
+            window.location.reload();
+          });
+
           const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
           swRegistration = registration;
           console.log('✅ Service Worker 登録成功:', registration.scope);
+
+          // 新しいSWが待機中の場合は即座にアクティブ化を要求
+          if (registration.waiting) {
+            console.log('⏳ [SW] 待機中のSWがあります - skipWaiting要求を送信');
+            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+
+          // 新しいSWがインストールされたら検知
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            console.log('📥 [SW] 新しいService Workerをインストール中...');
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('✅ [SW] 新バージョンインストール完了 - skipWaiting要求を送信');
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          });
         } catch (error) {
           console.error('❌ Service Worker 登録失敗:', error);
         }
