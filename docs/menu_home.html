@@ -362,6 +362,10 @@
   <div class="menu-container">
     <!-- ミニヘッダー（右上アイコン） -->
     <div class="mini-header">
+      <div class="mini-header-icon" onclick="navigateToPage('chat')" title="チャット">
+        <span class="icon">💬</span>
+        <span class="mini-badge" id="mini-chat-badge">0</span>
+      </div>
       <div class="mini-header-icon" onclick="navigateToPage('todo-list')" title="やることリスト">
         <img src="/images/check-green2.png" alt="やることリスト" class="icon" style="width: 30px; height: 30px;">
         <span class="mini-badge" id="mini-todo-badge">0</span>
@@ -433,12 +437,11 @@
         </div>
       </a>
 
-      <!-- チャット -->
-      <a href="#" onclick="navigateToPage('chat'); return false;" class="menu-item" id="menu-chat">
+      <!-- 報酬管理（管理者のみ） -->
+      <a href="#" onclick="navigateToPage('compensation'); return false;" class="menu-item" id="menu-compensation">
         <div class="menu-item-content">
-          <span class="menu-item-icon">💬</span>
-          <span>チャット</span>
-          <span class="menu-item-badge" id="chat-menu-badge">0</span>
+          <span class="menu-item-icon">💰</span>
+          <span>報酬管理</span>
         </div>
       </a>
 
@@ -567,12 +570,15 @@
       'purchase': 'menu-purchase',
       'sales': 'menu-sales',
       'accounting': 'menu-accounting',
-      'chat': 'menu-chat',
+      'compensation': 'menu-compensation',
       'master-product': 'menu-master-product',
       'master-business': 'menu-master-business',
       'config-product': 'menu-config-product',
       'config-system': 'menu-config-system'
     };
+
+    // 常に管理者のみ表示するメニュー（Firestore設定に関係なく非表示）
+    const ALWAYS_OWNER_ONLY_MENUS = ['compensation'];
 
     async function checkUserPermissionAndUpdateMenu() {
       try {
@@ -612,6 +618,16 @@
         if (permissionId === 'owner') {
           console.log('[menu_home] ✅ オーナー権限 - 全メニュー表示');
           return;
+        }
+
+        // 1.5. 常に管理者のみのメニューを非表示（Firestore設定に関係なく）
+        for (const menuId of ALWAYS_OWNER_ONLY_MENUS) {
+          const elementId = MENU_ID_MAP[menuId];
+          const element = document.getElementById(elementId);
+          if (element) {
+            element.style.display = 'none';
+            console.log('[menu_home] 🔒 管理者専用メニュー非表示:', menuId);
+          }
         }
 
         // 2. メニュー権限設定を取得
@@ -769,10 +785,10 @@
       }
     }
 
-    // チャットバッジ更新
+    // チャットバッジ更新（ミニヘッダー用）
     function updateChatBadge(count) {
       console.log('[menu_home] Chat バッジ更新:', count);
-      const badge = document.getElementById('chat-menu-badge');
+      const badge = document.getElementById('mini-chat-badge');
       if (badge) {
         if (count > 0) {
           badge.textContent = count > 99 ? '99+' : count.toString();
