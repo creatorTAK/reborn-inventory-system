@@ -1891,16 +1891,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-  <!-- Firebase SDK -->
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import {
-      initializeFirestore,
-      persistentLocalCache,
-      persistentMultipleTabManager,
-      collection, getDocs, getDoc, doc, setDoc, addDoc, updateDoc, serverTimestamp
-    } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
+  <!-- Firebase SDK (compat版 - product.htmlと同じ方式で高速化) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script>
     const firebaseConfig = {
       apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
       authDomain: "furira.jp",
@@ -1910,25 +1904,25 @@
       appId: "1:345706548795:web:058a553da6b4b74db5161e"
     };
 
-    const app = initializeApp(firebaseConfig);
+    // Firebase初期化（既存アプリがあれば再利用 - product.htmlと同じ方式）
+    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-    // Firestoreの永続化を有効化（IndexedDBにキャッシュ → 即座にデータ取得可能）
-    const db = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
-      })
+    // Firestore設定の最適化（product.htmlと同じ設定）
+    db.settings({
+      cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+      experimentalForceLongPolling: true  // WebSocketの代わりにlong pollingを使用
     });
-    console.log('🔥 [Firestore] 永続化キャッシュ有効化完了');
+    console.log('🔥 [Firestore] compat版初期化完了（product.htmlと同じ方式）');
 
     /**
      * 仕入先一覧を取得
      */
     async function getSuppliers() {
-      const suppliersRef = collection(db, 'suppliers');
-      const snapshot = await getDocs(suppliersRef);
+      const snapshot = await db.collection('suppliers').get();
       const suppliers = [];
-      snapshot.forEach(doc => {
-        const data = doc.data();
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
         if (data.name) suppliers.push(data.name);
       });
       return suppliers.sort((a, b) => a.localeCompare(b, 'ja'));
@@ -1940,8 +1934,7 @@
     async function getPurchaseData(yearMonth, supplier) {
       console.log('💰 [仕入] データ取得開始:', yearMonth, supplier);
 
-      const productsRef = collection(db, 'products');
-      const snapshot = await getDocs(productsRef);
+      const snapshot = await db.collection('products').get();
 
       const purchaseList = [];
       let startDate = '';
@@ -1996,14 +1989,13 @@
      * 支払ステータスを更新
      */
     async function updatePurchasePaymentStatus(productId, paymentData) {
-      const productRef = doc(db, 'products', productId);
-      await updateDoc(productRef, {
+      await db.collection('products').doc(productId).update({
         purchasePaymentStatus: paymentData.status,
         purchasePaymentDate: paymentData.date,
         purchasePaymentAmount: paymentData.amount,
         purchasePaymentMethod: paymentData.method,
         purchasePaymentNote: paymentData.note,
-        updatedAt: serverTimestamp()
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
 
@@ -2011,8 +2003,7 @@
      * 仕入登録用: 仕入先一覧を取得
      */
     async function getEntrySuppliersData() {
-      const suppliersRef = collection(db, 'suppliers');
-      const snapshot = await getDocs(suppliersRef);
+      const snapshot = await db.collection('suppliers').get();
       const suppliers = [];
       snapshot.forEach(docSnap => {
         suppliers.push({ id: docSnap.id, ...docSnap.data() });
@@ -2024,8 +2015,7 @@
      * 仕入登録用: 発送先一覧を取得
      */
     async function getEntryAssigneesData() {
-      const assigneesRef = collection(db, 'assignees');
-      const snapshot = await getDocs(assigneesRef);
+      const snapshot = await db.collection('assignees').get();
       const assignees = [];
       snapshot.forEach(docSnap => {
         assignees.push({ id: docSnap.id, ...docSnap.data() });
@@ -2038,9 +2028,8 @@
      */
     async function getEntryLabelSettings() {
       try {
-        const settingsRef = doc(db, 'settings', 'labelSettings');
-        const settingsSnap = await getDoc(settingsRef);
-        if (settingsSnap.exists()) {
+        const settingsSnap = await db.collection('settings').doc('labelSettings').get();
+        if (settingsSnap.exists) {
           return settingsSnap.data();
         }
         return null;
@@ -2055,8 +2044,7 @@
      */
     async function saveEntryLabelSettingsToFirestore(settings) {
       try {
-        const settingsRef = doc(db, 'settings', 'labelSettings');
-        await setDoc(settingsRef, settings, { merge: true });
+        await db.collection('settings').doc('labelSettings').set(settings, { merge: true });
         return true;
       } catch (error) {
         console.error('ラベル設定保存エラー:', error);
@@ -2077,8 +2065,7 @@
         const batchId = `BATCH-${dateStr}-${randomStr}`;
 
         // バッチを保存
-        const batchRef = doc(db, 'purchaseBatches', batchId);
-        await setDoc(batchRef, {
+        await db.collection('purchaseBatches').doc(batchId).set({
           batchId: batchId,
           purchaseDate: batchData.purchaseDate,
           supplier: batchData.supplier,
@@ -2087,7 +2074,7 @@
           assignee: batchData.assignee || '',
           memo: batchData.memo || '',
           status: 'pending', // pending / shipped / received
-          createdAt: serverTimestamp()
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
         // スロットを保存
@@ -2109,11 +2096,10 @@
             damageMarkerImage: itemData?.damageMarkerImage || null,
             damageMarkerType: itemData?.damageMarkerType || null,
             damageMarkerNote: itemData?.damageMarkerNote || null,
-            createdAt: serverTimestamp()
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
           };
 
-          const slotRef = doc(db, 'purchaseSlots', slotId);
-          await setDoc(slotRef, slotData);
+          await db.collection('purchaseSlots').doc(slotId).set(slotData);
           slots.push(slotData);
         }
 
@@ -2130,9 +2116,8 @@
      */
     async function getSlotBySlotId(slotId) {
       try {
-        const slotRef = doc(db, 'purchaseSlots', slotId);
-        const slotSnap = await getDoc(slotRef);
-        if (slotSnap.exists()) {
+        const slotSnap = await db.collection('purchaseSlots').doc(slotId).get();
+        if (slotSnap.exists) {
           return slotSnap.data();
         }
         return null;
@@ -2147,11 +2132,10 @@
      */
     async function linkSlotToProduct(slotId, productId) {
       try {
-        const slotRef = doc(db, 'purchaseSlots', slotId);
-        await updateDoc(slotRef, {
+        await db.collection('purchaseSlots').doc(slotId).update({
           productId: productId,
           status: 'registered',
-          registeredAt: serverTimestamp()
+          registeredAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         return true;
       } catch (error) {
@@ -2165,9 +2149,8 @@
      */
     async function getCategoryMaster() {
       try {
-        const catRef = doc(db, 'categories', 'master');
-        const docSnap = await getDoc(catRef);
-        if (docSnap.exists()) {
+        const docSnap = await db.collection('categories').doc('master').get();
+        if (docSnap.exists) {
           const data = docSnap.data();
           const rows = data.rows || [];
           return rows.map(r => ({
@@ -2191,9 +2174,8 @@
      */
     async function getMasterOptions() {
       try {
-        const optRef = doc(db, 'masterOptions', 'options');
-        const docSnap = await getDoc(optRef);
-        if (docSnap.exists()) {
+        const docSnap = await db.collection('masterOptions').doc('options').get();
+        if (docSnap.exists) {
           return docSnap.data();
         }
         return {};
