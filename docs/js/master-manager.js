@@ -449,8 +449,31 @@ async function loadMasterData() {
       masterCache[currentMasterConfig.collection] = data;
     } else {
       console.log(`ℹ️ [Master Manager] データなし: ${currentMasterConfig.collection}`);
-      allMasterData = [];
-      filteredMasterData = [];
+
+      // defaultDataが定義されている場合、自動的に初期データを登録
+      if (currentMasterConfig.defaultData && currentMasterConfig.defaultData.length > 0) {
+        console.log(`🔧 [Master Manager] 初期データを自動登録中: ${currentMasterConfig.defaultData.length}件`);
+        try {
+          const includeUsageCount = currentMasterConfig.usageCount === true;
+          for (const item of currentMasterConfig.defaultData) {
+            await window.createMaster(currentMasterConfig.collection, item, includeUsageCount);
+          }
+          console.log(`✅ [Master Manager] 初期データ登録完了`);
+
+          // 再読み込み
+          const newData = await window.getMasterData(currentMasterConfig.collection);
+          allMasterData = newData || [];
+          filteredMasterData = allMasterData;
+          masterCache[currentMasterConfig.collection] = allMasterData;
+        } catch (initError) {
+          console.error(`❌ [Master Manager] 初期データ登録エラー:`, initError);
+          allMasterData = [];
+          filteredMasterData = [];
+        }
+      } else {
+        allMasterData = [];
+        filteredMasterData = [];
+      }
     }
 
     renderMasterList();
