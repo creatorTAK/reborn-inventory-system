@@ -1280,6 +1280,15 @@
       // requestBack: 子から「戻りたい」という要求（親が履歴を見て判断）
       if (payload.type === 'requestBack') {
         console.log('[parent] ========== requestBack処理開始 ==========');
+
+        // ★★★ 二重発火防止ガード（iframe再ロードによる複数requestBack対策）v283 ★★★
+        if (window._isHandlingRequestBack) {
+          console.log('[parent] ⚠️⚠️⚠️ requestBack処理中のため無視（v283ガード発動）');
+          return;
+        }
+        window._isHandlingRequestBack = true;
+        console.log('[parent] 🔒 requestBack処理開始フラグON（v283）');
+
         console.log('[parent] isNavigatingProgrammatically:', typeof isNavigatingProgrammatically !== 'undefined' ? isNavigatingProgrammatically : 'undefined');
 
         // 注: isNavigatingProgrammaticallyチェックは一時的に無効化
@@ -1302,6 +1311,13 @@
           }
         };
         tryGoBack(0);
+
+        // 処理完了後、300ms後にフラグをリセット
+        setTimeout(function() {
+          window._isHandlingRequestBack = false;
+          console.log('[parent] 🔓 requestBack処理フラグリセット（v283）');
+        }, 300);
+
         console.log('[parent] ========== requestBack処理完了 ==========');
         return;
       }
@@ -1309,6 +1325,14 @@
       // goBack: 旧形式（後方互換性のため残す）→ requestBackと同じ処理
       if (payload.type === 'goBack' || (payload.type && payload.type.trim && payload.type.trim() === 'goBack')) {
         console.log('[parent] ========== goBack処理開始（旧形式） ==========');
+
+        // ★★★ 二重発火防止ガード（v283）★★★
+        if (window._isHandlingRequestBack) {
+          console.log('[parent] ⚠️⚠️⚠️ goBack処理中のため無視（v283ガード発動）');
+          return;
+        }
+        window._isHandlingRequestBack = true;
+        console.log('[parent] 🔒 goBack処理開始フラグON（v283）');
 
         // 注: isNavigatingProgrammaticallyチェックは無効化（戻るボタンは明示的アクション）
 
@@ -1326,6 +1350,13 @@
           }
         };
         tryGoBack2(0);
+
+        // 処理完了後、300ms後にフラグをリセット
+        setTimeout(function() {
+          window._isHandlingRequestBack = false;
+          console.log('[parent] 🔓 goBack処理フラグリセット（v283）');
+        }, 300);
+
         console.log('[parent] ========== goBack処理完了 ==========');
         return;
       }
