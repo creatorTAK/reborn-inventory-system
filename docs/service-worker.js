@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v92-search-no-zoom'; // 検索バーズーム防止
-const SW_VERSION = 'v92-search-no-zoom'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v93-chat-bg-08'; // チャット背景0.8
+const SW_VERSION = 'v93-chat-bg-08'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
