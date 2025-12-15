@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-11-27 17:20 - トークエリアタップでキーボードを閉じる -->
+  <!-- Cache Bust: 2025-12-15 21:00 - 音声入力機能追加（LINE風マイク/送信切り替え） -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -1108,6 +1108,18 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+
+    /* 音声入力中の送信ボタン（録音状態） */
+    .send-button.recording {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      animation: pulse-recording 1.5s infinite;
+    }
+
+    @keyframes pulse-recording {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    }
+
     /* ユーザー名選択（GAS版のみ） */
     #userSelectContainer {
       margin-bottom: 8px;
@@ -1989,8 +2001,8 @@
           rows="1"></textarea>
       </div>
 
-      <button class="send-button" id="sendButton" onclick="sendMessage()">
-        ➤
+      <button class="send-button" id="sendButton" onclick="handleSendButtonClick()">
+        <i class="bi bi-mic-fill" id="sendButtonIcon"></i>
       </button>
     </div>
 
@@ -2383,6 +2395,8 @@
         if (!isComposing) {
           checkMentionInput(this);
         }
+        // 送信/マイクアイコン切り替え
+        updateSendButtonIcon();
       });
 
       // Enterキーで送信（メンション選択中は候補選択）
@@ -4018,6 +4032,159 @@
       container.appendChild(item);
     }
 
+    // ========================================
+    // 音声入力機能（Web Speech API）
+    // ========================================
+    let voiceRecognition = null;
+    let isVoiceRecording = false;
+
+    // Web Speech API 初期化
+    function initVoiceRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.log('[Voice] Web Speech API not supported');
+        return;
+      }
+
+      voiceRecognition = new SpeechRecognition();
+      voiceRecognition.lang = 'ja-JP';
+      voiceRecognition.continuous = false;
+      voiceRecognition.interimResults = true;
+
+      voiceRecognition.onstart = function() {
+        isVoiceRecording = true;
+        const btn = document.getElementById('sendButton');
+        const icon = document.getElementById('sendButtonIcon');
+        if (btn) btn.classList.add('recording');
+        if (icon) icon.className = 'bi bi-stop-fill';
+        console.log('[Voice] Recording started');
+      };
+
+      voiceRecognition.onend = function() {
+        isVoiceRecording = false;
+        const btn = document.getElementById('sendButton');
+        if (btn) btn.classList.remove('recording');
+        updateSendButtonIcon();
+        console.log('[Voice] Recording ended');
+      };
+
+      voiceRecognition.onerror = function(event) {
+        console.error('[Voice] Error:', event.error);
+        isVoiceRecording = false;
+        const btn = document.getElementById('sendButton');
+        if (btn) btn.classList.remove('recording');
+        updateSendButtonIcon();
+
+        if (event.error === 'no-speech') {
+          showVoiceToast('音声が検出されませんでした');
+        } else if (event.error === 'not-allowed') {
+          showVoiceToast('マイクの使用が許可されていません');
+        }
+      };
+
+      voiceRecognition.onresult = function(event) {
+        const input = document.getElementById('messageInput');
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        if (finalTranscript && input) {
+          const currentValue = input.value;
+          input.value = currentValue + (currentValue ? ' ' : '') + finalTranscript;
+          updateSendButtonIcon();
+          console.log('[Voice] Transcribed:', finalTranscript);
+        }
+      };
+    }
+
+    // 送信ボタンアイコン更新（入力あり=送信、なし=マイク）
+    function updateSendButtonIcon() {
+      const input = document.getElementById('messageInput');
+      const icon = document.getElementById('sendButtonIcon');
+      if (!input || !icon || isVoiceRecording) return;
+
+      const hasContent = input.value.trim().length > 0 || selectedImageFiles.length > 0;
+      icon.className = hasContent ? 'bi bi-send-fill' : 'bi bi-mic-fill';
+    }
+
+    // 送信ボタンクリック処理
+    function handleSendButtonClick() {
+      const input = document.getElementById('messageInput');
+      const hasContent = input && (input.value.trim().length > 0 || selectedImageFiles.length > 0);
+
+      if (isVoiceRecording) {
+        // 録音中なら停止
+        if (voiceRecognition) voiceRecognition.stop();
+      } else if (hasContent) {
+        // テキストがあれば送信
+        sendMessage();
+      } else {
+        // テキストがなければ音声入力開始
+        startVoiceInput();
+      }
+    }
+
+    // 音声入力開始
+    function startVoiceInput() {
+      if (!voiceRecognition) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          showVoiceToast('このブラウザは音声入力に対応していません');
+          return;
+        }
+        initVoiceRecognition();
+      }
+
+      try {
+        voiceRecognition.start();
+      } catch (e) {
+        console.error('[Voice] Start failed:', e);
+      }
+    }
+
+    // 音声エラートースト表示
+    function showVoiceToast(message) {
+      const existing = document.getElementById('voiceToast');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.id = 'voiceToast';
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1f2937;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-size: 13px;
+        z-index: 9999;
+        opacity: 0;
+        transition: opacity 0.3s;
+      `;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          setTimeout(() => toast.remove(), 300);
+        }, 2500);
+      });
+    }
+
+    // ページ読み込み時に音声認識を初期化
+    document.addEventListener('DOMContentLoaded', function() {
+      initVoiceRecognition();
+      updateSendButtonIcon();
+    });
+
     // メッセージ送信
     window.sendMessage = async function() {
       console.log('[sendMessage] 関数呼び出し開始');
@@ -4082,6 +4249,7 @@
         insertedMentions = []; // 挿入済みメンションもリセット
         clearMentionTags(); // メンションタグもクリア
         sendButton.disabled = false;
+        updateSendButtonIcon(); // アイコンをマイクに戻す
 
         return;
       }
@@ -4155,6 +4323,7 @@
         input.value = '';
         insertedMentions = []; // 挿入済みメンションもリセット
         clearMentionTags(); // メンションタグもクリア
+        updateSendButtonIcon(); // アイコンをマイクに戻す
 
         // リプライプレビューをクリア
         cancelReply();
