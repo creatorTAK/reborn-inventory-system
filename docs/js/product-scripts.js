@@ -5183,8 +5183,10 @@ window.continueProductRegistration = function() {
     let order = [];
     try {
       const aiSettings = localStorage.getItem('rebornConfig_aiSettings');
+      console.log('📋 [配置順序] rebornConfig_aiSettings:', aiSettings ? '存在' : 'なし');
       if (aiSettings) {
         const settings = JSON.parse(aiSettings);
+        console.log('📋 [配置順序] descriptionOrder:', settings.descriptionOrder);
         if (settings.descriptionOrder && Array.isArray(settings.descriptionOrder)) {
           // 設定画面で保存された配置順序を使用（管理番号を除外）
           order = settings.descriptionOrder
@@ -5193,7 +5195,9 @@ window.continueProductRegistration = function() {
               id: item.id === 'ai' ? 'aiGeneration' : item.id,
               enabled: item.enabled !== false
             }));
-          console.log('AI生成設定から配置順序を取得（管理番号除外）:', order);
+          console.log('📋 [配置順序] 最終的な順序:', order.map(o => o.id).join(' → '));
+        } else {
+          console.log('📋 [配置順序] descriptionOrderが設定されていません');
         }
       }
     } catch (e) {
