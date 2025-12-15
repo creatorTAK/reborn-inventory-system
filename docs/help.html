@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- v317: 音声録音タイムスライス追加 -->
+  <!-- v318: 音声録音毎回初期化 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ヘルプ - フリラ</title>
@@ -1039,11 +1039,16 @@
 
         mediaRecorder.onstop = async () => {
           const voiceBtn = document.getElementById('chatVoiceBtn');
+          console.log('[Voice] onstop: audioChunks.length =', audioChunks.length);
           const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+          console.log('[Voice] audioBlob.size =', audioBlob.size, 'bytes');
           audioChunks = [];
 
           if (audioBlob.size < 100) {
-            showVoiceError('音声が短すぎます');
+            console.log('[Voice] Audio too small, retrying with fresh stream');
+            // ストリームをリセットして再初期化を促す
+            mediaRecorder = null;
+            showVoiceError('もう一度お試しください');
             if (voiceBtn) {
               voiceBtn.classList.remove('recording');
               voiceBtn.querySelector('i').className = 'bi bi-mic-fill';
@@ -1186,15 +1191,14 @@
           }
           isRecording = false;
         } else {
-          if (!mediaRecorder) {
-            const success = await initMediaRecorder();
-            if (!success) {
-              showVoiceError('マイクの初期化に失敗しました');
-              return;
-            }
+          // 毎回新しいストリームを取得（iOSでの安定性向上）
+          const success = await initMediaRecorder();
+          if (!success) {
+            showVoiceError('マイクの初期化に失敗しました');
+            return;
           }
           audioChunks = [];
-          mediaRecorder.start(100); // 100msごとにデータを取得（短い録音でもデータが取れるように）
+          mediaRecorder.start(100); // 100msごとにデータを取得
           isRecording = true;
           if (voiceBtn) {
             voiceBtn.classList.add('recording');
