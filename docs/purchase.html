@@ -6,8 +6,8 @@
   <base target="_top">
   <title>仕入管理 - FURIRA</title>
   <script>
-    // v304: バージョン確認用
-    console.log('🔴🔴🔴 purchase.html v304 loaded 🔴🔴🔴');
+    // v305: iOS印刷ウォームアップ機能追加
+    console.log('🔴🔴🔴 purchase.html v305 loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -1298,6 +1298,17 @@
           <div class="d-flex justify-content-between align-items-center mb-3">
             <div class="fw-bold"><i class="bi bi-grid-3x3"></i> QRコードプレビュー</div>
             <span class="badge bg-success" id="qrEntryCount">0枚</span>
+          </div>
+
+          <!-- v305: iOS印刷ウォームアップ -->
+          <div class="alert alert-info py-2 mb-3" id="printerWarmupNotice" style="display: none;">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-info-circle"></i>
+              <small>iOSでは初回印刷に30秒ほどかかる場合があります</small>
+              <button class="btn btn-sm btn-outline-primary ms-auto" onclick="warmupPrinter()">
+                <i class="bi bi-lightning-charge"></i> 準備
+              </button>
+            </div>
           </div>
 
           <!-- 印刷モード選択 -->
@@ -4693,6 +4704,7 @@
       document.getElementById('qrEntryCount').textContent = itemCount + '枚';
       document.getElementById('entryPurchaseId').textContent = batchId;
       document.getElementById('entryAfterActions').style.display = 'block';
+      checkShowPrinterWarmupNotice(); // v305: iOS印刷ウォームアップ通知
 
       setTimeout(() => {
         for (let i = 0; i < entryGeneratedQRData.length; i++) {
@@ -4880,6 +4892,7 @@
       document.getElementById('qrEntryCount').textContent = validItems.length + '枚';
       document.getElementById('entryPurchaseId').textContent = batchId;
       document.getElementById('entryAfterActions').style.display = 'block';
+      checkShowPrinterWarmupNotice(); // v305: iOS印刷ウォームアップ通知
 
       setTimeout(() => {
         for (let i = 0; i < entryGeneratedQRData.length; i++) {
@@ -4906,11 +4919,45 @@
       if (mode === 'label' && entryGeneratedQRData.length > 0) updateEntryLabelPreview();
     }
 
+    // v305: iOS印刷ウォームアップ
+    let printerWarmedUp = false;
+    
+    function checkShowPrinterWarmupNotice() {
+      // iOS検出
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS && !printerWarmedUp) {
+        document.getElementById('printerWarmupNotice').style.display = 'block';
+      }
+    }
+    
+    function warmupPrinter() {
+      const notice = document.getElementById('printerWarmupNotice');
+      notice.innerHTML = `
+        <div class="d-flex align-items-center gap-2">
+          <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+          <small>プリンター準備中... 印刷ダイアログが開いたら<strong>キャンセル</strong>してください</small>
+        </div>
+      `;
+      
+      setTimeout(() => {
+        window.print();
+        printerWarmedUp = true;
+        notice.innerHTML = `
+          <div class="d-flex align-items-center gap-2 text-success">
+            <i class="bi bi-check-circle-fill"></i>
+            <small>準備完了！印刷が高速になりました</small>
+          </div>
+        `;
+        setTimeout(() => { notice.style.display = 'none'; }, 3000);
+      }, 100);
+    }
+
     // シンプル印刷
     function printEntrySimple() {
       document.getElementById('qrEntryGrid').classList.add('print-area');
       document.getElementById('entryLabelPrintArea').style.display = 'none';
       window.print();
+      printerWarmedUp = true; // 印刷したらウォームアップ済み
     }
 
     // PDF保存
@@ -5158,9 +5205,10 @@
         printArea.appendChild(sheetDiv);
       }
 
-      // v303: 元のシンプルな印刷方式に戻す
+      // v305: 印刷実行
       setTimeout(() => {
         window.print();
+        printerWarmedUp = true; // 印刷したらウォームアップ済み
         setTimeout(() => { printArea.style.display = 'none'; }, 1000);
       }, 100);
     }
