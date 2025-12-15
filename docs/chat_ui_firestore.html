@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-15 21:00 - 音声入力機能追加（LINE風マイク/送信切り替え） -->
+  <!-- Cache Bust: 2025-12-16 - 音声入力機能削除 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -1109,17 +1109,6 @@
       cursor: not-allowed;
     }
 
-    /* 音声入力中の送信ボタン（録音状態） */
-    .send-button.recording {
-      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-      animation: pulse-recording 1.5s infinite;
-    }
-
-    @keyframes pulse-recording {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-      50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-    }
-
     /* ユーザー名選択（GAS版のみ） */
     #userSelectContainer {
       margin-bottom: 8px;
@@ -2001,8 +1990,8 @@
           rows="1"></textarea>
       </div>
 
-      <button class="send-button" id="sendButton" onclick="handleSendButtonClick()">
-        <i class="bi bi-mic-fill" id="sendButtonIcon"></i>
+      <button class="send-button" id="sendButton" onclick="sendMessage()">
+        <i class="bi bi-send-fill"></i>
       </button>
     </div>
 
@@ -2395,8 +2384,6 @@
         if (!isComposing) {
           checkMentionInput(this);
         }
-        // 送信/マイクアイコン切り替え
-        updateSendButtonIcon();
       });
 
       // Enterキーで送信（メンション選択中は候補選択）
@@ -4032,284 +4019,6 @@
       container.appendChild(item);
     }
 
-    // ========================================
-    // 音声入力機能（Web Speech API + Whisper API フォールバック）
-    // ========================================
-    const WHISPER_API_ENDPOINT = 'https://reborn-whisper.mercari-yasuhirotakuji.workers.dev/transcribe';
-    let voiceRecognition = null;
-    let isVoiceRecording = false;
-    let mediaRecorder = null;
-    let audioChunks = [];
-    let useWhisperFallback = false;
-
-    // Web Speech API がサポートされているか確認
-    function isSpeechRecognitionSupported() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) return false;
-
-      // iOS Safari は SpeechRecognition オブジェクトは存在するが動作しない
-      // User Agent で iOS Safari を検出
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-      if (isIOS) {
-        console.log('[Voice] iOS detected - using Whisper fallback');
-        return false;
-      }
-
-      return true;
-    }
-
-    // Web Speech API 初期化
-    function initVoiceRecognition() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) return;
-
-      voiceRecognition = new SpeechRecognition();
-      voiceRecognition.lang = 'ja-JP';
-      voiceRecognition.continuous = false;
-      voiceRecognition.interimResults = true;
-
-      voiceRecognition.onstart = function() {
-        isVoiceRecording = true;
-        setRecordingUI(true);
-        console.log('[Voice] Web Speech Recording started');
-      };
-
-      voiceRecognition.onend = function() {
-        isVoiceRecording = false;
-        setRecordingUI(false);
-        console.log('[Voice] Web Speech Recording ended');
-      };
-
-      voiceRecognition.onerror = function(event) {
-        console.error('[Voice] Web Speech Error:', event.error);
-        isVoiceRecording = false;
-        setRecordingUI(false);
-
-        if (event.error === 'no-speech') {
-          showVoiceToast('音声が検出されませんでした');
-        } else if (event.error === 'not-allowed') {
-          showVoiceToast('マイクの使用が許可されていません');
-        }
-      };
-
-      voiceRecognition.onresult = function(event) {
-        const input = document.getElementById('messageInput');
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
-          }
-        }
-
-        if (finalTranscript && input) {
-          const currentValue = input.value;
-          input.value = currentValue + (currentValue ? ' ' : '') + finalTranscript;
-          updateSendButtonIcon();
-          console.log('[Voice] Transcribed:', finalTranscript);
-        }
-      };
-    }
-
-    // 録音UI更新
-    function setRecordingUI(recording) {
-      const btn = document.getElementById('sendButton');
-      const icon = document.getElementById('sendButtonIcon');
-      if (recording) {
-        if (btn) btn.classList.add('recording');
-        if (icon) icon.className = 'bi bi-stop-fill';
-      } else {
-        if (btn) btn.classList.remove('recording');
-        updateSendButtonIcon();
-      }
-    }
-
-    // MediaRecorder初期化（Whisper用）
-    async function initMediaRecorder() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-        // iOS Safari対応のMIMEタイプ
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : 'audio/mp4';
-
-        mediaRecorder = new MediaRecorder(stream, { mimeType });
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunks.push(event.data);
-          }
-        };
-
-        mediaRecorder.onstop = async () => {
-          console.log('[Voice] MediaRecorder stopped, processing audio...');
-          const audioBlob = new Blob(audioChunks, { type: mimeType });
-          audioChunks = [];
-
-          // Whisper APIに送信
-          await transcribeWithWhisper(audioBlob);
-
-          // ストリームを停止
-          stream.getTracks().forEach(track => track.stop());
-          mediaRecorder = null;
-        };
-
-        return true;
-      } catch (error) {
-        console.error('[Voice] MediaRecorder init failed:', error);
-        showVoiceToast('マイクの使用が許可されていません');
-        return false;
-      }
-    }
-
-    // Whisper APIで文字起こし
-    async function transcribeWithWhisper(audioBlob) {
-      showVoiceToast('音声を認識中...');
-
-      try {
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'audio.webm');
-
-        const response = await fetch(WHISPER_API_ENDPOINT, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (data.text) {
-          const input = document.getElementById('messageInput');
-          if (input) {
-            const currentValue = input.value;
-            input.value = currentValue + (currentValue ? ' ' : '') + data.text;
-            updateSendButtonIcon();
-            console.log('[Voice] Whisper transcribed:', data.text);
-          }
-        } else {
-          showVoiceToast('音声を認識できませんでした');
-        }
-      } catch (error) {
-        console.error('[Voice] Whisper error:', error);
-        showVoiceToast('音声認識に失敗しました');
-      }
-
-      isVoiceRecording = false;
-      setRecordingUI(false);
-    }
-
-    // 送信ボタンアイコン更新（入力あり=送信、なし=マイク）
-    function updateSendButtonIcon() {
-      const input = document.getElementById('messageInput');
-      const icon = document.getElementById('sendButtonIcon');
-      if (!input || !icon || isVoiceRecording) return;
-
-      const hasContent = input.value.trim().length > 0 || selectedImageFiles.length > 0;
-      icon.className = hasContent ? 'bi bi-send-fill' : 'bi bi-mic-fill';
-    }
-
-    // 送信ボタンクリック処理（グローバルに公開）
-    window.handleSendButtonClick = function() {
-      const input = document.getElementById('messageInput');
-      const hasContent = input && (input.value.trim().length > 0 || selectedImageFiles.length > 0);
-
-      if (isVoiceRecording) {
-        // 録音中なら停止
-        stopVoiceInput();
-      } else if (hasContent) {
-        // テキストがあれば送信
-        sendMessage();
-      } else {
-        // テキストがなければ音声入力開始
-        startVoiceInput();
-      }
-    }
-
-    // 音声入力開始
-    async function startVoiceInput() {
-      // Web Speech API が使えるか確認
-      if (isSpeechRecognitionSupported()) {
-        // Chrome/Android/PC: Web Speech API使用
-        if (!voiceRecognition) {
-          initVoiceRecognition();
-        }
-        try {
-          voiceRecognition.start();
-        } catch (e) {
-          console.error('[Voice] Web Speech start failed:', e);
-        }
-      } else {
-        // iOS Safari: Whisper API使用
-        console.log('[Voice] Using Whisper fallback');
-        useWhisperFallback = true;
-
-        const success = await initMediaRecorder();
-        if (success) {
-          isVoiceRecording = true;
-          setRecordingUI(true);
-          audioChunks = [];
-          mediaRecorder.start();
-          console.log('[Voice] MediaRecorder started');
-        }
-      }
-    }
-
-    // 音声入力停止
-    function stopVoiceInput() {
-      if (useWhisperFallback && mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-        console.log('[Voice] MediaRecorder stopping...');
-      } else if (voiceRecognition) {
-        voiceRecognition.stop();
-      }
-      useWhisperFallback = false;
-    }
-
-    // 音声エラートースト表示
-    function showVoiceToast(message) {
-      const existing = document.getElementById('voiceToast');
-      if (existing) existing.remove();
-
-      const toast = document.createElement('div');
-      toast.id = 'voiceToast';
-      toast.style.cssText = `
-        position: fixed;
-        bottom: 100px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #1f2937;
-        color: white;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-size: 13px;
-        z-index: 9999;
-        opacity: 0;
-        transition: opacity 0.3s;
-      `;
-      toast.textContent = message;
-      document.body.appendChild(toast);
-
-      requestAnimationFrame(() => {
-        toast.style.opacity = '1';
-        setTimeout(() => {
-          toast.style.opacity = '0';
-          setTimeout(() => toast.remove(), 300);
-        }, 2500);
-      });
-    }
-
-    // ページ読み込み時に音声認識を初期化
-    document.addEventListener('DOMContentLoaded', function() {
-      initVoiceRecognition();
-      updateSendButtonIcon();
-    });
-
     // メッセージ送信
     window.sendMessage = async function() {
       console.log('[sendMessage] 関数呼び出し開始');
@@ -4374,7 +4083,6 @@
         insertedMentions = []; // 挿入済みメンションもリセット
         clearMentionTags(); // メンションタグもクリア
         sendButton.disabled = false;
-        updateSendButtonIcon(); // アイコンをマイクに戻す
 
         return;
       }
@@ -4448,7 +4156,6 @@
         input.value = '';
         insertedMentions = []; // 挿入済みメンションもリセット
         clearMentionTags(); // メンションタグもクリア
-        updateSendButtonIcon(); // アイコンをマイクに戻す
 
         // リプライプレビューをクリア
         cancelReply();
