@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-16 - 音声入力機能削除 -->
+  <!-- Cache Bust: 2025-12-16 - 送信ボタン有効/無効切り替え -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -1990,7 +1990,7 @@
           rows="1"></textarea>
       </div>
 
-      <button class="send-button" id="sendButton" onclick="sendMessage()">
+      <button class="send-button" id="sendButton" onclick="sendMessage()" disabled>
         <i class="bi bi-send-fill"></i>
       </button>
     </div>
@@ -2384,6 +2384,8 @@
         if (!isComposing) {
           checkMentionInput(this);
         }
+        // 送信ボタンの有効/無効を更新
+        updateSendButtonState();
       });
 
       // Enterキーで送信（メンション選択中は候補選択）
@@ -4019,6 +4021,17 @@
       container.appendChild(item);
     }
 
+    // 送信ボタンの有効/無効を更新
+    function updateSendButtonState() {
+      const input = document.getElementById('messageInput');
+      const sendBtn = document.getElementById('sendButton');
+      if (!input || !sendBtn) return;
+
+      const hasText = input.value.trim().length > 0;
+      const hasImages = selectedImageFiles && selectedImageFiles.length > 0;
+      sendBtn.disabled = !(hasText || hasImages);
+    }
+
     // メッセージ送信
     window.sendMessage = async function() {
       console.log('[sendMessage] 関数呼び出し開始');
@@ -4082,7 +4095,7 @@
         input.value = '';
         insertedMentions = []; // 挿入済みメンションもリセット
         clearMentionTags(); // メンションタグもクリア
-        sendButton.disabled = false;
+        updateSendButtonState(); // 送信後は無効化
 
         return;
       }
@@ -4156,6 +4169,7 @@
         input.value = '';
         insertedMentions = []; // 挿入済みメンションもリセット
         clearMentionTags(); // メンションタグもクリア
+        updateSendButtonState(); // 送信後は無効化
 
         // リプライプレビューをクリア
         cancelReply();
@@ -4242,6 +4256,9 @@
       // プレビュー表示を更新
       updateImagePreview();
 
+      // 送信ボタンの状態を更新
+      updateSendButtonState();
+
       // input をリセット（同じファイルを再選択可能にする）
       event.target.value = '';
     };
@@ -4300,12 +4317,14 @@
       console.log('[Image] 画像削除:', index);
       selectedImageFiles.splice(index, 1);
       updateImagePreview();
+      updateSendButtonState();
     }
 
     // すべての画像をクリア
     function clearAllImages() {
       selectedImageFiles = [];
       updateImagePreview();
+      updateSendButtonState();
     }
 
     // ファイル選択時の処理
