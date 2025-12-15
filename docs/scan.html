@@ -372,9 +372,30 @@
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
+<!-- Firebase v313: Firestore連携追加 -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
 <script>
+  // v313: Firebase初期化
+  const firebaseConfig = {
+    apiKey: "AIzaSyD8U8l0noFza2Wrt5mni2VgKV3iKPLadWQ",
+    authDomain: "furira.jp",
+    projectId: "reborn-chat",
+    storageBucket: "reborn-chat.firebasestorage.app",
+    messagingSenderId: "684049628498",
+    appId: "1:684049628498:web:efb1a6c5dfe93f9b5eb09c",
+    measurementId: "G-KGFXDX5XQ2"
+  };
+
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+  const db = firebase.firestore();
+
   let html5QrCode = null;
   let currentInvId = null;
+  let currentSlotData = null; // v313: スロットデータ保持
   let isAdmin = true; // TODO: 実際の権限チェック
   
   // 初期化
@@ -446,21 +467,51 @@
   }
   
   // スキャン結果処理
-  function processScannedCode(invId) {
+  // v313: Firestoreからスロットデータを取得
+  async function processScannedCode(invId) {
     currentInvId = invId;
-    
+    console.log('📷 [scan.html v313] スキャン:', invId);
+
     // 表示更新
     document.getElementById('scannedInvId').textContent = invId;
     document.getElementById('scannerCard').style.display = 'none';
     document.getElementById('manualInput').classList.remove('show');
     document.getElementById('scanResult').classList.add('show');
-    
-    // TODO: Firestoreから仕入情報を取得
-    // 今はダミーデータ
-    document.getElementById('info-purchaseDate').textContent = '2025/12/12';
-    document.getElementById('info-supplier').textContent = '〇〇古着市場';
-    document.getElementById('info-price').textContent = '¥500';
-    
+
+    // v313: Firestoreからスロットデータを取得
+    if (invId.startsWith('BATCH-')) {
+      try {
+        console.log('📷 [scan.html v313] Firestore取得開始:', invId);
+
+        // スロットデータを取得
+        const slotSnap = await db.collection('purchaseSlots').doc(invId).get();
+        if (slotSnap.exists) {
+          currentSlotData = slotSnap.data();
+          console.log('📷 [scan.html v313] スロットデータ:', currentSlotData);
+
+          // 仕入情報を表示
+          document.getElementById('info-purchaseDate').textContent = currentSlotData.purchaseDate || '-';
+          document.getElementById('info-supplier').textContent = currentSlotData.supplier || '-';
+          document.getElementById('info-price').textContent = currentSlotData.amount ? `¥${Number(currentSlotData.amount).toLocaleString()}` : '-';
+        } else {
+          console.warn('📷 [scan.html v313] スロット未発見:', invId);
+          document.getElementById('info-purchaseDate').textContent = '-';
+          document.getElementById('info-supplier').textContent = '（データなし）';
+          document.getElementById('info-price').textContent = '-';
+        }
+      } catch (error) {
+        console.error('📷 [scan.html v313] Firestore取得エラー:', error);
+        document.getElementById('info-purchaseDate').textContent = '-';
+        document.getElementById('info-supplier').textContent = '（取得エラー）';
+        document.getElementById('info-price').textContent = '-';
+      }
+    } else {
+      // 旧形式または不明なフォーマット
+      document.getElementById('info-purchaseDate').textContent = '-';
+      document.getElementById('info-supplier').textContent = '（不明な形式）';
+      document.getElementById('info-price').textContent = '-';
+    }
+
     // 効果音（オプション）
     try {
       const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleUI...');

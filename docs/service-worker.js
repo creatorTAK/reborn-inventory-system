@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v73-qr-scan-fix'; // QRスキャン情報表示修正
-const SW_VERSION = 'v73-qr-scan-fix'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v74-scan-firestore'; // scan.html Firestore連携
+const SW_VERSION = 'v74-scan-firestore'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
