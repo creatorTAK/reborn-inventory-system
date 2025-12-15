@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v69-qr-print-newwindow'; // QRコード印刷新規ウィンドウ
-const SW_VERSION = 'v69-qr-print-newwindow'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v70-qr-print-fix'; // QRコード印刷構文エラー修正
+const SW_VERSION = 'v70-qr-print-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',

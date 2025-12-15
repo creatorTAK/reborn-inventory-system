@@ -5192,7 +5192,7 @@
           </div>`;
       }
 
-      // v310: 印刷用HTMLドキュメント
+      // v310: 印刷用HTMLドキュメント（scriptタグなし）
       const printHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -5211,34 +5211,6 @@
 </head>
 <body>
   ${sheetsHtml}
-  <script>
-    // 全画像の読み込みを待ってから印刷
-    const images = document.querySelectorAll('img');
-    let loaded = 0;
-    const total = images.length;
-
-    function checkAndPrint() {
-      loaded++;
-      console.log('[v310] Image loaded:', loaded, '/', total);
-      if (loaded >= total) {
-        console.log('[v310] All images loaded, printing...');
-        setTimeout(() => { window.print(); }, 300);
-      }
-    }
-
-    if (total === 0) {
-      setTimeout(() => { window.print(); }, 300);
-    } else {
-      images.forEach(img => {
-        if (img.complete) {
-          checkAndPrint();
-        } else {
-          img.onload = checkAndPrint;
-          img.onerror = checkAndPrint;
-        }
-      });
-    }
-  </script>
 </body>
 </html>`;
 
@@ -5251,8 +5223,51 @@
 
       printWindow.document.write(printHtml);
       printWindow.document.close();
-      printerWarmedUp = true;
       console.log('[v310] 印刷ウィンドウを開きました');
+
+      // v310: 新規ウィンドウ内の画像読み込みを待って印刷
+      const waitAndPrint = () => {
+        const images = printWindow.document.querySelectorAll('img');
+        const total = images.length;
+        let loaded = 0;
+
+        const checkAndPrint = () => {
+          loaded++;
+          console.log('[v310] Image loaded:', loaded, '/', total);
+          if (loaded >= total) {
+            console.log('[v310] All images loaded, printing...');
+            setTimeout(() => {
+              printWindow.focus();
+              printWindow.print();
+              printerWarmedUp = true;
+            }, 300);
+          }
+        };
+
+        if (total === 0) {
+          setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+            printerWarmedUp = true;
+          }, 300);
+        } else {
+          images.forEach(img => {
+            if (img.complete) {
+              checkAndPrint();
+            } else {
+              img.onload = checkAndPrint;
+              img.onerror = checkAndPrint;
+            }
+          });
+        }
+      };
+
+      // DOMが準備できたら実行
+      if (printWindow.document.readyState === 'complete') {
+        waitAndPrint();
+      } else {
+        printWindow.onload = waitAndPrint;
+      }
     }
 
     // ラベル設定を保存（PurchaseApi経由）
