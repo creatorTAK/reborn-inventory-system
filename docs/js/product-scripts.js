@@ -5143,6 +5143,30 @@ window.continueProductRegistration = function() {
   }
 
   /**
+   * 付属品情報を取得
+   */
+  function getAccessoriesInfo() {
+    const container = document.getElementById('accessoriesCheckboxes');
+    if (!container) return '';
+
+    const checked = Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(cb => cb.value)
+      .filter(v => v && v !== 'その他');
+
+    // その他のフリーテキスト
+    const otherText = document.getElementById('accessoryOtherText')?.value?.trim();
+    if (otherText) {
+      checked.push(otherText);
+    }
+
+    if (checked.length > 0) {
+      return '【付属品】' + checked.join('、') + '\n\n';
+    }
+
+    return '';
+  }
+
+  /**
    * 配置順序に従って商品説明を組み立てる
    * @param {Object} elements - 各要素のテキスト（brand, color, size, material, condition, ai, management, discount, hashtag）
    * @param {HTMLTextAreaElement} descTextarea - 説明文を表示するテキストエリア
@@ -6252,6 +6276,9 @@ window.continueProductRegistration = function() {
           // 割引案内テキスト（設定シート対応版）
           const discountInfo = generateDiscountInfo();
 
+          // 付属品テキスト
+          const accessoriesText = getAccessoriesInfo();
+
           // 配置順序を取得して説明文を組み立て（管理番号の位置を指定）
           buildDescriptionByOrder({
             brand: brandText,
@@ -6259,6 +6286,7 @@ window.continueProductRegistration = function() {
             color: colorText,
             condition: detailSection,
             material: materialText,
+            accessories: accessoriesText,
             management: managementNumberSection,
             aiGeneration: aiGenerationSection,
             discount: discountInfo,
