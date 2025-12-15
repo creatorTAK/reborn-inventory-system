@@ -6,8 +6,8 @@
   <base target="_top">
   <title>仕入管理 - FURIRA</title>
   <script>
-    // v309: QRコード印刷修正（body直下移動方式）
-    console.log('🔴🔴🔴 purchase.html v309 loaded 🔴🔴🔴');
+    // v310: QRコード印刷 - 新規ウィンドウ方式（iOS Safari対応）
+    console.log('🔴🔴🔴 purchase.html v310 loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -5130,7 +5130,7 @@
       }
     }
 
-    // ラベルシート印刷 v307: 画像読み込み待機修正
+    // ラベルシート印刷 v310: 新規ウィンドウ印刷方式（iOS Safari対応）
     function printEntryLabelSheet() {
       if (entryGeneratedQRData.length === 0) {
         alert('先にQRコードを生成してください');
@@ -5145,25 +5145,20 @@
       const perSheet = cols * rows;
       const startPos = parseInt(document.getElementById('entryStartPosition')?.value) || 1;
       const a4Width = 210, a4Height = 297;
-
-      const printArea = document.getElementById('entryLabelPrintArea');
-      printArea.innerHTML = '';
-      printArea.style.display = 'block';
-
-      document.getElementById('qrEntryGrid').classList.remove('print-area');
+      const qrSize = Math.min(labelWidth, labelHeight) * 0.75;
+      const fontSize = Math.max(1.5, labelWidth * 0.12);
 
       const totalQR = entryGeneratedQRData.length;
       const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
+
+      console.log('[v310] 新規ウィンドウ印刷開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
+
+      // v310: シートHTMLを生成
+      let sheetsHtml = '';
       let qrIndex = 0;
-      const imagePromises = []; // v307: 画像読み込みPromiseを収集
 
       for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
-        const sheetDiv = document.createElement('div');
-        sheetDiv.className = 'entry-label-sheet-print-area';
-        sheetDiv.style.width = a4Width + 'mm';
-        sheetDiv.style.height = a4Height + 'mm';
-        sheetDiv.style.position = 'relative';
-        sheetDiv.style.background = 'white';
+        let cellsHtml = '';
 
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
@@ -5176,93 +5171,88 @@
 
             const x = marginLeft + col * (labelWidth + gapX);
             const y = marginTop + row * (labelHeight + gapY);
-
-            const cell = document.createElement('div');
-            cell.style.position = 'absolute';
-            cell.style.left = x + 'mm';
-            cell.style.top = y + 'mm';
-            cell.style.width = labelWidth + 'mm';
-            cell.style.height = labelHeight + 'mm';
-            cell.style.display = 'flex';
-            cell.style.alignItems = 'center';
-            cell.style.justifyContent = 'center';
-
             const qrData = entryGeneratedQRData[qrIndex];
-            // v307: QR + IDテキストのレイアウト（印刷用）
-            cell.style.flexDirection = 'column';
-            cell.style.padding = '0.5mm';
+            const shortId = qrData.slotId.replace(/^BATCH-\d{8}-/, '');
 
-            // v307: 画像を作成し、読み込み完了をPromiseで待機
-            const img = document.createElement('img');
-            const qrSize = Math.min(labelWidth, labelHeight) * 0.75;
-            img.style.width = qrSize + 'mm';
-            img.style.height = qrSize + 'mm';
-
-            // v307: 画像読み込み完了をPromiseで追跡
-            const loadPromise = new Promise((resolve) => {
-              img.onload = () => {
-                console.log('[v307] Image loaded:', qrIndex);
-                resolve();
-              };
-              img.onerror = () => {
-                console.error('[v307] Image load error:', qrIndex);
-                resolve(); // エラーでも続行
-              };
-            });
-            imagePromises.push(loadPromise);
-
-            // src設定はonload/onerror設定後に行う
-            img.src = qrData.dataUrl;
-            cell.appendChild(img);
-
-            // IDテキスト（slotIdの末尾部分を表示）
-            const idText = document.createElement('div');
-            const shortId = qrData.slotId.replace(/^BATCH-\d{8}-/, ''); // "abc123-001" 形式
-            idText.textContent = shortId;
-            idText.style.fontSize = Math.max(1.5, labelWidth * 0.12) + 'mm'; // 最小1.5mm
-            idText.style.lineHeight = '1';
-            idText.style.color = '#000';
-            idText.style.textAlign = 'center';
-            idText.style.marginTop = '0.3mm';
-            idText.style.fontFamily = 'Arial, sans-serif';
-            idText.style.fontWeight = 'bold';
-            cell.appendChild(idText);
-
-            sheetDiv.appendChild(cell);
+            cellsHtml += `
+              <div style="position:absolute;left:${x}mm;top:${y}mm;width:${labelWidth}mm;height:${labelHeight}mm;
+                          display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0.5mm;">
+                <img src="${qrData.dataUrl}" style="width:${qrSize}mm;height:${qrSize}mm;display:block;">
+                <div style="font-family:Arial,sans-serif;font-weight:bold;font-size:${fontSize}mm;
+                            line-height:1;color:#000;text-align:center;margin-top:0.3mm;">${shortId}</div>
+              </div>`;
             qrIndex++;
           }
         }
 
-        printArea.appendChild(sheetDiv);
+        sheetsHtml += `
+          <div class="sheet" style="width:${a4Width}mm;height:${a4Height}mm;position:relative;background:white;
+                                    page-break-after:${sheet < sheetsNeeded - 1 ? 'always' : 'auto'};">
+            ${cellsHtml}
+          </div>`;
       }
 
-      // v309: 全画像の読み込み完了を待ってから印刷
-      console.log('[v309] Waiting for', imagePromises.length, 'images to load...');
-      Promise.all(imagePromises).then(() => {
-        console.log('[v309] All images loaded, printing...');
+      // v310: 印刷用HTMLドキュメント
+      const printHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ラベル印刷</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{width:210mm;background:white;}
+    @page{size:A4;margin:0;}
+    @media print{
+      html,body{width:210mm;}
+      img{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    }
+  </style>
+</head>
+<body>
+  ${sheetsHtml}
+  <script>
+    // 全画像の読み込みを待ってから印刷
+    const images = document.querySelectorAll('img');
+    let loaded = 0;
+    const total = images.length;
 
-        // v309: printAreaをbody直下に移動（CSSで非表示にならないように）
-        const originalParent = printArea.parentNode;
-        const originalNextSibling = printArea.nextSibling;
-        document.body.appendChild(printArea);
-        console.log('[v309] Print area moved to body');
+    function checkAndPrint() {
+      loaded++;
+      console.log('[v310] Image loaded:', loaded, '/', total);
+      if (loaded >= total) {
+        console.log('[v310] All images loaded, printing...');
+        setTimeout(() => { window.print(); }, 300);
+      }
+    }
 
-        setTimeout(() => {
-          window.print();
-          printerWarmedUp = true;
-
-          // v309: 印刷後、元の位置に戻す
-          setTimeout(() => {
-            printArea.style.display = 'none';
-            if (originalNextSibling) {
-              originalParent.insertBefore(printArea, originalNextSibling);
-            } else {
-              originalParent.appendChild(printArea);
-            }
-            console.log('[v309] Print area moved back');
-          }, 1000);
-        }, 200);
+    if (total === 0) {
+      setTimeout(() => { window.print(); }, 300);
+    } else {
+      images.forEach(img => {
+        if (img.complete) {
+          checkAndPrint();
+        } else {
+          img.onload = checkAndPrint;
+          img.onerror = checkAndPrint;
+        }
       });
+    }
+  </script>
+</body>
+</html>`;
+
+      // v310: 新規ウィンドウで開く
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('ポップアップがブロックされました。ポップアップを許可してください。');
+        return;
+      }
+
+      printWindow.document.write(printHtml);
+      printWindow.document.close();
+      printerWarmedUp = true;
+      console.log('[v310] 印刷ウィンドウを開きました');
     }
 
     // ラベル設定を保存（PurchaseApi経由）
