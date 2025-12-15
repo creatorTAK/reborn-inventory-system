@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v62-print-revert'; // 印刷元に戻す
-const SW_VERSION = 'v62-print-revert'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v63-version-check'; // バージョン確認
+const SW_VERSION = 'v63-version-check'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
