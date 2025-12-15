@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v105-header-debug'; // ヘッダーデバッグ
-const SW_VERSION = 'v105-header-debug'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v106-early-listener'; // 早期リスナー修正
+const SW_VERSION = 'v106-early-listener'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
