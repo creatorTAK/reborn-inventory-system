@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- v318: 音声録音毎回初期化 -->
+  <!-- v319: chat_ui_firestore.htmlと同じ音声実装 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ヘルプ - フリラ</title>
@@ -1022,10 +1022,12 @@
       return true;
     }
 
-    // MediaRecorder初期化（iOS用）
+    // MediaRecorder初期化（iOS用）- chat_ui_firestore.htmlと同じ実装
     async function initMediaRecorder() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // iOS Safari対応のMIMEタイプ
         const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
         console.log('[Voice] MediaRecorder mimeType:', mimeType);
 
@@ -1038,69 +1040,70 @@
         };
 
         mediaRecorder.onstop = async () => {
-          const voiceBtn = document.getElementById('chatVoiceBtn');
-          console.log('[Voice] onstop: audioChunks.length =', audioChunks.length);
-          const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
-          console.log('[Voice] audioBlob.size =', audioBlob.size, 'bytes');
+          console.log('[Voice] MediaRecorder stopped, processing audio...');
+          const audioBlob = new Blob(audioChunks, { type: mimeType });
           audioChunks = [];
 
-          if (audioBlob.size < 100) {
-            console.log('[Voice] Audio too small, retrying with fresh stream');
-            // ストリームをリセットして再初期化を促す
-            mediaRecorder = null;
-            showVoiceError('もう一度お試しください');
-            if (voiceBtn) {
-              voiceBtn.classList.remove('recording');
-              voiceBtn.querySelector('i').className = 'bi bi-mic-fill';
-            }
-            return;
-          }
+          // Whisper APIで文字起こし
+          await transcribeWithWhisper(audioBlob);
 
-          // Whisper APIに送信
-          try {
-            if (voiceBtn) {
-              voiceBtn.querySelector('i').className = 'bi bi-hourglass-split';
-            }
-
-            const formData = new FormData();
-            formData.append('audio', audioBlob);
-
-            const response = await fetch(WHISPER_API_ENDPOINT, {
-              method: 'POST',
-              body: formData
-            });
-
-            if (!response.ok) {
-              throw new Error(`API error: ${response.status}`);
-            }
-
-            const data = await response.json();
-            if (data.text) {
-              const input = document.getElementById('chatInput');
-              const sendBtn = document.getElementById('chatSendBtn');
-              const currentValue = input.value;
-              input.value = currentValue + (currentValue ? ' ' : '') + data.text;
-              autoResize(input);
-              if (sendBtn) {
-                sendBtn.disabled = !input.value.trim();
-              }
-            }
-          } catch (error) {
-            console.error('[Voice] Whisper API error:', error);
-            showVoiceError('音声認識に失敗しました');
-          } finally {
-            isRecording = false;
-            if (voiceBtn) {
-              voiceBtn.classList.remove('recording');
-              voiceBtn.querySelector('i').className = 'bi bi-mic-fill';
-            }
-          }
+          // ストリームを停止
+          stream.getTracks().forEach(track => track.stop());
+          mediaRecorder = null;
         };
 
         return true;
       } catch (error) {
         console.error('[Voice] MediaRecorder init error:', error);
         return false;
+      }
+    }
+
+    // Whisper APIで文字起こし
+    async function transcribeWithWhisper(audioBlob) {
+      const voiceBtn = document.getElementById('chatVoiceBtn');
+
+      if (voiceBtn) {
+        voiceBtn.querySelector('i').className = 'bi bi-hourglass-split';
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'audio.webm');
+
+        const response = await fetch(WHISPER_API_ENDPOINT, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.text) {
+          const input = document.getElementById('chatInput');
+          const sendBtn = document.getElementById('chatSendBtn');
+          const currentValue = input.value;
+          input.value = currentValue + (currentValue ? ' ' : '') + data.text;
+          autoResize(input);
+          if (sendBtn) {
+            sendBtn.disabled = !input.value.trim();
+          }
+          console.log('[Voice] Whisper transcribed:', data.text);
+        } else {
+          showVoiceError('音声を認識できませんでした');
+        }
+      } catch (error) {
+        console.error('[Voice] Whisper API error:', error);
+        showVoiceError('音声認識に失敗しました');
+      }
+
+      isRecording = false;
+      if (voiceBtn) {
+        voiceBtn.classList.remove('recording');
+        voiceBtn.querySelector('i').className = 'bi bi-mic-fill';
       }
     }
 
@@ -1198,8 +1201,9 @@
             return;
           }
           audioChunks = [];
-          mediaRecorder.start(100); // 100msごとにデータを取得
+          mediaRecorder.start(); // chat_ui_firestore.htmlと同じ（タイムスライスなし）
           isRecording = true;
+          console.log('[Voice] MediaRecorder started');
           if (voiceBtn) {
             voiceBtn.classList.add('recording');
             voiceBtn.querySelector('i').className = 'bi bi-stop-fill';
