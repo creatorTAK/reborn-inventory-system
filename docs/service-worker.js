@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v83-scan-skip-fix'; // スキャンスキップ修正
-const SW_VERSION = 'v83-scan-skip-fix'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v84-qr-btn-toggle'; // QRボタン条件表示
+const SW_VERSION = 'v84-qr-btn-toggle'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',

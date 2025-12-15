@@ -62,7 +62,18 @@ console.log('[product.html] ✅ Script loaded - Version @315-SlotAutoFill');
   function checkAndApplySlotData() {
     try {
       const slotDataStr = sessionStorage.getItem('pendingSlotData');
-      if (!slotDataStr) return;
+
+      // v324: スロットデータの有無でフローティングボタンの表示を制御
+      const floatingBtn = document.getElementById('qrFloatingBtn');
+
+      if (!slotDataStr) {
+        // スキップして来た場合 → フローティングボタン表示
+        if (floatingBtn) {
+          floatingBtn.style.display = 'flex';
+          console.log('📦 [v324] スロットデータなし → QRスキャンボタン表示');
+        }
+        return;
+      }
 
       const slotData = JSON.parse(slotDataStr);
       console.log('📦 [v315] スロットデータ検出:', slotData.slotId);
@@ -72,6 +83,12 @@ console.log('[product.html] ✅ Script loaded - Version @315-SlotAutoFill');
 
       // sessionStorageからは削除（重複適用防止）
       sessionStorage.removeItem('pendingSlotData');
+
+      // v324: スキャン済みで来た場合 → フローティングボタン非表示
+      if (floatingBtn) {
+        floatingBtn.style.display = 'none';
+        console.log('📦 [v324] スロットデータあり → QRスキャンボタン非表示');
+      }
 
       // 少し遅延してから反映（DOM要素の準備を待つ）
       setTimeout(() => applySlotDataToForm(slotData), 500);
