@@ -6,7 +6,7 @@
   <base target="_top">
   <title>仕入管理 - FURIRA</title>
   <script>
-    // v302: ラベル印刷新ウィンドウ方式（iOS高速化）
+    // v303: ラベル印刷を元のシンプルな方式に戻す
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -1079,17 +1079,6 @@
       }
       .entry-label-sheet-print-area:last-child {
         page-break-after: auto;
-      }
-      /* v299: 印刷時の画像・キャンバス明示表示 */
-      #entryLabelPrintArea {
-        display: block !important;
-      }
-      #entryLabelPrintArea img,
-      #entryLabelPrintArea canvas {
-        display: block !important;
-        visibility: visible !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
       }
       @page {
         size: A4;
@@ -5080,8 +5069,6 @@
 
     // ラベルシート印刷
     function printEntryLabelSheet() {
-      console.log('[印刷] ★★★ printEntryLabelSheet 開始 ★★★');
-      console.log('[印刷] entryGeneratedQRData:', entryGeneratedQRData.length, '件');
       if (entryGeneratedQRData.length === 0) {
         alert('先にQRコードを生成してください');
         return;
@@ -5097,7 +5084,6 @@
       const a4Width = 210, a4Height = 297;
 
       const printArea = document.getElementById('entryLabelPrintArea');
-      console.log('[印刷] printArea取得:', printArea ? 'OK' : 'NG');
       printArea.innerHTML = '';
       printArea.style.display = 'block';
 
@@ -5105,7 +5091,6 @@
 
       const totalQR = entryGeneratedQRData.length;
       const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
-      console.log('[印刷] totalQR:', totalQR, 'sheetsNeeded:', sheetsNeeded);
       let qrIndex = 0;
 
       for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
@@ -5137,46 +5122,19 @@
             cell.style.display = 'flex';
             cell.style.alignItems = 'center';
             cell.style.justifyContent = 'center';
-            // v301: デバッグ用枠線
-            cell.style.border = '1px solid blue';
 
             const qrData = entryGeneratedQRData[qrIndex];
-            
-            // v298: dataUrl存在確認
-            if (!qrData.dataUrl) {
-              console.error('[印刷エラー] QRデータURL未生成:', qrIndex, qrData);
-              qrIndex++;
-              continue;
-            }
-            
             // v295: QR + IDテキストのレイアウト（印刷用）
             cell.style.flexDirection = 'column';
             cell.style.padding = '0.5mm';
 
-            // v299: canvasを直接コピー（iOS Safari対応）
+            // v303: 元のシンプルなimg方式に戻す
+            const img = document.createElement('img');
+            img.src = qrData.dataUrl;
             const qrSize = Math.min(labelWidth, labelHeight) * 0.75;
-            const originalCanvas = document.querySelector(`#qr-entry-${qrIndex + 1} canvas`);
-            console.log('[印刷] canvas検索:', `#qr-entry-${qrIndex + 1} canvas`, originalCanvas ? 'あり' : 'なし');
-            if (originalCanvas) {
-              const canvasCopy = document.createElement('canvas');
-              canvasCopy.width = originalCanvas.width;
-              canvasCopy.height = originalCanvas.height;
-              canvasCopy.getContext('2d').drawImage(originalCanvas, 0, 0);
-              canvasCopy.style.width = qrSize + 'mm';
-              canvasCopy.style.height = qrSize + 'mm';
-              // v301: デバッグ用に背景と枠を追加
-              canvasCopy.style.border = '1px solid red';
-              canvasCopy.style.background = '#fff';
-              cell.appendChild(canvasCopy);
-              console.log('[印刷] canvas追加完了 サイズ:', originalCanvas.width, 'x', originalCanvas.height);
-            } else {
-              // フォールバック: img要素を使用
-              const img = document.createElement('img');
-              img.src = qrData.dataUrl;
-              img.style.width = qrSize + 'mm';
-              img.style.height = qrSize + 'mm';
-              cell.appendChild(img);
-            }
+            img.style.width = qrSize + 'mm';
+            img.style.height = qrSize + 'mm';
+            cell.appendChild(img);
 
             // IDテキスト（slotIdの末尾部分を表示）
             const idText = document.createElement('div');
@@ -5199,79 +5157,11 @@
         printArea.appendChild(sheetDiv);
       }
 
-            // v302: 新しいウィンドウ方式（iOS高速化）
-      const canvasCount = printArea.querySelectorAll('canvas').length;
-      const imgCount = printArea.querySelectorAll('img').length;
-      console.log('[印刷] canvas数:', canvasCount, 'img数:', imgCount);
-      console.log('[印刷] printArea表示:', printArea.style.display);
-      
-      // 新しいウィンドウで印刷（iOS対応）
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        // canvasをimg(data URL)に変換してコピー
-        const canvases = printArea.querySelectorAll('canvas');
-        canvases.forEach((canvas, i) => {
-          const img = document.createElement('img');
-          img.src = canvas.toDataURL('image/png');
-          img.style.cssText = canvas.style.cssText;
-          canvas.parentNode.replaceChild(img, canvas);
-        });
-        
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>ラベル印刷</title>
-            <style>
-              * { margin: 0; padding: 0; box-sizing: border-box; }
-              body { background: white; }
-              @media print {
-                @page { size: A4; margin: 0; }
-              }
-              .entry-label-sheet-print-area {
-                width: 210mm; height: 297mm;
-                position: relative; background: white;
-                page-break-after: always;
-              }
-              .entry-label-sheet-print-area:last-child { page-break-after: auto; }
-              img { display: block !important; }
-            </style>
-          </head>
-          <body>${printArea.innerHTML}</body>
-          </html>
-        `);
-        printWindow.document.close();
-        
-        // 画像読み込み待機後に印刷
-        const images = printWindow.document.querySelectorAll('img');
-        let loadedCount = 0;
-        const onAllLoaded = () => {
-          console.log('[印刷] 新ウィンドウで印刷開始');
-          printWindow.focus();
-          printWindow.print();
-        };
-        
-        if (images.length === 0) {
-          onAllLoaded();
-        } else {
-          images.forEach(img => {
-            if (img.complete) {
-              loadedCount++;
-              if (loadedCount === images.length) onAllLoaded();
-            } else {
-              img.onload = img.onerror = () => {
-                loadedCount++;
-                if (loadedCount === images.length) onAllLoaded();
-              };
-            }
-          });
-        }
-      } else {
-        // ポップアップブロック時はフォールバック
-        alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
-      }
-      
-      printArea.style.display = 'none';
+      // v303: 元のシンプルな印刷方式に戻す
+      setTimeout(() => {
+        window.print();
+        setTimeout(() => { printArea.style.display = 'none'; }, 1000);
+      }, 100);
     }
 
     // ラベル設定を保存（PurchaseApi経由）
