@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v70-qr-print-fix'; // QRコード印刷構文エラー修正
-const SW_VERSION = 'v70-qr-print-fix'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v71-label-margin-fix'; // A-ONE 70面余白修正
+const SW_VERSION = 'v71-label-margin-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
