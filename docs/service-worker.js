@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v64-print-warmup'; // 印刷ウォームアップ
-const SW_VERSION = 'v64-print-warmup'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v65-warmup-nullcheck'; // ウォームアップnullチェック
+const SW_VERSION = 'v65-warmup-nullcheck'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
