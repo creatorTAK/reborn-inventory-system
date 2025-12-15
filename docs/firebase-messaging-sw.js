@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v292';  // カメラ機能削除（不要と判断）
+const CACHE_VERSION = 'v293';  // バッジ同期時にアプリバッジも更新
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -374,6 +374,18 @@ async function syncBadgeCounts(chatCount, todoCount) {
 
     // SystemNotificationDB（やることリスト用）をtodoCountに設定
     await setBadgeInDB('SystemNotificationDB', todoCount);
+
+    // ★ アプリバッジも正しい値に更新（重要！）
+    const totalCount = chatCount + todoCount;
+    if (navigator.setAppBadge) {
+      if (totalCount > 0) {
+        await navigator.setAppBadge(totalCount);
+        console.log('[SW v158] App badge synced to:', totalCount);
+      } else {
+        await navigator.clearAppBadge();
+        console.log('[SW v158] App badge cleared');
+      }
+    }
 
     console.log('[SW v158] Badge counts synced: chat=' + chatCount + ', todo=' + todoCount);
   } catch (err) {
