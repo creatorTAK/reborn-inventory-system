@@ -6,7 +6,7 @@
   <base target="_top">
   <title>仕入管理 - FURIRA</title>
   <script>
-    // v301: ラベル印刷視覚デバッグ（枠線追加）
+    // v302: ラベル印刷新ウィンドウ方式（iOS高速化）
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -5199,16 +5199,79 @@
         printArea.appendChild(sheetDiv);
       }
 
-            // v299: デバッグ強化
+            // v302: 新しいウィンドウ方式（iOS高速化）
       const canvasCount = printArea.querySelectorAll('canvas').length;
       const imgCount = printArea.querySelectorAll('img').length;
       console.log('[印刷] canvas数:', canvasCount, 'img数:', imgCount);
       console.log('[印刷] printArea表示:', printArea.style.display);
       
-      setTimeout(() => {
-        window.print();
-        setTimeout(() => { printArea.style.display = 'none'; }, 1000);
-      }, 500);
+      // 新しいウィンドウで印刷（iOS対応）
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        // canvasをimg(data URL)に変換してコピー
+        const canvases = printArea.querySelectorAll('canvas');
+        canvases.forEach((canvas, i) => {
+          const img = document.createElement('img');
+          img.src = canvas.toDataURL('image/png');
+          img.style.cssText = canvas.style.cssText;
+          canvas.parentNode.replaceChild(img, canvas);
+        });
+        
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>ラベル印刷</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { background: white; }
+              @media print {
+                @page { size: A4; margin: 0; }
+              }
+              .entry-label-sheet-print-area {
+                width: 210mm; height: 297mm;
+                position: relative; background: white;
+                page-break-after: always;
+              }
+              .entry-label-sheet-print-area:last-child { page-break-after: auto; }
+              img { display: block !important; }
+            </style>
+          </head>
+          <body>${printArea.innerHTML}</body>
+          </html>
+        `);
+        printWindow.document.close();
+        
+        // 画像読み込み待機後に印刷
+        const images = printWindow.document.querySelectorAll('img');
+        let loadedCount = 0;
+        const onAllLoaded = () => {
+          console.log('[印刷] 新ウィンドウで印刷開始');
+          printWindow.focus();
+          printWindow.print();
+        };
+        
+        if (images.length === 0) {
+          onAllLoaded();
+        } else {
+          images.forEach(img => {
+            if (img.complete) {
+              loadedCount++;
+              if (loadedCount === images.length) onAllLoaded();
+            } else {
+              img.onload = img.onerror = () => {
+                loadedCount++;
+                if (loadedCount === images.length) onAllLoaded();
+              };
+            }
+          });
+        }
+      } else {
+        // ポップアップブロック時はフォールバック
+        alert('ポップアップがブロックされました。ブラウザの設定を確認してください。');
+      }
+      
+      printArea.style.display = 'none';
     }
 
     // ラベル設定を保存（PurchaseApi経由）
