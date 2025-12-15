@@ -5400,12 +5400,51 @@
     }
 
     // スキャン成功時
-    function onQRCheckScanSuccess(decodedText) {
+    // v313: slotId形式対応（BATCH-YYYYMMDD-XXXXXX-NNN）
+    async function onQRCheckScanSuccess(decodedText) {
       console.log('📷 [QR確認] スキャン成功:', decodedText);
       stopQRCheckScanner();
       closeQRCheckScanner();
 
-      // JSON解析を試みる
+      // v313: slotId形式のQRコード対応（v296でJSON→slotIdに変更）
+      if (decodedText.startsWith('BATCH-')) {
+        try {
+          // Firestoreからスロットデータを取得
+          const slotData = await window.PurchaseApi.getSlotBySlotId(decodedText);
+          if (!slotData) {
+            showQRCheckError('このスロットは見つかりませんでした。');
+            return;
+          }
+
+          // バッチデータを取得して総数を得る
+          const db = firebase.firestore();
+          const batchSnap = await db.collection('purchaseBatches').doc(slotData.batchId).get();
+          const batchData = batchSnap.exists ? batchSnap.data() : null;
+          const totalCount = batchData?.itemCount || '-';
+
+          // showQRCheckResult用のフォーマットに変換
+          const qrData = {
+            s: slotData.slotId,
+            n: slotData.slotNumber,
+            t: totalCount,
+            d: slotData.purchaseDate,
+            sup: slotData.supplier,
+            amt: slotData.amount,
+            asg: slotData.assignee,
+            m: slotData.memo || ''
+          };
+
+          showQRCheckResult(qrData);
+          addToQRCheckHistory(qrData);
+          return;
+        } catch (error) {
+          console.error('QRスキャン処理エラー:', error);
+          showQRCheckError('データの取得に失敗しました。');
+          return;
+        }
+      }
+
+      // 旧形式（JSON）対応
       let qrData = null;
       try {
         qrData = JSON.parse(decodedText);
