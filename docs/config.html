@@ -884,12 +884,15 @@
               </div>
             </div>
 
-            <!-- 配置プレビュー -->
+            <!-- 説明文プレビュー -->
             <div style="margin-bottom: 24px; padding: 16px; background: white; border-radius: 8px; border: 2px solid #e5e7eb;">
               <div style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px;">
-                👁️ 配置プレビュー
+                👁️ 説明文プレビュー
               </div>
-              <div id="descriptionOrderPreview" style="padding: 12px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 11px; color: #6b7280; min-height: 60px; line-height: 1.6;">
+              <div style="font-size: 10px; color: #6b7280; margin-bottom: 8px;">
+                ※ 上の順序で商品説明文が生成されます
+              </div>
+              <div id="descriptionOrderPreview" style="padding: 12px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 12px; color: #374151; min-height: 200px; line-height: 1.8; white-space: pre-line; max-height: 400px; overflow-y: auto;">
                 順序がここに表示されます
               </div>
             </div>
@@ -1702,23 +1705,17 @@
       </div>
     </div>
 
-    <!-- 配置位置選択（商品名用） -->
+    <!-- 配置位置の説明（配置順序タブで管理） -->
     <div id="管理番号形式選択" style="display: none;">
-      <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">商品名での配置位置</label>
-      <select id="管理番号配置位置" style="width: 100%; font-size: 16px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white;" onchange="updateManagementNumberPreview(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
-        <option value="end">後ろ</option>
-        <option value="start">先頭</option>
-      </select>
+      <div style="font-size: 11px; color: #6b7280; padding: 8px; background: #f0f9ff; border-radius: 4px; border-left: 3px solid #0ea5e9;">
+        💡 商品名の管理番号は末尾に固定配置されます
+      </div>
     </div>
 
-    <!-- 配置位置選択（説明文用） -->
     <div id="説明文管理番号形式選択" style="display: none; margin-top: 12px;">
-      <label style="font-size: 12px; color: #6b7280; margin-bottom: 4px; display: block;">説明文での配置位置</label>
-      <select id="説明文管理番号配置位置" style="width: 100%; font-size: 16px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white;" onchange="updateManagementNumberPreview(); if (typeof onManagementNumberSettingChange === 'function') onManagementNumberSettingChange();">
-        <option value="top">先頭（ブランド名の上）</option>
-        <option value="middle">中（商品情報の下）</option>
-        <option value="bottom">末尾（ハッシュタグの下）</option>
-      </select>
+      <div style="font-size: 11px; color: #6b7280; padding: 8px; background: #f0f9ff; border-radius: 4px; border-left: 3px solid #0ea5e9;">
+        💡 説明文内の配置位置は「📐配置順序」タブで設定できます
+      </div>
     </div>
 
     <!-- プレビューコンテナ（タブ切り替え式） -->
@@ -2092,12 +2089,11 @@
             }
 
             // 配置設定もチェックボックスに反映
+            // ※配置位置は「配置順序」タブで管理するため、formatSelectのみ使用
             const showInTitle = document.getElementById('商品名に管理番号配置');
             const showInDescription = document.getElementById('説明文に管理番号配置');
             const formatSelect = document.getElementById('管理番号形式');
-            const positionSelect = document.getElementById('管理番号配置位置');
             const descFormatSelect = document.getElementById('説明文管理番号形式');
-            const descPositionSelect = document.getElementById('説明文管理番号配置位置');
 
             if (showInTitle && data.managementNumber?.showInTitle !== undefined) {
               showInTitle.checked = data.managementNumber.showInTitle;
@@ -2110,14 +2106,8 @@
             if (formatSelect && data.managementNumber?.titleFormat) {
               formatSelect.value = data.managementNumber.titleFormat;
             }
-            if (positionSelect && data.managementNumber?.titlePosition) {
-              positionSelect.value = data.managementNumber.titlePosition;
-            }
             if (descFormatSelect && data.managementNumber?.descFormat) {
               descFormatSelect.value = data.managementNumber.descFormat;
-            }
-            if (descPositionSelect && data.managementNumber?.descPosition) {
-              descPositionSelect.value = data.managementNumber.descPosition;
             }
 
             // 形式選択の表示/非表示を更新
@@ -2672,7 +2662,6 @@
     const titleCheckbox = document.getElementById('商品名に管理番号配置');
     const descCheckbox = document.getElementById('説明文に管理番号配置');
     const formatSelect = document.getElementById('管理番号形式');
-    const positionSelect = document.getElementById('管理番号配置位置');
     const titlePreviewElement = document.getElementById('商品名プレビュー_管理番号');
     const descPreviewElement = document.getElementById('説明文プレビュー_管理番号');
     const previewContainer = document.getElementById('プレビューコンテナ');
@@ -2683,7 +2672,6 @@
       titleCheckbox: titleCheckbox ? 'OK' : 'NG',
       descCheckbox: descCheckbox ? 'OK' : 'NG',
       formatSelect: formatSelect ? 'OK' : 'NG',
-      positionSelect: positionSelect ? 'OK' : 'NG',
       titlePreviewElement: titlePreviewElement ? 'OK' : 'NG',
       descPreviewElement: descPreviewElement ? 'OK' : 'NG'
     });
@@ -2752,9 +2740,9 @@
     // プルダウンの選択肢を動的に更新
     updateFormatDropdownOptions(sampleNumber);
 
-    // 形式と配置位置を取得
+    // 形式を取得（商品名の配置位置は後ろ固定）
     const format = formatSelect ? formatSelect.value : '【】';
-    const position = positionSelect ? positionSelect.value : 'end';
+    const position = 'end'; // 商品名の管理番号は常に後ろに配置
 
     console.log('選択値:', { format, position });
 
@@ -2807,13 +2795,10 @@
       titlePreviewElement.textContent = result;
     }
 
-    // 説明文プレビューを更新
+    // 説明文プレビューを更新（管理番号フォーマットの確認用）
     if (descCheckbox && descCheckbox.checked) {
       const descFormatSelect = document.getElementById('説明文管理番号形式');
-      const descPositionSelect = document.getElementById('説明文管理番号配置位置');
-
       const descFormat = descFormatSelect ? descFormatSelect.value : '【】';
-      const descPosition = descPositionSelect ? descPositionSelect.value : 'bottom';
 
       // 説明文用の管理番号をフォーマット（絵文字なし）
       let descFormattedNumber = '';
@@ -2837,112 +2822,18 @@
           descFormattedNumber = `【${sampleNumber}】`;
       }
 
-      // 配置位置に応じてプレビューを生成（実際の商品説明に近い形式）
-      let descPreview = '';
-
-      // ブランド名・基本情報（先頭部分）
-      const brandInfo = `ブランド名：UNIQLO（ユニクロ）
+      // シンプルなプレビュー（配置位置は配置順序タブで設定）
+      const descPreview = `ブランド名：UNIQLO（ユニクロ）
 
 カラー（詳細）：ブラック
 
-サイズ（表記）：M`;
+サイズ（表記）：M
 
-      // 商品情報（中央部分）
-      const detailInfo = `【サイズ(実寸)】
-肩幅：47cm
-身幅：55cm
-袖丈：62cm
-着丈：68cm
-
-【素材】
-表地：ナイロン 100%
-中綿：ダウン 90%、フェザー 10%
-
-商品状態（詳細）：
-目立った傷や汚れなし。`;
-
-      // 商品説明・その他（下部）
-      const descriptionPart = `【UNIQLO ウルトラライトダウンジャケット】
-
-UNIQLO（ユニクロ）の定番人気アイテム、ウルトラライトダウンジャケットです。軽量で持ち運びもしやすく、秋冬のアウターとして大活躍します。
-
-【おすすめシーン】
-普段使いはもちろん、旅行や通勤・通学にも便利。コンパクトに収納できるので、バッグに入れておくと安心です。`;
-
-      // ハッシュタグ（最下部）- ユーザー設定から生成
-      let hashtags = '';
-      try {
-        const hashtagConfig = localStorage.getItem('rebornConfig_hashtag');
-        if (hashtagConfig) {
-          const config = JSON.parse(hashtagConfig);
-          const commonPrefix = config.commonPrefix || '#REBORN_';
-
-          // 設定されたハッシュタグを生成（プレビュー用に簡略化）
-          const previewTags = [];
-
-          if (config.hashtags && Array.isArray(config.hashtags)) {
-            config.hashtags.forEach(tag => {
-              if (tag.title === '全商品') {
-                previewTags.push(`${commonPrefix}${tag.suffix || '全商品'}`);
-              } else if (tag.title === 'ブランド') {
-                previewTags.push(`${commonPrefix}UNIQLO${tag.suffix || 'アイテム一覧'}`);
-              } else if (tag.title === 'カテゴリ') {
-                previewTags.push(`${commonPrefix}メンズ・レディース${tag.suffix || '一覧'}`);
-              }
-            });
-          }
-
-          // タグが生成されていればそれを使用
-          if (previewTags.length > 0) {
-            hashtags = previewTags.join('\n');
-          } else {
-            // 旧形式または設定なしの場合
-            hashtags = `${commonPrefix}全商品\n${commonPrefix}UNIQLOアイテム一覧\n${commonPrefix}メンズ・レディース一覧`;
-          }
-        } else {
-          // 設定がない場合のデフォルト
-          hashtags = `#REBORN_全商品\n#REBORN_UNIQLOアイテム一覧\n#REBORN_メンズ・レディース一覧`;
-        }
-      } catch (e) {
-        console.error('ハッシュタグ設定の読み込みエラー:', e);
-        // エラー時のデフォルト
-        hashtags = `#REBORN_全商品\n#REBORN_UNIQLOアイテム一覧\n#REBORN_メンズ・レディース一覧`;
-      }
-
-      if (descPosition === 'top') {
-        // 先頭（ブランド名の上）
-        descPreview = `管理番号：${descFormattedNumber}
-
-${brandInfo}
-
-${detailInfo}
-
-${descriptionPart}
-
-${hashtags}`;
-      } else if (descPosition === 'middle') {
-        // 中（商品情報の下）
-        descPreview = `${brandInfo}
-
-${detailInfo}
+...（その他の商品情報）...
 
 管理番号：${descFormattedNumber}
 
-${descriptionPart}
-
-${hashtags}`;
-      } else {
-        // 末尾（ハッシュタグの下、一番目立たない位置）
-        descPreview = `${brandInfo}
-
-${detailInfo}
-
-${descriptionPart}
-
-${hashtags}
-
-管理番号：${descFormattedNumber}`;
-      }
+※配置位置は「📐配置順序」タブで設定できます`;
 
       descPreviewElement.textContent = descPreview;
     }
@@ -5739,12 +5630,11 @@ ${hashtags}
       }
 
       // 管理番号の配置設定を表示
+      // ※配置位置は「配置順序」タブで管理するため、positionSelectは使用しない
       const showInTitleCheckbox = document.getElementById('商品名に管理番号配置');
       const showInDescriptionCheckbox = document.getElementById('説明文に管理番号配置');
       const formatSelect = document.getElementById('管理番号形式');
-      const positionSelect = document.getElementById('管理番号配置位置');
       const descFormatSelect = document.getElementById('説明文管理番号形式');
-      const descPositionSelect = document.getElementById('説明文管理番号配置位置');
 
       console.log('📋 管理番号配置設定を読み込み:', placementConfig);
 
@@ -5760,17 +5650,9 @@ ${hashtags}
         formatSelect.value = placementConfig.titleFormat || '【】';
         console.log('✅ 形式選択設定:', formatSelect.value);
       }
-      if (positionSelect) {
-        positionSelect.value = placementConfig.titlePosition || 'end';
-        console.log('✅ 配置位置選択設定:', positionSelect.value);
-      }
       if (descFormatSelect) {
         descFormatSelect.value = placementConfig.descFormat || '【】';
         console.log('✅ 説明文形式選択設定:', descFormatSelect.value);
-      }
-      if (descPositionSelect) {
-        descPositionSelect.value = placementConfig.descPosition || 'bottom';
-        console.log('✅ 説明文配置位置選択設定:', descPositionSelect.value);
       }
 
       // 形式選択の表示/非表示を更新
@@ -6316,9 +6198,8 @@ ${hashtags}
           const showInTitle = document.getElementById('商品名に管理番号配置');
           const showInDescription = document.getElementById('説明文に管理番号配置');
           const format = document.getElementById('管理番号形式');
-          const position = document.getElementById('管理番号配置位置');
           const descFormat = document.getElementById('説明文管理番号形式');
-          const descPosition = document.getElementById('説明文管理番号配置位置');
+          // 配置位置は固定（商品名=後ろ、説明文=配置順序タブで管理）
 
           console.log('📝 管理番号配置設定を収集（保存前）:', {
             showInTitleElement: showInTitle,
@@ -6327,20 +6208,17 @@ ${hashtags}
             showInDescriptionChecked: showInDescription ? showInDescription.checked : null,
             formatElement: format,
             formatValue: format ? format.value : null,
-            positionElement: position,
-            positionValue: position ? position.value : null,
             descFormatElement: descFormat,
-            descFormatValue: descFormat ? descFormat.value : null,
-            descPositionElement: descPosition,
-            descPositionValue: descPosition ? descPosition.value : null
+            descFormatValue: descFormat ? descFormat.value : null
           });
 
           data.showInTitle = showInTitle ? showInTitle.checked : false;
           data.showInDescription = showInDescription ? showInDescription.checked : false;
           data.titleFormat = format ? format.value : '【】';
-          data.titlePosition = position ? position.value : 'end';
+          data.titlePosition = 'end'; // 商品名の管理番号は常に後ろ
           data.descFormat = descFormat ? descFormat.value : '【】';
-          data.descPosition = descPosition ? descPosition.value : 'bottom';
+          // descPositionは配置順序タブで管理するため、ここでは保存しない（後方互換のためにデフォルト値を設定）
+          data.descPosition = 'order'; // 配置順序に従う（新しいマーカー値）
 
           // プリセットキーも保存
           const presetSelect = document.getElementById('mnbPresetSelect');
@@ -6352,7 +6230,7 @@ ${hashtags}
             titleFormat: data.titleFormat,
             titlePosition: data.titlePosition,
             descFormat: data.descFormat,
-            descPosition: data.descPosition
+            descPosition: data.descPosition // 'order' = 配置順序タブに従う
           });
 
           // 商品登録画面用のlocalStorageにも保存（互換性のため）
@@ -6363,7 +6241,7 @@ ${hashtags}
               format: data.titleFormat,
               position: data.titlePosition,
               descFormat: data.descFormat,
-              descPosition: data.descPosition
+              descPosition: data.descPosition // 'order' = 配置順序タブに従う
             };
             localStorage.setItem('managementNumberPlacement', JSON.stringify(placementSettings));
             console.log('✅ managementNumberPlacementにも保存:', placementSettings);
@@ -8504,14 +8382,27 @@ ${prompt || '（未設定）'}
 
       if (!container || !preview) return;
 
+      // 各要素のサンプルテキスト
+      const sampleTexts = {
+        brand: 'ブランド名：UNIQLO（ユニクロ）',
+        color: 'カラー（詳細）：ブラック',
+        size: 'サイズ（表記）：M\n\n【サイズ(実寸)】\n肩幅：47cm / 身幅：55cm',
+        material: '【素材】\n表地：ナイロン 100%',
+        accessories: '【付属品】保存袋、ギャランティカード',
+        condition: '商品状態（詳細）：目立った傷や汚れなし',
+        ai: '【商品説明】\nUNIQLOの定番アイテム、ウルトラライトダウンです。軽量で持ち運びしやすく、秋冬に大活躍します。',
+        management: '管理番号：【AA-1001】',
+        discount: '✨ フォロー割、リピート割あります ✨',
+        hashtag: '#REBORN_全商品\n#REBORN_UNIQLOアイテム一覧'
+      };
+
       const items = Array.from(container.children);
       const enabledItems = items
-        .map((item, index) => {
+        .map((item) => {
           const checkbox = item.querySelector('input[type="checkbox"]');
-          const label = item.querySelector('span:last-child');
+          const elementId = item.dataset.elementId;
           return {
-            index: index + 1,
-            label: label.textContent,
+            id: elementId,
             enabled: checkbox.checked
           };
         })
@@ -8521,10 +8412,13 @@ ${prompt || '（未設定）'}
         preview.textContent = '（すべて非表示）';
         preview.style.color = '#ef4444';
       } else {
-        preview.innerHTML = enabledItems
-          .map(item => `${item.index}. ${item.label}`)
-          .join('<br>');
+        // 有効な要素のサンプルテキストを順番に結合
+        const previewText = enabledItems
+          .map(item => sampleTexts[item.id] || `[${item.id}]`)
+          .join('\n\n');
+        preview.textContent = previewText;
         preview.style.color = '#374151';
+        preview.style.whiteSpace = 'pre-line';
       }
     }
 

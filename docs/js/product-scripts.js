@@ -5171,13 +5171,8 @@ window.continueProductRegistration = function() {
    * @param {Object} elements - 各要素のテキスト（brand, color, size, material, condition, ai, management, discount, hashtag）
    * @param {HTMLTextAreaElement} descTextarea - 説明文を表示するテキストエリア
    */
-  function buildDescriptionByOrder(elements, descTextarea, managementNumberPosition) {
+  function buildDescriptionByOrder(elements, descTextarea) {
     console.log('buildDescriptionByOrder 関数が呼び出されました');
-
-    // 管理番号は位置ベースで配置するため、通常の順序からは除外
-    const managementContent = elements.management;
-    const elementsWithoutManagement = Object.assign({}, elements);
-    delete elementsWithoutManagement.management;
 
     // 1. AI生成設定から配置順序を取得（設定画面で管理可能）
     let order = [];
@@ -5188,9 +5183,8 @@ window.continueProductRegistration = function() {
         const settings = JSON.parse(aiSettings);
         console.log('📋 [配置順序] descriptionOrder:', settings.descriptionOrder);
         if (settings.descriptionOrder && Array.isArray(settings.descriptionOrder)) {
-          // 設定画面で保存された配置順序を使用（管理番号を除外）
+          // 設定画面で保存された配置順序を使用（管理番号も含む）
           order = settings.descriptionOrder
-            .filter(item => item.id !== 'management')  // 管理番号を除外
             .map(item => ({
               id: item.id === 'ai' ? 'aiGeneration' : item.id,
               enabled: item.enabled !== false
@@ -5204,47 +5198,25 @@ window.continueProductRegistration = function() {
       console.error('配置順序の読み込みエラー:', e);
     }
 
-    // 2. 配置順序が取得できない場合は、HTML要素の実際の順序を使用
+    // 2. 配置順序が取得できない場合は、デフォルト順序を使用
     if (order.length === 0) {
-      const actualBlocksOrder = getDescriptionBlocksOrder();
-      console.log('実際のブロック順序:', actualBlocksOrder);
-
-      const blockTypeToElementId = {
-        'brandName': 'brand',
-        'size': 'size',
-        'color': 'color',
-        'condition': 'condition',
-        'material': 'material',
-        'accessories': 'accessories',
-        'aiGeneration': 'aiGeneration',
-        'discount': 'discount',
-        'hashtag': 'hashtag'
-      };
-
-      if (actualBlocksOrder.length > 0) {
-        order = actualBlocksOrder.map(blockType => ({
-          id: blockTypeToElementId[blockType] || blockType,
-          enabled: true
-        }));
-        console.log('実際のブロック順序から配置順序を生成:', order);
-      } else {
-        // フォールバック: デフォルト順序（管理番号なし）
-        order = [
-          { id: 'brand', enabled: true },
-          { id: 'size', enabled: true },
-          { id: 'color', enabled: true },
-          { id: 'material', enabled: true },
-          { id: 'accessories', enabled: true },
-          { id: 'condition', enabled: true },
-          { id: 'aiGeneration', enabled: true },
-          { id: 'discount', enabled: true },
-          { id: 'hashtag', enabled: true }
-        ];
-        console.log('デフォルト順序を使用');
-      }
+      // デフォルト順序（管理番号を含む）
+      order = [
+        { id: 'brand', enabled: true },
+        { id: 'color', enabled: true },
+        { id: 'size', enabled: true },
+        { id: 'material', enabled: true },
+        { id: 'accessories', enabled: true },
+        { id: 'condition', enabled: true },
+        { id: 'aiGeneration', enabled: true },
+        { id: 'management', enabled: true },
+        { id: 'discount', enabled: true },
+        { id: 'hashtag', enabled: true }
+      ];
+      console.log('📋 [配置順序] デフォルト順序を使用');
     }
 
-    // 3. 配置順序に従って説明文を組み立て
+    // 3. 配置順序に従って説明文を組み立て（管理番号も通常要素として処理）
     const parts = [];
 
     for (const item of order) {
@@ -5254,8 +5226,8 @@ window.continueProductRegistration = function() {
         continue;
       }
 
-      // 要素の内容を取得
-      const content = elementsWithoutManagement[item.id];
+      // 要素の内容を取得（management も elements から取得）
+      const content = elements[item.id];
       if (content && content.trim()) {
         parts.push(content.trim());
         console.log(`要素 ${item.id} を追加`);
@@ -5264,54 +5236,7 @@ window.continueProductRegistration = function() {
       }
     }
 
-    // 4. 管理番号を指定位置に挿入
-    if (managementContent && managementContent.trim()) {
-      const position = managementNumberPosition || 'middle';
-
-      if (position === 'top') {
-        // 先頭（ブランド名の上、最初の位置）
-        parts.unshift(managementContent.trim());
-        console.log('✅ 管理番号を先頭（ブランド名の上）に配置');
-      } else if (position === 'bottom') {
-        // 末尾（ハッシュタグの下、最後の位置）
-        parts.push(managementContent.trim());
-        console.log('✅ 管理番号を末尾（ハッシュタグの下）に配置');
-      } else {
-        // 中（商品情報の下）
-        // brand, size, color, material, accessories, condition の後に挿入
-        const productInfoIds = ['brand', 'size', 'color', 'material', 'accessories', 'condition'];
-        let insertIndex = 0;
-
-        // parts配列の中で最後の商品情報要素の位置を見つける
-        for (let i = parts.length - 1; i >= 0; i--) {
-          // この部分の元IDを特定するために、order配列を参照
-          let elementId = null;
-          let partIndex = 0;
-          for (const item of order) {
-            if (item.enabled !== false) {
-              const content = elementsWithoutManagement[item.id];
-              if (content && content.trim()) {
-                if (partIndex === i) {
-                  elementId = item.id;
-                  break;
-                }
-                partIndex++;
-              }
-            }
-          }
-
-          if (elementId && productInfoIds.includes(elementId)) {
-            insertIndex = i + 1;
-            break;
-          }
-        }
-
-        parts.splice(insertIndex, 0, managementContent.trim());
-        console.log(`✅ 管理番号を中（商品情報の下、インデックス ${insertIndex}）に配置`);
-      }
-    }
-
-    // 5. 全要素を結合（2行の空行で区切る）
+    // 4. 全要素を結合（2行の空行で区切る）
     const finalText = parts.join('\n\n');
     descTextarea.value = finalText;
 
@@ -6215,8 +6140,8 @@ window.continueProductRegistration = function() {
           const hashtagText = hashtags.join('\n');
 
           // 管理番号セクション（localStorageの設定に基づく）
+          // ※配置位置は「配置順序」タブで設定（descPositionは使用しない）
           let managementNumberSection = '';
-          let managementNumberPosition = 'middle'; // デフォルトは中
           try {
             const saved = localStorage.getItem('managementNumberPlacement');
             console.log('🔍 説明文生成: localStorage取得結果:', saved);
@@ -6264,8 +6189,7 @@ window.continueProductRegistration = function() {
                   }
 
                   managementNumberSection = `${formattedNumber}\n\n`;
-                  managementNumberPosition = settings.descPosition || 'middle';
-                  console.log('✅ 説明文に管理番号を追加:', formattedNumber, '配置:', managementNumberPosition);
+                  console.log('✅ 説明文に管理番号を追加:', formattedNumber, '（配置位置は配置順序タブで設定）');
                 } else {
                   console.log('⚠️ 管理番号フィールドが空です');
                 }
@@ -6285,7 +6209,7 @@ window.continueProductRegistration = function() {
           // 付属品テキスト
           const accessoriesText = getAccessoriesInfo();
 
-          // 配置順序を取得して説明文を組み立て（管理番号の位置を指定）
+          // 配置順序を取得して説明文を組み立て（配置順序は「配置順序」タブで設定）
           buildDescriptionByOrder({
             brand: brandText,
             size: sizeText,
@@ -6297,7 +6221,7 @@ window.continueProductRegistration = function() {
             aiGeneration: aiGenerationSection,
             discount: discountInfo,
             hashtag: hashtagText
-          }, descTextarea, managementNumberPosition);
+          }, descTextarea);
     } catch (error) {
       console.error('商品の説明更新エラー:', error);
       debug.error('updateDescriptionFromDetail エラー:', error);
