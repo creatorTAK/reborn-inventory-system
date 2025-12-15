@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v95-chat-room-ui'; // トークルームUI改善
-const SW_VERSION = 'v95-chat-room-ui'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v96-chat-room-ui-fix'; // トークルームUI修正
+const SW_VERSION = 'v96-chat-room-ui-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
