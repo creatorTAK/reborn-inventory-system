@@ -6,8 +6,8 @@
   <base target="_top">
   <title>仕入管理 - FURIRA</title>
   <script>
-    // v306: ウォームアップnullチェック追加
-    console.log('🔴🔴🔴 purchase.html v306 loaded 🔴🔴🔴');
+    // v307: QRコード印刷修正（CSS + 画像読み込み待機）
+    console.log('🔴🔴🔴 purchase.html v307 loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -1051,25 +1051,28 @@
       object-fit: contain;
     }
 
-    /* 印刷用スタイル（仕入登録） */
+    /* 印刷用スタイル（仕入登録） v307: ラベル印刷修正 */
     @media print {
-      .entry-card:not(.qr-entry-preview), .entry-mode-tabs, .entry-print-mode-tabs,
-      .entry-label-preset-btn, .entry-custom-settings, .alert, #entryAfterActions,
-      .entry-add-item-btn, .btn, .header, .nav-tabs-custom, .content-container > *:not(#entry-content) {
-        display: none !important;
+      /* v307: 印刷時は全て非表示にしてからラベルエリアのみ表示 */
+      body * {
+        visibility: hidden;
       }
-      .qr-entry-grid {
-        grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
+      #entryLabelPrintArea,
+      #entryLabelPrintArea * {
+        visibility: visible !important;
       }
-      .qr-entry-item {
-        border: 1px solid #000;
-        padding: 6px;
-        page-break-inside: avoid;
+      #entryLabelPrintArea {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
       }
-      .qr-entry-item canvas {
-        width: 70px !important;
-        height: 70px !important;
+      /* v307: 画像を確実に表示 */
+      #entryLabelPrintArea img {
+        display: block !important;
+        visibility: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
       .entry-label-sheet-print-area {
         width: 210mm;
@@ -1077,6 +1080,7 @@
         margin: 0;
         padding: 0;
         page-break-after: always;
+        visibility: visible !important;
       }
       .entry-label-sheet-print-area:last-child {
         page-break-after: auto;
@@ -5117,7 +5121,7 @@
       }
     }
 
-    // ラベルシート印刷
+    // ラベルシート印刷 v307: 画像読み込み待機修正
     function printEntryLabelSheet() {
       if (entryGeneratedQRData.length === 0) {
         alert('先にQRコードを生成してください');
@@ -5142,6 +5146,7 @@
       const totalQR = entryGeneratedQRData.length;
       const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
       let qrIndex = 0;
+      const imagePromises = []; // v307: 画像読み込みPromiseを収集
 
       for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
         const sheetDiv = document.createElement('div');
@@ -5174,16 +5179,31 @@
             cell.style.justifyContent = 'center';
 
             const qrData = entryGeneratedQRData[qrIndex];
-            // v295: QR + IDテキストのレイアウト（印刷用）
+            // v307: QR + IDテキストのレイアウト（印刷用）
             cell.style.flexDirection = 'column';
             cell.style.padding = '0.5mm';
 
-            // v303: 元のシンプルなimg方式に戻す
+            // v307: 画像を作成し、読み込み完了をPromiseで待機
             const img = document.createElement('img');
-            img.src = qrData.dataUrl;
             const qrSize = Math.min(labelWidth, labelHeight) * 0.75;
             img.style.width = qrSize + 'mm';
             img.style.height = qrSize + 'mm';
+
+            // v307: 画像読み込み完了をPromiseで追跡
+            const loadPromise = new Promise((resolve) => {
+              img.onload = () => {
+                console.log('[v307] Image loaded:', qrIndex);
+                resolve();
+              };
+              img.onerror = () => {
+                console.error('[v307] Image load error:', qrIndex);
+                resolve(); // エラーでも続行
+              };
+            });
+            imagePromises.push(loadPromise);
+
+            // src設定はonload/onerror設定後に行う
+            img.src = qrData.dataUrl;
             cell.appendChild(img);
 
             // IDテキスト（slotIdの末尾部分を表示）
@@ -5207,12 +5227,17 @@
         printArea.appendChild(sheetDiv);
       }
 
-      // v305: 印刷実行
-      setTimeout(() => {
-        window.print();
-        printerWarmedUp = true; // 印刷したらウォームアップ済み
-        setTimeout(() => { printArea.style.display = 'none'; }, 1000);
-      }, 100);
+      // v307: 全画像の読み込み完了を待ってから印刷
+      console.log('[v307] Waiting for', imagePromises.length, 'images to load...');
+      Promise.all(imagePromises).then(() => {
+        console.log('[v307] All images loaded, printing...');
+        // 少し待機してDOMの描画を確実にする
+        setTimeout(() => {
+          window.print();
+          printerWarmedUp = true;
+          setTimeout(() => { printArea.style.display = 'none'; }, 1000);
+        }, 200);
+      });
     }
 
     // ラベル設定を保存（PurchaseApi経由）
