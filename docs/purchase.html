@@ -6,8 +6,8 @@
   <base target="_top">
   <title>仕入管理 - FURIRA</title>
   <script>
-    // v308: QRコード印刷CSS修正（display方式）
-    console.log('🔴🔴🔴 purchase.html v308 loaded 🔴🔴🔴');
+    // v309: QRコード印刷修正（body直下移動方式）
+    console.log('🔴🔴🔴 purchase.html v309 loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -5236,15 +5236,31 @@
         printArea.appendChild(sheetDiv);
       }
 
-      // v307: 全画像の読み込み完了を待ってから印刷
-      console.log('[v307] Waiting for', imagePromises.length, 'images to load...');
+      // v309: 全画像の読み込み完了を待ってから印刷
+      console.log('[v309] Waiting for', imagePromises.length, 'images to load...');
       Promise.all(imagePromises).then(() => {
-        console.log('[v307] All images loaded, printing...');
-        // 少し待機してDOMの描画を確実にする
+        console.log('[v309] All images loaded, printing...');
+
+        // v309: printAreaをbody直下に移動（CSSで非表示にならないように）
+        const originalParent = printArea.parentNode;
+        const originalNextSibling = printArea.nextSibling;
+        document.body.appendChild(printArea);
+        console.log('[v309] Print area moved to body');
+
         setTimeout(() => {
           window.print();
           printerWarmedUp = true;
-          setTimeout(() => { printArea.style.display = 'none'; }, 1000);
+
+          // v309: 印刷後、元の位置に戻す
+          setTimeout(() => {
+            printArea.style.display = 'none';
+            if (originalNextSibling) {
+              originalParent.insertBefore(printArea, originalNextSibling);
+            } else {
+              originalParent.appendChild(printArea);
+            }
+            console.log('[v309] Print area moved back');
+          }, 1000);
         }, 200);
       });
     }
