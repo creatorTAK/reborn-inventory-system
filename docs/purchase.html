@@ -6,7 +6,7 @@
   <base target="_top">
   <title>仕入管理 - FURIRA</title>
   <script>
-    // v298: ラベル印刷dataUrl検証・遅延修正
+    // v299: ラベル印刷canvas方式・iOS Safari対応
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -1079,6 +1079,17 @@
       }
       .entry-label-sheet-print-area:last-child {
         page-break-after: auto;
+      }
+      /* v299: 印刷時の画像・キャンバス明示表示 */
+      #entryLabelPrintArea {
+        display: block !important;
+      }
+      #entryLabelPrintArea img,
+      #entryLabelPrintArea canvas {
+        display: block !important;
+        visibility: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
       @page {
         size: A4;
@@ -5136,12 +5147,25 @@
             cell.style.flexDirection = 'column';
             cell.style.padding = '0.5mm';
 
-            const img = document.createElement('img');
-            img.src = qrData.dataUrl;
-            const qrSize = Math.min(labelWidth, labelHeight) * 0.75; // 75%に縮小してテキスト用スペース確保
-            img.style.width = qrSize + 'mm';
-            img.style.height = qrSize + 'mm';
-            cell.appendChild(img);
+            // v299: canvasを直接コピー（iOS Safari対応）
+            const qrSize = Math.min(labelWidth, labelHeight) * 0.75;
+            const originalCanvas = document.querySelector(`#qr-entry-${qrIndex + 1} canvas`);
+            if (originalCanvas) {
+              const canvasCopy = document.createElement('canvas');
+              canvasCopy.width = originalCanvas.width;
+              canvasCopy.height = originalCanvas.height;
+              canvasCopy.getContext('2d').drawImage(originalCanvas, 0, 0);
+              canvasCopy.style.width = qrSize + 'mm';
+              canvasCopy.style.height = qrSize + 'mm';
+              cell.appendChild(canvasCopy);
+            } else {
+              // フォールバック: img要素を使用
+              const img = document.createElement('img');
+              img.src = qrData.dataUrl;
+              img.style.width = qrSize + 'mm';
+              img.style.height = qrSize + 'mm';
+              cell.appendChild(img);
+            }
 
             // IDテキスト（slotIdの末尾部分を表示）
             const idText = document.createElement('div');
@@ -5164,12 +5188,16 @@
         printArea.appendChild(sheetDiv);
       }
 
-            // v298: Data URLは同期読み込みのため短い遅延で印刷
-      console.log('[印刷] 画像数:', printArea.querySelectorAll('img').length);
+            // v299: デバッグ強化
+      const canvasCount = printArea.querySelectorAll('canvas').length;
+      const imgCount = printArea.querySelectorAll('img').length;
+      console.log('[印刷] canvas数:', canvasCount, 'img数:', imgCount);
+      console.log('[印刷] printArea表示:', printArea.style.display);
+      
       setTimeout(() => {
         window.print();
         setTimeout(() => { printArea.style.display = 'none'; }, 1000);
-      }, 300);
+      }, 500);
     }
 
     // ラベル設定を保存（PurchaseApi経由）
