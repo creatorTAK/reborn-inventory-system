@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v89-header-btn-unified'; // ヘッダーボタン統一
-const SW_VERSION = 'v89-header-btn-unified'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v90-chat-bg-darker'; // チャット背景少し濃く
+const SW_VERSION = 'v90-chat-bg-darker'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
