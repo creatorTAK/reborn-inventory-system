@@ -5211,6 +5211,7 @@ window.continueProductRegistration = function() {
         'color': 'color',
         'condition': 'condition',
         'material': 'material',
+        'accessories': 'accessories',
         'aiGeneration': 'aiGeneration',
         'discount': 'discount',
         'hashtag': 'hashtag'
@@ -5228,8 +5229,9 @@ window.continueProductRegistration = function() {
           { id: 'brand', enabled: true },
           { id: 'size', enabled: true },
           { id: 'color', enabled: true },
-          { id: 'condition', enabled: true },
           { id: 'material', enabled: true },
+          { id: 'accessories', enabled: true },
+          { id: 'condition', enabled: true },
           { id: 'aiGeneration', enabled: true },
           { id: 'discount', enabled: true },
           { id: 'hashtag', enabled: true }
@@ -5272,8 +5274,8 @@ window.continueProductRegistration = function() {
         console.log('✅ 管理番号を末尾（ハッシュタグの下）に配置');
       } else {
         // 中（商品情報の下）
-        // brand, size, color, condition, material の後に挿入
-        const productInfoIds = ['brand', 'size', 'color', 'condition', 'material'];
+        // brand, size, color, material, accessories, condition の後に挿入
+        const productInfoIds = ['brand', 'size', 'color', 'material', 'accessories', 'condition'];
         let insertIndex = 0;
 
         // parts配列の中で最後の商品情報要素の位置を見つける
