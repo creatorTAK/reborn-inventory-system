@@ -4402,10 +4402,14 @@
         if (!roomSnap.exists()) return;
 
         const roomData = roomSnap.data();
-        const members = roomData.members || [];
+        // memberEmailsを使用（DM/グループチャット対応）
+        // memberEmailsがない場合はmembersにフォールバック（旧形式互換）
+        const memberEmails = roomData.memberEmails || roomData.members || [];
+
+        console.log('[Unread] メンバーメール一覧:', memberEmails, '自分:', currentUserEmail);
 
         // 自分以外のメンバーの未読カウントを+1
-        for (const memberEmail of members) {
+        for (const memberEmail of memberEmails) {
           if (memberEmail !== currentUserEmail) {
             const unreadRef = doc(db, `rooms/${currentRoomId}/unreadCounts/${memberEmail}`);
             await setDoc(unreadRef, {
@@ -4413,6 +4417,7 @@
               unreadCount: increment(1),
               lastUpdatedAt: serverTimestamp()
             }, { merge: true });
+            console.log('[Unread] +1:', memberEmail);
           }
         }
 
