@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v78-menu-balanced'; // メニュー余白バランス調整
-const SW_VERSION = 'v78-menu-balanced'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v79-menu-fontsize'; // メニューフォントサイズ調整
+const SW_VERSION = 'v79-menu-fontsize'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
