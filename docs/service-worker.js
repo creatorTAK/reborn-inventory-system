@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v86-chat-ui-v326'; // チャット画面UI改善v326
-const SW_VERSION = 'v86-chat-ui-v326'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v87-chat-searchbar-fix'; // 検索バー背景色修正
+const SW_VERSION = 'v87-chat-searchbar-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
