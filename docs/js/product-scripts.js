@@ -43,7 +43,7 @@ async function goBack() {
     }
   });
 
-console.log('[product.html] ✅ Script loaded - Version @945-PWA-Brand-Preload');
+console.log('[product.html] ✅ Script loaded - Version @315-SlotAutoFill');
 
   // ブランドキャッシュをグローバルに初期化
   window.brandsCache = null;
@@ -51,6 +51,163 @@ console.log('[product.html] ✅ Script loaded - Version @945-PWA-Brand-Preload')
 
   // カテゴリコードキャッシュをグローバルに初期化
   window.categoryCodesCache = null;
+
+  // v315: QRスキャンからのスロットデータ自動反映
+  window.pendingSlotData = null;
+
+  /**
+   * v315: スロットデータから商品登録フォームに自動反映
+   * scan.htmlからsessionStorageに保存されたデータを読み込む
+   */
+  function checkAndApplySlotData() {
+    try {
+      const slotDataStr = sessionStorage.getItem('pendingSlotData');
+      if (!slotDataStr) return;
+
+      const slotData = JSON.parse(slotDataStr);
+      console.log('📦 [v315] スロットデータ検出:', slotData.slotId);
+
+      // グローバルに保存（後で商品登録時にslotIdを紐付けるため）
+      window.pendingSlotData = slotData;
+
+      // sessionStorageからは削除（重複適用防止）
+      sessionStorage.removeItem('pendingSlotData');
+
+      // 少し遅延してから反映（DOM要素の準備を待つ）
+      setTimeout(() => applySlotDataToForm(slotData), 500);
+
+    } catch (e) {
+      console.error('📦 [v315] スロットデータ読み込みエラー:', e);
+    }
+  }
+
+  /**
+   * v315: スロットデータをフォームに反映
+   */
+  function applySlotDataToForm(slotData) {
+    console.log('📦 [v315] フォームにスロットデータを反映中...');
+
+    // ブランド
+    if (slotData.brand) {
+      const brandInput = document.getElementById('ブランド');
+      if (brandInput) {
+        brandInput.value = slotData.brand;
+        console.log('📦 [v315] ブランド設定:', slotData.brand);
+      }
+    }
+
+    // サイズ
+    if (slotData.size) {
+      const sizeInput = document.getElementById('サイズ');
+      if (sizeInput) {
+        sizeInput.value = slotData.size;
+        console.log('📦 [v315] サイズ設定:', slotData.size);
+      }
+    }
+
+    // 商品の状態
+    if (slotData.condition) {
+      const conditionSelect = document.getElementById('商品の状態');
+      if (conditionSelect) {
+        conditionSelect.value = slotData.condition;
+        console.log('📦 [v315] 商品の状態設定:', slotData.condition);
+      }
+    }
+
+    // カテゴリ（7階層）
+    if (slotData.category) {
+      applyCategoryFromSlot(slotData.category);
+    }
+
+    // 付属品（備考欄に追加）
+    if (slotData.accessories && slotData.accessories.length > 0) {
+      const remarksInput = document.getElementById('備考');
+      if (remarksInput) {
+        const accessoriesText = '【付属品】' + slotData.accessories.join('、');
+        remarksInput.value = remarksInput.value ? remarksInput.value + '\n' + accessoriesText : accessoriesText;
+        console.log('📦 [v315] 付属品設定:', slotData.accessories);
+      }
+    }
+
+    // メモ（備考欄に追加）
+    if (slotData.note) {
+      const remarksInput = document.getElementById('備考');
+      if (remarksInput) {
+        const noteText = '【検品メモ】' + slotData.note;
+        remarksInput.value = remarksInput.value ? remarksInput.value + '\n' + noteText : noteText;
+      }
+    }
+
+    // ダメージマーカー画像がある場合は通知
+    if (slotData.damageMarkerImage) {
+      console.log('📦 [v315] ダメージマーカー画像あり');
+      // 将来的に商品画像に追加する機能を実装可能
+    }
+
+    console.log('📦 [v315] スロットデータ反映完了');
+
+    // 反映完了通知（ユーザーへのフィードバック）
+    showSlotDataAppliedNotification(slotData);
+  }
+
+  /**
+   * v315: カテゴリ情報を反映（7階層対応）
+   */
+  function applyCategoryFromSlot(category) {
+    // カテゴリはプルダウンの連動があるため、順番に設定する必要がある
+    // 現在のカテゴリシステムの構造に合わせて実装
+    console.log('📦 [v315] カテゴリ反映:', category);
+
+    // 大分類から順に設定（簡易版：アイテム名を商品名に反映）
+    if (category.itemName) {
+      const productNameInput = document.getElementById('商品名');
+      if (productNameInput && !productNameInput.value) {
+        // 商品名が空の場合のみアイテム名を設定
+        productNameInput.value = category.itemName;
+        console.log('📦 [v315] 商品名にアイテム名設定:', category.itemName);
+      }
+    }
+
+    // TODO: カテゴリプルダウンの連動設定（複雑なため将来実装）
+  }
+
+  /**
+   * v315: スロットデータ反映完了通知
+   */
+  function showSlotDataAppliedNotification(slotData) {
+    // 簡易トースト通知
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #10b981;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10000;
+      animation: fadeInUp 0.3s ease;
+    `;
+    toast.innerHTML = `<i class="bi bi-check-circle me-2"></i>検品情報を反映しました`;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+  // v315: ページ読み込み時にスロットデータをチェック
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', checkAndApplySlotData);
+  } else {
+    checkAndApplySlotData();
+  }
 
   /**
    * 親ウィンドウからデータを受信（Algolia移行版）
