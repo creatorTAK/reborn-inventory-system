@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v100-badge-fix'; // バッジ修正(memberEmails使用)
-const SW_VERSION = 'v100-badge-fix'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v101-badge-debug'; // バッジデバッグ追加
+const SW_VERSION = 'v101-badge-debug'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
