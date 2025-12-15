@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v75-slot-autofill'; // QRスキャン→商品登録自動反映
-const SW_VERSION = 'v75-slot-autofill'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v76-menu-responsive'; // トップメニューレスポンシブ対応
+const SW_VERSION = 'v76-menu-responsive'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
