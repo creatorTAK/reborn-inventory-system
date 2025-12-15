@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v84-qr-btn-toggle'; // QRボタン条件表示
-const SW_VERSION = 'v84-qr-btn-toggle'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v85-chat-ui-fix'; // チャット画面UI改善
+const SW_VERSION = 'v85-chat-ui-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
