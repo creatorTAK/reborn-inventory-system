@@ -30,10 +30,36 @@ function handleOptions() {
   });
 }
 
+// MIMEタイプからファイル拡張子を取得
+function getFileExtension(mimeType) {
+  const mimeToExt = {
+    'audio/webm': 'webm',
+    'audio/mp4': 'm4a',
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/ogg': 'ogg',
+    'audio/aac': 'm4a',
+    'audio/x-m4a': 'm4a',
+    'audio/m4a': 'm4a',
+  };
+
+  // MIMEタイプからコーデック部分を除去 (例: audio/webm;codecs=opus -> audio/webm)
+  const baseMime = mimeType.split(';')[0].trim().toLowerCase();
+
+  return mimeToExt[baseMime] || 'webm';
+}
+
 // Call OpenAI Whisper API
-async function transcribeAudio(apiKey, audioBlob) {
+async function transcribeAudio(apiKey, audioBlob, mimeType) {
+  const ext = getFileExtension(mimeType);
+  const filename = `audio.${ext}`;
+
+  console.log('Sending to Whisper:', filename, 'mimeType:', mimeType, 'size:', audioBlob.size);
+
   const formData = new FormData();
-  formData.append('file', audioBlob, 'audio.webm');
+  formData.append('file', audioBlob, filename);
   formData.append('model', 'whisper-1');
   formData.append('language', 'ja');
   formData.append('response_format', 'json');
@@ -49,7 +75,7 @@ async function transcribeAudio(apiKey, audioBlob) {
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Whisper API error:', response.status, errorText);
-    throw new Error(`Whisper API error: ${response.status}`);
+    throw new Error(`Whisper API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
@@ -82,25 +108,41 @@ export default {
 
         // Get audio data from request
         const contentType = request.headers.get('content-type') || '';
+        console.log('Request content-type:', contentType);
 
         let audioBlob;
+        let mimeType = 'audio/webm'; // デフォルト
+
         if (contentType.includes('multipart/form-data')) {
           // FormData形式
           const formData = await request.formData();
           audioBlob = formData.get('audio');
+          if (audioBlob && audioBlob.type) {
+            mimeType = audioBlob.type;
+          }
         } else {
           // Raw blob形式
           audioBlob = await request.blob();
+          mimeType = audioBlob.type || contentType;
         }
 
         if (!audioBlob || audioBlob.size === 0) {
+          console.error('No audio data received');
           return jsonResponse({ error: 'Audio data is required' }, 400);
         }
 
-        console.log('Received audio:', audioBlob.size, 'bytes, type:', audioBlob.type);
+        console.log('Received audio:', audioBlob.size, 'bytes, type:', mimeType);
+
+        // 最小サイズチェック（100バイト未満は無効）
+        if (audioBlob.size < 100) {
+          console.error('Audio too small:', audioBlob.size);
+          return jsonResponse({ error: 'Audio data too small' }, 400);
+        }
 
         // Call Whisper API
-        const transcription = await transcribeAudio(env.OPENAI_API_KEY, audioBlob);
+        const transcription = await transcribeAudio(env.OPENAI_API_KEY, audioBlob, mimeType);
+
+        console.log('Transcription result:', transcription);
 
         return jsonResponse({
           text: transcription,
@@ -108,7 +150,7 @@ export default {
         });
 
       } catch (error) {
-        console.error('Transcription error:', error);
+        console.error('Transcription error:', error.message);
         return jsonResponse({
           error: 'Failed to transcribe audio',
           details: error.message
