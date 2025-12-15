@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v81-menu-logo-bigger'; // ロゴさらに拡大
-const SW_VERSION = 'v81-menu-logo-bigger'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v82-scan-skip'; // スキャンスキップ機能
+const SW_VERSION = 'v82-scan-skip'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
