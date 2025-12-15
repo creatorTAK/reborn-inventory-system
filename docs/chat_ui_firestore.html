@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-15 v2 - iOS Safari flex+100dvh レイアウト (ChatGPT推奨) -->
+  <!-- Cache Bust: 2025-12-15 v3 - iOS Safari PWA対応: 親ページヘッダー移動方式 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -1472,11 +1472,9 @@
     }
 
     /* メンバーアイコン行（グループチャット用）- オーバーレイ表示 */
-    /* ★ iOS Safari PWA対応: fixedをやめてflexで固定 */
+    /* ★★★ iOS Safari PWA対応: 親ページにヘッダーを移動したため非表示 ★★★ */
     .header {
-      flex-shrink: 0;
-      z-index: 100;
-      background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%);
+      display: none !important; /* 親ページのヘッダーを使用 */
     }
     .header .back-button {
       width: 40px;
@@ -2259,6 +2257,16 @@
 
 
           console.log('[Room] ルーム名表示完了:', currentRoomName);
+
+          // ★★★ iOS Safari PWA対応: 親ページのヘッダーにルーム名を送信 ★★★
+          if (window.parent && window.parent !== window) {
+            const displayName = isDM ? currentRoomName : `${roomIcon} ${currentRoomName}`;
+            window.parent.postMessage({
+              type: 'updateChatHeader',
+              roomName: displayName
+            }, '*');
+            console.log('[Room] 親ページへルーム名送信:', displayName);
+          }
         } else {
           console.error('[Room] ルームが見つかりません:', currentRoomId);
         }
@@ -2486,6 +2494,26 @@
       // beforeunload でも閲覧終了を記録（pagehideが発火しない場合の保険）
       window.addEventListener('beforeunload', () => {
         clearViewingStatus();
+      });
+
+      // ★★★ iOS Safari PWA対応: 親ページからのメッセージを受信 ★★★
+      window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data || !data.type) return;
+
+        // 戻るボタン押下
+        if (data.type === 'goBackFromParent') {
+          console.log('[Chat UI] 親ページから戻る指示を受信');
+          goBack();
+        }
+
+        // 検索ボタン押下
+        if (data.type === 'openSearchFromParent') {
+          console.log('[Chat UI] 親ページから検索モード開始指示を受信');
+          if (typeof openSearchMode === 'function') {
+            openSearchMode();
+          }
+        }
       });
 
       // ルームのmembersに自分を追加（未追加の場合）
