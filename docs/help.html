@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- v309: AIサポートチャットボット追加 -->
+  <!-- v310: チャットボット音声入力対応 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ヘルプ - フリラ</title>
@@ -563,6 +563,43 @@
     .chat-send-btn:not(:disabled):active {
       background: var(--reborn-primary-dark, #1E8FBF);
     }
+
+    /* 音声入力ボタン */
+    .chat-voice-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #f3f4f6;
+      color: #6b7280;
+      border: 1px solid #e5e7eb;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+
+    .chat-voice-btn:hover {
+      background: #e5e7eb;
+    }
+
+    .chat-voice-btn.recording {
+      background: #ef4444;
+      color: white;
+      border-color: #ef4444;
+      animation: pulse-recording 1.5s infinite;
+    }
+
+    .chat-voice-btn.not-supported {
+      display: none;
+    }
+
+    @keyframes pulse-recording {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    }
   </style>
 </head>
 <body>
@@ -749,6 +786,9 @@
         onkeydown="handleKeyDown(event)"
         oninput="autoResize(this)"
       ></textarea>
+      <button class="chat-voice-btn" id="chatVoiceBtn" onclick="toggleVoiceInput()" title="音声入力">
+        <i class="bi bi-mic-fill"></i>
+      </button>
       <button class="chat-send-btn" id="chatSendBtn" onclick="sendMessage()" disabled>
         <i class="bi bi-send-fill"></i>
       </button>
@@ -941,6 +981,152 @@
         });
       }
     });
+
+    // ========================================
+    // 音声入力機能（Web Speech API）
+    // ========================================
+
+    let recognition = null;
+    let isRecording = false;
+
+    // Web Speech API の初期化
+    function initVoiceInput() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const voiceBtn = document.getElementById('chatVoiceBtn');
+
+      if (!SpeechRecognition) {
+        // 音声認識非対応ブラウザ
+        if (voiceBtn) {
+          voiceBtn.classList.add('not-supported');
+        }
+        console.log('Web Speech API not supported');
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = function() {
+        isRecording = true;
+        if (voiceBtn) {
+          voiceBtn.classList.add('recording');
+          voiceBtn.querySelector('i').className = 'bi bi-stop-fill';
+        }
+      };
+
+      recognition.onend = function() {
+        isRecording = false;
+        if (voiceBtn) {
+          voiceBtn.classList.remove('recording');
+          voiceBtn.querySelector('i').className = 'bi bi-mic-fill';
+        }
+      };
+
+      recognition.onerror = function(event) {
+        console.error('Speech recognition error:', event.error);
+        isRecording = false;
+        if (voiceBtn) {
+          voiceBtn.classList.remove('recording');
+          voiceBtn.querySelector('i').className = 'bi bi-mic-fill';
+        }
+
+        // エラーメッセージ表示
+        if (event.error === 'no-speech') {
+          showVoiceError('音声が検出されませんでした');
+        } else if (event.error === 'not-allowed') {
+          showVoiceError('マイクの使用が許可されていません');
+        } else {
+          showVoiceError('音声認識エラーが発生しました');
+        }
+      };
+
+      recognition.onresult = function(event) {
+        const input = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('chatSendBtn');
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        // 確定テキストを入力欄に追加
+        if (finalTranscript) {
+          const currentValue = input.value;
+          input.value = currentValue + (currentValue ? ' ' : '') + finalTranscript;
+          autoResize(input);
+          if (sendBtn) {
+            sendBtn.disabled = !input.value.trim();
+          }
+        }
+      };
+    }
+
+    // 音声入力の開始/停止トグル
+    function toggleVoiceInput() {
+      if (!recognition) {
+        showVoiceError('このブラウザは音声入力に対応していません');
+        return;
+      }
+
+      if (isRecording) {
+        recognition.stop();
+      } else {
+        try {
+          recognition.start();
+        } catch (e) {
+          console.error('Failed to start recognition:', e);
+        }
+      }
+    }
+
+    // 音声エラー表示
+    function showVoiceError(message) {
+      // 一時的なトースト表示
+      const toast = document.createElement('div');
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1f2937;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-size: 13px;
+        z-index: 9999;
+        animation: fadeInOut 3s ease-in-out;
+      `;
+      toast.textContent = message;
+
+      // アニメーション用スタイル追加
+      if (!document.getElementById('voiceToastStyle')) {
+        const style = document.createElement('style');
+        style.id = 'voiceToastStyle';
+        style.textContent = `
+          @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ページ読み込み時に音声入力を初期化
+    document.addEventListener('DOMContentLoaded', initVoiceInput);
   </script>
 </body>
 </html>
