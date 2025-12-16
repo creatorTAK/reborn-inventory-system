@@ -2275,10 +2275,9 @@
     }
 
     async function initializePage() {
-      // 今月をデフォルトに
-      const now = new Date();
-      document.getElementById('purchaseMonth').value = now.toISOString().slice(0, 7);
-      document.getElementById('paymentDate').value = now.toISOString().slice(0, 10);
+      // 今月をデフォルトに（日本時間）
+      document.getElementById('purchaseMonth').value = getJSTMonth();
+      document.getElementById('paymentDate').value = getJSTToday();
 
       // 仕入登録タブを初期化（PurchaseApiが確実に利用可能な状態）
       initializeEntryTab();
@@ -2468,7 +2467,7 @@
         return;
       }
 
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getJSTToday();
       let html = '';
       Object.values(scheduleMap).sort((a, b) => a.date.localeCompare(b.date)).forEach(schedule => {
         const isOverdue = schedule.date < today;
@@ -2897,14 +2896,13 @@
      * 支払通知書発行モーダルを開く
      */
     window.openPaymentNoticeModal = function(items = []) {
-      // 初期値設定
-      const today = new Date();
-      document.getElementById('paymentNoticeDate').value = today.toISOString().slice(0, 10);
+      // 初期値設定（日本時間）
+      const todayStr = getJSTToday();
+      document.getElementById('paymentNoticeDate').value = todayStr;
 
-      // 通知番号自動生成
-      const noticeNumber = 'PAY-' + today.getFullYear() +
-        String(today.getMonth() + 1).padStart(2, '0') +
-        String(today.getDate()).padStart(2, '0') + '-' +
+      // 通知番号自動生成（日本時間ベース）
+      const [year, month, day] = todayStr.split('-');
+      const noticeNumber = 'PAY-' + year + month + day + '-' +
         String(Math.floor(Math.random() * 1000)).padStart(3, '0');
       document.getElementById('paymentNoticeNumber').value = noticeNumber;
 
@@ -3140,6 +3138,21 @@
     // ========================================
     // 仕入登録タブ機能
     // ========================================
+
+    // 日本時間で今日の日付を取得（YYYY-MM-DD形式）
+    function getJSTToday() {
+      const now = new Date();
+      // 日本時間に変換（UTC+9）
+      const jst = new Date(now.getTime() + (9 * 60 + now.getTimezoneOffset()) * 60000);
+      return jst.toISOString().slice(0, 10);
+    }
+
+    // 日本時間で今月を取得（YYYY-MM形式）
+    function getJSTMonth() {
+      const now = new Date();
+      const jst = new Date(now.getTime() + (9 * 60 + now.getTimezoneOffset()) * 60000);
+      return jst.toISOString().slice(0, 7);
+    }
 
     // グローバル変数（仕入登録用）
     let entrySuppliersData = [];
@@ -3526,8 +3539,8 @@
     async function initializeEntryTab() {
       console.log('📥 [仕入登録] 初期化開始');
 
-      // 今日の日付を即座にセット（API待機不要）
-      const today = new Date().toISOString().split('T')[0];
+      // 今日の日付を即座にセット（日本時間）
+      const today = getJSTToday();
       document.getElementById('entryPurchaseDate').value = today;
       document.getElementById('defaultPurchaseDate').value = today;
 
@@ -5425,7 +5438,7 @@
       document.getElementById('qrEntryPreview').style.display = 'none';
       document.getElementById('entryAfterActions').style.display = 'none';
       document.getElementById('qrEntryGrid').innerHTML = '';
-      const today = new Date().toISOString().split('T')[0];
+      const today = getJSTToday();
       document.getElementById('entryPurchaseDate').value = today;
       document.getElementById('defaultPurchaseDate').value = today;  // 個別入力デフォルト
       document.getElementById('entrySupplier').value = '';
