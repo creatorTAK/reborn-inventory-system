@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v303';  // ヘッダー幅修正v303（body:has(.header)方式）
+const CACHE_VERSION = 'v304';  // ヘッダーを親ページに移動（幅問題根本解決）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
