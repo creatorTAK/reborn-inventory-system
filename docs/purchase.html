@@ -1373,16 +1373,10 @@
                     <div class="preset-info">48.3×25.4mm</div>
                   </div>
                 </div>
-                <div class="col-6">
-                  <div class="entry-label-preset-btn" onclick="selectEntryLabelPreset('custom')" data-preset="custom">
-                    <div class="preset-name">カスタム</div>
-                    <div class="preset-info">自由設定</div>
-                  </div>
-                </div>
               </div>
 
-              <!-- カスタム設定パネル -->
-              <div class="entry-custom-settings" id="entryCustomSettings" style="display: none;">
+              <!-- 詳細設定パネル（常時表示） -->
+              <div class="entry-custom-settings mt-3" id="entryCustomSettings">
                 <div class="row g-2">
                   <div class="col-6">
                     <label class="form-label">幅 (mm)</label>
@@ -1417,9 +1411,14 @@
                     <input type="number" class="form-control form-control-sm" id="entryGapY" value="4" step="0.5" onchange="updateEntryLabelPreview()">
                   </div>
                 </div>
-                <button class="btn btn-sm btn-outline-secondary mt-2" onclick="saveEntryLabelSettings()">
-                  <i class="bi bi-save"></i> 設定を保存
-                </button>
+                <div class="d-flex gap-2 mt-2">
+                  <button class="btn btn-sm btn-outline-primary" onclick="saveEntryLabelSettings()">
+                    <i class="bi bi-save"></i> 設定を保存
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="resetEntryLabelToDefault()">
+                    <i class="bi bi-arrow-counterclockwise"></i> デフォルトに戻す
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2068,15 +2067,34 @@
     }
 
     /**
-     * 仕入登録用: ラベル設定を保存
+     * 仕入登録用: ラベル設定を保存（プリセットごと）
      */
-    async function saveEntryLabelSettingsToFirestore(settings) {
+    async function saveEntryLabelSettingsToFirestore(presetKey, settings) {
       try {
-        await db.collection('settings').doc('labelSettings').set(settings, { merge: true });
+        await db.collection('settings').doc('labelSettings').set({
+          [`presets.${presetKey}`]: settings
+        }, { merge: true });
         return true;
       } catch (error) {
         console.error('ラベル設定保存エラー:', error);
         return false;
+      }
+    }
+
+    /**
+     * 仕入登録用: 全プリセットのラベル設定を取得
+     */
+    async function getAllLabelSettings() {
+      try {
+        const settingsSnap = await db.collection('settings').doc('labelSettings').get();
+        if (settingsSnap.exists) {
+          const data = settingsSnap.data();
+          return data.presets || null;
+        }
+        return null;
+      } catch (error) {
+        console.error('ラベル設定取得エラー:', error);
+        return null;
       }
     }
 
@@ -2230,6 +2248,7 @@
       getEntrySuppliersData,
       getEntryAssigneesData,
       getEntryLabelSettings,
+      getAllLabelSettings,
       saveEntryLabelSettingsToFirestore,
       savePurchaseBatch,
       getSlotBySlotId,
@@ -3151,11 +3170,21 @@
       perSheet: 70
     };
 
-    const entryLabelPresets = {
+    // 現在選択中のプリセットキー
+    let currentEntryPresetKey = '70face';
+
+    // プリセットのデフォルト値（変更不可）
+    const entryLabelPresetsDefault = {
       '70face': { name: '70面', labelWidth: 20, labelHeight: 20, cols: 7, rows: 10, marginTop: 22, marginLeft: 11.5, gapX: 4, gapY: 4, perSheet: 70 },
       '24face': { name: '24面', labelWidth: 66, labelHeight: 33.9, cols: 3, rows: 8, marginTop: 8.5, marginLeft: 5, gapX: 2.5, gapY: 0, perSheet: 24 },
-      '44face': { name: '44面', labelWidth: 48.3, labelHeight: 25.4, cols: 4, rows: 11, marginTop: 12.7, marginLeft: 7, gapX: 2.5, gapY: 0, perSheet: 44 },
-      'custom': { name: 'カスタム', labelWidth: 20, labelHeight: 20, cols: 7, rows: 10, marginTop: 22, marginLeft: 11.5, gapX: 4, gapY: 4, perSheet: 70 }
+      '44face': { name: '44面', labelWidth: 48.3, labelHeight: 25.4, cols: 4, rows: 11, marginTop: 12.7, marginLeft: 7, gapX: 2.5, gapY: 0, perSheet: 44 }
+    };
+
+    // ユーザー調整可能なプリセット（保存対象）
+    const entryLabelPresets = {
+      '70face': { ...entryLabelPresetsDefault['70face'] },
+      '24face': { ...entryLabelPresetsDefault['24face'] },
+      '44face': { ...entryLabelPresetsDefault['44face'] }
     };
 
     // ========================================
@@ -5002,17 +5031,17 @@
 
     // ラベルプリセット選択
     function selectEntryLabelPreset(presetKey) {
+      // 現在のプリセットキーを記録
+      currentEntryPresetKey = presetKey;
+
+      // ボタンのアクティブ状態を更新
       document.querySelectorAll('.entry-label-preset-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.preset === presetKey);
       });
-      document.getElementById('entryCustomSettings').style.display = presetKey === 'custom' ? 'block' : 'none';
 
-      if (presetKey !== 'custom') {
-        currentEntryLabelSettings = { ...entryLabelPresets[presetKey] };
-        updateEntryCustomInputs();
-      } else {
-        readEntryCustomInputs();
-      }
+      // プリセットの設定を適用
+      currentEntryLabelSettings = { ...entryLabelPresets[presetKey] };
+      updateEntryCustomInputs();
       updateEntryLabelInfo();
       updateEntryLabelPreview();
     }
@@ -5295,47 +5324,89 @@
       }
     }
 
-    // ラベル設定を保存（PurchaseApi経由）
+    // ラベル設定を保存（プリセットごと）
     async function saveEntryLabelSettings() {
       readEntryCustomInputs();
+      // 現在のプリセットに設定を反映
+      entryLabelPresets[currentEntryPresetKey] = { ...currentEntryLabelSettings };
+
       try {
         if (window.PurchaseApi && window.PurchaseApi.saveEntryLabelSettingsToFirestore) {
-          const success = await window.PurchaseApi.saveEntryLabelSettingsToFirestore(currentEntryLabelSettings);
+          const success = await window.PurchaseApi.saveEntryLabelSettingsToFirestore(currentEntryPresetKey, currentEntryLabelSettings);
           if (success) {
-            alert('✅ 設定を保存しました');
+            // ローカルにも保存（バックアップ）
+            const allPresets = JSON.parse(localStorage.getItem('entryLabelPresets') || '{}');
+            allPresets[currentEntryPresetKey] = currentEntryLabelSettings;
+            localStorage.setItem('entryLabelPresets', JSON.stringify(allPresets));
+            alert(`✅ ${entryLabelPresetsDefault[currentEntryPresetKey]?.name || currentEntryPresetKey}の設定を保存しました`);
           } else {
             alert('⚠️ 設定の保存に失敗しました');
           }
         } else {
           // ローカルストレージに保存（フォールバック）
-          localStorage.setItem('entryLabelSettings', JSON.stringify(currentEntryLabelSettings));
-          alert('✅ 設定を保存しました（ローカル）');
+          const allPresets = JSON.parse(localStorage.getItem('entryLabelPresets') || '{}');
+          allPresets[currentEntryPresetKey] = currentEntryLabelSettings;
+          localStorage.setItem('entryLabelPresets', JSON.stringify(allPresets));
+          alert(`✅ ${entryLabelPresetsDefault[currentEntryPresetKey]?.name || currentEntryPresetKey}の設定を保存しました（ローカル）`);
         }
       } catch (error) {
         console.error('設定保存エラー:', error);
       }
     }
 
-    // ラベル設定を読み込み（PurchaseApi経由）
+    // ラベル設定を読み込み（全プリセット）
     async function loadEntryLabelSettings() {
       try {
-        if (window.PurchaseApi && window.PurchaseApi.getEntryLabelSettings) {
-          const saved = await window.PurchaseApi.getEntryLabelSettings();
-          if (saved) {
-            entryLabelPresets['custom'] = { ...saved, name: 'カスタム' };
-            console.log('📥 [仕入登録] ラベル設定読み込み完了');
-          }
-        } else {
-          // ローカルストレージから読み込み（フォールバック）
-          const localSaved = localStorage.getItem('entryLabelSettings');
+        let savedPresets = null;
+
+        if (window.PurchaseApi && window.PurchaseApi.getAllLabelSettings) {
+          savedPresets = await window.PurchaseApi.getAllLabelSettings();
+        }
+
+        // Firestoreから取得できない場合はローカルストレージから
+        if (!savedPresets) {
+          const localSaved = localStorage.getItem('entryLabelPresets');
           if (localSaved) {
-            const parsed = JSON.parse(localSaved);
-            entryLabelPresets['custom'] = { ...parsed, name: 'カスタム' };
+            savedPresets = JSON.parse(localSaved);
           }
         }
+
+        // 保存された設定をプリセットに反映
+        if (savedPresets) {
+          for (const key of Object.keys(entryLabelPresets)) {
+            if (savedPresets[key]) {
+              entryLabelPresets[key] = { ...entryLabelPresetsDefault[key], ...savedPresets[key] };
+            }
+          }
+          console.log('📥 [仕入登録] ラベル設定読み込み完了');
+        }
+
+        // 現在選択中のプリセットを反映
+        currentEntryLabelSettings = { ...entryLabelPresets[currentEntryPresetKey] };
+        updateEntryCustomInputs();
       } catch (error) {
         console.error('ラベル設定読み込みエラー:', error);
       }
+    }
+
+    // デフォルト設定に戻す
+    function resetEntryLabelToDefault() {
+      if (!confirm(`${entryLabelPresetsDefault[currentEntryPresetKey]?.name || currentEntryPresetKey}をデフォルト設定に戻しますか？`)) {
+        return;
+      }
+
+      // デフォルト値に戻す
+      entryLabelPresets[currentEntryPresetKey] = { ...entryLabelPresetsDefault[currentEntryPresetKey] };
+      currentEntryLabelSettings = { ...entryLabelPresets[currentEntryPresetKey] };
+      updateEntryCustomInputs();
+      updateEntryLabelPreview();
+
+      // ローカルストレージからも削除
+      const allPresets = JSON.parse(localStorage.getItem('entryLabelPresets') || '{}');
+      delete allPresets[currentEntryPresetKey];
+      localStorage.setItem('entryLabelPresets', JSON.stringify(allPresets));
+
+      alert('✅ デフォルト設定に戻しました');
     }
 
     // フォームリセット
