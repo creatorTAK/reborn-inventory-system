@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <!-- v322: AIチャットUI改善（左=閉じる、右=履歴） -->
+  <!-- v323: ユーザーID取得をフリラ標準方式に修正 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ヘルプ - フリラ</title>
@@ -995,33 +995,37 @@
     // Cloudflare Worker エンドポイント
     const CHATBOT_API_ENDPOINT = 'https://reborn-help-chatbot.mercari-yasuhirotakuji.workers.dev/chat';
 
-    // ユーザーID取得（親フレームから）
+    // ユーザーID取得（localStorageから - フリラ標準方式）
     function getUserId() {
-      return new Promise((resolve) => {
-        // 親フレームにユーザーID要求
-        window.parent.postMessage({ type: 'requestUserId' }, '*');
+      // フリラのログイン情報からメールアドレスを取得
+      const userEmail = localStorage.getItem('reborn_user_email');
+      if (userEmail) {
+        console.log('[Help] ユーザーID（メール）:', userEmail);
+        return userEmail;
+      }
 
-        // レスポンス待ち
-        const handler = (event) => {
-          if (event.data && event.data.type === 'userId') {
-            window.removeEventListener('message', handler);
-            resolve(event.data.userId);
-          }
-        };
-        window.addEventListener('message', handler);
+      // フォールバック: Firebase UIDを試す
+      const firebaseUid = localStorage.getItem('reborn_firebase_uid');
+      if (firebaseUid) {
+        console.log('[Help] ユーザーID（Firebase UID）:', firebaseUid);
+        return firebaseUid;
+      }
 
-        // タイムアウト（3秒後にlocalStorageから取得を試みる）
-        setTimeout(() => {
-          window.removeEventListener('message', handler);
-          const storedUserId = localStorage.getItem('currentUserId');
-          resolve(storedUserId || 'anonymous_' + Date.now());
-        }, 3000);
-      });
+      // 最終フォールバック: デバイス固有IDを生成・保存
+      let deviceId = localStorage.getItem('help_chat_device_id');
+      if (!deviceId) {
+        deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('help_chat_device_id', deviceId);
+        console.log('[Help] 新規デバイスID生成:', deviceId);
+      } else {
+        console.log('[Help] 既存デバイスID:', deviceId);
+      }
+      return deviceId;
     }
 
     // 初期化
-    async function initChat() {
-      currentUserId = await getUserId();
+    function initChat() {
+      currentUserId = getUserId();
       console.log('[Help] ユーザーID:', currentUserId);
 
       // 会話一覧を読み込み
