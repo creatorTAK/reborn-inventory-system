@@ -1596,7 +1596,7 @@ style="display:none;">削除</button>
     link.click();
   }
 
-  // QRコード印刷
+  // QRコード印刷 v307: iOS対応（閉じるボタン追加）
   function printQRCode() {
     const canvas = document.getElementById('qrCodeCanvas');
     const mgmtNumber = document.getElementById('qrMgmtNumber').textContent;
@@ -1622,6 +1622,29 @@ style="display:none;">削除</button>
           .info { flex: 1; }
           .mgmt-number { font-size: 14pt; font-weight: bold; }
           .product-name { font-size: 8pt; color: #666; margin-top: 2mm; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30mm; }
+          /* v307: iOS用の閉じるボタン */
+          .close-btn-container {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            z-index: 9999;
+          }
+          .close-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          }
+          @media print {
+            .close-btn-container { display: none !important; }
+          }
         </style>
       </head>
       <body>
@@ -1630,13 +1653,21 @@ style="display:none;">削除</button>
           <div class="mgmt-number">${mgmtNumber}</div>
           <div class="product-name">${productName}</div>
         </div>
+        <!-- v307: iOS用の閉じるボタン -->
+        <div class="close-btn-container">
+          <button class="close-btn" onclick="window.close(); history.back();">印刷完了・閉じる</button>
+        </div>
       </body>
       </html>
     `);
     printWindow.document.close();
     printWindow.onload = function() {
       printWindow.print();
-      printWindow.close();
+      // v307: iOS Safariではwindow.close()が効かないため、ボタンで閉じる
+      // PCブラウザでは自動で閉じる試行
+      setTimeout(function() {
+        try { printWindow.close(); } catch(e) {}
+      }, 1000);
     };
   }
 
