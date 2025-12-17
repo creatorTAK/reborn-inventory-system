@@ -4796,10 +4796,19 @@
       checkShowPrinterWarmupNotice(); // v305: iOS印刷ウォームアップ通知
 
       setTimeout(() => {
+        console.log('[v323] dataUrl抽出開始, 対象:', entryGeneratedQRData.length, '件');
+        let extracted = 0;
         for (let i = 0; i < entryGeneratedQRData.length; i++) {
-          const canvas = document.querySelector(`#qr-entry-${i + 1} canvas`);
-          if (canvas) entryGeneratedQRData[i].dataUrl = canvas.toDataURL('image/png');
+          const selector = `#qr-entry-${i + 1} canvas`;
+          const canvas = document.querySelector(selector);
+          if (canvas) {
+            entryGeneratedQRData[i].dataUrl = canvas.toDataURL('image/png');
+            extracted++;
+          } else {
+            console.error('[v323] canvas見つからず:', selector);
+          }
         }
+        console.log('[v323] dataUrl抽出完了:', extracted, '/', entryGeneratedQRData.length);
         if (currentEntryPrintMode === 'label') updateEntryLabelPreview();
         updateEntryLabelInfo();
       }, 500);
@@ -4993,10 +5002,19 @@
       checkShowPrinterWarmupNotice(); // v305: iOS印刷ウォームアップ通知
 
       setTimeout(() => {
+        console.log('[v323] 個別モード dataUrl抽出開始, 対象:', entryGeneratedQRData.length, '件');
+        let extracted = 0;
         for (let i = 0; i < entryGeneratedQRData.length; i++) {
-          const canvas = document.querySelector(`#qr-entry-${i + 1} canvas`);
-          if (canvas) entryGeneratedQRData[i].dataUrl = canvas.toDataURL('image/png');
+          const selector = `#qr-entry-${i + 1} canvas`;
+          const canvas = document.querySelector(selector);
+          if (canvas) {
+            entryGeneratedQRData[i].dataUrl = canvas.toDataURL('image/png');
+            extracted++;
+          } else {
+            console.error('[v323] 個別モード canvas見つからず:', selector);
+          }
         }
+        console.log('[v323] 個別モード dataUrl抽出完了:', extracted, '/', entryGeneratedQRData.length);
         if (currentEntryPrintMode === 'label') updateEntryLabelPreview();
         updateEntryLabelInfo();
       }, 500);
@@ -5121,6 +5139,8 @@
 
     // ラベルシートプレビューを更新
     function updateEntryLabelPreview() {
+      console.log('[v323] updateEntryLabelPreview開始, QRデータ数:', entryGeneratedQRData.length);
+      
       if (document.querySelector('.entry-label-preset-btn[data-preset="custom"].active')) {
         readEntryCustomInputs();
       }
@@ -5130,6 +5150,10 @@
         document.getElementById('entryLabelSheetContainer').innerHTML = '<div class="text-center text-muted py-4">QRコードを生成するとプレビューが表示されます</div>';
         return;
       }
+      
+      // dataUrl状態をログ
+      const withDataUrl = entryGeneratedQRData.filter(qr => qr.dataUrl).length;
+      console.log('[v323] dataUrl設定済み:', withDataUrl, '/', entryGeneratedQRData.length);
 
       const container = document.getElementById('entryLabelSheetContainer');
       container.innerHTML = '';
@@ -5410,12 +5434,41 @@
 
     // ===== ラベル印刷履歴機能 ここまで =====
 
-    // ラベルシート印刷 v322: Canvas 300dpi方式（iOS Safari/PWA/AirPrint対応）
+    // ラベルシート印刷 v323: Canvas 300dpi方式（iOS Safari/PWA/AirPrint対応）
     // 最終印刷物を1枚の画像として確定させ、ブラウザのmm→px変換を完全に回避
     async function printEntryLabelSheet(skipHistorySave = false) {
+      console.log('[v323] printEntryLabelSheet開始');
+      
       if (entryGeneratedQRData.length === 0) {
         alert('先にQRコードを生成してください');
         return;
+      }
+
+      // dataUrl存在チェック
+      const missingDataUrl = entryGeneratedQRData.filter(qr => !qr.dataUrl);
+      console.log('[v323] QRデータ:', entryGeneratedQRData.length, '件, dataUrl未設定:', missingDataUrl.length, '件');
+      
+      if (missingDataUrl.length > 0) {
+        console.log('[v323] dataUrl未設定のため再取得を試行...');
+        // dataUrlを再取得
+        for (let i = 0; i < entryGeneratedQRData.length; i++) {
+          if (!entryGeneratedQRData[i].dataUrl) {
+            const canvas = document.querySelector(`#qr-entry-${i + 1} canvas`);
+            if (canvas) {
+              entryGeneratedQRData[i].dataUrl = canvas.toDataURL('image/png');
+              console.log('[v323] dataUrl再取得成功:', i + 1);
+            } else {
+              console.error('[v323] canvas要素が見つからない:', `#qr-entry-${i + 1} canvas`);
+            }
+          }
+        }
+        
+        // 再チェック
+        const stillMissing = entryGeneratedQRData.filter(qr => !qr.dataUrl);
+        if (stillMissing.length > 0) {
+          alert('QRコードの画像データが取得できません。再度QRコードを生成してください。');
+          return;
+        }
       }
 
       if (document.querySelector('.entry-label-preset-btn[data-preset="custom"].active')) {
