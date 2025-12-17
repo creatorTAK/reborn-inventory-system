@@ -5429,9 +5429,18 @@
 
       console.log('[v310] 新規ウィンドウ印刷開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
 
-      // 印刷履歴を保存（再印刷時はスキップ）
+      // v314: iOS Safari対策 - window.openを最初に実行（awaitの前）
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('ポップアップがブロックされました。ポップアップを許可してください。');
+        return;
+      }
+      // ローディング表示
+      printWindow.document.write('<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;"><p>印刷準備中...</p></body></html>');
+
+      // 印刷履歴を保存（再印刷時はスキップ）- バックグラウンドで実行
       if (!skipHistorySave) {
-        await saveLabelPrintHistory(sheetsNeeded);
+        saveLabelPrintHistory(sheetsNeeded).catch(e => console.warn('履歴保存失敗:', e));
       }
 
       // v310: シートHTMLを生成
@@ -5519,16 +5528,11 @@
 </body>
 </html>`;
 
-      // v310: 新規ウィンドウで開く
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alert('ポップアップがブロックされました。ポップアップを許可してください。');
-        return;
-      }
-
+      // v314: 既に開いているウィンドウにHTMLを書き込み
+      printWindow.document.open();
       printWindow.document.write(printHtml);
       printWindow.document.close();
-      console.log('[v310] 印刷ウィンドウを開きました');
+      console.log('[v314] 印刷ウィンドウにコンテンツを書き込みました');
 
       // v310: 新規ウィンドウ内の画像読み込みを待って印刷
       const waitAndPrint = () => {
