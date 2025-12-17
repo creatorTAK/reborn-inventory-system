@@ -7,7 +7,7 @@
   <title>仕入管理 - FURIRA</title>
   <script>
     // v312: A-ONE 70面ラベル余白微調整
-    console.log('🔴🔴🔴 purchase.html v326 loaded 🔴🔴🔴');
+    console.log('🔴🔴🔴 purchase.html v315-restored loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -1102,13 +1102,10 @@
       .entry-label-sheet-print-area:last-child {
         page-break-after: auto;
       }
-      /* v322: Canvas画像を正確に印刷 */
+      /* v308: QR画像を確実に表示 */
       #entryLabelPrintArea img {
         display: block !important;
-        width: 210mm !important;
-        height: 297mm !important;
         max-width: none !important;
-        image-rendering: auto !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
@@ -5434,41 +5431,11 @@
 
     // ===== ラベル印刷履歴機能 ここまで =====
 
-    // ラベルシート印刷 v323: Canvas 300dpi方式（iOS Safari/PWA/AirPrint対応）
-    // 最終印刷物を1枚の画像として確定させ、ブラウザのmm→px変換を完全に回避
-    async function printEntryLabelSheet(skipHistorySave = false) {
-      console.log('[v323] printEntryLabelSheet開始');
-      
+    // ラベルシート印刷 v315: HTML方式（スムーズに動作）
+    function printEntryLabelSheet(skipHistorySave = false) {
       if (entryGeneratedQRData.length === 0) {
         alert('先にQRコードを生成してください');
         return;
-      }
-
-      // dataUrl存在チェック
-      const missingDataUrl = entryGeneratedQRData.filter(qr => !qr.dataUrl);
-      console.log('[v323] QRデータ:', entryGeneratedQRData.length, '件, dataUrl未設定:', missingDataUrl.length, '件');
-      
-      if (missingDataUrl.length > 0) {
-        console.log('[v323] dataUrl未設定のため再取得を試行...');
-        // dataUrlを再取得
-        for (let i = 0; i < entryGeneratedQRData.length; i++) {
-          if (!entryGeneratedQRData[i].dataUrl) {
-            const canvas = document.querySelector(`#qr-entry-${i + 1} canvas`);
-            if (canvas) {
-              entryGeneratedQRData[i].dataUrl = canvas.toDataURL('image/png');
-              console.log('[v323] dataUrl再取得成功:', i + 1);
-            } else {
-              console.error('[v323] canvas要素が見つからない:', `#qr-entry-${i + 1} canvas`);
-            }
-          }
-        }
-        
-        // 再チェック
-        const stillMissing = entryGeneratedQRData.filter(qr => !qr.dataUrl);
-        if (stillMissing.length > 0) {
-          alert('QRコードの画像データが取得できません。再度QRコードを生成してください。');
-          return;
-        }
       }
 
       if (document.querySelector('.entry-label-preset-btn[data-preset="custom"].active')) {
@@ -5478,73 +5445,23 @@
       const { labelWidth, labelHeight, cols, rows, marginTop, marginLeft, gapX, gapY } = currentEntryLabelSettings;
       const perSheet = cols * rows;
       const startPos = parseInt(document.getElementById('entryStartPosition')?.value) || 1;
-
-      // 150dpi設定（iOS Safari最適化 - 300dpiはtoDataURLが遅すぎる）
-      const DPI = 150;
-      const pxPerMm = DPI / 25.4; // 1mm ≈ 5.91px
-
-      // A4サイズ at 150dpi
-      const a4WidthPx = Math.round(210 * pxPerMm);   // ≈ 1240px
-      const a4HeightPx = Math.round(297 * pxPerMm); // ≈ 1754px
-
-      // mm→px変換関数（累積誤差なし）
-      const mm = (v) => Math.round(v * pxPerMm);
-
-      const qrSizeMm = Math.min(labelWidth, labelHeight) * 0.75;
-      const qrSizePx = mm(qrSizeMm);
-      const fontSizePx = mm(Math.max(1.8, labelWidth * 0.12));
+      const a4Width = 210, a4Height = 297;
+      const qrSize = Math.min(labelWidth, labelHeight) * 0.75;
+      const fontSize = Math.max(1.5, labelWidth * 0.12);
 
       const totalQR = entryGeneratedQRData.length;
       const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
 
-      console.log('[v326] Canvas 150dpi印刷開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
-      console.log('[v326] Canvas解像度:', a4WidthPx, 'x', a4HeightPx, 'px (300dpi)');
-      console.log('[v326] 設定(mm):', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
+      console.log('[v315] 同一ページ内印刷:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
+      console.log('[v315] 設定:', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
 
-      // 画像プリロード関数（タイムアウト付き）
-      const loadImage = (src, timeout = 3000) => new Promise((resolve, reject) => {
-        const img = new Image();
-        const timer = setTimeout(() => {
-          console.error('[v326] 画像読み込みタイムアウト');
-          reject(new Error('タイムアウト'));
-        }, timeout);
-        img.onload = () => {
-          clearTimeout(timer);
-          console.log('[v326] 画像読み込み成功');
-          resolve(img);
-        };
-        img.onerror = (e) => {
-          clearTimeout(timer);
-          console.error('[v326] 画像読み込みエラー:', e);
-          reject(new Error('画像読み込み失敗'));
-        };
-        img.src = src;
-      });
-
+      // 印刷エリアにコンテンツを生成
       const printArea = document.getElementById('entryLabelPrintArea');
       let sheetsHtml = '';
       let qrIndex = 0;
 
-      console.log('[v326] Canvas描画ループ開始');
-      
       for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
-        console.log('[v326] シート', sheet + 1, '/', sheetsNeeded, '処理開始');
-        
-        // 300dpi Canvasを作成
-        const canvas = document.createElement('canvas');
-        canvas.width = a4WidthPx;
-        canvas.height = a4HeightPx;
-        const ctx = canvas.getContext('2d');
-
-        // 白背景
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, a4WidthPx, a4HeightPx);
-
-        // フォント設定
-        ctx.fillStyle = '#000000';
-        ctx.font = `bold ${fontSizePx}px Arial, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
+        let cellsHtml = '';
 
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
@@ -5555,82 +5472,38 @@
 
             if (!hasQR) continue;
 
-            // mm座標を直接px変換（累積誤差ゼロ）
-            const xPx = mm(marginLeft + col * (labelWidth + gapX));
-            const yPx = mm(marginTop + row * (labelHeight + gapY));
-            const labelWidthPx = mm(labelWidth);
-            const labelHeightPx = mm(labelHeight);
-
+            const x = marginLeft + col * (labelWidth + gapX);
+            const y = marginTop + row * (labelHeight + gapY);
             const qrData = entryGeneratedQRData[qrIndex];
             const shortId = qrData.slotId.replace(/^BATCH-\d{8}-/, '');
 
-            console.log('[v326] QR描画:', qrIndex + 1, 'dataUrl長さ:', qrData.dataUrl ? qrData.dataUrl.length : 'null');
-
-            // QRコード描画（ラベル内中央上部）
-            try {
-              const img = await loadImage(qrData.dataUrl);
-              const qrX = xPx + Math.round((labelWidthPx - qrSizePx) / 2);
-              const qrY = yPx + mm(1); // 上から1mm
-              ctx.drawImage(img, qrX, qrY, qrSizePx, qrSizePx);
-              console.log('[v326] QR描画完了:', qrIndex + 1);
-            } catch (e) {
-              console.error('[v326] QR画像読み込みエラー:', qrIndex + 1, e);
-            }
-
-            // IDテキスト描画（ラベル内下部）
-            const textX = xPx + labelWidthPx / 2;
-            const textY = yPx + labelHeightPx - mm(1); // 下から1mm
-            ctx.fillText(shortId, textX, textY);
-
+            cellsHtml += `
+              <div style="position:absolute;left:${x}mm;top:${y}mm;width:${labelWidth}mm;height:${labelHeight}mm;
+                          display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0.5mm;">
+                <img src="${qrData.dataUrl}" style="width:${qrSize}mm;height:${qrSize}mm;display:block;">
+                <div style="font-family:Arial,sans-serif;font-weight:bold;font-size:${fontSize}mm;
+                            line-height:1;color:#000;text-align:center;margin-top:0.3mm;">${shortId}</div>
+              </div>`;
             qrIndex++;
           }
         }
-        
-        console.log('[v326] シート', sheet + 1, 'Canvas描画完了');
 
-        // CanvasをBlob URLに変換（Data URLよりiOSで高速な場合がある）
-        console.log('[v326] toBlob開始...');
-        const t1 = performance.now();
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        const blobUrl = URL.createObjectURL(blob);
-        const t2 = performance.now();
-        console.log('[v326] toBlob完了:', Math.round(t2 - t1), 'ms, サイズ:', Math.round(blob.size / 1024), 'KB');
-        
         sheetsHtml += `
-          <div class="entry-label-sheet-print-area">
-            <img src="${blobUrl}" style="width:210mm;height:297mm;display:block;">
+          <div class="entry-label-sheet-print-area" style="width:${a4Width}mm;height:${a4Height}mm;position:relative;background:white;">
+            ${cellsHtml}
           </div>`;
       }
 
-      console.log('[v326] DOM挿入開始...');
       printArea.innerHTML = sheetsHtml;
       printArea.style.display = 'block';
-      console.log('[v326] DOM挿入完了');
-
-      // 画像読み込み完了を待機
-      const images = printArea.querySelectorAll('img');
-      console.log('[v326] 画像待機開始, 枚数:', images.length);
-      await Promise.all(Array.from(images).map(img =>
-        img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; })
-      ));
-      console.log('[v326] 画像待機完了');
 
       // 印刷実行
-      console.log('[v326] window.print()呼び出し');
-      window.print();
-      
-      // 印刷後のクリーンアップ
       setTimeout(() => {
-        printArea.style.display = 'none';
-        // Blob URLを解放
-        printArea.querySelectorAll('img').forEach(img => {
-          if (img.src.startsWith('blob:')) {
-            URL.revokeObjectURL(img.src);
-          }
-        });
-        printArea.innerHTML = '';
-        console.log('[v326] クリーンアップ完了');
-      }, 2000);
+        window.print();
+        setTimeout(() => {
+          printArea.style.display = 'none';
+        }, 1000);
+      }, 100);
     }
 
     // ラベル設定を保存（プリセットごと）
