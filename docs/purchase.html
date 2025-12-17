@@ -1452,6 +1452,18 @@
               </button>
             </div>
 
+            <!-- 印刷履歴セクション -->
+            <div class="mb-3">
+              <button class="btn btn-sm btn-outline-secondary w-100" type="button" onclick="toggleLabelPrintHistory()">
+                <i class="bi bi-clock-history"></i> 印刷履歴を表示
+              </button>
+              <div id="labelPrintHistoryPanel" class="mt-2 border rounded p-2" style="display: none; max-height: 300px; overflow-y: auto;">
+                <div id="labelPrintHistoryList" class="list-group list-group-flush">
+                  <!-- 動的に生成 -->
+                </div>
+              </div>
+            </div>
+
             <!-- ラベルシートプレビュー -->
             <div class="text-center">
               <small class="text-muted mb-2 d-block">プレビュー（縮小表示）</small>
@@ -5196,8 +5208,181 @@
       }
     }
 
+    // ===== ラベル印刷履歴機能 =====
+
+    // 履歴ID生成
+    function generateLabelHistoryId() {
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+      const randomStr = Math.random().toString(36).substring(2, 7).toUpperCase();
+      return `LABEL-${dateStr}-${randomStr}`;
+    }
+
+    // 印刷履歴を保存
+    async function saveLabelPrintHistory(sheetsNeeded) {
+      try {
+        const historyId = generateLabelHistoryId();
+        const slotIds = entryGeneratedQRData.map(qr => qr.slotId);
+        const startPos = parseInt(document.getElementById('entryStartPosition')?.value) || 1;
+
+        const historyData = {
+          historyId,
+          batchId: entryPurchaseId || '',
+          slotIds,
+          itemCount: slotIds.length,
+          presetKey: currentEntryPresetKey,
+          presetName: entryLabelPresetsDefault[currentEntryPresetKey]?.name || currentEntryPresetKey,
+          labelSettings: { ...currentEntryLabelSettings },
+          startPosition: startPos,
+          sheetsUsed: sheetsNeeded,
+          printedBy: firebase.auth().currentUser?.email || 'unknown',
+          printedByName: firebase.auth().currentUser?.displayName || '',
+          printedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          reprintCount: 0,
+          lastReprintAt: null
+        };
+
+        await db.collection('labelPrintHistory').doc(historyId).set(historyData);
+        console.log('[印刷履歴] 保存完了:', historyId);
+        return historyId;
+      } catch (error) {
+        console.error('[印刷履歴] 保存エラー:', error);
+        // エラーでも印刷は続行
+        return null;
+      }
+    }
+
+    // 印刷履歴を取得
+    async function loadLabelPrintHistory(limit = 20) {
+      try {
+        const snapshot = await db.collection('labelPrintHistory')
+          .orderBy('printedAt', 'desc')
+          .limit(limit)
+          .get();
+
+        return snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (error) {
+        console.error('[印刷履歴] 取得エラー:', error);
+        return [];
+      }
+    }
+
+    // 印刷履歴パネル表示切り替え
+    async function toggleLabelPrintHistory() {
+      const panel = document.getElementById('labelPrintHistoryPanel');
+      const btn = document.querySelector('[onclick="toggleLabelPrintHistory()"]');
+
+      if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        btn.innerHTML = '<i class="bi bi-chevron-up"></i> 印刷履歴を閉じる';
+        await renderLabelPrintHistory();
+      } else {
+        panel.style.display = 'none';
+        btn.innerHTML = '<i class="bi bi-clock-history"></i> 印刷履歴を表示';
+      }
+      document.activeElement.blur();
+    }
+
+    // 印刷履歴を描画
+    async function renderLabelPrintHistory() {
+      const listEl = document.getElementById('labelPrintHistoryList');
+      listEl.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> 読み込み中...</div>';
+
+      const histories = await loadLabelPrintHistory();
+
+      if (histories.length === 0) {
+        listEl.innerHTML = '<div class="text-center text-muted py-3">印刷履歴がありません</div>';
+        return;
+      }
+
+      listEl.innerHTML = histories.map(h => {
+        const date = h.printedAt?.toDate ? h.printedAt.toDate() : new Date();
+        const dateStr = date.toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' });
+        const timeStr = date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+        const reprintBadge = h.reprintCount > 0 ? `<span class="badge bg-secondary ms-1">再印刷${h.reprintCount}回</span>` : '';
+
+        return `
+          <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+            <div>
+              <div class="fw-bold">${dateStr} ${timeStr}</div>
+              <small class="text-muted">${h.presetName || h.presetKey} ${h.itemCount}枚${reprintBadge}</small>
+            </div>
+            <button class="btn btn-sm btn-outline-primary" onclick="reprintFromHistory('${h.id}')">
+              <i class="bi bi-printer"></i> 再印刷
+            </button>
+          </div>`;
+      }).join('');
+    }
+
+    // 履歴から再印刷
+    async function reprintFromHistory(historyId) {
+      try {
+        const doc = await db.collection('labelPrintHistory').doc(historyId).get();
+        if (!doc.exists) {
+          alert('履歴が見つかりません');
+          return;
+        }
+
+        const history = doc.data();
+
+        // QRコード再生成
+        const qrDataList = [];
+        for (const slotId of history.slotIds) {
+          const qrDataUrl = await new Promise((resolve) => {
+            QRCode.toDataURL(slotId, {
+              width: 200,
+              margin: 1,
+              errorCorrectionLevel: 'M'
+            }, (err, url) => resolve(url));
+          });
+
+          qrDataList.push({
+            slotId,
+            content: slotId,
+            dataUrl: qrDataUrl
+          });
+        }
+
+        // 印刷データを設定
+        entryGeneratedQRData = qrDataList;
+        currentEntryPresetKey = history.presetKey;
+        currentEntryLabelSettings = { ...history.labelSettings };
+
+        // 開始位置を設定
+        const startPosEl = document.getElementById('entryStartPosition');
+        if (startPosEl) startPosEl.value = history.startPosition;
+
+        // プレビュー更新
+        updateEntryLabelPreview();
+
+        // 再印刷カウント更新
+        await db.collection('labelPrintHistory').doc(historyId).update({
+          reprintCount: firebase.firestore.FieldValue.increment(1),
+          lastReprintAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 履歴パネルを閉じる
+        const panel = document.getElementById('labelPrintHistoryPanel');
+        if (panel) panel.style.display = 'none';
+        const btn = document.querySelector('[onclick="toggleLabelPrintHistory()"]');
+        if (btn) btn.innerHTML = '<i class="bi bi-clock-history"></i> 印刷履歴を表示';
+
+        // 印刷実行（履歴保存はスキップ）
+        printEntryLabelSheet(true);
+
+      } catch (error) {
+        console.error('[再印刷] エラー:', error);
+        alert('再印刷に失敗しました: ' + error.message);
+      }
+    }
+
+    // ===== ラベル印刷履歴機能 ここまで =====
+
     // ラベルシート印刷 v310: 新規ウィンドウ印刷方式（iOS Safari対応）
-    function printEntryLabelSheet() {
+    async function printEntryLabelSheet(skipHistorySave = false) {
       if (entryGeneratedQRData.length === 0) {
         alert('先にQRコードを生成してください');
         return;
@@ -5218,6 +5403,11 @@
       const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
 
       console.log('[v310] 新規ウィンドウ印刷開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
+
+      // 印刷履歴を保存（再印刷時はスキップ）
+      if (!skipHistorySave) {
+        await saveLabelPrintHistory(sheetsNeeded);
+      }
 
       // v310: シートHTMLを生成
       let sheetsHtml = '';
