@@ -7,7 +7,7 @@
   <title>仕入管理 - FURIRA</title>
   <script>
     // v312: A-ONE 70面ラベル余白微調整
-    console.log('🔴🔴🔴 purchase.html v339-PDF loaded 🔴🔴🔴');
+    console.log('🔴🔴🔴 purchase.html v340-PDF loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -5069,12 +5069,72 @@
       }, 100);
     }
 
-    // シンプル印刷
-    function printEntrySimple() {
-      document.getElementById('qrEntryGrid').classList.add('print-area');
-      document.getElementById('entryLabelPrintArea').style.display = 'none';
-      window.print();
-      printerWarmedUp = true; // 印刷したらウォームアップ済み
+    // シンプル印刷（jsPDF方式）
+    async function printEntrySimple() {
+      if (entryGeneratedQRData.length === 0) {
+        alert('先にQRコードを生成してください');
+        return;
+      }
+
+      try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
+
+        const pageWidth = 210;
+        const pageHeight = 297;
+        const margin = 15;
+        const qrSize = 25;
+        const labelHeight = 12;
+        const cellWidth = 45;
+        const cellHeight = qrSize + labelHeight + 5;
+        const cols = Math.floor((pageWidth - margin * 2) / cellWidth);
+        const rowsPerPage = Math.floor((pageHeight - margin * 2) / cellHeight);
+        const itemsPerPage = cols * rowsPerPage;
+
+        let itemIndex = 0;
+        const totalItems = entryGeneratedQRData.length;
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+        for (let page = 0; page < totalPages; page++) {
+          if (page > 0) pdf.addPage();
+
+          for (let row = 0; row < rowsPerPage && itemIndex < totalItems; row++) {
+            for (let col = 0; col < cols && itemIndex < totalItems; col++) {
+              const qrData = entryGeneratedQRData[itemIndex];
+              const x = margin + col * cellWidth;
+              const y = margin + row * cellHeight;
+
+              // QRコード
+              const qrX = x + (cellWidth - qrSize) / 2;
+              pdf.addImage(qrData.dataUrl, 'PNG', qrX, y, qrSize, qrSize);
+
+              // ラベル（番号・金額・仕入先）
+              pdf.setFontSize(7);
+              pdf.setFont('helvetica', 'normal');
+              const labelY = y + qrSize + 3;
+              const labelText = `#${qrData.slotNumber}/${qrData.totalCount} ¥${qrData.amount?.toLocaleString() || '0'}`;
+              pdf.text(labelText, x + cellWidth / 2, labelY, { align: 'center' });
+              pdf.text(qrData.supplier || '', x + cellWidth / 2, labelY + 4, { align: 'center' });
+
+              itemIndex++;
+            }
+          }
+        }
+
+        const pdfBlob = pdf.output('blob');
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        window.open(pdfUrl, '_blank');
+        setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+        printerWarmedUp = true;
+
+      } catch (error) {
+        console.error('シンプル印刷エラー:', error);
+        alert('PDF生成中にエラーが発生しました: ' + error.message);
+      }
     }
 
     // PDF保存
