@@ -1102,18 +1102,7 @@
       .entry-label-sheet-print-area:last-child {
         page-break-after: auto;
       }
-      /* v320: SVG印刷対応 */
-      #entryLabelPrintArea svg {
-        display: block !important;
-        width: 210mm !important;
-        height: 297mm !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        overflow: visible !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      /* v308: QR画像を確実に表示（レガシー対応） */
+      /* v308: QR画像を確実に表示 */
       #entryLabelPrintArea img {
         display: block !important;
         max-width: none !important;
@@ -5418,8 +5407,7 @@
 
     // ===== ラベル印刷履歴機能 ここまで =====
 
-    // ラベルシート印刷 v320: SVG方式（累積誤差ゼロ）
-    // SVGは物理単位(mm)を最後まで保持するため、iOS Safari/PWAでも正確に印刷可能
+    // ラベルシート印刷 v315: 同一ページ内印刷方式（PWA対応）
     function printEntryLabelSheet(skipHistorySave = false) {
       if (entryGeneratedQRData.length === 0) {
         alert('先にQRコードを生成してください');
@@ -5430,28 +5418,26 @@
         readEntryCustomInputs();
       }
 
-      // A-ONE 31556 仕様（物理寸法）
       const { labelWidth, labelHeight, cols, rows, marginTop, marginLeft, gapX, gapY } = currentEntryLabelSettings;
       const perSheet = cols * rows;
       const startPos = parseInt(document.getElementById('entryStartPosition')?.value) || 1;
-      const a4Width = 210, a4Height = 297; // A4サイズ(mm)
+      const a4Width = 210, a4Height = 297;
       const qrSize = Math.min(labelWidth, labelHeight) * 0.75;
-      const fontSize = Math.max(1.8, labelWidth * 0.12);
+      const fontSize = Math.max(1.5, labelWidth * 0.12);
 
       const totalQR = entryGeneratedQRData.length;
       const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
 
-      console.log('[v320] SVG印刷開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
-      console.log('[v320] 設定(mm):', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
+      console.log('[v315] 同一ページ内印刷:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
+      console.log('[v315] 設定:', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
 
-      // 印刷エリアにSVGを生成
+      // 印刷エリアにコンテンツを生成
       const printArea = document.getElementById('entryLabelPrintArea');
       let sheetsHtml = '';
       let qrIndex = 0;
 
       for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
-        // SVG要素を生成（mm単位で直接指定）
-        let svgContent = '';
+        let cellsHtml = '';
 
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
@@ -5462,36 +5448,25 @@
 
             if (!hasQR) continue;
 
-            // SVG座標（mm単位、累積誤差なし）
             const x = marginLeft + col * (labelWidth + gapX);
             const y = marginTop + row * (labelHeight + gapY);
             const qrData = entryGeneratedQRData[qrIndex];
             const shortId = qrData.slotId.replace(/^BATCH-\d{8}-/, '');
 
-            // QRコードの中央配置計算
-            const qrX = x + (labelWidth - qrSize) / 2;
-            const qrY = y + 1; // 上から1mm
-            const textY = y + labelHeight - 2; // 下から2mm
-
-            svgContent += `
-              <image href="${qrData.dataUrl}" x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" />
-              <text x="${x + labelWidth / 2}" y="${textY}"
-                    font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="bold"
-                    text-anchor="middle" fill="#000">${shortId}</text>
-            `;
+            cellsHtml += `
+              <div style="position:absolute;left:${x}mm;top:${y}mm;width:${labelWidth}mm;height:${labelHeight}mm;
+                          display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0.5mm;">
+                <img src="${qrData.dataUrl}" style="width:${qrSize}mm;height:${qrSize}mm;display:block;">
+                <div style="font-family:Arial,sans-serif;font-weight:bold;font-size:${fontSize}mm;
+                            line-height:1;color:#000;text-align:center;margin-top:0.3mm;">${shortId}</div>
+              </div>`;
             qrIndex++;
           }
         }
 
-        // A4サイズのSVG（mm単位で定義）
         sheetsHtml += `
-          <div class="entry-label-sheet-print-area">
-            <svg xmlns="http://www.w3.org/2000/svg"
-                 width="${a4Width}mm" height="${a4Height}mm"
-                 viewBox="0 0 ${a4Width} ${a4Height}"
-                 style="display:block;background:white;">
-              ${svgContent}
-            </svg>
+          <div class="entry-label-sheet-print-area" style="width:${a4Width}mm;height:${a4Height}mm;position:relative;background:white;">
+            ${cellsHtml}
           </div>`;
       }
 
