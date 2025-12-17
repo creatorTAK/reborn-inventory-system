@@ -1102,10 +1102,13 @@
       .entry-label-sheet-print-area:last-child {
         page-break-after: auto;
       }
-      /* v308: QR画像を確実に表示 */
+      /* v322: Canvas画像を正確に印刷 */
       #entryLabelPrintArea img {
         display: block !important;
+        width: 210mm !important;
+        height: 297mm !important;
         max-width: none !important;
+        image-rendering: auto !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }
@@ -5407,8 +5410,9 @@
 
     // ===== ラベル印刷履歴機能 ここまで =====
 
-    // ラベルシート印刷 v315: 同一ページ内印刷方式（PWA対応）
-    function printEntryLabelSheet(skipHistorySave = false) {
+    // ラベルシート印刷 v322: Canvas 300dpi方式（iOS Safari/PWA/AirPrint対応）
+    // 最終印刷物を1枚の画像として確定させ、ブラウザのmm→px変換を完全に回避
+    async function printEntryLabelSheet(skipHistorySave = false) {
       if (entryGeneratedQRData.length === 0) {
         alert('先にQRコードを生成してください');
         return;
@@ -5421,23 +5425,57 @@
       const { labelWidth, labelHeight, cols, rows, marginTop, marginLeft, gapX, gapY } = currentEntryLabelSettings;
       const perSheet = cols * rows;
       const startPos = parseInt(document.getElementById('entryStartPosition')?.value) || 1;
-      const a4Width = 210, a4Height = 297;
-      const qrSize = Math.min(labelWidth, labelHeight) * 0.75;
-      const fontSize = Math.max(1.5, labelWidth * 0.12);
+
+      // 300dpi設定（印刷品質確保）
+      const DPI = 300;
+      const pxPerMm = DPI / 25.4; // 1mm ≈ 11.81px
+
+      // A4サイズ at 300dpi
+      const a4WidthPx = Math.round(210 * pxPerMm);   // ≈ 2480px
+      const a4HeightPx = Math.round(297 * pxPerMm); // ≈ 3508px
+
+      // mm→px変換関数（累積誤差なし）
+      const mm = (v) => Math.round(v * pxPerMm);
+
+      const qrSizeMm = Math.min(labelWidth, labelHeight) * 0.75;
+      const qrSizePx = mm(qrSizeMm);
+      const fontSizePx = mm(Math.max(1.8, labelWidth * 0.12));
 
       const totalQR = entryGeneratedQRData.length;
       const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
 
-      console.log('[v315] 同一ページ内印刷:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
-      console.log('[v315] 設定:', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
+      console.log('[v322] Canvas 300dpi印刷開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
+      console.log('[v322] Canvas解像度:', a4WidthPx, 'x', a4HeightPx, 'px (300dpi)');
+      console.log('[v322] 設定(mm):', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
 
-      // 印刷エリアにコンテンツを生成
+      // 画像プリロード関数
+      const loadImage = (src) => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('画像読み込み失敗'));
+        img.src = src;
+      });
+
       const printArea = document.getElementById('entryLabelPrintArea');
       let sheetsHtml = '';
       let qrIndex = 0;
 
       for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
-        let cellsHtml = '';
+        // 300dpi Canvasを作成
+        const canvas = document.createElement('canvas');
+        canvas.width = a4WidthPx;
+        canvas.height = a4HeightPx;
+        const ctx = canvas.getContext('2d');
+
+        // 白背景
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, a4WidthPx, a4HeightPx);
+
+        // フォント設定
+        ctx.fillStyle = '#000000';
+        ctx.font = `bold ${fontSizePx}px Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
 
         for (let row = 0; row < rows; row++) {
           for (let col = 0; col < cols; col++) {
@@ -5448,39 +5486,60 @@
 
             if (!hasQR) continue;
 
-            const x = marginLeft + col * (labelWidth + gapX);
-            const y = marginTop + row * (labelHeight + gapY);
+            // mm座標を直接px変換（累積誤差ゼロ）
+            const xPx = mm(marginLeft + col * (labelWidth + gapX));
+            const yPx = mm(marginTop + row * (labelHeight + gapY));
+            const labelWidthPx = mm(labelWidth);
+            const labelHeightPx = mm(labelHeight);
+
             const qrData = entryGeneratedQRData[qrIndex];
             const shortId = qrData.slotId.replace(/^BATCH-\d{8}-/, '');
 
-            cellsHtml += `
-              <div style="position:absolute;left:${x}mm;top:${y}mm;width:${labelWidth}mm;height:${labelHeight}mm;
-                          display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0.5mm;">
-                <img src="${qrData.dataUrl}" style="width:${qrSize}mm;height:${qrSize}mm;display:block;">
-                <div style="font-family:Arial,sans-serif;font-weight:bold;font-size:${fontSize}mm;
-                            line-height:1;color:#000;text-align:center;margin-top:0.3mm;">${shortId}</div>
-              </div>`;
+            // QRコード描画（ラベル内中央上部）
+            try {
+              const img = await loadImage(qrData.dataUrl);
+              const qrX = xPx + Math.round((labelWidthPx - qrSizePx) / 2);
+              const qrY = yPx + mm(1); // 上から1mm
+              ctx.drawImage(img, qrX, qrY, qrSizePx, qrSizePx);
+            } catch (e) {
+              console.error('[v322] QR画像読み込みエラー:', e);
+            }
+
+            // IDテキスト描画（ラベル内下部）
+            const textX = xPx + labelWidthPx / 2;
+            const textY = yPx + labelHeightPx - mm(1); // 下から1mm
+            ctx.fillText(shortId, textX, textY);
+
             qrIndex++;
           }
         }
 
+        // CanvasをPNG画像に変換
+        const dataUrl = canvas.toDataURL('image/png');
         sheetsHtml += `
-          <div class="entry-label-sheet-print-area" style="width:${a4Width}mm;height:${a4Height}mm;position:relative;background:white;">
-            ${cellsHtml}
+          <div class="entry-label-sheet-print-area">
+            <img src="${dataUrl}" style="width:210mm;height:297mm;display:block;">
           </div>`;
       }
 
       printArea.innerHTML = sheetsHtml;
       printArea.style.display = 'block';
 
+      // 画像読み込み完了を待機
+      const images = printArea.querySelectorAll('img');
+      await Promise.all(Array.from(images).map(img =>
+        img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; })
+      ));
+
       // 印刷実行
-      setTimeout(() => {
-        window.print();
-        // 印刷ダイアログが閉じた後に非表示に戻す
+      requestAnimationFrame(() => {
         setTimeout(() => {
-          printArea.style.display = 'none';
-        }, 1000);
-      }, 100);
+          window.print();
+          setTimeout(() => {
+            printArea.style.display = 'none';
+          }, 1000);
+        }, 0);
+      });
     }
 
     // ラベル設定を保存（プリセットごと）
