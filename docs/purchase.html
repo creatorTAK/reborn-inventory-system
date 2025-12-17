@@ -1190,6 +1190,18 @@
     <div class="tab-content">
       <!-- 仕入登録タブ -->
       <div class="tab-pane fade show active" id="entry-content" role="tabpanel">
+        <!-- 印刷履歴セクション（常時表示） -->
+        <div class="mb-3">
+          <button class="btn btn-sm btn-outline-secondary w-100" type="button" onclick="toggleLabelPrintHistory()">
+            <i class="bi bi-clock-history"></i> ラベル印刷履歴
+          </button>
+          <div id="labelPrintHistoryPanel" class="mt-2 border rounded p-2 bg-light" style="display: none; max-height: 300px; overflow-y: auto;">
+            <div id="labelPrintHistoryList" class="list-group list-group-flush">
+              <!-- 動的に生成 -->
+            </div>
+          </div>
+        </div>
+
         <!-- 入力モード切替 -->
         <div class="entry-mode-tabs mb-3">
           <div class="entry-mode-tab active" onclick="setEntryMode('individual')" id="entryModeIndividual">
@@ -1450,18 +1462,6 @@
               <button class="btn btn-entry-teal" onclick="printEntryLabelSheet()">
                 <i class="bi bi-printer"></i> ラベルシート印刷
               </button>
-            </div>
-
-            <!-- 印刷履歴セクション -->
-            <div class="mb-3">
-              <button class="btn btn-sm btn-outline-secondary w-100" type="button" onclick="toggleLabelPrintHistory()">
-                <i class="bi bi-clock-history"></i> 印刷履歴を表示
-              </button>
-              <div id="labelPrintHistoryPanel" class="mt-2 border rounded p-2" style="display: none; max-height: 300px; overflow-y: auto;">
-                <div id="labelPrintHistoryList" class="list-group list-group-flush">
-                  <!-- 動的に生成 -->
-                </div>
-              </div>
             </div>
 
             <!-- ラベルシートプレビュー -->
@@ -5221,9 +5221,19 @@
     // 印刷履歴を保存
     async function saveLabelPrintHistory(sheetsNeeded) {
       try {
+        console.log('[印刷履歴] 保存開始...');
+
+        // Firestore接続確認
+        if (!db) {
+          console.error('[印刷履歴] Firestore (db) が未初期化');
+          return null;
+        }
+
         const historyId = generateLabelHistoryId();
         const slotIds = entryGeneratedQRData.map(qr => qr.slotId);
         const startPos = parseInt(document.getElementById('entryStartPosition')?.value) || 1;
+
+        console.log('[印刷履歴] データ準備:', { historyId, slotCount: slotIds.length, sheetsNeeded });
 
         const historyData = {
           historyId,
@@ -5243,10 +5253,11 @@
         };
 
         await db.collection('labelPrintHistory').doc(historyId).set(historyData);
-        console.log('[印刷履歴] 保存完了:', historyId);
+        console.log('[印刷履歴] ✅ 保存完了:', historyId);
         return historyId;
       } catch (error) {
-        console.error('[印刷履歴] 保存エラー:', error);
+        console.error('[印刷履歴] ❌ 保存エラー:', error.message, error);
+        alert('印刷履歴の保存に失敗しました: ' + error.message);
         // エラーでも印刷は続行
         return null;
       }
@@ -5255,17 +5266,26 @@
     // 印刷履歴を取得
     async function loadLabelPrintHistory(limit = 20) {
       try {
+        console.log('[印刷履歴] 取得開始...');
+
+        if (!db) {
+          console.error('[印刷履歴] Firestore (db) が未初期化');
+          return [];
+        }
+
         const snapshot = await db.collection('labelPrintHistory')
           .orderBy('printedAt', 'desc')
           .limit(limit)
           .get();
+
+        console.log('[印刷履歴] 取得完了:', snapshot.docs.length, '件');
 
         return snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
       } catch (error) {
-        console.error('[印刷履歴] 取得エラー:', error);
+        console.error('[印刷履歴] ❌ 取得エラー:', error.message, error);
         return [];
       }
     }
