@@ -7,7 +7,7 @@
   <title>仕入管理 - FURIRA</title>
   <script>
     // v312: A-ONE 70面ラベル余白微調整
-    console.log('🔴🔴🔴 purchase.html v315-restored loaded 🔴🔴🔴');
+    console.log('🔴🔴🔴 purchase.html v330-PDF loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -5431,8 +5431,9 @@
 
     // ===== ラベル印刷履歴機能 ここまで =====
 
-    // ラベルシート印刷 v315: HTML方式（スムーズに動作）
-    function printEntryLabelSheet(skipHistorySave = false) {
+    // ラベルシート印刷 v330: jsPDF方式（iOS Safari対応）
+    // window.print()を使用せず、PDFを生成してiOSネイティブで開く
+    async function printEntryLabelSheet(skipHistorySave = false) {
       if (entryGeneratedQRData.length === 0) {
         alert('先にQRコードを生成してください');
         return;
@@ -5445,65 +5446,92 @@
       const { labelWidth, labelHeight, cols, rows, marginTop, marginLeft, gapX, gapY } = currentEntryLabelSettings;
       const perSheet = cols * rows;
       const startPos = parseInt(document.getElementById('entryStartPosition')?.value) || 1;
-      const a4Width = 210, a4Height = 297;
       const qrSize = Math.min(labelWidth, labelHeight) * 0.75;
       const fontSize = Math.max(1.5, labelWidth * 0.12);
 
       const totalQR = entryGeneratedQRData.length;
       const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
 
-      console.log('[v315] 同一ページ内印刷:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
-      console.log('[v315] 設定:', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
+      console.log('[v330-PDF] PDF生成開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
+      console.log('[v330-PDF] 設定:', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
 
-      // 印刷エリアにコンテンツを生成
-      const printArea = document.getElementById('entryLabelPrintArea');
-      let sheetsHtml = '';
-      let qrIndex = 0;
+      try {
+        // jsPDF初期化（A4縦、mm単位）
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
 
-      for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
-        let cellsHtml = '';
+        let qrIndex = 0;
 
-        for (let row = 0; row < rows; row++) {
-          for (let col = 0; col < cols; col++) {
-            const cellIndex = row * cols + col;
-            const globalIndex = sheet * perSheet + cellIndex;
-            const isBeforeStart = globalIndex < startPos - 1;
-            const hasQR = !isBeforeStart && qrIndex < totalQR;
+        for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
+          // 2ページ目以降は新しいページを追加
+          if (sheet > 0) {
+            pdf.addPage();
+          }
 
-            if (!hasQR) continue;
+          for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+              const cellIndex = row * cols + col;
+              const globalIndex = sheet * perSheet + cellIndex;
+              const isBeforeStart = globalIndex < startPos - 1;
+              const hasQR = !isBeforeStart && qrIndex < totalQR;
 
-            const x = marginLeft + col * (labelWidth + gapX);
-            const y = marginTop + row * (labelHeight + gapY);
-            const qrData = entryGeneratedQRData[qrIndex];
-            const shortId = qrData.slotId.replace(/^BATCH-\d{8}-/, '');
+              if (!hasQR) continue;
 
-            cellsHtml += `
-              <div style="position:absolute;left:${x}mm;top:${y}mm;width:${labelWidth}mm;height:${labelHeight}mm;
-                          display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0.5mm;">
-                <img src="${qrData.dataUrl}" style="width:${qrSize}mm;height:${qrSize}mm;display:block;">
-                <div style="font-family:Arial,sans-serif;font-weight:bold;font-size:${fontSize}mm;
-                            line-height:1;color:#000;text-align:center;margin-top:0.3mm;">${shortId}</div>
-              </div>`;
-            qrIndex++;
+              // ラベル位置計算（mm単位で正確）
+              const x = marginLeft + col * (labelWidth + gapX);
+              const y = marginTop + row * (labelHeight + gapY);
+              const qrData = entryGeneratedQRData[qrIndex];
+              const shortId = qrData.slotId.replace(/^BATCH-\d{8}-/, '');
+
+              // QRコード中央配置
+              const qrX = x + (labelWidth - qrSize) / 2;
+              const qrY = y + 0.5; // 上部に少し余白
+
+              // QRコード画像をPDFに追加
+              pdf.addImage(qrData.dataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+
+              // テキスト追加（QRコードの下）
+              pdf.setFontSize(fontSize * 2.83465); // mm→pt変換（1mm≒2.83pt）
+              pdf.setFont('helvetica', 'bold');
+              const textY = qrY + qrSize + fontSize + 0.5;
+              pdf.text(shortId, x + labelWidth / 2, textY, { align: 'center' });
+
+              qrIndex++;
+            }
           }
         }
 
-        sheetsHtml += `
-          <div class="entry-label-sheet-print-area" style="width:${a4Width}mm;height:${a4Height}mm;position:relative;background:white;">
-            ${cellsHtml}
-          </div>`;
+        console.log('[v330-PDF] PDF生成完了');
+
+        // PDFをBlobとして取得
+        const pdfBlob = pdf.output('blob');
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+
+        // iOSの場合は新しいタブで開く（ネイティブPDFビューア）
+        // 他のブラウザでもPDFを開く
+        const newWindow = window.open(pdfUrl, '_blank');
+
+        if (!newWindow) {
+          // ポップアップがブロックされた場合はダウンロード
+          const link = document.createElement('a');
+          link.href = pdfUrl;
+          link.download = `labels_${new Date().toISOString().slice(0,10)}.pdf`;
+          link.click();
+        }
+
+        console.log('[v330-PDF] PDFを開きました');
+
+        // URLを後でクリーンアップ
+        setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+
+      } catch (error) {
+        console.error('[v330-PDF] PDF生成エラー:', error);
+        alert('PDF生成中にエラーが発生しました: ' + error.message);
       }
-
-      printArea.innerHTML = sheetsHtml;
-      printArea.style.display = 'block';
-
-      // 印刷実行
-      setTimeout(() => {
-        window.print();
-        setTimeout(() => {
-          printArea.style.display = 'none';
-        }, 1000);
-      }, 100);
     }
 
     // ラベル設定を保存（プリセットごと）
