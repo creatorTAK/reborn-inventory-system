@@ -5406,8 +5406,8 @@
 
     // ===== ラベル印刷履歴機能 ここまで =====
 
-    // ラベルシート印刷 v310: 新規ウィンドウ印刷方式（iOS Safari対応）
-    async function printEntryLabelSheet(skipHistorySave = false) {
+    // ラベルシート印刷 v315: 同一ページ内印刷方式（PWA対応）
+    function printEntryLabelSheet(skipHistorySave = false) {
       if (entryGeneratedQRData.length === 0) {
         alert('先にQRコードを生成してください');
         return;
@@ -5427,23 +5427,11 @@
       const totalQR = entryGeneratedQRData.length;
       const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
 
-      console.log('[v310] 新規ウィンドウ印刷開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
+      console.log('[v315] 同一ページ内印刷:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
+      console.log('[v315] 設定:', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
 
-      // v314: iOS Safari対策 - window.openを最初に実行（awaitの前）
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alert('ポップアップがブロックされました。ポップアップを許可してください。');
-        return;
-      }
-      // ローディング表示
-      printWindow.document.write('<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;"><p>印刷準備中...</p></body></html>');
-
-      // 印刷履歴を保存（再印刷時はスキップ）- バックグラウンドで実行
-      if (!skipHistorySave) {
-        saveLabelPrintHistory(sheetsNeeded).catch(e => console.warn('履歴保存失敗:', e));
-      }
-
-      // v310: シートHTMLを生成
+      // 印刷エリアにコンテンツを生成
+      const printArea = document.getElementById('entryLabelPrintArea');
       let sheetsHtml = '';
       let qrIndex = 0;
 
@@ -5475,111 +5463,23 @@
           }
         }
 
-        // v313: デバッグマーカー（位置ズレ調査用）
-        const debugMode = true; // 本番ではfalseに
-        const debugMarkers = debugMode ? `
-          <!-- デバッグ: A4四隅マーカー -->
-          <div style="position:absolute;left:0;top:0;width:10mm;height:0.5mm;background:red;"></div>
-          <div style="position:absolute;left:0;top:0;width:0.5mm;height:10mm;background:red;"></div>
-          <div style="position:absolute;right:0;top:0;width:10mm;height:0.5mm;background:blue;"></div>
-          <div style="position:absolute;right:0;top:0;width:0.5mm;height:10mm;background:blue;"></div>
-          <div style="position:absolute;left:0;bottom:0;width:10mm;height:0.5mm;background:green;"></div>
-          <div style="position:absolute;left:0;bottom:0;width:0.5mm;height:10mm;background:green;"></div>
-          <div style="position:absolute;right:0;bottom:0;width:10mm;height:0.5mm;background:orange;"></div>
-          <div style="position:absolute;right:0;bottom:0;width:0.5mm;height:10mm;background:orange;"></div>
-          <!-- デバッグ: 1番目ラベル枠（23mm, 30.5mm） -->
-          <div style="position:absolute;left:${marginLeft}mm;top:${marginTop}mm;width:${labelWidth}mm;height:${labelHeight}mm;border:0.3mm dashed red;box-sizing:border-box;"></div>
-          <!-- デバッグ: 2番目ラベル枠 -->
-          <div style="position:absolute;left:${marginLeft + labelWidth + gapX}mm;top:${marginTop}mm;width:${labelWidth}mm;height:${labelHeight}mm;border:0.3mm dashed blue;box-sizing:border-box;"></div>
-        ` : '';
-
         sheetsHtml += `
-          <div class="sheet" style="width:${a4Width}mm;height:${a4Height}mm;position:relative;background:white;
-                                    page-break-after:${sheet < sheetsNeeded - 1 ? 'always' : 'auto'};">
-            ${debugMarkers}
+          <div class="entry-label-sheet-print-area" style="width:${a4Width}mm;height:${a4Height}mm;position:relative;background:white;">
             ${cellsHtml}
           </div>`;
       }
 
-      const printHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ラベル印刷</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box;}
-    html,body{width:210mm;background:white;}
-    @page{size:A4;margin:0;}
-    @media print{
-      html,body{width:210mm;}
-      img{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-      .btn-container{display:none!important;}
-    }
-    .btn-container{position:fixed;bottom:20px;left:0;right:0;text-align:center;z-index:9999;display:flex;gap:10px;justify-content:center;}
-    .btn{border:none;padding:12px 24px;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
-    .btn-print{background:#10b981;color:white;}
-    .btn-close{background:#6b7280;color:white;}
-  </style>
-</head>
-<body>
-  ${sheetsHtml}
-  <div class="btn-container">
-    <button class="btn btn-print" onclick="window.print();">🖨️ 印刷する</button>
-    <button class="btn btn-close" onclick="window.close();history.back();">閉じる</button>
-  </div>
-</body>
-</html>`;
+      printArea.innerHTML = sheetsHtml;
+      printArea.style.display = 'block';
 
-      // v314: 既に開いているウィンドウにHTMLを書き込み
-      printWindow.document.open();
-      printWindow.document.write(printHtml);
-      printWindow.document.close();
-      console.log('[v314] 印刷ウィンドウにコンテンツを書き込みました');
-
-      // v310: 新規ウィンドウ内の画像読み込みを待って印刷
-      const waitAndPrint = () => {
-        const images = printWindow.document.querySelectorAll('img');
-        const total = images.length;
-        let loaded = 0;
-
-        const checkAndPrint = () => {
-          loaded++;
-          console.log('[v310] Image loaded:', loaded, '/', total);
-          if (loaded >= total) {
-            console.log('[v310] All images loaded, printing...');
-            setTimeout(() => {
-              printWindow.focus();
-              printWindow.print();
-              printerWarmedUp = true;
-            }, 300);
-          }
-        };
-
-        if (total === 0) {
-          setTimeout(() => {
-            printWindow.focus();
-            printWindow.print();
-            printerWarmedUp = true;
-          }, 300);
-        } else {
-          images.forEach(img => {
-            if (img.complete) {
-              checkAndPrint();
-            } else {
-              img.onload = checkAndPrint;
-              img.onerror = checkAndPrint;
-            }
-          });
-        }
-      };
-
-      // DOMが準備できたら実行
-      if (printWindow.document.readyState === 'complete') {
-        waitAndPrint();
-      } else {
-        printWindow.onload = waitAndPrint;
-      }
+      // 印刷実行
+      setTimeout(() => {
+        window.print();
+        // 印刷ダイアログが閉じた後に非表示に戻す
+        setTimeout(() => {
+          printArea.style.display = 'none';
+        }, 1000);
+      }, 100);
     }
 
     // ラベル設定を保存（プリセットごと）
