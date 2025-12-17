@@ -7,7 +7,7 @@
   <title>仕入管理 - FURIRA</title>
   <script>
     // v312: A-ONE 70面ラベル余白微調整
-    console.log('🔴🔴🔴 purchase.html v312 loaded 🔴🔴🔴');
+    console.log('🔴🔴🔴 purchase.html v324 loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -5497,15 +5497,27 @@
       const totalQR = entryGeneratedQRData.length;
       const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
 
-      console.log('[v322] Canvas 300dpi印刷開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
-      console.log('[v322] Canvas解像度:', a4WidthPx, 'x', a4HeightPx, 'px (300dpi)');
-      console.log('[v322] 設定(mm):', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
+      console.log('[v324] Canvas 300dpi印刷開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
+      console.log('[v324] Canvas解像度:', a4WidthPx, 'x', a4HeightPx, 'px (300dpi)');
+      console.log('[v324] 設定(mm):', { marginTop, marginLeft, gapX, gapY, labelWidth, labelHeight });
 
-      // 画像プリロード関数
-      const loadImage = (src) => new Promise((resolve, reject) => {
+      // 画像プリロード関数（タイムアウト付き）
+      const loadImage = (src, timeout = 3000) => new Promise((resolve, reject) => {
         const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('画像読み込み失敗'));
+        const timer = setTimeout(() => {
+          console.error('[v324] 画像読み込みタイムアウト');
+          reject(new Error('タイムアウト'));
+        }, timeout);
+        img.onload = () => {
+          clearTimeout(timer);
+          console.log('[v324] 画像読み込み成功');
+          resolve(img);
+        };
+        img.onerror = (e) => {
+          clearTimeout(timer);
+          console.error('[v324] 画像読み込みエラー:', e);
+          reject(new Error('画像読み込み失敗'));
+        };
         img.src = src;
       });
 
@@ -5513,7 +5525,11 @@
       let sheetsHtml = '';
       let qrIndex = 0;
 
+      console.log('[v324] Canvas描画ループ開始');
+      
       for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
+        console.log('[v324] シート', sheet + 1, '/', sheetsNeeded, '処理開始');
+        
         // 300dpi Canvasを作成
         const canvas = document.createElement('canvas');
         canvas.width = a4WidthPx;
@@ -5548,14 +5564,17 @@
             const qrData = entryGeneratedQRData[qrIndex];
             const shortId = qrData.slotId.replace(/^BATCH-\d{8}-/, '');
 
+            console.log('[v324] QR描画:', qrIndex + 1, 'dataUrl長さ:', qrData.dataUrl ? qrData.dataUrl.length : 'null');
+
             // QRコード描画（ラベル内中央上部）
             try {
               const img = await loadImage(qrData.dataUrl);
               const qrX = xPx + Math.round((labelWidthPx - qrSizePx) / 2);
               const qrY = yPx + mm(1); // 上から1mm
               ctx.drawImage(img, qrX, qrY, qrSizePx, qrSizePx);
+              console.log('[v324] QR描画完了:', qrIndex + 1);
             } catch (e) {
-              console.error('[v322] QR画像読み込みエラー:', e);
+              console.error('[v324] QR画像読み込みエラー:', qrIndex + 1, e);
             }
 
             // IDテキスト描画（ラベル内下部）
@@ -5566,6 +5585,8 @@
             qrIndex++;
           }
         }
+        
+        console.log('[v324] シート', sheet + 1, 'Canvas描画完了');
 
         // CanvasをPNG画像に変換
         const dataUrl = canvas.toDataURL('image/png');
