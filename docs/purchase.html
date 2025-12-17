@@ -7,7 +7,7 @@
   <title>仕入管理 - FURIRA</title>
   <script>
     // v312: A-ONE 70面ラベル余白微調整
-    console.log('🔴🔴🔴 purchase.html v341-PDF loaded 🔴🔴🔴');
+    console.log('🔴🔴🔴 purchase.html v342-PDF loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -1358,6 +1358,42 @@
                 <i class="bi bi-download"></i> PDF保存
               </button>
             </div>
+
+            <!-- シンプル印刷詳細設定トグル -->
+            <button class="btn btn-sm btn-outline-secondary w-100 mb-2" type="button" id="simpleSettingsToggleBtn" onclick="toggleSimpleSettings()">
+              <i class="bi bi-sliders" id="simpleSettingsIcon"></i> <span id="simpleSettingsToggleText">詳細設定</span>
+            </button>
+
+            <!-- シンプル印刷詳細設定パネル -->
+            <div class="entry-custom-settings mb-3" id="simpleCustomSettings" style="display: none;">
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label">上余白 (mm)</label>
+                  <input type="number" class="form-control form-control-sm" id="simpleMarginTop" value="15" step="0.5">
+                </div>
+                <div class="col-6">
+                  <label class="form-label">左余白 (mm)</label>
+                  <input type="number" class="form-control form-control-sm" id="simpleMarginLeft" value="15" step="0.5">
+                </div>
+                <div class="col-6">
+                  <label class="form-label">QRサイズ (mm)</label>
+                  <input type="number" class="form-control form-control-sm" id="simpleQrSize" value="25" step="1">
+                </div>
+                <div class="col-6">
+                  <label class="form-label">間隔 (mm)</label>
+                  <input type="number" class="form-control form-control-sm" id="simpleGap" value="10" step="1">
+                </div>
+              </div>
+              <div class="d-flex gap-2 mt-2">
+                <button class="btn btn-sm btn-primary flex-fill" onclick="saveSimpleSettings()">
+                  <i class="bi bi-check-lg"></i> 設定を保存
+                </button>
+                <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="resetSimpleSettings()">
+                  <i class="bi bi-arrow-counterclockwise"></i> デフォルト
+                </button>
+              </div>
+            </div>
+
             <div class="qr-entry-grid" id="qrEntryGrid">
               <!-- QRコードがここに生成される -->
             </div>
@@ -3189,6 +3225,15 @@
     let entryMasterOptions = {}; // マスターオプション（サイズ等）
     let entryGeneratedQRData = [];
     let currentEntryPrintMode = 'simple';
+
+    // シンプル印刷設定
+    const simpleSettingsDefault = {
+      marginTop: 15,
+      marginLeft: 15,
+      qrSize: 25,
+      gap: 10
+    };
+    let currentSimpleSettings = { ...simpleSettingsDefault };
     // v312: A-ONE 31556（70面）余白微調整（上+3mm）
     let currentEntryLabelSettings = {
       name: '70面',
@@ -3677,6 +3722,9 @@
 
       // ラベル設定読み込み
       loadEntryLabelSettings();
+
+      // シンプル印刷設定読み込み
+      loadSimpleSettings();
 
       console.log('📥 [仕入登録] 初期化完了');
     }
@@ -5086,13 +5134,15 @@
 
         const pageWidth = 210;
         const pageHeight = 297;
-        const margin = 15;
-        const qrSize = 25;
-        const labelHeight = 12;
-        const cellWidth = 45;
-        const cellHeight = qrSize + labelHeight + 5;
-        const cols = Math.floor((pageWidth - margin * 2) / cellWidth);
-        const rowsPerPage = Math.floor((pageHeight - margin * 2) / cellHeight);
+        const marginTop = currentSimpleSettings.marginTop;
+        const marginLeft = currentSimpleSettings.marginLeft;
+        const qrSize = currentSimpleSettings.qrSize;
+        const gap = currentSimpleSettings.gap;
+        const labelHeight = 8;
+        const cellWidth = qrSize + gap;
+        const cellHeight = qrSize + labelHeight + gap;
+        const cols = Math.floor((pageWidth - marginLeft * 2) / cellWidth);
+        const rowsPerPage = Math.floor((pageHeight - marginTop * 2) / cellHeight);
         const itemsPerPage = cols * rowsPerPage;
 
         let itemIndex = 0;
@@ -5105,8 +5155,8 @@
           for (let row = 0; row < rowsPerPage && itemIndex < totalItems; row++) {
             for (let col = 0; col < cols && itemIndex < totalItems; col++) {
               const qrData = entryGeneratedQRData[itemIndex];
-              const x = margin + col * cellWidth;
-              const y = margin + row * cellHeight;
+              const x = marginLeft + col * cellWidth;
+              const y = marginTop + row * cellHeight;
 
               // QRコード
               const qrX = x + (cellWidth - qrSize) / 2;
@@ -5716,6 +5766,70 @@
       localStorage.setItem('entryLabelPresets', JSON.stringify(allPresets));
 
       alert('✅ デフォルト設定に戻しました');
+    }
+
+    // ========================================
+    // シンプル印刷詳細設定
+    // ========================================
+
+    // シンプル詳細設定パネルの開閉
+    function toggleSimpleSettings() {
+      const panel = document.getElementById('simpleCustomSettings');
+      const toggleText = document.getElementById('simpleSettingsToggleText');
+      const icon = document.getElementById('simpleSettingsIcon');
+      const btn = document.getElementById('simpleSettingsToggleBtn');
+
+      if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        toggleText.textContent = '詳細設定を閉じる';
+        icon.className = 'bi bi-chevron-up';
+        btn.classList.remove('btn-outline-secondary');
+        btn.classList.add('btn-secondary');
+      } else {
+        panel.style.display = 'none';
+        toggleText.textContent = '詳細設定';
+        icon.className = 'bi bi-sliders';
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-outline-secondary');
+      }
+
+      setTimeout(() => document.activeElement.blur(), 100);
+    }
+
+    // シンプル印刷設定を保存
+    function saveSimpleSettings() {
+      currentSimpleSettings = {
+        marginTop: parseFloat(document.getElementById('simpleMarginTop').value) || 15,
+        marginLeft: parseFloat(document.getElementById('simpleMarginLeft').value) || 15,
+        qrSize: parseFloat(document.getElementById('simpleQrSize').value) || 25,
+        gap: parseFloat(document.getElementById('simpleGap').value) || 10
+      };
+      localStorage.setItem('simpleSettings', JSON.stringify(currentSimpleSettings));
+      alert('✅ シンプル印刷設定を保存しました');
+    }
+
+    // シンプル印刷設定をデフォルトに戻す
+    function resetSimpleSettings() {
+      if (!confirm('シンプル印刷設定をデフォルトに戻しますか？')) return;
+      currentSimpleSettings = { ...simpleSettingsDefault };
+      document.getElementById('simpleMarginTop').value = simpleSettingsDefault.marginTop;
+      document.getElementById('simpleMarginLeft').value = simpleSettingsDefault.marginLeft;
+      document.getElementById('simpleQrSize').value = simpleSettingsDefault.qrSize;
+      document.getElementById('simpleGap').value = simpleSettingsDefault.gap;
+      localStorage.removeItem('simpleSettings');
+      alert('✅ デフォルト設定に戻しました');
+    }
+
+    // シンプル印刷設定を読み込み
+    function loadSimpleSettings() {
+      const saved = localStorage.getItem('simpleSettings');
+      if (saved) {
+        currentSimpleSettings = { ...simpleSettingsDefault, ...JSON.parse(saved) };
+      }
+      document.getElementById('simpleMarginTop').value = currentSimpleSettings.marginTop;
+      document.getElementById('simpleMarginLeft').value = currentSimpleSettings.marginLeft;
+      document.getElementById('simpleQrSize').value = currentSimpleSettings.qrSize;
+      document.getElementById('simpleGap').value = currentSimpleSettings.gap;
     }
 
     // フォームリセット
