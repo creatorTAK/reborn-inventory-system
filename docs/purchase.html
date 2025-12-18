@@ -1140,10 +1140,10 @@
         仕入管理
       </div>
       <div class="header-actions">
-        <button class="btn btn-sm btn-outline-primary me-1" onclick="openPaymentNoticeModal()" title="支払通知書発行">
+        <button class="btn btn-sm btn-outline-light me-1" onclick="openPaymentNoticeModal()" title="支払通知書発行">
           <i class="bi bi-file-text"></i>
         </button>
-        <button class="btn btn-sm btn-outline-primary me-1" onclick="openExportModal()" title="データ出力">
+        <button class="btn btn-sm btn-outline-light me-1" onclick="openExportModal()" title="データ出力">
           <i class="bi bi-download"></i>
         </button>
         <button class="menu-button" onclick="window.parent.postMessage({type:'toggleDrawer'}, '*')" title="メニュー">
@@ -3210,14 +3210,20 @@
       const now = new Date();
       // 日本時間に変換（UTC+9）
       const jst = new Date(now.getTime() + (9 * 60 + now.getTimezoneOffset()) * 60000);
-      return jst.toISOString().slice(0, 10);
+      // toISOString()はUTC時間を返すので、getFullYear/Month/Dateを使用
+      const year = jst.getFullYear();
+      const month = String(jst.getMonth() + 1).padStart(2, '0');
+      const day = String(jst.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     }
 
     // 日本時間で今月を取得（YYYY-MM形式）
     function getJSTMonth() {
       const now = new Date();
       const jst = new Date(now.getTime() + (9 * 60 + now.getTimezoneOffset()) * 60000);
-      return jst.toISOString().slice(0, 7);
+      const year = jst.getFullYear();
+      const month = String(jst.getMonth() + 1).padStart(2, '0');
+      return `${year}-${month}`;
     }
 
     // グローバル変数（仕入登録用）
@@ -5644,6 +5650,11 @@
         }
 
         console.log('[v330-PDF] PDFを開きました');
+
+        // 履歴保存（再印刷時はスキップ）
+        if (!skipHistorySave) {
+          await saveLabelPrintHistory(sheetsNeeded);
+        }
 
         // URLを後でクリーンアップ
         setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
