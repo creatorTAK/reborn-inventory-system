@@ -5501,6 +5501,34 @@
       }).join('');
     }
 
+    // QRコードをDataURLとして生成（qrcodejs用）
+    function generateQRCodeDataUrl(content) {
+      return new Promise((resolve) => {
+        // 一時的なコンテナを作成
+        const tempContainer = document.createElement('div');
+        tempContainer.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+        document.body.appendChild(tempContainer);
+
+        // QRコード生成
+        const qr = new QRCode(tempContainer, {
+          text: content,
+          width: 200,
+          height: 200,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+
+        // canvasの描画完了を待つ
+        setTimeout(() => {
+          const canvas = tempContainer.querySelector('canvas');
+          const dataUrl = canvas ? canvas.toDataURL('image/png') : null;
+          document.body.removeChild(tempContainer);
+          resolve(dataUrl);
+        }, 100);
+      });
+    }
+
     // 履歴から再印刷
     async function reprintFromHistory(historyId) {
       try {
@@ -5512,16 +5540,10 @@
 
         const history = doc.data();
 
-        // QRコード再生成
+        // QRコード再生成（qrcodejs用の方法）
         const qrDataList = [];
         for (const slotId of history.slotIds) {
-          const qrDataUrl = await new Promise((resolve) => {
-            QRCode.toDataURL(slotId, {
-              width: 200,
-              margin: 1,
-              errorCorrectionLevel: 'M'
-            }, (err, url) => resolve(url));
-          });
+          const qrDataUrl = await generateQRCodeDataUrl(slotId);
 
           qrDataList.push({
             slotId,
