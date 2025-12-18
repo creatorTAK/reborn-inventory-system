@@ -118,9 +118,83 @@
     width: 100%;
     border-radius: 12px;
     overflow: hidden;
+    position: relative;
   }
   #reader video {
     border-radius: 12px;
+  }
+
+  /* スキャンガイドフレーム */
+  .scan-guide-container {
+    position: relative;
+  }
+  .scan-guide-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 200px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .scan-guide-corner {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-color: #40B4E5;
+    border-style: solid;
+    border-width: 0;
+  }
+  .scan-guide-corner.top-left {
+    top: 0;
+    left: 0;
+    border-top-width: 4px;
+    border-left-width: 4px;
+    border-top-left-radius: 8px;
+  }
+  .scan-guide-corner.top-right {
+    top: 0;
+    right: 0;
+    border-top-width: 4px;
+    border-right-width: 4px;
+    border-top-right-radius: 8px;
+  }
+  .scan-guide-corner.bottom-left {
+    bottom: 0;
+    left: 0;
+    border-bottom-width: 4px;
+    border-left-width: 4px;
+    border-bottom-left-radius: 8px;
+  }
+  .scan-guide-corner.bottom-right {
+    bottom: 0;
+    right: 0;
+    border-bottom-width: 4px;
+    border-right-width: 4px;
+    border-bottom-right-radius: 8px;
+  }
+  .scan-guide-text {
+    position: absolute;
+    bottom: -35px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    white-space: nowrap;
+    background: rgba(0,0,0,0.5);
+    padding: 4px 12px;
+    border-radius: 12px;
+  }
+
+  /* html5-qrcodeのシェーディング調整 */
+  #reader__scan_region {
+    border-radius: 8px !important;
+  }
+  #reader__dashboard_section {
+    display: none !important;
   }
   
   /* スキャン結果 */
@@ -311,10 +385,20 @@
     <div class="card-title">
       <i class="bi bi-camera-video"></i> QRコードをスキャン
     </div>
-    <div id="reader"></div>
+    <div class="scan-guide-container">
+      <div id="reader"></div>
+      <!-- スキャンガイドフレーム（四隅の角マーク） -->
+      <div class="scan-guide-overlay" id="scanGuideOverlay" style="display: none;">
+        <div class="scan-guide-corner top-left"></div>
+        <div class="scan-guide-corner top-right"></div>
+        <div class="scan-guide-corner bottom-left"></div>
+        <div class="scan-guide-corner bottom-right"></div>
+        <div class="scan-guide-text">枠内にQRコードを合わせてください</div>
+      </div>
+    </div>
     <p class="text-muted mt-3 mb-0 small">
       <i class="bi bi-info-circle"></i>
-      商品タグのQRコードをカメラにかざしてください
+      1つのQRコードを枠内に収めてスキャン
     </p>
     <!-- v322: スキップリンク -->
     <div class="text-center mt-3 pt-2 border-top">
@@ -465,16 +549,22 @@
   // スキャナー起動
   function startScanner() {
     html5QrCode = new Html5Qrcode("reader");
-    
+
     html5QrCode.start(
       { facingMode: "environment" },
       {
         fps: 10,
-        qrbox: { width: 250, height: 250 }
+        qrbox: { width: 200, height: 200 },  // 小さめの枠で精確にスキャン
+        aspectRatio: 1.0,  // 正方形のスキャンエリア
+        disableFlip: false  // 反転を許可（一部のカメラ対応）
       },
       onScanSuccess,
       onScanFailure
-    ).catch(err => {
+    ).then(() => {
+      // スキャン開始後にガイドフレームを表示
+      const guide = document.getElementById('scanGuideOverlay');
+      if (guide) guide.style.display = 'block';
+    }).catch(err => {
       console.error("カメラの起動に失敗:", err);
       document.getElementById('reader').innerHTML = `
         <div class="text-center text-danger p-4">
@@ -496,12 +586,16 @@
     } catch (e) {
       // URLでない場合はそのまま使用
     }
-    
+
+    // ガイドフレームを非表示
+    const guide = document.getElementById('scanGuideOverlay');
+    if (guide) guide.style.display = 'none';
+
     // スキャナー停止
     if (html5QrCode) {
       html5QrCode.stop();
     }
-    
+
     processScannedCode(invId);
   }
   
@@ -583,7 +677,8 @@
   // モード切替
   function switchMode(mode) {
     document.querySelectorAll('.mode-tab').forEach(tab => tab.classList.remove('active'));
-    
+    const guide = document.getElementById('scanGuideOverlay');
+
     if (mode === 'scan') {
       document.querySelector('.mode-tab:first-child').classList.add('active');
       document.getElementById('scannerCard').style.display = 'block';
@@ -595,6 +690,8 @@
       document.querySelector('.mode-tab:last-child').classList.add('active');
       document.getElementById('scannerCard').style.display = 'none';
       document.getElementById('manualInput').classList.add('show');
+      // 手動入力モードではガイドを非表示
+      if (guide) guide.style.display = 'none';
       if (html5QrCode) {
         html5QrCode.stop().catch(() => {});
         html5QrCode = null;
