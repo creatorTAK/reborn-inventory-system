@@ -1256,7 +1256,8 @@ window.continueProductRegistration = function() {
   '肩幅','身幅','袖丈','着丈','ウエスト','ヒップ','股上','股下',
   '仕入日','仕入先','仕入金額',
   '出品日','出品先','出品金額',
-  '配送料の負担','配送の方法','発送元の地域','発送までの日数'
+  '配送料の負担','配送の方法','発送元の地域','発送までの日数',
+  'invId'  // 仕入商品ID（QRスキャン時に紐付け）
 ];
 
   let CAT_ROWS = [];
@@ -10076,6 +10077,7 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
     productId: productId,
     shelfNumber: formData['棚番号'] || '',
     managementNumber: formData['管理番号'] || '',
+    purchaseSlotId: formData['invId'] || null,  // 仕入商品との紐付けID
 
     // 商品情報
     productName: formData['商品名(タイトル)'] || '',
@@ -10286,6 +10288,23 @@ async function saveProductToFirestore(formData) {
     // Firestoreに保存（ドキュメントIDは商品番号）
     await window.db.collection('products').doc(productId).set(doc);
     console.log(`[saveProductToFirestore] Firestore保存完了: products/${productId}`);
+
+    // purchaseSlotsの逆引き更新（紐付けがある場合）
+    const purchaseSlotId = formData['invId'];
+    if (purchaseSlotId) {
+      try {
+        await window.db.collection('purchaseSlots').doc(purchaseSlotId).update({
+          productId: productId,
+          managementNumber: formData['管理番号'] || '',
+          status: 'registered',
+          registeredAt: new Date().toISOString()
+        });
+        console.log(`[saveProductToFirestore] purchaseSlots更新完了: ${purchaseSlotId} → ${productId}`);
+      } catch (slotError) {
+        // purchaseSlotsが存在しない場合はログのみ（エラーにしない）
+        console.warn(`[saveProductToFirestore] purchaseSlots更新スキップ:`, slotError.message);
+      }
+    }
 
     // 成功レスポンス
     return {

@@ -1172,26 +1172,49 @@
       console.log('QRスキャン成功:', decodedText);
       stopScanner();
 
-      // QRコードから管理番号を抽出
-      let managementNumber = decodedText;
-      try {
-        const qrData = JSON.parse(decodedText);
-        if (qrData.managementNumber) {
-          managementNumber = qrData.managementNumber;
+      let product = null;
+      let searchKey = decodedText;
+
+      // 1. URL形式（仕入QR: https://furira.jp/scan?inv=BATCH-XXXX）
+      if (decodedText.includes('furira.jp/scan') || decodedText.includes('inv=')) {
+        try {
+          const url = new URL(decodedText);
+          const invId = url.searchParams.get('inv');
+          if (invId) {
+            console.log('仕入QR検出、purchaseSlotIdで検索:', invId);
+            searchKey = invId;
+            // purchaseSlotIdで商品検索
+            product = allProducts.find(p => p.purchaseSlotId === invId);
+          }
+        } catch (e) {
+          console.log('URL解析失敗、テキストとして処理');
         }
-      } catch (e) {
-        // JSON以外はそのまま使用
       }
 
-      // 商品検索
-      const product = allProducts.find(p =>
-        p.managementNumber === managementNumber || p.id === managementNumber
-      );
+      // 2. JSON形式（商品QR: {"type":"product","managementNumber":"XX-XXXX"}）
+      if (!product) {
+        try {
+          const qrData = JSON.parse(decodedText);
+          if (qrData.managementNumber) {
+            searchKey = qrData.managementNumber;
+            product = allProducts.find(p => p.managementNumber === qrData.managementNumber);
+          }
+        } catch (e) {
+          // JSON以外
+        }
+      }
+
+      // 3. 直接テキスト（管理番号またはID）
+      if (!product) {
+        product = allProducts.find(p =>
+          p.managementNumber === searchKey || p.id === searchKey
+        );
+      }
 
       if (product) {
         selectProduct(product.id);
       } else {
-        alert('商品が見つかりません: ' + managementNumber);
+        alert('商品が見つかりません: ' + searchKey);
       }
     }
 
