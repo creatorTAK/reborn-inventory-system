@@ -2297,6 +2297,17 @@
         // 権限チェックしてサイドバーメニューを制御（PERM-001）
         await checkUserPermissionForSidebar();
 
+        // オンライン状態を更新（UI-017: ユーザー管理オンライン表示）
+        updateLastActiveAt();
+        // 3分ごとに更新（アプリ使用中はオンライン状態を維持）
+        setInterval(updateLastActiveAt, 3 * 60 * 1000);
+        // ページがアクティブになった時も更新
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            updateLastActiveAt();
+          }
+        });
+
         // 🏠 初期設定完了済みの場合、ヘッダーを非表示にしてメニュー画面を表示（UI-013）
         // スケルトンUI表示中もヘッダーを非表示に保つ
         const header = document.getElementById('app-header');
@@ -4975,6 +4986,27 @@
       // やることリストのリスナーを開始（ヘッダーバッジ更新用）
       if (typeof startTodoListener === 'function') {
         startTodoListener();
+      }
+    }
+
+    /**
+     * オンライン状態を更新（UI-017: ユーザー管理オンライン表示）
+     * Firestoreのusersコレクションに lastActiveAt を更新
+     */
+    async function updateLastActiveAt() {
+      try {
+        const userEmail = localStorage.getItem('reborn_user_email');
+        if (!userEmail || !window.db) {
+          return;
+        }
+
+        await window.db.collection('users').doc(userEmail).update({
+          lastActiveAt: new Date().toISOString()
+        });
+        console.log('[Online] ✅ lastActiveAt更新:', new Date().toLocaleTimeString());
+      } catch (error) {
+        // エラーが発生しても静かに失敗（オンライン状態は重要ではないため）
+        console.log('[Online] lastActiveAt更新スキップ:', error.message);
       }
     }
 
