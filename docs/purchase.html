@@ -5553,9 +5553,13 @@
 
     // 履歴から再印刷
     async function reprintFromHistory(historyId) {
+      // iOS対策: ユーザーアクション直後にウィンドウを開く（後で差し替え）
+      const pdfWindow = window.open('about:blank', '_blank');
+
       try {
         const doc = await db.collection('labelPrintHistory').doc(historyId).get();
         if (!doc.exists) {
+          if (pdfWindow) pdfWindow.close();
           alert('履歴が見つかりません');
           return;
         }
@@ -5598,16 +5602,100 @@
         const btn = document.querySelector('[onclick="toggleLabelPrintHistory()"]');
         if (btn) btn.innerHTML = '<i class="bi bi-clock-history"></i> 印刷履歴を表示';
 
-        // 印刷実行（履歴保存はスキップ）
-        printEntryLabelSheet(true);
+        // 印刷実行（履歴保存はスキップ、事前に開いたウィンドウを渡す）
+        await printEntryLabelSheetWithWindow(pdfWindow, true);
 
       } catch (error) {
         console.error('[再印刷] エラー:', error);
+        if (pdfWindow) pdfWindow.close();
         alert('再印刷に失敗しました: ' + error.message);
       }
     }
 
     // ===== ラベル印刷履歴機能 ここまで =====
+
+    // 再印刷用: 事前に開いたウィンドウにPDFを表示（iOS対策）
+    async function printEntryLabelSheetWithWindow(pdfWindow, skipHistorySave = false) {
+      if (entryGeneratedQRData.length === 0) {
+        if (pdfWindow) pdfWindow.close();
+        alert('先にQRコードを生成してください');
+        return;
+      }
+
+      const { labelWidth, labelHeight, cols, rows, marginTop, marginLeft, gapX, gapY } = currentEntryLabelSettings;
+      const perSheet = cols * rows;
+      const startPos = parseInt(document.getElementById('entryStartPosition')?.value) || 1;
+      const qrSize = currentEntryLabelSettings.qrSize || Math.min(labelWidth, labelHeight) * 0.75;
+      const fontSize = Math.max(1.5, labelWidth * 0.12);
+
+      const totalQR = entryGeneratedQRData.length;
+      const sheetsNeeded = Math.ceil((totalQR + startPos - 1) / perSheet);
+
+      console.log('[再印刷] PDF生成開始:', totalQR, 'QRコード,', sheetsNeeded, 'シート');
+
+      try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+        let qrIndex = 0;
+
+        for (let sheet = 0; sheet < sheetsNeeded; sheet++) {
+          if (sheet > 0) pdf.addPage();
+
+          for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+              const cellIndex = row * cols + col;
+              const globalIndex = sheet * perSheet + cellIndex;
+              const isBeforeStart = globalIndex < startPos - 1;
+              const hasQR = !isBeforeStart && qrIndex < totalQR;
+
+              if (!hasQR) continue;
+
+              const x = marginLeft + col * (labelWidth + gapX);
+              const y = marginTop + row * (labelHeight + gapY);
+              const qrData = entryGeneratedQRData[qrIndex];
+              const shortId = qrData.slotId.replace(/^BATCH-\d{8}-/, '');
+
+              const qrX = x + (labelWidth - qrSize) / 2;
+              const qrY = y + 0.5;
+
+              pdf.addImage(qrData.dataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+
+              pdf.setFontSize(fontSize * 2.83465);
+              pdf.setFont('helvetica', 'bold');
+              const textY = qrY + qrSize + fontSize;
+              pdf.text(shortId, x + labelWidth / 2, textY, { align: 'center' });
+
+              qrIndex++;
+            }
+          }
+        }
+
+        console.log('[再印刷] PDF生成完了');
+
+        const pdfBlob = pdf.output('blob');
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+
+        // 事前に開いたウィンドウのURLを差し替え
+        if (pdfWindow) {
+          pdfWindow.location.href = pdfUrl;
+          console.log('[再印刷] PDFウィンドウに表示完了');
+        } else {
+          // フォールバック：ダウンロード
+          const link = document.createElement('a');
+          link.href = pdfUrl;
+          link.download = `labels_${getJSTToday()}.pdf`;
+          link.click();
+        }
+
+        setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+
+      } catch (error) {
+        console.error('[再印刷] PDF生成エラー:', error);
+        if (pdfWindow) pdfWindow.close();
+        alert('PDF生成中にエラーが発生しました: ' + error.message);
+      }
+    }
 
     // ラベルシート印刷 v330: jsPDF方式（iOS Safari対応）
     // window.print()を使用せず、PDFを生成してiOSネイティブで開く
