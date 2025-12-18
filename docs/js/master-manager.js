@@ -281,9 +281,9 @@ async function loadMaster(category, type) {
     const headerTitle = document.getElementById('headerTitle');
     if (headerTitle) {
       if (category === 'product') {
-        headerTitle.textContent = '🏷️ 商品関連マスタ管理';
+        headerTitle.innerHTML = '<i class="bi bi-box"></i> 商品関連マスタ管理';
       } else if (category === 'business') {
-        headerTitle.textContent = '📦 業務関連マスタ管理';
+        headerTitle.innerHTML = '<i class="bi bi-building"></i> 業務関連マスタ管理';
       }
     }
   }
