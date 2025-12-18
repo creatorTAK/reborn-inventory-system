@@ -895,6 +895,33 @@
     let currentSalesData = [];
     let selectedProductForPayment = null;
 
+    // 日本時間で今日の日付を取得（YYYY-MM-DD形式）
+    function getJSTToday() {
+      const now = new Date();
+      const jst = new Date(now.getTime() + (9 * 60 + now.getTimezoneOffset()) * 60000);
+      const year = jst.getFullYear();
+      const month = String(jst.getMonth() + 1).padStart(2, '0');
+      const day = String(jst.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    // 日本時間で今月を取得（YYYY-MM形式）
+    function getJSTMonth() {
+      const now = new Date();
+      const jst = new Date(now.getTime() + (9 * 60 + now.getTimezoneOffset()) * 60000);
+      const year = jst.getFullYear();
+      const month = String(jst.getMonth() + 1).padStart(2, '0');
+      return `${year}-${month}`;
+    }
+
+    // 任意のDateオブジェクトから日付文字列を取得（YYYY-MM-DD形式）
+    function formatDateLocal(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
     function showLoading() {
       document.getElementById('loadingOverlay').style.display = 'flex';
     }
@@ -920,7 +947,7 @@
      */
     function calculateDateRange(preset) {
       const now = new Date();
-      const today = now.toISOString().slice(0, 10);
+      const today = getJSTToday();
       let startDate = '';
       let endDate = today;
 
@@ -931,21 +958,21 @@
         case 'week':
           const weekStart = new Date(now);
           weekStart.setDate(now.getDate() - now.getDay()); // 日曜始まり
-          startDate = weekStart.toISOString().slice(0, 10);
+          startDate = formatDateLocal(weekStart);
           break;
         case 'month':
-          startDate = now.toISOString().slice(0, 7) + '-01';
+          startDate = getJSTMonth() + '-01';
           break;
         case 'lastMonth':
           const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
           const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-          startDate = lastMonth.toISOString().slice(0, 10);
-          endDate = lastMonthEnd.toISOString().slice(0, 10);
+          startDate = formatDateLocal(lastMonth);
+          endDate = formatDateLocal(lastMonthEnd);
           break;
         case 'quarter':
           const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
           const quarterStart = new Date(now.getFullYear(), quarterMonth, 1);
-          startDate = quarterStart.toISOString().slice(0, 10);
+          startDate = formatDateLocal(quarterStart);
           break;
         case 'year':
           startDate = now.getFullYear() + '-01-01';
@@ -990,14 +1017,13 @@
     }
 
     function initializePage() {
-      // 入金日のデフォルト
-      const now = new Date();
-      document.getElementById('paymentDate').value = now.toISOString().slice(0, 10);
+      // 入金日のデフォルト（日本時間）
+      document.getElementById('paymentDate').value = getJSTToday();
 
-      // カスタム日付のデフォルト値
-      const monthStart = now.toISOString().slice(0, 7) + '-01';
+      // カスタム日付のデフォルト値（日本時間）
+      const monthStart = getJSTMonth() + '-01';
       document.getElementById('salesStartDate').value = monthStart;
-      document.getElementById('salesEndDate').value = now.toISOString().slice(0, 10);
+      document.getElementById('salesEndDate').value = getJSTToday();
 
       // 期間プリセットボタンのイベント設定（売上一覧用）
       document.querySelectorAll('.period-preset').forEach(btn => {
@@ -1187,7 +1213,7 @@
 
         const expectedDate = new Date(saleDate);
         expectedDate.setDate(expectedDate.getDate() + expectedDays);
-        const expectedDateStr = expectedDate.toISOString().slice(0, 10);
+        const expectedDateStr = formatDateLocal(expectedDate);
 
         const key = `${expectedDateStr}_${platform}`;
         if (!scheduleMap[key]) {
@@ -1203,7 +1229,7 @@
         return;
       }
 
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getJSTToday();
       let html = '';
       Object.values(scheduleMap).sort((a, b) => a.date.localeCompare(b.date)).forEach(schedule => {
         const isOverdue = schedule.date < today;
@@ -1366,8 +1392,8 @@
           return;
       }
 
-      document.getElementById('exportStartDate').value = startDate.toISOString().slice(0, 10);
-      document.getElementById('exportEndDate').value = endDate.toISOString().slice(0, 10);
+      document.getElementById('exportStartDate').value = formatDateLocal(startDate);
+      document.getElementById('exportEndDate').value = formatDateLocal(endDate);
     }
 
     async function exportData() {
@@ -1536,19 +1562,18 @@
     window.openInvoiceModal = function(items = []) {
       currentInvoiceData = items;
 
-      // 初期値設定
-      const today = new Date();
-      document.getElementById('invoiceDate').value = today.toISOString().slice(0, 10);
+      // 初期値設定（日本時間）
+      const todayStr = getJSTToday();
+      document.getElementById('invoiceDate').value = todayStr;
 
       // 支払期限：30日後
+      const today = new Date();
       const dueDate = new Date(today);
       dueDate.setDate(dueDate.getDate() + 30);
-      document.getElementById('invoiceDueDate').value = dueDate.toISOString().slice(0, 10);
+      document.getElementById('invoiceDueDate').value = formatDateLocal(dueDate);
 
-      // 請求番号自動生成
-      const invoiceNumber = 'INV-' + today.getFullYear() +
-        String(today.getMonth() + 1).padStart(2, '0') +
-        String(today.getDate()).padStart(2, '0') + '-' +
+      // 請求番号自動生成（日本時間基準）
+      const invoiceNumber = 'INV-' + todayStr.replace(/-/g, '') + '-' +
         String(Math.floor(Math.random() * 1000)).padStart(3, '0');
       document.getElementById('invoiceNumber').value = invoiceNumber;
 
@@ -1849,7 +1874,7 @@
      */
     function calculateAnalysisDateRange(preset) {
       const now = new Date();
-      const today = now.toISOString().slice(0, 10);
+      const today = getJSTToday();
       let startDate = '';
       let endDate = today;
 
@@ -1860,21 +1885,21 @@
         case 'week':
           const weekStart = new Date(now);
           weekStart.setDate(now.getDate() - now.getDay());
-          startDate = weekStart.toISOString().slice(0, 10);
+          startDate = formatDateLocal(weekStart);
           break;
         case 'month':
-          startDate = now.toISOString().slice(0, 7) + '-01';
+          startDate = getJSTMonth() + '-01';
           break;
         case 'lastMonth':
           const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
           const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-          startDate = lastMonth.toISOString().slice(0, 10);
-          endDate = lastMonthEnd.toISOString().slice(0, 10);
+          startDate = formatDateLocal(lastMonth);
+          endDate = formatDateLocal(lastMonthEnd);
           break;
         case 'quarter':
           const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
           const quarterStart = new Date(now.getFullYear(), quarterMonth, 1);
-          startDate = quarterStart.toISOString().slice(0, 10);
+          startDate = formatDateLocal(quarterStart);
           break;
         case 'year':
           startDate = now.getFullYear() + '-01-01';
@@ -1925,11 +1950,10 @@
         });
       });
 
-      // カスタム日付のデフォルト値
-      const now = new Date();
-      const monthStart = now.toISOString().slice(0, 7) + '-01';
+      // カスタム日付のデフォルト値（日本時間）
+      const monthStart = getJSTMonth() + '-01';
       document.getElementById('analysisStartDate').value = monthStart;
-      document.getElementById('analysisEndDate').value = now.toISOString().slice(0, 10);
+      document.getElementById('analysisEndDate').value = getJSTToday();
     }
 
     // 分析カスタム日付変更時
