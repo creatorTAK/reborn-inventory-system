@@ -104,14 +104,34 @@ console.log('[product.html] ✅ Script loaded - Version @315-SlotAutoFill');
   function applySlotDataToForm(slotData) {
     console.log('📦 [v315] フォームにスロットデータを反映中...', slotData);
 
-    // ブランド
+    // ブランド（英語）
     if (slotData.brand) {
-      const brandInput = document.getElementById('ブランド');
+      const brandInput = document.getElementById('ブランド(英語)');
       if (brandInput) {
         brandInput.value = slotData.brand;
         // 入力イベントを発火してブランドサジェストを更新
         brandInput.dispatchEvent(new Event('input', { bubbles: true }));
-        console.log('📦 [v315] ブランド設定:', slotData.brand);
+        console.log('📦 [v315] ブランド(英語)設定:', slotData.brand);
+      }
+      // 商品名用のブランドフィールドにも設定
+      const brandNameInput = document.getElementById('商品名_ブランド(英語)');
+      if (brandNameInput) {
+        brandNameInput.value = slotData.brand;
+        brandNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+
+    // ブランド（カナ）
+    if (slotData.brandKana) {
+      const brandKanaInput = document.getElementById('ブランド(カナ)');
+      if (brandKanaInput) {
+        brandKanaInput.value = slotData.brandKana;
+        console.log('📦 [v315] ブランド(カナ)設定:', slotData.brandKana);
+      }
+      // 商品名用のブランドカナフィールドにも設定
+      const brandKanaNameInput = document.getElementById('商品名_ブランド(カナ)');
+      if (brandKanaNameInput) {
+        brandKanaNameInput.value = slotData.brandKana;
       }
     }
 
