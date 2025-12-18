@@ -10289,9 +10289,11 @@ async function saveProductToFirestore(formData) {
     await window.db.collection('products').doc(productId).set(doc);
     console.log(`[saveProductToFirestore] Firestore保存完了: products/${productId}`);
 
-    // purchaseSlotsの逆引き更新（紐付けがある場合）
-    const purchaseSlotId = formData['invId'];
+    // purchaseSlotsの処理（紐付け更新 or 自動作成）
+    let purchaseSlotId = formData['invId'];
+    
     if (purchaseSlotId) {
+      // 既存のpurchaseSlotを更新
       try {
         await window.db.collection('purchaseSlots').doc(purchaseSlotId).update({
           productId: productId,
@@ -10301,8 +10303,39 @@ async function saveProductToFirestore(formData) {
         });
         console.log(`[saveProductToFirestore] purchaseSlots更新完了: ${purchaseSlotId} → ${productId}`);
       } catch (slotError) {
-        // purchaseSlotsが存在しない場合はログのみ（エラーにしない）
         console.warn(`[saveProductToFirestore] purchaseSlots更新スキップ:`, slotError.message);
+      }
+    } else {
+      // purchaseSlotがない場合は自動作成（副業ユーザー向け）
+      try {
+        const autoSlotId = `AUTO-${productId}`;
+        const purchaseSlotData = {
+          slotId: autoSlotId,
+          productId: productId,
+          managementNumber: formData['管理番号'] || '',
+          productName: formData['商品名'] || '',
+          brand: formData['ブランド'] || '',
+          category: formData['カテゴリ'] || '',
+          purchasePrice: parseFloat(formData['仕入価格']) || 0,
+          status: 'registered',
+          autoCreated: true, // 自動作成フラグ
+          createdAt: new Date().toISOString(),
+          registeredAt: new Date().toISOString()
+        };
+        
+        await window.db.collection('purchaseSlots').doc(autoSlotId).set(purchaseSlotData);
+        console.log(`[saveProductToFirestore] purchaseSlots自動作成: ${autoSlotId}`);
+        
+        // productsドキュメントにもpurchaseSlotIdを追記
+        await window.db.collection('products').doc(productId).update({
+          purchaseSlotId: autoSlotId
+        });
+        console.log(`[saveProductToFirestore] products.purchaseSlotId更新: ${autoSlotId}`);
+        
+        purchaseSlotId = autoSlotId;
+      } catch (autoSlotError) {
+        // 自動作成失敗はログのみ（商品登録自体は成功させる）
+        console.warn(`[saveProductToFirestore] purchaseSlots自動作成スキップ:`, autoSlotError.message);
       }
     }
 

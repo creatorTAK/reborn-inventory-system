@@ -1,18 +1,15 @@
-# SESSION_STATE
+# Session State
 
-## セッション開始
-- **日時**: 2025-12-18
-- **状態**: 指示待ち
+## 最終更新
+- 日時: 2025-12-18
+- セッション開始: 新規セッション
 
-## 前回の作業
-- UI-017: config.html ヘッダーUI統一化進行中
-- 配送設定を統合枠構造に変更完了
+## 直近コミット
+- e32860e - QR-棚卸連携: purchaseSlotId紐付けと棚卸スキャン拡張
+
+## 進行中のタスク
+なし（指示待ち）
 
 ## 未コミット変更
-- `.serena/memories/SESSION_STATE.md`
-- `docs/config.html`
-
-## 次のステップ候補
-1. UI-017 続行（config.html の残り作業）
-2. TEST-001 機能検証
-3. PROD-002 商品登録時の発送方法・梱包資材事前選択
+- .serena/memories/SESSION_STATE.md（自動更新）
+- .serena/memories/IOS_INPUT_ZOOM_PREVENTION.md（メモリ）

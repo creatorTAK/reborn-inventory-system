@@ -6,7 +6,7 @@
   <title>棚卸 - FURIRA</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="/css/reborn-theme.css?v=296">
+  <link rel="stylesheet" href="/css/reborn-theme.css?v=297-purchaseslots-base">
   <!-- html5-qrcode for QR scanning -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- QRCode.js for QR generation (棚卸ではスキャンのみ使用、生成は不要) -->
@@ -118,6 +118,19 @@
     .check-status.in-progress { background: #fef3c7; color: #92400e; }
     .check-status.completed { background: #d1fae5; color: #065f46; }
     .check-status.adjusted { background: #dbeafe; color: #1e40af; }
+
+    /* 在庫ステータスバッジ */
+    .inventory-status {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-left: 6px;
+    }
+    .inventory-status.purchased { background: #fef3c7; color: #92400e; }
+    .inventory-status.registered { background: #d1fae5; color: #065f46; }
+    .inventory-status.sold { background: #e5e7eb; color: #6b7280; }
 
     /* プログレスバー */
     .progress-bar-custom {
@@ -699,7 +712,14 @@
     // API公開
     window.StocktakingApi = {
       db,
-      // 商品一覧取得
+      // 仕入商品一覧取得（purchaseSlotsベース）
+      async getPurchaseSlots() {
+        const snapshot = await getDocs(collection(db, 'purchaseSlots'));
+        const slots = [];
+        snapshot.forEach(doc => slots.push({ id: doc.id, ...doc.data() }));
+        return slots;
+      },
+      // 商品一覧取得（products - 補助用）
       async getProducts() {
         const snapshot = await getDocs(collection(db, 'products'));
         const products = [];
@@ -777,11 +797,12 @@
   </script>
 
   <script>
-    let allProducts = [];
+    let allPurchaseSlots = []; // 仕入商品（棚卸の主データソース）
+    let allProducts = [];      // 商品（補助データ）
     let allChecks = [];
     let activeCheck = null;
     let checkItems = {};
-    let currentProduct = null;
+    let currentSlot = null;    // 現在選択中の仕入商品
     let html5QrCode = null;
 
     // 日本時間で今日の日付を取得（YYYY-MM-DD形式）
@@ -845,8 +866,40 @@
     }
 
     async function loadData() {
+      // purchaseSlotsを主データソースとして取得
+      allPurchaseSlots = await StocktakingApi.getPurchaseSlots();
+      // productsも補助データとして取得（商品詳細情報用）
       allProducts = await StocktakingApi.getProducts();
       allChecks = await StocktakingApi.getChecks();
+
+      // productsの情報をpurchaseSlotsにマージ
+      const productMap = {};
+      allProducts.forEach(p => {
+        productMap[p.id] = p;
+        // purchaseSlotIdでもマップ
+        if (p.purchaseSlotId) {
+          productMap[p.purchaseSlotId] = p;
+        }
+      });
+
+      // purchaseSlotsに商品詳細を追加
+      allPurchaseSlots = allPurchaseSlots.map(slot => {
+        const product = productMap[slot.productId] || productMap[slot.id];
+        return {
+          ...slot,
+          // 商品情報があればマージ
+          productName: slot.productName || product?.productName || '',
+          brand: slot.brand || product?.brand || '',
+          category: slot.category || product?.category || '',
+          images: product?.images || [],
+          quantity: product?.quantity || 1,
+          purchaseAmount: slot.purchasePrice || product?.purchase?.amount || product?.purchaseAmount || 0,
+          // ステータス判定
+          displayStatus: getDisplayStatus(slot, product)
+        };
+      });
+
+      console.log(`📋 [棚卸] データ読み込み完了: purchaseSlots=${allPurchaseSlots.length}, products=${allProducts.length}`);
 
       // 進行中の棚卸があれば設定
       activeCheck = allChecks.find(c => c.status === 'in_progress');
@@ -859,6 +912,20 @@
       renderCheckList();
       updateCountTab();
       updateDiffTab();
+    }
+
+    // 表示用ステータスを判定
+    function getDisplayStatus(slot, product) {
+      // 売却済チェック
+      if (slot.status === 'sold' || product?.status === '販売済') {
+        return { label: '売却済', class: 'sold', color: '#6b7280' };
+      }
+      // 商品登録済チェック
+      if (slot.status === 'registered' || slot.productId) {
+        return { label: '出品中', class: 'registered', color: '#10b981' };
+      }
+      // 未登録
+      return { label: '未登録', class: 'purchased', color: '#f59e0b' };
     }
 
     function renderCheckList() {
@@ -924,8 +991,9 @@
       document.getElementById('activeCheckPanel').style.display = 'block';
       document.getElementById('fabContainer').style.display = 'block';
 
-      // 進捗計算
-      const total = allProducts.filter(p => p.status !== '販売済').length;
+      // 進捗計算（売却済以外のpurchaseSlotsが対象）
+      const targetSlots = allPurchaseSlots.filter(s => s.displayStatus?.class !== 'sold');
+      const total = targetSlots.length;
       const counted = Object.keys(checkItems).length;
       const remaining = total - counted;
       const progress = total > 0 ? Math.round((counted / total) * 100) : 0;
@@ -936,15 +1004,20 @@
       document.getElementById('count-remaining').textContent = remaining;
       document.getElementById('count-diff').textContent = diffCount;
 
-      // 未カウントリスト
-      const uncounted = allProducts.filter(p => p.status !== '販売済' && !checkItems[p.id]);
-      const uncountedHtml = uncounted.length > 0 ? uncounted.slice(0, 50).map(p => `
-        <div class="diff-item" onclick="selectProduct('${p.id}')">
+      // 未カウントリスト（purchaseSlotsベース）
+      const uncounted = targetSlots.filter(s => !checkItems[s.id]);
+      const uncountedHtml = uncounted.length > 0 ? uncounted.slice(0, 50).map(s => `
+        <div class="diff-item" onclick="selectSlot('${s.id}')">
           <div class="item-info">
-            <div class="item-name">${p.managementNumber || '-'}</div>
-            <div class="item-meta">${p.productName || '-'}</div>
+            <div class="item-name">
+              ${s.managementNumber || s.slotId || s.id}
+              <span class="badge" style="background: ${s.displayStatus?.color || '#6b7280'}; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">
+                ${s.displayStatus?.label || '不明'}
+              </span>
+            </div>
+            <div class="item-meta">${s.productName || s.brand || '-'}</div>
           </div>
-          <div class="text-muted small">帳簿: ${p.quantity || 1}点</div>
+          <div class="text-muted small">帳簿: ${s.quantity || 1}点</div>
         </div>
       `).join('') : '<div class="text-center text-muted py-3">すべてカウント済みです</div>';
       document.getElementById('uncountedList').innerHTML = uncountedHtml;
@@ -955,23 +1028,30 @@
       }
     }
 
-    function selectProduct(productId) {
-      currentProduct = allProducts.find(p => p.id === productId);
-      if (!currentProduct) return;
+    // 仕入商品を選択（purchaseSlotsベース）
+    function selectSlot(slotId) {
+      currentSlot = allPurchaseSlots.find(s => s.id === slotId);
+      if (!currentSlot) return;
 
-      const existingCount = checkItems[productId];
-      const bookQty = currentProduct.quantity || 1;
+      const existingCount = checkItems[slotId];
+      const bookQty = currentSlot.quantity || 1;
       const actualQty = existingCount?.actualQuantity ?? '';
 
       document.getElementById('countInputArea').innerHTML = `
         <div class="count-input-card">
           <div class="product-info">
-            <img src="${currentProduct.images?.[0] || '/images/no-image.png'}" class="product-image" onerror="this.src='/images/no-image.png'">
+            <img src="${currentSlot.images?.[0] || '/images/no-image.png'}" class="product-image" onerror="this.src='/images/no-image.png'">
             <div class="product-details">
-              <div class="product-name">${currentProduct.productName || '-'}</div>
+              <div class="product-name">
+                ${currentSlot.productName || currentSlot.brand || '-'}
+                <span class="badge" style="background: ${currentSlot.displayStatus?.color || '#6b7280'}; color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">
+                  ${currentSlot.displayStatus?.label || '不明'}
+                </span>
+              </div>
               <div class="product-meta">
-                管理番号: ${currentProduct.managementNumber || '-'}<br>
-                ${currentProduct.brand || ''} ${currentProduct.category || ''}
+                管理番号: ${currentSlot.managementNumber || '-'}<br>
+                仕入ID: ${currentSlot.slotId || currentSlot.id}<br>
+                ${currentSlot.brand || ''} ${currentSlot.category || ''}
               </div>
             </div>
           </div>
@@ -992,7 +1072,7 @@
             <button class="btn btn-outline-secondary flex-fill" onclick="clearCountInput()">
               キャンセル
             </button>
-            <button class="btn btn-success flex-fill" onclick="saveCount('${productId}')">
+            <button class="btn btn-success flex-fill" onclick="saveCount('${slotId}')">
               <i class="bi bi-check-lg"></i> 保存
             </button>
           </div>
@@ -1009,6 +1089,15 @@
 
       // フォーカス
       setTimeout(() => document.getElementById('actualQtyInput').focus(), 100);
+    }
+
+    // 後方互換: selectProductはselectSlotにリダイレクト
+    function selectProduct(productId) {
+      // productIdからpurchaseSlotを検索
+      const slot = allPurchaseSlots.find(s => s.productId === productId || s.id === productId);
+      if (slot) {
+        selectSlot(slot.id);
+      }
     }
 
     function updateDiffBadge(bookQty, actualQty) {
@@ -1036,10 +1125,10 @@
 
     function clearCountInput() {
       document.getElementById('countInputArea').innerHTML = '';
-      currentProduct = null;
+      currentSlot = null;
     }
 
-    async function saveCount(productId) {
+    async function saveCount(slotId) {
       const actualQty = parseInt(document.getElementById('actualQtyInput').value);
       const note = document.getElementById('countNote').value;
 
@@ -1048,30 +1137,36 @@
         return;
       }
 
-      const product = allProducts.find(p => p.id === productId);
-      const bookQty = product?.quantity || 1;
+      const slot = allPurchaseSlots.find(s => s.id === slotId);
+      const bookQty = slot?.quantity || 1;
       const diff = actualQty - bookQty;
 
       showLoading();
       try {
-        await StocktakingApi.saveCountItem(activeCheck.id, productId, {
-          productId,
-          managementNumber: product?.managementNumber || '',
-          productName: product?.productName || '',
+        await StocktakingApi.saveCountItem(activeCheck.id, slotId, {
+          slotId,
+          productId: slot?.productId || '',
+          managementNumber: slot?.managementNumber || '',
+          productName: slot?.productName || '',
+          brand: slot?.brand || '',
           bookQuantity: bookQty,
           actualQuantity: actualQty,
           diff,
           note,
-          purchaseAmount: product?.purchase?.amount || product?.purchaseAmount || 0
+          purchaseAmount: slot?.purchaseAmount || 0,
+          status: slot?.displayStatus?.class || 'unknown'
         });
 
         // ローカル更新
-        checkItems[productId] = {
-          id: productId,
+        checkItems[slotId] = {
+          id: slotId,
+          managementNumber: slot?.managementNumber || '',
+          productName: slot?.productName || '',
           bookQuantity: bookQty,
           actualQuantity: actualQty,
           diff,
-          note
+          note,
+          purchaseAmount: slot?.purchaseAmount || 0
         };
 
         clearCountInput();
@@ -1079,9 +1174,9 @@
         updateDiffTab();
 
         // 全完了チェック
-        const total = allProducts.filter(p => p.status !== '販売済').length;
-        if (Object.keys(checkItems).length >= total) {
-          if (confirm('すべての商品のカウントが完了しました。差異分析タブを開きますか？')) {
+        const targetSlots = allPurchaseSlots.filter(s => s.displayStatus?.class !== 'sold');
+        if (Object.keys(checkItems).length >= targetSlots.length) {
+          if (confirm('すべての在庫のカウントが完了しました。差異分析タブを開きますか？')) {
             const tab = document.querySelector('[data-bs-target="#diff-tab"]');
             bootstrap.Tab.getOrCreateInstance(tab).show();
           }
@@ -1172,7 +1267,7 @@
       console.log('QRスキャン成功:', decodedText);
       stopScanner();
 
-      let product = null;
+      let slot = null;
       let searchKey = decodedText;
 
       // 1. URL形式（仕入QR: https://furira.jp/scan?inv=BATCH-XXXX）
@@ -1181,10 +1276,10 @@
           const url = new URL(decodedText);
           const invId = url.searchParams.get('inv');
           if (invId) {
-            console.log('仕入QR検出、purchaseSlotIdで検索:', invId);
+            console.log('仕入QR検出、purchaseSlotsで検索:', invId);
             searchKey = invId;
-            // purchaseSlotIdで商品検索
-            product = allProducts.find(p => p.purchaseSlotId === invId);
+            // purchaseSlotsで直接検索（ID or slotId）
+            slot = allPurchaseSlots.find(s => s.id === invId || s.slotId === invId);
           }
         } catch (e) {
           console.log('URL解析失敗、テキストとして処理');
@@ -1192,29 +1287,32 @@
       }
 
       // 2. JSON形式（商品QR: {"type":"product","managementNumber":"XX-XXXX"}）
-      if (!product) {
+      if (!slot) {
         try {
           const qrData = JSON.parse(decodedText);
           if (qrData.managementNumber) {
             searchKey = qrData.managementNumber;
-            product = allProducts.find(p => p.managementNumber === qrData.managementNumber);
+            slot = allPurchaseSlots.find(s => s.managementNumber === qrData.managementNumber);
           }
         } catch (e) {
           // JSON以外
         }
       }
 
-      // 3. 直接テキスト（管理番号またはID）
-      if (!product) {
-        product = allProducts.find(p =>
-          p.managementNumber === searchKey || p.id === searchKey
+      // 3. 直接テキスト（管理番号、slotId、ID）
+      if (!slot) {
+        slot = allPurchaseSlots.find(s =>
+          s.managementNumber === searchKey || 
+          s.slotId === searchKey || 
+          s.id === searchKey ||
+          s.productId === searchKey
         );
       }
 
-      if (product) {
-        selectProduct(product.id);
+      if (slot) {
+        selectSlot(slot.id);
       } else {
-        alert('商品が見つかりません: ' + searchKey);
+        alert('在庫が見つかりません: ' + searchKey);
       }
     }
 
@@ -1226,16 +1324,18 @@
       const query = document.getElementById('searchInput').value.trim();
       if (!query) return;
 
-      const product = allProducts.find(p =>
-        p.managementNumber?.toLowerCase().includes(query.toLowerCase()) ||
-        p.productName?.toLowerCase().includes(query.toLowerCase())
+      const slot = allPurchaseSlots.find(s =>
+        s.managementNumber?.toLowerCase().includes(query.toLowerCase()) ||
+        s.productName?.toLowerCase().includes(query.toLowerCase()) ||
+        s.slotId?.toLowerCase().includes(query.toLowerCase()) ||
+        s.brand?.toLowerCase().includes(query.toLowerCase())
       );
 
-      if (product) {
-        selectProduct(product.id);
+      if (slot) {
+        selectSlot(slot.id);
         document.getElementById('searchInput').value = '';
       } else {
-        alert('商品が見つかりません');
+        alert('在庫が見つかりません');
       }
     }
 
