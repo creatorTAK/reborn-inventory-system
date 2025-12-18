@@ -2,14 +2,19 @@
 
 ## 最終更新
 - 日時: 2025-12-18
-- セッション開始: 新規セッション
+- セッション開始: 継続中
 
 ## 直近コミット
-- e32860e - QR-棚卸連携: purchaseSlotId紐付けと棚卸スキャン拡張
+- 499b8a2 - 棚卸機能をpurchaseSlotsベースに改修
+
+## 完了タスク（本セッション）
+1. 棚卸機能をpurchaseSlotsベースに改修
+   - 商品登録時のpurchaseSlot自動作成機能
+   - 棚卸データソースをproducts→purchaseSlotsに変更
+   - ステータス表示（未登録/出品中/売却済）追加
 
 ## 進行中のタスク
 なし（指示待ち）
 
 ## 未コミット変更
-- .serena/memories/SESSION_STATE.md（自動更新）
-- .serena/memories/IOS_INPUT_ZOOM_PREVENTION.md（メモリ）
+なし

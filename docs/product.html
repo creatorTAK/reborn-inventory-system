@@ -1339,7 +1339,7 @@ style="display:none;">削除</button>
 <!-- 外部JavaScriptファイル（トークン削減、ブラウザキャッシュ活用）-->
 <!-- CACHED_CONFIG等のグローバル変数を定義するため、モジュールスクリプトより先に読み込む -->
 <script src="/js/webhook-config.js"></script>
-<script src="/js/product-scripts.js?v=333-auto-purchase-slot"></script>
+<script src="/js/product-scripts.js?v=334-qr-auto-toggle"></script>
 
 <!-- Firestore版ブランド検索モジュール -->
 <script type="module">
@@ -2295,9 +2295,64 @@ style="display:none;">削除</button>
       <button onclick="manualInvIdInput()" style="padding: 10px 20px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer;">
         <i class="bi bi-keyboard"></i> 手動で入力
       </button>
+      <!-- 自動表示設定トグル -->
+      <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+        <label style="display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; font-size: 14px; color: #374151;">
+          <input type="checkbox" id="qrAutoOpenToggle" onchange="toggleQrAutoOpen()" style="width: 18px; height: 18px; accent-color: #3b82f6; cursor: pointer;">
+          <span>商品登録時に自動表示</span>
+        </label>
+        <p style="font-size: 12px; color: #9ca3af; margin-top: 6px;">オフにすると、右下のスキャンボタンから手動で開けます</p>
+      </div>
     </div>
   </div>
 </div>
+
+<script>
+  // QRスキャナー自動表示設定
+  const QR_AUTO_OPEN_KEY = 'reborn_qr_auto_open';
+  
+  // 設定の初期化（デフォルトはtrue = 自動表示オン）
+  function initQrAutoOpenSetting() {
+    const saved = localStorage.getItem(QR_AUTO_OPEN_KEY);
+    // 初回は設定がないのでtrue（自動表示オン）
+    const isEnabled = saved === null ? true : saved === 'true';
+    const toggle = document.getElementById('qrAutoOpenToggle');
+    if (toggle) {
+      toggle.checked = isEnabled;
+    }
+    return isEnabled;
+  }
+  
+  // トグル変更時
+  function toggleQrAutoOpen() {
+    const toggle = document.getElementById('qrAutoOpenToggle');
+    const isEnabled = toggle.checked;
+    localStorage.setItem(QR_AUTO_OPEN_KEY, isEnabled.toString());
+    console.log('[QR設定] 自動表示:', isEnabled ? 'オン' : 'オフ');
+  }
+  
+  // ページ読み込み時に設定に基づいて自動表示
+  function autoOpenQrScannerIfEnabled() {
+    const isEnabled = initQrAutoOpenSetting();
+    if (isEnabled) {
+      console.log('[QR設定] 自動表示が有効 → QRスキャナーを開く');
+      // 少し遅延させて、ページが完全に読み込まれてから開く
+      setTimeout(() => {
+        openQRScanner();
+      }, 500);
+    } else {
+      console.log('[QR設定] 自動表示が無効 → スキップ');
+    }
+  }
+  
+  // ページ読み込み完了時に実行
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', autoOpenQrScannerIfEnabled);
+  } else {
+    // 少し遅延させて他の初期化処理が完了してから
+    setTimeout(autoOpenQrScannerIfEnabled, 300);
+  }
+</script>
 
 </body>
 </html>
