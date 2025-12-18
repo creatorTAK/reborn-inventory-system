@@ -102,13 +102,15 @@ console.log('[product.html] ✅ Script loaded - Version @315-SlotAutoFill');
    * v315: スロットデータをフォームに反映
    */
   function applySlotDataToForm(slotData) {
-    console.log('📦 [v315] フォームにスロットデータを反映中...');
+    console.log('📦 [v315] フォームにスロットデータを反映中...', slotData);
 
     // ブランド
     if (slotData.brand) {
       const brandInput = document.getElementById('ブランド');
       if (brandInput) {
         brandInput.value = slotData.brand;
+        // 入力イベントを発火してブランドサジェストを更新
+        brandInput.dispatchEvent(new Event('input', { bubbles: true }));
         console.log('📦 [v315] ブランド設定:', slotData.brand);
       }
     }
@@ -155,10 +157,9 @@ console.log('[product.html] ✅ Script loaded - Version @315-SlotAutoFill');
       }
     }
 
-    // ダメージマーカー画像がある場合は通知
+    // ダメージマーカー画像を表示
     if (slotData.damageMarkerImage) {
-      console.log('📦 [v315] ダメージマーカー画像あり');
-      // 将来的に商品画像に追加する機能を実装可能
+      displayDamageMarkerFromSlot(slotData);
     }
 
     console.log('📦 [v315] スロットデータ反映完了');
@@ -171,21 +172,98 @@ console.log('[product.html] ✅ Script loaded - Version @315-SlotAutoFill');
    * v315: カテゴリ情報を反映（7階層対応）
    */
   function applyCategoryFromSlot(category) {
-    // カテゴリはプルダウンの連動があるため、順番に設定する必要がある
-    // 現在のカテゴリシステムの構造に合わせて実装
     console.log('📦 [v315] カテゴリ反映:', category);
 
-    // 大分類から順に設定（簡易版：アイテム名を商品名に反映）
-    if (category.itemName) {
-      const productNameInput = document.getElementById('商品名');
-      if (productNameInput && !productNameInput.value) {
-        // 商品名が空の場合のみアイテム名を設定
-        productNameInput.value = category.itemName;
-        console.log('📦 [v315] 商品名にアイテム名設定:', category.itemName);
+    // ヘルパー関数: セレクトボックスの値を設定してchangeイベントを発火
+    function selectValue(elementId, value) {
+      const el = document.getElementById(elementId);
+      if (!el || !value) return false;
+      for (let i = 0; i < el.options.length; i++) {
+        if (el.options[i].value === value) {
+          el.selectedIndex = i;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          console.log('📦 [v315] ' + elementId + ' 設定:', value);
+          return true;
+        }
       }
+      return false;
     }
 
-    // TODO: カテゴリプルダウンの連動設定（複雑なため将来実装）
+    // 特大分類
+    if (category.superCategory) {
+      selectValue('特大分類', category.superCategory);
+    }
+
+    // 大分類〜アイテム名は連動プルダウンなので、順番に遅延させて設定
+    setTimeout(() => {
+      if (category.major) {
+        selectValue('大分類(カテゴリ)', category.major);
+      }
+      setTimeout(() => {
+        if (category.middle) {
+          selectValue('中分類(カテゴリ)', category.middle);
+        }
+        setTimeout(() => {
+          if (category.small) {
+            selectValue('小分類(カテゴリ)', category.small);
+          }
+          setTimeout(() => {
+            if (category.fine) {
+              selectValue('細分類(カテゴリ)', category.fine);
+            }
+            setTimeout(() => {
+              if (category.fine2) {
+                selectValue('細分類2', category.fine2);
+              }
+              setTimeout(() => {
+                if (category.itemName) {
+                  selectValue('アイテム名', category.itemName);
+                }
+              }, 100);
+            }, 100);
+          }, 100);
+        }, 100);
+      }, 100);
+    }, 100);
+  }
+
+  /**
+   * v315: ダメージマーカー画像を表示
+   */
+  function displayDamageMarkerFromSlot(slotData) {
+    console.log('📦 [v315] ダメージマーカー画像を表示');
+    
+    const previewSection = document.getElementById('damageMarkerPreviewSection');
+    const previewImg = document.getElementById('damageMarkerPreviewImg');
+    const typeLabel = document.getElementById('damageMarkerTypeLabel');
+    const noteSection = document.getElementById('damageMarkerNoteSection');
+    const noteText = document.getElementById('damageMarkerNoteText');
+
+    if (!previewSection || !previewImg) {
+      console.warn('📦 [v315] ダメージマーカー表示要素が見つかりません');
+      return;
+    }
+
+    previewImg.src = slotData.damageMarkerImage;
+    if (typeLabel) {
+      typeLabel.textContent = slotData.damageMarkerType || '';
+    }
+    previewSection.style.display = 'block';
+
+    // 補足説明があれば表示
+    if (slotData.damageMarkerNote && noteSection && noteText) {
+      noteText.textContent = slotData.damageMarkerNote;
+      noteSection.style.display = 'block';
+    } else if (noteSection) {
+      noteSection.style.display = 'none';
+    }
+
+    // グローバル変数に保持（商品登録時に使用）
+    window.currentDamageMarker = {
+      image: slotData.damageMarkerImage,
+      type: slotData.damageMarkerType || null,
+      note: slotData.damageMarkerNote || null
+    };
   }
 
   /**
