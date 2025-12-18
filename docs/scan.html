@@ -414,7 +414,7 @@
       <i class="bi bi-keyboard"></i> 仕入商品IDを入力
     </div>
     <div class="mb-3">
-      <input type="text" class="form-control" id="manualInvId" placeholder="例: BATCH-20251217-AB1C2-001">
+      <input type="text" class="form-control" id="manualInvId" placeholder="例: 441a1e-001（ラベル下の番号）">
       <small class="text-muted mt-1 d-block">ラベルに印字されているIDを入力してください</small>
     </div>
     <button class="btn btn-primary w-100" onclick="processManualInput()">
@@ -604,8 +604,39 @@
     // 無視（継続）
   }
   
+  // v316: 短縮IDからフルスロットIDを検索
+  // 過去7日分の日付でBATCH-{date}-{shortId}を試行
+  async function findFullSlotId(shortId) {
+    // 日本時間で今日の日付を取得
+    function getJSTDate(daysAgo = 0) {
+      const now = new Date();
+      const jst = new Date(now.getTime() + (9 * 60 + now.getTimezoneOffset()) * 60000);
+      jst.setDate(jst.getDate() - daysAgo);
+      const year = jst.getFullYear();
+      const month = String(jst.getMonth() + 1).padStart(2, '0');
+      const day = String(jst.getDate()).padStart(2, '0');
+      return `${year}${month}${day}`;
+    }
+    
+    for (let i = 0; i < 7; i++) {
+      const dateStr = getJSTDate(i);
+      const fullId = `BATCH-${dateStr}-${shortId}`;
+      
+      try {
+        const doc = await db.collection('purchaseSlots').doc(fullId).get();
+        if (doc.exists) {
+          return fullId;
+        }
+      } catch (e) {
+        console.error('📷 [scan.html v316] 検索エラー:', fullId, e);
+      }
+    }
+    
+    return null; // 見つからなかった
+  }
+
   // スキャン結果処理
-  // v313: Firestoreからスロットデータを取得
+  // v316: Firestoreからスロットデータを取得（短縮ID対応）
   async function processScannedCode(invId) {
     currentInvId = invId;
     console.log('📷 [scan.html v313] スキャン:', invId);
@@ -616,13 +647,31 @@
     document.getElementById('manualInput').classList.remove('show');
     document.getElementById('scanResult').classList.add('show');
 
+    // v316: 短縮ID対応 - BATCH-で始まらない場合は日付を補完して検索
+    let fullSlotId = invId;
+    if (!invId.startsWith('BATCH-')) {
+      console.log('📷 [scan.html v316] 短縮ID検出、フルID検索開始:', invId);
+      fullSlotId = await findFullSlotId(invId);
+      if (fullSlotId) {
+        console.log('📷 [scan.html v316] フルID発見:', fullSlotId);
+        document.getElementById('scannedInvId').textContent = fullSlotId;
+      } else {
+        console.warn('📷 [scan.html v316] フルID未発見:', invId);
+        document.getElementById('info-purchaseDate').textContent = '-';
+        document.getElementById('info-supplier').textContent = '（該当データなし）';
+        document.getElementById('info-price').textContent = '-';
+        showNoInspectionInfo();
+        return;
+      }
+    }
+
     // v313: Firestoreからスロットデータを取得
-    if (invId.startsWith('BATCH-')) {
+    if (fullSlotId.startsWith('BATCH-')) {
       try {
-        console.log('📷 [scan.html v313] Firestore取得開始:', invId);
+        console.log('📷 [scan.html v316] Firestore取得開始:', fullSlotId);
 
         // スロットデータを取得
-        const slotSnap = await db.collection('purchaseSlots').doc(invId).get();
+        const slotSnap = await db.collection('purchaseSlots').doc(fullSlotId).get();
         if (slotSnap.exists) {
           currentSlotData = slotSnap.data();
           console.log('📷 [scan.html v313] スロットデータ:', currentSlotData);
@@ -635,7 +684,7 @@
           // v315: 検品情報を表示
           displayInspectionInfo(currentSlotData);
         } else {
-          console.warn('📷 [scan.html v315] スロット未発見:', invId);
+          console.warn('📷 [scan.html v316] スロット未発見:', fullSlotId);
           document.getElementById('info-purchaseDate').textContent = '-';
           document.getElementById('info-supplier').textContent = '（データなし）';
           document.getElementById('info-price').textContent = '-';
