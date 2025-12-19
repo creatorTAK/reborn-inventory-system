@@ -4159,33 +4159,56 @@
             });
 
             if (hits.length === 0) {
-              panel.innerHTML = '<div class="suggest-item text-muted">候補がありません</div>';
-            } else {
-              panel.innerHTML = hits.map(hit => {
-                const escapedName = escapeHtml(hit.name);
-                const escapedKana = escapeHtml(hit.nameKana || '');
-                return `<div class="suggest-item" data-name="${escapedName}" data-kana="${escapedKana}">
-                  ${escapedName}${hit.nameKana ? ' (' + escapedKana + ')' : ''}
-                </div>`;
-              }).join('');
+              panel.hidden = true;
+              panel.style.display = 'none';
+              return;
             }
+
+            // 入力欄の位置でパネル位置を決定
+            const inputRect = input.getBoundingClientRect();
+            const screenHeight = window.innerHeight;
+            const isInLowerHalf = inputRect.top > screenHeight * 0.5;
+
+            if (isInLowerHalf) {
+              panel.classList.add('suggest-above');
+            } else {
+              panel.classList.remove('suggest-above');
+            }
+
+            panel.innerHTML = '';
+            hits.forEach((hit) => {
+              const div = document.createElement('div');
+              div.className = 'sug-item brand-item';
+
+              const escapedName = escapeHtml(hit.name || '');
+              const escapedKana = escapeHtml(hit.nameKana || '');
+
+              div.innerHTML = `
+                <div class="brand-english">${escapedName}</div>
+                <div class="brand-kana">${escapedKana}</div>
+              `;
+
+              div.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+              });
+
+              div.addEventListener('click', () => {
+                input.value = hit.name || hit.nameKana || '';
+                document.getElementById('batchBrandKana').value = hit.nameKana || '';
+                panel.hidden = true;
+                panel.style.display = 'none';
+                input.blur();
+              });
+
+              panel.appendChild(div);
+            });
+
             panel.hidden = false;
             panel.style.display = 'block';
           } catch (error) {
             console.error('[一括入力] Algolia検索エラー:', error);
           }
         }, 150);
-      });
-
-      // クリックイベント（サジェスト選択）
-      panel.addEventListener('click', (e) => {
-        const item = e.target.closest('.suggest-item');
-        if (item && item.dataset.name) {
-          input.value = item.dataset.name;
-          document.getElementById('batchBrandKana').value = item.dataset.kana || '';
-          panel.hidden = true;
-          panel.style.display = 'none';
-        }
       });
 
       // フォーカスアウト時にパネルを閉じる
