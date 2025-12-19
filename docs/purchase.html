@@ -1325,7 +1325,7 @@
                   </select>
                 </div>
                 <div class="col-6">
-                  <label class="form-label">仕入金額</label>
+                  <label class="form-label">仕入金額 <span class="text-danger">*</span></label>
                   <div class="input-group">
                     <span class="input-group-text">¥</span>
                     <input type="number" class="form-control" id="entryTotalAmount" min="0" onchange="calculateEntryPerItem()">
@@ -4107,54 +4107,101 @@
       fillSelectSafe(document.getElementById('batch-cat-item'), items);
     }
 
-    // 一括入力用ブランドサジェスト
+    // 一括入力用ブランドサジェストを初期化
     function attachBatchBrandSuggest() {
       const input = document.getElementById('batchBrand');
-      const suggestDiv = document.getElementById('suggest-batch-brand');
-      if (!input || !suggestDiv) return;
+      const panel = document.getElementById('suggest-batch-brand');
 
-      input.addEventListener('focus', () => suggestDiv.hidden = false);
-      input.addEventListener('blur', () => setTimeout(() => suggestDiv.hidden = true, 200));
-    }
-
-    // 一括入力ブランド入力時
-    async function onBatchBrandInput() {
-      const input = document.getElementById('batchBrand');
-      const suggestDiv = document.getElementById('suggest-batch-brand');
-      const query = input.value.trim();
-
-      if (query.length < 1) {
-        suggestDiv.innerHTML = '';
-        suggestDiv.hidden = true;
+      if (!input || !panel) {
+        console.warn('[一括入力] ブランドサジェスト要素が見つかりません');
         return;
       }
 
-      // Algoliaで検索
-      if (window.brandIndex) {
-        try {
-          const results = await window.brandIndex.search(query, { hitsPerPage: 8 });
-          if (results.hits.length > 0) {
-            suggestDiv.innerHTML = results.hits.map(hit => `
-              <div class="suggest-item" onclick="selectBatchBrand('${hit.name}', '${hit.kana || ''}')">
-                ${hit.name}${hit.kana ? ' (' + hit.kana + ')' : ''}
-              </div>
-            `).join('');
-            suggestDiv.hidden = false;
-          } else {
-            suggestDiv.innerHTML = '<div class="suggest-item text-muted">候補がありません</div>';
-            suggestDiv.hidden = false;
-          }
-        } catch (e) {
-          console.error('Algolia検索エラー:', e);
-        }
+      // Algolia SDKがロードされているか確認
+      if (typeof window.algoliasearch === 'undefined') {
+        console.warn('[一括入力] Algolia SDKがまだロードされていません');
+        return;
       }
+
+      // Algoliaクライアント初期化
+      const ALGOLIA_APP_ID = 'P68RUXXTYN';
+      const ALGOLIA_SEARCH_KEY = '12758e11bbd889f72177b459d296ed50';
+      const ALGOLIA_INDEX_NAME = 'brands';
+
+      let searchClient;
+      try {
+        searchClient = window.algoliasearch(ALGOLIA_APP_ID, ALGOLIA_SEARCH_KEY);
+      } catch (error) {
+        console.error('[一括入力] Algoliaクライアント初期化エラー:', error);
+        return;
+      }
+
+      const index = searchClient.initIndex(ALGOLIA_INDEX_NAME);
+      let debounceTimer = null;
+
+      // 入力イベント
+      input.addEventListener('input', async (e) => {
+        const query = e.target.value.trim();
+        if (query.length < 1) {
+          panel.hidden = true;
+          panel.style.display = 'none';
+          return;
+        }
+
+        // デバウンス
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+          try {
+            const convertedQuery = hiraganaToKatakana(query);
+            const { hits } = await index.search(convertedQuery, {
+              hitsPerPage: 15,
+              attributesToRetrieve: ['id', 'name', 'nameKana', 'usageCount']
+            });
+
+            if (hits.length === 0) {
+              panel.innerHTML = '<div class="suggest-item text-muted">候補がありません</div>';
+            } else {
+              panel.innerHTML = hits.map(hit => {
+                const escapedName = escapeHtml(hit.name);
+                const escapedKana = escapeHtml(hit.nameKana || '');
+                return `<div class="suggest-item" data-name="${escapedName}" data-kana="${escapedKana}">
+                  ${escapedName}${hit.nameKana ? ' (' + escapedKana + ')' : ''}
+                </div>`;
+              }).join('');
+            }
+            panel.hidden = false;
+            panel.style.display = 'block';
+          } catch (error) {
+            console.error('[一括入力] Algolia検索エラー:', error);
+          }
+        }, 150);
+      });
+
+      // クリックイベント（サジェスト選択）
+      panel.addEventListener('click', (e) => {
+        const item = e.target.closest('.suggest-item');
+        if (item && item.dataset.name) {
+          input.value = item.dataset.name;
+          document.getElementById('batchBrandKana').value = item.dataset.kana || '';
+          panel.hidden = true;
+          panel.style.display = 'none';
+        }
+      });
+
+      // フォーカスアウト時にパネルを閉じる
+      input.addEventListener('blur', () => {
+        setTimeout(() => {
+          panel.hidden = true;
+          panel.style.display = 'none';
+        }, 200);
+      });
+
+      console.log('[一括入力] ブランドサジェスト初期化完了');
     }
 
-    // 一括入力ブランド選択
-    function selectBatchBrand(name, kana) {
-      document.getElementById('batchBrand').value = name;
-      document.getElementById('batchBrandKana').value = kana;
-      document.getElementById('suggest-batch-brand').hidden = true;
+    // 一括入力ブランド入力時（oninput属性から呼ばれる - 互換性のため残す）
+    function onBatchBrandInput() {
+      // attachBatchBrandSuggestで処理されるため、ここでは何もしない
     }
 
     // 既存の商品アイテムの仕入先プルダウンを更新
