@@ -4003,6 +4003,11 @@
         supplier: defaultSupplier,          // 仕入先
         amount: defaultAmount,
         memo: '',
+        // INV-010: 新品/バリエーション対応
+        itemType: 'unique',  // 'unique'=1点物, 'sku-based'=新品（SKU管理）
+        quantity: 1,         // 数量（1点物は常に1）
+        skuId: null,         // SKU ID（新品時に自動生成）
+        unitPrice: null,     // 仕入単価（新品時に計算）
         // 検品情報（商品登録と同じ順番: カテゴリ → サイズ → 商品の状態 → ブランド → 付属品 → メモ）
         category: {
           superCategory: '',  // 特大分類
@@ -4048,6 +4053,31 @@
         </div>
         <!-- アコーディオン詳細ボディ -->
         <div class="entry-item-body">
+          <!-- INV-010: 商品タイプ選択 -->
+          <div class="item-type-section mb-3" style="background: #f8f9fa; border-radius: 8px; padding: 12px;">
+            <div class="d-flex align-items-center gap-3">
+              <label class="form-label mb-0" style="font-weight: 600; min-width: 80px;">商品タイプ</label>
+              <div class="btn-group" role="group">
+                <input type="radio" class="btn-check" name="entry-item-type-${itemId}" id="entry-type-unique-${itemId}" value="unique" checked onchange="onEntryItemTypeChanged(${itemId})">
+                <label class="btn btn-outline-secondary" for="entry-type-unique-${itemId}" style="padding: 6px 16px;">
+                  <i class="bi bi-1-circle me-1"></i>1点物
+                </label>
+                <input type="radio" class="btn-check" name="entry-item-type-${itemId}" id="entry-type-sku-${itemId}" value="sku-based" onchange="onEntryItemTypeChanged(${itemId})">
+                <label class="btn btn-outline-secondary" for="entry-type-sku-${itemId}" style="padding: 6px 16px;">
+                  <i class="bi bi-box-seam me-1"></i>新品（複数）
+                </label>
+              </div>
+            </div>
+            <!-- 数量入力（新品時のみ表示） -->
+            <div class="quantity-section mt-2" id="entry-quantity-section-${itemId}" style="display: none;">
+              <div class="d-flex align-items-center gap-2">
+                <label class="form-label mb-0" style="min-width: 80px;">数量</label>
+                <input type="number" class="form-control" id="entry-quantity-${itemId}" min="1" value="1" style="width: 100px;" onchange="updateEntryItem(${itemId})">
+                <span class="text-muted">点</span>
+                <small class="text-info ms-2"><i class="bi bi-info-circle"></i> 同一商品の仕入数量</small>
+              </div>
+            </div>
+          </div>
           <!-- 仕入日・仕入先・発送先・仕入金額 -->
           <div class="row g-2 mb-2">
             <div class="col-6">
@@ -4467,6 +4497,16 @@
         item.supplier = document.getElementById(`entry-supplier-${itemId}`)?.value || '';
         item.amount = parseInt(document.getElementById(`entry-amount-${itemId}`)?.value) || 0;
         item.memo = document.getElementById(`entry-memo-${itemId}`)?.value || '';
+        // INV-010: 商品タイプと数量
+        const typeRadio = document.querySelector(`input[name="entry-item-type-${itemId}"]:checked`);
+        item.itemType = typeRadio?.value || 'unique';
+        item.quantity = item.itemType === 'sku-based'
+          ? (parseInt(document.getElementById(`entry-quantity-${itemId}`)?.value) || 1)
+          : 1;
+        // 仕入単価（新品時は総額÷数量）
+        item.unitPrice = item.itemType === 'sku-based' && item.quantity > 0
+          ? Math.round(item.amount / item.quantity)
+          : null;
         // 検品情報（7階層カテゴリ対応）
         item.category = {
           superCategory: document.getElementById(`entry-cat-l0-${itemId}`)?.value || '',
@@ -4499,6 +4539,25 @@
       updateEntryTotal();
       updateEntryItemSummary(itemId);
       saveEntryDraft(); // 自動保存
+    }
+
+    // INV-010: 商品タイプ変更時の処理
+    function onEntryItemTypeChanged(itemId) {
+      const typeRadio = document.querySelector(`input[name="entry-item-type-${itemId}"]:checked`);
+      const itemType = typeRadio?.value || 'unique';
+      const quantitySection = document.getElementById(`entry-quantity-section-${itemId}`);
+
+      if (quantitySection) {
+        quantitySection.style.display = itemType === 'sku-based' ? 'block' : 'none';
+      }
+
+      // 1点物の場合は数量を1にリセット
+      if (itemType === 'unique') {
+        const quantityInput = document.getElementById(`entry-quantity-${itemId}`);
+        if (quantityInput) quantityInput.value = '1';
+      }
+
+      updateEntryItem(itemId);
     }
 
     // ========================================
@@ -4849,8 +4908,15 @@
     // 合計を更新
     function updateEntryTotal() {
       const totalAmount = entryItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      // INV-010: 数量を考慮した合計点数を計算
+      const totalQuantity = entryItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
       document.getElementById('entryTotalValue').textContent = '¥' + totalAmount.toLocaleString();
-      document.getElementById('entryTotalCount').textContent = `${entryItems.length}点`;
+      // 商品数と点数が異なる場合は両方表示
+      if (totalQuantity !== entryItems.length) {
+        document.getElementById('entryTotalCount').textContent = `${entryItems.length}商品 / ${totalQuantity}点`;
+      } else {
+        document.getElementById('entryTotalCount').textContent = `${entryItems.length}点`;
+      }
     }
 
     // QRコード生成（入力モードに応じて分岐）
@@ -4994,6 +5060,15 @@
         item.brandKana = document.getElementById(`entry-brand-kana-${item.id}`)?.value || '';
         item.condition = document.getElementById(`entry-condition-${item.id}`)?.value || '';
         item.note = document.getElementById(`entry-note-${item.id}`)?.value || '';
+        // INV-010: 商品タイプと数量
+        const typeRadio = document.querySelector(`input[name="entry-item-type-${item.id}"]:checked`);
+        item.itemType = typeRadio?.value || 'unique';
+        item.quantity = item.itemType === 'sku-based'
+          ? (parseInt(document.getElementById(`entry-quantity-${item.id}`)?.value) || 1)
+          : 1;
+        item.unitPrice = item.itemType === 'sku-based' && item.quantity > 0
+          ? Math.round(item.amount / item.quantity)
+          : null;
         const accessoriesContainer = document.getElementById(`entry-accessories-${item.id}`);
         if (accessoriesContainer) {
           const checked = accessoriesContainer.querySelectorAll('input:checked');
