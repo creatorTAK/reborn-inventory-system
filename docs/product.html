@@ -1339,7 +1339,7 @@ style="display:none;">削除</button>
 <!-- 外部JavaScriptファイル（トークン削減、ブラウザキャッシュ活用）-->
 <!-- CACHED_CONFIG等のグローバル変数を定義するため、モジュールスクリプトより先に読み込む -->
 <script src="/js/webhook-config.js"></script>
-<script src="/js/product-scripts.js?v=336-inv010-phase1"></script>
+<script src="/js/product-scripts.js?v=337-inv010-phase4"></script>
 
 <!-- Firestore版ブランド検索モジュール -->
 <script type="module">
@@ -1829,9 +1829,48 @@ style="display:none;">削除</button>
         const slotData = slotDoc.data();
         console.log('📦 slotId形式QRコード検出:', slotData);
 
-        // INV-010: sku-based商品の場合は特別処理
-        if (slotData.itemType === 'sku-based') {
-          const result = confirm(`📦 新品（複数）商品です\n\n数量: ${slotData.quantity}点\n仕入単価: ¥${slotData.unitPrice?.toLocaleString() || '-'}\nSKU: ${slotData.skuId || '未設定'}\n\n商品登録を続けますか？\n（キャンセルで戻る）`);
+        // INV-010: sku-based商品の場合は在庫追加モード対応
+        if (slotData.itemType === 'sku-based' && slotData.skuId) {
+          // 既存SKUで登録済み商品があるか確認
+          const existingProduct = await findProductBySkuId(slotData.skuId);
+
+          if (existingProduct) {
+            // 既存SKU商品が見つかった場合：在庫追加モード
+            const choice = confirm(
+              `📦 既存SKU商品が見つかりました\n\n` +
+              `商品名: ${existingProduct.商品名 || existingProduct.name || '未設定'}\n` +
+              `現在庫: ${existingProduct.stockQuantity || 0}点\n` +
+              `追加数: ${slotData.quantity}点\n\n` +
+              `【OK】在庫を追加（${(existingProduct.stockQuantity || 0) + slotData.quantity}点になります）\n` +
+              `【キャンセル】新規商品として登録`
+            );
+
+            if (choice) {
+              // 在庫追加処理
+              await addStockToExistingSku(slotData.skuId, slotData.quantity, slotData.slotId);
+              alert(`✅ 在庫を追加しました\n\n商品: ${existingProduct.商品名 || existingProduct.name}\n新在庫数: ${(existingProduct.stockQuantity || 0) + slotData.quantity}点`);
+              return;
+            }
+            // キャンセル：新規商品登録へ続行
+          } else {
+            // SKUはあるが商品未登録の場合
+            const result = confirm(
+              `📦 新品（複数）商品です\n\n` +
+              `数量: ${slotData.quantity}点\n` +
+              `仕入単価: ¥${slotData.unitPrice?.toLocaleString() || '-'}\n` +
+              `SKU: ${slotData.skuId}\n\n` +
+              `商品登録を続けますか？`
+            );
+            if (!result) return;
+          }
+        } else if (slotData.itemType === 'sku-based') {
+          // SKU IDがない場合（旧データ互換）
+          const result = confirm(
+            `📦 新品（複数）商品です\n\n` +
+            `数量: ${slotData.quantity}点\n` +
+            `仕入単価: ¥${slotData.unitPrice?.toLocaleString() || '-'}\n\n` +
+            `商品登録を続けますか？`
+          );
           if (!result) return;
         }
 
@@ -2128,11 +2167,61 @@ style="display:none;">削除</button>
     if (qrData.s && window.db) {
       loadDamageMarkerFromFirestore(qrData.s);
     }
-    
+
+    // INV-010: SKU情報をグローバル変数に保持（商品登録時に使用）
+    window.currentSkuInfo = {
+      itemType: qrData.itemType || 'unique',
+      quantity: qrData.quantity || 1,
+      skuId: qrData.skuId || null,
+      unitPrice: qrData.unitPrice || null
+    };
+
+    // INV-010: sku-based商品の場合は情報を表示
+    if (qrData.itemType === 'sku-based') {
+      showSkuInfoBanner(qrData);
+    }
+
     // 反映完了通知
     showInspectionDataAppliedNotification(qrData);
-    
+
     console.log('✅ 検品情報の自動反映完了');
+  }
+
+  // INV-010: SKU情報バナー表示
+  function showSkuInfoBanner(qrData) {
+    // 既存バナーがあれば削除
+    const existingBanner = document.getElementById('skuInfoBanner');
+    if (existingBanner) existingBanner.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'skuInfoBanner';
+    banner.style.cssText = `
+      background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    `;
+    banner.innerHTML = `
+      <span style="font-size: 24px;">📦</span>
+      <div style="flex: 1;">
+        <div style="font-weight: 600; color: #1e40af; margin-bottom: 4px;">新品（複数）商品</div>
+        <div style="font-size: 13px; color: #1e3a8a;">
+          数量: <strong>${qrData.quantity}点</strong> ／
+          仕入単価: <strong>¥${qrData.unitPrice?.toLocaleString() || '-'}</strong>
+          ${qrData.skuId ? `／ SKU: <code style="background:#e0f2fe; padding:2px 6px; border-radius:4px;">${qrData.skuId}</code>` : ''}
+        </div>
+      </div>
+    `;
+
+    // 仕入商品ID入力欄の後に挿入
+    const invIdEl = document.getElementById('invId');
+    if (invIdEl && invIdEl.parentElement) {
+      invIdEl.parentElement.insertAdjacentElement('afterend', banner);
+    }
   }
 
   // マーキング画像のグローバル保持（商品登録時に使用）
@@ -2260,6 +2349,65 @@ style="display:none;">削除</button>
 
   function onQRScanFailure(error) {
     // 継続してスキャン（エラーは無視）
+  }
+
+  // INV-010: SKUで既存商品を検索
+  async function findProductBySkuId(skuId) {
+    try {
+      const db = firebase.firestore();
+      const snapshot = await db.collection('products')
+        .where('skuId', '==', skuId)
+        .limit(1)
+        .get();
+
+      if (snapshot.empty) return null;
+      return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    } catch (error) {
+      console.error('SKU検索エラー:', error);
+      return null;
+    }
+  }
+
+  // INV-010: 既存SKU商品に在庫追加
+  async function addStockToExistingSku(skuId, quantity, slotId) {
+    try {
+      const db = firebase.firestore();
+      const batch = db.batch();
+
+      // 1. productsの在庫数を更新
+      const productSnapshot = await db.collection('products')
+        .where('skuId', '==', skuId)
+        .limit(1)
+        .get();
+
+      if (!productSnapshot.empty) {
+        const productRef = productSnapshot.docs[0].ref;
+        batch.update(productRef, {
+          stockQuantity: firebase.firestore.FieldValue.increment(quantity),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      // 2. skusの在庫数を更新
+      const skuRef = db.collection('skus').doc(skuId);
+      batch.set(skuRef, {
+        currentStock: firebase.firestore.FieldValue.increment(quantity),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      // 3. purchaseSlotsのステータスを更新
+      const slotRef = db.collection('purchaseSlots').doc(slotId);
+      batch.update(slotRef, {
+        status: 'registered',
+        registeredAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      await batch.commit();
+      console.log('✅ 在庫追加完了:', { skuId, quantity, slotId });
+    } catch (error) {
+      console.error('在庫追加エラー:', error);
+      throw error;
+    }
   }
 
   function setInvId(invId) {

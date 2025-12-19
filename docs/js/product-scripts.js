@@ -10287,6 +10287,17 @@ async function saveProductToFirestore(formData) {
       console.log(`[saveProductToFirestore] 管理番号確定完了`);
     }
 
+    // INV-010: QRスキャン時のSKU情報をformDataに反映
+    if (window.currentSkuInfo) {
+      formData['itemType'] = window.currentSkuInfo.itemType || 'unique';
+      formData['skuId'] = window.currentSkuInfo.skuId || null;
+      formData['stockQuantity'] = window.currentSkuInfo.quantity || 1;
+      // 単価情報も保持（原価計算用）
+      if (window.currentSkuInfo.unitPrice) {
+        formData['unitPurchasePrice'] = window.currentSkuInfo.unitPrice;
+      }
+    }
+
     // Firestoreドキュメント作成
     const doc = convertFormToFirestoreDoc(formData, productId, userEmail, userName);
     console.log(`[saveProductToFirestore] ドキュメント作成完了`);
@@ -10308,6 +10319,26 @@ async function saveProductToFirestore(formData) {
           registeredAt: new Date().toISOString()
         });
         console.log(`[saveProductToFirestore] purchaseSlots更新完了: ${purchaseSlotId} → ${productId}`);
+
+        // INV-010: sku-based商品の場合はSKUコレクションも更新
+        if (window.currentSkuInfo && window.currentSkuInfo.itemType === 'sku-based' && window.currentSkuInfo.skuId) {
+          try {
+            await window.db.collection('skus').doc(window.currentSkuInfo.skuId).set({
+              skuId: window.currentSkuInfo.skuId,
+              productId: productId,
+              name: formData['商品名'] || '',
+              brand: formData['ブランド'] || '',
+              category: formData['カテゴリ'] || '',
+              currentStock: window.currentSkuInfo.quantity || 1,
+              unitPurchasePrice: window.currentSkuInfo.unitPrice || null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+            console.log(`[saveProductToFirestore] SKU登録完了: ${window.currentSkuInfo.skuId}`);
+          } catch (skuError) {
+            console.warn(`[saveProductToFirestore] SKU登録スキップ:`, skuError.message);
+          }
+        }
       } catch (slotError) {
         console.warn(`[saveProductToFirestore] purchaseSlots更新スキップ:`, slotError.message);
       }
