@@ -1810,9 +1810,67 @@ style="display:none;">削除</button>
     }
   }
 
-  function onQRScanSuccess(decodedText) {
+  async function onQRScanSuccess(decodedText) {
     console.log('📷 QRスキャン成功:', decodedText);
-    
+
+    // スキャナー停止
+    stopQRScanner();
+    closeQRScanner();
+
+    // INV-010: slotId形式のQRコード対応（BATCH-で始まる）
+    if (decodedText.startsWith('BATCH-')) {
+      try {
+        const db = firebase.firestore();
+        const slotDoc = await db.collection('purchaseSlots').doc(decodedText).get();
+        if (!slotDoc.exists) {
+          alert('⚠️ このスロットは見つかりませんでした。');
+          return;
+        }
+        const slotData = slotDoc.data();
+        console.log('📦 slotId形式QRコード検出:', slotData);
+
+        // INV-010: sku-based商品の場合は特別処理
+        if (slotData.itemType === 'sku-based') {
+          const result = confirm(`📦 新品（複数）商品です\n\n数量: ${slotData.quantity}点\n仕入単価: ¥${slotData.unitPrice?.toLocaleString() || '-'}\nSKU: ${slotData.skuId || '未設定'}\n\n商品登録を続けますか？\n（キャンセルで戻る）`);
+          if (!result) return;
+        }
+
+        // qrDataフォーマットに変換
+        const qrData = {
+          s: slotData.slotId,
+          n: slotData.slotNumber,
+          d: slotData.purchaseDate,
+          sup: slotData.supplier,
+          amt: slotData.amount,
+          asg: slotData.assignee,
+          m: slotData.memo || '',
+          cat: slotData.category || null,
+          sz: slotData.size || '',
+          br: slotData.brand || '',
+          brk: slotData.brandKana || '',
+          cnd: slotData.condition || '',
+          acc: slotData.accessories || [],
+          nt: slotData.note || '',
+          // INV-010: 追加フィールド
+          itemType: slotData.itemType || 'unique',
+          quantity: slotData.quantity || 1,
+          skuId: slotData.skuId || null,
+          unitPrice: slotData.unitPrice || null
+        };
+
+        // 仕入商品IDをセット
+        setInvId(slotData.slotId);
+
+        // 仕入情報を自動反映
+        applyPurchaseQRData(qrData);
+        return;
+      } catch (error) {
+        console.error('slotId QRコード処理エラー:', error);
+        alert('⚠️ データの取得に失敗しました。');
+        return;
+      }
+    }
+
     // JSON形式の仕入QRコードかチェック
     let qrData = null;
     try {
@@ -1821,17 +1879,13 @@ style="display:none;">削除</button>
       // JSON形式でない場合は従来の処理
     }
 
-    // スキャナー停止
-    stopQRScanner();
-    closeQRScanner();
-
     // 仕入QRコード（検品情報付き）の場合
     if (qrData && qrData.s && qrData.n) {
       console.log('📦 仕入QRコード検出（検品情報付き）:', qrData);
-      
+
       // 仕入商品IDをセット
       setInvId(qrData.s);
-      
+
       // 仕入情報を自動反映
       applyPurchaseQRData(qrData);
       return;

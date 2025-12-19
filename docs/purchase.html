@@ -2384,6 +2384,14 @@
       }
     }
 
+    // INV-010: SKU ID生成（仕入登録用）
+    function generateSkuIdForPurchase() {
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+      const randomPart = Math.random().toString(36).substring(2, 9).toUpperCase();
+      return `SKU-${dateStr}-${randomPart}`;
+    }
+
     // グローバルに公開
     window.PurchaseApi = {
       getSuppliers,
@@ -5148,6 +5156,11 @@
             damageMarkerImage: item.damageMarkerImage || null,
             damageMarkerType: item.damageMarkerType || null,
             damageMarkerNote: item.damageMarkerNote || null,
+            // INV-010: 商品タイプ・数量・SKU
+            itemType: item.itemType || 'unique',
+            quantity: item.quantity || 1,
+            skuId: item.itemType === 'sku-based' ? generateSkuIdForPurchase() : null,
+            unitPrice: item.unitPrice || null,
             // 検品情報
             category: item.category || null,
             size: item.size || '',
@@ -6268,7 +6281,20 @@
             sup: slotData.supplier,
             amt: slotData.amount,
             asg: slotData.assignee,
-            m: slotData.memo || ''
+            m: slotData.memo || '',
+            // INV-010: 商品タイプ・数量・SKU
+            itemType: slotData.itemType || 'unique',
+            quantity: slotData.quantity || 1,
+            skuId: slotData.skuId || null,
+            unitPrice: slotData.unitPrice || null,
+            // 検品情報
+            cat: slotData.category || null,
+            sz: slotData.size || '',
+            br: slotData.brand || '',
+            brk: slotData.brandKana || '',
+            cnd: slotData.condition || '',
+            acc: slotData.accessories || [],
+            nt: slotData.note || ''
           };
 
           showQRCheckResult(qrData);
@@ -6347,6 +6373,12 @@
       const condition = qrData.cnd || '';
       const accessories = qrData.acc || [];
       const note = qrData.nt || '';
+      // INV-010: 商品タイプ・数量・SKU
+      const itemType = qrData.itemType || 'unique';
+      const quantity = qrData.quantity || 1;
+      const skuId = qrData.skuId || null;
+      const unitPrice = qrData.unitPrice || null;
+      const isSkuBased = itemType === 'sku-based';
 
       // 検品情報があるかチェック
       const hasInspectionData = categoryDisplay || size || brand || condition || accessories.length > 0 || note;
@@ -6362,7 +6394,27 @@
             <span class="qr-result-value highlight">#${slotNumber} / ${totalCount}</span>
           </div>
           <div class="qr-result-row">
-            <span class="qr-result-label">金額</span>
+            <span class="qr-result-label">商品タイプ</span>
+            <span class="qr-result-value">${isSkuBased ? '<span class="badge bg-info">新品（複数）</span>' : '<span class="badge bg-secondary">1点物</span>'}</span>
+          </div>
+          ${isSkuBased ? `
+          <div class="qr-result-row">
+            <span class="qr-result-label">数量</span>
+            <span class="qr-result-value highlight">${quantity}点</span>
+          </div>
+          <div class="qr-result-row">
+            <span class="qr-result-label">仕入単価</span>
+            <span class="qr-result-value">¥${unitPrice ? Number(unitPrice).toLocaleString() : '-'}</span>
+          </div>
+          ${skuId ? `
+          <div class="qr-result-row">
+            <span class="qr-result-label">SKU ID</span>
+            <span class="qr-result-value" style="font-size: 0.85em;">${skuId}</span>
+          </div>
+          ` : ''}
+          ` : ''}
+          <div class="qr-result-row">
+            <span class="qr-result-label">金額${isSkuBased ? '（合計）' : ''}</span>
             <span class="qr-result-value highlight">¥${Number(amount).toLocaleString()}</span>
           </div>
           <div class="qr-result-row">
