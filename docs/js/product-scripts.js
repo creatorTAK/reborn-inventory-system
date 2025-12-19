@@ -10173,6 +10173,12 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
       totalCost: 0
     },
 
+    // INV-010: 新品/バリエーション対応
+    itemType: formData['itemType'] || 'unique', // 'unique'=1点物, 'sku-based'=SKU管理
+    skuId: formData['skuId'] || null, // SKU ID（SKU管理時のみ）
+    variations: formData['variations'] || {}, // バリエーション情報 { size, color, etc }
+    stockQuantity: formData['stockQuantity'] || 1, // 在庫数量（1点物は常に1）
+
     // ステータス管理
     status: formData['ステータス'] || '登録済み',
 
@@ -10319,6 +10325,11 @@ async function saveProductToFirestore(formData) {
           purchasePrice: parseFloat(formData['仕入価格']) || 0,
           status: 'registered',
           autoCreated: true, // 自動作成フラグ
+          // INV-010: 新品/バリエーション対応（自動作成は常に1点物）
+          itemType: 'unique',
+          quantity: 1,
+          skuId: null,
+          unitPrice: null,
           createdAt: new Date().toISOString(),
           registeredAt: new Date().toISOString()
         };

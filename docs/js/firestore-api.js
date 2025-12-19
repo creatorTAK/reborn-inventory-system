@@ -1283,6 +1283,256 @@ async function searchMaster(collection, searchQuery, searchFields, limit = 100) 
   }
 }
 
+// ========================================
+// SKU管理関数 (INV-010: 新品/バリエーション対応)
+// ========================================
+
+/**
+ * SKU ID生成
+ * @returns {string} SKU-YYYYMMDD-XXXXXXX形式のID
+ */
+function generateSkuId() {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const randomPart = Math.random().toString(36).substring(2, 9).toUpperCase();
+  return `SKU-${dateStr}-${randomPart}`;
+}
+
+/**
+ * SKU作成
+ *
+ * @param {object} skuData - SKUデータ
+ * @param {string} skuData.name - 商品名
+ * @param {string} [skuData.skuCode] - 任意の管理コード
+ * @param {boolean} [skuData.isVariant] - バリエーション商品かどうか
+ * @param {string} [skuData.parentSkuId] - 親SKU ID（バリエーションの場合）
+ * @param {object} [skuData.variations] - バリエーション情報 { size, color, etc }
+ * @param {number} [skuData.currentStock] - 現在庫数
+ * @param {number} [skuData.unitCost] - 仕入単価
+ * @param {number} [skuData.sellingPrice] - 販売価格
+ * @param {Array} [skuData.images] - 画像URL配列
+ * @returns {Promise<object>} { success, skuId?, error? }
+ */
+async function createSKU(skuData) {
+  try {
+    if (!skuData.name || !skuData.name.trim()) {
+      return { success: false, error: '商品名は必須です' };
+    }
+
+    const db = await initializeFirestore();
+    const skuId = generateSkuId();
+
+    const newSku = {
+      skuId,
+      skuCode: skuData.skuCode || '',
+      name: skuData.name.trim(),
+      isVariant: skuData.isVariant || false,
+      parentSkuId: skuData.parentSkuId || null,
+      variations: skuData.variations || {},
+      currentStock: skuData.currentStock || 0,
+      unitCost: skuData.unitCost || 0,
+      sellingPrice: skuData.sellingPrice || 0,
+      images: skuData.images || [],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('skus').doc(skuId).set(newSku);
+
+    console.log(`✅ [SKU API] SKU作成成功: ${skuId}`);
+    return { success: true, skuId };
+
+  } catch (error) {
+    console.error('❌ [SKU API] SKU作成エラー:', error);
+    return { success: false, error: error.message || 'SKUの作成に失敗しました' };
+  }
+}
+
+/**
+ * SKU取得
+ *
+ * @param {string} skuId - SKU ID
+ * @returns {Promise<object|null>} SKUデータまたはnull
+ */
+async function getSKU(skuId) {
+  try {
+    if (!skuId) return null;
+
+    const db = await initializeFirestore();
+    const doc = await db.collection('skus').doc(skuId).get();
+
+    if (!doc.exists) {
+      console.log(`⚠️ [SKU API] SKU見つからず: ${skuId}`);
+      return null;
+    }
+
+    return { id: doc.id, ...doc.data() };
+
+  } catch (error) {
+    console.error('❌ [SKU API] SKU取得エラー:', error);
+    return null;
+  }
+}
+
+/**
+ * SKU更新
+ *
+ * @param {string} skuId - SKU ID
+ * @param {object} updateData - 更新データ
+ * @returns {Promise<object>} { success, error? }
+ */
+async function updateSKU(skuId, updateData) {
+  try {
+    if (!skuId) {
+      return { success: false, error: 'SKU IDは必須です' };
+    }
+
+    const db = await initializeFirestore();
+
+    const dataWithTimestamp = {
+      ...updateData,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('skus').doc(skuId).update(dataWithTimestamp);
+
+    console.log(`✅ [SKU API] SKU更新成功: ${skuId}`);
+    return { success: true };
+
+  } catch (error) {
+    console.error('❌ [SKU API] SKU更新エラー:', error);
+    return { success: false, error: error.message || 'SKUの更新に失敗しました' };
+  }
+}
+
+/**
+ * SKU在庫数更新（インクリメント/デクリメント）
+ *
+ * @param {string} skuId - SKU ID
+ * @param {number} delta - 増減量（正: 追加、負: 減少）
+ * @returns {Promise<object>} { success, newStock?, error? }
+ */
+async function updateSKUStock(skuId, delta) {
+  try {
+    if (!skuId) {
+      return { success: false, error: 'SKU IDは必須です' };
+    }
+
+    const db = await initializeFirestore();
+
+    await db.collection('skus').doc(skuId).update({
+      currentStock: firebase.firestore.FieldValue.increment(delta),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // 更新後の値を取得
+    const updated = await getSKU(skuId);
+    const newStock = updated ? updated.currentStock : null;
+
+    console.log(`✅ [SKU API] SKU在庫更新: ${skuId}, delta=${delta}, 新在庫=${newStock}`);
+    return { success: true, newStock };
+
+  } catch (error) {
+    console.error('❌ [SKU API] SKU在庫更新エラー:', error);
+    return { success: false, error: error.message || '在庫の更新に失敗しました' };
+  }
+}
+
+/**
+ * SKU検索
+ *
+ * @param {string} query - 検索クエリ
+ * @param {number} [limit] - 取得件数制限
+ * @returns {Promise<Array>} SKU配列
+ */
+async function searchSKUs(query, limit = 50) {
+  try {
+    const db = await initializeFirestore();
+    const snapshot = await db.collection('skus')
+      .orderBy('name')
+      .limit(500) // 最大500件取得して絞り込み
+      .get();
+
+    const allSkus = [];
+    snapshot.forEach(doc => {
+      allSkus.push({ id: doc.id, ...doc.data() });
+    });
+
+    if (!query || !query.trim()) {
+      return allSkus.slice(0, limit);
+    }
+
+    const lowerQuery = query.toLowerCase();
+    const results = allSkus.filter(sku => {
+      return (
+        (sku.name && sku.name.toLowerCase().includes(lowerQuery)) ||
+        (sku.skuCode && sku.skuCode.toLowerCase().includes(lowerQuery)) ||
+        (sku.skuId && sku.skuId.toLowerCase().includes(lowerQuery))
+      );
+    });
+
+    console.log(`✅ [SKU API] SKU検索完了: ${results.length}件`);
+    return results.slice(0, limit);
+
+  } catch (error) {
+    console.error('❌ [SKU API] SKU検索エラー:', error);
+    return [];
+  }
+}
+
+/**
+ * 親SKUの子バリエーション取得
+ *
+ * @param {string} parentSkuId - 親SKU ID
+ * @returns {Promise<Array>} 子バリエーション配列
+ */
+async function getSKUVariants(parentSkuId) {
+  try {
+    if (!parentSkuId) return [];
+
+    const db = await initializeFirestore();
+    const snapshot = await db.collection('skus')
+      .where('parentSkuId', '==', parentSkuId)
+      .get();
+
+    const variants = [];
+    snapshot.forEach(doc => {
+      variants.push({ id: doc.id, ...doc.data() });
+    });
+
+    console.log(`✅ [SKU API] バリエーション取得: ${parentSkuId} → ${variants.length}件`);
+    return variants;
+
+  } catch (error) {
+    console.error('❌ [SKU API] バリエーション取得エラー:', error);
+    return [];
+  }
+}
+
+/**
+ * SKU削除
+ *
+ * @param {string} skuId - SKU ID
+ * @returns {Promise<object>} { success, error? }
+ */
+async function deleteSKU(skuId) {
+  try {
+    if (!skuId) {
+      return { success: false, error: 'SKU IDは必須です' };
+    }
+
+    const db = await initializeFirestore();
+    await db.collection('skus').doc(skuId).delete();
+
+    console.log(`✅ [SKU API] SKU削除成功: ${skuId}`);
+    return { success: true };
+
+  } catch (error) {
+    console.error('❌ [SKU API] SKU削除エラー:', error);
+    return { success: false, error: error.message || 'SKUの削除に失敗しました' };
+  }
+}
+
 // CommonJS環境（Node.js等）向けエクスポート
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
@@ -1313,7 +1563,16 @@ if (typeof module !== 'undefined' && module.exports) {
     createMaster,
     updateMaster,
     deleteMaster,
-    searchMaster
+    searchMaster,
+    // SKU関連 (INV-010)
+    generateSkuId,
+    createSKU,
+    getSKU,
+    updateSKU,
+    updateSKUStock,
+    searchSKUs,
+    getSKUVariants,
+    deleteSKU
   };
 }
 
@@ -1348,7 +1607,16 @@ if (typeof window !== 'undefined') {
     updateMaster,
     deleteMaster,
     searchMaster,
-    incrementMasterUsageCount
+    incrementMasterUsageCount,
+    // SKU関連 (INV-010)
+    generateSkuId,
+    createSKU,
+    getSKU,
+    updateSKU,
+    updateSKUStock,
+    searchSKUs,
+    getSKUVariants,
+    deleteSKU
   };
 }
 
@@ -1382,7 +1650,16 @@ export {
   updateMaster,
   deleteMaster,
   searchMaster,
-  incrementMasterUsageCount
+  incrementMasterUsageCount,
+  // SKU関連 (INV-010)
+  generateSkuId,
+  createSKU,
+  getSKU,
+  updateSKU,
+  updateSKUStock,
+  searchSKUs,
+  getSKUVariants,
+  deleteSKU
 };
 
 // グローバルスコープに公開（非モジュールスクリプトから使用するため）
