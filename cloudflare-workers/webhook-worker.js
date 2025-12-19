@@ -560,12 +560,16 @@ async function handleAnnounceBroadcast(request, env) {
 
     console.log(`[AnnounceBroadcast] 取得デバイス数: ${documents.length}`)
 
-    // FCMトークンを収集
+    // FCMトークンを収集（fcmTokensは配列として保存されている）
     const fcmTokens = []
     for (const doc of documents) {
-      const token = doc.fields?.fcmToken?.stringValue
-      if (token) {
-        fcmTokens.push(token)
+      // Firestore配列形式: arrayValue.values[]
+      const tokenArray = doc.fields?.fcmTokens?.arrayValue?.values || []
+      for (const tokenItem of tokenArray) {
+        const token = tokenItem.stringValue
+        if (token) {
+          fcmTokens.push(token)
+        }
       }
     }
 
