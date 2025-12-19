@@ -3724,28 +3724,18 @@
     window.showNameInputScreen = function showNameInputScreen(email, photoURL, userType, firebaseUid, displayName) {
       const resultDiv = document.getElementById('auth-result');
 
-      // Googleプロフィールから姓・名を取得（family_name/given_nameを優先）
+      // Googleプロフィールからユーザー名を取得
       const googleProfile = window.currentGoogleProfile;
-      let defaultLastName = '';
-      let defaultFirstName = '';
+      let defaultUserName = '';
 
-      if (googleProfile?.family_name || googleProfile?.given_name) {
-        // Googleアカウントで姓・名が設定されている場合はそれを使用
-        defaultLastName = googleProfile.family_name || '';
-        defaultFirstName = googleProfile.given_name || '';
-        console.log('[showNameInputScreen] Googleプロフィールから姓名取得:', defaultLastName, defaultFirstName);
+      if (googleProfile?.name) {
+        // Googleアカウントの表示名を使用
+        defaultUserName = googleProfile.name;
+        console.log('[showNameInputScreen] Googleプロフィールから名前取得:', defaultUserName);
       } else if (displayName) {
-        // フォールバック：スペース区切りで分割を試みる
-        const nameParts = displayName.trim().split(/\s+/);
-        if (nameParts.length >= 2) {
-          // スペースで区切られている場合（日本語：姓 名、英語：First Last）
-          defaultLastName = nameParts[0];
-          defaultFirstName = nameParts.slice(1).join(' ');
-        } else {
-          // スペースがない場合は姓に全体を入れる
-          defaultLastName = displayName;
-        }
-        console.log('[showNameInputScreen] displayNameから分割:', defaultLastName, defaultFirstName);
+        // フォールバック：displayNameをそのまま使用
+        defaultUserName = displayName.trim();
+        console.log('[showNameInputScreen] displayNameを使用:', defaultUserName);
       }
 
       // 現在のアイコンURLを保存（変更用）
@@ -3785,27 +3775,22 @@
             <div style="font-size: 12px; color: #9ca3af; margin-top: 8px;">タップして変更（任意）</div>
           </div>
           <div style="margin-bottom: 16px;">
-            <label style="display: block; font-size: 14px; color: #374151; margin-bottom: 6px; font-weight: 500;">姓</label>
+            <label style="display: block; font-size: 14px; color: #374151; margin-bottom: 6px; font-weight: 500;">ユーザー名</label>
             <div style="position: relative;">
-              <input type="text" id="input-last-name" placeholder="例：山田" value="${defaultLastName.replace(/"/g, '&quot;')}"
+              <input type="text" id="input-user-name" placeholder="例：田中太郎、たなかさん" value="${defaultUserName.replace(/"/g, '&quot;')}"
                      style="width: 100%; padding: 14px 40px 14px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; box-sizing: border-box; -webkit-appearance: none;"
                      oninput="toggleClearButton(this); clearNameValidationError()">
-              <button type="button" class="input-clear-btn" onclick="clearInput('input-last-name')"
-                      style="${defaultLastName ? 'display: block;' : 'display: none;'} position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border: none; background: #9ca3af; border-radius: 50%; color: white; font-size: 16px; cursor: pointer; line-height: 1;">×</button>
+              <button type="button" class="input-clear-btn" onclick="clearInput('input-user-name')"
+                      style="${defaultUserName ? 'display: block;' : 'display: none;'} position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border: none; background: #9ca3af; border-radius: 50%; color: white; font-size: 16px; cursor: pointer; line-height: 1;">×</button>
             </div>
-          </div>
-          <div style="margin-bottom: 24px;">
-            <label style="display: block; font-size: 14px; color: #374151; margin-bottom: 6px; font-weight: 500;">名</label>
-            <div style="position: relative;">
-              <input type="text" id="input-first-name" placeholder="例：太郎" value="${defaultFirstName.replace(/"/g, '&quot;')}"
-                     style="width: 100%; padding: 14px 40px 14px 14px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; box-sizing: border-box; -webkit-appearance: none;"
-                     oninput="toggleClearButton(this); clearNameValidationError()">
-              <button type="button" class="input-clear-btn" onclick="clearInput('input-first-name')"
-                      style="${defaultFirstName ? 'display: block;' : 'display: none;'} position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border: none; background: #9ca3af; border-radius: 50%; color: white; font-size: 16px; cursor: pointer; line-height: 1;">×</button>
+            <div style="margin-top: 8px; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px;">
+              <div style="font-size: 12px; color: #0369a1; line-height: 1.5;">
+                💡 この名前はアプリ内でチームメンバーに表示されます。本名でもニックネームでもOKです。
+              </div>
             </div>
           </div>
           <div id="name-validation-error" style="display: none; margin-bottom: 12px; padding: 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #dc2626; font-size: 14px; text-align: center;">
-            姓と名の両方を入力してください
+            ユーザー名を入力してください
           </div>
           <button onclick="saveNewUserName('${email}', '${photoURL}', '${userType}', '${firebaseUid}')"
                   id="save-name-btn"
@@ -3913,20 +3898,17 @@
 
     // 新規ユーザーの姓・名を保存する関数
     window.saveNewUserName = async function saveNewUserName(email, photoURL, userType, firebaseUid) {
-      const lastName = document.getElementById('input-last-name').value.trim();
-      const firstName = document.getElementById('input-first-name').value.trim();
+      const userName = document.getElementById('input-user-name').value.trim();
       const resultDiv = document.getElementById('auth-result');
       const errorDiv = document.getElementById('name-validation-error');
       const saveBtn = document.getElementById('save-name-btn');
 
       // バリデーション
-      if (!lastName || !firstName) {
+      if (!userName) {
         errorDiv.style.display = 'block';
         return;
       }
       errorDiv.style.display = 'none';
-
-      const userName = lastName + firstName; // 姓名を結合
 
       try {
         // アイコンデータを取得（Base64優先、なければURL）
