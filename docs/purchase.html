@@ -1416,6 +1416,19 @@
                     <div class="suggest" id="suggest-batch-brand" hidden></div>
                     <input type="hidden" id="batchBrandKana">
                   </div>
+
+                  <!-- 付属品 -->
+                  <div class="mt-2">
+                    <label class="form-label">付属品</label>
+                    <div class="accessories-checkboxes" id="batch-accessories">
+                    </div>
+                    <!-- その他フリーテキスト入力 -->
+                    <div id="batch-accessory-other-container" style="display: none; margin-top: 8px;">
+                      <input type="text" class="form-control" id="batch-accessory-other"
+                             placeholder="その他の付属品（例: オリジナルハンガー、購入レシート）"
+                             style="font-size: 0.85rem;">
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3955,6 +3968,59 @@
 
       // ブランドサジェストをアタッチ
       attachBatchBrandSuggest();
+
+      // 付属品チェックボックスを初期化
+      initBatchAccessories();
+    }
+
+    // 一括入力用付属品チェックボックスを初期化
+    function initBatchAccessories() {
+      const container = document.getElementById('batch-accessories');
+      if (!container) return;
+
+      container.innerHTML = INSPECTION_ACCESSORIES.map(acc => `
+        <label class="accessory-checkbox">
+          <input type="checkbox" value="${acc}" onchange="updateBatchAccessoryCheckbox(this)">
+          ${acc}
+        </label>
+      `).join('');
+    }
+
+    // 一括入力用付属品チェックボックス変更ハンドラ
+    function updateBatchAccessoryCheckbox(checkbox) {
+      const label = checkbox.parentElement;
+      if (checkbox.checked) {
+        label.classList.add('checked');
+      } else {
+        label.classList.remove('checked');
+      }
+
+      // 「その他」の場合はフリーテキスト入力を表示/非表示
+      if (checkbox.value === 'その他') {
+        const otherContainer = document.getElementById('batch-accessory-other-container');
+        if (otherContainer) {
+          otherContainer.style.display = checkbox.checked ? 'block' : 'none';
+        }
+      }
+    }
+
+    // 一括入力用付属品を取得
+    function getBatchAccessories() {
+      const container = document.getElementById('batch-accessories');
+      if (!container) return [];
+
+      const accessories = [];
+      container.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+        if (cb.value === 'その他') {
+          const otherInput = document.getElementById('batch-accessory-other');
+          if (otherInput && otherInput.value.trim()) {
+            accessories.push(otherInput.value.trim());
+          }
+        } else {
+          accessories.push(cb.value);
+        }
+      });
+      return accessories;
     }
 
     // ========================================
@@ -5336,6 +5402,9 @@
       const batchBrand = document.getElementById('batchBrand')?.value || '';
       const batchBrandKana = document.getElementById('batchBrandKana')?.value || '';
 
+      // 付属品を収集
+      const batchAccessories = getBatchAccessories();
+
       // カテゴリーオブジェクト（個別入力と同じ構造）
       const categoryData = {
         superCategory: batchCatL0,
@@ -5363,7 +5432,8 @@
           size: batchSize,
           condition: batchCondition,
           brand: batchBrand,
-          brandKana: batchBrandKana
+          brandKana: batchBrandKana,
+          accessories: batchAccessories
         });
       }
 
