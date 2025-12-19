@@ -1752,6 +1752,9 @@ style="display:none;">削除</button>
     if (modal) {
       modal.style.display = 'none';
     }
+    // オーバーレイテキストを非表示（次回オープン時のため）
+    const overlay = document.getElementById('qrOverlayText');
+    if (overlay) overlay.style.display = 'none';
     stopQRScanner();
   }
 
@@ -1779,8 +1782,15 @@ style="display:none;">削除</button>
       { fps: 10, qrbox: { width: 250, height: 250 } },
       onQRScanSuccess,
       onQRScanFailure
-    ).catch(err => {
+    ).then(() => {
+      // カメラ起動成功時にオーバーレイテキストを表示
+      const overlay = document.getElementById('qrOverlayText');
+      if (overlay) overlay.style.display = 'block';
+    }).catch(err => {
       console.error("カメラ起動失敗:", err);
+      // エラー時はオーバーレイを非表示のまま
+      const overlay = document.getElementById('qrOverlayText');
+      if (overlay) overlay.style.display = 'none';
       document.getElementById('qrReader').innerHTML = `
         <div style="text-align: center; padding: 20px; color: #ef4444;">
           <i class="bi bi-camera-video-off" style="font-size: 48px;"></i>
@@ -2291,8 +2301,8 @@ style="display:none;">削除</button>
     </div>
     <div style="position: relative; width: 100%;">
       <div id="qrReader" style="width: 100%;"></div>
-      <!-- カメラビュー内オーバーレイテキスト -->
-      <div id="qrOverlayText" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); color: white; padding: 8px 16px; border-radius: 20px; font-size: 13px; white-space: nowrap; pointer-events: none;">
+      <!-- カメラビュー内オーバーレイテキスト（カメラ起動後に表示） -->
+      <div id="qrOverlayText" style="display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); color: white; padding: 8px 16px; border-radius: 20px; font-size: 13px; white-space: nowrap; pointer-events: none;">
         枠内にQRコードを合わせてください
       </div>
     </div>
