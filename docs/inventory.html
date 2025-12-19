@@ -452,6 +452,37 @@
     </div>
   </div>
 
+  <!-- INV-010: 在庫編集モーダル -->
+  <div class="modal fade" id="stockEditModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title">📦 在庫数編集</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="stockEditManagementNumber">
+          <div class="mb-3">
+            <label class="form-label">管理番号</label>
+            <div id="stockEditProductInfo" class="form-control-plaintext fw-bold"></div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="stockEditQuantity">在庫数</label>
+            <div class="input-group">
+              <button class="btn btn-outline-secondary" type="button" onclick="adjustStock(-1)">−</button>
+              <input type="number" class="form-control text-center" id="stockEditQuantity" min="0" value="1">
+              <button class="btn btn-outline-secondary" type="button" onclick="adjustStock(1)">＋</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-info" onclick="saveStockQuantity()">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 販売記録モーダル -->
   <div class="modal fade" id="salesRecordModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -1224,10 +1255,12 @@
                   <div class="small">
                     <strong>出品: ${formatCurrency(product.listingAmount)}</strong><br>
                     <span class="text-success">利益: ${formatCurrency(product.profit)}</span>
+                    ${product.itemType === 'sku-based' ? `<br><span class="badge bg-info">在庫: ${product.stockQuantity || 1}点</span>` : ''}
                   </div>
                   <div class="btn-group btn-group-sm">
                     <button class="btn btn-outline-primary" onclick="viewProduct('${product.managementNumber}')">詳細</button>
-                    <button class="btn btn-outline-success" onclick="openSalesRecordModal('${product.managementNumber}')">販売記録</button>
+                    ${product.itemType === 'sku-based' ? `<button class="btn btn-outline-info" onclick="openStockEditModal('${product.managementNumber}', ${product.stockQuantity || 1})">在庫</button>` : ''}
+                    <button class="btn btn-outline-success" onclick="openSalesRecordModal('${product.managementNumber}')">販売</button>
                     <button class="btn btn-outline-secondary" onclick="duplicateProduct('${product.managementNumber}')">複製</button>
                   </div>
                 </div>
@@ -1775,6 +1808,67 @@
             }
           }
         };
+      }
+    }
+
+    // INV-010: 在庫編集モーダルを開く
+    function openStockEditModal(managementNumber, currentStock) {
+      document.getElementById('stockEditManagementNumber').value = managementNumber;
+      document.getElementById('stockEditProductInfo').textContent = managementNumber;
+      document.getElementById('stockEditQuantity').value = currentStock;
+      const modal = new bootstrap.Modal(document.getElementById('stockEditModal'));
+      modal.show();
+    }
+
+    // INV-010: 在庫数を調整（+/-ボタン）
+    function adjustStock(delta) {
+      const input = document.getElementById('stockEditQuantity');
+      const newValue = Math.max(0, parseInt(input.value || 0) + delta);
+      input.value = newValue;
+    }
+
+    // INV-010: 在庫数を保存
+    async function saveStockQuantity() {
+      const managementNumber = document.getElementById('stockEditManagementNumber').value;
+      const newQuantity = parseInt(document.getElementById('stockEditQuantity').value) || 0;
+
+      showLoading();
+      try {
+        // productsコレクションを更新
+        const snapshot = await db.collection('products')
+          .where('管理番号', '==', managementNumber)
+          .limit(1)
+          .get();
+
+        if (!snapshot.empty) {
+          const productRef = snapshot.docs[0].ref;
+          const productData = snapshot.docs[0].data();
+
+          await productRef.update({
+            stockQuantity: newQuantity,
+            updatedAt: new Date().toISOString()
+          });
+
+          // SKUコレクションも更新
+          if (productData.skuId) {
+            await db.collection('skus').doc(productData.skuId).update({
+              currentStock: newQuantity,
+              updatedAt: new Date().toISOString()
+            });
+          }
+
+          hideLoading();
+          bootstrap.Modal.getInstance(document.getElementById('stockEditModal')).hide();
+          alert(`✅ 在庫数を更新しました\n\n${managementNumber}: ${newQuantity}点`);
+          loadDashboardAndSearch(); // 一覧を再読み込み
+        } else {
+          hideLoading();
+          alert('⚠️ 商品が見つかりませんでした');
+        }
+      } catch (error) {
+        hideLoading();
+        console.error('在庫更新エラー:', error);
+        alert('⚠️ 在庫の更新に失敗しました: ' + error.message);
       }
     }
 
