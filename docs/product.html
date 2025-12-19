@@ -2210,23 +2210,20 @@ style="display:none;">削除</button>
 
   function setInvId(invId) {
     document.getElementById('invId').value = invId;
-    
+
     // ステータスセクションを表示
     const statusSection = document.getElementById('qrStatusSection');
     statusSection.style.display = 'block';
-    
-    // ステータス表示を更新
+
+    // ステータス表示を更新（読み込み中）
     const statusDiv = document.getElementById('qrScanStatus');
     statusDiv.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px;">
-        <i class="bi bi-check-circle-fill" style="color: #10b981; font-size: 20px;"></i>
+        <i class="bi bi-hourglass-split" style="color: #f59e0b; font-size: 20px;"></i>
         <div style="flex: 1;">
-          <div style="font-weight: 600; color: #065f46;">仕入商品と紐付け済み</div>
-          <div style="font-size: 12px; color: #047857;">${invId}</div>
+          <div style="font-weight: 600; color: #92400e;">仕入情報を読み込み中...</div>
+          <div style="font-size: 12px; color: #b45309;">${invId}</div>
         </div>
-        <button onclick="clearInvId()" style="background: none; border: none; color: #6b7280; cursor: pointer; padding: 4px;">
-          <i class="bi bi-x-lg"></i>
-        </button>
       </div>
     `;
 
@@ -2234,8 +2231,285 @@ style="display:none;">削除</button>
     const floatingBtn = document.getElementById('qrFloatingBtn');
     floatingBtn.style.display = 'none';
 
-    // TODO: Firestoreから仕入情報を取得して表示（管理者のみ）
-    console.log('仕入商品ID:', invId);
+    // Firestoreから仕入情報を取得して反映
+    fetchAndApplyPurchaseSlotData(invId);
+  }
+
+  // Firestoreから仕入スロットデータを取得してフォームに反映
+  async function fetchAndApplyPurchaseSlotData(slotId) {
+    const statusDiv = document.getElementById('qrScanStatus');
+
+    try {
+      console.log('📦 仕入スロット取得開始:', slotId);
+
+      const doc = await window.db.collection('purchaseSlots').doc(slotId).get();
+
+      if (!doc.exists) {
+        console.warn('仕入スロットが見つかりません:', slotId);
+        statusDiv.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <i class="bi bi-exclamation-triangle-fill" style="color: #f59e0b; font-size: 20px;"></i>
+            <div style="flex: 1;">
+              <div style="font-weight: 600; color: #92400e;">仕入情報が見つかりません</div>
+              <div style="font-size: 12px; color: #b45309;">${slotId}</div>
+            </div>
+            <button onclick="clearInvId()" style="background: none; border: none; color: #6b7280; cursor: pointer; padding: 4px;">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      const slotData = doc.data();
+      console.log('📦 仕入スロットデータ:', slotData);
+
+      // ステータス表示を更新（紐付け完了）
+      statusDiv.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <i class="bi bi-check-circle-fill" style="color: #10b981; font-size: 20px;"></i>
+          <div style="flex: 1;">
+            <div style="font-weight: 600; color: #065f46;">仕入商品と紐付け済み</div>
+            <div style="font-size: 12px; color: #047857;">${slotId}</div>
+          </div>
+          <button onclick="clearInvId()" style="background: none; border: none; color: #6b7280; cursor: pointer; padding: 4px;">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+      `;
+
+      // フォームにデータを反映
+      applyPurchaseSlotDataToForm(slotData);
+
+    } catch (error) {
+      console.error('仕入スロット取得エラー:', error);
+      statusDiv.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <i class="bi bi-x-circle-fill" style="color: #ef4444; font-size: 20px;"></i>
+          <div style="flex: 1;">
+            <div style="font-weight: 600; color: #dc2626;">読み込みエラー</div>
+            <div style="font-size: 12px; color: #b91c1c;">${slotId}</div>
+          </div>
+          <button onclick="clearInvId()" style="background: none; border: none; color: #6b7280; cursor: pointer; padding: 4px;">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+      `;
+    }
+  }
+
+  // 仕入スロットデータをフォームに反映
+  function applyPurchaseSlotDataToForm(slotData) {
+    console.log('🔄 仕入情報をフォームに反映中...');
+
+    // 仕入日
+    if (slotData.purchaseDate) {
+      const purchaseDateEl = document.getElementById('仕入日');
+      if (purchaseDateEl) purchaseDateEl.value = slotData.purchaseDate;
+    }
+
+    // 仕入金額
+    if (slotData.amount) {
+      const purchaseAmountEl = document.getElementById('仕入金額');
+      if (purchaseAmountEl) purchaseAmountEl.value = slotData.amount;
+    }
+
+    // 仕入先
+    if (slotData.supplier) {
+      const supplierEl = document.getElementById('仕入先');
+      if (supplierEl) {
+        const options = supplierEl.options;
+        for (let i = 0; i < options.length; i++) {
+          if (options[i].value === slotData.supplier || options[i].text.includes(slotData.supplier)) {
+            supplierEl.selectedIndex = i;
+            break;
+          }
+        }
+      }
+    }
+
+    // カテゴリ（7階層対応）
+    if (slotData.category) {
+      const categoryObj = slotData.category;
+
+      // 特大分類
+      if (categoryObj.superCategory) {
+        const l0El = document.getElementById('特大分類');
+        if (l0El) {
+          for (let i = 0; i < l0El.options.length; i++) {
+            if (l0El.options[i].value === categoryObj.superCategory) {
+              l0El.selectedIndex = i;
+              l0El.dispatchEvent(new Event('change', { bubbles: true }));
+              break;
+            }
+          }
+        }
+      }
+
+      // 大分類〜アイテム名は連動プルダウンなので、遅延させて設定
+      setTimeout(() => {
+        if (categoryObj.major) {
+          const l1El = document.getElementById('大分類(カテゴリ)');
+          if (l1El) {
+            for (let i = 0; i < l1El.options.length; i++) {
+              if (l1El.options[i].value === categoryObj.major) {
+                l1El.selectedIndex = i;
+                l1El.dispatchEvent(new Event('change', { bubbles: true }));
+                break;
+              }
+            }
+          }
+        }
+
+        setTimeout(() => {
+          if (categoryObj.middle) {
+            const l2El = document.getElementById('中分類(カテゴリ)');
+            if (l2El) {
+              for (let i = 0; i < l2El.options.length; i++) {
+                if (l2El.options[i].value === categoryObj.middle) {
+                  l2El.selectedIndex = i;
+                  l2El.dispatchEvent(new Event('change', { bubbles: true }));
+                  break;
+                }
+              }
+            }
+          }
+
+          setTimeout(() => {
+            if (categoryObj.small) {
+              const l3El = document.getElementById('小分類(カテゴリ)');
+              if (l3El) {
+                for (let i = 0; i < l3El.options.length; i++) {
+                  if (l3El.options[i].value === categoryObj.small) {
+                    l3El.selectedIndex = i;
+                    l3El.dispatchEvent(new Event('change', { bubbles: true }));
+                    break;
+                  }
+                }
+              }
+            }
+
+            setTimeout(() => {
+              if (categoryObj.fine) {
+                const l4El = document.getElementById('細分類(カテゴリ)');
+                if (l4El) {
+                  for (let i = 0; i < l4El.options.length; i++) {
+                    if (l4El.options[i].value === categoryObj.fine) {
+                      l4El.selectedIndex = i;
+                      l4El.dispatchEvent(new Event('change', { bubbles: true }));
+                      break;
+                    }
+                  }
+                }
+              }
+
+              setTimeout(() => {
+                if (categoryObj.fine2) {
+                  const l5El = document.getElementById('細分類2');
+                  if (l5El) {
+                    for (let i = 0; i < l5El.options.length; i++) {
+                      if (l5El.options[i].value === categoryObj.fine2) {
+                        l5El.selectedIndex = i;
+                        l5El.dispatchEvent(new Event('change', { bubbles: true }));
+                        break;
+                      }
+                    }
+                  }
+                }
+
+                setTimeout(() => {
+                  if (categoryObj.itemName) {
+                    const itemEl = document.getElementById('アイテム名');
+                    if (itemEl) {
+                      for (let i = 0; i < itemEl.options.length; i++) {
+                        if (itemEl.options[i].value === categoryObj.itemName) {
+                          itemEl.selectedIndex = i;
+                          itemEl.dispatchEvent(new Event('change', { bubbles: true }));
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }, 100);
+              }, 100);
+            }, 100);
+          }, 100);
+        }, 100);
+      }, 100);
+    }
+
+    // サイズ
+    if (slotData.size) {
+      const sizeEl = document.getElementById('サイズ');
+      if (sizeEl) sizeEl.value = slotData.size;
+    }
+
+    // ブランド
+    if (slotData.brand) {
+      const brandEl = document.getElementById('ブランド(英語)');
+      if (brandEl) brandEl.value = slotData.brand;
+      const brandNameEl = document.getElementById('商品名_ブランド(英語)');
+      if (brandNameEl) brandNameEl.value = slotData.brand;
+    }
+    if (slotData.brandKana) {
+      const brandKanaEl = document.getElementById('ブランド(カナ)');
+      if (brandKanaEl) brandKanaEl.value = slotData.brandKana;
+      const brandNameKanaEl = document.getElementById('商品名_ブランド(カナ)');
+      if (brandNameKanaEl) brandNameKanaEl.value = slotData.brandKana;
+    }
+
+    // 商品の状態
+    if (slotData.condition) {
+      const conditionEl = document.getElementById('商品の状態');
+      if (conditionEl) {
+        const options = conditionEl.options;
+        for (let i = 0; i < options.length; i++) {
+          if (options[i].value === slotData.condition || options[i].text === slotData.condition) {
+            conditionEl.selectedIndex = i;
+            conditionEl.dispatchEvent(new Event('change', { bubbles: true }));
+            break;
+          }
+        }
+      }
+    }
+
+    // 付属品
+    if (slotData.accessories && slotData.accessories.length > 0) {
+      if (typeof window.setAccessoriesFromQR === 'function') {
+        window.setAccessoriesFromQR(slotData.accessories);
+      }
+    }
+
+    // マーキング画像（傷・ダメージ）
+    if (slotData.damageMarkerImage) {
+      console.log('📸 マーキング画像を反映:', slotData.damageMarkerImage);
+      // マーキング画像をプレビューに表示
+      if (typeof window.setDamageMarkerImage === 'function') {
+        window.setDamageMarkerImage(slotData.damageMarkerImage, slotData.damageMarkerType, slotData.damageMarkerNote);
+      } else {
+        // フォールバック: 商品状態詳細にメモを追加
+        if (slotData.damageMarkerNote) {
+          const conditionDetailEl = document.getElementById('商品状態詳細');
+          if (conditionDetailEl) {
+            const current = conditionDetailEl.value;
+            const noteText = '【検品メモ】' + slotData.damageMarkerNote;
+            conditionDetailEl.value = current ? current + '\n' + noteText : noteText;
+          }
+        }
+      }
+    }
+
+    // メモ
+    if (slotData.note || slotData.memo) {
+      const noteText = slotData.note || slotData.memo;
+      const conditionDetailEl = document.getElementById('商品状態詳細');
+      if (conditionDetailEl && noteText) {
+        const current = conditionDetailEl.value;
+        conditionDetailEl.value = current ? current + '\n' + noteText : noteText;
+      }
+    }
+
+    console.log('✅ 仕入情報の反映完了');
   }
 
   function manualInvIdInput() {
