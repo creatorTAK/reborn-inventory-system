@@ -65,6 +65,11 @@ export default {
       return handleUnreadIncrement(request, env)
     }
 
+    // 🆕 ルーティング: /api/announce/broadcast (お知らせブロードキャスト)
+    if (url.pathname === '/api/announce/broadcast') {
+      return handleAnnounceBroadcast(request, env)
+    }
+
     // POSTのみ受理（既存Webhook）
     if (request.method !== 'POST') {
       return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
@@ -478,6 +483,161 @@ async function handleUnreadIncrement(request, env) {
 
   } catch (error) {
     console.error('[UnreadIncrement] Error:', error)
+    return jsonResponse({
+      success: false,
+      error: error.message
+    }, 500)
+  }
+}
+
+/**
+ * 🆕 /api/announce/broadcast エンドポイント
+ * 管理者からのお知らせを全ユーザーにプッシュ通知
+ */
+async function handleAnnounceBroadcast(request, env) {
+  // CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      }
+    })
+  }
+
+  try {
+    // POSTのみ受理
+    if (request.method !== 'POST') {
+      return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
+    }
+
+    // リクエストボディ取得
+    const body = await request.json()
+    const { title, message, adminEmail } = body
+
+    // パラメータ検証
+    if (!title || !message || !adminEmail) {
+      return jsonResponse({
+        success: false,
+        error: 'Missing required parameters: title, message, adminEmail'
+      }, 400)
+    }
+
+    // 管理者メールアドレス検証
+    const ADMIN_EMAILS = ['mercari.yasuhirotakuji@gmail.com']
+    if (!ADMIN_EMAILS.includes(adminEmail)) {
+      console.log(`[AnnounceBroadcast] 管理者認証失敗: ${adminEmail}`)
+      return jsonResponse({ success: false, error: 'Unauthorized' }, 403)
+    }
+
+    console.log(`[AnnounceBroadcast] 管理者認証成功: ${adminEmail}`)
+    console.log(`[AnnounceBroadcast] 通知タイトル: ${title}`)
+
+    // Service Account取得
+    const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT)
+
+    // Access Token取得
+    const accessToken = await getFirebaseAccessToken(serviceAccount)
+
+    // Firestoreから全ユーザーのFCMトークンを取得
+    const tokensUrl = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/activeDevices`
+    const tokensResponse = await fetch(tokensUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!tokensResponse.ok) {
+      const error = await tokensResponse.text()
+      throw new Error(`Firestore GET activeDevices failed: ${error}`)
+    }
+
+    const tokensData = await tokensResponse.json()
+    const documents = tokensData.documents || []
+
+    console.log(`[AnnounceBroadcast] 取得デバイス数: ${documents.length}`)
+
+    // FCMトークンを収集
+    const fcmTokens = []
+    for (const doc of documents) {
+      const token = doc.fields?.fcmToken?.stringValue
+      if (token) {
+        fcmTokens.push(token)
+      }
+    }
+
+    console.log(`[AnnounceBroadcast] 有効FCMトークン数: ${fcmTokens.length}`)
+
+    if (fcmTokens.length === 0) {
+      return jsonResponse({
+        success: true,
+        message: 'No FCM tokens found',
+        sentCount: 0
+      })
+    }
+
+    // FCM v1 APIで通知送信
+    let successCount = 0
+    let failCount = 0
+
+    for (const token of fcmTokens) {
+      try {
+        const fcmUrl = `https://fcm.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/messages:send`
+        const fcmResponse = await fetch(fcmUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: {
+              token: token,
+              notification: {
+                title: title,
+                body: message
+              },
+              webpush: {
+                notification: {
+                  icon: '/images/icon-192.png',
+                  badge: '/images/icon-badge.png',
+                  tag: 'announcement',
+                  requireInteraction: true
+                },
+                fcm_options: {
+                  link: '/mypage.html'
+                }
+              }
+            }
+          })
+        })
+
+        if (fcmResponse.ok) {
+          successCount++
+        } else {
+          failCount++
+          const error = await fcmResponse.text()
+          console.error(`[AnnounceBroadcast] FCM送信失敗: ${error}`)
+        }
+      } catch (err) {
+        failCount++
+        console.error(`[AnnounceBroadcast] FCM送信エラー: ${err.message}`)
+      }
+    }
+
+    console.log(`[AnnounceBroadcast] 送信完了: 成功=${successCount}, 失敗=${failCount}`)
+
+    return jsonResponse({
+      success: true,
+      message: 'Broadcast completed',
+      sentCount: successCount,
+      failCount: failCount
+    })
+
+  } catch (error) {
+    console.error('[AnnounceBroadcast] Error:', error)
     return jsonResponse({
       success: false,
       error: error.message

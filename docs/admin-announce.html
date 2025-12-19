@@ -539,6 +539,9 @@
       }).join('');
     }
 
+    // Cloudflare Worker URL
+    const WORKER_URL = 'https://reborn-webhook-worker.mercari-yasuhirotakuji.workers.dev';
+
     async function submitAnnouncement() {
       const title = document.getElementById('announceTitle').value.trim();
       const body = document.getElementById('announceBody').value.trim();
@@ -553,12 +556,41 @@
       submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 投稿中...';
 
       try {
+        // Firestoreにお知らせを保存
         await addDoc(collection(db, 'announcements'), {
           title,
           body,
           priority: selectedPriority,
           createdAt: serverTimestamp()
         });
+
+        // 「重要」の場合はプッシュ通知を送信
+        if (selectedPriority === 'danger') {
+          submitBtn.innerHTML = '<i class="bi bi-bell"></i> 通知送信中...';
+          try {
+            const userEmail = localStorage.getItem('reborn_user_email');
+            const response = await fetch(`${WORKER_URL}/api/announce/broadcast`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                title: `❗ ${title}`,
+                message: body,
+                adminEmail: userEmail
+              })
+            });
+            const result = await response.json();
+            if (result.success) {
+              console.log(`プッシュ通知送信完了: ${result.sentCount}件`);
+            } else {
+              console.error('プッシュ通知送信失敗:', result.error);
+            }
+          } catch (pushError) {
+            console.error('プッシュ通知送信エラー:', pushError);
+            // プッシュ通知失敗してもお知らせ投稿は成功とする
+          }
+        }
 
         // フォームリセット
         document.getElementById('announceForm').reset();
@@ -569,6 +601,9 @@
         // 一覧更新
         await loadAnnouncements();
 
+        const message = selectedPriority === 'danger'
+          ? 'お知らせを投稿し、プッシュ通知を送信しました'
+          : 'お知らせを投稿しました';
         alert('お知らせを投稿しました');
       } catch (error) {
         console.error('投稿エラー:', error);
