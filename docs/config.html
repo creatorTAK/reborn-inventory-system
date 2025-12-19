@@ -1063,11 +1063,44 @@
           </div>
 
           <!-- メールアドレス -->
-          <div class="form-group">
+          <div class="form-group" style="margin-bottom: 16px;">
             <label class="form-label">メールアドレス</label>
             <input type="email" id="basicUserEmail" class="form-control" placeholder="例: example@example.com" maxlength="100" readonly style="background: #f9fafb; cursor: not-allowed;">
             <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
               Googleアカウントのメールアドレス（変更不可）
+            </div>
+          </div>
+
+          <!-- 住所 -->
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label">住所</label>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span style="font-size: 13px; color: #6b7280;">〒</span>
+                <input type="text" id="basicPostalCode" class="form-control" placeholder="000-0000" maxlength="8" style="width: 120px;" oninput="formatPostalCode(this)">
+                <button type="button" class="btn btn-sm" style="background: #e5e7eb; color: #374151; border: none; padding: 6px 10px; border-radius: 6px; font-size: 11px; white-space: nowrap;" onclick="searchAddress()">住所検索</button>
+              </div>
+              <input type="text" id="basicPrefecture" class="form-control" placeholder="都道府県" maxlength="10">
+              <input type="text" id="basicCity" class="form-control" placeholder="市区町村・番地" maxlength="100">
+              <input type="text" id="basicBuilding" class="form-control" placeholder="建物名・部屋番号（任意）" maxlength="100">
+            </div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+              仕入れた商品の郵送先として使用されます
+            </div>
+          </div>
+
+          <!-- 口座情報 -->
+          <div class="form-group">
+            <label class="form-label">口座情報</label>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <button type="button" class="btn" style="background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px;" onclick="openBankAccountModal()">
+                <i class="bi bi-bank"></i>
+                <span id="bankAccountStatus">未登録</span>
+                <i class="bi bi-chevron-right" style="margin-left: 4px;"></i>
+              </button>
+            </div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+              報酬の振込先として使用されます（管理者のみ閲覧可能）
             </div>
           </div>
         </div>
@@ -8769,6 +8802,49 @@ ${prompt || '（未設定）'}
     })();
   </script>
 
+  <!-- 口座情報入力モーダル -->
+  <div id="bankAccountModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 12px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto;">
+      <div style="padding: 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1f2937;">口座情報を入力</h3>
+        <button type="button" onclick="closeBankAccountModal()" style="background: none; border: none; font-size: 20px; color: #6b7280; cursor: pointer;">&times;</button>
+      </div>
+      <div style="padding: 16px;">
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">銀行名<span style="color: #ef4444;">*</span></label>
+          <input type="text" id="bankName" class="form-control" placeholder="例: 三菱UFJ銀行" maxlength="50">
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">支店名<span style="color: #ef4444;">*</span></label>
+          <input type="text" id="bankBranch" class="form-control" placeholder="例: 渋谷支店" maxlength="50">
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">口座種別<span style="color: #ef4444;">*</span></label>
+          <select id="bankAccountType" class="form-control">
+            <option value="普通">普通</option>
+            <option value="当座">当座</option>
+          </select>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">口座番号<span style="color: #ef4444;">*</span></label>
+          <input type="text" id="bankAccountNumber" class="form-control" placeholder="1234567" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">口座名義（カタカナ）<span style="color: #ef4444;">*</span></label>
+          <input type="text" id="bankAccountHolder" class="form-control" placeholder="例: ヤマダ タロウ" maxlength="50">
+        </div>
+        <div style="font-size: 11px; color: #6b7280; margin-bottom: 16px; padding: 8px; background: #f9fafb; border-radius: 6px;">
+          <i class="bi bi-shield-lock" style="margin-right: 4px;"></i>
+          口座情報は暗号化して保存され、管理者のみ閲覧できます
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" onclick="closeBankAccountModal()" style="flex: 1; padding: 10px; background: #f3f4f6; color: #374151; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;">キャンセル</button>
+          <button type="button" onclick="saveBankAccount()" style="flex: 1; padding: 10px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Firebase SDK (compat版: UMD形式) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -9338,6 +9414,137 @@ ${prompt || '（未設定）'}
     }
 
     /**
+     * 郵便番号フォーマット（XXX-XXXX形式）
+     */
+    function formatPostalCode(input) {
+      let value = input.value.replace(/[^0-9]/g, '');
+      if (value.length > 3) {
+        value = value.slice(0, 3) + '-' + value.slice(3, 7);
+      }
+      input.value = value;
+    }
+
+    /**
+     * 郵便番号から住所を検索（zipcloud API使用）
+     */
+    async function searchAddress() {
+      const postalCode = document.getElementById('basicPostalCode').value.replace(/-/g, '');
+      
+      if (postalCode.length !== 7) {
+        alert('郵便番号を正しく入力してください（7桁）');
+        return;
+      }
+
+      try {
+        const response = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${postalCode}`);
+        const data = await response.json();
+        
+        if (data.results && data.results.length > 0) {
+          const result = data.results[0];
+          document.getElementById('basicPrefecture').value = result.address1;
+          document.getElementById('basicCity').value = result.address2 + result.address3;
+          console.log('✅ 住所検索成功:', result);
+        } else {
+          alert('該当する住所が見つかりませんでした');
+        }
+      } catch (e) {
+        console.error('❌ 住所検索エラー:', e);
+        alert('住所検索に失敗しました');
+      }
+    }
+
+    /**
+     * 口座情報モーダルを開く
+     */
+    function openBankAccountModal() {
+      const modal = document.getElementById('bankAccountModal');
+      if (modal) {
+        modal.style.display = 'flex';
+        loadBankAccountInfo();
+      }
+    }
+
+    /**
+     * 口座情報モーダルを閉じる
+     */
+    function closeBankAccountModal() {
+      const modal = document.getElementById('bankAccountModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    /**
+     * 口座情報を読み込む
+     */
+    async function loadBankAccountInfo() {
+      const userEmail = localStorage.getItem('reborn_user_email');
+      if (!userEmail || !window.db) return;
+
+      try {
+        const userDoc = await window.db.collection('users').doc(userEmail).get();
+        if (userDoc.exists) {
+          const data = userDoc.data();
+          const bankInfo = data.bankAccount || {};
+          
+          document.getElementById('bankName').value = bankInfo.bankName || '';
+          document.getElementById('bankBranch').value = bankInfo.branchName || '';
+          document.getElementById('bankAccountType').value = bankInfo.accountType || '普通';
+          document.getElementById('bankAccountNumber').value = bankInfo.accountNumber || '';
+          document.getElementById('bankAccountHolder').value = bankInfo.accountHolder || '';
+          
+          console.log('✅ 口座情報を読み込みました');
+        }
+      } catch (e) {
+        console.error('❌ 口座情報読み込みエラー:', e);
+      }
+    }
+
+    /**
+     * 口座情報を保存
+     */
+    async function saveBankAccount() {
+      const userEmail = localStorage.getItem('reborn_user_email');
+      if (!userEmail) {
+        alert('ユーザーメールアドレスが見つかりません。再ログインしてください。');
+        return;
+      }
+
+      if (!window.db) {
+        alert('Firestoreが初期化されていません');
+        return;
+      }
+
+      const bankInfo = {
+        bankName: document.getElementById('bankName').value.trim(),
+        branchName: document.getElementById('bankBranch').value.trim(),
+        accountType: document.getElementById('bankAccountType').value,
+        accountNumber: document.getElementById('bankAccountNumber').value.trim(),
+        accountHolder: document.getElementById('bankAccountHolder').value.trim()
+      };
+
+      // 入力チェック
+      if (!bankInfo.bankName || !bankInfo.branchName || !bankInfo.accountNumber || !bankInfo.accountHolder) {
+        alert('金融機関名、支店名、口座番号、口座名義は必須です');
+        return;
+      }
+
+      try {
+        await window.db.collection('users').doc(userEmail).set({
+          bankAccount: bankInfo,
+          bankAccountUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        alert('✅ 口座情報を保存しました');
+        closeBankAccountModal();
+        console.log('✅ 口座情報を保存しました');
+      } catch (e) {
+        console.error('❌ 口座情報保存エラー:', e);
+        alert('❌ 保存に失敗しました: ' + e.message);
+      }
+    }
+
+    /**
      * 基本設定を読み込む（フォールバック方式）
      */
     async function loadBasicSettings() {
@@ -9358,6 +9565,21 @@ ${prompt || '（未設定）'}
               permissionId = userData.permissionId || permissionId;
               // localStorageも更新
               localStorage.setItem('reborn_user_permission_id', permissionId);
+
+              // 住所情報を読み込み
+              const address = userData.address || {};
+              if (document.getElementById('basicPostalCode')) {
+                document.getElementById('basicPostalCode').value = address.postalCode || '';
+              }
+              if (document.getElementById('basicPrefecture')) {
+                document.getElementById('basicPrefecture').value = address.prefecture || '';
+              }
+              if (document.getElementById('basicCity')) {
+                document.getElementById('basicCity').value = address.city || '';
+              }
+              if (document.getElementById('basicBuilding')) {
+                document.getElementById('basicBuilding').value = address.building || '';
+              }
             }
           } catch (e) {
             console.warn('⚠️ Firestoreから権限取得失敗、localStorageを使用:', e);
@@ -9506,10 +9728,19 @@ ${prompt || '（未設定）'}
           throw new Error('Firestoreが初期化されていません');
         }
 
+        // 住所情報を収集
+        const addressInfo = {
+          postalCode: document.getElementById('basicPostalCode')?.value.trim() || '',
+          prefecture: document.getElementById('basicPrefecture')?.value.trim() || '',
+          city: document.getElementById('basicCity')?.value.trim() || '',
+          building: document.getElementById('basicBuilding')?.value.trim() || ''
+        };
+
         await window.db.collection('users').doc(userEmail).set({
           userName: settings.userName,
           notificationEnabled: settings.notificationEnabled,
           notificationSound: settings.notificationSound,
+          address: addressInfo,
           lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
@@ -10890,6 +11121,40 @@ ${prompt || '（未設定）'}
         </div>
       </div>
 
+      <!-- 住所・口座情報（管理者のみ表示） -->
+      <div style="background: #fff7ed; border-radius: 8px; padding: 16px; margin-top: 12px; border: 1px solid #fed7aa;">
+        <div style="font-size: 12px; font-weight: 600; color: #c2410c; margin-bottom: 12px;">📋 配送・振込先情報</div>
+        ${user.address && (user.address.postalCode || user.address.prefecture) ? `
+          <div style="margin-bottom: 12px;">
+            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">📦 住所</div>
+            <div style="font-size: 13px; color: #374151;">
+              ${user.address.postalCode ? '〒' + user.address.postalCode + '<br>' : ''}
+              ${user.address.prefecture || ''}${user.address.city || ''}${user.address.building ? '<br>' + user.address.building : ''}
+            </div>
+          </div>
+        ` : `
+          <div style="margin-bottom: 12px;">
+            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">📦 住所</div>
+            <div style="font-size: 12px; color: #9ca3af;">未登録</div>
+          </div>
+        `}
+        ${user.bankAccount && user.bankAccount.bankName ? `
+          <div>
+            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">🏦 口座情報</div>
+            <div style="font-size: 13px; color: #374151;">
+              ${user.bankAccount.bankName} ${user.bankAccount.branchName}<br>
+              ${user.bankAccount.accountType} ${user.bankAccount.accountNumber}<br>
+              ${user.bankAccount.accountHolder}
+            </div>
+          </div>
+        ` : `
+          <div>
+            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">🏦 口座情報</div>
+            <div style="font-size: 12px; color: #9ca3af;">未登録</div>
+          </div>
+        `}
+      </div>
+
       ${actionButtons}
     `;
 
@@ -10946,6 +11211,11 @@ ${prompt || '（未設定）'}
 
       try {
         await sendApprovalEmail(userId, userName);
+      } catch (e) { console.error(e); }
+
+      // ウェルカム通知を作成
+      try {
+        await createWelcomeAnnouncements(userId, userName);
       } catch (e) { console.error(e); }
 
       closeUserDetailModal();
@@ -11030,6 +11300,34 @@ ${prompt || '（未設定）'}
   }
 
   /**
+   * 新規ユーザーにウェルカム通知（あなた宛）を作成
+   */
+  async function createWelcomeAnnouncements(userEmail, userName) {
+    const now = new Date().toISOString();
+    const personalRef = window.db.collection('users').doc(userEmail).collection('personalAnnouncements');
+
+    // 通知1: 住所登録のお願い
+    await personalRef.add({
+      title: '📦 住所を登録してください',
+      content: '商品の配送先として住所情報が必要です。設定 > 基本設定から住所を登録してください。',
+      priority: 'normal',
+      createdAt: now,
+      type: 'address_request'
+    });
+
+    // 通知2: 口座情報登録のお願い
+    await personalRef.add({
+      title: '🏦 口座情報を登録してください',
+      content: '報酬の振込先として口座情報が必要です。設定 > 基本設定から口座情報を登録してください。',
+      priority: 'normal',
+      createdAt: now,
+      type: 'bank_request'
+    });
+
+    console.log('[Announce] ✅ ウェルカム通知を作成:', userEmail);
+  }
+
+  /**
    * ユーザーを承認
    */
   window.approveUser = async function(userId) {
@@ -11087,6 +11385,14 @@ ${prompt || '（未設定）'}
         console.log('[USER] ✅ 承認メール送信完了');
       } catch (emailError) {
         console.error('[USER] メール送信エラー:', emailError);
+      }
+
+      // 新規ユーザーに「あなた宛」通知を作成
+      try {
+        await createWelcomeAnnouncements(userId, userName);
+        console.log('[USER] ✅ ウェルカム通知作成完了');
+      } catch (announceError) {
+        console.error('[USER] 通知作成エラー:', announceError);
       }
 
       alert(`ユーザーを「${permDef.label}」として承認しました`);
