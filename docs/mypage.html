@@ -751,6 +751,64 @@
       display: flex;
     }
 
+    /* 設定ドロップダウン */
+    .settings-dropdown {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      min-width: 200px;
+      overflow: hidden;
+      display: none;
+      z-index: 1001;
+    }
+    .settings-dropdown.active {
+      display: block;
+    }
+    .settings-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      font-size: 14px;
+      color: #1f2937;
+      text-decoration: none;
+      transition: background 0.2s;
+      cursor: pointer;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+    .settings-dropdown-item:hover {
+      background: #f3f4f6;
+    }
+    .settings-dropdown-item i {
+      font-size: 18px;
+      color: #6b7280;
+      width: 24px;
+      text-align: center;
+    }
+    .settings-dropdown-item.admin-only {
+      display: none;
+    }
+    .settings-dropdown-item.admin-only.visible {
+      display: flex;
+      border-top: 1px solid #e5e7eb;
+      color: #6366f1;
+    }
+    .settings-dropdown-item.admin-only.visible i {
+      color: #6366f1;
+    }
+    .settings-dropdown-divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 4px 0;
+    }
+
     /* ローディング */
     .loading-overlay {
       position: fixed;
@@ -849,9 +907,25 @@
         <i class="bi bi-bell"></i>
         <span class="header-badge" id="announceBadge">0</span>
       </button>
-      <button class="minimal-header-icon" title="設定">
-        <i class="bi bi-gear"></i>
-      </button>
+      <div style="position: relative;">
+        <button class="minimal-header-icon" title="設定" onclick="toggleSettingsDropdown(event)">
+          <i class="bi bi-gear"></i>
+        </button>
+        <div class="settings-dropdown" id="settingsDropdown">
+          <button class="settings-dropdown-item" onclick="window.parent.postMessage({type:'navigate', page:'config'}, '*')">
+            <i class="bi bi-sliders"></i>
+            <span>設定管理</span>
+          </button>
+          <button class="settings-dropdown-item" onclick="window.parent.postMessage({type:'navigate', page:'help'}, '*')">
+            <i class="bi bi-question-circle"></i>
+            <span>ヘルプ</span>
+          </button>
+          <button class="settings-dropdown-item admin-only" id="adminAnnounceLink" onclick="window.open('/admin-announce.html', '_blank')">
+            <i class="bi bi-megaphone"></i>
+            <span>お知らせ管理</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -978,6 +1052,9 @@
 
         // お知らせを読み込んでバッジを更新
         await initAnnouncements();
+
+        // 管理者メニュー表示チェック
+        checkAdminAccess();
       } catch (error) {
         console.error('初期化エラー:', error);
         showNotEligible('エラーが発生しました', 'データの読み込み中にエラーが発生しました。');
@@ -985,6 +1062,35 @@
 
       showLoading(false);
     }
+
+    // 管理者メールアドレス
+    const ADMIN_EMAILS = ['takushiy0@gmail.com'];
+
+    // 管理者アクセスチェック
+    function checkAdminAccess() {
+      if (currentUser && ADMIN_EMAILS.includes(currentUser.email)) {
+        const adminLink = document.getElementById('adminAnnounceLink');
+        if (adminLink) {
+          adminLink.classList.add('visible');
+        }
+        console.log('管理者メニュー表示:', currentUser.email);
+      }
+    }
+
+    // 設定ドロップダウン制御
+    window.toggleSettingsDropdown = function(event) {
+      event.stopPropagation();
+      const dropdown = document.getElementById('settingsDropdown');
+      dropdown.classList.toggle('active');
+    };
+
+    // ドロップダウン外クリックで閉じる
+    document.addEventListener('click', function(event) {
+      const dropdown = document.getElementById('settingsDropdown');
+      if (dropdown && !dropdown.contains(event.target)) {
+        dropdown.classList.remove('active');
+      }
+    });
 
     // 報酬設定を取得（localStorageからconfig経由）
     async function loadCompensationSettings() {
