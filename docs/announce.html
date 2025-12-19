@@ -17,7 +17,56 @@
       background-color: #f8f9fa;
       margin: 0;
       padding: 0;
-      padding-top: 56px;
+      padding-top: 100px;
+    }
+
+    /* タブ */
+    .announce-tabs {
+      position: fixed;
+      top: 56px;
+      left: 0;
+      right: 0;
+      height: 44px;
+      background: white;
+      display: flex;
+      border-bottom: 1px solid #e5e7eb;
+      z-index: 999;
+    }
+    .announce-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+      color: #6b7280;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+    }
+    .announce-tab.active {
+      color: #ef4444;
+      font-weight: 600;
+    }
+    .announce-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 20%;
+      right: 20%;
+      height: 2px;
+      background: #ef4444;
+    }
+    .tab-badge {
+      background: #ef4444;
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 10px;
+      margin-left: 4px;
+      min-width: 16px;
+      text-align: center;
     }
 
     /* ヘッダー */
@@ -256,6 +305,18 @@
     <div class="header-title" id="headerTitle">お知らせ</div>
   </header>
 
+  <!-- タブ -->
+  <div class="announce-tabs" id="tabsContainer">
+    <div class="announce-tab active" data-tab="personal" onclick="switchTab('personal')">
+      あなた宛
+      <span class="tab-badge" id="personalBadge" style="display: none;">0</span>
+    </div>
+    <div class="announce-tab" data-tab="global" onclick="switchTab('global')">
+      全体
+      <span class="tab-badge" id="globalBadge" style="display: none;">0</span>
+    </div>
+  </div>
+
   <!-- コンテンツ -->
   <div class="content-container">
     <!-- 一覧ビュー -->
@@ -308,9 +369,12 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let announcements = [];
+    let globalAnnouncements = [];
+    let personalAnnouncements = [];
     let readAnnouncementIds = new Set();
+    let readPersonalIds = new Set();
     let currentView = 'list';
+    let currentTab = 'personal';
     let currentUser = null;
 
     // 初期化
@@ -325,23 +389,42 @@
         };
       }
 
-      await loadAnnouncements();
+      await Promise.all([loadGlobalAnnouncements(), loadPersonalAnnouncements()]);
+      updateBadges();
       renderList();
     }
 
-    // お知らせを読み込む
-    async function loadAnnouncements() {
+    // タブ切り替え
+    window.switchTab = function(tab) {
+      if (currentTab === tab) return;
+      currentTab = tab;
+
+      // タブUIを更新
+      document.querySelectorAll('.announce-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+      });
+
+      // 詳細ビューが開いていたら一覧に戻る
+      if (currentView === 'detail') {
+        showList();
+      } else {
+        renderList();
+      }
+    };
+
+    // 全体お知らせを読み込む
+    async function loadGlobalAnnouncements() {
       try {
         const announcementsRef = collection(db, 'announcements');
         const snapshot = await getDocs(announcementsRef);
 
-        announcements = [];
+        globalAnnouncements = [];
         snapshot.forEach(docSnap => {
-          announcements.push({ id: docSnap.id, ...docSnap.data() });
+          globalAnnouncements.push({ id: docSnap.id, type: 'global', ...docSnap.data() });
         });
 
         // 日付でソート（新しい順）
-        announcements.sort((a, b) => {
+        globalAnnouncements.sort((a, b) => {
           const dateA = a.createdAt ? (typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt.toDate()) : new Date(0);
           const dateB = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt.toDate()) : new Date(0);
           return dateB - dateA;
@@ -360,7 +443,71 @@
           });
         }
       } catch (error) {
-        console.error('お知らせ読み込みエラー:', error);
+        console.error('全体お知らせ読み込みエラー:', error);
+      }
+    }
+
+    // 個人お知らせを読み込む
+    async function loadPersonalAnnouncements() {
+      if (!currentUser || !currentUser.email) {
+        personalAnnouncements = [];
+        return;
+      }
+
+      try {
+        // users/{email}/personalAnnouncements から取得
+        const personalRef = collection(db, 'users', currentUser.email, 'personalAnnouncements');
+        const snapshot = await getDocs(personalRef);
+
+        personalAnnouncements = [];
+        snapshot.forEach(docSnap => {
+          personalAnnouncements.push({ id: docSnap.id, type: 'personal', ...docSnap.data() });
+        });
+
+        // 日付でソート（新しい順）
+        personalAnnouncements.sort((a, b) => {
+          const dateA = a.createdAt ? (typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt.toDate()) : new Date(0);
+          const dateB = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt.toDate()) : new Date(0);
+          return dateB - dateA;
+        });
+
+        // 既読情報を取得
+        readPersonalIds = new Set();
+        const readRef = collection(db, 'users', currentUser.email, 'readPersonalAnnouncements');
+        const readSnapshot = await getDocs(readRef);
+        readSnapshot.forEach(docSnap => {
+          readPersonalIds.add(docSnap.data().announcementId);
+        });
+      } catch (error) {
+        console.error('個人お知らせ読み込みエラー:', error);
+        personalAnnouncements = [];
+      }
+    }
+
+    // バッジを更新
+    function updateBadges() {
+      // 全体の未読数
+      const globalUnread = globalAnnouncements.filter(a => !readAnnouncementIds.has(a.id)).length;
+      const globalBadge = document.getElementById('globalBadge');
+      if (globalBadge) {
+        if (globalUnread > 0) {
+          globalBadge.textContent = globalUnread > 99 ? '99+' : globalUnread;
+          globalBadge.style.display = 'inline';
+        } else {
+          globalBadge.style.display = 'none';
+        }
+      }
+
+      // 個人の未読数
+      const personalUnread = personalAnnouncements.filter(a => !readPersonalIds.has(a.id)).length;
+      const personalBadge = document.getElementById('personalBadge');
+      if (personalBadge) {
+        if (personalUnread > 0) {
+          personalBadge.textContent = personalUnread > 99 ? '99+' : personalUnread;
+          personalBadge.style.display = 'inline';
+        } else {
+          personalBadge.style.display = 'none';
+        }
       }
     }
 
@@ -400,21 +547,27 @@
     function renderList() {
       document.getElementById('loadingContainer').style.display = 'none';
 
+      // 現在のタブに応じてデータを選択
+      const announcements = currentTab === 'personal' ? personalAnnouncements : globalAnnouncements;
+      const readIds = currentTab === 'personal' ? readPersonalIds : readAnnouncementIds;
+
       if (announcements.length === 0) {
+        const emptyMsg = currentTab === 'personal' ? 'あなた宛のお知らせはありません' : 'お知らせはありません';
+        document.getElementById('emptyState').innerHTML = `<i class="bi bi-bell-slash"></i><p>${emptyMsg}</p>`;
         document.getElementById('emptyState').style.display = 'block';
         document.getElementById('announceList').style.display = 'none';
         return;
       }
 
       const listHtml = announcements.map(item => {
-        const isUnread = !readAnnouncementIds.has(item.id);
+        const isUnread = !readIds.has(item.id);
         const date = item.createdAt ? (typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt.toDate()) : new Date();
         const relativeTime = getRelativeTime(date);
         const priority = item.priority || 'info';
         const priorityLabel = getPriorityLabel(priority);
 
         return `
-          <div class="announce-item ${isUnread ? 'unread' : ''}" data-id="${item.id}">
+          <div class="announce-item ${isUnread ? 'unread' : ''}" data-id="${item.id}" data-type="${item.type}">
             <div class="announce-icon">
               <img src="/images/furira-square-logo.png" alt="FURIRA">
             </div>
@@ -438,13 +591,15 @@
       document.querySelectorAll('.announce-item').forEach(item => {
         item.addEventListener('click', () => {
           const id = item.dataset.id;
-          showDetail(id);
+          const type = item.dataset.type;
+          showDetail(id, type);
         });
       });
     }
 
     // 詳細を表示
-    async function showDetail(announcementId) {
+    async function showDetail(announcementId, type) {
+      const announcements = type === 'personal' ? personalAnnouncements : globalAnnouncements;
       const item = announcements.find(a => a.id === announcementId);
       if (!item) return;
 
@@ -468,19 +623,33 @@
       // ビューを切り替え
       document.getElementById('listView').classList.add('hidden');
       document.getElementById('detailView').classList.add('active');
+      document.getElementById('tabsContainer').style.display = 'none';
 
       // 既読にする
-      if (currentUser && currentUser.email && !readAnnouncementIds.has(announcementId)) {
-        try {
-          const readRef = collection(db, 'readAnnouncements');
-          await addDoc(readRef, {
-            announcementId: announcementId,
-            userEmail: currentUser.email,
-            readAt: Timestamp.now()
-          });
-          readAnnouncementIds.add(announcementId);
-        } catch (error) {
-          console.error('既読記録エラー:', error);
+      if (currentUser && currentUser.email) {
+        const readIds = type === 'personal' ? readPersonalIds : readAnnouncementIds;
+        if (!readIds.has(announcementId)) {
+          try {
+            if (type === 'personal') {
+              const readRef = collection(db, 'users', currentUser.email, 'readPersonalAnnouncements');
+              await addDoc(readRef, {
+                announcementId: announcementId,
+                readAt: Timestamp.now()
+              });
+              readPersonalIds.add(announcementId);
+            } else {
+              const readRef = collection(db, 'readAnnouncements');
+              await addDoc(readRef, {
+                announcementId: announcementId,
+                userEmail: currentUser.email,
+                readAt: Timestamp.now()
+              });
+              readAnnouncementIds.add(announcementId);
+            }
+            updateBadges();
+          } catch (error) {
+            console.error('既読記録エラー:', error);
+          }
         }
       }
     }
@@ -491,6 +660,7 @@
       document.getElementById('headerTitle').textContent = 'お知らせ';
       document.getElementById('listView').classList.remove('hidden');
       document.getElementById('detailView').classList.remove('active');
+      document.getElementById('tabsContainer').style.display = 'flex';
 
       // 一覧を再描画（既読状態を更新）
       renderList();
