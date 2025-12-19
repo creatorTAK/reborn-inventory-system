@@ -1287,10 +1287,12 @@
           <div class="entry-mode-tab active" onclick="setEntryMode('individual')" id="entryModeIndividual">
             <i class="bi bi-list-ol"></i>
             <span>個別入力</span>
+            <small class="d-block text-muted" style="font-size: 10px;">異なる商品をそれぞれ詳細入力</small>
           </div>
           <div class="entry-mode-tab" onclick="setEntryMode('batch')" id="entryModeBatch">
             <i class="bi bi-collection"></i>
             <span>一括入力</span>
+            <small class="d-block text-muted" style="font-size: 10px;">同じ条件で複数点を一括登録</small>
           </div>
         </div>
 
@@ -1341,6 +1343,47 @@
               <label class="form-label">メモ（任意）</label>
               <input type="text" class="form-control" id="entryMemo" placeholder="例：セール品、まとめ買い等">
               <small class="text-muted">QRコードに埋め込まれます（全商品共通）</small>
+            </div>
+
+            <!-- 検品情報（共通設定） -->
+            <div class="inspection-section-inline mt-3" style="background: #f0fdf4; border-radius: 8px; padding: 12px;">
+              <div class="inspection-section-title mb-2">
+                <i class="bi bi-clipboard-check"></i>
+                <span style="font-weight: 600;">検品情報（共通）</span>
+                <small class="text-muted">（全商品に適用）</small>
+              </div>
+
+              <!-- カテゴリー（簡易版：主カテゴリのみ） -->
+              <div class="mb-2">
+                <label class="form-label">カテゴリー</label>
+                <select class="form-select" id="batchCategory">
+                  <option value="">--選択してください--</option>
+                </select>
+              </div>
+
+              <!-- サイズ -->
+              <div class="mb-2">
+                <label class="form-label">サイズ</label>
+                <select class="form-select" id="batchSize">
+                  <option value="">--選択--</option>
+                </select>
+              </div>
+
+              <!-- 商品の状態 -->
+              <div class="mb-2">
+                <label class="form-label">商品の状態</label>
+                <select class="form-select" id="batchCondition">
+                  <option value="">--選択--</option>
+                </select>
+              </div>
+
+              <!-- ブランド -->
+              <div class="brand-field mb-2">
+                <label class="form-label">ブランド</label>
+                <input type="text" class="form-control" id="batchBrand" autocomplete="off" placeholder="入力すると候補が表示されます" oninput="onBatchBrandInput()">
+                <div class="suggest" id="suggest-batch-brand" hidden></div>
+                <input type="hidden" id="batchBrandKana">
+              </div>
             </div>
         </div>
 
@@ -3837,7 +3880,94 @@
       // シンプル印刷設定読み込み
       loadSimpleSettings();
 
+      // 一括入力用の検品情報プルダウンを初期化
+      initBatchInspectionDropdowns();
+
       console.log('📥 [仕入登録] 初期化完了');
+    }
+
+    // 一括入力用の検品情報プルダウンを初期化
+    function initBatchInspectionDropdowns() {
+      // カテゴリー
+      const categorySelect = document.getElementById('batchCategory');
+      if (categorySelect) {
+        categorySelect.innerHTML = '<option value="">--選択してください--</option>';
+        INSPECTION_CATEGORIES.forEach(c => {
+          categorySelect.innerHTML += `<option value="${c}">${c}</option>`;
+        });
+      }
+
+      // サイズ
+      const sizeSelect = document.getElementById('batchSize');
+      if (sizeSelect) {
+        sizeSelect.innerHTML = '<option value="">--選択--</option>';
+        const sizes = entryMasterOptions?.サイズ || ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'FREE'];
+        sizes.forEach(s => {
+          sizeSelect.innerHTML += `<option value="${s}">${s}</option>`;
+        });
+      }
+
+      // 商品の状態
+      const conditionSelect = document.getElementById('batchCondition');
+      if (conditionSelect) {
+        conditionSelect.innerHTML = '<option value="">--選択--</option>';
+        INSPECTION_CONDITIONS.forEach(c => {
+          conditionSelect.innerHTML += `<option value="${c}">${c}</option>`;
+        });
+      }
+
+      // ブランドサジェストをアタッチ
+      attachBatchBrandSuggest();
+    }
+
+    // 一括入力用ブランドサジェスト
+    function attachBatchBrandSuggest() {
+      const input = document.getElementById('batchBrand');
+      const suggestDiv = document.getElementById('suggest-batch-brand');
+      if (!input || !suggestDiv) return;
+
+      input.addEventListener('focus', () => suggestDiv.hidden = false);
+      input.addEventListener('blur', () => setTimeout(() => suggestDiv.hidden = true, 200));
+    }
+
+    // 一括入力ブランド入力時
+    async function onBatchBrandInput() {
+      const input = document.getElementById('batchBrand');
+      const suggestDiv = document.getElementById('suggest-batch-brand');
+      const query = input.value.trim();
+
+      if (query.length < 1) {
+        suggestDiv.innerHTML = '';
+        suggestDiv.hidden = true;
+        return;
+      }
+
+      // Algoliaで検索
+      if (window.brandIndex) {
+        try {
+          const results = await window.brandIndex.search(query, { hitsPerPage: 8 });
+          if (results.hits.length > 0) {
+            suggestDiv.innerHTML = results.hits.map(hit => `
+              <div class="suggest-item" onclick="selectBatchBrand('${hit.name}', '${hit.kana || ''}')">
+                ${hit.name}${hit.kana ? ' (' + hit.kana + ')' : ''}
+              </div>
+            `).join('');
+            suggestDiv.hidden = false;
+          } else {
+            suggestDiv.innerHTML = '<div class="suggest-item text-muted">候補がありません</div>';
+            suggestDiv.hidden = false;
+          }
+        } catch (e) {
+          console.error('Algolia検索エラー:', e);
+        }
+      }
+    }
+
+    // 一括入力ブランド選択
+    function selectBatchBrand(name, kana) {
+      document.getElementById('batchBrand').value = name;
+      document.getElementById('batchBrandKana').value = kana;
+      document.getElementById('suggest-batch-brand').hidden = true;
     }
 
     // 既存の商品アイテムの仕入先プルダウンを更新
@@ -3930,6 +4060,11 @@
       document.getElementById('entryModeIndividual').classList.toggle('active', mode === 'individual');
       document.getElementById('batchEntrySection').style.display = mode === 'batch' ? 'block' : 'none';
       document.getElementById('individualEntrySection').style.display = mode === 'individual' ? 'block' : 'none';
+
+      // 一括入力モード切替時に検品情報プルダウンを初期化
+      if (mode === 'batch' && typeof initBatchInspectionDropdowns === 'function') {
+        initBatchInspectionDropdowns();
+      }
     }
 
     // 1点あたり単価計算
@@ -4943,9 +5078,31 @@
       const assignee = document.getElementById('entryAssignee').value;
       const memo = document.getElementById('entryMemo')?.value || '';
 
+      // 一括入力用検品情報を収集
+      const batchCategory = document.getElementById('batchCategory')?.value || '';
+      const batchSize = document.getElementById('batchSize')?.value || '';
+      const batchCondition = document.getElementById('batchCondition')?.value || '';
+      const batchBrand = document.getElementById('batchBrand')?.value || '';
+      const batchBrandKana = document.getElementById('batchBrandKana')?.value || '';
+
       if (!purchaseDate || !supplier || !itemCount || !assignee) {
         alert('必須項目を入力してください');
         return;
+      }
+
+      // 全スロットに共通の検品情報を設定
+      const items = [];
+      const perItemAmount = Math.round(totalAmount / itemCount);
+      for (let i = 0; i < itemCount; i++) {
+        items.push({
+          amount: perItemAmount,
+          memo: memo,
+          category: batchCategory,
+          size: batchSize,
+          condition: batchCondition,
+          brand: batchBrand,
+          brandKana: batchBrandKana
+        });
       }
 
       // Firestoreにバッチ＆スロットを保存
@@ -4957,7 +5114,8 @@
           totalAmount,
           itemCount,
           assignee,
-          memo
+          memo,
+          items  // 検品情報を含むitems配列を追加
         });
       } catch (error) {
         alert('保存に失敗しました: ' + error.message);
@@ -4965,7 +5123,7 @@
       }
 
       const { batchId, slots } = batchResult;
-      const perItemAmount = Math.round(totalAmount / itemCount);
+      // perItemAmountは上で計算済み
 
       entryGeneratedQRData = [];
       const qrGrid = document.getElementById('qrEntryGrid');
