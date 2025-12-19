@@ -607,7 +607,7 @@ async function handleAnnounceBroadcast(request, env) {
                   requireInteraction: true
                 },
                 fcm_options: {
-                  link: '/mypage.html'
+                  link: '/'
                 }
               }
             }
