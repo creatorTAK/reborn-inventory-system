@@ -1071,21 +1071,18 @@
             </div>
           </div>
 
-          <!-- 住所 -->
+          <!-- 発送先情報 -->
           <div class="form-group" style="margin-bottom: 16px;">
-            <label class="form-label">住所</label>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <span style="font-size: 13px; color: #6b7280;">〒</span>
-                <input type="text" id="basicPostalCode" class="form-control" placeholder="000-0000" maxlength="8" style="width: 120px;" oninput="formatPostalCode(this)">
-                <button type="button" class="btn btn-sm" style="background: #e5e7eb; color: #374151; border: none; padding: 6px 10px; border-radius: 6px; font-size: 11px; white-space: nowrap;" onclick="searchAddress()">住所検索</button>
-              </div>
-              <input type="text" id="basicPrefecture" class="form-control" placeholder="都道府県" maxlength="10">
-              <input type="text" id="basicCity" class="form-control" placeholder="市区町村・番地" maxlength="100">
-              <input type="text" id="basicBuilding" class="form-control" placeholder="建物名・部屋番号（任意）" maxlength="100">
+            <label class="form-label">発送先情報</label>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <button type="button" class="btn" style="background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; padding: 10px 16px; border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px;" onclick="openShippingInfoModal()">
+                <i class="bi bi-box-seam"></i>
+                <span id="shippingInfoStatus">未登録</span>
+                <i class="bi bi-chevron-right" style="margin-left: 4px;"></i>
+              </button>
             </div>
             <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
-              仕入れた商品の郵送先として使用されます
+              仕入れた商品の郵送先として使用されます（管理者のみ閲覧可能）
             </div>
           </div>
 
@@ -8802,6 +8799,56 @@ ${prompt || '（未設定）'}
     })();
   </script>
 
+  <!-- 発送先情報入力モーダル -->
+  <div id="shippingInfoModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 12px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto;">
+      <div style="padding: 16px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #1f2937;">発送先情報を入力</h3>
+        <button type="button" onclick="closeShippingInfoModal()" style="background: none; border: none; font-size: 20px; color: #6b7280; cursor: pointer;">&times;</button>
+      </div>
+      <div style="padding: 16px;">
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <div style="flex: 1;">
+            <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">姓<span style="color: #ef4444;">*</span></label>
+            <input type="text" id="shippingLastName" class="form-control" placeholder="山田" maxlength="20">
+          </div>
+          <div style="flex: 1;">
+            <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">名<span style="color: #ef4444;">*</span></label>
+            <input type="text" id="shippingFirstName" class="form-control" placeholder="太郎" maxlength="20">
+          </div>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">郵便番号<span style="color: #ef4444;">*</span></label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span style="font-size: 13px; color: #6b7280;">〒</span>
+            <input type="text" id="shippingPostalCode" class="form-control" placeholder="000-0000" maxlength="8" style="width: 120px;" oninput="formatPostalCode(this)">
+            <button type="button" onclick="searchShippingAddress()" style="background: #e5e7eb; color: #374151; border: none; padding: 6px 10px; border-radius: 6px; font-size: 11px; white-space: nowrap; cursor: pointer;">住所検索</button>
+          </div>
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">都道府県<span style="color: #ef4444;">*</span></label>
+          <input type="text" id="shippingPrefecture" class="form-control" placeholder="東京都" maxlength="10">
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">市区町村・番地<span style="color: #ef4444;">*</span></label>
+          <input type="text" id="shippingCity" class="form-control" placeholder="渋谷区渋谷1-2-3" maxlength="100">
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">建物名・部屋番号</label>
+          <input type="text" id="shippingBuilding" class="form-control" placeholder="フリラビル101号室（任意）" maxlength="100">
+        </div>
+        <div style="font-size: 11px; color: #6b7280; margin-bottom: 16px; padding: 8px; background: #f9fafb; border-radius: 6px;">
+          <i class="bi bi-shield-lock" style="margin-right: 4px;"></i>
+          発送先情報は管理者のみ閲覧できます
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" onclick="closeShippingInfoModal()" style="flex: 1; padding: 10px; background: #f3f4f6; color: #374151; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;">キャンセル</button>
+          <button type="button" onclick="saveShippingInfo()" style="flex: 1; padding: 10px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 口座情報入力モーダル -->
   <div id="bankAccountModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
     <div style="background: white; border-radius: 12px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto;">
@@ -9425,10 +9472,10 @@ ${prompt || '（未設定）'}
     }
 
     /**
-     * 郵便番号から住所を検索（zipcloud API使用）
+     * 郵便番号から住所を検索（発送先情報モーダル用）
      */
-    async function searchAddress() {
-      const postalCode = document.getElementById('basicPostalCode').value.replace(/-/g, '');
+    async function searchShippingAddress() {
+      const postalCode = document.getElementById('shippingPostalCode').value.replace(/-/g, '');
       
       if (postalCode.length !== 7) {
         alert('郵便番号を正しく入力してください（7桁）');
@@ -9441,8 +9488,8 @@ ${prompt || '（未設定）'}
         
         if (data.results && data.results.length > 0) {
           const result = data.results[0];
-          document.getElementById('basicPrefecture').value = result.address1;
-          document.getElementById('basicCity').value = result.address2 + result.address3;
+          document.getElementById('shippingPrefecture').value = result.address1;
+          document.getElementById('shippingCity').value = result.address2 + result.address3;
           console.log('✅ 住所検索成功:', result);
         } else {
           alert('該当する住所が見つかりませんでした');
@@ -9450,6 +9497,134 @@ ${prompt || '（未設定）'}
       } catch (e) {
         console.error('❌ 住所検索エラー:', e);
         alert('住所検索に失敗しました');
+      }
+    }
+
+    /**
+     * 発送先情報モーダルを開く
+     */
+    function openShippingInfoModal() {
+      const modal = document.getElementById('shippingInfoModal');
+      if (modal) {
+        modal.style.display = 'flex';
+        loadShippingInfo();
+      }
+    }
+
+    /**
+     * 発送先情報モーダルを閉じる
+     */
+    function closeShippingInfoModal() {
+      const modal = document.getElementById('shippingInfoModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    /**
+     * 発送先情報を読み込む
+     */
+    async function loadShippingInfo() {
+      const userEmail = localStorage.getItem('reborn_user_email');
+      if (!userEmail || !window.db) return;
+
+      try {
+        const userDoc = await window.db.collection('users').doc(userEmail).get();
+        if (userDoc.exists) {
+          const data = userDoc.data();
+          const shipping = data.shippingInfo || {};
+          
+          document.getElementById('shippingLastName').value = shipping.lastName || '';
+          document.getElementById('shippingFirstName').value = shipping.firstName || '';
+          document.getElementById('shippingPostalCode').value = shipping.postalCode || '';
+          document.getElementById('shippingPrefecture').value = shipping.prefecture || '';
+          document.getElementById('shippingCity').value = shipping.city || '';
+          document.getElementById('shippingBuilding').value = shipping.building || '';
+          
+          console.log('✅ 発送先情報を読み込みました');
+        }
+      } catch (e) {
+        console.error('❌ 発送先情報読み込みエラー:', e);
+      }
+    }
+
+    /**
+     * 発送先情報を保存
+     */
+    async function saveShippingInfo() {
+      const userEmail = localStorage.getItem('reborn_user_email');
+      if (!userEmail) {
+        alert('ユーザーメールアドレスが見つかりません。再ログインしてください。');
+        return;
+      }
+
+      if (!window.db) {
+        alert('Firestoreが初期化されていません');
+        return;
+      }
+
+      const shippingInfo = {
+        lastName: document.getElementById('shippingLastName').value.trim(),
+        firstName: document.getElementById('shippingFirstName').value.trim(),
+        postalCode: document.getElementById('shippingPostalCode').value.trim(),
+        prefecture: document.getElementById('shippingPrefecture').value.trim(),
+        city: document.getElementById('shippingCity').value.trim(),
+        building: document.getElementById('shippingBuilding').value.trim()
+      };
+
+      // 入力チェック
+      if (!shippingInfo.lastName || !shippingInfo.firstName || !shippingInfo.postalCode || !shippingInfo.prefecture || !shippingInfo.city) {
+        alert('姓、名、郵便番号、都道府県、市区町村・番地は必須です');
+        return;
+      }
+
+      try {
+        await window.db.collection('users').doc(userEmail).set({
+          shippingInfo: shippingInfo,
+          shippingInfoUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // ステータス表示を更新
+        updateShippingInfoStatus(shippingInfo);
+
+        alert('✅ 発送先情報を保存しました');
+        closeShippingInfoModal();
+        console.log('✅ 発送先情報を保存しました');
+      } catch (e) {
+        console.error('❌ 発送先情報保存エラー:', e);
+        alert('❌ 保存に失敗しました: ' + e.message);
+      }
+    }
+
+    /**
+     * 発送先情報ステータスを更新
+     */
+    function updateShippingInfoStatus(shippingInfo) {
+      const statusEl = document.getElementById('shippingInfoStatus');
+      if (statusEl) {
+        if (shippingInfo && shippingInfo.lastName && shippingInfo.prefecture) {
+          statusEl.textContent = `${shippingInfo.lastName} ${shippingInfo.firstName}（${shippingInfo.prefecture}）`;
+          statusEl.style.color = '#059669';
+        } else {
+          statusEl.textContent = '未登録';
+          statusEl.style.color = '#374151';
+        }
+      }
+    }
+
+    /**
+     * 口座情報ステータスを更新
+     */
+    function updateBankAccountStatus(bankInfo) {
+      const statusEl = document.getElementById('bankAccountStatus');
+      if (statusEl) {
+        if (bankInfo && bankInfo.bankName) {
+          statusEl.textContent = `${bankInfo.bankName}（登録済み）`;
+          statusEl.style.color = '#059669';
+        } else {
+          statusEl.textContent = '未登録';
+          statusEl.style.color = '#374151';
+        }
       }
     }
 
@@ -9535,6 +9710,9 @@ ${prompt || '（未設定）'}
           bankAccountUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
+        // ステータス表示を更新
+        updateBankAccountStatus(bankInfo);
+
         alert('✅ 口座情報を保存しました');
         closeBankAccountModal();
         console.log('✅ 口座情報を保存しました');
@@ -9566,20 +9744,13 @@ ${prompt || '（未設定）'}
               // localStorageも更新
               localStorage.setItem('reborn_user_permission_id', permissionId);
 
-              // 住所情報を読み込み
-              const address = userData.address || {};
-              if (document.getElementById('basicPostalCode')) {
-                document.getElementById('basicPostalCode').value = address.postalCode || '';
-              }
-              if (document.getElementById('basicPrefecture')) {
-                document.getElementById('basicPrefecture').value = address.prefecture || '';
-              }
-              if (document.getElementById('basicCity')) {
-                document.getElementById('basicCity').value = address.city || '';
-              }
-              if (document.getElementById('basicBuilding')) {
-                document.getElementById('basicBuilding').value = address.building || '';
-              }
+              // 発送先情報ステータスを表示
+              const shippingInfo = userData.shippingInfo || {};
+              updateShippingInfoStatus(shippingInfo);
+
+              // 口座情報ステータスを表示
+              const bankInfo = userData.bankAccount || {};
+              updateBankAccountStatus(bankInfo);
             }
           } catch (e) {
             console.warn('⚠️ Firestoreから権限取得失敗、localStorageを使用:', e);
@@ -9728,19 +9899,10 @@ ${prompt || '（未設定）'}
           throw new Error('Firestoreが初期化されていません');
         }
 
-        // 住所情報を収集
-        const addressInfo = {
-          postalCode: document.getElementById('basicPostalCode')?.value.trim() || '',
-          prefecture: document.getElementById('basicPrefecture')?.value.trim() || '',
-          city: document.getElementById('basicCity')?.value.trim() || '',
-          building: document.getElementById('basicBuilding')?.value.trim() || ''
-        };
-
         await window.db.collection('users').doc(userEmail).set({
           userName: settings.userName,
           notificationEnabled: settings.notificationEnabled,
           notificationSound: settings.notificationSound,
-          address: addressInfo,
           lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
 
@@ -11121,20 +11283,21 @@ ${prompt || '（未設定）'}
         </div>
       </div>
 
-      <!-- 住所・口座情報（管理者のみ表示） -->
+      <!-- 発送先・口座情報（管理者のみ表示） -->
       <div style="background: #fff7ed; border-radius: 8px; padding: 16px; margin-top: 12px; border: 1px solid #fed7aa;">
         <div style="font-size: 12px; font-weight: 600; color: #c2410c; margin-bottom: 12px;">📋 配送・振込先情報</div>
-        ${user.address && (user.address.postalCode || user.address.prefecture) ? `
+        ${user.shippingInfo && (user.shippingInfo.lastName || user.shippingInfo.postalCode) ? `
           <div style="margin-bottom: 12px;">
-            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">📦 住所</div>
+            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">📦 発送先情報</div>
             <div style="font-size: 13px; color: #374151;">
-              ${user.address.postalCode ? '〒' + user.address.postalCode + '<br>' : ''}
-              ${user.address.prefecture || ''}${user.address.city || ''}${user.address.building ? '<br>' + user.address.building : ''}
+              ${user.shippingInfo.lastName || ''} ${user.shippingInfo.firstName || ''}<br>
+              ${user.shippingInfo.postalCode ? '〒' + user.shippingInfo.postalCode + '<br>' : ''}
+              ${user.shippingInfo.prefecture || ''}${user.shippingInfo.city || ''}${user.shippingInfo.building ? '<br>' + user.shippingInfo.building : ''}
             </div>
           </div>
         ` : `
           <div style="margin-bottom: 12px;">
-            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">📦 住所</div>
+            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">📦 発送先情報</div>
             <div style="font-size: 12px; color: #9ca3af;">未登録</div>
           </div>
         `}
@@ -11305,14 +11468,25 @@ ${prompt || '（未設定）'}
   async function createWelcomeAnnouncements(userEmail, userName) {
     const now = new Date().toISOString();
     const personalRef = window.db.collection('users').doc(userEmail).collection('personalAnnouncements');
+    const tasksRef = window.db.collection('userTasks').doc(userEmail).collection('tasks');
 
-    // 通知1: 住所登録のお願い
+    // 通知1: 発送先情報登録のお願い
     await personalRef.add({
-      title: '📦 住所を登録してください',
-      content: '商品の配送先として住所情報が必要です。設定 > 基本設定から住所を登録してください。',
+      title: '📦 発送先情報を登録してください',
+      content: '商品の配送先として発送先情報（氏名・住所）が必要です。設定 > 基本設定から発送先情報を登録してください。',
       priority: 'normal',
       createdAt: now,
-      type: 'address_request'
+      type: 'shipping_request'
+    });
+
+    // タスク1: 発送先情報登録
+    await tasksRef.add({
+      type: 'shipping_info_registration',
+      title: '📦 発送先情報を登録',
+      description: '設定 > 基本設定から発送先情報（氏名・住所）を登録してください',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      completed: false,
+      read: false
     });
 
     // 通知2: 口座情報登録のお願い
@@ -11324,7 +11498,17 @@ ${prompt || '（未設定）'}
       type: 'bank_request'
     });
 
-    console.log('[Announce] ✅ ウェルカム通知を作成:', userEmail);
+    // タスク2: 口座情報登録
+    await tasksRef.add({
+      type: 'bank_account_registration',
+      title: '🏦 口座情報を登録',
+      description: '設定 > 基本設定から口座情報を登録してください',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      completed: false,
+      read: false
+    });
+
+    console.log('[Announce] ✅ ウェルカム通知とタスクを作成:', userEmail);
   }
 
   /**
