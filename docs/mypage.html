@@ -7,7 +7,7 @@
   <title>マイページ - FURIRA</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="/css/reborn-theme.css?v=296">
+  <link rel="stylesheet" href="/css/reborn-theme.css?v=297">
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -54,8 +54,11 @@
       margin-bottom: 4px;
     }
     .profile-role {
-      font-size: 14px;
-      opacity: 0.9;
+      font-size: 13px;
+      background: rgba(255,255,255,0.2);
+      padding: 4px 12px;
+      border-radius: 12px;
+      display: inline-block;
     }
     .profile-month {
       font-size: 12px;
@@ -123,6 +126,52 @@
     .progress-percent {
       font-weight: 700;
       color: #40B4E5;
+    }
+
+    /* 進捗吹き出し */
+    .progress-milestone {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border-radius: 12px;
+      font-size: 13px;
+      color: #92400e;
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .progress-milestone::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      left: 20px;
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 6px solid #fef3c7;
+    }
+    .progress-milestone.milestone-50 {
+      background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%);
+      color: #1e40af;
+    }
+    .progress-milestone.milestone-50::before {
+      border-bottom-color: #dbeafe;
+    }
+    .progress-milestone.milestone-80 {
+      background: linear-gradient(135deg, #d1fae5 0%, #6ee7b7 100%);
+      color: #065f46;
+    }
+    .progress-milestone.milestone-80::before {
+      border-bottom-color: #d1fae5;
+    }
+    .progress-milestone.milestone-100 {
+      background: linear-gradient(135deg, #fce7f3 0%, #f9a8d4 100%);
+      color: #9d174d;
+    }
+    .progress-milestone.milestone-100::before {
+      border-bottom-color: #fce7f3;
     }
 
     /* 内訳カード */
@@ -372,6 +421,24 @@
     .goal-preset-btn:hover {
       border-color: #40B4E5;
       color: #40B4E5;
+    }
+    .goal-skip-option {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .goal-skip-btn {
+      padding: 10px 20px;
+      border: 1px solid #9ca3af;
+      border-radius: 8px;
+      background: #f9fafb;
+      font-size: 13px;
+      color: #6b7280;
+      cursor: pointer;
+      width: 100%;
+    }
+    .goal-skip-btn:hover {
+      background: #f3f4f6;
+      border-color: #6b7280;
     }
     .goal-modal-buttons {
       display: flex;
@@ -951,6 +1018,9 @@
         <button class="goal-preset-btn" onclick="setGoalPreset(30000)">¥30,000</button>
         <button class="goal-preset-btn" onclick="setGoalPreset(50000)">¥50,000</button>
       </div>
+      <div class="goal-skip-option">
+        <button class="goal-skip-btn" onclick="skipGoal()">目標を設定しない</button>
+      </div>
       <div class="goal-modal-buttons">
         <button class="goal-cancel-btn" onclick="closeGoalModal()">キャンセル</button>
         <button class="goal-save-btn" onclick="saveGoal()">保存</button>
@@ -1171,11 +1241,11 @@
         if (docSnap.exists()) {
           userGoal = docSnap.data().goalAmount || 0;
         } else {
-          userGoal = 10000; // デフォルト目標
+          userGoal = 0; // 目標未設定
         }
       } catch (error) {
         console.error('目標取得エラー:', error);
-        userGoal = 10000;
+        userGoal = 0;
       }
     }
 
@@ -1208,6 +1278,20 @@
       }
     }
 
+    // 進捗に応じたマイルストーンメッセージを取得
+    function getMilestoneMessage(percent) {
+      if (percent >= 100) {
+        return `<div class="progress-milestone milestone-100">🎉 目標達成おめでとうございます！</div>`;
+      } else if (percent >= 80) {
+        return `<div class="progress-milestone milestone-80">🔥 あと少し！目標まであと${100 - percent}%です！</div>`;
+      } else if (percent >= 50) {
+        return `<div class="progress-milestone milestone-50">💪 折り返し地点を通過！この調子で頑張りましょう！</div>`;
+      } else if (percent >= 30) {
+        return `<div class="progress-milestone">🌱 順調に進んでいます！目標の${percent}%達成中！</div>`;
+      }
+      return '';
+    }
+
     // マイページを描画
     function renderMyPage() {
       const now = new Date();
@@ -1234,7 +1318,7 @@
         <div class="profile-card">
           <div class="profile-avatar">${avatarHtml}</div>
           <div class="profile-name">${escapeHtml(currentUser.name)}さん</div>
-          <div class="profile-role">${escapeHtml(currentUser.permissionDisplay)}</div>
+          <div class="profile-role">${escapeHtml(stripEmoji(currentUser.permissionDisplay))}</div>
           <div class="profile-month">${monthName}</div>
         </div>
 
@@ -1245,8 +1329,9 @@
           </div>
           <div class="compensation-amount">¥${myStats.totalAmount.toLocaleString()}</div>
           <div class="compensation-goal">
-            目標: <span class="goal-amount">¥${userGoal.toLocaleString()}</span>
+            目標: <span class="goal-amount">${userGoal > 0 ? '¥' + userGoal.toLocaleString() : '未設定'}</span>
           </div>
+          ${userGoal > 0 ? `
           <div class="progress-container">
             <div class="progress-bar-bg">
               <div class="progress-bar-fill" style="width: ${progressPercent}%"></div>
@@ -1255,12 +1340,13 @@
               <span>達成率</span>
               <span class="progress-percent">${progressPercent}%</span>
             </div>
-          </div>
+            ${getMilestoneMessage(progressPercent)}
+          </div>` : ''}
         </div>
 
         <!-- 内訳 -->
         <div class="breakdown-card">
-          <div class="breakdown-title"><i class="bi bi-pie-chart"></i> 内訳</div>
+          <div class="breakdown-title">📊 内訳</div>
           <div class="breakdown-item">
             <div class="breakdown-label">
               <div class="breakdown-icon listing">📦</div>
@@ -1285,7 +1371,7 @@
 
         <!-- ランキング -->
         <div class="ranking-card">
-          <div class="ranking-title"><i class="bi bi-trophy"></i> 今月のランキング</div>
+          <div class="ranking-title">🏆 今月のランキング</div>
           ${renderRankingList(rankingData, currentUser.email)}
         </div>
 
@@ -1436,6 +1522,36 @@
     // プリセット金額を設定
     window.setGoalPreset = function(amount) {
       document.getElementById('goalAmountInput').value = amount;
+    };
+
+    // 目標をスキップ（設定しない）
+    window.skipGoal = async function() {
+      try {
+        showLoading(true);
+
+        const now = new Date();
+        const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const docRef = doc(db, 'userGoals', `${currentUser.email}_${yearMonth}`);
+
+        await setDoc(docRef, {
+          email: currentUser.email,
+          name: currentUser.name,
+          yearMonth: yearMonth,
+          goalAmount: 0,
+          skipped: true,
+          updatedAt: new Date().toISOString()
+        });
+
+        userGoal = 0;
+        closeGoalModal();
+        renderMyPage();
+
+        showLoading(false);
+      } catch (error) {
+        console.error('目標スキップエラー:', error);
+        alert('保存に失敗しました。');
+        showLoading(false);
+      }
     };
 
     // 目標を保存
@@ -1853,6 +1969,12 @@
         '"': '&quot;',
         "'": '&#39;'
       }[char]));
+    }
+
+    // 絵文字を削除
+    function stripEmoji(str) {
+      if (!str) return '';
+      return str.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '').trim();
     }
 
     // 初期化実行
