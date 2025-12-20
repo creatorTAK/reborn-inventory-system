@@ -5057,15 +5057,15 @@
 
         // localStorageに保存されているトークンと比較
         const savedToken = localStorage.getItem('reborn_fcm_token');
+        const tokenChanged = savedToken !== currentToken;
 
-        if (savedToken === currentToken) {
-          console.log('✅ FCMトークンは最新です（更新なし）');
-          return;
+        if (tokenChanged) {
+          console.log('🔄 FCMトークンが更新されました');
+          console.log('  - 旧トークン:', savedToken ? savedToken.substring(0, 20) + '...' : 'なし');
+          console.log('  - 新トークン:', currentToken.substring(0, 20) + '...');
+        } else {
+          console.log('✅ FCMトークンは最新です');
         }
-
-        console.log('🔄 FCMトークンが更新されました');
-        console.log('  - 旧トークン:', savedToken ? savedToken.substring(0, 20) + '...' : 'なし');
-        console.log('  - 新トークン:', currentToken.substring(0, 20) + '...');
 
         // デバイス情報を取得
         const deviceInfo = {
@@ -5086,85 +5086,82 @@
         const notificationEnabled = config.notificationEnabled !== undefined ? config.notificationEnabled : true;
         const notificationSound = config.notificationSound !== undefined ? config.notificationSound : true;
 
-        // GASに新しいトークンを送信
-        const response = await fetch(GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(currentToken) +
-                                    '&deviceInfo=' + encodeURIComponent(JSON.stringify(deviceInfo)) +
-                                    '&userId=' + encodeURIComponent(userEmail) +
-                                    '&userName=' + encodeURIComponent(userName) +
-                                    '&email=' + encodeURIComponent(userEmail) +
-                                    '&permission=' + encodeURIComponent(permissionDisplay) +
-                                    '&notificationEnabled=' + encodeURIComponent(notificationEnabled) +
-                                    '&notificationSound=' + encodeURIComponent(notificationSound));
-
-        if (response.ok) {
-          // localStorageに新しいトークンを保存
-          localStorage.setItem('reborn_fcm_token', currentToken);
-          console.log('✅ FCMトークンを自動更新しました（GAS）');
-        } else {
-          console.error('❌ FCMトークンの送信に失敗:', response.status);
-        }
-
-        // 🔧 Firestoreのデバイス情報も更新（通知送信で使用されるため重要）
+        // 🔧 v291: activeDevicesへの書き込みは常に実行（通知受信に必須）
         try {
           const db = await getFirebaseDb();
-          const { collection, query, where, getDocs, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+          const { doc, setDoc, arrayUnion, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+          const activeDevicesRef = doc(db, 'activeDevices', userEmail);
+          await setDoc(activeDevicesRef, {
+            fcmTokens: arrayUnion(currentToken),
+            userName: userName,
+            notificationEnabled: notificationEnabled,
+            notificationSound: notificationSound,
+            lastUpdated: serverTimestamp()
+          }, { merge: true });
+          console.log('✅ activeDevicesを更新しました');
+        } catch (activeDevicesError) {
+          console.error('⚠️ activeDevices更新エラー:', activeDevicesError);
+        }
 
-          // ユーザーのデバイスコレクションから、旧トークンまたはactive=trueのデバイスを検索
-          const devicesRef = collection(db, 'users', userEmail, 'devices');
-          const devicesSnapshot = await getDocs(devicesRef);
+        // トークンが変更された場合のみ、GASとFirestoreデバイスを更新
+        if (tokenChanged) {
+          // GASに新しいトークンを送信
+          const response = await fetch(GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(currentToken) +
+                                      '&deviceInfo=' + encodeURIComponent(JSON.stringify(deviceInfo)) +
+                                      '&userId=' + encodeURIComponent(userEmail) +
+                                      '&userName=' + encodeURIComponent(userName) +
+                                      '&email=' + encodeURIComponent(userEmail) +
+                                      '&permission=' + encodeURIComponent(permissionDisplay) +
+                                      '&notificationEnabled=' + encodeURIComponent(notificationEnabled) +
+                                      '&notificationSound=' + encodeURIComponent(notificationSound));
 
-          let deviceUpdated = false;
-          for (const deviceDoc of devicesSnapshot.docs) {
-            const deviceData = deviceDoc.data();
-            // 旧トークンを持つデバイス、またはactive=trueのデバイスを更新
-            if (deviceData.fcmToken === savedToken || (deviceData.active === true && !deviceUpdated)) {
-              await updateDoc(deviceDoc.ref, {
-                fcmToken: currentToken,
-                lastUsedAt: new Date(),
-                deviceInfo: deviceInfo
-              });
-              console.log('✅ FCMトークンを自動更新しました（Firestore）:', deviceDoc.id);
-              deviceUpdated = true;
-            }
+          if (response.ok) {
+            // localStorageに新しいトークンを保存
+            localStorage.setItem('reborn_fcm_token', currentToken);
+            console.log('✅ FCMトークンを自動更新しました（GAS）');
+          } else {
+            console.error('❌ FCMトークンの送信に失敗:', response.status);
           }
 
-          if (!deviceUpdated && devicesSnapshot.size === 0) {
-            // デバイスがない場合は新規作成（稀なケース）
-            const { addDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-            const permissionId = localStorage.getItem('reborn_user_permission_id') || 'staff';
-            await addDoc(devicesRef, {
-              fcmToken: currentToken,
-              deviceInfo: deviceInfo,
-              active: true,
-              permissionId: permissionId,
-              permissionDisplay: permissionDisplay,
-              userName: userName,
-              userEmail: userEmail,
-              registeredAt: new Date(),
-              lastUsedAt: new Date()
-            });
-            console.log('✅ 新規デバイスを登録しました（Firestore）');
-          }
-
-          // 🔧 v289: activeDevicesにも直接書き込み（Functions同期に依存しない）
-          // Firebase Functionsのデプロイ問題を回避し、確実に通知が届くようにする
+          // Firestoreのデバイス情報も更新
           try {
-            const { doc, setDoc, arrayUnion, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-            const activeDevicesRef = doc(db, 'activeDevices', userEmail);
-            await setDoc(activeDevicesRef, {
-              fcmTokens: arrayUnion(currentToken),
-              userName: userName,
-              notificationEnabled: notificationEnabled,
-              notificationSound: notificationSound,
-              lastUpdated: serverTimestamp()
-            }, { merge: true });
-            console.log('✅ activeDevicesに直接登録しました');
-          } catch (activeDevicesError) {
-            console.error('⚠️ activeDevices更新エラー（通知に影響する可能性）:', activeDevicesError);
+            const { collection, getDocs, updateDoc, addDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+            const devicesRef = collection(db, 'users', userEmail, 'devices');
+            const devicesSnapshot = await getDocs(devicesRef);
+
+            let deviceUpdated = false;
+            for (const deviceDoc of devicesSnapshot.docs) {
+              const deviceData = deviceDoc.data();
+              if (deviceData.fcmToken === savedToken || (deviceData.active === true && !deviceUpdated)) {
+                await updateDoc(deviceDoc.ref, {
+                  fcmToken: currentToken,
+                  lastUsedAt: new Date(),
+                  deviceInfo: deviceInfo
+                });
+                console.log('✅ FCMトークンを自動更新しました（Firestore）:', deviceDoc.id);
+                deviceUpdated = true;
+              }
+            }
+
+            if (!deviceUpdated && devicesSnapshot.size === 0) {
+              const permissionId = localStorage.getItem('reborn_user_permission_id') || 'staff';
+              await addDoc(devicesRef, {
+                fcmToken: currentToken,
+                deviceInfo: deviceInfo,
+                active: true,
+                permissionId: permissionId,
+                permissionDisplay: permissionDisplay,
+                userName: userName,
+                userEmail: userEmail,
+                registeredAt: new Date(),
+                lastUsedAt: new Date()
+              });
+              console.log('✅ 新規デバイスを登録しました（Firestore）');
+            }
+          } catch (firestoreError) {
+            console.error('❌ Firestoreトークン更新エラー:', firestoreError);
           }
-        } catch (firestoreError) {
-          console.error('❌ Firestoreトークン更新エラー:', firestoreError);
-          // GAS更新は成功しているので、処理は続行
         }
       } catch (error) {
         console.error('❌ FCMトークン更新チェックエラー:', error);
