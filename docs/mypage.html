@@ -1629,7 +1629,9 @@
     // お知らせ機能
     // ========================================
     let announcements = [];
+    let personalAnnouncements = [];
     let readAnnouncementIds = new Set();
+    let readPersonalIds = new Set();
     let currentAnnouncementView = 'list'; // 'list' or 'detail'
 
     // お知らせページを開く
@@ -1663,23 +1665,23 @@
 
     // お知らせを読み込む
     async function loadAnnouncements() {
-      // お知らせ一覧を取得
+      // 全体お知らせ一覧を取得
       const announcementsRef = collection(db, 'announcements');
       const snapshot = await getDocs(announcementsRef);
-      
+
       announcements = [];
       snapshot.forEach(docSnap => {
         announcements.push({ id: docSnap.id, ...docSnap.data() });
       });
-      
+
       // 日付でソート（新しい順）
       announcements.sort((a, b) => {
         const dateA = a.createdAt ? (typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt.toDate()) : new Date(0);
         const dateB = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt.toDate()) : new Date(0);
         return dateB - dateA;
       });
-      
-      // 既読情報を取得
+
+      // 全体お知らせ既読情報を取得
       readAnnouncementIds = new Set();
       if (currentUser && currentUser.email) {
         const readRef = collection(db, 'readAnnouncements');
@@ -1690,8 +1692,30 @@
             readAnnouncementIds.add(data.announcementId);
           }
         });
+
+        // 個人お知らせを取得
+        try {
+          const personalRef = collection(db, 'users', currentUser.email, 'personalAnnouncements');
+          const personalSnapshot = await getDocs(personalRef);
+          personalAnnouncements = [];
+          personalSnapshot.forEach(docSnap => {
+            personalAnnouncements.push({ id: docSnap.id, ...docSnap.data() });
+          });
+
+          // 個人お知らせ既読情報を取得
+          readPersonalIds = new Set();
+          const readPersonalRef = collection(db, 'users', currentUser.email, 'readPersonalAnnouncements');
+          const readPersonalSnapshot = await getDocs(readPersonalRef);
+          readPersonalSnapshot.forEach(docSnap => {
+            readPersonalIds.add(docSnap.data().announcementId);
+          });
+        } catch (e) {
+          console.log('[Announce] 個人お知らせ読み込みスキップ:', e.message);
+          personalAnnouncements = [];
+          readPersonalIds = new Set();
+        }
       }
-      
+
       // バッジを更新
       updateAnnounceBadge();
     }
@@ -1770,13 +1794,15 @@
       }
     };
 
-    // バッジを更新
+    // バッジを更新（全体 + 個人お知らせの未読数）
     function updateAnnounceBadge() {
-      const unreadCount = announcements.filter(a => !readAnnouncementIds.has(a.id)).length;
+      const globalUnread = announcements.filter(a => !readAnnouncementIds.has(a.id)).length;
+      const personalUnread = personalAnnouncements.filter(a => !readPersonalIds.has(a.id)).length;
+      const totalUnread = globalUnread + personalUnread;
       const badge = document.getElementById('announceBadge');
       if (badge) {
-        if (unreadCount > 0) {
-          badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+        if (totalUnread > 0) {
+          badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
           badge.classList.add('active');
         } else {
           badge.textContent = '0';

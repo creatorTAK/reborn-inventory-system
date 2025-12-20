@@ -9642,6 +9642,9 @@ ${prompt || '（未設定）'}
         // ステータス表示を更新
         updateShippingInfoStatus(shippingInfo);
 
+        // 発送先情報登録タスクを完了にする
+        await completeSettingTask('shipping_info_registration');
+
         alert('✅ 発送先情報を保存しました');
         closeShippingInfoModal();
         console.log('✅ 発送先情報を保存しました');
@@ -9767,6 +9770,9 @@ ${prompt || '（未設定）'}
 
         // ステータス表示を更新
         updateBankAccountStatus(bankInfo);
+
+        // 口座情報登録タスクを完了にする
+        await completeSettingTask('bank_account_registration');
 
         alert('✅ 口座情報を保存しました');
         closeBankAccountModal();
@@ -11538,6 +11544,44 @@ ${prompt || '（未設定）'}
       }
     } catch (error) {
       console.error('[Todo] タスク完了エラー:', error);
+    }
+  }
+
+  /**
+   * 設定タスクを完了にする（発送先情報・口座情報登録時に呼び出し）
+   */
+  async function completeSettingTask(taskType) {
+    try {
+      const userEmail = localStorage.getItem('reborn_user_email');
+      if (!userEmail) {
+        console.log('[Task] ⏭️ ユーザーメール未設定のためスキップ');
+        return;
+      }
+      if (!window.db) {
+        console.log('[Task] ⏭️ Firestore未初期化のためスキップ');
+        return;
+      }
+
+      const tasksRef = window.db.collection('userTasks').doc(userEmail).collection('tasks');
+      const tasksSnapshot = await tasksRef
+        .where('type', '==', taskType)
+        .where('completed', '==', false)
+        .get();
+
+      if (tasksSnapshot.empty) {
+        console.log('[Task] ℹ️ 該当タスクなし:', taskType);
+        return;
+      }
+
+      for (const taskDoc of tasksSnapshot.docs) {
+        await taskDoc.ref.update({
+          completed: true,
+          completedAt: new Date().toISOString()
+        });
+        console.log('[Task] ✅ 設定タスク完了:', taskType, taskDoc.id);
+      }
+    } catch (error) {
+      console.error('[Task] ❌ 設定タスク完了エラー:', error);
     }
   }
 
