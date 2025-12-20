@@ -5,6 +5,7 @@
  * Firestoreトリガーで自動実行、100-200msで通知配信
  *
  * v2.1: 個別チャット通知高速化（memberEmails優先使用）
+ * v2.2: activeDevices未登録時のフォールバック処理追加（個別チャット通知修正）
  */
 
 const {onDocumentCreated, onDocumentUpdated} = require('firebase-functions/v2/firestore');
@@ -620,6 +621,7 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
     console.log(`💬 [sendChatNotifications] FCM送信開始: ${unmutedUsers.length}人 (ミュート除外後)`);
 
     // 🔧 修正: 各ユーザーの通知設定をチェックしてトークンを取得
+    // v2.2: activeDevices未登録時は users/{email}/devices サブコレクションからフォールバック取得
     const tokensPromises = unmutedUsers.map(async (user) => {
       try {
         const { userName, userEmail } = user;
@@ -628,30 +630,57 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
         // activeDevices/{userEmail} から直接取得（高速化）
         const activeDeviceDoc = await db.collection('activeDevices').doc(userEmail).get();
 
-        if (!activeDeviceDoc.exists) {
-          console.log(`⚠️ [sendChatNotifications] activeDevices未登録: ${userName}`);
+        if (activeDeviceDoc.exists) {
+          const data = activeDeviceDoc.data();
+
+          // 🔧 通知が無効になっている場合はスキップ
+          if (data.notificationEnabled === false) {
+            console.log(`🔕 [sendChatNotifications] 通知無効: ${userName}`);
+            return { tokens: [], soundEnabled: false };
+          }
+
+          const tokens = Array.isArray(data?.fcmTokens) ? data.fcmTokens.filter(Boolean) : [];
+
+          if (tokens.length > 0) {
+            console.log(`✅ [sendChatNotifications] activeDevicesから取得成功: ${userName} (${tokens.length}件)`);
+            return {
+              tokens: tokens,
+              soundEnabled: data.notificationSound !== false
+            };
+          }
+        }
+
+        // 🔧 v2.2: activeDevices未登録またはトークンなしの場合、サブコレクションから取得
+        console.log(`🔄 [sendChatNotifications] フォールバック: users/${userEmail}/devices を検索`);
+        const devicesSnapshot = await db
+          .collection('users')
+          .doc(userEmail)
+          .collection('devices')
+          .where('active', '==', true)
+          .get();
+
+        if (devicesSnapshot.empty) {
+          console.log(`⚠️ [sendChatNotifications] アクティブデバイスなし: ${userName}`);
           return { tokens: [], soundEnabled: true };
         }
 
-        const data = activeDeviceDoc.data();
+        const fallbackTokens = [];
+        devicesSnapshot.forEach(deviceDoc => {
+          const deviceData = deviceDoc.data();
+          if (deviceData.fcmToken) {
+            fallbackTokens.push(deviceData.fcmToken);
+          }
+        });
 
-        // 🔧 通知が無効になっている場合はスキップ
-        if (data.notificationEnabled === false) {
-          console.log(`🔕 [sendChatNotifications] 通知無効: ${userName}`);
-          return { tokens: [], soundEnabled: false };
+        if (fallbackTokens.length === 0) {
+          console.log(`⚠️ [sendChatNotifications] FCMトークンなし: ${userName}`);
+          return { tokens: [], soundEnabled: true };
         }
 
-        const tokens = Array.isArray(data?.fcmTokens) ? data.fcmTokens.filter(Boolean) : [];
-
-        if (tokens.length === 0) {
-          console.log(`⚠️ [sendChatNotifications] アクティブトークンなし: ${userName}`);
-          return { tokens: [], soundEnabled: data.notificationSound !== false };
-        }
-
-        console.log(`✅ [sendChatNotifications] トークン取得成功: ${userName} (${tokens.length}件)`);
+        console.log(`✅ [sendChatNotifications] フォールバック成功: ${userName} (${fallbackTokens.length}件)`);
         return {
-          tokens: tokens,
-          soundEnabled: data.notificationSound !== false // デフォルトtrue
+          tokens: fallbackTokens,
+          soundEnabled: true // デフォルトtrue
         };
       } catch (error) {
         console.error(`❌ [sendChatNotifications] ユーザー${user.userName}のトークン取得エラー:`, error);
@@ -779,6 +808,7 @@ async function sendMentionNotifications(senderName, messageText, roomName, menti
     console.log(`📢 [sendMentionNotifications] FCM送信開始: ${mentionedUsers.length}人`);
 
     // 各ユーザーのトークンを取得（ミュートは無視）
+    // v2.2: activeDevices未登録時は users/{email}/devices サブコレクションからフォールバック取得
     const tokensPromises = mentionedUsers.map(async (user) => {
       try {
         const { userName, userEmail } = user;
@@ -786,29 +816,53 @@ async function sendMentionNotifications(senderName, messageText, roomName, menti
 
         const activeDeviceDoc = await db.collection('activeDevices').doc(userEmail).get();
 
-        if (!activeDeviceDoc.exists) {
-          console.log(`⚠️ [sendMentionNotifications] activeDevices未登録: ${userName}`);
+        if (activeDeviceDoc.exists) {
+          const data = activeDeviceDoc.data();
+
+          // 通知が無効でもメンションは送信（重要な通知のため）
+          // ただし、notificationEnabled が明示的に false の場合はスキップ
+          if (data.notificationEnabled === false) {
+            console.log(`🔕 [sendMentionNotifications] 通知完全無効: ${userName}（メンションもスキップ）`);
+            return [];
+          }
+
+          const tokens = Array.isArray(data?.fcmTokens) ? data.fcmTokens.filter(Boolean) : [];
+
+          if (tokens.length > 0) {
+            console.log(`✅ [sendMentionNotifications] activeDevicesから取得成功: ${userName} (${tokens.length}件)`);
+            return tokens;
+          }
+        }
+
+        // 🔧 v2.2: activeDevices未登録またはトークンなしの場合、サブコレクションから取得
+        console.log(`🔄 [sendMentionNotifications] フォールバック: users/${userEmail}/devices を検索`);
+        const devicesSnapshot = await db
+          .collection('users')
+          .doc(userEmail)
+          .collection('devices')
+          .where('active', '==', true)
+          .get();
+
+        if (devicesSnapshot.empty) {
+          console.log(`⚠️ [sendMentionNotifications] アクティブデバイスなし: ${userName}`);
           return [];
         }
 
-        const data = activeDeviceDoc.data();
+        const fallbackTokens = [];
+        devicesSnapshot.forEach(deviceDoc => {
+          const deviceData = deviceDoc.data();
+          if (deviceData.fcmToken) {
+            fallbackTokens.push(deviceData.fcmToken);
+          }
+        });
 
-        // 通知が無効でもメンションは送信（重要な通知のため）
-        // ただし、notificationEnabled が明示的に false の場合はスキップ
-        if (data.notificationEnabled === false) {
-          console.log(`🔕 [sendMentionNotifications] 通知完全無効: ${userName}（メンションもスキップ）`);
+        if (fallbackTokens.length === 0) {
+          console.log(`⚠️ [sendMentionNotifications] FCMトークンなし: ${userName}`);
           return [];
         }
 
-        const tokens = Array.isArray(data?.fcmTokens) ? data.fcmTokens.filter(Boolean) : [];
-
-        if (tokens.length === 0) {
-          console.log(`⚠️ [sendMentionNotifications] アクティブトークンなし: ${userName}`);
-          return [];
-        }
-
-        console.log(`✅ [sendMentionNotifications] トークン取得成功: ${userName} (${tokens.length}件)`);
-        return tokens;
+        console.log(`✅ [sendMentionNotifications] フォールバック成功: ${userName} (${fallbackTokens.length}件)`);
+        return fallbackTokens;
       } catch (error) {
         console.error(`❌ [sendMentionNotifications] ユーザー${user.userName}のトークン取得エラー:`, error);
         return [];
