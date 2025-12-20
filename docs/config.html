@@ -4286,6 +4286,27 @@
                 </div>
               </div>
 
+              <!-- ユーザー別タスク担当設定 -->
+              <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <h4 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 12px 0;">📋 ユーザー別タスク担当設定</h4>
+                <div style="font-size: 11px; color: #6b7280; margin-bottom: 12px;">
+                  各ユーザーが担当するタスクを設定します。マイページの内訳には担当タスクのみが表示されます。
+                </div>
+
+                <div id="userTaskAssignmentList" style="display: flex; flex-direction: column; gap: 12px;">
+                  <!-- ユーザー一覧が動的に追加される -->
+                  <div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">
+                    ユーザー一覧を読み込んでいます...
+                  </div>
+                </div>
+
+                <div style="margin-top: 12px; display: flex; gap: 8px;">
+                  <button type="button" onclick="assignAllTasksToAll()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #374151; cursor: pointer;">
+                    全員に全タスク割当
+                  </button>
+                </div>
+              </div>
+
               <!-- 報酬管理画面へのリンク -->
               <div style="background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
                 <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -6121,8 +6142,17 @@
         const permissionSaved = await savePermissionSettings(false);
         console.log('Step 13 結果:', permissionSaved ? '成功' : '失敗またはスキップ');
 
-        // 5. PWA版では PropertiesService 保存不要（Firestore + localStorage で完結）
-        console.log('Step 14: PWA版では PropertiesService 保存不要');
+        // 5. ユーザー別タスク担当設定を保存
+        console.log('Step 14: ユーザー別タスク設定を保存中...');
+        try {
+          await saveUserTaskAssignments();
+          console.log('Step 14 結果: 成功');
+        } catch (err) {
+          console.warn('Step 14 結果: スキップ（チェックボックスなし）', err);
+        }
+
+        // 6. PWA版では PropertiesService 保存不要（Firestore + localStorage で完結）
+        console.log('Step 15: PWA版では PropertiesService 保存不要');
         if (localStorageSaved) {
           alert('✅ 設定完了しました');
         } else {
@@ -8368,6 +8398,164 @@ ${prompt || '（未設定）'}
       };
     }
 
+    // ============================================
+    // ユーザー別タスク担当設定
+    // ============================================
+
+    let userTaskAssignmentRetryCount = 0;
+    const USER_TASK_ASSIGNMENT_MAX_RETRIES = 5;
+    window.userTaskAssignments = {}; // ユーザー別タスク設定キャッシュ
+
+    /**
+     * ユーザー別タスク担当設定を読み込み
+     */
+    async function loadUserTaskAssignmentList() {
+      const container = document.getElementById('userTaskAssignmentList');
+      if (!container) {
+        console.log('[TASK_ASSIGN] コンテナが見つかりません');
+        return;
+      }
+
+      console.log('[TASK_ASSIGN] ユーザー一覧読み込み開始');
+
+      try {
+        // Firestoreの準備を待つ
+        if (!window.db) {
+          userTaskAssignmentRetryCount++;
+          if (userTaskAssignmentRetryCount <= USER_TASK_ASSIGNMENT_MAX_RETRIES) {
+            console.log('[TASK_ASSIGN] Firestore未初期化、1秒後に再試行');
+            container.innerHTML = '<div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">Firestoreを初期化中...</div>';
+            setTimeout(() => loadUserTaskAssignmentList(), 1000);
+            return;
+          } else {
+            console.error('[TASK_ASSIGN] Firestore初期化タイムアウト');
+            container.innerHTML = '<div style="font-size: 12px; color: #ef4444; padding: 12px; text-align: center;">Firestoreの初期化に失敗しました</div>';
+            return;
+          }
+        }
+
+        userTaskAssignmentRetryCount = 0;
+
+        // ユーザー一覧を取得
+        const snapshot = await window.db.collection('users').get();
+        const users = [];
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          users.push({
+            email: docSnap.id,
+            name: data.userName || data.name || data.displayName || docSnap.id,
+            permissionId: data.permissionId || 'staff',
+            permissionDisplay: data.permissionDisplay || 'スタッフ',
+            photoURL: data.userIconUrl || data.photoURL || '',
+            assignedTasks: data.assignedTasks || ['listing', 'shipping'] // デフォルトは両方
+          });
+        });
+
+        // 権限でソート
+        const permissionOrder = { owner: 1, admin: 2, staff: 3, outsourcing: 4 };
+        users.sort((a, b) => (permissionOrder[a.permissionId] || 99) - (permissionOrder[b.permissionId] || 99));
+
+        if (users.length === 0) {
+          container.innerHTML = '<div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">ユーザーが登録されていません</div>';
+          return;
+        }
+
+        // ユーザータスク設定をキャッシュ
+        users.forEach(u => {
+          window.userTaskAssignments[u.email] = u.assignedTasks;
+        });
+
+        // ユーザーリストを描画
+        container.innerHTML = users.map(user => {
+          const permissionBadge = getPermissionBadgeStyle(user.permissionId);
+          const avatarHtml = user.photoURL
+            ? `<img src="${escapeHtml(user.photoURL)}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">`
+            : `<div style="width: 32px; height: 32px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 14px;">👤</div>`;
+
+          const listingChecked = user.assignedTasks.includes('listing') ? 'checked' : '';
+          const shippingChecked = user.assignedTasks.includes('shipping') ? 'checked' : '';
+
+          return `
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+              ${avatarHtml}
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 13px; color: #374151; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(user.name)}</div>
+                <span style="${permissionBadge}">${escapeHtml(user.permissionDisplay)}</span>
+              </div>
+              <div style="display: flex; gap: 12px; flex-shrink: 0;">
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="task-assign-checkbox" data-email="${escapeHtml(user.email)}" data-task="listing" ${listingChecked} style="width: 14px; height: 14px; accent-color: #3b82f6;">
+                  <span style="font-size: 11px; color: #4b5563;">📦出品</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                  <input type="checkbox" class="task-assign-checkbox" data-email="${escapeHtml(user.email)}" data-task="shipping" ${shippingChecked} style="width: 14px; height: 14px; accent-color: #10b981;">
+                  <span style="font-size: 11px; color: #4b5563;">🚚発送</span>
+                </label>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        console.log('[TASK_ASSIGN] ✅ ユーザー一覧描画完了:', users.length, '人');
+      } catch (error) {
+        console.error('[TASK_ASSIGN] ❌ エラー:', error);
+        container.innerHTML = '<div style="font-size: 12px; color: #ef4444; padding: 12px; text-align: center;">読み込みに失敗しました</div>';
+      }
+    }
+
+    /**
+     * 全員に全タスクを割り当て
+     */
+    function assignAllTasksToAll() {
+      document.querySelectorAll('.task-assign-checkbox').forEach(cb => cb.checked = true);
+    }
+
+    /**
+     * ユーザー別タスク設定を収集
+     */
+    function collectUserTaskAssignments() {
+      const assignments = {};
+      document.querySelectorAll('.task-assign-checkbox').forEach(cb => {
+        const email = cb.dataset.email;
+        const task = cb.dataset.task;
+        if (!assignments[email]) {
+          assignments[email] = [];
+        }
+        if (cb.checked) {
+          assignments[email].push(task);
+        }
+      });
+      return assignments;
+    }
+
+    /**
+     * ユーザー別タスク設定を保存（設定保存時に呼ばれる）
+     */
+    async function saveUserTaskAssignments() {
+      const assignments = collectUserTaskAssignments();
+      console.log('[TASK_ASSIGN] 保存するタスク設定:', assignments);
+
+      if (!window.db) {
+        console.error('[TASK_ASSIGN] Firestoreが初期化されていません');
+        return;
+      }
+
+      try {
+        const batch = window.db.batch();
+
+        for (const [email, tasks] of Object.entries(assignments)) {
+          const userRef = window.db.collection('users').doc(email);
+          batch.update(userRef, { assignedTasks: tasks });
+        }
+
+        await batch.commit();
+        console.log('[TASK_ASSIGN] ✅ タスク設定保存完了');
+      } catch (error) {
+        console.error('[TASK_ASSIGN] ❌ 保存エラー:', error);
+        throw error;
+      }
+    }
+
     /**
      * カスタム報酬タスクを追加
      */
@@ -10056,6 +10244,8 @@ ${prompt || '（未設定）'}
         loadCompensationSettings(config);
         // マイページ対象ユーザー一覧を読み込み
         await loadMypageUserList();
+        // ユーザー別タスク担当設定を読み込み
+        await loadUserTaskAssignmentList();
       });
     }
 
@@ -10066,6 +10256,7 @@ ${prompt || '（未設定）'}
       // マイページ対象ユーザー一覧を読み込み（報酬設定タブが表示されている場合）
       if (document.getElementById('system-compensation')?.classList.contains('active')) {
         await loadMypageUserList();
+        await loadUserTaskAssignmentList();
       }
     }, 250);
 

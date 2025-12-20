@@ -1156,6 +1156,7 @@
     let userGoal = 0;
     let rankingParticipation = true; // ランキング参加フラグ
     let allUsersRankingPrefs = {}; // 全ユーザーのランキング参加設定
+    let assignedTasks = ['listing', 'shipping']; // ユーザーの担当タスク（デフォルトは両方）
 
     // 初期化
     async function init() {
@@ -1191,6 +1192,9 @@
 
         // ユーザーの目標を取得
         await loadUserGoal();
+
+        // ユーザーの担当タスクを取得
+        await loadAssignedTasks();
 
         // 全ユーザーのランキング参加設定を取得
         await loadAllUsersRankingPrefs();
@@ -1334,6 +1338,25 @@
       }
     }
 
+    // ユーザーの担当タスクを取得
+    async function loadAssignedTasks() {
+      try {
+        const userRef = doc(db, 'users', currentUser.email);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          // 担当タスクが設定されていればそれを使用、未設定なら両方担当
+          assignedTasks = data.assignedTasks || ['listing', 'shipping'];
+        } else {
+          assignedTasks = ['listing', 'shipping'];
+        }
+        console.log('担当タスク:', assignedTasks);
+      } catch (error) {
+        console.error('担当タスク取得エラー:', error);
+        assignedTasks = ['listing', 'shipping'];
+      }
+    }
+
     // 全ユーザーのランキング参加設定を取得
     async function loadAllUsersRankingPrefs() {
       try {
@@ -1449,9 +1472,10 @@
           </div>` : ''}
         </div>
 
-        <!-- 内訳 -->
+        <!-- 内訳（担当タスクのみ表示） -->
         <div class="breakdown-card">
           <div class="breakdown-title">📊 内訳</div>
+          ${assignedTasks.includes('listing') ? `
           <div class="breakdown-item">
             <div class="breakdown-label">
               <div class="breakdown-icon listing">📦</div>
@@ -1461,7 +1485,8 @@
               </div>
             </div>
             <div class="breakdown-amount">¥${myStats.listingAmount.toLocaleString()}</div>
-          </div>
+          </div>` : ''}
+          ${assignedTasks.includes('shipping') ? `
           <div class="breakdown-item">
             <div class="breakdown-label">
               <div class="breakdown-icon shipping">🚚</div>
@@ -1471,7 +1496,11 @@
               </div>
             </div>
             <div class="breakdown-amount">¥${myStats.shippingAmount.toLocaleString()}</div>
-          </div>
+          </div>` : ''}
+          ${assignedTasks.length === 0 ? `
+          <div style="text-align: center; color: #9ca3af; padding: 16px; font-size: 14px;">
+            担当タスクが設定されていません
+          </div>` : ''}
         </div>
 
         <!-- ランキング -->
@@ -1851,16 +1880,18 @@
             </div>
             <div class="history-details">
               <div class="history-breakdown">
+                ${assignedTasks.includes('listing') ? `
                 <div class="history-breakdown-item">
                   <div class="history-breakdown-icon">📦</div>
                   <div class="history-breakdown-label">出品</div>
                   <div class="history-breakdown-value">${item.listingCount}件 / ¥${item.listingAmount.toLocaleString()}</div>
-                </div>
+                </div>` : ''}
+                ${assignedTasks.includes('shipping') ? `
                 <div class="history-breakdown-item">
                   <div class="history-breakdown-icon">🚚</div>
                   <div class="history-breakdown-label">発送</div>
                   <div class="history-breakdown-value">${item.shippingCount}件 / ¥${item.shippingAmount.toLocaleString()}</div>
-                </div>
+                </div>` : ''}
               </div>
               <div class="history-ranking">
                 <span class="history-ranking-label">🏆 ランキング</span>
