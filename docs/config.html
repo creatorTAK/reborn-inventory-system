@@ -9461,6 +9461,61 @@ ${prompt || '（未設定）'}
     }
 
     /**
+     * オンライン状態を更新（UI-017: ユーザー管理オンライン表示）
+     * Firestoreのusersコレクションに lastActiveAt を更新
+     */
+    async function updateLastActiveAt() {
+      try {
+        const userEmail = localStorage.getItem('reborn_user_email');
+        if (!userEmail) {
+          console.log('[Online] ⏭️ userEmail未設定のためスキップ');
+          return;
+        }
+        if (!window.db) {
+          console.log('[Online] ⏭️ window.db未初期化のためスキップ');
+          return;
+        }
+
+        await window.db.collection('users').doc(userEmail).update({
+          lastActiveAt: new Date().toISOString()
+        });
+        console.log('[Online] ✅ lastActiveAt更新:', new Date().toLocaleTimeString());
+      } catch (error) {
+        console.error('[Online] ❌ lastActiveAt更新エラー:', error.message);
+      }
+    }
+
+    // オンライン状態の定期更新を開始
+    function startOnlineStatusUpdates() {
+      // Firestoreが準備できたら開始
+      const checkAndStart = () => {
+        if (window.db && window.firestoreReady) {
+          // 初回更新
+          updateLastActiveAt();
+          // 3分ごとに更新
+          setInterval(updateLastActiveAt, 3 * 60 * 1000);
+          // ページがアクティブになった時も更新
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+              updateLastActiveAt();
+            }
+          });
+          console.log('[Online] 🔄 オンライン状態更新を開始しました');
+        } else {
+          setTimeout(checkAndStart, 500);
+        }
+      };
+      checkAndStart();
+    }
+
+    // ページ読み込み時にオンライン状態更新を開始
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startOnlineStatusUpdates);
+    } else {
+      startOnlineStatusUpdates();
+    }
+
+    /**
      * 郵便番号フォーマット（XXX-XXXX形式）
      */
     function formatPostalCode(input) {
