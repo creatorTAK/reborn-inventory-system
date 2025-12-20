@@ -5146,6 +5146,23 @@
             });
             console.log('✅ 新規デバイスを登録しました（Firestore）');
           }
+
+          // 🔧 v289: activeDevicesにも直接書き込み（Functions同期に依存しない）
+          // Firebase Functionsのデプロイ問題を回避し、確実に通知が届くようにする
+          try {
+            const { doc, setDoc, arrayUnion, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+            const activeDevicesRef = doc(db, 'activeDevices', userEmail);
+            await setDoc(activeDevicesRef, {
+              fcmTokens: arrayUnion(currentToken),
+              userName: userName,
+              notificationEnabled: notificationEnabled,
+              notificationSound: notificationSound,
+              lastUpdated: serverTimestamp()
+            }, { merge: true });
+            console.log('✅ activeDevicesに直接登録しました');
+          } catch (activeDevicesError) {
+            console.error('⚠️ activeDevices更新エラー（通知に影響する可能性）:', activeDevicesError);
+          }
         } catch (firestoreError) {
           console.error('❌ Firestoreトークン更新エラー:', firestoreError);
           // GAS更新は成功しているので、処理は続行
