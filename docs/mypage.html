@@ -7,7 +7,7 @@
   <title>マイページ - FURIRA</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="/css/reborn-theme.css?v=297">
+  <link rel="stylesheet" href="/css/reborn-theme.css?v=298">
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -55,7 +55,7 @@
     }
     .profile-role {
       font-size: 13px;
-      background: rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.15);
       padding: 4px 12px;
       border-radius: 12px;
       display: inline-block;
@@ -307,6 +307,21 @@
       font-weight: 700;
       color: #40B4E5;
     }
+    .ranking-opt-out-message {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 16px;
+      background: #f3f4f6;
+      border-radius: 10px;
+      color: #6b7280;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .ranking-opt-out-message i {
+      font-size: 18px;
+    }
 
     /* アクションボタン */
     .action-buttons {
@@ -439,6 +454,59 @@
     .goal-skip-btn:hover {
       background: #f3f4f6;
       border-color: #6b7280;
+    }
+    .ranking-option {
+      margin-bottom: 20px;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+    }
+    .ranking-toggle {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+    .ranking-toggle input {
+      display: none;
+    }
+    .toggle-slider {
+      width: 44px;
+      height: 24px;
+      background: #d1d5db;
+      border-radius: 12px;
+      position: relative;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .toggle-slider::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .ranking-toggle input:checked + .toggle-slider {
+      background: #40B4E5;
+    }
+    .ranking-toggle input:checked + .toggle-slider::after {
+      transform: translateX(20px);
+    }
+    .toggle-label {
+      font-size: 14px;
+      color: #374151;
+      font-weight: 500;
+    }
+    .ranking-option-note {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 8px;
+      padding-left: 56px;
     }
     .goal-modal-buttons {
       display: flex;
@@ -1021,6 +1089,14 @@
       <div class="goal-skip-option">
         <button class="goal-skip-btn" onclick="skipGoal()">目標を設定しない</button>
       </div>
+      <div class="ranking-option">
+        <label class="ranking-toggle">
+          <input type="checkbox" id="rankingParticipation" checked>
+          <span class="toggle-slider"></span>
+          <span class="toggle-label">ランキングに参加する</span>
+        </label>
+        <div class="ranking-option-note">オフにすると他のメンバーにあなたの順位が表示されません</div>
+      </div>
       <div class="goal-modal-buttons">
         <button class="goal-cancel-btn" onclick="closeGoalModal()">キャンセル</button>
         <button class="goal-save-btn" onclick="saveGoal()">保存</button>
@@ -1078,6 +1154,8 @@
     let compensationRecords = [];
     let compensationSettings = {};
     let userGoal = 0;
+    let rankingParticipation = true; // ランキング参加フラグ
+    let allUsersRankingPrefs = {}; // 全ユーザーのランキング参加設定
 
     // 初期化
     async function init() {
@@ -1113,6 +1191,9 @@
 
         // ユーザーの目標を取得
         await loadUserGoal();
+
+        // 全ユーザーのランキング参加設定を取得
+        await loadAllUsersRankingPrefs();
 
         // 報酬データを取得
         await loadCompensationData();
@@ -1239,13 +1320,37 @@
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-          userGoal = docSnap.data().goalAmount || 0;
+          const data = docSnap.data();
+          userGoal = data.goalAmount || 0;
+          rankingParticipation = data.rankingParticipation !== false; // デフォルトtrue
         } else {
           userGoal = 0; // 目標未設定
+          rankingParticipation = true;
         }
       } catch (error) {
         console.error('目標取得エラー:', error);
         userGoal = 0;
+        rankingParticipation = true;
+      }
+    }
+
+    // 全ユーザーのランキング参加設定を取得
+    async function loadAllUsersRankingPrefs() {
+      try {
+        const now = new Date();
+        const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const goalsRef = collection(db, 'userGoals');
+        const snapshot = await getDocs(goalsRef);
+
+        allUsersRankingPrefs = {};
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.yearMonth === yearMonth) {
+            allUsersRankingPrefs[data.email] = data.rankingParticipation !== false;
+          }
+        });
+      } catch (error) {
+        console.error('ランキング設定取得エラー:', error);
       }
     }
 
@@ -1436,6 +1541,12 @@
 
         if (!email) return;
 
+        // ランキング不参加のユーザーはスキップ（自分以外）
+        // 自分は参加・不参加に関わらず自分の位置を確認できる
+        if (email !== currentUser.email && allUsersRankingPrefs[email] === false) {
+          return;
+        }
+
         if (!staffStats[email]) {
           staffStats[email] = { email, name, totalAmount: 0 };
         }
@@ -1450,6 +1561,19 @@
 
     // ランキングリストを描画
     function renderRankingList(rankingData, myEmail) {
+      // ランキング不参加の場合はメッセージを表示
+      if (!rankingParticipation) {
+        return `
+          <div class="ranking-opt-out-message">
+            <i class="bi bi-eye-slash"></i>
+            <span>ランキング非公開中</span>
+          </div>
+          <div class="text-center text-muted" style="font-size: 12px;">
+            目標設定から「ランキングに参加する」をオンにすると表示されます
+          </div>
+        `;
+      }
+
       if (rankingData.length === 0) {
         return '<div class="text-center text-muted py-3">まだデータがありません</div>';
       }
@@ -1511,6 +1635,7 @@
     // 目標設定モーダルを開く
     window.openGoalModal = function() {
       document.getElementById('goalAmountInput').value = userGoal || '';
+      document.getElementById('rankingParticipation').checked = rankingParticipation;
       document.getElementById('goalModal').style.display = 'flex';
     };
 
@@ -1533,16 +1658,20 @@
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         const docRef = doc(db, 'userGoals', `${currentUser.email}_${yearMonth}`);
 
+        const newRankingPref = document.getElementById('rankingParticipation').checked;
         await setDoc(docRef, {
           email: currentUser.email,
           name: currentUser.name,
           yearMonth: yearMonth,
           goalAmount: 0,
           skipped: true,
+          rankingParticipation: newRankingPref,
           updatedAt: new Date().toISOString()
         });
 
         userGoal = 0;
+        rankingParticipation = newRankingPref;
+        allUsersRankingPrefs[currentUser.email] = newRankingPref;
         closeGoalModal();
         renderMyPage();
 
@@ -1570,15 +1699,19 @@
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         const docRef = doc(db, 'userGoals', `${currentUser.email}_${yearMonth}`);
 
+        const newRankingPref = document.getElementById('rankingParticipation').checked;
         await setDoc(docRef, {
           email: currentUser.email,
           name: currentUser.name,
           yearMonth: yearMonth,
           goalAmount: goalAmount,
+          rankingParticipation: newRankingPref,
           updatedAt: new Date().toISOString()
         });
 
         userGoal = goalAmount;
+        rankingParticipation = newRankingPref;
+        allUsersRankingPrefs[currentUser.email] = newRankingPref;
         closeGoalModal();
         renderMyPage();
 
