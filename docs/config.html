@@ -11393,10 +11393,16 @@ ${prompt || '（未設定）'}
       } catch (e) { console.error(e); }
 
       // ウェルカム通知を作成（管理者は不要）
+      console.log('[Modal] 権限ID:', selectedPermissionId, '→ owner除外チェック:', selectedPermissionId !== 'owner');
       if (selectedPermissionId !== 'owner') {
         try {
           await createWelcomeAnnouncements(userId, userName);
-        } catch (e) { console.error(e); }
+          console.log('[Modal] ✅ ウェルカム通知作成完了:', userId);
+        } catch (e) {
+          console.error('[Modal] ❌ ウェルカム通知作成エラー:', e);
+        }
+      } else {
+        console.log('[Modal] ⏭️ 管理者のためウェルカム通知スキップ');
       }
 
       closeUserDetailModal();
@@ -11484,11 +11490,13 @@ ${prompt || '（未設定）'}
    * 新規ユーザーにウェルカム通知（あなた宛）を作成
    */
   async function createWelcomeAnnouncements(userEmail, userName) {
+    console.log('[Announce] 🔄 開始: userEmail=', userEmail, ', userName=', userName);
     const now = new Date().toISOString();
     const personalRef = window.db.collection('users').doc(userEmail).collection('personalAnnouncements');
     const tasksRef = window.db.collection('userTasks').doc(userEmail).collection('tasks');
 
     // 通知1: 発送先情報登録のお願い
+    console.log('[Announce] 📝 通知1 作成中...');
     await personalRef.add({
       title: '📦 発送先情報を登録してください',
       content: '商品の配送先として発送先情報（氏名・住所）が必要です。設定 > 基本設定から発送先情報を登録してください。',
@@ -11496,8 +11504,10 @@ ${prompt || '（未設定）'}
       createdAt: now,
       type: 'shipping_request'
     });
+    console.log('[Announce] ✓ 通知1 完了');
 
     // タスク1: 発送先情報登録
+    console.log('[Announce] 📝 タスク1 作成中...');
     await tasksRef.add({
       type: 'shipping_info_registration',
       title: '📦 発送先情報を登録',
@@ -11506,8 +11516,10 @@ ${prompt || '（未設定）'}
       completed: false,
       read: false
     });
+    console.log('[Announce] ✓ タスク1 完了');
 
     // 通知2: 口座情報登録のお願い
+    console.log('[Announce] 📝 通知2 作成中...');
     await personalRef.add({
       title: '🏦 口座情報を登録してください',
       content: '報酬の振込先として口座情報が必要です。設定 > 基本設定から口座情報を登録してください。',
@@ -11515,8 +11527,10 @@ ${prompt || '（未設定）'}
       createdAt: now,
       type: 'bank_request'
     });
+    console.log('[Announce] ✓ 通知2 完了');
 
     // タスク2: 口座情報登録
+    console.log('[Announce] 📝 タスク2 作成中...');
     await tasksRef.add({
       type: 'bank_account_registration',
       title: '🏦 口座情報を登録',
@@ -11525,8 +11539,9 @@ ${prompt || '（未設定）'}
       completed: false,
       read: false
     });
+    console.log('[Announce] ✓ タスク2 完了');
 
-    console.log('[Announce] ✅ ウェルカム通知とタスクを作成:', userEmail);
+    console.log('[Announce] ✅ 全ウェルカム通知とタスク作成完了:', userEmail);
   }
 
   /**
