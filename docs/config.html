@@ -11760,15 +11760,51 @@ ${prompt || '（未設定）'}
   }
 
   /**
-   * ユーザーを完全削除
+   * ユーザーを完全削除（関連データも一括削除）
    */
   window.deleteUser = async function(userId, userName) {
-    if (!confirm(`「${userName}」を完全に削除しますか？\\nこの操作は取り消せません。`)) return;
+    if (!confirm(`「${userName}」を完全に削除しますか？\n\n以下のデータも削除されます：\n・お知らせ\n・デバイス情報\n・タスク\n・月間目標\n\nこの操作は取り消せません。`)) return;
 
     try {
+      console.log('[USER] 🗑️ ユーザー削除開始:', userId);
+
+      // 1. users/{email}/personalAnnouncements サブコレクションを削除
+      const announcementsRef = window.db.collection('users').doc(userId).collection('personalAnnouncements');
+      const announcementsSnap = await announcementsRef.get();
+      for (const doc of announcementsSnap.docs) {
+        await doc.ref.delete();
+      }
+      console.log('[USER] ✓ お知らせ削除:', announcementsSnap.size, '件');
+
+      // 2. users/{email}/devices サブコレクションを削除
+      const devicesRef = window.db.collection('users').doc(userId).collection('devices');
+      const devicesSnap = await devicesRef.get();
+      for (const doc of devicesSnap.docs) {
+        await doc.ref.delete();
+      }
+      console.log('[USER] ✓ デバイス削除:', devicesSnap.size, '件');
+
+      // 3. userTasks/{email}/tasks サブコレクションを削除
+      const tasksRef = window.db.collection('userTasks').doc(userId).collection('tasks');
+      const tasksSnap = await tasksRef.get();
+      for (const doc of tasksSnap.docs) {
+        await doc.ref.delete();
+      }
+      console.log('[USER] ✓ タスク削除:', tasksSnap.size, '件');
+
+      // 4. userGoals で email が一致するドキュメントを削除
+      const goalsRef = window.db.collection('userGoals').where('email', '==', userId);
+      const goalsSnap = await goalsRef.get();
+      for (const doc of goalsSnap.docs) {
+        await doc.ref.delete();
+      }
+      console.log('[USER] ✓ 月間目標削除:', goalsSnap.size, '件');
+
+      // 5. 最後にユーザードキュメント本体を削除
       await window.db.collection('users').doc(userId).delete();
-      console.log('[USER] ✅ ユーザーを削除:', userId);
-      alert('ユーザーを削除しました');
+      console.log('[USER] ✅ ユーザー削除完了:', userId);
+
+      alert('ユーザーと関連データを削除しました');
       loadUserManagement(); // リスト再読み込み
     } catch (error) {
       console.error('[USER] ❌ 削除エラー:', error);
