@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-20 v296 - Cloudflare Worker経由でチャット通知送信 -->
+  <!-- Cache Bust: 2025-12-20 v297 - 通知・バッジをFirebase Functionsに一本化 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -4162,13 +4162,8 @@
 
         console.log('[Firestore] ルーム情報更新完了');
 
-        // 🔧 v295: 未読カウント更新を復活（バッジ表示に必須）
-        await updateUnreadCountsForOthers();
-        console.log('[Firestore] 未読カウント更新完了');
-
-        // 🔧 v296: Cloudflare Worker経由でプッシュ通知送信
-        sendChatPushNotification(message, currentRoomName);
-        console.log('[Push] プッシュ通知送信リクエスト完了');
+        // 🔧 v297: 未読カウント更新とプッシュ通知はFirebase Functions (onChatMessageCreated) に任せる
+        // クライアント側での更新は削除（Firebase Functionsと重複するため）
 
         // 入力欄クリア
         input.value = '';
@@ -4408,11 +4403,7 @@
         });
         console.log('[Upload] ルーム情報更新完了');
 
-        // 未読カウント更新（他のユーザー向け）
-        await updateUnreadCountsForOthers();
-
-        // 🔧 v296: 画像送信時もプッシュ通知送信
-        sendChatPushNotification(caption || '画像を送信しました', currentRoomName);
+        // 🔧 v297: 未読カウント更新とプッシュ通知はFirebase Functions (onChatMessageCreated) に任せる
 
       } catch (error) {
         console.error('[Upload] エラー:', error);
@@ -4420,7 +4411,8 @@
       }
     }
 
-    // 未読カウント更新（他のユーザー向け）
+    // 🔧 v297: この関数はFirebase Functionsと重複するため使用停止
+    // Firebase Functions (onChatMessageCreated) が未読カウントを更新する
     async function updateUnreadCountsForOthers() {
       try {
         // ルーム情報を取得
