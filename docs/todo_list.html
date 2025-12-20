@@ -237,6 +237,11 @@
       background: #fee2e2;
       color: #991b1b;
     }
+    .type-badge.shipping_info_registration,
+    .type-badge.bank_account_registration {
+      background: #dbeafe;
+      color: #1e40af;
+    }
     .type-badge.default {
       background: #e0e7ff;
       color: #3730a3;
@@ -399,8 +404,8 @@
         iconHtml = getTypeIcon(task.type);
       }
 
-      // 完了ボタンを表示するタスクタイプ（報酬対象タスク）
-      const completableTaskTypes = ['listing_approval', 'shipping_task'];
+      // 完了ボタンを表示するタスクタイプ
+      const completableTaskTypes = ['listing_approval', 'shipping_task', 'shipping_info_registration', 'bank_account_registration'];
       const showCompleteButton = completableTaskTypes.includes(task.type);
 
       // アクションボタン
@@ -409,7 +414,7 @@
         actionButtons += `<div class="task-action" onclick="handleTaskClick('${task.id}', '${task.link}')"><i class="bi bi-arrow-right-circle"></i> 対応する</div>`;
       }
       if (showCompleteButton) {
-        actionButtons += `<div class="task-action complete-btn" onclick="completeTask('${task.id}')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 完了</div>`;
+        actionButtons += `<div class="task-action complete-btn" onclick="completeTask('${task.id}', '${task.type}')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 完了</div>`;
       }
 
       return `
@@ -433,10 +438,17 @@
     }
 
     /**
-     * タスクを完了にする（報酬トリガー発動）
+     * タスクを完了にする
      */
-    async function completeTask(taskId) {
-      if (!confirm('このタスクを完了にしますか？\n（報酬が自動記録されます）')) return;
+    async function completeTask(taskId, taskType) {
+      // 報酬対象タスクか判定
+      const rewardTaskTypes = ['listing_approval', 'shipping_task'];
+      const isRewardTask = rewardTaskTypes.includes(taskType);
+      const confirmMsg = isRewardTask
+        ? 'このタスクを完了にしますか？\n（報酬が自動記録されます）'
+        : 'このタスクを完了にしますか？';
+
+      if (!confirm(confirmMsg)) return;
 
       try {
         const taskRef = db.collection('userTasks').doc(userEmail).collection('tasks').doc(taskId);
@@ -460,7 +472,9 @@
         'pending_user_approval': '👤',
         'inventory_alert': '📦',
         'listing_approval': '📤',
-        'shipping_task': '📦'
+        'shipping_task': '📦',
+        'shipping_info_registration': '📦',
+        'bank_account_registration': '🏦'
       };
       return icons[type] || '📋';
     }
@@ -471,7 +485,9 @@
         'pending_user_approval': 'ユーザー承認',
         'inventory_alert': '在庫アラート',
         'listing_approval': '出品確認',
-        'shipping_task': '梱包・発送'
+        'shipping_task': '梱包・発送',
+        'shipping_info_registration': '初期設定',
+        'bank_account_registration': '初期設定'
       };
       return labels[type] || 'タスク';
     }
