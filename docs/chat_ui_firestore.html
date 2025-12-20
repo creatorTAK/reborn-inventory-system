@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-16 - 送信ボタン有効/無効切り替え -->
+  <!-- Cache Bust: 2025-12-20 v296 - Cloudflare Worker経由でチャット通知送信 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -4166,6 +4166,10 @@
         await updateUnreadCountsForOthers();
         console.log('[Firestore] 未読カウント更新完了');
 
+        // 🔧 v296: Cloudflare Worker経由でプッシュ通知送信
+        sendChatPushNotification(message, currentRoomName);
+        console.log('[Push] プッシュ通知送信リクエスト完了');
+
         // 入力欄クリア
         input.value = '';
         insertedMentions = []; // 挿入済みメンションもリセット
@@ -4407,6 +4411,9 @@
         // 未読カウント更新（他のユーザー向け）
         await updateUnreadCountsForOthers();
 
+        // 🔧 v296: 画像送信時もプッシュ通知送信
+        sendChatPushNotification(caption || '画像を送信しました', currentRoomName);
+
       } catch (error) {
         console.error('[Upload] エラー:', error);
         alert('アップロードに失敗しました: ' + error.message);
@@ -4445,6 +4452,102 @@
         console.log('[Unread] 未読カウント更新完了');
       } catch (error) {
         console.error('[Unread] 未読カウント更新エラー:', error);
+      }
+    }
+
+    // 🔧 v296: Cloudflare Worker経由でプッシュ通知を送信（Firebase Functions不要）
+    async function sendChatPushNotification(message, roomName) {
+      try {
+        console.log('[Push] チャット通知送信開始');
+
+        // ルーム情報を取得
+        const roomRef = doc(db, `rooms/${currentRoomId}`);
+        const roomSnap = await getDoc(roomRef);
+        if (!roomSnap.exists()) {
+          console.log('[Push] ルームが見つかりません');
+          return;
+        }
+
+        const roomData = roomSnap.data();
+        const memberEmails = roomData.memberEmails || [];
+
+        if (memberEmails.length === 0) {
+          console.log('[Push] メンバーメールがありません');
+          return;
+        }
+
+        // 自分以外のメンバーのFCMトークンを取得
+        const tokens = [];
+        for (const memberEmail of memberEmails) {
+          if (memberEmail === currentUserEmail) continue; // 自分はスキップ
+
+          // 閲覧中チェック
+          try {
+            const viewingRef = doc(db, 'viewingStatus', memberEmail);
+            const viewingSnap = await getDoc(viewingRef);
+            if (viewingSnap.exists()) {
+              const viewingData = viewingSnap.data();
+              if (viewingData.roomId === currentRoomId) {
+                const lastUpdated = viewingData.lastUpdated?.toMillis?.() || 0;
+                const now = Date.now();
+                if ((now - lastUpdated) < 5 * 60 * 1000) { // 5分以内
+                  console.log('[Push] 閲覧中のためスキップ:', memberEmail);
+                  continue;
+                }
+              }
+            }
+          } catch (e) {
+            // viewingStatus取得エラーは無視
+          }
+
+          // デバイスからFCMトークンを取得
+          try {
+            const devicesRef = collection(db, `users/${memberEmail}/devices`);
+            const devicesQuery = query(devicesRef, where('active', '==', true));
+            const devicesSnap = await getDocs(devicesQuery);
+
+            devicesSnap.forEach(deviceDoc => {
+              const deviceData = deviceDoc.data();
+              if (deviceData.fcmToken) {
+                tokens.push(deviceData.fcmToken);
+                console.log('[Push] トークン取得:', memberEmail, deviceData.fcmToken.substring(0, 20) + '...');
+              }
+            });
+          } catch (e) {
+            console.error('[Push] デバイス取得エラー:', memberEmail, e);
+          }
+        }
+
+        if (tokens.length === 0) {
+          console.log('[Push] 送信先トークンがありません');
+          return;
+        }
+
+        console.log('[Push] 送信先トークン数:', tokens.length);
+
+        // Cloudflare Worker経由でプッシュ送信
+        const displayRoomName = roomName || roomData.name || '個別チャット';
+        const response = await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tokens: tokens,
+            title: `💬 ${displayRoomName}`,
+            body: `${currentUserName}: ${message.substring(0, 100)}`,
+            data: {
+              type: 'chat_message',
+              roomId: currentRoomId,
+              senderName: currentUserName
+            }
+          })
+        });
+
+        const result = await response.json().catch(() => ({}));
+        console.log('[Push] 送信結果:', result);
+
+      } catch (error) {
+        console.error('[Push] チャット通知送信エラー:', error);
+        // 通知送信失敗してもメッセージ送信自体は成功させる
       }
     }
 
