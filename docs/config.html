@@ -3946,16 +3946,20 @@
 
             <!-- ユーザー詳細モーダル -->
             <div id="userDetailModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
-              <div style="background: white; border-radius: 16px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+              <div style="background: white; border-radius: 16px; width: 90%; max-width: 400px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
                 <!-- モーダルヘッダー -->
-                <div style="padding: 16px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: white; border-radius: 16px 16px 0 0;">
+                <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; background: white; border-radius: 16px 16px 0 0;">
                   <button onclick="closeUserDetailModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280;">←</button>
                   <span style="font-size: 16px; font-weight: 600;">ユーザー詳細</span>
                   <div style="width: 24px;"></div>
                 </div>
-                <!-- モーダルコンテンツ -->
-                <div id="userDetailContent" style="padding: 24px;">
+                <!-- モーダルコンテンツ（スクロール領域） -->
+                <div id="userDetailContent" style="padding: 16px; overflow-y: auto; flex: 1;">
                   <!-- 詳細情報がここに動的に追加される -->
+                </div>
+                <!-- アクションボタン領域（固定フッター） -->
+                <div id="userDetailActions" style="padding: 12px 16px; border-top: 1px solid #e5e7eb; flex-shrink: 0; background: white; border-radius: 0 0 16px 16px;">
+                  <!-- アクションボタンがここに動的に追加される -->
                 </div>
               </div>
             </div>
@@ -11436,6 +11440,7 @@ ${prompt || '（未設定）'}
     const user = JSON.parse(decodeURIComponent(encodedData));
     const modal = document.getElementById('userDetailModal');
     const content = document.getElementById('userDetailContent');
+    const actionsDiv = document.getElementById('userDetailActions');
     const currentEmail = localStorage.getItem('reborn_user_email');
     const isSelf = (user.userEmail || user.email) === currentEmail;
 
@@ -11457,8 +11462,8 @@ ${prompt || '（未設定）'}
       isOnline = (now - lastActive) < ONLINE_THRESHOLD;
     }
     const onlineStatusHtml = isOnline
-      ? '<span style="display: inline-flex; align-items: center; gap: 4px; color: #10b981; font-size: 12px;"><span style="width: 8px; height: 8px; background: #10b981; border-radius: 50%; display: inline-block;"></span>オンライン</span>'
-      : '<span style="display: inline-flex; align-items: center; gap: 4px; color: #9ca3af; font-size: 12px;"><span style="width: 8px; height: 8px; background: #d1d5db; border-radius: 50%; display: inline-block;"></span>オフライン</span>';
+      ? '<span style="display: inline-flex; align-items: center; gap: 4px; color: #10b981; font-size: 11px;"><span style="width: 6px; height: 6px; background: #10b981; border-radius: 50%; display: inline-block;"></span>オンライン</span>'
+      : '<span style="display: inline-flex; align-items: center; gap: 4px; color: #9ca3af; font-size: 11px;"><span style="width: 6px; height: 6px; background: #d1d5db; border-radius: 50%; display: inline-block;"></span>オフライン</span>';
 
     // 権限選択オプション
     const permissionOptions = Object.values(PERMISSION_DEFINITIONS)
@@ -11466,128 +11471,113 @@ ${prompt || '（未設定）'}
       .map(p => `<option value="${p.id}" ${p.id === permId ? 'selected' : ''} ${p.id === 'owner' && !isSelf ? 'disabled' : ''}>${p.label}</option>`)
       .join('');
 
+    // アクションボタンを固定フッターに配置
     let actionButtons = '';
     if (status === 'pending') {
       actionButtons = `
-        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
-          <div style="margin-bottom: 12px;">
-            <label style="display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px;">承認する権限:</label>
-            <select id="modal-permission-select" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: white;">
-              ${Object.values(PERMISSION_DEFINITIONS).filter(p => p.id !== 'owner').sort((a, b) => a.order - b.order).map(p => `<option value="${p.id}">${p.label}</option>`).join('')}
-            </select>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <button onclick="approveUserFromModal('${user.id}')"
-                    style="flex: 1; padding: 12px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
-              ✅ 承認
-            </button>
-            <button onclick="rejectUser('${user.id}'); closeUserDetailModal();"
-                    style="flex: 1; padding: 12px; background: #ef4444; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
-              ❌ 却下
-            </button>
-          </div>
+        <div style="margin-bottom: 8px;">
+          <label style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">承認する権限:</label>
+          <select id="modal-permission-select" style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
+            ${Object.values(PERMISSION_DEFINITIONS).filter(p => p.id !== 'owner').sort((a, b) => a.order - b.order).map(p => `<option value="${p.id}">${p.label}</option>`).join('')}
+          </select>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button onclick="approveUserFromModal('${user.id}')"
+                  style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+            ✅ 承認
+          </button>
+          <button onclick="rejectUser('${user.id}'); closeUserDetailModal();"
+                  style="flex: 1; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+            ❌ 却下
+          </button>
         </div>
       `;
     } else if (status === 'active' && !isSelf) {
       actionButtons = `
-        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
-          <div style="margin-bottom: 12px;">
-            <label style="display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px;">権限を変更:</label>
-            <select id="modal-permission-select" onchange="changeUserPermission('${user.id}', this.value)"
-                    style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: white;">
-              ${permissionOptions}
-            </select>
-          </div>
-          <button onclick="disableUser('${user.id}'); closeUserDetailModal();"
-                  style="width: 100%; padding: 12px; background: #fee2e2; color: #dc2626; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;">
-            🚫 このユーザーを無効化
-          </button>
+        <div style="margin-bottom: 8px;">
+          <label style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">権限を変更:</label>
+          <select id="modal-permission-select" onchange="changeUserPermission('${user.id}', this.value)"
+                  style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
+            ${permissionOptions}
+          </select>
         </div>
+        <button onclick="disableUser('${user.id}'); closeUserDetailModal();"
+                style="width: 100%; padding: 10px; background: #fee2e2; color: #dc2626; border: none; border-radius: 8px; font-size: 13px; cursor: pointer;">
+          🚫 このユーザーを無効化
+        </button>
       `;
     } else if (status === 'inactive') {
       actionButtons = `
-        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
           <button onclick="enableUser('${user.id}'); closeUserDetailModal();"
-                  style="width: 100%; padding: 12px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                  style="width: 100%; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
             ✅ 有効化
           </button>
           <button onclick="deleteUser('${user.id}', '${userName.replace(/'/g, "\\'")}'); closeUserDetailModal();"
-                  style="width: 100%; padding: 12px; background: #fee2e2; color: #dc2626; border: none; border-radius: 8px; font-size: 14px; cursor: pointer;">
+                  style="width: 100%; padding: 10px; background: #fee2e2; color: #dc2626; border: none; border-radius: 8px; font-size: 13px; cursor: pointer;">
             🗑️ 完全に削除
           </button>
         </div>
       `;
     } else if (isSelf) {
       actionButtons = `
-        <div style="margin-top: 24px; padding: 12px; background: #f0f9ff; border-radius: 8px; text-align: center; color: #0369a1; font-size: 13px;">
+        <div style="padding: 10px; background: #f0f9ff; border-radius: 8px; text-align: center; color: #0369a1; font-size: 12px;">
           これはあなたのアカウントです
         </div>
       `;
     }
 
+    // コンテンツ領域（よりコンパクトに）
     content.innerHTML = `
-      <div style="text-align: center; margin-bottom: 24px;">
+      <div style="text-align: center; margin-bottom: 16px;">
         ${photoUrl ?
-          `<img src="${photoUrl}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 12px;">` :
-          `<div style="width: 80px; height: 80px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 32px; color: #9ca3af; margin: 0 auto 12px;">👤</div>`
+          `<img src="${photoUrl}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; margin-bottom: 8px;">` :
+          `<div style="width: 64px; height: 64px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #9ca3af; margin: 0 auto 8px;">👤</div>`
         }
-        <div style="font-size: 18px; font-weight: 600; color: #374151;">${userName}</div>
-        <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">${userEmail}</div>
-        <div style="margin-top: 8px;">${onlineStatusHtml}</div>
+        <div style="font-size: 16px; font-weight: 600; color: #374151;">${userName}</div>
+        <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">${userEmail}</div>
+        <div style="margin-top: 4px;">${onlineStatusHtml}</div>
       </div>
 
-      <div style="background: #f9fafb; border-radius: 8px; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-          <span style="color: #6b7280; font-size: 13px;">権限</span>
-          <span style="font-weight: 500; font-size: 13px;">${status === 'pending' ? '承認待ち' : permDef.label}</span>
+      <div style="background: #f9fafb; border-radius: 8px; padding: 12px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+          <span style="color: #6b7280; font-size: 12px;">権限</span>
+          <span style="font-weight: 500; font-size: 12px;">${status === 'pending' ? '承認待ち' : permDef.label}</span>
         </div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-          <span style="color: #6b7280; font-size: 13px;">登録日</span>
-          <span style="font-weight: 500; font-size: 13px;">${createdAt}</span>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+          <span style="color: #6b7280; font-size: 12px;">登録日</span>
+          <span style="font-weight: 500; font-size: 12px;">${createdAt}</span>
         </div>
         <div style="display: flex; justify-content: space-between;">
-          <span style="color: #6b7280; font-size: 13px;">ステータス</span>
-          <span style="font-weight: 500; font-size: 13px;">${status === 'active' ? '✅ 有効' : status === 'pending' ? '⏳ 承認待ち' : '🚫 無効'}</span>
+          <span style="color: #6b7280; font-size: 12px;">ステータス</span>
+          <span style="font-weight: 500; font-size: 12px;">${status === 'active' ? '✅ 有効' : status === 'pending' ? '⏳ 承認待ち' : '🚫 無効'}</span>
         </div>
       </div>
 
-      <!-- 発送先・口座情報（管理者のみ表示） -->
-      <div style="background: #fff7ed; border-radius: 8px; padding: 16px; margin-top: 12px; border: 1px solid #fed7aa;">
-        <div style="font-size: 12px; font-weight: 600; color: #c2410c; margin-bottom: 12px;">📋 配送・振込先情報</div>
-        ${user.shippingInfo && (user.shippingInfo.lastName || user.shippingInfo.postalCode) ? `
-          <div style="margin-bottom: 12px;">
-            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">📦 発送先情報</div>
-            <div style="font-size: 13px; color: #374151;">
-              ${user.shippingInfo.lastName || ''} ${user.shippingInfo.firstName || ''}<br>
-              ${user.shippingInfo.postalCode ? '〒' + user.shippingInfo.postalCode + '<br>' : ''}
-              ${user.shippingInfo.prefecture || ''}${user.shippingInfo.city || ''}${user.shippingInfo.building ? '<br>' + user.shippingInfo.building : ''}
-            </div>
+      <!-- 発送先・口座情報（コンパクト版） -->
+      <div style="background: #fff7ed; border-radius: 8px; padding: 12px; margin-top: 10px; border: 1px solid #fed7aa;">
+        <div style="font-size: 11px; font-weight: 600; color: #c2410c; margin-bottom: 8px;">📋 配送・振込先情報</div>
+        <div style="display: flex; gap: 12px;">
+          <div style="flex: 1;">
+            <div style="color: #6b7280; font-size: 10px; margin-bottom: 2px;">📦 発送先情報</div>
+            ${user.shippingInfo && (user.shippingInfo.lastName || user.shippingInfo.postalCode) ?
+              `<div style="font-size: 11px; color: #374151; line-height: 1.3;">${user.shippingInfo.lastName || ''} ${user.shippingInfo.firstName || ''}</div>` :
+              `<div style="font-size: 11px; color: #9ca3af;">未登録</div>`
+            }
           </div>
-        ` : `
-          <div style="margin-bottom: 12px;">
-            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">📦 発送先情報</div>
-            <div style="font-size: 12px; color: #9ca3af;">未登録</div>
+          <div style="flex: 1;">
+            <div style="color: #6b7280; font-size: 10px; margin-bottom: 2px;">🏦 口座情報</div>
+            ${user.bankAccount && user.bankAccount.bankName ?
+              `<div style="font-size: 11px; color: #374151; line-height: 1.3;">${user.bankAccount.bankName}</div>` :
+              `<div style="font-size: 11px; color: #9ca3af;">未登録</div>`
+            }
           </div>
-        `}
-        ${user.bankAccount && user.bankAccount.bankName ? `
-          <div>
-            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">🏦 口座情報</div>
-            <div style="font-size: 13px; color: #374151;">
-              ${user.bankAccount.bankName} ${user.bankAccount.branchName}<br>
-              ${user.bankAccount.accountType} ${user.bankAccount.accountNumber}<br>
-              ${user.bankAccount.accountHolder}
-            </div>
-          </div>
-        ` : `
-          <div>
-            <div style="color: #6b7280; font-size: 11px; margin-bottom: 4px;">🏦 口座情報</div>
-            <div style="font-size: 12px; color: #9ca3af;">未登録</div>
-          </div>
-        `}
+        </div>
       </div>
-
-      ${actionButtons}
     `;
+
+    // アクションボタンを固定フッターに配置
+    actionsDiv.innerHTML = actionButtons;
 
     modal.style.display = 'flex';
   }
