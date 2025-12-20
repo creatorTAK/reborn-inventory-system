@@ -862,28 +862,23 @@
       padding: 0;
       margin-bottom: 16px;
     }
-    /* ベルアイコンのバッジ */
+    /* ベルアイコンのバッジ（v288: 赤いドット表示に変更） */
     .minimal-header-icon {
       position: relative;
     }
-    .header-badge {
+    .announce-dot {
       position: absolute;
-      top: 4px;
-      right: 4px;
+      top: 6px;
+      right: 6px;
+      width: 8px;
+      height: 8px;
       background: #ef4444;
-      color: white;
-      font-size: 10px;
-      font-weight: 700;
-      min-width: 16px;
-      height: 16px;
-      border-radius: 8px;
+      border-radius: 50%;
       display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 0 4px;
+      box-shadow: 0 0 0 2px white;
     }
-    .header-badge.active {
-      display: flex;
+    .announce-dot.active {
+      display: block;
     }
 
     /* 設定ドロップダウン */
@@ -1040,7 +1035,7 @@
     <div class="minimal-header-icons">
       <button class="minimal-header-icon" title="通知" onclick="openAnnouncePage()">
         <i class="bi bi-bell"></i>
-        <span class="header-badge" id="announceBadge">0</span>
+        <span class="announce-dot" id="announceDot"></span>
       </button>
       <div style="position: relative;">
         <button class="minimal-header-icon" title="設定" onclick="toggleSettingsDropdown(event)">
@@ -2074,30 +2069,22 @@
       }
     };
 
-    // バッジを更新（全体 + 個人お知らせの未読数）
+    // バッジを更新（v288: 赤いドット表示に変更）
+    // 未読があれば赤いドットを表示、なければ非表示
     function updateAnnounceBadge() {
       const globalUnread = announcements.filter(a => !readAnnouncementIds.has(a.id)).length;
       const personalUnread = personalAnnouncements.filter(a => !readPersonalIds.has(a.id)).length;
-      const totalUnread = globalUnread + personalUnread;
-      const badge = document.getElementById('announceBadge');
-      if (badge) {
-        if (totalUnread > 0) {
-          badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-          badge.classList.add('active');
+      const hasUnread = (globalUnread + personalUnread) > 0;
+      const dot = document.getElementById('announceDot');
+      if (dot) {
+        if (hasUnread) {
+          dot.classList.add('active');
         } else {
-          badge.textContent = '0';
-          badge.classList.remove('active');
+          dot.classList.remove('active');
         }
       }
-
-      // 親フレームにお知らせバッジ数を通知（アプリバッジに反映するため）
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({
-          type: 'UPDATE_ANNOUNCE_BADGE',
-          count: totalUnread
-        }, '*');
-        console.log('[Announce] 親フレームにバッジ更新通知:', totalUnread);
-      }
+      console.log('[Announce] 未読あり:', hasUnread, '(全体:', globalUnread, ', 個人:', personalUnread, ')');
+      // v288: お知らせは独立管理のため、親フレームへの通知は不要
     }
 
     // 初期化時にお知らせを読み込んでバッジを更新
