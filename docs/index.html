@@ -5871,6 +5871,14 @@
         updateUserIcon(event.data.iconUrl);
       }
 
+      // 📢 お知らせバッジ更新要求（mypage.htmlから受信）
+      if (event.data.type === 'UPDATE_ANNOUNCE_BADGE') {
+        console.log('🔔 お知らせバッジ更新:', event.data.count);
+        if (typeof updateAnnounceUnreadCount === 'function') {
+          updateAnnounceUnreadCount(event.data.count || 0);
+        }
+      }
+
       // 📢 システム通知ルーム投稿（統合型アーキテクチャ）
       // Webhook方式に移行したため、postMessageによる通知受信は不要
       // GAS → Cloudflare Worker → Firestore + FCM で完結
@@ -5923,15 +5931,15 @@
     */
 
     // App Badge API を更新（アイコンのバッジ）
-    // 統合型アーキテクチャ：チャット未読 + やることリストの合計を表示
+    // 統合型アーキテクチャ：チャット未読 + やることリスト + お知らせ の合計を表示
     function updateAppBadge() {
       if ('setAppBadge' in navigator) {
-        const totalBadgeCount = chatUnreadCount + todoUnreadCount;
+        const totalBadgeCount = chatUnreadCount + todoUnreadCount + announceUnreadCount;
         if (totalBadgeCount > 0) {
           navigator.setAppBadge(totalBadgeCount).catch(err => {
             console.error('❌ Badge API エラー:', err);
           });
-          console.log('📱 アプリバッジ更新:', totalBadgeCount, '(チャット:', chatUnreadCount, '+ Todo:', todoUnreadCount, ')');
+          console.log('📱 アプリバッジ更新:', totalBadgeCount, '(チャット:', chatUnreadCount, '+ Todo:', todoUnreadCount, '+ お知らせ:', announceUnreadCount, ')');
         } else {
           navigator.clearAppBadge().catch(err => {
             console.error('❌ Badge API エラー:', err);
@@ -5942,18 +5950,19 @@
 
       // 🔧 Service WorkerのIndexedDBカウントを同期
       // これにより次回のpush通知時に正しいカウントからインクリメントされる
-      syncServiceWorkerBadgeCount(chatUnreadCount, todoUnreadCount);
+      syncServiceWorkerBadgeCount(chatUnreadCount, todoUnreadCount, announceUnreadCount);
     }
 
     // Service WorkerのIndexedDBバッジカウントを同期
-    function syncServiceWorkerBadgeCount(chatCount, todoCount) {
+    function syncServiceWorkerBadgeCount(chatCount, todoCount, announceCount) {
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
           type: 'SYNC_BADGE_COUNT',
           chatCount: chatCount,
-          todoCount: todoCount
+          todoCount: todoCount,
+          announceCount: announceCount || 0
         });
-        console.log('📤 SW同期: chatCount=' + chatCount + ', todoCount=' + todoCount);
+        console.log('📤 SW同期: chatCount=' + chatCount + ', todoCount=' + todoCount + ', announceCount=' + (announceCount || 0));
       }
     }
 
@@ -6187,6 +6196,18 @@
     // やることリスト機能
     // ==========================================
     let todoUnreadCount = 0;
+
+    // ==========================================
+    // お知らせバッジ（mypage.htmlからの通知を受信）
+    // ==========================================
+    let announceUnreadCount = 0;
+
+    function updateAnnounceUnreadCount(count) {
+      console.log('[Announce Badge] バッジ更新:', count);
+      announceUnreadCount = count;
+      // アプリアイコンバッジも更新（チャット + Todo + お知らせ の合計）
+      updateAppBadge();
+    }
 
     // やることリストを開く
     function openTodoList() {
