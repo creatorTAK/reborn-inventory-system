@@ -4975,6 +4975,11 @@
         startTodoListener();
       }
 
+      // お知らせのリスナーを開始（ヘッダーバッジ更新用）
+      if (typeof startAnnounceListener === 'function') {
+        startAnnounceListener();
+      }
+
       // ボトムナビのユーザーアイコンを初期化
       if (typeof initBottomNavUserIcon === 'function') {
         initBottomNavUserIcon();
@@ -6294,6 +6299,87 @@
         console.log('[Todo] リスナー登録完了');
       } catch (error) {
         console.error('[Todo] リスナー開始エラー:', error);
+      }
+    }
+
+    // お知らせのリアルタイム監視を開始（起動時にバッジを更新）
+    async function startAnnounceListener() {
+      const userEmail = localStorage.getItem('reborn_user_email');
+      if (!userEmail) {
+        console.warn('[Announce] ユーザーメールがありません');
+        return;
+      }
+
+      try {
+        const db = await getFirebaseDb();
+        const { collection, getDocs, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        // 状態を保持
+        let globalAnnouncements = [];
+        let personalAnnouncements = [];
+        let readGlobalIds = new Set();
+        let readPersonalIds = new Set();
+
+        // 未読数を計算して更新
+        function calculateAndUpdateBadge() {
+          const globalUnread = globalAnnouncements.filter(a => !readGlobalIds.has(a.id)).length;
+          const personalUnread = personalAnnouncements.filter(a => !readPersonalIds.has(a.id)).length;
+          const totalUnread = globalUnread + personalUnread;
+          console.log('[Announce] 未読数計算: 全体=' + globalUnread + ', 個人=' + personalUnread + ', 合計=' + totalUnread);
+          updateAnnounceUnreadCount(totalUnread);
+        }
+
+        // 1. 全体お知らせを監視
+        const globalRef = collection(db, 'announcements');
+        onSnapshot(globalRef, (snapshot) => {
+          globalAnnouncements = [];
+          snapshot.forEach(doc => {
+            globalAnnouncements.push({ id: doc.id, ...doc.data() });
+          });
+          console.log('[Announce] 全体お知らせ:', globalAnnouncements.length, '件');
+          calculateAndUpdateBadge();
+        });
+
+        // 2. 全体お知らせ既読を監視
+        const readGlobalRef = collection(db, 'readAnnouncements');
+        onSnapshot(readGlobalRef, (snapshot) => {
+          readGlobalIds = new Set();
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.userEmail === userEmail) {
+              readGlobalIds.add(data.announcementId);
+            }
+          });
+          console.log('[Announce] 全体既読:', readGlobalIds.size, '件');
+          calculateAndUpdateBadge();
+        });
+
+        // 3. 個人お知らせを監視
+        const personalRef = collection(db, 'users', userEmail, 'personalAnnouncements');
+        onSnapshot(personalRef, (snapshot) => {
+          personalAnnouncements = [];
+          snapshot.forEach(doc => {
+            personalAnnouncements.push({ id: doc.id, ...doc.data() });
+          });
+          console.log('[Announce] 個人お知らせ:', personalAnnouncements.length, '件');
+          calculateAndUpdateBadge();
+        });
+
+        // 4. 個人お知らせ既読を監視
+        const readPersonalRef = collection(db, 'users', userEmail, 'readPersonalAnnouncements');
+        onSnapshot(readPersonalRef, (snapshot) => {
+          readPersonalIds = new Set();
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            readPersonalIds.add(data.announcementId);
+          });
+          console.log('[Announce] 個人既読:', readPersonalIds.size, '件');
+          calculateAndUpdateBadge();
+        });
+
+        console.log('[Announce] リスナー登録完了');
+      } catch (error) {
+        console.error('[Announce] リスナー開始エラー:', error);
       }
     }
 
