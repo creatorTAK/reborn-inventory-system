@@ -5094,9 +5094,55 @@
         if (response.ok) {
           // localStorageに新しいトークンを保存
           localStorage.setItem('reborn_fcm_token', currentToken);
-          console.log('✅ FCMトークンを自動更新しました');
+          console.log('✅ FCMトークンを自動更新しました（GAS）');
         } else {
           console.error('❌ FCMトークンの送信に失敗:', response.status);
+        }
+
+        // 🔧 Firestoreのデバイス情報も更新（通知送信で使用されるため重要）
+        try {
+          const db = await getFirebaseDb();
+          const { collection, query, where, getDocs, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+          // ユーザーのデバイスコレクションから、旧トークンまたはactive=trueのデバイスを検索
+          const devicesRef = collection(db, 'users', userEmail, 'devices');
+          const devicesSnapshot = await getDocs(devicesRef);
+
+          let deviceUpdated = false;
+          for (const deviceDoc of devicesSnapshot.docs) {
+            const deviceData = deviceDoc.data();
+            // 旧トークンを持つデバイス、またはactive=trueのデバイスを更新
+            if (deviceData.fcmToken === savedToken || (deviceData.active === true && !deviceUpdated)) {
+              await updateDoc(deviceDoc.ref, {
+                fcmToken: currentToken,
+                lastUsedAt: new Date(),
+                deviceInfo: deviceInfo
+              });
+              console.log('✅ FCMトークンを自動更新しました（Firestore）:', deviceDoc.id);
+              deviceUpdated = true;
+            }
+          }
+
+          if (!deviceUpdated && devicesSnapshot.size === 0) {
+            // デバイスがない場合は新規作成（稀なケース）
+            const { addDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+            const permissionId = localStorage.getItem('reborn_user_permission_id') || 'staff';
+            await addDoc(devicesRef, {
+              fcmToken: currentToken,
+              deviceInfo: deviceInfo,
+              active: true,
+              permissionId: permissionId,
+              permissionDisplay: permissionDisplay,
+              userName: userName,
+              userEmail: userEmail,
+              registeredAt: new Date(),
+              lastUsedAt: new Date()
+            });
+            console.log('✅ 新規デバイスを登録しました（Firestore）');
+          }
+        } catch (firestoreError) {
+          console.error('❌ Firestoreトークン更新エラー:', firestoreError);
+          // GAS更新は成功しているので、処理は続行
         }
       } catch (error) {
         console.error('❌ FCMトークン更新チェックエラー:', error);
