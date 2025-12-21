@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-20 v297 - 通知・バッジをFirebase Functionsに一本化 -->
+  <!-- Cache Bust: 2025-12-21 v320 - Keepに保存機能追加（長押しメニュー） -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -308,6 +308,12 @@
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+      15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
     }
 
     /* メッセージコンテント（アイコン + バブル + 時間） */
@@ -2016,6 +2022,10 @@
       <button class="context-menu-item" id="contextMenuForward">
         <i class="bi bi-box-arrow-up-right"></i>
         <span>転送</span>
+      </button>
+      <button class="context-menu-item" id="contextMenuKeep">
+        <i class="bi bi-bookmark"></i>
+        <span>Keep</span>
       </button>
       <button class="context-menu-item" id="contextMenuDelete">
         <i class="bi bi-trash"></i>
@@ -5056,6 +5066,11 @@
       e.stopPropagation();
       unsendMessage();
     });
+    document.getElementById('contextMenuKeep').addEventListener('touchend', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      saveToKeep();
+    });
 
     // PC用: クリックイベントも追加
     document.getElementById('contextMenuCopy').addEventListener('click', function(e) {
@@ -5083,6 +5098,11 @@
       e.stopPropagation();
       unsendMessage();
     });
+    document.getElementById('contextMenuKeep').addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      saveToKeep();
+    });
 
     // コピー機能
     window.copyMessage = function() {
@@ -5108,6 +5128,127 @@
           closeContextMenu();
         });
     };
+
+    // Keepに保存機能
+    window.saveToKeep = async function() {
+      if (!contextMenuData.messageText && !contextMenuData.fileUrl) {
+        console.log('[Keep] 保存するコンテンツがありません');
+        return;
+      }
+
+      if (!currentUserName) {
+        alert('ユーザー情報が取得できません');
+        return;
+      }
+
+      // データを保存してからメニューを閉じる
+      const messageText = contextMenuData.messageText;
+      const fileUrl = contextMenuData.fileUrl;
+      const fileName = contextMenuData.fileName;
+      const senderName = contextMenuData.senderName || '不明';
+
+      closeContextMenu();
+
+      try {
+        // 既存のKeepメモルームを検索
+        const q = query(
+          collection(db, 'rooms'),
+          where('type', '==', 'keep'),
+          where('createdBy', '==', currentUserName)
+        );
+        const snapshot = await getDocs(q);
+
+        let keepRoomId;
+
+        if (!snapshot.empty) {
+          // 既存のKeepメモルームがある場合
+          keepRoomId = snapshot.docs[0].id;
+          console.log('[Keep] 既存のKeepメモルームを使用:', keepRoomId);
+        } else {
+          // Keepメモルームを新規作成
+          console.log('[Keep] Keepメモルームを新規作成');
+          const newRoom = await addDoc(collection(db, 'rooms'), {
+            name: 'Keepメモ',
+            icon: '📌',
+            createdBy: currentUserName,
+            createdAt: serverTimestamp(),
+            lastMessageAt: serverTimestamp(),
+            lastMessageText: '',
+            lastMessageSender: '',
+            members: [currentUserName],
+            type: 'keep'
+          });
+          keepRoomId = newRoom.id;
+          console.log('[Keep] Keepメモルーム作成完了:', keepRoomId);
+        }
+
+        // 保存するメッセージの内容を構築
+        let keepMessage = '';
+        if (messageText) {
+          keepMessage = `📎 ${senderName}さんのメッセージ:\n${messageText}`;
+        } else if (fileUrl) {
+          keepMessage = `📎 ${senderName}さんのファイル`;
+        }
+
+        // Keepメモルームにメッセージを保存
+        const messageData = {
+          text: keepMessage,
+          userName: currentUserName,
+          userEmail: currentUserEmail || '',
+          createdAt: serverTimestamp(),
+          type: 'text'
+        };
+
+        // 画像/ファイルがある場合は添付
+        if (fileUrl) {
+          messageData.fileUrl = fileUrl;
+          messageData.fileName = fileName || 'ファイル';
+          messageData.type = 'file';
+        }
+
+        await addDoc(collection(db, 'rooms', keepRoomId, 'messages'), messageData);
+
+        // Keepルームの最終メッセージを更新
+        await updateDoc(doc(db, 'rooms', keepRoomId), {
+          lastMessageAt: serverTimestamp(),
+          lastMessageText: messageText || '（ファイル）',
+          lastMessageSender: currentUserName
+        });
+
+        console.log('[Keep] メッセージをKeepに保存しました');
+
+        // 成功通知（簡易トースト）
+        showKeepToast('Keepに保存しました');
+
+      } catch (error) {
+        console.error('[Keep] 保存エラー:', error);
+        alert('Keepへの保存に失敗しました: ' + error.message);
+      }
+    };
+
+    // Keep保存完了トースト表示
+    function showKeepToast(message) {
+      const toast = document.createElement('div');
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 24px;
+        font-size: 14px;
+        z-index: 10000;
+        animation: fadeInOut 2s ease-in-out;
+      `;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.remove();
+      }, 2000);
+    }
 
     // リプライ機能（LINE風）
     window.replyMessage = function() {
