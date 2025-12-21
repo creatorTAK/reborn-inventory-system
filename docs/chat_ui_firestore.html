@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21 v333 - ヘッダー白化・サイドメニュー削除 -->
+  <!-- Cache Bust: 2025-12-21 v334 - ヘッダー歯車メニュー・ブロック機能追加 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -145,6 +145,90 @@
       font-size: 17px;
       font-weight: 600;
       padding: 0 8px;
+    }
+
+    /* 設定ボタン（白ヘッダー用） */
+    .settings-button {
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: transparent;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
+      color: #606060;
+      font-size: 22px;
+      position: relative;
+    }
+    .settings-button:hover {
+      background: #f2f2f2;
+    }
+    .settings-button:active {
+      background: #e5e5e5;
+    }
+
+    /* チャット設定ドロップダウン */
+    .chat-settings-dropdown {
+      position: absolute;
+      top: 100%;
+      right: 8px;
+      margin-top: 4px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      min-width: 180px;
+      overflow: hidden;
+      display: none;
+      z-index: 1001;
+    }
+    .chat-settings-dropdown.active {
+      display: block;
+    }
+    .chat-settings-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 14px 16px;
+      border: none;
+      background: transparent;
+      font-size: 15px;
+      color: #1f2937;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.2s;
+    }
+    .chat-settings-item:hover {
+      background: #f5f5f5;
+    }
+    .chat-settings-item:active {
+      background: #e5e5e5;
+    }
+    .chat-settings-item i {
+      font-size: 18px;
+      color: #606060;
+    }
+    .chat-settings-item.danger {
+      color: #ef4444;
+    }
+    .chat-settings-item.danger i {
+      color: #ef4444;
+    }
+    .chat-settings-divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 4px 0;
+    }
+
+    /* トーストアニメーション */
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+      15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
     }
 
     /* 検索モード */
@@ -1848,6 +1932,25 @@
       <button class="search-button" id="searchButton" onclick="openSearchMode()">
         <i class="bi bi-search"></i>
       </button>
+      <button class="settings-button" id="chatSettingsButton" onclick="toggleChatSettings(event)">
+        <i class="bi bi-gear"></i>
+      </button>
+      <!-- チャット設定ドロップダウン -->
+      <div class="chat-settings-dropdown" id="chatSettingsDropdown">
+        <button class="chat-settings-item" id="blockUserBtn" onclick="toggleBlockUser()">
+          <i class="bi bi-slash-circle"></i>
+          <span id="blockUserText">ブロックする</span>
+        </button>
+        <button class="chat-settings-item" id="muteRoomBtn" onclick="toggleMuteRoom()">
+          <i class="bi bi-bell-slash"></i>
+          <span id="muteRoomText">通知をオフ</span>
+        </button>
+        <div class="chat-settings-divider"></div>
+        <button class="chat-settings-item danger" id="leaveRoomBtn" onclick="confirmLeaveRoom()">
+          <i class="bi bi-box-arrow-right"></i>
+          <span>退出する</span>
+        </button>
+      </div>
     </div>
     <!-- 検索モード -->
     <div class="header-content header-search-mode" id="headerSearch" style="display: none;">
@@ -5874,7 +5977,246 @@
       google.script.host.close();
     }
   }
-  
+
+  // ========== チャット設定ドロップダウン ==========
+  function toggleChatSettings(event) {
+    event.stopPropagation();
+    const dropdown = document.getElementById('chatSettingsDropdown');
+    dropdown.classList.toggle('active');
+
+    // ドロップダウンを開いた時に状態を更新
+    if (dropdown.classList.contains('active')) {
+      updateSettingsMenuState();
+    }
+  }
+
+  // 設定メニューの状態を更新
+  async function updateSettingsMenuState() {
+    if (!currentRoomId || !currentUserEmail) return;
+
+    try {
+      // 現在のルームのデータを取得
+      const roomRef = firebase.firestore().collection('rooms').doc(currentRoomId);
+      const roomDoc = await roomRef.get();
+      const roomData = roomDoc.data();
+
+      // ミュート状態を確認
+      const isMuted = roomData.mutedBy && roomData.mutedBy.includes(currentUserEmail);
+      const muteText = document.getElementById('muteRoomText');
+      const muteBtn = document.getElementById('muteRoomBtn');
+      if (isMuted) {
+        muteText.textContent = '通知をオン';
+        muteBtn.querySelector('i').className = 'bi bi-bell';
+      } else {
+        muteText.textContent = '通知をオフ';
+        muteBtn.querySelector('i').className = 'bi bi-bell-slash';
+      }
+
+      // ブロック状態を確認（個別チャットのみ）
+      const blockBtn = document.getElementById('blockUserBtn');
+      const blockText = document.getElementById('blockUserText');
+
+      if (roomData.type === 'direct') {
+        // 相手のユーザーを特定
+        const otherUserEmail = roomData.members.find(m => m !== currentUserEmail);
+
+        // 自分のブロックリストを確認
+        const userRef = firebase.firestore().collection('users').doc(currentUserEmail);
+        const userDoc = await userRef.get();
+        const userData = userDoc.data() || {};
+        const blockedUsers = userData.blockedUsers || [];
+
+        const isBlocked = blockedUsers.includes(otherUserEmail);
+        if (isBlocked) {
+          blockText.textContent = 'ブロック解除';
+          blockBtn.querySelector('i').className = 'bi bi-slash-circle-fill';
+        } else {
+          blockText.textContent = 'ブロックする';
+          blockBtn.querySelector('i').className = 'bi bi-slash-circle';
+        }
+        blockBtn.style.display = 'flex';
+        blockBtn.dataset.targetUser = otherUserEmail;
+      } else {
+        // グループチャットではブロックボタン非表示
+        blockBtn.style.display = 'none';
+      }
+
+      // 退出ボタンの表示（グループチャットのみ）
+      const leaveBtn = document.getElementById('leaveRoomBtn');
+      if (roomData.type === 'group') {
+        leaveBtn.style.display = 'flex';
+      } else {
+        leaveBtn.style.display = 'none';
+      }
+
+    } catch (error) {
+      console.error('[Settings] 状態取得エラー:', error);
+    }
+  }
+
+  // ブロック/ブロック解除
+  async function toggleBlockUser() {
+    const blockBtn = document.getElementById('blockUserBtn');
+    const targetUser = blockBtn.dataset.targetUser;
+    const blockText = document.getElementById('blockUserText');
+
+    if (!targetUser || !currentUserEmail) {
+      showToast('エラーが発生しました');
+      return;
+    }
+
+    const isCurrentlyBlocked = blockText.textContent === 'ブロック解除';
+
+    // 確認ダイアログ
+    const action = isCurrentlyBlocked ? 'ブロックを解除' : 'ブロック';
+    if (!confirm(`このユーザーを${action}しますか？`)) {
+      closeChatSettings();
+      return;
+    }
+
+    try {
+      const userRef = firebase.firestore().collection('users').doc(currentUserEmail);
+
+      if (isCurrentlyBlocked) {
+        // ブロック解除
+        await userRef.update({
+          blockedUsers: firebase.firestore.FieldValue.arrayRemove(targetUser)
+        });
+        showToast('ブロックを解除しました');
+        blockText.textContent = 'ブロックする';
+        blockBtn.querySelector('i').className = 'bi bi-slash-circle';
+      } else {
+        // ブロック
+        await userRef.set({
+          blockedUsers: firebase.firestore.FieldValue.arrayUnion(targetUser)
+        }, { merge: true });
+        showToast('ブロックしました');
+        blockText.textContent = 'ブロック解除';
+        blockBtn.querySelector('i').className = 'bi bi-slash-circle-fill';
+      }
+
+      closeChatSettings();
+
+    } catch (error) {
+      console.error('[Block] エラー:', error);
+      showToast('エラーが発生しました');
+    }
+  }
+
+  // ミュート/ミュート解除
+  async function toggleMuteRoom() {
+    if (!currentRoomId || !currentUserEmail) return;
+
+    const muteText = document.getElementById('muteRoomText');
+    const isCurrentlyMuted = muteText.textContent === '通知をオン';
+
+    try {
+      const roomRef = firebase.firestore().collection('rooms').doc(currentRoomId);
+
+      if (isCurrentlyMuted) {
+        // ミュート解除
+        await roomRef.update({
+          mutedBy: firebase.firestore.FieldValue.arrayRemove(currentUserEmail)
+        });
+        showToast('通知をオンにしました');
+        muteText.textContent = '通知をオフ';
+        document.getElementById('muteRoomBtn').querySelector('i').className = 'bi bi-bell-slash';
+      } else {
+        // ミュート
+        await roomRef.update({
+          mutedBy: firebase.firestore.FieldValue.arrayUnion(currentUserEmail)
+        });
+        showToast('通知をオフにしました');
+        muteText.textContent = '通知をオン';
+        document.getElementById('muteRoomBtn').querySelector('i').className = 'bi bi-bell';
+      }
+
+      closeChatSettings();
+
+    } catch (error) {
+      console.error('[Mute] エラー:', error);
+      showToast('エラーが発生しました');
+    }
+  }
+
+  // グループ退出確認
+  function confirmLeaveRoom() {
+    if (!confirm('このグループから退出しますか？')) {
+      closeChatSettings();
+      return;
+    }
+    leaveRoom();
+  }
+
+  // グループ退出
+  async function leaveRoom() {
+    if (!currentRoomId || !currentUserEmail) return;
+
+    try {
+      const roomRef = firebase.firestore().collection('rooms').doc(currentRoomId);
+
+      // メンバーから削除
+      await roomRef.update({
+        members: firebase.firestore.FieldValue.arrayRemove(currentUserEmail)
+      });
+
+      showToast('グループから退出しました');
+      closeChatSettings();
+
+      // チャット一覧に戻る
+      setTimeout(() => {
+        goBack();
+      }, 500);
+
+    } catch (error) {
+      console.error('[Leave] エラー:', error);
+      showToast('エラーが発生しました');
+    }
+  }
+
+  // 設定ドロップダウンを閉じる
+  function closeChatSettings() {
+    document.getElementById('chatSettingsDropdown').classList.remove('active');
+  }
+
+  // 画面外クリックで閉じる
+  document.addEventListener('click', function(e) {
+    const dropdown = document.getElementById('chatSettingsDropdown');
+    const settingsBtn = document.getElementById('chatSettingsButton');
+    if (dropdown && !dropdown.contains(e.target) && !settingsBtn.contains(e.target)) {
+      dropdown.classList.remove('active');
+    }
+  });
+
+  // トースト表示
+  function showToast(message) {
+    // 既存のトーストがあれば削除
+    const existingToast = document.getElementById('settingsToast');
+    if (existingToast) existingToast.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'settingsToast';
+    toast.textContent = message;
+    toast.style.cssText = `
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 24px;
+      font-size: 14px;
+      z-index: 9999;
+      animation: fadeInOut 2s ease;
+    `;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.remove();
+    }, 2000);
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     console.log('[chat_ui_firestore] DOMContentLoaded fired');
     const backButton = document.getElementById('back-button');
