@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21-v324 - ブロックリスト自分自身除外+自動クリーンアップ -->
+  <!-- Cache Bust: 2025-12-21-v325 - ルーム一覧でブロック中ユーザーのメッセージ非表示 -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1431,6 +1431,7 @@
     let currentUserEmail = '';
     let usersCache = []; // ユーザーアイコン表示用キャッシュ
     let unsubscribeRooms = null; // Firestoreリスナーの解除用
+    let currentUserBlockedList = []; // ブロック中ユーザーリスト（LINE風ブロック）
 
     // デバッグ用：グローバルに公開
     window.debugUsersCache = () => {
@@ -1719,6 +1720,26 @@
           </div>
         `;
         return;
+      }
+
+      // 🚫 ブロックリスト取得（LINE風ブロック機能用）
+      if (trimmedUserEmail) {
+        try {
+          const userRef = doc(db, 'users', trimmedUserEmail);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            currentUserBlockedList = (userData.blockedUsers || []).filter(
+              name => name !== trimmedUserName && name !== trimmedUserEmail
+            );
+            console.log('🚫 [Block] ブロックリスト取得:', currentUserBlockedList);
+          } else {
+            currentUserBlockedList = [];
+          }
+        } catch (error) {
+          console.error('❌ [Block] ブロックリスト取得エラー:', error);
+          currentUserBlockedList = [];
+        }
       }
 
       // 🔧 emailベースのクエリを優先（ユーザー名変更に強い）
@@ -2180,7 +2201,33 @@
 
       const lastMessage = document.createElement('div');
       lastMessage.className = 'room-last-message';
-      if (room.lastMessage) {
+
+      // 🚫 ブロックチェック（LINE風）: ダイレクトチャットで相手がブロック中の場合
+      let isBlockedRoom = false;
+      if (room.type === 'direct' && currentUserBlockedList.length > 0) {
+        // 相手のユーザー名を取得
+        let otherMember = null;
+        if (room.memberEmails && room.memberEmails.length === 2) {
+          const otherEmail = room.memberEmails.find(e => e !== currentUserEmail);
+          const otherUserData = usersCache.find(u => u.id === otherEmail || u.userEmail === otherEmail);
+          otherMember = otherUserData?.userName || otherEmail;
+        } else if (room.members && Array.isArray(room.members)) {
+          otherMember = room.members.find(m => m !== currentUserName);
+        }
+        // ブロックリストに含まれているかチェック
+        if (otherMember) {
+          isBlockedRoom = currentUserBlockedList.some(
+            blocked => blocked.toLowerCase() === otherMember.toLowerCase()
+          );
+        }
+      }
+
+      if (isBlockedRoom) {
+        // ブロック中: メッセージを非表示
+        lastMessage.textContent = '🚫 ブロック中';
+        lastMessage.style.color = '#9ca3af';
+        lastMessage.style.fontStyle = 'italic';
+      } else if (room.lastMessage) {
         const sender = room.lastMessageBy || '';
 
         // 表示ロジック:
