@@ -22,66 +22,100 @@
       background: #f5f5f5;
       min-height: 100vh;
     }
-    /* ヘルプ風ヘッダー（v306c: スクロール追従に変更） */
-    .page-header {
-      background: linear-gradient(135deg, var(--reborn-primary, #40B4E5) 0%, var(--reborn-primary-dark, #1E8FBF) 100%);
-      padding: 28px 20px;
-      color: white;
-      text-align: center;
+    /* ミニマルヘッダー（マイページと同じスタイル） */
+    .minimal-header {
+      background: #ffffff;
+      height: 56px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       position: sticky;
       top: 0;
       z-index: 1000;
+      border-bottom: 1px solid #f0f0f0;
     }
-    .page-header h1 {
-      font-size: 22px;
-      font-weight: 600;
+    .minimal-header-logo {
+      width: 100px;
+      height: auto;
+      cursor: pointer;
+    }
+    .minimal-header-icons {
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 8px;
+      gap: 6px;
     }
-    .page-header h1 i {
-      font-size: 22px;
-    }
-    .back-button {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      left: 16px;
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
+    .minimal-header-icon {
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
-      width: 42px;
-      height: 42px;
+      border: none;
+      background: transparent;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      color: white;
-      font-size: 20px;
+      color: #606060;
+      font-size: 22px;
+      transition: background 0.2s;
+      position: relative;
     }
-    .back-button:active {
-      background: rgba(255, 255, 255, 0.3);
+    .minimal-header-icon:hover {
+      background: #f2f2f2;
     }
-    .menu-button {
+    .minimal-header-icon:active {
+      background: #e5e5e5;
+    }
+    /* 設定ドロップダウン */
+    .settings-dropdown {
       position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      right: 16px;
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
-      border-radius: 50%;
-      width: 42px;
-      height: 42px;
+      top: 100%;
+      right: 0;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      min-width: 200px;
+      padding: 8px 0;
+      display: none;
+      z-index: 1001;
+    }
+    .settings-dropdown.active {
+      display: block;
+    }
+    .settings-dropdown-item {
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border: none;
+      background: none;
+      width: 100%;
+      font-size: 14px;
+      color: #374151;
       cursor: pointer;
-      color: white;
-      font-size: 20px;
+      text-align: left;
     }
-    .menu-button:active {
-      background: rgba(255, 255, 255, 0.3);
+    .settings-dropdown-item:hover {
+      background: #f3f4f6;
+    }
+    .settings-dropdown-item i {
+      font-size: 18px;
+      color: #6b7280;
+      width: 20px;
+      text-align: center;
+    }
+    .announce-dot {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 8px;
+      height: 8px;
+      background: #ef4444;
+      border-radius: 50%;
+      display: none;
+    }
+    .announce-dot.visible {
+      display: block;
     }
     .tasks-container {
       padding: 16px;
@@ -249,15 +283,26 @@
   </style>
 </head>
 <body>
-  <!-- ヘルプ風ヘッダー -->
-  <div class="page-header">
-    <button class="back-button" onclick="goBack()" title="戻る">
-      <i class="bi bi-chevron-left"></i>
-    </button>
-    <h1>タスク</h1>
-    <button class="menu-button" onclick="window.parent.postMessage({type:'toggleDrawer'}, '*')" title="メニュー">
-      <i class="bi bi-list"></i>
-    </button>
+  <!-- ミニマルヘッダー（マイページと同じスタイル） -->
+  <div class="minimal-header">
+    <img src="/images/furira-square-logo.png?v=20251209" alt="Furira" class="minimal-header-logo" onclick="window.parent.postMessage({type:'navigate', page:'home'}, '*')">
+    <div class="minimal-header-icons">
+      <button class="minimal-header-icon" title="通知" onclick="openAnnouncePage()">
+        <i class="bi bi-bell"></i>
+        <span class="announce-dot" id="announceDot"></span>
+      </button>
+      <div style="position: relative;">
+        <button class="minimal-header-icon" title="設定" onclick="toggleSettingsDropdown(event)">
+          <i class="bi bi-gear"></i>
+        </button>
+        <div class="settings-dropdown" id="settingsDropdown">
+          <button class="settings-dropdown-item" onclick="goToHistory()">
+            <i class="bi bi-clock-history"></i>
+            <span>完了した履歴</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="tasks-container">
@@ -518,6 +563,10 @@
 
     // 履歴ページへ遷移
     function goToHistory() {
+      // ドロップダウンを閉じる
+      const dropdown = document.getElementById('settingsDropdown');
+      if (dropdown) dropdown.classList.remove('active');
+
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({
           type: 'navigateToPage',
@@ -526,6 +575,30 @@
         }, parentOrigin);
       } else {
         window.location.href = `todo_history.html?userEmail=${encodeURIComponent(userEmail)}&parentOrigin=${encodeURIComponent(parentOrigin)}&pmToken=${encodeURIComponent(pmToken)}`;
+      }
+    }
+
+    // 設定ドロップダウン制御
+    function toggleSettingsDropdown(event) {
+      event.stopPropagation();
+      const dropdown = document.getElementById('settingsDropdown');
+      dropdown.classList.toggle('active');
+    }
+
+    // ドロップダウン外クリックで閉じる
+    document.addEventListener('click', function(event) {
+      const dropdown = document.getElementById('settingsDropdown');
+      if (dropdown && !event.target.closest('.settings-dropdown') && !event.target.closest('.minimal-header-icon')) {
+        dropdown.classList.remove('active');
+      }
+    });
+
+    // お知らせページを開く
+    function openAnnouncePage() {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'navigate', page: 'announce' }, '*');
+      } else {
+        window.location.href = '/announce.html';
       }
     }
 
