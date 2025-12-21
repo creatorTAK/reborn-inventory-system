@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21-v326 - ブロック中ルームの時間・バッジも非表示 -->
+  <!-- Cache Bust: 2025-12-21-v327 - バッジ同期機能追加（ホームアイコンとルーム未読数の一致） -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1432,6 +1432,36 @@
     let usersCache = []; // ユーザーアイコン表示用キャッシュ
     let unsubscribeRooms = null; // Firestoreリスナーの解除用
     let currentUserBlockedList = []; // ブロック中ユーザーリスト（LINE風ブロック）
+    let roomUnreadCounts = new Map(); // ルームごとの未読数を追跡（バッジ同期用）
+
+    // Service Workerにバッジカウントを同期する関数
+    function syncBadgeWithServiceWorker() {
+      const totalUnread = Array.from(roomUnreadCounts.values()).reduce((sum, count) => sum + count, 0);
+      console.log('[Badge Sync] 合計未読:', totalUnread, 'rooms:', roomUnreadCounts.size);
+
+      // Service Workerにメッセージ送信
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SYNC_BADGE_COUNT',
+          chatCount: totalUnread,
+          todoCount: 0 // todo未読はここでは不明なので0、index.htmlで正しい値が設定される
+        });
+        console.log('[Badge Sync] 📤 SW同期: chatCount=' + totalUnread);
+      }
+
+      // アプリバッジも直接更新（Service Workerとは別に）
+      if ('setAppBadge' in navigator) {
+        if (totalUnread > 0) {
+          navigator.setAppBadge(totalUnread).catch(err => {
+            console.warn('[Badge Sync] setAppBadge失敗:', err);
+          });
+        } else {
+          navigator.clearAppBadge().catch(err => {
+            console.warn('[Badge Sync] clearAppBadge失敗:', err);
+          });
+        }
+      }
+    }
 
     // デバッグ用：グローバルに公開
     window.debugUsersCache = () => {
@@ -1814,6 +1844,9 @@
 
         const container = document.getElementById('roomsContainer');
         container.innerHTML = '';
+
+        // 🔧 ルームリスト再読み込み時にバッジカウントマップをクリア
+        roomUnreadCounts.clear();
 
         if (snapshot.empty) {
           // 空の状態
@@ -2272,15 +2305,23 @@
         const unreadRef = doc(db, `rooms/${room.id}/unreadCounts/${currentUserEmail}`);
         onSnapshot(unreadRef, (unreadDoc) => {
           const badgeEl = document.getElementById(`unread-badge-${room.id}`);
+          const unreadData = unreadDoc.data();
+          const unreadCount = unreadData?.unreadCount || 0;
+
+          // 🔧 バッジ同期用マップを更新
+          const prevCount = roomUnreadCounts.get(room.id) || 0;
+          if (prevCount !== unreadCount) {
+            roomUnreadCounts.set(room.id, unreadCount);
+            // 全ルームの合計でService Workerを同期
+            syncBadgeWithServiceWorker();
+          }
+
           if (badgeEl) {
             // ブロック中フラグが立っている場合はスキップ
             if (badgeEl.dataset.blocked === 'true') {
               badgeEl.style.display = 'none';
               return;
             }
-
-            const unreadData = unreadDoc.data();
-            const unreadCount = unreadData?.unreadCount || 0;
 
             if (unreadCount > 0) {
               badgeEl.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
@@ -2292,6 +2333,9 @@
         }, (error) => {
           console.error('[Rooms List] 未読カウント取得エラー:', room.id, error);
         });
+      } else if (isBlockedRoom) {
+        // ブロック中のルームは未読カウント0として扱う
+        roomUnreadCounts.set(room.id, 0);
       }
     }
 
