@@ -1320,7 +1320,7 @@
   <!-- 非表示ルーム一覧モーダル -->
   <div class="modal-overlay" id="hiddenRoomsModal">
     <div class="modal-content" style="max-height: 80vh;">
-      <div class="modal-title">🙈 非表示ルーム</div>
+      <div class="modal-title">非表示ルーム</div>
       <div style="margin-bottom: 12px; font-size: 14px; color: #718096;">
         スワイプで非表示にしたルームを復元できます
       </div>
@@ -3555,11 +3555,21 @@
           const data = doc.data();
           const hiddenBy = data.hiddenBy || [];
           if (hiddenBy.includes(currentUserName)) {
+            // ダイレクトチャットの場合、相手のユーザー名を取得
+            let displayName = data.name || '不明なルーム';
+            let otherUserName = '';
+            if (data.type === 'direct' && data.members && Array.isArray(data.members)) {
+              otherUserName = data.members.find(m => m !== currentUserName) || '';
+              displayName = otherUserName || '不明なユーザー';
+            }
+
             hiddenRooms.push({
               id: doc.id,
-              name: data.name || '不明なルーム',
-              icon: data.icon || '💬',
-              type: data.type || 'group'
+              name: displayName,
+              icon: data.icon || '',
+              type: data.type || 'group',
+              members: data.members || [],
+              otherUserName: otherUserName
             });
           }
         });
@@ -3571,11 +3581,27 @@
 
         let html = '';
         hiddenRooms.forEach(room => {
-          const displayName = room.type === 'direct' ? room.name.replace(currentUserName, '').replace(' & ', '').trim() : room.name;
+          let iconHtml;
+          if (room.type === 'direct' && room.otherUserName) {
+            // ダイレクトチャット：相手のアイコンを表示
+            const iconUrl = getUserIconUrl(room.otherUserName);
+            const initial = room.otherUserName.charAt(0).toUpperCase();
+            if (iconUrl) {
+              iconHtml = `<img src="${iconUrl}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--reborn-primary), var(--reborn-primary-dark)); display: none; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; margin-right: 12px;">${initial}</div>`;
+            } else {
+              iconHtml = `<div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--reborn-primary), var(--reborn-primary-dark)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; margin-right: 12px;">${initial}</div>`;
+            }
+          } else {
+            // グループチャット：絵文字アイコン
+            const icon = room.icon || '💬';
+            iconHtml = `<div style="width: 40px; height: 40px; border-radius: 50%; background: #f3f4f6; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-right: 12px;">${icon}</div>`;
+          }
+
           html += `
             <div style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e5e7eb;">
-              <div style="font-size: 24px; margin-right: 12px;">${room.icon}</div>
-              <div style="flex: 1; font-weight: 500; color: #1f2937;">${displayName}</div>
+              ${iconHtml}
+              <div style="flex: 1; font-weight: 500; color: #1f2937;">${room.name}</div>
               <button onclick="restoreHiddenRoom('${room.id}')" style="padding: 6px 12px; background: var(--reborn-primary); color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">復元</button>
             </div>
           `;
