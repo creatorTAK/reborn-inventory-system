@@ -968,10 +968,7 @@
         <!-- システム設定内の横タブナビゲーション -->
         <ul class="nav nav-tabs" id="systemConfigTabs" role="tablist" style="margin-bottom: 16px; overflow-x: auto; flex-wrap: nowrap; white-space: nowrap;">
           <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="system-basic-tab" data-bs-toggle="tab" data-bs-target="#system-basic" type="button" role="tab" style="font-size: 13px; padding: 8px 12px;">⚙️ 基本設定</button>
-          </li>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="system-management-tab" data-bs-toggle="tab" data-bs-target="#system-management" type="button" role="tab" style="font-size: 13px; padding: 8px 12px;">🔢 管理番号設定</button>
+            <button class="nav-link active" id="system-management-tab" data-bs-toggle="tab" data-bs-target="#system-management" type="button" role="tab" style="font-size: 13px; padding: 8px 12px;">🔢 管理番号設定</button>
           </li>
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="system-shipping-tab" data-bs-toggle="tab" data-bs-target="#system-shipping" type="button" role="tab" style="font-size: 13px; padding: 8px 12px;">📦配送設定</button>
@@ -995,26 +992,8 @@
 
         <!-- システム設定内のタブコンテンツ -->
         <div class="tab-content" id="systemConfigTabContent">
-          <!-- 基本設定タブ（v355: マイページに移行済み） -->
-          <div class="tab-pane fade show active" id="system-basic" role="tabpanel">
-            <!-- マイページへの案内 -->
-            <div style="padding: 40px 20px; text-align: center;">
-              <div style="font-size: 48px; margin-bottom: 16px;">👤</div>
-              <h3 style="font-size: 18px; font-weight: 600; color: #1f2937; margin-bottom: 8px;">基本設定はマイページに移動しました</h3>
-              <p style="font-size: 14px; color: #6b7280; margin-bottom: 24px; line-height: 1.6;">
-                プロフィール編集、通知設定、個人情報設定は<br>
-                マイページからアクセスできます。
-              </p>
-              <button type="button" class="btn" style="background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500;" onclick="navigateToMyPage()">
-                <i class="bi bi-person-circle" style="margin-right: 8px;"></i>
-                マイページを開く
-              </button>
-            </div>
-          </div><!-- /system-basic -->
-          </div>
-
           <!-- 管理番号タブ -->
-          <div class="tab-pane fade" id="system-management" role="tabpanel">
+          <div class="tab-pane fade show active" id="system-management" role="tabpanel">
 
               <!-- ヒント -->
               <div style="font-size: 11px; color: #6b7280; padding: 8px 12px; background: #f0f9ff; border-radius: 4px; border-left: 3px solid #0ea5e9; margin-bottom: 16px; line-height: 1.6;">
@@ -5897,9 +5876,6 @@
         const managementConfig = collectManagementConfig();
         console.log('管理番号設定:', managementConfig);
 
-        // 基本設定を保存
-        await saveBasicSettings();
-
         // アイコン画像をアップロード（選択されている場合）
         if (pendingUserIconData) {
           await uploadUserIcon();
@@ -8772,7 +8748,7 @@ ${prompt || '（未設定）'}
       const systemTabContent = document.getElementById('systemConfigTabContent');
       if (!systemTabContent) return;
 
-      const tabIds = ['system-basic', 'system-management', 'system-shipping', 'system-procure', 'system-permission'];
+      const tabIds = ['system-management', 'system-shipping', 'system-procure', 'system-permission'];
       let touchStartX = 0;
       let touchStartY = 0;
       let touchEndX = 0;
@@ -9141,7 +9117,6 @@ ${prompt || '（未設定）'}
 
         // システム設定のサブタブを制御（MENU_DEFINITIONSに合わせたdefaultOwnerOnlyフラグ）
         applySubTabPermissions('system', [
-          { id: 'system-basic', tabId: 'system-basic-tab', paneId: 'system-basic', defaultOwnerOnly: false },
           { id: 'system-management', tabId: 'system-management-tab', paneId: 'system-management', defaultOwnerOnly: true },
           { id: 'system-shipping', tabId: 'system-shipping-tab', paneId: 'system-shipping', defaultOwnerOnly: true },
           { id: 'system-procure', tabId: 'system-procure-tab', paneId: 'system-procure', defaultOwnerOnly: true },
@@ -9352,12 +9327,6 @@ ${prompt || '（未設定）'}
               console.log('[config.html] usersPane要素:', usersPane);
 
               if (usersTab && usersPane) {
-                // 基本設定タブを非アクティブにする
-                const basicTab = document.getElementById('system-basic-tab');
-                const basicPane = document.getElementById('system-basic');
-                if (basicTab) basicTab.classList.remove('active');
-                if (basicPane) basicPane.classList.remove('show', 'active');
-
                 // Bootstrap Tabが利用可能か確認
                 if (typeof bootstrap !== 'undefined' && bootstrap.Tab) {
                   const tab = new bootstrap.Tab(usersTab);
@@ -10017,25 +9986,6 @@ ${prompt || '（未設定）'}
       }
     }
 
-    // 基本設定タブが表示されたら設定を読み込む
-    // システム設定タブ内の基本設定タブを正しく参照（system-basic-tab）
-    const basicTab = document.getElementById('system-basic-tab');
-
-    // subtab=usersの場合は基本設定を読み込まない（ユーザー管理タブに直接遷移するため）
-    const subtabParamForBasic = new URLSearchParams(window.location.search).get('subtab');
-    const skipBasicSettings = (subtabParamForBasic === 'users');
-
-    if (basicTab) {
-      basicTab.addEventListener('shown.bs.tab', function() {
-        loadBasicSettings();
-      });
-
-      // 初回表示時も即座に読み込む（subtab=usersの場合はスキップ）
-      if (basicTab.classList.contains('active') && !skipBasicSettings) {
-        loadBasicSettings();
-      }
-    }
-
     // プラットフォーム設定タブのイベントリスナー
     const platformTab = document.getElementById('system-platform-tab');
     if (platformTab) {
@@ -10083,19 +10033,6 @@ ${prompt || '（未設定）'}
         await loadUserTaskAssignmentList();
       }
     }, 250);
-
-    // システム設定タブ（#system）が最初から表示されている場合の対応
-    const systemPane = document.getElementById('system');
-    if (systemPane && systemPane.classList.contains('active') && !skipBasicSettings) {
-      // システム設定タブが表示されていて、基本設定タブも表示されている場合
-      const basicPane = document.getElementById('system-basic');
-      if (basicPane && (basicPane.classList.contains('active') || basicPane.classList.contains('show'))) {
-        // 確実にloadBasicSettings()を呼ぶ
-        setTimeout(function() {
-          loadBasicSettings();
-        }, 100);
-      }
-    }
 
     // ユーザー名入力のクリアボタン表示/非表示
     const userNameInput = document.getElementById('basicUserName');
@@ -10478,7 +10415,6 @@ ${prompt || '（未設定）'}
           label: '⚙️ システム設定',
           isGroup: true,
           children: [
-            { id: 'system-basic', label: '基本設定', defaultOwnerOnly: false },
             { id: 'system-management', label: '管理番号設定', defaultOwnerOnly: true },
             { id: 'system-shipping', label: '配送設定', defaultOwnerOnly: true },
             { id: 'system-procure', label: '仕入・出品設定', defaultOwnerOnly: true },
@@ -11640,8 +11576,8 @@ ${prompt || '（未設定）'}
     await tasksRef.add({
       type: 'shipping_info_registration',
       title: '📦 発送先情報を登録',
-      description: 'マイページ > 設定 > 設定管理 > 発送先情報から登録',
-      link: 'config-basic',
+      description: 'マイページ > 設定 > 発送先情報から登録',
+      link: 'mypage',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       completed: false,
       read: false
@@ -11683,8 +11619,8 @@ ${prompt || '（未設定）'}
     await tasksRef.add({
       type: 'bank_account_registration',
       title: '🏦 口座情報を登録',
-      description: 'マイページ > 設定 > 設定管理 > 口座情報から登録',
-      link: 'config-basic',
+      description: 'マイページ > 設定 > 口座情報から登録',
+      link: 'mypage',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       completed: false,
       read: false
