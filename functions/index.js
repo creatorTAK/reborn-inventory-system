@@ -466,6 +466,41 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
       console.log('📧 [onChatMessageCreated] users スキャン完了:', memberEmails);
     }
 
+    // 🚫 ブロックチェック: 送信者をブロックしているユーザーには通知しない（LINE風）
+    const senderEmail = messageData.userEmail || null;
+    if (senderEmail && memberEmails.length > 0) {
+      console.log('🚫 [onChatMessageCreated] ブロックチェック開始');
+      const blockChecks = await Promise.all(
+        memberEmails.map(async (user) => {
+          try {
+            const userDoc = await db.collection('users').doc(user.userEmail).get();
+            if (userDoc.exists) {
+              const userData = userDoc.data();
+              const blockedUsers = userData.blockedUsers || [];
+              // 送信者のユーザー名またはメールがブロックリストに含まれているかチェック
+              const hasBlocked = blockedUsers.includes(senderName) || blockedUsers.includes(senderEmail);
+              if (hasBlocked) {
+                console.log(`🚫 [onChatMessageCreated] ${user.userName} が送信者 ${senderName} をブロック中 → 通知スキップ`);
+              }
+              return { ...user, hasBlocked };
+            }
+            return { ...user, hasBlocked: false };
+          } catch (error) {
+            console.error(`❌ [onChatMessageCreated] ブロックチェックエラー: ${user.userEmail}`, error);
+            return { ...user, hasBlocked: false };
+          }
+        })
+      );
+
+      // ブロックしているユーザーを除外
+      const beforeCount = memberEmails.length;
+      memberEmails = blockChecks.filter(user => !user.hasBlocked);
+      const blockedCount = beforeCount - memberEmails.length;
+      if (blockedCount > 0) {
+        console.log(`🚫 [onChatMessageCreated] ブロック除外: ${blockedCount}人を通知対象から除外`);
+      }
+    }
+
     // メンション通知と通常通知を分離
     let mentionedUsers = [];
     let normalUsers = memberEmails;

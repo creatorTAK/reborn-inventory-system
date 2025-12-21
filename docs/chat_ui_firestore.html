@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21 v346 - 自分自身ブロックリスト自動クリーンアップ -->
+  <!-- Cache Bust: 2025-12-21 v347 - ブロックフィルタデバッグログ追加 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -3837,10 +3837,24 @@
           const msgData = { id: doc.id, ...doc.data() };
 
           // ブロック中の相手からのメッセージはスキップ（LINE風）
-          // membersにはユーザー名が入っているため、userNameで比較
-          if (isBlockedByMe && (msgData.userName === otherUserEmail || msgData.userEmail === otherUserEmail)) {
-            console.log('[Block] ブロック中ユーザーのメッセージをスキップ:', msgData.id, msgData.userName);
-            return; // このメッセージは表示しない
+          if (isBlockedByMe) {
+            // デバッグ：比較対象を表示
+            console.log('[Block Debug] isBlockedByMe:', isBlockedByMe);
+            console.log('[Block Debug] otherUserEmail (blocked target):', otherUserEmail);
+            console.log('[Block Debug] msgData.userName:', msgData.userName);
+            console.log('[Block Debug] msgData.userEmail:', msgData.userEmail);
+
+            // ユーザー名またはメールで比較（大文字小文字を区別しない）
+            const blockedName = (otherUserEmail || '').trim().toLowerCase();
+            const msgUserName = (msgData.userName || '').trim().toLowerCase();
+            const msgUserEmail = (msgData.userEmail || '').trim().toLowerCase();
+
+            if (blockedName === msgUserName || blockedName === msgUserEmail) {
+              console.log('[Block] ✅ ブロック中ユーザーのメッセージをスキップ:', msgData.id, msgData.userName);
+              return; // このメッセージは表示しない
+            } else {
+              console.log('[Block] ⚠️ 比較不一致 - メッセージは表示される');
+            }
           }
 
           messages.unshift(msgData);
