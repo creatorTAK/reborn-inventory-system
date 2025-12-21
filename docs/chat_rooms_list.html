@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21-v327 - バッジ同期機能追加（ホームアイコンとルーム未読数の一致） -->
+  <!-- Cache Bust: 2025-12-21-v352 - ブロックリストからの解除時も非表示解除 -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -3933,6 +3933,36 @@
           const newBlockedUsers = blockedUsers.filter(name => name !== userName);
           await updateDoc(userRef, { blockedUsers: newBlockedUsers });
           console.log('[Block List] ブロック解除成功');
+
+          // 🔧 v352: ブロック解除時にそのユーザーとのDMルームの非表示も解除
+          try {
+            // そのユーザーとのDMルームを検索
+            const roomsQuery = query(
+              collection(db, 'rooms'),
+              where('type', '==', 'direct'),
+              where('members', 'array-contains', currentUserName)
+            );
+            const roomsSnap = await getDocs(roomsQuery);
+
+            for (const roomDoc of roomsSnap.docs) {
+              const roomData = roomDoc.data();
+              // 相手がブロック解除したユーザーかチェック
+              if (roomData.members && roomData.members.includes(userName)) {
+                // 非表示を解除
+                if (roomData.hiddenBy && roomData.hiddenBy.includes(currentUserName)) {
+                  const roomRef = doc(db, 'rooms', roomDoc.id);
+                  await updateDoc(roomRef, {
+                    hiddenBy: arrayRemove(currentUserName)
+                  });
+                  console.log('[Block List] ルーム非表示解除:', roomDoc.id);
+                }
+              }
+            }
+          } catch (unhideError) {
+            console.error('[Block List] 非表示解除エラー:', unhideError);
+            // 非表示解除に失敗してもブロック解除は成功扱い
+          }
+
           await loadBlockList(); // 一覧を更新
         }
       } catch (error) {
