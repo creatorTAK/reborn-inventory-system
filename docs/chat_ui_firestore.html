@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21 v342 - Firebase モジュラーAPI対応 -->
+  <!-- Cache Bust: 2025-12-21 v343 - LINE風ブロック機能実装 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -772,6 +772,23 @@
       max-height: 120px;
       border-radius: 8px;
       display: block;
+    }
+
+    /* ブロック中バナー */
+    .blocked-banner {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 16px;
+      background: #fef2f2;
+      border-top: 1px solid #fecaca;
+      color: #dc2626;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .blocked-banner i {
+      font-size: 18px;
     }
 
     /* 入力エリア */
@@ -2053,6 +2070,12 @@
     <span class="image-preview-count" id="imagePreviewCount" style="display: none;">0枚</span>
   </div>
 
+  <!-- ブロック中バナー -->
+  <div class="blocked-banner" id="blockedBanner" style="display: none;">
+    <i class="bi bi-slash-circle"></i>
+    <span>ブロック中のため、メッセージを送信できません</span>
+  </div>
+
   <div class="input-container">
     <!-- メンション候補リスト -->
     <div class="mention-suggestions" id="mentionSuggestions"></div>
@@ -2224,6 +2247,11 @@
 
     // リプライ機能用（LINE風）
     let currentReplyTo = null; // { messageId, userName, text, userIcon }
+
+    // ブロック機能用（LINE風）
+    let isBlockedByMe = false;      // 自分が相手をブロックしているか
+    let isBlockedByOther = false;   // 相手が自分をブロックしているか
+    let otherUserEmail = '';        // 個別チャットの相手のメールアドレス
 
     // PWA版：URLパラメータから取得（GASテンプレート変数は使用しない）
     const isPWAFlag        = true;  // PWA版として動作
@@ -3670,8 +3698,88 @@
       }
     }
 
+    // ブロック状態をチェック（LINE風）
+    async function checkBlockStatus() {
+      // 個別チャット以外はブロック機能なし
+      if (currentRoomType !== 'direct' || !currentUserEmail) {
+        isBlockedByMe = false;
+        isBlockedByOther = false;
+        return;
+      }
+
+      try {
+        // ルーム情報から相手のメールアドレスを取得
+        const roomRef = doc(db, 'rooms', currentRoomId);
+        const roomDoc = await getDoc(roomRef);
+        if (!roomDoc.exists()) return;
+
+        const roomData = roomDoc.data();
+        if (!roomData.members || !Array.isArray(roomData.members)) return;
+
+        // メンバーにはメールアドレスが入っている
+        otherUserEmail = roomData.members.find(m => m !== currentUserEmail) || '';
+        console.log('[Block] 相手のメール:', otherUserEmail);
+
+        if (!otherUserEmail) return;
+
+        // 自分が相手をブロックしているかチェック
+        const myUserRef = doc(db, 'users', currentUserEmail);
+        const myUserDoc = await getDoc(myUserRef);
+        if (myUserDoc.exists()) {
+          const myData = myUserDoc.data();
+          const myBlockedList = myData.blockedUsers || [];
+          isBlockedByMe = myBlockedList.includes(otherUserEmail);
+          console.log('[Block] 自分→相手ブロック:', isBlockedByMe);
+        }
+
+        // 相手が自分をブロックしているかチェック
+        const otherUserRef = doc(db, 'users', otherUserEmail);
+        const otherUserDoc = await getDoc(otherUserRef);
+        if (otherUserDoc.exists()) {
+          const otherData = otherUserDoc.data();
+          const otherBlockedList = otherData.blockedUsers || [];
+          isBlockedByOther = otherBlockedList.includes(currentUserEmail);
+          console.log('[Block] 相手→自分ブロック:', isBlockedByOther);
+        }
+
+        // UIを更新
+        updateBlockedUI();
+
+      } catch (error) {
+        console.error('[Block] ブロック状態チェックエラー:', error);
+      }
+    }
+
+    // ブロック状態に応じたUI更新
+    function updateBlockedUI() {
+      const inputContainer = document.querySelector('.input-container');
+      const blockedBanner = document.getElementById('blockedBanner');
+
+      if (isBlockedByMe) {
+        // 自分が相手をブロックしている場合
+        // 入力欄を非表示、バナー表示
+        if (inputContainer) inputContainer.style.display = 'none';
+        if (blockedBanner) {
+          blockedBanner.textContent = 'ブロック中のため、メッセージを送信できません';
+          blockedBanner.style.display = 'flex';
+        }
+        console.log('[Block] UI更新: ブロック中表示');
+      } else if (isBlockedByOther) {
+        // 相手が自分をブロックしている場合（LINEと同様、明示的には表示しない）
+        // 送信時にエラーにする
+        console.log('[Block] UI更新: 相手にブロックされている（送信時に無効化）');
+      } else {
+        // ブロックなし
+        if (inputContainer) inputContainer.style.display = 'flex';
+        if (blockedBanner) blockedBanner.style.display = 'none';
+      }
+    }
+
     // Firestoreメッセージをリアルタイムリスニング
-    function startListening() {
+    async function startListening() {
+      // 先にブロック状態をチェック
+      await checkBlockStatus();
+
       const q = query(
         collection(db, `rooms/${currentRoomId}/messages`),
         orderBy('timestamp', 'desc'),
@@ -3712,8 +3820,15 @@
         const unreadMessageIds = []; // 未読メッセージIDを収集
         snapshot.forEach((doc) => {
           const msgData = { id: doc.id, ...doc.data() };
+
+          // ブロック中の相手からのメッセージはスキップ（LINE風）
+          if (isBlockedByMe && msgData.userEmail === otherUserEmail) {
+            console.log('[Block] ブロック中ユーザーのメッセージをスキップ:', msgData.id);
+            return; // このメッセージは表示しない
+          }
+
           messages.unshift(msgData);
-          
+
           // 自分以外のメッセージで、まだ自分が既読にしていないもの
           if (msgData.userEmail !== currentUserEmail) {
             const readBy = msgData.readBy || [];
@@ -4172,6 +4287,20 @@
     // メッセージ送信
     window.sendMessage = async function() {
       console.log('[sendMessage] 関数呼び出し開始');
+
+      // ブロックチェック（LINE風：相手にブロックされている場合は無言で送信失敗）
+      if (isBlockedByOther) {
+        console.log('[sendMessage] 相手にブロックされているため送信スキップ');
+        // 入力欄をクリアして送信したように見せる（LINE風）
+        const input = document.getElementById('messageInput');
+        if (input) {
+          input.value = '';
+          insertedMentions = [];
+          clearMentionTags();
+          updateSendButtonState();
+        }
+        return;
+      }
 
       const input = document.getElementById('messageInput');
       const textMessage = getPlainText(input).trim();
@@ -6070,6 +6199,7 @@
           showSettingsToast('ブロックを解除しました');
           blockText.textContent = 'ブロックする';
           blockBtn.querySelector('i').className = 'bi bi-slash-circle';
+          isBlockedByMe = false; // グローバル変数を更新
         } else {
           // ブロック
           await setDoc(userRef, {
@@ -6078,9 +6208,18 @@
           showSettingsToast('ブロックしました');
           blockText.textContent = 'ブロック解除';
           blockBtn.querySelector('i').className = 'bi bi-slash-circle-fill';
+          isBlockedByMe = true; // グローバル変数を更新
         }
 
+        // UIを更新（入力欄の表示/非表示）
+        updateBlockedUI();
+
         closeChatSettings();
+
+        // ページをリロードしてメッセージ表示を更新
+        setTimeout(() => {
+          location.reload();
+        }, 500);
 
       } catch (error) {
         console.error('[Block] Firestoreエラー:', error);
