@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21-v322 - Keepメモの📌アイコン削除 -->
+  <!-- Cache Bust: 2025-12-21-v323 - Keepドット（緑）追加 -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -197,6 +197,21 @@
       box-shadow: 0 0 0 2px white;
     }
     .announce-dot.active {
+      display: block;
+    }
+    /* Keepドット（緑） */
+    .keep-dot {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 8px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+      display: none;
+      box-shadow: 0 0 0 2px white;
+    }
+    .keep-dot.active {
       display: block;
     }
     .menu-button:active {
@@ -975,6 +990,7 @@
     <div class="minimal-header-icons">
       <button class="minimal-header-icon" title="Keepメモ" onclick="openKeepMemo()">
         <i class="bi bi-bookmark"></i>
+        <span class="keep-dot" id="keepDot"></span>
       </button>
       <button class="minimal-header-icon" title="通知" onclick="openAnnouncePage()">
         <i class="bi bi-bell"></i>
@@ -1312,6 +1328,9 @@
 
       // v314: 管理者アクセスチェック（ヘッダーメニュー用）
       checkAdminAccess();
+
+      // v323: Keepドットの状態を復元
+      restoreKeepDotState();
 
       // 🔧 v299: 読み込み直後にスケルトンUIを表示（データ取得完了まで表示）
       const skeleton = document.getElementById('skeleton-loader');
@@ -2944,6 +2963,9 @@
     window.openKeepMemo = async function() {
       console.log('[Keep Memo] Keepメモを開く');
 
+      // Keepドットを非表示にする
+      hideKeepDot();
+
       if (!currentUserName) {
         alert('ユーザー情報が取得できません');
         return;
@@ -2990,6 +3012,48 @@
         alert('Keepメモを開けませんでした: ' + error.message);
       }
     };
+
+    // Keepドットを表示
+    window.showKeepDot = function() {
+      const dot = document.getElementById('keepDot');
+      if (dot) {
+        dot.classList.add('active');
+        localStorage.setItem('keepDotActive', 'true');
+        console.log('[Keep] ドット表示');
+      }
+    };
+
+    // Keepドットを非表示
+    window.hideKeepDot = function() {
+      const dot = document.getElementById('keepDot');
+      if (dot) {
+        dot.classList.remove('active');
+        localStorage.removeItem('keepDotActive');
+        console.log('[Keep] ドット非表示');
+      }
+    };
+
+    // ページ読み込み時にKeepドットの状態を復元
+    function restoreKeepDotState() {
+      if (localStorage.getItem('keepDotActive') === 'true') {
+        const dot = document.getElementById('keepDot');
+        if (dot) {
+          dot.classList.add('active');
+          console.log('[Keep] ドット状態を復元');
+        }
+      }
+    }
+
+    // localStorageの変更を監視（他のiframeからの変更を検知）
+    window.addEventListener('storage', function(e) {
+      if (e.key === 'keepDotActive') {
+        if (e.newValue === 'true') {
+          showKeepDot();
+        } else {
+          hideKeepDot();
+        }
+      }
+    });
 
     // お知らせ管理を開く（管理者のみ）
     window.openAdminAnnounce = function() {
