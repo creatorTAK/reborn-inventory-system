@@ -3332,11 +3332,43 @@
     };
 
     // トークボタンクリック
-    document.getElementById('profilePopupChatBtn').addEventListener('click', function() {
+    document.getElementById('profilePopupChatBtn').addEventListener('click', async function() {
       if (currentProfileUser) {
+        const targetUserName = currentProfileUser.userName;
         closeProfilePopup();
         closeMemberListModal();
-        openDirectChatWith(currentProfileUser.userName);
+        // openDirectChatWithを呼ばず、直接ルームを検索して開く
+        try {
+          const roomsRef = collection(db, 'rooms');
+          const q = query(roomsRef, where('type', '==', 'direct'));
+          const snapshot = await getDocs(q);
+
+          let existingRoomId = null;
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.members && data.members.includes(currentUserName) && data.members.includes(targetUserName)) {
+              existingRoomId = doc.id;
+            }
+          });
+
+          if (existingRoomId) {
+            console.log('[Profile Popup] 既存ルームを開く:', existingRoomId);
+            openRoom(existingRoomId);
+          } else {
+            console.log('[Profile Popup] 新規ダイレクトチャット作成');
+            const newRoom = await addDoc(collection(db, 'rooms'), {
+              name: `${currentUserName} & ${targetUserName}`,
+              type: 'direct',
+              members: [currentUserName, targetUserName],
+              createdAt: serverTimestamp(),
+              createdBy: currentUserName
+            });
+            openRoom(newRoom.id);
+          }
+        } catch (error) {
+          console.error('[Profile Popup] チャット開始エラー:', error);
+          alert('チャットを開けませんでした');
+        }
       }
     });
 
