@@ -117,6 +117,43 @@
     .announce-dot.visible {
       display: block;
     }
+    /* 検索バー */
+    .search-bar {
+      display: flex;
+      align-items: center;
+      background: #e5e7eb;
+      border-radius: 12px;
+      padding: 12px 14px;
+      gap: 10px;
+      margin: 12px 16px;
+    }
+    .search-bar i {
+      color: #9ca3af;
+      font-size: 16px;
+    }
+    .search-bar input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 16px;
+      color: #1f2937;
+      outline: none;
+    }
+    .search-bar input::placeholder {
+      color: #9ca3af;
+    }
+    .search-bar .clear-btn {
+      display: none;
+      background: none;
+      border: none;
+      color: #9ca3af;
+      cursor: pointer;
+      padding: 0;
+      font-size: 16px;
+    }
+    .search-bar .clear-btn.show {
+      display: block;
+    }
     .tasks-container {
       padding: 16px;
       max-width: 600px;
@@ -305,6 +342,15 @@
     </div>
   </div>
 
+  <!-- 検索バー -->
+  <div class="search-bar">
+    <i class="bi bi-search"></i>
+    <input type="text" id="searchInput" placeholder="タスクを検索" oninput="performSearch()" />
+    <button class="clear-btn" id="searchClearBtn" onclick="clearSearch()">
+      <i class="bi bi-x-circle-fill"></i>
+    </button>
+  </div>
+
   <div class="tasks-container">
     <div id="loading" class="loading">
       <i class="bi bi-arrow-repeat"></i> 読み込み中...
@@ -359,6 +405,9 @@
     }
     const db = firebase.firestore();
 
+    // 全タスクを保存（検索用）
+    let allPendingTasks = [];
+
     // タスク一覧を読み込み
     async function loadTasks() {
       if (!userEmail) {
@@ -398,7 +447,8 @@
           }
         }
 
-        // 未完了タスクを表示
+        // 未完了タスクを保存・表示
+        allPendingTasks = pendingTasks;
         if (pendingTasks.length > 0) {
           document.getElementById('pending-tasks').style.display = 'block';
           document.getElementById('pending-tasks-list').innerHTML = pendingTasks.map(task => renderTask(task)).join('');
@@ -599,6 +649,65 @@
         window.parent.postMessage({ type: 'navigate', page: 'announce' }, '*');
       } else {
         window.location.href = '/announce.html';
+      }
+    }
+
+    // 検索機能
+    function performSearch() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      const clearBtn = document.getElementById('searchClearBtn');
+
+      // クリアボタンの表示/非表示
+      if (query) {
+        clearBtn.classList.add('show');
+      } else {
+        clearBtn.classList.remove('show');
+      }
+
+      // フィルタリング
+      const filteredTasks = allPendingTasks.filter(task => {
+        const title = (task.title || '').toLowerCase();
+        const description = (task.description || '').toLowerCase();
+        return title.includes(query) || description.includes(query);
+      });
+
+      // 表示更新
+      const pendingTasksContainer = document.getElementById('pending-tasks');
+      const pendingTasksList = document.getElementById('pending-tasks-list');
+
+      if (filteredTasks.length > 0) {
+        pendingTasksContainer.style.display = 'block';
+        pendingTasksList.innerHTML = filteredTasks.map(task => renderTask(task)).join('');
+      } else {
+        if (query) {
+          pendingTasksContainer.style.display = 'block';
+          pendingTasksList.innerHTML = `
+            <div style="text-align: center; padding: 32px; color: #9ca3af;">
+              <i class="bi bi-search" style="font-size: 32px; display: block; margin-bottom: 8px;"></i>
+              <p>「${escapeHtml(query)}」に一致するタスクはありません</p>
+            </div>
+          `;
+        } else {
+          pendingTasksContainer.style.display = allPendingTasks.length > 0 ? 'block' : 'none';
+          pendingTasksList.innerHTML = allPendingTasks.map(task => renderTask(task)).join('');
+        }
+      }
+    }
+
+    // 検索クリア
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('searchClearBtn').classList.remove('show');
+
+      // 元のタスク一覧を復元
+      const pendingTasksContainer = document.getElementById('pending-tasks');
+      const pendingTasksList = document.getElementById('pending-tasks-list');
+
+      if (allPendingTasks.length > 0) {
+        pendingTasksContainer.style.display = 'block';
+        pendingTasksList.innerHTML = allPendingTasks.map(task => renderTask(task)).join('');
+      } else {
+        pendingTasksContainer.style.display = 'none';
       }
     }
 
