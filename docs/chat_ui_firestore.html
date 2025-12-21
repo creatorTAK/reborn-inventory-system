@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21 v350 - ブロック解除時の非表示自動解除 -->
+  <!-- Cache Bust: 2025-12-21 v351 - ブロック解除時の非表示自動解除（デバッグログ強化） -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -6239,12 +6239,26 @@
           });
 
           // ルームの非表示も解除（ブロック時に非表示になっていた場合）
-          if (currentRoomId) {
-            const roomRef = doc(db, 'rooms', currentRoomId);
-            await updateDoc(roomRef, {
-              hiddenBy: arrayRemove(currentUserName)
-            });
-            console.log('[Block] ルームの非表示も解除');
+          console.log('[Block] 非表示解除チェック - currentRoomId:', currentRoomId, ', currentUserName:', currentUserName);
+          if (currentRoomId && currentUserName) {
+            try {
+              const roomRef = doc(db, 'rooms', currentRoomId);
+              // 更新前の状態を確認
+              const roomSnap = await getDoc(roomRef);
+              if (roomSnap.exists()) {
+                const roomData = roomSnap.data();
+                console.log('[Block] 更新前 hiddenBy:', roomData.hiddenBy);
+              }
+
+              await updateDoc(roomRef, {
+                hiddenBy: arrayRemove(currentUserName)
+              });
+              console.log('[Block] ✅ ルームの非表示も解除完了');
+            } catch (unhideError) {
+              console.error('[Block] ❌ 非表示解除エラー:', unhideError);
+            }
+          } else {
+            console.warn('[Block] ⚠️ currentRoomId or currentUserName is empty, skipping unhide');
           }
 
           showSettingsToast('ブロックを解除しました');
