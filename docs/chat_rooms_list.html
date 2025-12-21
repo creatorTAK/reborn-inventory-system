@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21-v352 - ブロックリストからの解除時も非表示解除 -->
+  <!-- Cache Bust: 2025-12-21-v353 - プロフィールポップアップに相手の背景設定を適用 -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -568,6 +568,8 @@
       padding: 30px 20px 20px;
       text-align: center;
       position: relative;
+      background-size: cover;
+      background-position: center;
     }
     .profile-popup-close {
       position: absolute;
@@ -1433,6 +1435,22 @@
     let unsubscribeRooms = null; // Firestoreリスナーの解除用
     let currentUserBlockedList = []; // ブロック中ユーザーリスト（LINE風ブロック）
     let roomUnreadCounts = new Map(); // ルームごとの未読数を追跡（バッジ同期用）
+
+    // プロフィール背景グラデーションプリセット
+    const GRADIENT_PRESETS = [
+      { id: 'blue', gradient: 'linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%)' },
+      { id: 'purple', gradient: 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)' },
+      { id: 'pink', gradient: 'linear-gradient(135deg, #EC4899 0%, #BE185D 100%)' },
+      { id: 'orange', gradient: 'linear-gradient(135deg, #F97316 0%, #EA580C 100%)' },
+      { id: 'green', gradient: 'linear-gradient(135deg, #22C55E 0%, #15803D 100%)' },
+      { id: 'teal', gradient: 'linear-gradient(135deg, #14B8A6 0%, #0F766E 100%)' },
+      { id: 'indigo', gradient: 'linear-gradient(135deg, #6366F1 0%, #4338CA 100%)' },
+      { id: 'rose', gradient: 'linear-gradient(135deg, #F43F5E 0%, #BE123C 100%)' },
+      { id: 'amber', gradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' },
+      { id: 'cyan', gradient: 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)' },
+      { id: 'lime', gradient: 'linear-gradient(135deg, #84CC16 0%, #65A30D 100%)' },
+      { id: 'slate', gradient: 'linear-gradient(135deg, #64748B 0%, #475569 100%)' },
+    ];
 
     // Service Workerにバッジカウントを同期する関数
     function syncBadgeWithServiceWorker() {
@@ -3443,7 +3461,7 @@
     // ========================================
     let currentProfileUser = null;
 
-    window.openProfilePopup = function(userName, iconUrl) {
+    window.openProfilePopup = async function(userName, iconUrl) {
       console.log('[Profile Popup] 開く:', userName);
       currentProfileUser = { userName, iconUrl };
 
@@ -3459,6 +3477,48 @@
 
       // 名前表示
       document.getElementById('profilePopupName').textContent = userName;
+
+      // ユーザーの背景設定を取得して適用
+      const header = document.querySelector('.profile-popup-header');
+      try {
+        // usersCacheからユーザーのメールを取得
+        const user = usersCache.find(u => u.userName === userName);
+        if (user && user.id) {
+          const userRef = doc(db, 'users', user.id);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            if (userData.profileBackground) {
+              const bg = userData.profileBackground;
+              if (bg.type === 'image' && bg.value) {
+                header.style.backgroundImage = `url('${bg.value}')`;
+                header.style.backgroundSize = 'cover';
+                header.style.backgroundPosition = 'center';
+                header.style.background = '';
+                header.style.backgroundImage = `url('${bg.value}')`;
+              } else if (bg.type === 'gradient') {
+                const preset = GRADIENT_PRESETS.find(p => p.id === bg.value) || GRADIENT_PRESETS[0];
+                header.style.backgroundImage = '';
+                header.style.background = preset.gradient;
+              }
+              console.log('[Profile Popup] 背景設定適用:', bg);
+            } else {
+              // デフォルト背景
+              header.style.backgroundImage = '';
+              header.style.background = 'linear-gradient(135deg, var(--reborn-primary), var(--reborn-primary-dark))';
+            }
+          }
+        } else {
+          // デフォルト背景
+          header.style.backgroundImage = '';
+          header.style.background = 'linear-gradient(135deg, var(--reborn-primary), var(--reborn-primary-dark))';
+        }
+      } catch (error) {
+        console.error('[Profile Popup] 背景設定取得エラー:', error);
+        // デフォルト背景
+        header.style.backgroundImage = '';
+        header.style.background = 'linear-gradient(135deg, var(--reborn-primary), var(--reborn-primary-dark))';
+      }
 
       // ポップアップ表示
       document.getElementById('profilePopupOverlay').classList.add('active');
