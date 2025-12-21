@@ -1005,6 +1005,23 @@
             <i class="bi bi-plus-circle"></i>
             <span>チャット作成</span>
           </button>
+          <div class="settings-dropdown-divider"></div>
+          <button class="settings-dropdown-item" onclick="openMemberListModal(); toggleSettingsDropdown(event);">
+            <i class="bi bi-people"></i>
+            <span>メンバー一覧</span>
+          </button>
+          <button class="settings-dropdown-item" onclick="openHiddenRoomsModal(); toggleSettingsDropdown(event);">
+            <i class="bi bi-eye-slash"></i>
+            <span>非表示ルーム</span>
+          </button>
+          <button class="settings-dropdown-item" onclick="openMutedRoomsModal(); toggleSettingsDropdown(event);">
+            <i class="bi bi-bell-slash"></i>
+            <span>ミュート中</span>
+          </button>
+          <button class="settings-dropdown-item" onclick="openBlockListModal(); toggleSettingsDropdown(event);">
+            <i class="bi bi-person-x"></i>
+            <span>ブロックリスト</span>
+          </button>
         </div>
       </div>
     </div>
@@ -1145,6 +1162,70 @@
         <div class="emoji-grid" id="emojiGrid">
           <!-- 絵文字はJSで生成 -->
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- メンバー一覧モーダル -->
+  <div class="modal-overlay" id="memberListModal">
+    <div class="modal-content" style="max-height: 80vh;">
+      <div class="modal-title">👥 メンバー一覧</div>
+      <div style="margin-bottom: 12px;">
+        <input type="text" class="form-input" id="memberListSearchInput" placeholder="🔍 ユーザー名で検索..." oninput="filterMemberList(this.value)" style="font-size: 14px;">
+      </div>
+      <div id="memberListContainer" style="max-height: 50vh; overflow-y: auto;">
+        <div class="loading">読み込み中...</div>
+      </div>
+      <div class="modal-buttons" style="margin-top: 16px;">
+        <button type="button" class="modal-button secondary" onclick="closeMemberListModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 非表示ルーム一覧モーダル -->
+  <div class="modal-overlay" id="hiddenRoomsModal">
+    <div class="modal-content" style="max-height: 80vh;">
+      <div class="modal-title">🙈 非表示ルーム</div>
+      <div style="margin-bottom: 12px; font-size: 14px; color: #718096;">
+        スワイプで非表示にしたルームを復元できます
+      </div>
+      <div id="hiddenRoomsContainer" style="max-height: 50vh; overflow-y: auto;">
+        <div class="loading">読み込み中...</div>
+      </div>
+      <div class="modal-buttons" style="margin-top: 16px;">
+        <button type="button" class="modal-button secondary" onclick="closeHiddenRoomsModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ミュート中ルーム一覧モーダル -->
+  <div class="modal-overlay" id="mutedRoomsModal">
+    <div class="modal-content" style="max-height: 80vh;">
+      <div class="modal-title">🔕 ミュート中ルーム</div>
+      <div style="margin-bottom: 12px; font-size: 14px; color: #718096;">
+        通知をオフにしているルームです
+      </div>
+      <div id="mutedRoomsContainer" style="max-height: 50vh; overflow-y: auto;">
+        <div class="loading">読み込み中...</div>
+      </div>
+      <div class="modal-buttons" style="margin-top: 16px;">
+        <button type="button" class="modal-button secondary" onclick="closeMutedRoomsModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ブロックリストモーダル -->
+  <div class="modal-overlay" id="blockListModal">
+    <div class="modal-content" style="max-height: 80vh;">
+      <div class="modal-title">🚫 ブロックリスト</div>
+      <div style="margin-bottom: 12px; font-size: 14px; color: #718096;">
+        ブロック中のユーザーはチャットに表示されません
+      </div>
+      <div id="blockListContainer" style="max-height: 50vh; overflow-y: auto;">
+        <div class="loading">読み込み中...</div>
+      </div>
+      <div class="modal-buttons" style="margin-top: 16px;">
+        <button type="button" class="modal-button secondary" onclick="closeBlockListModal()">閉じる</button>
       </div>
     </div>
   </div>
@@ -3054,6 +3135,370 @@
         }
       }
     });
+
+    // ========================================
+    // メンバー一覧モーダル
+    // ========================================
+    let allMembersForList = [];
+
+    window.openMemberListModal = async function() {
+      console.log('[Member List] モーダルを開く');
+      document.getElementById('memberListModal').classList.add('active');
+      document.getElementById('memberListSearchInput').value = '';
+      await loadMemberList();
+    };
+
+    window.closeMemberListModal = function() {
+      document.getElementById('memberListModal').classList.remove('active');
+    };
+
+    async function loadMemberList() {
+      const container = document.getElementById('memberListContainer');
+      container.innerHTML = '<div class="loading">読み込み中...</div>';
+
+      try {
+        // FCM通知登録シートからユーザー一覧を取得
+        const usersRef = collection(db, 'users');
+        const usersSnap = await getDocs(usersRef);
+
+        allMembersForList = [];
+        usersSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.userName && data.userName !== currentUserName) {
+            allMembersForList.push({
+              id: doc.id,
+              userName: data.userName,
+              email: data.email || '',
+              iconUrl: data.iconUrl || ''
+            });
+          }
+        });
+
+        // 自分も追加（先頭に）
+        allMembersForList.unshift({
+          id: 'self',
+          userName: currentUserName + '（自分）',
+          email: localStorage.getItem('reborn_user_email') || '',
+          iconUrl: ''
+        });
+
+        renderMemberList(allMembersForList);
+      } catch (error) {
+        console.error('[Member List] 読み込みエラー:', error);
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #718096;">メンバーを読み込めませんでした</div>';
+      }
+    }
+
+    function renderMemberList(members) {
+      const container = document.getElementById('memberListContainer');
+
+      if (members.length === 0) {
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #718096;">メンバーがいません</div>';
+        return;
+      }
+
+      let html = '';
+      members.forEach(member => {
+        const isSelf = member.id === 'self';
+        const initial = member.userName.charAt(0).toUpperCase();
+        html += `
+          <div class="member-list-item" style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e5e7eb; cursor: ${isSelf ? 'default' : 'pointer'};" ${isSelf ? '' : `onclick="openDirectChatWith('${member.userName}')"`}>
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--reborn-primary), var(--reborn-primary-dark)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; margin-right: 12px;">
+              ${initial}
+            </div>
+            <div style="flex: 1;">
+              <div style="font-weight: 500; color: #1f2937;">${member.userName}</div>
+            </div>
+            ${isSelf ? '' : '<i class="bi bi-chevron-right" style="color: #9ca3af;"></i>'}
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    window.filterMemberList = function(searchTerm) {
+      const filtered = allMembersForList.filter(m =>
+        m.userName.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      renderMemberList(filtered);
+    };
+
+    // メンバーとの個別チャットを開く（既存があれば開く、なければ作成）
+    window.openDirectChatWith = async function(targetUserName) {
+      console.log('[Member List] 個別チャットを開く:', targetUserName);
+      closeMemberListModal();
+
+      try {
+        // 既存のダイレクトチャットルームを検索
+        const roomsRef = collection(db, 'rooms');
+        const q = query(roomsRef, where('type', '==', 'direct'));
+        const snapshot = await getDocs(q);
+
+        let existingRoomId = null;
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.members && data.members.includes(currentUserName) && data.members.includes(targetUserName)) {
+            existingRoomId = doc.id;
+          }
+        });
+
+        if (existingRoomId) {
+          // 既存ルームを開く
+          console.log('[Member List] 既存ルームを開く:', existingRoomId);
+          openRoom(existingRoomId);
+        } else {
+          // 新規作成
+          console.log('[Member List] 新規ダイレクトチャット作成');
+          const newRoom = await addDoc(collection(db, 'rooms'), {
+            name: `${currentUserName} & ${targetUserName}`,
+            type: 'direct',
+            members: [currentUserName, targetUserName],
+            createdAt: serverTimestamp(),
+            createdBy: currentUserName
+          });
+          openRoom(newRoom.id);
+        }
+      } catch (error) {
+        console.error('[Member List] エラー:', error);
+        alert('チャットを開けませんでした');
+      }
+    };
+
+    // ========================================
+    // 非表示ルーム一覧モーダル
+    // ========================================
+    window.openHiddenRoomsModal = async function() {
+      console.log('[Hidden Rooms] モーダルを開く');
+      document.getElementById('hiddenRoomsModal').classList.add('active');
+      await loadHiddenRooms();
+    };
+
+    window.closeHiddenRoomsModal = function() {
+      document.getElementById('hiddenRoomsModal').classList.remove('active');
+    };
+
+    async function loadHiddenRooms() {
+      const container = document.getElementById('hiddenRoomsContainer');
+      container.innerHTML = '<div class="loading">読み込み中...</div>';
+
+      try {
+        const roomsRef = collection(db, 'rooms');
+        const snapshot = await getDocs(roomsRef);
+
+        const hiddenRooms = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const hiddenBy = data.hiddenBy || [];
+          if (hiddenBy.includes(currentUserName)) {
+            hiddenRooms.push({
+              id: doc.id,
+              name: data.name || '不明なルーム',
+              icon: data.icon || '💬',
+              type: data.type || 'group'
+            });
+          }
+        });
+
+        if (hiddenRooms.length === 0) {
+          container.innerHTML = '<div style="padding: 20px; text-align: center; color: #718096;">非表示ルームはありません</div>';
+          return;
+        }
+
+        let html = '';
+        hiddenRooms.forEach(room => {
+          const displayName = room.type === 'direct' ? room.name.replace(currentUserName, '').replace(' & ', '').trim() : room.name;
+          html += `
+            <div style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e5e7eb;">
+              <div style="font-size: 24px; margin-right: 12px;">${room.icon}</div>
+              <div style="flex: 1; font-weight: 500; color: #1f2937;">${displayName}</div>
+              <button onclick="restoreHiddenRoom('${room.id}')" style="padding: 6px 12px; background: var(--reborn-primary); color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">復元</button>
+            </div>
+          `;
+        });
+
+        container.innerHTML = html;
+      } catch (error) {
+        console.error('[Hidden Rooms] 読み込みエラー:', error);
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #718096;">読み込みに失敗しました</div>';
+      }
+    }
+
+    window.restoreHiddenRoom = async function(roomId) {
+      try {
+        console.log('[Hidden Rooms] 復元:', roomId);
+        const roomRef = doc(db, 'rooms', roomId);
+        const roomSnap = await getDoc(roomRef);
+
+        if (roomSnap.exists()) {
+          const hiddenBy = roomSnap.data().hiddenBy || [];
+          const newHiddenBy = hiddenBy.filter(name => name !== currentUserName);
+          await updateDoc(roomRef, { hiddenBy: newHiddenBy });
+          console.log('[Hidden Rooms] 復元成功');
+          await loadHiddenRooms(); // 一覧を更新
+        }
+      } catch (error) {
+        console.error('[Hidden Rooms] 復元エラー:', error);
+        alert('復元に失敗しました');
+      }
+    };
+
+    // ========================================
+    // ミュート中ルーム一覧モーダル
+    // ========================================
+    window.openMutedRoomsModal = async function() {
+      console.log('[Muted Rooms] モーダルを開く');
+      document.getElementById('mutedRoomsModal').classList.add('active');
+      await loadMutedRooms();
+    };
+
+    window.closeMutedRoomsModal = function() {
+      document.getElementById('mutedRoomsModal').classList.remove('active');
+    };
+
+    async function loadMutedRooms() {
+      const container = document.getElementById('mutedRoomsContainer');
+      container.innerHTML = '<div class="loading">読み込み中...</div>';
+
+      try {
+        const roomsRef = collection(db, 'rooms');
+        const snapshot = await getDocs(roomsRef);
+
+        const mutedRooms = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const mutedBy = data.mutedBy || [];
+          if (mutedBy.includes(currentUserName)) {
+            mutedRooms.push({
+              id: doc.id,
+              name: data.name || '不明なルーム',
+              icon: data.icon || '💬',
+              type: data.type || 'group'
+            });
+          }
+        });
+
+        if (mutedRooms.length === 0) {
+          container.innerHTML = '<div style="padding: 20px; text-align: center; color: #718096;">ミュート中のルームはありません</div>';
+          return;
+        }
+
+        let html = '';
+        mutedRooms.forEach(room => {
+          const displayName = room.type === 'direct' ? room.name.replace(currentUserName, '').replace(' & ', '').trim() : room.name;
+          html += `
+            <div style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e5e7eb;">
+              <div style="font-size: 24px; margin-right: 12px;">${room.icon}</div>
+              <div style="flex: 1; font-weight: 500; color: #1f2937;">${displayName}</div>
+              <button onclick="unmuteMutedRoom('${room.id}')" style="padding: 6px 12px; background: var(--reborn-primary); color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">解除</button>
+            </div>
+          `;
+        });
+
+        container.innerHTML = html;
+      } catch (error) {
+        console.error('[Muted Rooms] 読み込みエラー:', error);
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #718096;">読み込みに失敗しました</div>';
+      }
+    }
+
+    window.unmuteMutedRoom = async function(roomId) {
+      try {
+        console.log('[Muted Rooms] ミュート解除:', roomId);
+        const roomRef = doc(db, 'rooms', roomId);
+        const roomSnap = await getDoc(roomRef);
+
+        if (roomSnap.exists()) {
+          const mutedBy = roomSnap.data().mutedBy || [];
+          const newMutedBy = mutedBy.filter(name => name !== currentUserName);
+          await updateDoc(roomRef, { mutedBy: newMutedBy });
+          console.log('[Muted Rooms] ミュート解除成功');
+          await loadMutedRooms(); // 一覧を更新
+        }
+      } catch (error) {
+        console.error('[Muted Rooms] ミュート解除エラー:', error);
+        alert('ミュート解除に失敗しました');
+      }
+    };
+
+    // ========================================
+    // ブロックリストモーダル
+    // ========================================
+    window.openBlockListModal = async function() {
+      console.log('[Block List] モーダルを開く');
+      document.getElementById('blockListModal').classList.add('active');
+      await loadBlockList();
+    };
+
+    window.closeBlockListModal = function() {
+      document.getElementById('blockListModal').classList.remove('active');
+    };
+
+    async function loadBlockList() {
+      const container = document.getElementById('blockListContainer');
+      container.innerHTML = '<div class="loading">読み込み中...</div>';
+
+      try {
+        // ブロックリストはユーザードキュメントに保存
+        const userEmail = localStorage.getItem('reborn_user_email') || '';
+        if (!userEmail) {
+          container.innerHTML = '<div style="padding: 20px; text-align: center; color: #718096;">ログインが必要です</div>';
+          return;
+        }
+
+        const userRef = doc(db, 'users', userEmail);
+        const userSnap = await getDoc(userRef);
+
+        let blockedUsers = [];
+        if (userSnap.exists()) {
+          blockedUsers = userSnap.data().blockedUsers || [];
+        }
+
+        if (blockedUsers.length === 0) {
+          container.innerHTML = '<div style="padding: 20px; text-align: center; color: #718096;">ブロック中のユーザーはいません</div>';
+          return;
+        }
+
+        let html = '';
+        blockedUsers.forEach(userName => {
+          const initial = userName.charAt(0).toUpperCase();
+          html += `
+            <div style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e5e7eb;">
+              <div style="width: 40px; height: 40px; border-radius: 50%; background: #ef4444; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; margin-right: 12px;">
+                ${initial}
+              </div>
+              <div style="flex: 1; font-weight: 500; color: #1f2937;">${userName}</div>
+              <button onclick="unblockUser('${userName}')" style="padding: 6px 12px; background: #6b7280; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">解除</button>
+            </div>
+          `;
+        });
+
+        container.innerHTML = html;
+      } catch (error) {
+        console.error('[Block List] 読み込みエラー:', error);
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #718096;">読み込みに失敗しました</div>';
+      }
+    }
+
+    window.unblockUser = async function(userName) {
+      try {
+        console.log('[Block List] ブロック解除:', userName);
+        const userEmail = localStorage.getItem('reborn_user_email') || '';
+        const userRef = doc(db, 'users', userEmail);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const blockedUsers = userSnap.data().blockedUsers || [];
+          const newBlockedUsers = blockedUsers.filter(name => name !== userName);
+          await updateDoc(userRef, { blockedUsers: newBlockedUsers });
+          console.log('[Block List] ブロック解除成功');
+          await loadBlockList(); // 一覧を更新
+        }
+      } catch (error) {
+        console.error('[Block List] ブロック解除エラー:', error);
+        alert('ブロック解除に失敗しました');
+      }
+    };
 
     // お知らせ管理を開く（管理者のみ）
     window.openAdminAnnounce = function() {
