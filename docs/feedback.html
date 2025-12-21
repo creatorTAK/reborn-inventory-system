@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>フィードバック - フリラ</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f8f9fa;
+      min-height: 100vh;
+    }
+    .back-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+      padding: 12px 20px;
+      padding-top: calc(12px + env(safe-area-inset-top, 0px));
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 1000;
+    }
+    .back-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .back-btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    .header-title {
+      color: white;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      padding-top: calc(70px + env(safe-area-inset-top, 0px));
+    }
+    .page-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1E8FBF;
+      margin-bottom: 8px;
+    }
+    .page-description {
+      color: #6b7280;
+      font-size: 14px;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+    .form-label .required {
+      color: #ef4444;
+      margin-left: 4px;
+    }
+    .type-selector {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .type-option {
+      flex: 1;
+      min-width: 100px;
+      padding: 12px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      background: white;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .type-option:hover {
+      border-color: #40B4E5;
+    }
+    .type-option.selected {
+      border-color: #40B4E5;
+      background: #e0f2fe;
+    }
+    .type-option i {
+      font-size: 24px;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .type-option.feature i { color: #10b981; }
+    .type-option.bug i { color: #ef4444; }
+    .type-option.other i { color: #6b7280; }
+    .type-option span {
+      font-size: 13px;
+      font-weight: 500;
+      color: #374151;
+    }
+    .form-textarea {
+      width: 100%;
+      min-height: 150px;
+      padding: 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 16px;
+      font-family: inherit;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+    .form-textarea:focus {
+      outline: none;
+      border-color: #40B4E5;
+    }
+    .form-textarea::placeholder {
+      color: #9ca3af;
+    }
+    .char-count {
+      text-align: right;
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity 0.2s;
+    }
+    .submit-btn:hover {
+      opacity: 0.9;
+    }
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .submit-btn .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .success-message {
+      display: none;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .success-message.show {
+      display: block;
+    }
+    .success-message i {
+      font-size: 64px;
+      color: #10b981;
+      margin-bottom: 16px;
+    }
+    .success-message h2 {
+      font-size: 20px;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+    .success-message p {
+      color: #6b7280;
+      margin-bottom: 24px;
+    }
+    .success-message .back-to-mypage {
+      display: inline-block;
+      padding: 12px 24px;
+      background: #40B4E5;
+      color: white;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .form-container {
+      display: block;
+    }
+    .form-container.hide {
+      display: none;
+    }
+    .note {
+      background: #fef3c7;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 13px;
+      color: #92400e;
+      margin-bottom: 20px;
+    }
+    .note i {
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="back-header">
+    <button class="back-btn" onclick="goBack()">← 戻る</button>
+    <span class="header-title">フィードバック</span>
+  </div>
+
+  <div class="container">
+    <div class="form-container" id="formContainer">
+      <h1 class="page-title">フィードバック・バグ報告</h1>
+      <p class="page-description">
+        機能のご要望やバグのご報告など、お気軽にお寄せください。<br>
+        いただいたご意見はサービス改善に活用させていただきます。
+      </p>
+
+      <div class="note">
+        <i class="bi bi-info-circle"></i>
+        返信が必要な場合は、内容に連絡先をご記入ください。
+      </div>
+
+      <form id="feedbackForm" onsubmit="submitFeedback(event)">
+        <div class="form-group">
+          <label class="form-label">
+            種類<span class="required">*</span>
+          </label>
+          <div class="type-selector">
+            <div class="type-option feature" data-type="feature" onclick="selectType('feature')">
+              <i class="bi bi-lightbulb"></i>
+              <span>機能要望</span>
+            </div>
+            <div class="type-option bug" data-type="bug" onclick="selectType('bug')">
+              <i class="bi bi-bug"></i>
+              <span>バグ報告</span>
+            </div>
+            <div class="type-option other" data-type="other" onclick="selectType('other')">
+              <i class="bi bi-chat-dots"></i>
+              <span>その他</span>
+            </div>
+          </div>
+          <input type="hidden" id="feedbackType" name="type" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="feedbackContent">
+            内容<span class="required">*</span>
+          </label>
+          <textarea
+            class="form-textarea"
+            id="feedbackContent"
+            name="content"
+            placeholder="できるだけ具体的にお書きください。&#10;&#10;バグ報告の場合：&#10;・どの画面で発生したか&#10;・どのような操作をしたか&#10;・どのようなエラーが出たか"
+            required
+            maxlength="2000"
+            oninput="updateCharCount()"
+          ></textarea>
+          <div class="char-count"><span id="charCount">0</span> / 2000</div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submitBtn">
+          <i class="bi bi-send"></i>
+          送信する
+        </button>
+      </form>
+    </div>
+
+    <div class="success-message" id="successMessage">
+      <i class="bi bi-check-circle"></i>
+      <h2>送信完了</h2>
+      <p>フィードバックをお寄せいただき、<br>ありがとうございます。</p>
+      <span class="back-to-mypage" onclick="goBack()">マイページに戻る</span>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    // Firebase設定
+    const firebaseConfig = {
+      apiKey: "AIzaSyDbtlUvpMbLOFtne3F_Ld_k9U_Mtqfxs2g",
+      authDomain: "furira.jp",
+      projectId: "reborn-inventory-system",
+      storageBucket: "reborn-inventory-system.firebasestorage.app",
+      messagingSenderId: "844291294656",
+      appId: "1:844291294656:web:7f1234567890abcdef"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // グローバルに公開
+    window.firebaseDb = db;
+    window.firestoreFunctions = { collection, addDoc, serverTimestamp };
+  </script>
+
+  <script>
+    let selectedType = null;
+
+    function selectType(type) {
+      selectedType = type;
+      document.getElementById('feedbackType').value = type;
+
+      // 選択状態を更新
+      document.querySelectorAll('.type-option').forEach(el => {
+        el.classList.remove('selected');
+      });
+      document.querySelector(`.type-option[data-type="${type}"]`).classList.add('selected');
+    }
+
+    function updateCharCount() {
+      const content = document.getElementById('feedbackContent').value;
+      document.getElementById('charCount').textContent = content.length;
+    }
+
+    async function submitFeedback(event) {
+      event.preventDefault();
+
+      if (!selectedType) {
+        alert('種類を選択してください');
+        return;
+      }
+
+      const content = document.getElementById('feedbackContent').value.trim();
+      if (!content) {
+        alert('内容を入力してください');
+        return;
+      }
+
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<div class="spinner"></div> 送信中...';
+
+      try {
+        const db = window.firebaseDb;
+        const { collection, addDoc, serverTimestamp } = window.firestoreFunctions;
+
+        // ユーザー情報を取得
+        const userId = localStorage.getItem('reborn_user_id') || '';
+        const userEmail = localStorage.getItem('reborn_user_email') || '';
+        const userName = localStorage.getItem('reborn_user_name') || '';
+
+        // デバイス情報
+        const deviceInfo = {
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+          language: navigator.language,
+          screenWidth: screen.width,
+          screenHeight: screen.height
+        };
+
+        // Firestoreに保存
+        await addDoc(collection(db, 'feedback'), {
+          type: selectedType,
+          content: content,
+          userId: userId,
+          userEmail: userEmail,
+          userName: userName,
+          deviceInfo: deviceInfo,
+          status: 'new',
+          createdAt: serverTimestamp()
+        });
+
+        // 成功メッセージを表示
+        document.getElementById('formContainer').classList.add('hide');
+        document.getElementById('successMessage').classList.add('show');
+
+      } catch (error) {
+        console.error('送信エラー:', error);
+        alert('送信に失敗しました。もう一度お試しください。');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-send"></i> 送信する';
+      }
+    }
+
+    function goBack() {
+      const params = new URLSearchParams(window.location.search);
+      const from = params.get('from');
+
+      if (from === 'mypage' && window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'navigate', page: 'mypage' }, '*');
+      } else {
+        history.back();
+      }
+    }
+  </script>
+</body>
+</html>
