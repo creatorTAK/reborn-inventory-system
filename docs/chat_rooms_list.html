@@ -3162,14 +3162,23 @@
         const usersSnap = await getDocs(usersRef);
 
         allMembersForList = [];
+        let selfIconUrl = '';
+
         usersSnap.forEach(doc => {
           const data = doc.data();
+          const iconUrl = data.userIconUrl || data.photoURL || '';
+
+          if (data.userName === currentUserName) {
+            // 自分のアイコンを保存
+            selfIconUrl = iconUrl;
+          }
+
           if (data.userName && data.userName !== currentUserName) {
             allMembersForList.push({
               id: doc.id,
               userName: data.userName,
               email: data.email || '',
-              iconUrl: data.iconUrl || ''
+              iconUrl: iconUrl
             });
           }
         });
@@ -3179,7 +3188,7 @@
           id: 'self',
           userName: currentUserName + '（自分）',
           email: localStorage.getItem('reborn_user_email') || '',
-          iconUrl: ''
+          iconUrl: selfIconUrl
         });
 
         renderMemberList(allMembersForList);
@@ -3201,11 +3210,20 @@
       members.forEach(member => {
         const isSelf = member.id === 'self';
         const initial = member.userName.charAt(0).toUpperCase();
+        const displayName = isSelf ? member.userName.replace('（自分）', '') : member.userName;
+
+        // アイコン表示: 画像があれば画像、なければイニシャル
+        let iconHtml;
+        if (member.iconUrl) {
+          iconHtml = `<img src="${member.iconUrl}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--reborn-primary), var(--reborn-primary-dark)); display: none; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; margin-right: 12px;">${initial}</div>`;
+        } else {
+          iconHtml = `<div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--reborn-primary), var(--reborn-primary-dark)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; margin-right: 12px;">${initial}</div>`;
+        }
+
         html += `
-          <div class="member-list-item" style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e5e7eb; cursor: ${isSelf ? 'default' : 'pointer'};" ${isSelf ? '' : `onclick="openDirectChatWith('${member.userName}')"`}>
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--reborn-primary), var(--reborn-primary-dark)); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; margin-right: 12px;">
-              ${initial}
-            </div>
+          <div class="member-list-item" style="display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #e5e7eb; cursor: ${isSelf ? 'default' : 'pointer'};" ${isSelf ? '' : `onclick="openDirectChatWith('${displayName}')"`}>
+            ${iconHtml}
             <div style="flex: 1;">
               <div style="font-weight: 500; color: #1f2937;">${member.userName}</div>
             </div>
