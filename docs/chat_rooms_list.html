@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21-v318 - チャット作成ボタンを歯車メニュー内に移動 -->
+  <!-- Cache Bust: 2025-12-21-v319 - Keepメモ機能追加 -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -973,6 +973,9 @@
   <div class="minimal-header">
     <img src="/images/furira-square-logo.png?v=20251209" alt="Furira" class="minimal-header-logo" onclick="window.parent.postMessage({type:'navigate', page:'home'}, '*')">
     <div class="minimal-header-icons">
+      <button class="minimal-header-icon" title="Keepメモ" onclick="openKeepMemo()">
+        <i class="bi bi-bookmark"></i>
+      </button>
       <button class="minimal-header-icon" title="通知" onclick="openAnnouncePage()">
         <i class="bi bi-bell"></i>
         <span class="announce-dot" id="announceDot"></span>
@@ -1550,6 +1553,7 @@
           const emailMatch = room.memberEmails?.includes(trimmedUserEmail);
           const nameMatch = room.members?.includes(trimmedUserName);
           const isSystemRoom = room.type === 'system';
+          const isKeepRoom = room.type === 'keep'; // v319: Keepメモは一覧に表示しない
 
           // デバッグ: 各ルームの情報を出力
           console.log('[Filter] ルーム検証:', {
@@ -1560,7 +1564,8 @@
             members: room.members,
             emailMatch: emailMatch,
             nameMatch: nameMatch,
-            isSystemRoom: isSystemRoom
+            isSystemRoom: isSystemRoom,
+            isKeepRoom: isKeepRoom
           });
 
           // 非表示チェック: hiddenBy配列に自分のユーザー名が含まれているか
@@ -1571,12 +1576,15 @@
           // - memberEmails に自分のメールが含まれる場合
           // - または members配列に自分のユーザー名が含まれる場合
           // - 非表示設定されているルームは除外
-          if ((isSystemRoom || emailMatch || nameMatch) && !isHidden) {
+          // - Keepメモ（type='keep'）は一覧から除外（アイコンからのみアクセス）
+          if ((isSystemRoom || emailMatch || nameMatch) && !isHidden && !isKeepRoom) {
             console.log('[Filter] ✅ ルーム表示:', room.id, room.name,
               isSystemRoom ? '(system)' : emailMatch ? '(emailMatch)' : '(nameMatch)');
             visibleRooms.push(room);
           } else if (isHidden) {
             console.log('[Filter] 🙈 非表示ルーム:', room.id, room.name);
+          } else if (isKeepRoom) {
+            console.log('[Filter] 📌 Keepメモ（一覧非表示）:', room.id, room.name);
           } else {
             console.log('[Filter] ❌ ルームをスキップ:', room.id, room.name);
           }
@@ -2929,6 +2937,57 @@
         window.parent.postMessage({ type: 'navigate', page: 'announce' }, '*');
       } else {
         window.location.href = '/announce.html';
+      }
+    };
+
+    // Keepメモを開く（なければ作成）
+    window.openKeepMemo = async function() {
+      console.log('[Keep Memo] Keepメモを開く');
+
+      if (!currentUserName) {
+        alert('ユーザー情報が取得できません');
+        return;
+      }
+
+      try {
+        // 既存のKeepメモルームを検索
+        const q = query(
+          collection(db, 'rooms'),
+          where('type', '==', 'keep'),
+          where('createdBy', '==', currentUserName)
+        );
+        const snapshot = await getDocs(q);
+
+        let roomId;
+
+        if (!snapshot.empty) {
+          // 既存のKeepメモルームがある場合
+          roomId = snapshot.docs[0].id;
+          console.log('[Keep Memo] 既存のKeepメモを開く:', roomId);
+        } else {
+          // Keepメモルームを新規作成
+          console.log('[Keep Memo] Keepメモを新規作成');
+          const newRoom = await addDoc(collection(db, 'rooms'), {
+            name: 'Keepメモ',
+            icon: '📌',
+            createdBy: currentUserName,
+            createdAt: serverTimestamp(),
+            lastMessageAt: serverTimestamp(),
+            lastMessageText: '',
+            lastMessageSender: '',
+            members: [currentUserName],
+            type: 'keep'
+          });
+          roomId = newRoom.id;
+          console.log('[Keep Memo] Keepメモ作成完了:', roomId);
+        }
+
+        // Keepメモルームを開く
+        openRoom(roomId);
+
+      } catch (error) {
+        console.error('[Keep Memo] エラー:', error);
+        alert('Keepメモを開けませんでした: ' + error.message);
       }
     };
 
