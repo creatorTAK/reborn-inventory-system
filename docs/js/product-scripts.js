@@ -5531,59 +5531,17 @@ window.continueProductRegistration = function() {
   let productImages = [];
 
   /**
-   * ページ読み込み時に設定を確認して、商品画像ブロックの表示/非表示を切り替え
+   * 商品画像ブロックを表示
+   * v355: 画像管理設定を廃止し、常に表示に変更
    */
   function checkProductImageBlockVisibility() {
     const block = document.getElementById('productImagesBlock');
 
-    // まずlocalStorageから読み込み（高速表示）
-    // デフォルトはON（true）- localStorageに明示的に'false'が設定されている場合のみOFF
-    const localStorageValue = localStorage.getItem('enableProductImageSave');
-    let enabled = localStorageValue !== 'false';
-
-    console.log('🔍 商品画像ブロック表示チェック:');
-    console.log('  - localStorage値:', localStorageValue);
-    console.log('  - 有効:', enabled);
-    console.log('  - ブロック要素:', block ? '存在' : '見つからない');
-
-    // UIを即座に更新
     if (block) {
-      block.style.display = enabled ? '' : 'none';
-      console.log('  - 表示状態:', enabled ? '表示' : '非表示');
+      block.style.display = '';
+      console.log('📷 商品画像ブロック: 常時表示');
     } else {
       console.error('❌ productImagesBlock要素が見つかりません');
-      return;
-    }
-
-    // バックグラウンドでサーバーから読み込み（iOS/スマホ対応・バックアップ復元）
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(serverEnabled) {
-          console.log('📥 [商品登録画面] サーバーから読み込み:', serverEnabled);
-
-          // サーバーの値とlocalStorageの値が異なる場合は同期
-          if (serverEnabled !== enabled) {
-            console.log('⚠️ サーバーとlocalStorageの値が異なるため同期します');
-            enabled = serverEnabled;
-
-            // localStorageを更新
-            try {
-              localStorage.setItem('enableProductImageSave', enabled.toString());
-            } catch (e) {
-              console.warn('localStorage更新エラー（iOS/スマホでは制限される場合があります）');
-            }
-
-            // UIを更新
-            if (block) {
-              block.style.display = enabled ? '' : 'none';
-              console.log('  - 同期後の表示状態:', enabled ? '表示' : '非表示');
-            }
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('❌ サーバーからの読み込みエラー:', error);
-        })
-        .loadImageSettingFromServer();
     }
   }
 
