@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21 v341 - 設定関数グローバル登録修正 -->
+  <!-- Cache Bust: 2025-12-21 v342 - Firebase モジュラーAPI対応 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -5972,9 +5972,9 @@
       if (!currentRoomId || !currentUserEmail) return;
 
       try {
-        // 現在のルームのデータを取得
-        const roomRef = firebase.firestore().collection('rooms').doc(currentRoomId);
-        const roomDoc = await roomRef.get();
+        // 現在のルームのデータを取得（モジュラーAPI使用）
+        const roomRef = doc(db, 'rooms', currentRoomId);
+        const roomDoc = await getDoc(roomRef);
         const roomData = roomDoc.data();
 
         // ミュート状態を確認
@@ -5998,8 +5998,8 @@
           const otherUserEmail = roomData.members.find(m => m !== currentUserEmail);
 
           // 自分のブロックリストを確認
-          const userRef = firebase.firestore().collection('users').doc(currentUserEmail);
-          const userDoc = await userRef.get();
+          const userRef = doc(db, 'users', currentUserEmail);
+          const userDoc = await getDoc(userRef);
           const userData = userDoc.data() || {};
           const blockedUsers = userData.blockedUsers || [];
 
@@ -6060,20 +6060,20 @@
       }
 
       try {
-        const userRef = firebase.firestore().collection('users').doc(currentUserEmail);
+        const userRef = doc(db, 'users', currentUserEmail);
 
         if (isCurrentlyBlocked) {
           // ブロック解除
-          await userRef.update({
-            blockedUsers: firebase.firestore.FieldValue.arrayRemove(targetUser)
+          await updateDoc(userRef, {
+            blockedUsers: arrayRemove(targetUser)
           });
           showSettingsToast('ブロックを解除しました');
           blockText.textContent = 'ブロックする';
           blockBtn.querySelector('i').className = 'bi bi-slash-circle';
         } else {
           // ブロック
-          await userRef.set({
-            blockedUsers: firebase.firestore.FieldValue.arrayUnion(targetUser)
+          await setDoc(userRef, {
+            blockedUsers: arrayUnion(targetUser)
           }, { merge: true });
           showSettingsToast('ブロックしました');
           blockText.textContent = 'ブロック解除';
@@ -6096,20 +6096,20 @@
       const isCurrentlyMuted = muteText.textContent === '通知をオン';
 
       try {
-        const roomRef = firebase.firestore().collection('rooms').doc(currentRoomId);
+        const roomRef = doc(db, 'rooms', currentRoomId);
 
         if (isCurrentlyMuted) {
           // ミュート解除
-          await roomRef.update({
-            mutedBy: firebase.firestore.FieldValue.arrayRemove(currentUserEmail)
+          await updateDoc(roomRef, {
+            mutedBy: arrayRemove(currentUserEmail)
           });
           showSettingsToast('通知をオンにしました');
           muteText.textContent = '通知をオフ';
           document.getElementById('muteRoomBtn').querySelector('i').className = 'bi bi-bell-slash';
         } else {
           // ミュート
-          await roomRef.update({
-            mutedBy: firebase.firestore.FieldValue.arrayUnion(currentUserEmail)
+          await updateDoc(roomRef, {
+            mutedBy: arrayUnion(currentUserEmail)
           });
           showSettingsToast('通知をオフにしました');
           muteText.textContent = '通知をオン';
@@ -6138,11 +6138,11 @@
       if (!currentRoomId || !currentUserEmail) return;
 
       try {
-        const roomRef = firebase.firestore().collection('rooms').doc(currentRoomId);
+        const roomRef = doc(db, 'rooms', currentRoomId);
 
         // メンバーから削除
-        await roomRef.update({
-          members: firebase.firestore.FieldValue.arrayRemove(currentUserEmail)
+        await updateDoc(roomRef, {
+          members: arrayRemove(currentUserEmail)
         });
 
         showSettingsToast('グループから退出しました');
