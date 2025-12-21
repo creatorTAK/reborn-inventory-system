@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21-v323 - Keepドット（緑）追加 -->
+  <!-- Cache Bust: 2025-12-21-v324 - ブロックリスト自分自身除外+自動クリーンアップ -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -3776,6 +3776,18 @@
         let blockedUsers = [];
         if (userSnap.exists()) {
           blockedUsers = userSnap.data().blockedUsers || [];
+        }
+
+        // 自分自身を除外（ユーザー名とメールの両方）
+        const userName = localStorage.getItem('reborn_user_name') || '';
+        const originalLength = blockedUsers.length;
+        blockedUsers = blockedUsers.filter(name => name !== userName && name !== userEmail);
+
+        // 自分がリストに入っていた場合はFirestoreからも削除
+        if (blockedUsers.length < originalLength) {
+          console.log('[Block List] ⚠️ 自分自身がブロックリストに入っていたため削除します');
+          await updateDoc(userRef, { blockedUsers: blockedUsers });
+          console.log('[Block List] ✅ Firestoreから自分自身を削除しました');
         }
 
         if (blockedUsers.length === 0) {

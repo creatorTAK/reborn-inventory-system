@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21 v345 - 自分自身ブロック防止 + 入力欄レイアウト修正 -->
+  <!-- Cache Bust: 2025-12-21 v346 - 自分自身ブロックリスト自動クリーンアップ -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -3728,7 +3728,24 @@
         const myUserDoc = await getDoc(myUserRef);
         if (myUserDoc.exists()) {
           const myData = myUserDoc.data();
-          const myBlockedList = myData.blockedUsers || [];
+          let myBlockedList = myData.blockedUsers || [];
+
+          // 自分自身がブロックリストに入っている場合はクリーンアップ
+          const selfInList = myBlockedList.some(u => u === currentUserName || u === currentUserEmail);
+          if (selfInList) {
+            console.log('[Block] ⚠️ 自分自身がブロックリストに入っています。クリーンアップします...');
+            // Firestoreから自分を削除
+            await updateDoc(myUserRef, {
+              blockedUsers: arrayRemove(currentUserName)
+            });
+            await updateDoc(myUserRef, {
+              blockedUsers: arrayRemove(currentUserEmail)
+            });
+            // ローカルリストからも除外
+            myBlockedList = myBlockedList.filter(u => u !== currentUserName && u !== currentUserEmail);
+            console.log('[Block] ✅ 自分自身をブロックリストから削除しました');
+          }
+
           isBlockedByMe = myBlockedList.includes(otherUserEmail);
           console.log('[Block] 自分→相手ブロック:', isBlockedByMe);
         }
@@ -6129,7 +6146,10 @@
           const userRef = doc(db, 'users', currentUserEmail);
           const userDoc = await getDoc(userRef);
           const userData = userDoc.data() || {};
-          const blockedUsers = userData.blockedUsers || [];
+          // 自分自身を除外したブロックリスト
+          const blockedUsers = (userData.blockedUsers || []).filter(
+            u => u !== currentUserName && u !== currentUserEmail
+          );
 
           const isBlocked = blockedUsers.includes(otherUserEmail);
           if (isBlocked) {
