@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21-v325 - ルーム一覧でブロック中ユーザーのメッセージ非表示 -->
+  <!-- Cache Bust: 2025-12-21-v326 - ブロック中ルームの時間・バッジも非表示 -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2156,13 +2156,36 @@
         name.appendChild(muteIcon);
       }
 
+      // 🚫 ブロックチェック（LINE風）: ダイレクトチャットで相手がブロック中の場合
+      // この判定を時間表示・メッセージプレビューの両方で使用
+      let isBlockedRoom = false;
+      if (room.type === 'direct' && currentUserBlockedList.length > 0) {
+        let otherMember = null;
+        if (room.memberEmails && room.memberEmails.length === 2) {
+          const otherEmail = room.memberEmails.find(e => e !== currentUserEmail);
+          const otherUserData = usersCache.find(u => u.id === otherEmail || u.userEmail === otherEmail);
+          otherMember = otherUserData?.userName || otherEmail;
+        } else if (room.members && Array.isArray(room.members)) {
+          otherMember = room.members.find(m => m !== currentUserName);
+        }
+        if (otherMember) {
+          isBlockedRoom = currentUserBlockedList.some(
+            blocked => blocked.toLowerCase() === otherMember.toLowerCase()
+          );
+        }
+      }
+
       // 右側メタ情報（時間 + 未読バッジ）
       const meta = document.createElement('div');
       meta.className = 'room-meta';
 
       const time = document.createElement('div');
       time.className = 'room-time';
-      if (room.lastMessageAt && room.lastMessageAt.toDate) {
+
+      // ブロック中のルームは時間を非表示（メッセージ更新を隠す）
+      if (isBlockedRoom) {
+        time.textContent = '';
+      } else if (room.lastMessageAt && room.lastMessageAt.toDate) {
         const date = room.lastMessageAt.toDate();
         const now = new Date();
         const diffMs = now - date;
@@ -2185,11 +2208,14 @@
 
       meta.appendChild(time);
 
-      // 未読バッジ（時間の下に配置）
+      // 未読バッジ（時間の下に配置）- ブロック中は常に非表示
       const badge = document.createElement('div');
       badge.className = 'unread-badge';
       badge.id = `unread-badge-${room.id}`;
       badge.style.display = 'none'; // 初期非表示
+      if (isBlockedRoom) {
+        badge.dataset.blocked = 'true'; // ブロック中フラグ
+      }
       meta.appendChild(badge);
 
       header.appendChild(name);
@@ -2202,26 +2228,7 @@
       const lastMessage = document.createElement('div');
       lastMessage.className = 'room-last-message';
 
-      // 🚫 ブロックチェック（LINE風）: ダイレクトチャットで相手がブロック中の場合
-      let isBlockedRoom = false;
-      if (room.type === 'direct' && currentUserBlockedList.length > 0) {
-        // 相手のユーザー名を取得
-        let otherMember = null;
-        if (room.memberEmails && room.memberEmails.length === 2) {
-          const otherEmail = room.memberEmails.find(e => e !== currentUserEmail);
-          const otherUserData = usersCache.find(u => u.id === otherEmail || u.userEmail === otherEmail);
-          otherMember = otherUserData?.userName || otherEmail;
-        } else if (room.members && Array.isArray(room.members)) {
-          otherMember = room.members.find(m => m !== currentUserName);
-        }
-        // ブロックリストに含まれているかチェック
-        if (otherMember) {
-          isBlockedRoom = currentUserBlockedList.some(
-            blocked => blocked.toLowerCase() === otherMember.toLowerCase()
-          );
-        }
-      }
-
+      // isBlockedRoom は上で既に定義済み
       if (isBlockedRoom) {
         // ブロック中: メッセージを非表示
         lastMessage.textContent = '🚫 ブロック中';
@@ -2260,11 +2267,18 @@
       container.appendChild(wrapper);
 
       // 未読カウントをリアルタイムで取得・更新
-      if (currentUserEmail) {
+      // ブロック中のルームはバッジを表示しない
+      if (currentUserEmail && !isBlockedRoom) {
         const unreadRef = doc(db, `rooms/${room.id}/unreadCounts/${currentUserEmail}`);
         onSnapshot(unreadRef, (unreadDoc) => {
           const badgeEl = document.getElementById(`unread-badge-${room.id}`);
           if (badgeEl) {
+            // ブロック中フラグが立っている場合はスキップ
+            if (badgeEl.dataset.blocked === 'true') {
+              badgeEl.style.display = 'none';
+              return;
+            }
+
             const unreadData = unreadDoc.data();
             const unreadCount = unreadData?.unreadCount || 0;
 

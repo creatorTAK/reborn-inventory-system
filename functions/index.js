@@ -412,10 +412,45 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
     console.log('📋 [onChatMessageCreated] ルーム:', roomData.name, 'タイプ:', roomType, 'メンバー:', members);
 
     // 🔔 非表示解除: 新着メッセージ時にhiddenByをクリア（ルームを再表示）
+    // ただし、送信者をブロックしているユーザーの非表示設定は維持する（LINE風）
     if (roomData.hiddenBy && roomData.hiddenBy.length > 0) {
-      console.log('👁️ [onChatMessageCreated] 非表示解除:', roomData.hiddenBy);
-      await roomRef.update({ hiddenBy: [] });
-      console.log('✅ [onChatMessageCreated] hiddenBy クリア完了');
+      console.log('👁️ [onChatMessageCreated] 非表示ユーザー確認:', roomData.hiddenBy);
+
+      // ブロックチェック: 非表示にしているユーザーの中で、送信者をブロックしている人を特定
+      const senderEmail = messageData.userEmail || null;
+      let usersToKeepHidden = [];
+
+      if (roomType === 'direct' && senderEmail) {
+        // 個別チャットの場合、非表示ユーザーのブロック状態をチェック
+        for (const hiddenUserName of roomData.hiddenBy) {
+          // hiddenByにはユーザー名が入っている。メールアドレスを取得してブロックリストをチェック
+          const hiddenUserEmail = roomData.memberEmails?.find(e => {
+            // memberEmailsとmembersの順番が対応していると仮定
+            const idx = roomData.memberEmails.indexOf(e);
+            return roomData.members?.[idx] === hiddenUserName;
+          });
+
+          if (hiddenUserEmail) {
+            const hiddenUserDoc = await db.collection('users').doc(hiddenUserEmail).get();
+            if (hiddenUserDoc.exists) {
+              const blockedList = hiddenUserDoc.data().blockedUsers || [];
+              if (blockedList.includes(senderName) || blockedList.includes(senderEmail)) {
+                console.log(`🚫 [onChatMessageCreated] ${hiddenUserName} は送信者をブロック中 → 非表示維持`);
+                usersToKeepHidden.push(hiddenUserName);
+              }
+            }
+          }
+        }
+      }
+
+      // ブロックしていないユーザーの非表示のみ解除
+      if (usersToKeepHidden.length > 0) {
+        console.log('👁️ [onChatMessageCreated] 非表示維持ユーザー:', usersToKeepHidden);
+        await roomRef.update({ hiddenBy: usersToKeepHidden });
+      } else {
+        await roomRef.update({ hiddenBy: [] });
+      }
+      console.log('✅ [onChatMessageCreated] hiddenBy 更新完了');
     }
 
     // 送信者以外のメンバーに通知
