@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21 v343 - LINE風ブロック機能実装 -->
+  <!-- Cache Bust: 2025-12-21 v344 - ブロック機能修正（ユーザー名比較） -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -3708,7 +3708,7 @@
       }
 
       try {
-        // ルーム情報から相手のメールアドレスを取得
+        // ルーム情報から相手のユーザー名を取得
         const roomRef = doc(db, 'rooms', currentRoomId);
         const roomDoc = await getDoc(roomRef);
         if (!roomDoc.exists()) return;
@@ -3716,9 +3716,10 @@
         const roomData = roomDoc.data();
         if (!roomData.members || !Array.isArray(roomData.members)) return;
 
-        // メンバーにはメールアドレスが入っている
-        otherUserEmail = roomData.members.find(m => m !== currentUserEmail) || '';
-        console.log('[Block] 相手のメール:', otherUserEmail);
+        // メンバーにはユーザー名が入っている（メールではない）
+        // currentUserNameと比較して相手を特定
+        otherUserEmail = roomData.members.find(m => m !== currentUserName) || '';
+        console.log('[Block] 相手のユーザー名:', otherUserEmail);
 
         if (!otherUserEmail) return;
 
@@ -3733,14 +3734,11 @@
         }
 
         // 相手が自分をブロックしているかチェック
-        const otherUserRef = doc(db, 'users', otherUserEmail);
-        const otherUserDoc = await getDoc(otherUserRef);
-        if (otherUserDoc.exists()) {
-          const otherData = otherUserDoc.data();
-          const otherBlockedList = otherData.blockedUsers || [];
-          isBlockedByOther = otherBlockedList.includes(currentUserEmail);
-          console.log('[Block] 相手→自分ブロック:', isBlockedByOther);
-        }
+        // 注意: usersコレクションはメールアドレスをキーにしているため、
+        // ユーザー名からは検索できない。isBlockedByOtherは常にfalse。
+        // LINEと同様、ブロックされた側は気づかない仕様。
+        isBlockedByOther = false;
+        console.log('[Block] 相手→自分ブロック: チェック省略（メール不明）');
 
         // UIを更新
         updateBlockedUI();
@@ -3822,8 +3820,9 @@
           const msgData = { id: doc.id, ...doc.data() };
 
           // ブロック中の相手からのメッセージはスキップ（LINE風）
-          if (isBlockedByMe && msgData.userEmail === otherUserEmail) {
-            console.log('[Block] ブロック中ユーザーのメッセージをスキップ:', msgData.id);
+          // membersにはユーザー名が入っているため、userNameで比較
+          if (isBlockedByMe && (msgData.userName === otherUserEmail || msgData.userEmail === otherUserEmail)) {
+            console.log('[Block] ブロック中ユーザーのメッセージをスキップ:', msgData.id, msgData.userName);
             return; // このメッセージは表示しない
           }
 
@@ -6123,8 +6122,8 @@
         const blockText = document.getElementById('blockUserText');
 
         if (roomData.type === 'direct') {
-          // 相手のユーザーを特定
-          const otherUserEmail = roomData.members.find(m => m !== currentUserEmail);
+          // 相手のユーザー名を特定（membersにはユーザー名が入っている）
+          const otherUserEmail = roomData.members.find(m => m !== currentUserName);
 
           // 自分のブロックリストを確認
           const userRef = doc(db, 'users', currentUserEmail);
