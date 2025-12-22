@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v148-note-drag-handle'; // ドラッグハンドル追加
-const SW_VERSION = 'v148-note-drag-handle'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v149-note-ui-fix'; // 追加ボタン下部固定・コントロール位置修正
+const SW_VERSION = 'v149-note-ui-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
