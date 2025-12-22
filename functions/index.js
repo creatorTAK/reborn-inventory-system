@@ -73,11 +73,123 @@ exports.onProductCreated = onDocumentCreated('products/{productId}', async (even
     const duration = Date.now() - startTime;
     console.log(`✅ [onProductCreated] 通知完了: ${duration}ms`);
 
+    // 🔢 商品登録カウントダウン処理（仕入スロット連携）
+    if (productData.purchaseSlotId) {
+      console.log('🔢 [onProductCreated] 仕入スロット連携あり:', productData.purchaseSlotId);
+      try {
+        await updateRegistrationCountdown(productData.purchaseSlotId);
+      } catch (countdownError) {
+        console.error('❌ [onProductCreated] カウントダウン処理エラー:', countdownError);
+        // カウントダウンエラーでも通知は継続
+      }
+    }
+
   } catch (error) {
     console.error('❌ [onProductCreated] エラー:', error);
     // エラーでもFirestore保存は成功しているので、処理継続
   }
 });
+
+/**
+ * 🔢 商品登録カウントダウン処理
+ * purchaseSlotから仕入バッチを特定し、残数を減らす
+ * 残数が0になったら商品登録タスクを自動完了
+ */
+async function updateRegistrationCountdown(purchaseSlotId) {
+  console.log('🔢 [updateRegistrationCountdown] 開始:', purchaseSlotId);
+
+  try {
+    // 1. purchaseSlotsからbatchIdを取得
+    const slotDoc = await db.collection('purchaseSlots').doc(purchaseSlotId).get();
+    if (!slotDoc.exists) {
+      console.warn('⚠️ [updateRegistrationCountdown] スロットが見つかりません:', purchaseSlotId);
+      return;
+    }
+
+    const slotData = slotDoc.data();
+    const batchId = slotData.batchId;
+    if (!batchId) {
+      console.warn('⚠️ [updateRegistrationCountdown] batchIdがありません:', purchaseSlotId);
+      return;
+    }
+
+    console.log('🔢 [updateRegistrationCountdown] batchId:', batchId);
+
+    // 2. purchaseBatchesのカウントを更新
+    const batchRef = db.collection('purchaseBatches').doc(batchId);
+    const batchDoc = await batchRef.get();
+    if (!batchDoc.exists) {
+      console.warn('⚠️ [updateRegistrationCountdown] バッチが見つかりません:', batchId);
+      return;
+    }
+
+    const batchData = batchDoc.data();
+    const currentRemaining = batchData.remainingCount || 0;
+    const currentRegistered = batchData.registeredCount || 0;
+    const totalCount = batchData.itemCount || 0;
+
+    if (currentRemaining <= 0) {
+      console.log('⚠️ [updateRegistrationCountdown] 残数が0以下、スキップ:', batchId);
+      return;
+    }
+
+    const newRemaining = currentRemaining - 1;
+    const newRegistered = currentRegistered + 1;
+
+    console.log(`🔢 [updateRegistrationCountdown] カウント更新: ${currentRemaining} → ${newRemaining} (登録済み: ${newRegistered}/${totalCount})`);
+
+    // 3. バッチデータ更新
+    const batchUpdate = {
+      remainingCount: newRemaining,
+      registeredCount: newRegistered,
+      updatedAt: new Date().toISOString()
+    };
+
+    // 4. 残数0の場合はステータスを完了に
+    if (newRemaining === 0) {
+      batchUpdate.status = 'completed';
+      console.log('🎉 [updateRegistrationCountdown] 全商品登録完了!', batchId);
+    }
+
+    await batchRef.update(batchUpdate);
+
+    // 5. 商品登録タスクのタイトルを更新（残数表示）
+    const taskId = batchData.registrationTaskId;
+    if (taskId) {
+      const assigneeUserId = batchData.assigneeUserId;
+      if (assigneeUserId) {
+        const taskRef = db.collection('userTasks').doc(assigneeUserId).collection('tasks').doc(taskId);
+        const taskDoc = await taskRef.get();
+
+        if (taskDoc.exists) {
+          const taskUpdate = {
+            title: `商品登録（残り${newRemaining}点）`,
+            'relatedData.remainingCount': newRemaining,
+            'relatedData.registeredCount': newRegistered,
+            updatedAt: new Date().toISOString()
+          };
+
+          // 残数0の場合はタスクを自動完了
+          if (newRemaining === 0) {
+            taskUpdate.completed = true;
+            taskUpdate.completedAt = new Date().toISOString();
+            taskUpdate.title = `商品登録完了（${totalCount}点）`;
+            console.log('✅ [updateRegistrationCountdown] タスク自動完了:', taskId);
+          }
+
+          await taskRef.update(taskUpdate);
+          console.log('✅ [updateRegistrationCountdown] タスク更新完了:', taskId);
+        }
+      }
+    }
+
+    console.log('✅ [updateRegistrationCountdown] 処理完了');
+
+  } catch (error) {
+    console.error('❌ [updateRegistrationCountdown] エラー:', error);
+    throw error;
+  }
+}
 
 /**
  * 通知データ作成

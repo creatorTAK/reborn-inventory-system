@@ -1052,6 +1052,49 @@ window.showAddModal = async function() {
           customWrapper.style.display = 'none';
         }
       });
+    } else if (field.type === 'user-select') {
+      // スタッフ選択プルダウン
+      const select = document.createElement('select');
+      select.id = `add-${field.name}`;
+      select.className = 'form-input';
+
+      // 「選択してください」オプション
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = '-- スタッフを選択 --';
+      select.appendChild(defaultOption);
+
+      // usersコレクションからスタッフを読み込み
+      if (window.db) {
+        window.db.collection('users').get().then(snapshot => {
+          snapshot.forEach(doc => {
+            const userData = doc.data();
+            // アクティブなスタッフのみ表示
+            if (userData.status === 'アクティブ') {
+              const option = document.createElement('option');
+              option.value = doc.id; // userEmail
+              option.textContent = userData.userName || userData.displayName || doc.id;
+              select.appendChild(option);
+            }
+          });
+        }).catch(err => {
+          console.error('スタッフ読み込みエラー:', err);
+        });
+      }
+
+      formGroup.appendChild(select);
+
+      // 説明文があれば追加
+      if (field.description) {
+        const helpText = document.createElement('small');
+        helpText.className = 'form-help-text';
+        helpText.style.color = '#6b7280';
+        helpText.style.fontSize = '12px';
+        helpText.style.marginTop = '4px';
+        helpText.style.display = 'block';
+        helpText.textContent = field.description;
+        formGroup.appendChild(helpText);
+      }
     } else {
       // 通常のテキスト入力
       const input = document.createElement('input');

@@ -3699,6 +3699,39 @@
                   <!-- メニュー設定リストがここに動的に追加される -->
                 </div>
               </div>
+
+              <!-- タスク設定セクション -->
+              <div style="margin-bottom: 24px; padding: 16px; background: white; border-radius: 8px; border: 2px solid #e5e7eb;">
+                <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px;">
+                  ✅ タスク設定
+                </div>
+                <div style="font-size: 12px; color: #6b7280; margin-bottom: 12px;">
+                  仕入商品受取後の商品登録タスクに関する設定です。
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                  <!-- 商品登録期限設定 -->
+                  <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #f9fafb; border-radius: 8px;">
+                    <div>
+                      <div style="font-size: 13px; font-weight: 600; color: #374151;">商品登録期限</div>
+                      <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">
+                        受取タスク完了から商品登録完了までの期限
+                      </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <input type="number" id="taskProductRegistrationDueDays" min="1" max="30" value="7"
+                             style="width: 60px; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; text-align: center; font-size: 14px;">
+                      <span style="font-size: 13px; color: #6b7280;">日</span>
+                    </div>
+                  </div>
+
+                  <!-- 保存ボタン -->
+                  <button onclick="saveTaskSettings()" id="saveTaskSettingsBtn"
+                          style="width: 100%; padding: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+                    タスク設定を保存
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -10985,6 +11018,95 @@ ${prompt || '（未設定）'}
       return false;
     }
   }
+
+  // ================= タスク設定機能 =================
+
+  /**
+   * タスク設定を読み込む
+   */
+  async function loadTaskSettings() {
+    console.log('[TASK] タスク設定を読み込み中...');
+    try {
+      if (!window.db) {
+        console.warn('[TASK] Firestoreが初期化されていません');
+        return;
+      }
+
+      const doc = await window.db.collection('settings').doc('taskSettings').get();
+      if (doc.exists) {
+        const settings = doc.data();
+        const dueDays = settings.productRegistration?.defaultDueDays || 7;
+        const input = document.getElementById('taskProductRegistrationDueDays');
+        if (input) {
+          input.value = dueDays;
+        }
+        console.log('[TASK] タスク設定読み込み完了:', settings);
+      } else {
+        console.log('[TASK] タスク設定がありません、デフォルト値を使用');
+      }
+    } catch (error) {
+      console.error('[TASK] タスク設定読み込みエラー:', error);
+    }
+  }
+
+  /**
+   * タスク設定を保存する
+   */
+  async function saveTaskSettings() {
+    const btn = document.getElementById('saveTaskSettingsBtn');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '保存中...';
+
+    try {
+      if (!window.db) {
+        throw new Error('Firestoreが初期化されていません');
+      }
+
+      const dueDays = parseInt(document.getElementById('taskProductRegistrationDueDays').value) || 7;
+
+      // 値の検証
+      if (dueDays < 1 || dueDays > 30) {
+        alert('商品登録期限は1〜30日の範囲で設定してください');
+        btn.disabled = false;
+        btn.textContent = originalText;
+        return;
+      }
+
+      await window.db.collection('settings').doc('taskSettings').set({
+        productRegistration: {
+          defaultDueDays: dueDays
+        },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      console.log('[TASK] タスク設定を保存しました:', { dueDays });
+      btn.textContent = '保存完了!';
+      btn.style.background = '#10b981';
+
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+        btn.style.background = '';
+      }, 2000);
+
+    } catch (error) {
+      console.error('[TASK] タスク設定保存エラー:', error);
+      alert('タスク設定の保存に失敗しました: ' + error.message);
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+
+  // システム設定タブ表示時にタスク設定を読み込む
+  document.addEventListener('DOMContentLoaded', function() {
+    const systemTab = document.getElementById('system-settings-tab');
+    if (systemTab) {
+      systemTab.addEventListener('shown.bs.tab', function() {
+        loadTaskSettings();
+      });
+    }
+  });
 
   // ================= ユーザー管理機能 =================
 

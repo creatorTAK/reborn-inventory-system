@@ -1264,6 +1264,11 @@
           📅 支払予定
         </button>
       </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="dispatch-progress-tab" data-bs-toggle="tab" data-bs-target="#dispatch-progress-content" type="button" role="tab" onclick="loadDispatchProgress()">
+          📦 発送進捗
+        </button>
+      </li>
     </ul>
 
     <!-- タブコンテンツ -->
@@ -1785,6 +1790,21 @@
             <span class="fw-bold">仕入登録完了</span>
           </div>
           <p class="mb-3">仕入ID: <strong id="entryPurchaseId"></strong></p>
+          <p class="mb-2">発送先: <strong id="entryAssigneeName"></strong></p>
+
+          <!-- 発送通知ボタン（スタッフ連携時のみ表示） -->
+          <div id="dispatchNotificationArea" style="display: none;" class="mb-3">
+            <div class="alert alert-info py-2 mb-2" style="font-size: 0.9rem;">
+              <i class="bi bi-info-circle"></i> 発送先スタッフにタスク通知を送信できます
+            </div>
+            <button class="btn btn-primary w-100" onclick="sendDispatchNotification()" id="btnSendDispatch">
+              <i class="bi bi-send"></i> 発送通知を送信
+            </button>
+            <div id="dispatchNotificationSent" style="display: none;" class="alert alert-success py-2 mt-2">
+              <i class="bi bi-check-circle"></i> 発送通知を送信しました
+            </div>
+          </div>
+
           <div class="d-grid gap-2">
             <button class="btn btn-entry-teal" onclick="resetEntryForm()">
               <i class="bi bi-plus-circle"></i> 続けて仕入登録
@@ -1973,6 +1993,50 @@
               <tbody id="paymentScheduleBody">
                 <tr>
                   <td colspan="5" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 発送進捗タブ -->
+      <div class="tab-pane fade" id="dispatch-progress-content" role="tabpanel">
+        <div class="alert alert-info small mb-3">
+          <i class="bi bi-info-circle"></i> 発送済みの仕入バッチの商品登録進捗を確認できます。
+        </div>
+
+        <!-- フィルター -->
+        <div class="row g-2 mb-3">
+          <div class="col-auto">
+            <select class="form-select form-select-sm" id="dispatchStatusFilter" onchange="filterDispatchProgress()">
+              <option value="all">すべて</option>
+              <option value="pending">未発送</option>
+              <option value="shipped">発送済み</option>
+              <option value="received">受取済み</option>
+              <option value="registering">登録中</option>
+              <option value="completed">完了</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 進捗テーブル -->
+        <div class="data-table-container">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>仕入日</th>
+                  <th>仕入先</th>
+                  <th>点数</th>
+                  <th>発送先</th>
+                  <th>ステータス</th>
+                  <th>登録進捗</th>
+                </tr>
+              </thead>
+              <tbody id="dispatchProgressBody">
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-4">タブをクリックしてデータを読み込んでください</td>
                 </tr>
               </tbody>
             </table>
@@ -2428,8 +2492,11 @@
           totalAmount: batchData.totalAmount,
           itemCount: batchData.itemCount,
           assignee: batchData.assignee || '',
+          assigneeUserId: batchData.assigneeUserId || null, // スタッフ連携用
           memo: batchData.memo || '',
-          status: 'pending', // pending / shipped / received
+          status: 'pending', // pending / shipped / received / completed
+          remainingCount: batchData.itemCount, // カウントダウン用（未登録数）
+          registeredCount: 0, // 登録済み数
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
@@ -3960,7 +4027,10 @@
         const assigneeSelect = document.getElementById('entryAssignee');
         assigneeSelect.innerHTML = '<option value="">--選択--</option>';
         entryAssigneesData.forEach(item => {
-          assigneeSelect.innerHTML += `<option value="${item.name}">${item.note ? item.name + '（' + item.note + '）' : item.name}</option>`;
+          // userIdが設定されている場合はdata属性に保存
+          const userIdAttr = item.userId ? ` data-user-id="${item.userId}"` : '';
+          const linkedMark = item.userId ? ' 📱' : ''; // 連携済みマーク
+          assigneeSelect.innerHTML += `<option value="${item.name}"${userIdAttr}>${item.note ? item.name + '（' + item.note + '）' : item.name}${linkedMark}</option>`;
         });
         document.getElementById('entryAssigneeIndividual').innerHTML = assigneeSelect.innerHTML;
         updateAllEntryItemAssignees();
@@ -5064,7 +5134,7 @@
         amount: defaultAmount,
         memo: '',
         // INV-010: 新品/バリエーション対応
-        itemType: 'unique',  // 'unique'=1点物, 'sku-based'=新品（SKU管理）
+        itemType: 'unique',  // 'unique'=1点物, 'sku-based'=新品(複数)
         quantity: 1,         // 数量（1点物は常に1）
         skuId: null,         // SKU ID（新品時に自動生成）
         unitPrice: null,     // 仕入単価（新品時に計算）
@@ -5123,7 +5193,7 @@
               </label>
               <input type="radio" class="btn-check" name="entry-item-type-${itemId}" id="entry-type-sku-${itemId}" value="sku-based" onchange="onEntryItemTypeChanged(${itemId})">
               <label class="btn btn-outline-secondary" for="entry-type-sku-${itemId}" style="flex: 1; padding: 8px 16px;">
-                <i class="bi bi-box-seam me-1"></i>新品（複数）
+                <i class="bi bi-box-seam me-1"></i>新品(複数)
               </label>
             </div>
             <!-- 数量入力（新品時のみ表示） -->
@@ -5988,7 +6058,9 @@
       const supplier = document.getElementById('entrySupplier').value;
       const itemCount = parseInt(document.getElementById('entryItemCount').value) || 0;
       const totalAmount = parseInt(document.getElementById('entryTotalAmount').value) || 0;
-      const assignee = document.getElementById('entryAssignee').value;
+      const assigneeSelect = document.getElementById('entryAssignee');
+      const assignee = assigneeSelect.value;
+      const assigneeUserId = assigneeSelect.selectedOptions[0]?.dataset?.userId || null;
       const memo = document.getElementById('entryMemo')?.value || '';
 
       // 一括入力用検品情報を収集（個別入力と同じ構造）
@@ -6054,6 +6126,7 @@
           totalAmount,
           itemCount,
           assignee,
+          assigneeUserId,
           memo,
           items  // 検品情報を含むitems配列を追加
         });
@@ -6115,7 +6188,24 @@
       document.getElementById('qrEntryPreview').style.display = 'block';
       document.getElementById('qrEntryCount').textContent = itemCount + '枚';
       document.getElementById('entryPurchaseId').textContent = batchId;
+      document.getElementById('entryAssigneeName').textContent = assignee || '未設定';
       document.getElementById('entryAfterActions').style.display = 'block';
+
+      // 発送通知エリアの表示制御（スタッフ連携時のみ）
+      const dispatchArea = document.getElementById('dispatchNotificationArea');
+      if (assigneeUserId) {
+        dispatchArea.style.display = 'block';
+        dispatchArea.dataset.batchId = batchId;
+        dispatchArea.dataset.assigneeUserId = assigneeUserId;
+        dispatchArea.dataset.assigneeName = assignee;
+        dispatchArea.dataset.itemCount = itemCount;
+        dispatchArea.dataset.supplier = supplier;
+        document.getElementById('dispatchNotificationSent').style.display = 'none';
+        document.getElementById('btnSendDispatch').disabled = false;
+      } else {
+        dispatchArea.style.display = 'none';
+      }
+
       checkShowPrinterWarmupNotice(); // v305: iOS印刷ウォームアップ通知
 
       setTimeout(() => {
@@ -7260,6 +7350,203 @@
       document.getElementById('simpleGap').value = currentSimpleSettings.gap;
     }
 
+    // 発送通知を送信
+    async function sendDispatchNotification() {
+      const dispatchArea = document.getElementById('dispatchNotificationArea');
+      const batchId = dispatchArea.dataset.batchId;
+      const assigneeUserId = dispatchArea.dataset.assigneeUserId;
+      const assigneeName = dispatchArea.dataset.assigneeName;
+      const itemCount = parseInt(dispatchArea.dataset.itemCount) || 0;
+      const supplier = dispatchArea.dataset.supplier;
+
+      if (!batchId || !assigneeUserId) {
+        alert('発送通知に必要な情報がありません');
+        return;
+      }
+
+      const btn = document.getElementById('btnSendDispatch');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 送信中...';
+
+      try {
+        // 1. receiving_taskを作成
+        const taskId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        const taskData = {
+          type: 'receiving_task',
+          title: `仕入商品の受取（${itemCount}点）`,
+          description: `${supplier}から${itemCount}点の商品が発送されました。商品を受け取ったらこのタスクを完了にしてください。`,
+          link: 'purchase',
+          relatedData: {
+            batchId: batchId,
+            itemCount: itemCount,
+            supplier: supplier,
+            assigneeName: assigneeName
+          },
+          createdAt: new Date().toISOString(),
+          completed: false,
+          read: false
+        };
+
+        await db.collection('userTasks')
+          .doc(assigneeUserId)
+          .collection('tasks')
+          .doc(taskId)
+          .set(taskData);
+
+        // 2. purchaseBatchesのstatusをshippedに更新
+        await db.collection('purchaseBatches').doc(batchId).update({
+          status: 'shipped',
+          shippedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          dispatchTaskId: taskId
+        });
+
+        console.log('📬 [発送通知] タスク作成完了:', taskId, '宛先:', assigneeUserId);
+
+        // 3. UI更新
+        document.getElementById('dispatchNotificationSent').style.display = 'block';
+        btn.innerHTML = '<i class="bi bi-check"></i> 送信完了';
+
+      } catch (error) {
+        console.error('発送通知エラー:', error);
+        alert('発送通知の送信に失敗しました: ' + error.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-send"></i> 発送通知を送信';
+      }
+    }
+
+    // ========================================
+    // 発送進捗タブ機能
+    // ========================================
+    let dispatchProgressData = [];
+
+    /**
+     * 発送進捗データを読み込む
+     */
+    async function loadDispatchProgress() {
+      const tbody = document.getElementById('dispatchProgressBody');
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">データを読み込んでいます...</td></tr>';
+
+      try {
+        // 直近3ヶ月のバッチを取得
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+        const batchesSnapshot = await db.collection('purchaseBatches')
+          .where('createdAt', '>=', threeMonthsAgo.toISOString())
+          .orderBy('createdAt', 'desc')
+          .limit(100)
+          .get();
+
+        dispatchProgressData = [];
+
+        batchesSnapshot.forEach(doc => {
+          const data = doc.data();
+          dispatchProgressData.push({
+            id: doc.id,
+            ...data
+          });
+        });
+
+        console.log('📦 [発送進捗] データ取得:', dispatchProgressData.length, '件');
+
+        renderDispatchProgress();
+
+      } catch (error) {
+        console.error('発送進捗データ読み込みエラー:', error);
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">データの読み込みに失敗しました</td></tr>';
+      }
+    }
+
+    /**
+     * 発送進捗テーブルを描画
+     */
+    function renderDispatchProgress() {
+      const tbody = document.getElementById('dispatchProgressBody');
+      const filter = document.getElementById('dispatchStatusFilter').value;
+
+      // フィルタリング
+      let filteredData = dispatchProgressData;
+      if (filter !== 'all') {
+        filteredData = dispatchProgressData.filter(batch => batch.status === filter);
+      }
+
+      if (filteredData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">該当するデータがありません</td></tr>';
+        return;
+      }
+
+      let html = '';
+      filteredData.forEach(batch => {
+        const purchaseDate = batch.purchaseDate || '-';
+        const supplier = batch.supplier || '-';
+        const itemCount = batch.itemCount || 0;
+        const assignee = batch.assignee || '-';
+        const status = batch.status || 'pending';
+        const registeredCount = batch.registeredCount || 0;
+        const remainingCount = batch.remainingCount ?? itemCount;
+
+        // ステータスバッジ
+        let statusBadge = '';
+        switch(status) {
+          case 'pending':
+            statusBadge = '<span class="badge bg-secondary">未発送</span>';
+            break;
+          case 'shipped':
+            statusBadge = '<span class="badge bg-primary">発送済み</span>';
+            break;
+          case 'received':
+            statusBadge = '<span class="badge bg-info">受取済み</span>';
+            break;
+          case 'registering':
+            statusBadge = '<span class="badge bg-warning">登録中</span>';
+            break;
+          case 'completed':
+            statusBadge = '<span class="badge bg-success">完了</span>';
+            break;
+          default:
+            statusBadge = '<span class="badge bg-secondary">' + status + '</span>';
+        }
+
+        // 進捗表示
+        let progressHtml = '-';
+        if (status !== 'pending' && itemCount > 0) {
+          const progressPercent = Math.round((registeredCount / itemCount) * 100);
+          const progressColor = progressPercent === 100 ? '#10b981' : '#3b82f6';
+          progressHtml = `
+            <div style="min-width: 120px;">
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                <span>${registeredCount}/${itemCount}点</span>
+                <span>${progressPercent}%</span>
+              </div>
+              <div style="background: #e5e7eb; border-radius: 4px; height: 6px; overflow: hidden;">
+                <div style="background: ${progressColor}; height: 100%; width: ${progressPercent}%;"></div>
+              </div>
+            </div>
+          `;
+        }
+
+        html += `
+          <tr>
+            <td>${purchaseDate}</td>
+            <td>${supplier}</td>
+            <td class="text-center">${itemCount}</td>
+            <td>${assignee}</td>
+            <td>${statusBadge}</td>
+            <td>${progressHtml}</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    /**
+     * 発送進捗フィルター
+     */
+    function filterDispatchProgress() {
+      renderDispatchProgress();
+    }
+
     // フォームリセット
     function resetEntryForm() {
       document.getElementById('qrEntryPreview').style.display = 'none';
@@ -7499,7 +7786,7 @@
           </div>
           <div class="qr-result-row">
             <span class="qr-result-label">商品タイプ</span>
-            <span class="qr-result-value">${isSkuBased ? '<span class="badge bg-info">新品（複数）</span>' : '<span class="badge bg-secondary">1点物</span>'}</span>
+            <span class="qr-result-value">${isSkuBased ? '<span class="badge bg-info">新品(複数)</span>' : '<span class="badge bg-secondary">1点物</span>'}</span>
           </div>
           ${isSkuBased ? `
           <div class="qr-result-row">

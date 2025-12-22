@@ -472,6 +472,14 @@
       background: #dbeafe;
       color: #1e40af;
     }
+    .type-badge.receiving_task {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .type-badge.product_registration_task {
+      background: #fef3c7;
+      color: #92400e;
+    }
     .type-badge.default {
       background: #e0e7ff;
       color: #3730a3;
@@ -727,6 +735,30 @@
         }
       }
 
+      // 🔢 商品登録タスクのプログレスバー表示
+      let progressHtml = '';
+      if (task.type === 'product_registration_task' && task.relatedData) {
+        const totalCount = task.relatedData.totalCount || 0;
+        const registeredCount = task.relatedData.registeredCount || 0;
+        const remainingCount = task.relatedData.remainingCount || totalCount;
+        const progressPercent = totalCount > 0 ? Math.round((registeredCount / totalCount) * 100) : 0;
+
+        progressHtml = `
+          <div style="margin-top: 8px; padding: 8px; background: #f3f4f6; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">
+              <span style="color: #374151; font-weight: 600;">📦 登録進捗</span>
+              <span style="color: #6b7280;">${registeredCount} / ${totalCount} 点 (${progressPercent}%)</span>
+            </div>
+            <div style="background: #e5e7eb; border-radius: 4px; height: 8px; overflow: hidden;">
+              <div style="background: linear-gradient(90deg, #10b981 0%, #34d399 100%); height: 100%; width: ${progressPercent}%; transition: width 0.5s ease;"></div>
+            </div>
+            <div style="text-align: center; margin-top: 6px; font-size: 14px; color: ${remainingCount === 0 ? '#10b981' : '#f59e0b'}; font-weight: 600;">
+              ${remainingCount === 0 ? '✅ 完了!' : `残り ${remainingCount} 点`}
+            </div>
+          </div>
+        `;
+      }
+
       // アクションボタン
       let actionButtons = '';
       if (task.link) {
@@ -748,6 +780,7 @@
                 <span>${createdAt}</span>
                 ${dueDateHtml}
               </div>
+              ${progressHtml}
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${actionButtons}
               </div>
@@ -762,16 +795,33 @@
      */
     async function completeTask(taskId, taskType) {
       // 報酬対象タスクか判定
-      const rewardTaskTypes = ['listing_approval', 'shipping_task'];
+      const rewardTaskTypes = ['listing_approval', 'shipping_task', 'product_registration_task'];
       const isRewardTask = rewardTaskTypes.includes(taskType);
-      const confirmMsg = isRewardTask
-        ? 'このタスクを完了にしますか？\n（報酬が自動記録されます）'
-        : 'このタスクを完了にしますか？';
+
+      // receiving_taskの場合は商品登録タスクが作成される旨を通知
+      let confirmMsg;
+      if (taskType === 'receiving_task') {
+        confirmMsg = '受取を完了しますか？\n（商品登録タスクが自動で作成されます）';
+      } else if (isRewardTask) {
+        confirmMsg = 'このタスクを完了にしますか？\n（報酬が自動記録されます）';
+      } else {
+        confirmMsg = 'このタスクを完了にしますか？';
+      }
 
       if (!confirm(confirmMsg)) return;
 
       try {
         const taskRef = db.collection('userTasks').doc(userEmail).collection('tasks').doc(taskId);
+
+        // receiving_taskの場合は商品登録タスクを作成
+        if (taskType === 'receiving_task') {
+          const taskDoc = await taskRef.get();
+          if (taskDoc.exists) {
+            const taskData = taskDoc.data();
+            await createProductRegistrationTask(taskData.relatedData);
+          }
+        }
+
         await taskRef.update({
           completed: true,
           completedAt: new Date().toISOString()
@@ -786,6 +836,67 @@
       }
     }
 
+    /**
+     * 商品登録タスクを作成（receiving_task完了時）
+     */
+    async function createProductRegistrationTask(relatedData) {
+      if (!relatedData || !relatedData.batchId) {
+        console.warn('商品登録タスク作成スキップ: relatedDataがありません');
+        return;
+      }
+
+      const { batchId, itemCount, supplier } = relatedData;
+
+      // 設定から期限日数を取得（デフォルト7日）
+      let dueDays = 7;
+      try {
+        const settingsDoc = await db.collection('settings').doc('taskSettings').get();
+        if (settingsDoc.exists) {
+          dueDays = settingsDoc.data()?.productRegistration?.defaultDueDays || 7;
+        }
+      } catch (e) {
+        console.warn('タスク設定取得失敗、デフォルト7日を使用');
+      }
+
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + dueDays);
+
+      const newTaskId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const taskData = {
+        type: 'product_registration_task',
+        title: `商品登録（残り${itemCount}点）`,
+        description: `受取完了した${itemCount}点の商品を登録してください。期限: ${dueDate.getMonth() + 1}/${dueDate.getDate()}`,
+        link: 'scan',
+        relatedData: {
+          batchId: batchId,
+          totalCount: itemCount,
+          remainingCount: itemCount,
+          registeredCount: 0,
+          supplier: supplier
+        },
+        dueDate: dueDate.toISOString(),
+        createdAt: new Date().toISOString(),
+        completed: false,
+        read: false
+      };
+
+      await db.collection('userTasks')
+        .doc(userEmail)
+        .collection('tasks')
+        .doc(newTaskId)
+        .set(taskData);
+
+      // purchaseBatchesを更新
+      await db.collection('purchaseBatches').doc(batchId).update({
+        status: 'received',
+        receivedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        registrationTaskId: newTaskId,
+        registrationDueDate: dueDate.toISOString()
+      });
+
+      console.log('📝 [Task] 商品登録タスク作成:', newTaskId);
+    }
+
     // タスクタイプのアイコンを取得
     function getTypeIcon(type) {
       const icons = {
@@ -794,7 +905,9 @@
         'listing_approval': '📤',
         'shipping_task': '📦',
         'shipping_info_registration': '📦',
-        'bank_account_registration': '🏦'
+        'bank_account_registration': '🏦',
+        'receiving_task': '📬',
+        'product_registration_task': '📝'
       };
       return icons[type] || '📋';
     }
@@ -807,7 +920,9 @@
         'listing_approval': '出品確認',
         'shipping_task': '梱包・発送',
         'shipping_info_registration': '初期設定',
-        'bank_account_registration': '初期設定'
+        'bank_account_registration': '初期設定',
+        'receiving_task': '仕入商品受取',
+        'product_registration_task': '商品登録'
       };
       return labels[type] || 'タスク';
     }
@@ -842,6 +957,8 @@
         'listing_approval': '出品確認',
         'inspection': '検品',
         'photography': '撮影',
+        'receiving_task': '仕入受取',
+        'product_registration_task': '商品登録',
         'other': 'その他'
       };
       return typeLabels[taskType] || taskType;

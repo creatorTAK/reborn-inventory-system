@@ -615,6 +615,14 @@ const masterCategories = {
             validation: {
               pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
             }
+          },
+          {
+            name: 'userId',
+            label: 'スタッフ連携（タスク通知用）',
+            required: false,
+            type: 'user-select',
+            placeholder: 'スタッフを選択',
+            description: 'スタッフと連携すると、発送時にタスク通知が自動送信されます'
           }
         ],
         displayFields: ['name', 'note'],
