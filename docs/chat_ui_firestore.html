@@ -2746,6 +2746,10 @@
         <i class="bi bi-bookmark"></i>
         <span>Keepから送信</span>
       </button>
+      <button class="attachment-menu-item" onclick="openMyNoteSelectModal()">
+        <i class="bi bi-journal-text"></i>
+        <span>ノートを送信</span>
+      </button>
       <button class="attachment-menu-item" onclick="startVoiceRecording()">
         <i class="bi bi-mic"></i>
         <span>音声メッセージ</span>
@@ -2883,6 +2887,20 @@
     </div>
     <div class="note-list-modal-body" id="noteListContent">
       <!-- ノート一覧がここに動的に追加される -->
+    </div>
+  </div>
+
+  <!-- 自分のノート選択モーダル -->
+  <div id="myNoteSelectModalOverlay" class="note-list-modal-overlay" onclick="closeMyNoteSelectModal()"></div>
+  <div id="myNoteSelectModal" class="note-list-modal">
+    <div class="note-list-modal-header">
+      <span>ノートを選択</span>
+      <button class="note-list-modal-close" onclick="closeMyNoteSelectModal()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div class="note-list-modal-body" id="myNoteSelectContent">
+      <!-- 自分のノート一覧がここに動的に追加される -->
     </div>
   </div>
 
@@ -7186,6 +7204,200 @@
           </div>
         `;
       }
+    }
+
+    // ========== 自分のノート選択モーダル ==========
+    window.openMyNoteSelectModal = async function() {
+      console.log('[MyNoteSelect] モーダルを開く userEmail:', currentUserEmail);
+
+      // 添付メニューを閉じる
+      document.getElementById('attachmentMenu').style.display = 'none';
+      document.getElementById('toggleMenuBtn').classList.remove('active');
+
+      const overlay = document.getElementById('myNoteSelectModalOverlay');
+      const modal = document.getElementById('myNoteSelectModal');
+      const content = document.getElementById('myNoteSelectContent');
+
+      // ローディング表示
+      content.innerHTML = `
+        <div class="note-list-loading">
+          <i class="bi bi-arrow-clockwise spin"></i>
+          読み込み中...
+        </div>
+      `;
+
+      // モーダル表示
+      overlay.classList.add('active');
+      setTimeout(() => {
+        modal.classList.add('active');
+      }, 10);
+
+      // 自分のノート一覧を取得
+      await loadMyNotes();
+    };
+
+    window.closeMyNoteSelectModal = function() {
+      const overlay = document.getElementById('myNoteSelectModalOverlay');
+      const modal = document.getElementById('myNoteSelectModal');
+
+      modal.classList.remove('active');
+      setTimeout(() => {
+        overlay.classList.remove('active');
+      }, 300);
+    };
+
+    async function loadMyNotes() {
+      const content = document.getElementById('myNoteSelectContent');
+
+      try {
+        // 自分のノート一覧を取得
+        const notesRef = collection(db, `users/${currentUserEmail}/notes`);
+        const q = query(notesRef, orderBy('updatedAt', 'desc'), limit(50));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+          content.innerHTML = `
+            <div class="note-list-empty">
+              <i class="bi bi-journal-text"></i>
+              <p>ノートがありません</p>
+              <p style="font-size: 12px; margin-top: 8px;">マイページからノートを作成してください</p>
+            </div>
+          `;
+          return;
+        }
+
+        // ノート一覧を表示
+        let html = '';
+        snapshot.forEach(docSnap => {
+          const note = docSnap.data();
+          const noteId = docSnap.id;
+          const title = note.title || '無題のノート';
+
+          // 更新日時
+          let dateStr = '';
+          if (note.updatedAt) {
+            const date = note.updatedAt.toDate ? note.updatedAt.toDate() : new Date(note.updatedAt);
+            dateStr = date.toLocaleDateString('ja-JP', {
+              month: 'short',
+              day: 'numeric'
+            });
+          }
+
+          // ブロック数
+          const blockCount = note.blocks ? note.blocks.length : 0;
+
+          html += `
+            <div class="note-list-item" onclick="sendNoteToChat('${noteId}', '${escapeHtml(title).replace(/'/g, "\\'")}')">
+              <div class="note-list-icon">
+                <i class="bi bi-journal-text"></i>
+              </div>
+              <div class="note-list-info">
+                <div class="note-list-title">${escapeHtml(title)}</div>
+                <div class="note-list-meta">
+                  <span>${blockCount}ブロック</span>
+                  <span>${dateStr}</span>
+                </div>
+              </div>
+              <div class="note-list-arrow">
+                <i class="bi bi-send"></i>
+              </div>
+            </div>
+          `;
+        });
+
+        content.innerHTML = html;
+
+      } catch (error) {
+        console.error('[MyNoteSelect] 読み込みエラー:', error);
+        content.innerHTML = `
+          <div class="note-list-empty">
+            <i class="bi bi-exclamation-circle"></i>
+            <p>ノート一覧の読み込みに失敗しました</p>
+            <p style="font-size: 11px; color: #9ca3af; margin-top: 8px;">${escapeHtml(error.message || '')}</p>
+          </div>
+        `;
+      }
+    }
+
+    // ノートをチャットに送信
+    window.sendNoteToChat = async function(noteId, noteTitle) {
+      console.log('[SendNote] ノート送信開始:', noteId, noteTitle);
+
+      closeMyNoteSelectModal();
+
+      try {
+        // 共有リンクを生成（既存のshareIdがあれば使用、なければ新規作成）
+        const noteRef = doc(db, `users/${currentUserEmail}/notes`, noteId);
+        const noteSnap = await getDoc(noteRef);
+
+        if (!noteSnap.exists()) {
+          alert('ノートが見つかりません');
+          return;
+        }
+
+        const noteData = noteSnap.data();
+        let shareId = noteData.shareId;
+
+        // shareIdがない場合は新規作成
+        if (!shareId) {
+          shareId = generateShareId();
+
+          // ノートにshareIdを保存
+          await updateDoc(noteRef, {
+            shareId: shareId,
+            isPublic: true
+          });
+
+          // noteSharesコレクションに登録
+          await setDoc(doc(db, 'noteShares', shareId), {
+            noteId: noteId,
+            ownerEmail: currentUserEmail,
+            createdAt: serverTimestamp(),
+            isActive: true
+          });
+        }
+
+        const shareUrl = `${window.location.origin}/note-view.html?id=${shareId}`;
+
+        // チャットにメッセージ送信
+        const messagesRef = collection(db, `rooms/${currentRoomId}/messages`);
+        await addDoc(messagesRef, {
+          text: `📝 ノートを共有しました\n\n「${noteTitle}」\n${shareUrl}`,
+          userName: currentUserName,
+          userEmail: currentUserEmail,
+          timestamp: serverTimestamp(),
+          type: 'note-share',
+          noteShareData: {
+            shareId: shareId,
+            noteId: noteId,
+            title: noteTitle,
+            url: shareUrl
+          }
+        });
+
+        // ルームのlastMessageを更新
+        const roomRef = doc(db, 'rooms', currentRoomId);
+        await updateDoc(roomRef, {
+          lastMessage: `📝 ノートを共有しました`,
+          lastMessageAt: serverTimestamp()
+        });
+
+        console.log('[SendNote] ノート送信完了');
+
+      } catch (error) {
+        console.error('[SendNote] 送信エラー:', error);
+        alert('ノートの送信に失敗しました: ' + error.message);
+      }
+    };
+
+    // 共有ID生成（ランダム文字列）
+    function generateShareId() {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let result = '';
+      for (let i = 0; i < 16; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
     }
 
     window.executeForward = async function(targetRoomId, targetRoomName) {

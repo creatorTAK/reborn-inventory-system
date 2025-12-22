@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v137-note-list-debug'; // ノート一覧エラー表示
-const SW_VERSION = 'v137-note-list-debug'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v138-send-note-from-chat'; // チャットからノート送信
+const SW_VERSION = 'v138-send-note-from-chat'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
