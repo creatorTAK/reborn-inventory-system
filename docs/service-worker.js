@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v145-note-canvas'; // キャンバス形式
-const SW_VERSION = 'v145-note-canvas'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v146-note-simple-canvas'; // シンプルキャンバス
+const SW_VERSION = 'v146-note-simple-canvas'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
