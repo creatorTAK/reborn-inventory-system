@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-22 v355 - 日付バッジ位置修正・viewport-fit=cover対応 -->
+  <!-- Cache Bust: 2025-12-22 v363 - 音声メッセージ機能追加 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
@@ -1006,6 +1006,145 @@
       font-size: 20px;
       color: #606060;
     }
+
+    /* 録音中オーバーレイ */
+    .voice-recording-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .voice-recording-content {
+      text-align: center;
+      color: white;
+    }
+    .voice-recording-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .voice-recording-dot {
+      width: 16px;
+      height: 16px;
+      background: #ef4444;
+      border-radius: 50%;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.1); }
+    }
+    .voice-recording-time {
+      font-size: 48px;
+      font-weight: 300;
+      font-variant-numeric: tabular-nums;
+    }
+    .voice-recording-text {
+      font-size: 16px;
+      opacity: 0.8;
+      margin-bottom: 32px;
+    }
+    .voice-recording-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+    }
+    .voice-cancel-btn, .voice-send-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      border: none;
+      color: white;
+      cursor: pointer;
+      padding: 12px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .voice-cancel-btn i, .voice-send-btn i {
+      font-size: 32px;
+    }
+    .voice-cancel-btn span, .voice-send-btn span {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+    .voice-cancel-btn:active, .voice-send-btn:active {
+      opacity: 0.7;
+    }
+    .voice-send-btn {
+      color: var(--reborn-primary);
+    }
+
+    /* 音声メッセージ表示 */
+    .voice-message {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #f0f0f0;
+      padding: 10px 14px;
+      border-radius: 18px;
+      min-width: 160px;
+    }
+    .voice-message.sent {
+      background: var(--reborn-primary);
+    }
+    .voice-play-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: white;
+      color: var(--reborn-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .voice-play-btn i {
+      font-size: 16px;
+      margin-left: 2px;
+    }
+    .voice-play-btn.playing i::before {
+      content: "\\F4C3"; /* bi-pause-fill */
+    }
+    .voice-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+    .voice-waveform {
+      height: 24px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .voice-waveform-bar {
+      width: 3px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 2px;
+    }
+    .voice-message.sent .voice-waveform-bar {
+      background: rgba(255, 255, 255, 0.5);
+    }
+    .voice-duration {
+      font-size: 12px;
+      color: #666;
+    }
+    .voice-message.sent .voice-duration {
+      color: rgba(255, 255, 255, 0.8);
+    }
+
     /* メッセージ入力エリア - シンプルtextarea（iOS対応） */
     .message-input-wrapper {
       flex: 1;
@@ -2245,10 +2384,31 @@
 
     <!-- 添付メニュー（+ボタンで展開） -->
     <div class="attachment-menu" id="attachmentMenu" style="display: none;">
-      <button class="attachment-menu-item" onclick="selectFile()">
-        <i class="bi bi-file-earmark"></i>
-        <span>ファイル</span>
+      <button class="attachment-menu-item" onclick="startVoiceRecording()">
+        <i class="bi bi-mic"></i>
+        <span>音声メッセージ</span>
       </button>
+    </div>
+
+    <!-- 録音中オーバーレイ -->
+    <div class="voice-recording-overlay" id="voiceRecordingOverlay" style="display: none;">
+      <div class="voice-recording-content">
+        <div class="voice-recording-indicator">
+          <div class="voice-recording-dot"></div>
+          <span class="voice-recording-time" id="voiceRecordingTime">0:00</span>
+        </div>
+        <p class="voice-recording-text">録音中...</p>
+        <div class="voice-recording-buttons">
+          <button class="voice-cancel-btn" onclick="cancelVoiceRecording()">
+            <i class="bi bi-x-lg"></i>
+            <span>キャンセル</span>
+          </button>
+          <button class="voice-send-btn" onclick="sendVoiceMessage()">
+            <i class="bi bi-send-fill"></i>
+            <span>送信</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="input-wrapper">
@@ -4483,6 +4643,53 @@
           bubble.appendChild(caption);
         }
       }
+      // 音声メッセージの場合
+      else if (msg.type === 'voice' && msg.voiceUrl) {
+        const voiceContainer = document.createElement('div');
+        voiceContainer.className = 'voice-message' + (isMine ? ' sent' : '');
+        
+        // 再生ボタン
+        const playBtn = document.createElement('button');
+        playBtn.className = 'voice-play-btn';
+        playBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
+        playBtn.dataset.voiceUrl = msg.voiceUrl;
+        playBtn.dataset.msgId = msg.id;
+        playBtn.onclick = function(e) {
+          e.stopPropagation();
+          toggleVoicePlayback(msg.voiceUrl, msg.id, playBtn);
+        };
+        
+        // 音声情報
+        const voiceInfo = document.createElement('div');
+        voiceInfo.className = 'voice-info';
+        
+        // 波形（簡易表示）
+        const waveform = document.createElement('div');
+        waveform.className = 'voice-waveform';
+        // ランダムな高さの波形バーを生成
+        const barHeights = [12, 18, 24, 16, 20, 14, 22, 18, 12, 16, 20, 24, 18, 14];
+        barHeights.forEach(h => {
+          const bar = document.createElement('div');
+          bar.className = 'voice-waveform-bar';
+          bar.style.height = h + 'px';
+          waveform.appendChild(bar);
+        });
+        
+        // 再生時間
+        const duration = document.createElement('span');
+        duration.className = 'voice-duration';
+        duration.id = 'voiceDuration_' + msg.id;
+        const mins = Math.floor((msg.voiceDuration || 0) / 60);
+        const secs = (msg.voiceDuration || 0) % 60;
+        duration.textContent = mins + ':' + String(secs).padStart(2, '0');
+        
+        voiceInfo.appendChild(waveform);
+        voiceInfo.appendChild(duration);
+        
+        voiceContainer.appendChild(playBtn);
+        voiceContainer.appendChild(voiceInfo);
+        bubble.appendChild(voiceContainer);
+      }
       // テキストメッセージの場合
       else {
         const text = document.createElement('div');
@@ -4753,12 +4960,231 @@
       document.getElementById('imageInput').click();
     };
 
-    // ファイル選択
+    // ファイル選択（音声メッセージに置き換え済みのため未使用）
     window.selectFile = function() {
       document.getElementById('fileInput').click();
       // メニューを閉じる
       document.getElementById('attachmentMenu').style.display = 'none';
       document.getElementById('toggleMenuBtn').classList.remove('active');
+    };
+
+    // ========== 音声メッセージ機能 ==========
+    let voiceMediaRecorder = null;
+    let voiceAudioChunks = [];
+    let voiceRecordingStartTime = null;
+    let voiceRecordingTimer = null;
+    let voiceAudioStream = null;
+
+    // 録音開始
+    window.startVoiceRecording = async function() {
+      // メニューを閉じる
+      document.getElementById('attachmentMenu').style.display = 'none';
+      document.getElementById('toggleMenuBtn').classList.remove('active');
+
+      try {
+        // マイクの許可を取得
+        voiceAudioStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 44100
+          }
+        });
+
+        // MediaRecorderを作成
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+        voiceMediaRecorder = new MediaRecorder(voiceAudioStream, { mimeType });
+        voiceAudioChunks = [];
+
+        voiceMediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            voiceAudioChunks.push(event.data);
+          }
+        };
+
+        // 録音開始
+        voiceMediaRecorder.start(100); // 100msごとにデータを取得
+        voiceRecordingStartTime = Date.now();
+
+        // オーバーレイを表示
+        document.getElementById('voiceRecordingOverlay').style.display = 'flex';
+
+        // タイマー更新開始
+        voiceRecordingTimer = setInterval(updateVoiceRecordingTime, 100);
+
+      } catch (error) {
+        console.error('[Voice] マイク許可エラー:', error);
+        if (error.name === 'NotAllowedError') {
+          alert('マイクの使用が許可されていません。設定からマイクへのアクセスを許可してください。');
+        } else {
+          alert('録音を開始できませんでした: ' + error.message);
+        }
+      }
+    };
+
+    // 録音時間更新
+    function updateVoiceRecordingTime() {
+      if (!voiceRecordingStartTime) return;
+      const elapsed = Math.floor((Date.now() - voiceRecordingStartTime) / 1000);
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      document.getElementById('voiceRecordingTime').textContent =
+        `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    // 録音キャンセル
+    window.cancelVoiceRecording = function() {
+      if (voiceMediaRecorder && voiceMediaRecorder.state !== 'inactive') {
+        voiceMediaRecorder.stop();
+      }
+      cleanupVoiceRecording();
+      document.getElementById('voiceRecordingOverlay').style.display = 'none';
+    };
+
+    // 録音クリーンアップ
+    function cleanupVoiceRecording() {
+      if (voiceRecordingTimer) {
+        clearInterval(voiceRecordingTimer);
+        voiceRecordingTimer = null;
+      }
+      if (voiceAudioStream) {
+        voiceAudioStream.getTracks().forEach(track => track.stop());
+        voiceAudioStream = null;
+      }
+      voiceMediaRecorder = null;
+      voiceAudioChunks = [];
+      voiceRecordingStartTime = null;
+      document.getElementById('voiceRecordingTime').textContent = '0:00';
+    }
+
+    // 音声メッセージ送信
+    window.sendVoiceMessage = async function() {
+      if (!voiceMediaRecorder || voiceMediaRecorder.state === 'inactive') {
+        alert('録音データがありません');
+        return;
+      }
+
+      const duration = Math.floor((Date.now() - voiceRecordingStartTime) / 1000);
+
+      // 録音を停止してBlobを取得
+      voiceMediaRecorder.stop();
+
+      // onstopイベントを待つ
+      voiceMediaRecorder.onstop = async () => {
+        try {
+          const mimeType = voiceMediaRecorder.mimeType;
+          const audioBlob = new Blob(voiceAudioChunks, { type: mimeType });
+
+          // 最小録音時間チェック（1秒未満は送信しない）
+          if (duration < 1) {
+            alert('録音時間が短すぎます');
+            cleanupVoiceRecording();
+            document.getElementById('voiceRecordingOverlay').style.display = 'none';
+            return;
+          }
+
+          console.log('[Voice] 録音完了:', audioBlob.size, 'bytes, duration:', duration, 's');
+
+          // Firebase Storageにアップロード
+          const extension = mimeType.includes('webm') ? 'webm' : 'm4a';
+          const fileName = `voice_${Date.now()}.${extension}`;
+          const storageRef = ref(storage, `chat/${currentRoomId}/voice/${fileName}`);
+
+          const snapshot = await uploadBytes(storageRef, audioBlob);
+          console.log('[Voice] アップロード完了:', snapshot.metadata.fullPath);
+
+          const downloadURL = await getDownloadURL(storageRef);
+          console.log('[Voice] URL取得完了:', downloadURL);
+
+          // Firestoreにメッセージを保存
+          await addDoc(collection(db, 'rooms', currentRoomId, 'messages'), {
+            type: 'voice',
+            voiceUrl: downloadURL,
+            voiceDuration: duration,
+            voiceMimeType: mimeType,
+            sender: currentUserEmail,
+            senderName: currentUserName,
+            timestamp: serverTimestamp(),
+            readBy: [currentUserEmail]
+          });
+
+          console.log('[Voice] メッセージ保存完了');
+
+        } catch (error) {
+          console.error('[Voice] 送信エラー:', error);
+          alert('音声メッセージの送信に失敗しました: ' + error.message);
+        } finally {
+          cleanupVoiceRecording();
+          document.getElementById('voiceRecordingOverlay').style.display = 'none';
+        }
+      };
+    };
+
+    // 音声メッセージ再生用のAudioオブジェクト管理
+    let currentVoiceAudio = null;
+    let currentVoiceButton = null;
+    let currentVoiceMsgId = null;
+
+    // 音声メッセージの再生/一時停止
+    window.toggleVoicePlayback = function(voiceUrl, msgId, playBtn) {
+      // 同じメッセージを再度クリックした場合は再生/一時停止を切り替え
+      if (currentVoiceMsgId === msgId && currentVoiceAudio) {
+        if (currentVoiceAudio.paused) {
+          currentVoiceAudio.play();
+          playBtn.classList.add('playing');
+          playBtn.innerHTML = '<i class="bi bi-pause-fill"></i>';
+        } else {
+          currentVoiceAudio.pause();
+          playBtn.classList.remove('playing');
+          playBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
+        }
+        return;
+      }
+
+      // 別のメッセージの音声が再生中の場合は停止
+      if (currentVoiceAudio) {
+        currentVoiceAudio.pause();
+        currentVoiceAudio = null;
+        if (currentVoiceButton) {
+          currentVoiceButton.classList.remove('playing');
+          currentVoiceButton.innerHTML = '<i class="bi bi-play-fill"></i>';
+        }
+      }
+
+      // 新しい音声を再生
+      const audio = new Audio(voiceUrl);
+      currentVoiceAudio = audio;
+      currentVoiceButton = playBtn;
+      currentVoiceMsgId = msgId;
+
+      playBtn.classList.add('playing');
+      playBtn.innerHTML = '<i class="bi bi-pause-fill"></i>';
+
+      audio.play().catch(err => {
+        console.error('[Voice] 再生エラー:', err);
+        alert('音声の再生に失敗しました');
+        playBtn.classList.remove('playing');
+        playBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
+      });
+
+      // 再生完了時
+      audio.onended = function() {
+        playBtn.classList.remove('playing');
+        playBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
+        currentVoiceAudio = null;
+        currentVoiceButton = null;
+        currentVoiceMsgId = null;
+      };
+
+      // エラー時
+      audio.onerror = function() {
+        console.error('[Voice] 音声読み込みエラー');
+        playBtn.classList.remove('playing');
+        playBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
+        currentVoiceAudio = null;
+        currentVoiceButton = null;
+        currentVoiceMsgId = null;
+      };
     };
 
     // カメラ起動

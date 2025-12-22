@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v110-header-icons'; // ヘッダーアイコン間隔調整
-const SW_VERSION = 'v110-header-icons'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v111-voice-message'; // 音声メッセージ機能追加
+const SW_VERSION = 'v111-voice-message'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
