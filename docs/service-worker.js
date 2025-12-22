@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v141-note-heading-transparent'; // 見出しブロック・背景透明
-const SW_VERSION = 'v141-note-heading-transparent'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v142-note-button-layout'; // ボタン2行配置
+const SW_VERSION = 'v142-note-button-layout'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
