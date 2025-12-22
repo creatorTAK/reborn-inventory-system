@@ -10,6 +10,7 @@
 
 const {onDocumentCreated, onDocumentUpdated} = require('firebase-functions/v2/firestore');
 const {onObjectFinalized} = require('firebase-functions/v2/storage');
+const {onSchedule} = require('firebase-functions/v2/scheduler');
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
@@ -1383,3 +1384,166 @@ function getDefaultCompensationSettings() {
     }
   };
 }
+
+// ============================================
+// 🔔 自動リマインダー（毎日9時実行）
+// ============================================
+
+/**
+ * 自動リマインダー関数
+ * 毎日朝9時（JST）に実行
+ * - 発送タスク: 期限24時間前、期限当日/超過で通知
+ * - 通常タスク: 3日以上放置で通知
+ */
+exports.dailyTaskReminder = onSchedule({
+  schedule: '0 0 * * *', // UTC 0:00 = JST 9:00
+  timeZone: 'Asia/Tokyo',
+  region: 'asia-northeast1'
+}, async (event) => {
+  console.log('🔔 [dailyTaskReminder] 自動リマインダー開始');
+  const startTime = Date.now();
+
+  try {
+    // 全ユーザーを取得
+    const usersSnapshot = await db.collection('users').get();
+    console.log(`👥 [dailyTaskReminder] ユーザー数: ${usersSnapshot.size}`);
+
+    const now = new Date();
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(23, 59, 59, 999);
+
+    let totalNotifications = 0;
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userEmail = userDoc.id;
+      const userData = userDoc.data();
+
+      // ユーザーのタスクを取得
+      const tasksSnapshot = await db.collection('userTasks')
+        .doc(userEmail)
+        .collection('tasks')
+        .where('completed', '==', false)
+        .get();
+
+      if (tasksSnapshot.empty) continue;
+
+      const notifications = [];
+
+      for (const taskDoc of tasksSnapshot.docs) {
+        const task = taskDoc.data();
+        const taskId = taskDoc.id;
+
+        // 既にリマインダー送信済みかチェック（同じ日に複数送信しない）
+        const lastReminder = task.lastReminderSent?.toDate?.() || null;
+        if (lastReminder) {
+          const lastReminderDate = lastReminder.toDateString();
+          const todayDate = now.toDateString();
+          if (lastReminderDate === todayDate) {
+            continue; // 今日既に送信済み
+          }
+        }
+
+        let shouldNotify = false;
+        let notificationTitle = '';
+        let notificationContent = '';
+        let notificationType = 'reminder';
+
+        if (task.dueDate) {
+          // 発送タスク等（dueDateあり）
+          const dueDate = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
+
+          if (dueDate < now) {
+            // 期限切れ
+            const overdueDays = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
+            shouldNotify = true;
+            notificationTitle = '🚨 発送期限を過ぎています';
+            notificationContent = `「${task.title}」の期限を${overdueDays}日超過しています。至急対応してください。`;
+            notificationType = 'urgent_reminder';
+          } else if (dueDate <= tomorrow) {
+            // 明日が期限 or 今日が期限
+            const hoursLeft = Math.ceil((dueDate - now) / (1000 * 60 * 60));
+            if (hoursLeft <= 24) {
+              shouldNotify = true;
+              notificationTitle = '⏰ 本日が発送期限です';
+              notificationContent = `「${task.title}」の期限が本日です。お早めに対応してください。`;
+              notificationType = 'urgent_reminder';
+            } else {
+              shouldNotify = true;
+              notificationTitle = '📅 明日が発送期限です';
+              notificationContent = `「${task.title}」の期限が明日です。準備をお願いします。`;
+              notificationType = 'reminder';
+            }
+          }
+        } else if (task.createdAt) {
+          // 通常タスク（3日以上放置）
+          const createdDate = task.createdAt.toDate ? task.createdAt.toDate() : new Date(task.createdAt);
+          if (createdDate < threeDaysAgo) {
+            const daysPassed = Math.ceil((now - createdDate) / (1000 * 60 * 60 * 24));
+            shouldNotify = true;
+            notificationTitle = '📋 未完了タスクがあります';
+            notificationContent = `「${task.title}」が${daysPassed}日間未完了です。確認をお願いします。`;
+            notificationType = 'reminder';
+          }
+        }
+
+        if (shouldNotify) {
+          notifications.push({
+            taskId,
+            title: notificationTitle,
+            content: notificationContent,
+            type: notificationType
+          });
+        }
+      }
+
+      // 通知を送信
+      if (notifications.length > 0) {
+        const batch = db.batch();
+
+        for (const notification of notifications) {
+          // userAnnouncementsに通知追加
+          const announcementRef = db.collection('users')
+            .doc(userEmail)
+            .collection('userAnnouncements')
+            .doc();
+
+          batch.set(announcementRef, {
+            title: notification.title,
+            content: notification.content,
+            createdAt: FieldValue.serverTimestamp(),
+            read: false,
+            type: notification.type
+          });
+
+          // タスクのlastReminderSentを更新
+          const taskRef = db.collection('userTasks')
+            .doc(userEmail)
+            .collection('tasks')
+            .doc(notification.taskId);
+
+          batch.update(taskRef, {
+            lastReminderSent: FieldValue.serverTimestamp()
+          });
+
+          totalNotifications++;
+        }
+
+        await batch.commit();
+        console.log(`📧 [dailyTaskReminder] ${userData.displayName || userEmail}: ${notifications.length}件の通知送信`);
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [dailyTaskReminder] 完了: ${totalNotifications}件の通知送信 (${duration}ms)`);
+
+    return { success: true, notificationsSent: totalNotifications };
+
+  } catch (error) {
+    console.error('❌ [dailyTaskReminder] エラー:', error);
+    return { success: false, error: error.message };
+  }
+});
