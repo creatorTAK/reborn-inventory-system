@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v129-user-icon-display'; // ユーザーアイコン表示
-const SW_VERSION = 'v129-user-icon-display'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v130-note-share-card'; // ノート共有カード表示
+const SW_VERSION = 'v130-note-share-card'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
