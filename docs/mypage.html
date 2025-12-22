@@ -1721,6 +1721,27 @@
       border-color: #40B4E5;
       color: white;
     }
+    /* テキスト色変更ボタン */
+    .block-color-controls {
+      display: flex;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .block-color-btn {
+      width: 24px;
+      height: 24px;
+      border: 2px solid #e5e7eb;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .block-color-btn:hover {
+      transform: scale(1.1);
+    }
+    .block-color-btn.active {
+      border-color: #40B4E5;
+      box-shadow: 0 0 0 2px rgba(64,180,229,0.3);
+    }
     .block-file {
       display: flex;
       align-items: center;
@@ -1753,9 +1774,24 @@
     .block-delete-btn:hover {
       color: #ef4444;
     }
-    .note-add-block-bar {
+    /* ノートメニューオーバーレイ */
+    .note-menu-overlay {
       position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
       bottom: 0;
+      background: rgba(0,0,0,0.3);
+      z-index: 1200;
+      display: none;
+    }
+    .note-menu-overlay.active {
+      display: block;
+    }
+    /* ブロック追加メニュー（開閉式） */
+    .note-add-block-menu {
+      position: fixed;
+      bottom: 70px;
       left: 0;
       right: 0;
       padding: 12px 16px;
@@ -1765,10 +1801,49 @@
       flex-direction: column;
       align-items: center;
       gap: 8px;
+      z-index: 1202;
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+    }
+    .note-add-block-menu.active {
+      display: flex;
+    }
+    .note-add-block-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 16px;
+      background: white;
+      border-top: 1px solid #e5e7eb;
+      display: none;
+      justify-content: center;
+      align-items: center;
       z-index: 1201;
     }
     .note-editor-modal.active .note-add-block-bar {
       display: flex;
+    }
+    .note-add-toggle-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+      border: none;
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s;
+      box-shadow: 0 2px 8px rgba(64,180,229,0.3);
+    }
+    .note-add-toggle-btn:active {
+      transform: scale(0.95);
+    }
+    .note-add-toggle-btn.active {
+      transform: rotate(45deg);
     }
     .note-add-block-row {
       display: flex;
@@ -2376,27 +2451,36 @@
         <!-- ブロックが動的に追加される -->
       </div>
     </div>
-    <div class="note-add-block-bar" id="noteAddBlockBar">
+    <!-- ブロック追加メニューオーバーレイ -->
+    <div class="note-menu-overlay" id="noteMenuOverlay" onclick="closeNoteBlockMenu()"></div>
+    <!-- ブロック追加メニュー（開閉式） -->
+    <div class="note-add-block-menu" id="noteAddBlockMenu">
       <div class="note-add-block-row">
-        <button class="note-add-block-btn" onclick="addHeadingBlock()">
+        <button class="note-add-block-btn" onclick="addHeadingBlock(); closeNoteBlockMenu();">
           <i class="bi bi-type-h1"></i>
           <span>見出し</span>
         </button>
-        <button class="note-add-block-btn" onclick="addTextBlock()">
+        <button class="note-add-block-btn" onclick="addTextBlock(); closeNoteBlockMenu();">
           <i class="bi bi-fonts"></i>
           <span>テキスト</span>
         </button>
-        <button class="note-add-block-btn" onclick="triggerImageUpload()">
+        <button class="note-add-block-btn" onclick="triggerImageUpload(); closeNoteBlockMenu();">
           <i class="bi bi-image"></i>
           <span>画像</span>
         </button>
       </div>
       <div class="note-add-block-row">
-        <button class="note-add-block-btn" onclick="triggerFileUpload()">
+        <button class="note-add-block-btn" onclick="triggerFileUpload(); closeNoteBlockMenu();">
           <i class="bi bi-paperclip"></i>
           <span>ファイル</span>
         </button>
       </div>
+    </div>
+    <!-- +ボタン -->
+    <div class="note-add-block-bar" id="noteAddBlockBar">
+      <button class="note-add-toggle-btn" id="noteAddToggleBtn" onclick="toggleNoteBlockMenu()">
+        <i class="bi bi-plus-lg"></i>
+      </button>
     </div>
   </div>
 
@@ -4396,14 +4480,25 @@
     // 単一ブロックをHTMLに変換
     function renderBlock(block) {
       if (block.type === 'text') {
+        const textColor = block.content?.color || '#000000';
         return `
           <div class="note-block" data-block-id="${block.id}">
             <div class="block-drag-handle">⋮⋮</div>
             <div class="block-content">
               <textarea class="block-textarea"
                         placeholder="テキストを入力..."
+                        style="color: ${textColor};"
                         oninput="updateBlockContent('${block.id}', this.value); autoResizeTextarea(this);"
               >${escapeHtml(block.content?.text || '')}</textarea>
+              <div class="block-color-controls">
+                <button class="block-color-btn ${textColor === '#000000' ? 'active' : ''}" style="background: #000000;" onclick="changeTextColor('${block.id}', '#000000')" title="黒"></button>
+                <button class="block-color-btn ${textColor === '#6b7280' ? 'active' : ''}" style="background: #6b7280;" onclick="changeTextColor('${block.id}', '#6b7280')" title="グレー"></button>
+                <button class="block-color-btn ${textColor === '#ef4444' ? 'active' : ''}" style="background: #ef4444;" onclick="changeTextColor('${block.id}', '#ef4444')" title="赤"></button>
+                <button class="block-color-btn ${textColor === '#f97316' ? 'active' : ''}" style="background: #f97316;" onclick="changeTextColor('${block.id}', '#f97316')" title="オレンジ"></button>
+                <button class="block-color-btn ${textColor === '#22c55e' ? 'active' : ''}" style="background: #22c55e;" onclick="changeTextColor('${block.id}', '#22c55e')" title="緑"></button>
+                <button class="block-color-btn ${textColor === '#3b82f6' ? 'active' : ''}" style="background: #3b82f6;" onclick="changeTextColor('${block.id}', '#3b82f6')" title="青"></button>
+                <button class="block-color-btn ${textColor === '#8b5cf6' ? 'active' : ''}" style="background: #8b5cf6;" onclick="changeTextColor('${block.id}', '#8b5cf6')" title="紫"></button>
+              </div>
             </div>
             <button class="block-delete-btn" onclick="deleteBlock('${block.id}')">
               <i class="bi bi-x"></i>
@@ -4447,18 +4542,29 @@
         `;
       } else if (block.type === 'heading') {
         const level = block.content?.level || 'h2';
+        const headingColor = block.content?.color || '#000000';
         return `
           <div class="note-block" data-block-id="${block.id}">
             <div class="block-drag-handle">⋮⋮</div>
             <div class="block-content">
               <textarea class="block-heading ${level}"
                         placeholder="${level === 'h1' ? '大見出し' : level === 'h2' ? '中見出し' : '小見出し'}"
+                        style="color: ${headingColor};"
                         oninput="updateBlockContent('${block.id}', this.value); autoResizeTextarea(this);"
               >${escapeHtml(block.content?.text || '')}</textarea>
               <div class="block-image-controls">
                 <button class="block-size-btn ${level === 'h1' ? 'active' : ''}" onclick="changeHeadingLevel('${block.id}', 'h1')">H1</button>
                 <button class="block-size-btn ${level === 'h2' ? 'active' : ''}" onclick="changeHeadingLevel('${block.id}', 'h2')">H2</button>
                 <button class="block-size-btn ${level === 'h3' ? 'active' : ''}" onclick="changeHeadingLevel('${block.id}', 'h3')">H3</button>
+              </div>
+              <div class="block-color-controls">
+                <button class="block-color-btn ${headingColor === '#000000' ? 'active' : ''}" style="background: #000000;" onclick="changeTextColor('${block.id}', '#000000')" title="黒"></button>
+                <button class="block-color-btn ${headingColor === '#6b7280' ? 'active' : ''}" style="background: #6b7280;" onclick="changeTextColor('${block.id}', '#6b7280')" title="グレー"></button>
+                <button class="block-color-btn ${headingColor === '#ef4444' ? 'active' : ''}" style="background: #ef4444;" onclick="changeTextColor('${block.id}', '#ef4444')" title="赤"></button>
+                <button class="block-color-btn ${headingColor === '#f97316' ? 'active' : ''}" style="background: #f97316;" onclick="changeTextColor('${block.id}', '#f97316')" title="オレンジ"></button>
+                <button class="block-color-btn ${headingColor === '#22c55e' ? 'active' : ''}" style="background: #22c55e;" onclick="changeTextColor('${block.id}', '#22c55e')" title="緑"></button>
+                <button class="block-color-btn ${headingColor === '#3b82f6' ? 'active' : ''}" style="background: #3b82f6;" onclick="changeTextColor('${block.id}', '#3b82f6')" title="青"></button>
+                <button class="block-color-btn ${headingColor === '#8b5cf6' ? 'active' : ''}" style="background: #8b5cf6;" onclick="changeTextColor('${block.id}', '#8b5cf6')" title="紫"></button>
               </div>
             </div>
             <button class="block-delete-btn" onclick="deleteBlock('${block.id}')">
@@ -4542,6 +4648,31 @@
           textareas[textareas.length - 1].focus();
         }
       }, 100);
+    };
+
+    // ノートブロックメニュー開閉
+    window.toggleNoteBlockMenu = function() {
+      const menu = document.getElementById('noteAddBlockMenu');
+      const overlay = document.getElementById('noteMenuOverlay');
+      const toggleBtn = document.getElementById('noteAddToggleBtn');
+
+      if (menu.classList.contains('active')) {
+        closeNoteBlockMenu();
+      } else {
+        menu.classList.add('active');
+        overlay.classList.add('active');
+        toggleBtn.classList.add('active');
+      }
+    };
+
+    window.closeNoteBlockMenu = function() {
+      const menu = document.getElementById('noteAddBlockMenu');
+      const overlay = document.getElementById('noteMenuOverlay');
+      const toggleBtn = document.getElementById('noteAddToggleBtn');
+
+      menu.classList.remove('active');
+      overlay.classList.remove('active');
+      toggleBtn.classList.remove('active');
     };
 
     // 見出しブロック追加
@@ -4716,6 +4847,18 @@
       if (block && block.type === 'heading') {
         if (!block.content) block.content = {};
         block.content.level = level;
+        renderBlocks();
+        initSortable();
+        scheduleNoteSave();
+      }
+    };
+
+    // テキスト色変更
+    window.changeTextColor = function(blockId, color) {
+      const block = currentNoteData.blocks.find(b => b.id === blockId);
+      if (block && (block.type === 'text' || block.type === 'heading')) {
+        if (!block.content) block.content = {};
+        block.content.color = color;
         renderBlocks();
         initSortable();
         scheduleNoteSave();
