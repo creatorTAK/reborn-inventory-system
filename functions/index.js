@@ -503,8 +503,18 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
       return;
     }
 
-    const senderName = messageData.userName || '匿名';
-    const messageText = messageData.text || '(ファイル)';
+    const senderName = messageData.senderName || messageData.userName || '匿名';
+    // メッセージタイプに応じた表示テキスト
+    let messageText;
+    if (messageData.type === 'voice') {
+      messageText = '🎤 音声メッセージ';
+    } else if (messageData.type === 'image') {
+      messageText = '📷 画像';
+    } else if (messageData.type === 'file') {
+      messageText = '📎 ファイル';
+    } else {
+      messageText = messageData.text || '(メッセージ)';
+    }
     const mentions = messageData.mentions || []; // メンションされたユーザー名の配列
 
     console.log('📋 [onChatMessageCreated] 送信者:', senderName, '内容:', messageText, 'メンション:', mentions);
