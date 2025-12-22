@@ -1604,13 +1604,26 @@
     }
     .block-drag-handle {
       cursor: grab;
-      color: #d1d5db;
-      font-size: 14px;
-      padding: 4px 0;
+      color: #9ca3af;
+      font-size: 16px;
+      padding: 12px 8px;
       user-select: none;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 24px;
+      min-height: 40px;
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+    .block-drag-handle:hover {
+      background: #f3f4f6;
+      color: #6b7280;
     }
     .block-drag-handle:active {
       cursor: grabbing;
+      background: #e5e7eb;
     }
     .block-content {
       flex: 1;
@@ -1640,6 +1653,41 @@
       width: 100%;
       border-radius: 8px;
       display: block;
+    }
+    /* 画像サイズバリエーション */
+    .block-image.size-small {
+      width: 50%;
+    }
+    .block-image.size-medium {
+      width: 75%;
+    }
+    .block-image.size-large {
+      width: 100%;
+    }
+    /* 画像サイズ変更ボタン */
+    .block-image-controls {
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .block-size-btn {
+      padding: 4px 10px;
+      font-size: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      background: white;
+      color: #6b7280;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .block-size-btn:hover {
+      border-color: #40B4E5;
+      color: #40B4E5;
+    }
+    .block-size-btn.active {
+      background: #40B4E5;
+      border-color: #40B4E5;
+      color: white;
     }
     .block-file {
       display: flex;
@@ -4312,12 +4360,18 @@
           </div>
         `;
       } else if (block.type === 'image') {
+        const size = block.content?.size || 'large';
         return `
           <div class="note-block" data-block-id="${block.id}">
             <div class="block-drag-handle">⋮⋮</div>
             <div class="block-content">
-              <div class="block-image">
+              <div class="block-image size-${size}">
                 <img src="${block.content?.url || ''}" alt="${escapeHtml(block.content?.fileName || '画像')}">
+              </div>
+              <div class="block-image-controls">
+                <button class="block-size-btn ${size === 'small' ? 'active' : ''}" onclick="changeImageSize('${block.id}', 'small')">S</button>
+                <button class="block-size-btn ${size === 'medium' ? 'active' : ''}" onclick="changeImageSize('${block.id}', 'medium')">M</button>
+                <button class="block-size-btn ${size === 'large' ? 'active' : ''}" onclick="changeImageSize('${block.id}', 'large')">L</button>
               </div>
             </div>
             <button class="block-delete-btn" onclick="deleteBlock('${block.id}')">
@@ -4543,6 +4597,18 @@
       renderBlocks();
       initSortable();
       scheduleNoteSave();
+    };
+
+    // 画像サイズ変更
+    window.changeImageSize = function(blockId, size) {
+      const block = currentNoteData.blocks.find(b => b.id === blockId);
+      if (block && block.type === 'image') {
+        if (!block.content) block.content = {};
+        block.content.size = size;
+        renderBlocks();
+        initSortable();
+        scheduleNoteSave();
+      }
     };
 
     // 保存スケジュール（デバウンス）
