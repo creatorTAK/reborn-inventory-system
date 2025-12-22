@@ -1633,17 +1633,48 @@
       width: 100%;
       min-height: 44px;
       padding: 8px 12px;
-      border: 1px solid #e5e7eb;
+      border: 1px solid transparent;
       border-radius: 8px;
       font-size: 16px; /* iOS zoom防止 */
       line-height: 1.6;
       resize: none;
       outline: none;
-      background: rgba(255,255,255,0.9);
+      background: transparent; /* 罫線が見えるように透明 */
       overflow: hidden; /* 自動リサイズ時にスクロールバー非表示 */
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .block-textarea:hover {
+      border-color: #e5e7eb;
+      background: rgba(255,255,255,0.5);
     }
     .block-textarea:focus {
       border-color: #40B4E5;
+      background: rgba(255,255,255,0.8);
+    }
+    /* 見出しブロック */
+    .block-heading {
+      width: 100%;
+      padding: 4px 8px;
+      border: none;
+      background: transparent;
+      font-weight: 600;
+      line-height: 1.4;
+      resize: none;
+      outline: none;
+      overflow: hidden;
+    }
+    .block-heading:focus {
+      background: rgba(255,255,255,0.5);
+      border-radius: 4px;
+    }
+    .block-heading.h1 {
+      font-size: 28px;
+    }
+    .block-heading.h2 {
+      font-size: 22px;
+    }
+    .block-heading.h3 {
+      font-size: 18px;
     }
     .block-image {
       width: 100%;
@@ -2340,6 +2371,10 @@
       </div>
     </div>
     <div class="note-add-block-bar" id="noteAddBlockBar">
+      <button class="note-add-block-btn" onclick="addHeadingBlock()">
+        <i class="bi bi-type-h1"></i>
+        <span>見出し</span>
+      </button>
       <button class="note-add-block-btn" onclick="addTextBlock()">
         <i class="bi bi-fonts"></i>
         <span>テキスト</span>
@@ -4400,6 +4435,27 @@
             </button>
           </div>
         `;
+      } else if (block.type === 'heading') {
+        const level = block.content?.level || 'h2';
+        return `
+          <div class="note-block" data-block-id="${block.id}">
+            <div class="block-drag-handle">⋮⋮</div>
+            <div class="block-content">
+              <textarea class="block-heading ${level}"
+                        placeholder="${level === 'h1' ? '大見出し' : level === 'h2' ? '中見出し' : '小見出し'}"
+                        oninput="updateBlockContent('${block.id}', this.value); autoResizeTextarea(this);"
+              >${escapeHtml(block.content?.text || '')}</textarea>
+              <div class="block-image-controls">
+                <button class="block-size-btn ${level === 'h1' ? 'active' : ''}" onclick="changeHeadingLevel('${block.id}', 'h1')">H1</button>
+                <button class="block-size-btn ${level === 'h2' ? 'active' : ''}" onclick="changeHeadingLevel('${block.id}', 'h2')">H2</button>
+                <button class="block-size-btn ${level === 'h3' ? 'active' : ''}" onclick="changeHeadingLevel('${block.id}', 'h3')">H3</button>
+              </div>
+            </div>
+            <button class="block-delete-btn" onclick="deleteBlock('${block.id}')">
+              <i class="bi bi-x"></i>
+            </button>
+          </div>
+        `;
       }
       return '';
     }
@@ -4474,6 +4530,33 @@
         const textareas = document.querySelectorAll('.block-textarea');
         if (textareas.length > 0) {
           textareas[textareas.length - 1].focus();
+        }
+      }, 100);
+    };
+
+    // 見出しブロック追加
+    window.addHeadingBlock = function() {
+      const block = {
+        id: generateUUID(),
+        type: 'heading',
+        order: currentNoteData.blocks ? currentNoteData.blocks.length : 0,
+        content: { text: '', level: 'h2' }
+      };
+
+      if (!currentNoteData.blocks) {
+        currentNoteData.blocks = [];
+      }
+      currentNoteData.blocks.push(block);
+
+      renderBlocks();
+      initSortable();
+      scheduleNoteSave();
+
+      // 新しい見出しにフォーカス
+      setTimeout(() => {
+        const headings = document.querySelectorAll('.block-heading');
+        if (headings.length > 0) {
+          headings[headings.length - 1].focus();
         }
       }, 100);
     };
@@ -4617,6 +4700,18 @@
       }
     };
 
+    // 見出しレベル変更
+    window.changeHeadingLevel = function(blockId, level) {
+      const block = currentNoteData.blocks.find(b => b.id === blockId);
+      if (block && block.type === 'heading') {
+        if (!block.content) block.content = {};
+        block.content.level = level;
+        renderBlocks();
+        initSortable();
+        scheduleNoteSave();
+      }
+    };
+
     // テキストエリア自動リサイズ
     window.autoResizeTextarea = function(textarea) {
       textarea.style.height = 'auto';
@@ -4625,7 +4720,7 @@
 
     // 全テキストエリアの高さを調整
     function resizeAllTextareas() {
-      const textareas = document.querySelectorAll('.block-textarea');
+      const textareas = document.querySelectorAll('.block-textarea, .block-heading');
       textareas.forEach(textarea => {
         autoResizeTextarea(textarea);
       });
