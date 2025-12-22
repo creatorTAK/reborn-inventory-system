@@ -1836,6 +1836,161 @@
       to { transform: rotate(360deg); }
     }
 
+    /* ノート一覧モーダル */
+    .note-list-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 4000;
+      display: none;
+    }
+    .note-list-modal-overlay.active {
+      display: block;
+    }
+    .note-list-modal {
+      position: fixed;
+      bottom: -100%;
+      left: 0;
+      right: 0;
+      max-height: 70vh;
+      background: white;
+      border-radius: 16px 16px 0 0;
+      z-index: 4001;
+      transition: bottom 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    .note-list-modal.active {
+      bottom: 0;
+    }
+    .note-list-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      border-bottom: 1px solid #e5e7eb;
+      font-weight: 600;
+      font-size: 16px;
+    }
+    .note-list-modal-close {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      color: #6b7280;
+    }
+    .note-list-modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .note-list-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      cursor: pointer;
+      transition: background 0.15s;
+      gap: 12px;
+    }
+    .note-list-item:hover {
+      background: #f3f4f6;
+    }
+    .note-list-item:active {
+      background: #e5e7eb;
+    }
+    .note-list-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #64748b;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .note-list-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .note-list-title {
+      font-weight: 500;
+      font-size: 15px;
+      color: #1f2937;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .note-list-meta {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .note-list-sender {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .note-list-sender-avatar {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .note-list-sender-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .note-list-sender-avatar i {
+      font-size: 10px;
+      color: #9ca3af;
+    }
+    .note-list-arrow {
+      color: #9ca3af;
+      font-size: 18px;
+    }
+    .note-list-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      color: #9ca3af;
+      text-align: center;
+    }
+    .note-list-empty i {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    .note-list-empty p {
+      font-size: 14px;
+      margin: 0;
+    }
+    .note-list-loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 32px;
+      color: #9ca3af;
+    }
+    .note-list-loading .spin {
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+    }
+
     /* Keep選択モーダル */
     .keep-modal-overlay {
       position: fixed;
@@ -2417,6 +2572,10 @@
           <i class="bi bi-bell-slash"></i>
           <span id="muteRoomText">通知をオフ</span>
         </button>
+        <button class="chat-settings-item" onclick="openNoteListModal()">
+          <i class="bi bi-journal-text"></i>
+          <span>ノート一覧</span>
+        </button>
         <div class="chat-settings-divider"></div>
         <button class="chat-settings-item danger" id="leaveRoomBtn" onclick="confirmLeaveRoom()">
           <i class="bi bi-box-arrow-right"></i>
@@ -2710,6 +2869,20 @@
     </div>
     <div class="forward-modal-body" id="forwardRoomList">
       <!-- ルーム一覧がここに動的に追加される -->
+    </div>
+  </div>
+
+  <!-- ノート一覧モーダル -->
+  <div id="noteListModalOverlay" class="note-list-modal-overlay" onclick="closeNoteListModal()"></div>
+  <div id="noteListModal" class="note-list-modal">
+    <div class="note-list-modal-header">
+      <span>共有ノート一覧</span>
+      <button class="note-list-modal-close" onclick="closeNoteListModal()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div class="note-list-modal-body" id="noteListContent">
+      <!-- ノート一覧がここに動的に追加される -->
     </div>
   </div>
 
@@ -6881,6 +7054,132 @@
         overlay.classList.remove('active');
       }, 300);
     };
+
+    // ========== ノート一覧モーダル ==========
+    window.openNoteListModal = async function() {
+      console.log('[NoteList] モーダルを開く roomId:', currentRoomId);
+
+      // 設定ドロップダウンを閉じる
+      document.getElementById('chatSettingsDropdown').classList.remove('active');
+
+      const overlay = document.getElementById('noteListModalOverlay');
+      const modal = document.getElementById('noteListModal');
+      const content = document.getElementById('noteListContent');
+
+      // ローディング表示
+      content.innerHTML = `
+        <div class="note-list-loading">
+          <i class="bi bi-arrow-clockwise spin"></i>
+          読み込み中...
+        </div>
+      `;
+
+      // モーダル表示
+      overlay.classList.add('active');
+      setTimeout(() => {
+        modal.classList.add('active');
+      }, 10);
+
+      // ノート一覧を取得
+      await loadSharedNotes();
+    };
+
+    window.closeNoteListModal = function() {
+      const overlay = document.getElementById('noteListModalOverlay');
+      const modal = document.getElementById('noteListModal');
+
+      modal.classList.remove('active');
+      setTimeout(() => {
+        overlay.classList.remove('active');
+      }, 300);
+    };
+
+    async function loadSharedNotes() {
+      const content = document.getElementById('noteListContent');
+
+      try {
+        // このルームのメッセージからtype='note-share'を検索
+        const messagesRef = collection(db, `rooms/${currentRoomId}/messages`);
+        const q = query(
+          messagesRef,
+          where('type', '==', 'note-share'),
+          orderBy('timestamp', 'desc'),
+          limit(50)
+        );
+
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+          content.innerHTML = `
+            <div class="note-list-empty">
+              <i class="bi bi-journal-text"></i>
+              <p>このチャットで共有されたノートはありません</p>
+            </div>
+          `;
+          return;
+        }
+
+        // ノート一覧を表示
+        let html = '';
+        snapshot.forEach(docSnap => {
+          const msg = docSnap.data();
+          const noteData = msg.noteShareData || {};
+          const title = noteData.title || '無題のノート';
+          const url = noteData.url || '#';
+          const senderName = msg.userName || '不明';
+          const senderEmail = msg.userEmail || '';
+
+          // 送信日時
+          let dateStr = '';
+          if (msg.timestamp) {
+            const date = msg.timestamp.toDate ? msg.timestamp.toDate() : new Date(msg.timestamp);
+            dateStr = date.toLocaleDateString('ja-JP', {
+              month: 'short',
+              day: 'numeric'
+            });
+          }
+
+          // 送信者のアイコンを取得
+          const senderIconUrl = getUserIconUrl(senderName) || '';
+
+          html += `
+            <div class="note-list-item" onclick="window.open('${url}', '_blank')">
+              <div class="note-list-icon">
+                <i class="bi bi-journal-text"></i>
+              </div>
+              <div class="note-list-info">
+                <div class="note-list-title">${escapeHtml(title)}</div>
+                <div class="note-list-meta">
+                  <div class="note-list-sender">
+                    <div class="note-list-sender-avatar">
+                      ${senderIconUrl
+                        ? `<img src="${senderIconUrl}" alt="${escapeHtml(senderName)}" onerror="this.outerHTML='<i class=\\'bi bi-person\\'></i>'">`
+                        : `<i class="bi bi-person"></i>`}
+                    </div>
+                    <span>${escapeHtml(senderName)}</span>
+                  </div>
+                  <span>${dateStr}</span>
+                </div>
+              </div>
+              <div class="note-list-arrow">
+                <i class="bi bi-chevron-right"></i>
+              </div>
+            </div>
+          `;
+        });
+
+        content.innerHTML = html;
+
+      } catch (error) {
+        console.error('[NoteList] 読み込みエラー:', error);
+        content.innerHTML = `
+          <div class="note-list-empty">
+            <i class="bi bi-exclamation-circle"></i>
+            <p>ノート一覧の読み込みに失敗しました</p>
+          </div>
+        `;
+      }
+    }
 
     window.executeForward = async function(targetRoomId, targetRoomName) {
       if (!forwardMessageData) return;
