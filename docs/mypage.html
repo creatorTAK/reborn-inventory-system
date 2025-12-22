@@ -4710,7 +4710,6 @@
       try {
         const roomsRef = collection(db, 'rooms');
         // membersにはユーザー名が入っている（emailではない）
-        // currentUser.name = localStorage.getItem('reborn_user_name')
         const userName = currentUser.name || currentUser.email.split('@')[0];
         console.log('[Notes] ルーム検索ユーザー名:', userName);
         const q = query(
@@ -4735,22 +4734,42 @@
           return;
         }
 
+        // ユーザーアイコンを取得するためにusersコレクションを読み込み
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        const usersMap = {};
+        usersSnapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.userName) {
+            usersMap[data.userName] = data.userIconUrl || data.photoURL || data.iconUrl || '';
+          }
+        });
+
         const html = rooms.map(room => {
-          let icon = 'bi-chat-fill';
+          let iconHtml = '';
           let typeLabel = 'チャット';
           let roomName = room.name || '';
+          let otherUserName = '';
 
           if (room.type === 'team') {
-            icon = 'bi-people-fill';
+            // チーム・全体チャットは💬絵文字
+            iconHtml = '<span style="font-size: 22px;">💬</span>';
             typeLabel = 'チーム';
           } else if (room.type === 'direct' || room.type === 'dm') {
-            icon = 'bi-person-fill';
             typeLabel = '個別';
             // membersから相手の名前を取得
             if (room.members && Array.isArray(room.members)) {
-              const otherName = room.members.find(m => m !== userName);
-              if (otherName) roomName = otherName;
+              otherUserName = room.members.find(m => m !== userName) || '';
+              if (otherUserName) roomName = otherUserName;
             }
+            // 相手のアイコンを取得
+            const iconUrl = usersMap[otherUserName] || '';
+            if (iconUrl) {
+              iconHtml = `<img src="${iconUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.outerHTML='<i class=\\'bi bi-person-fill\\'></i>'">`;
+            } else {
+              iconHtml = '<i class="bi bi-person-fill"></i>';
+            }
+          } else {
+            iconHtml = '<i class="bi bi-chat-fill"></i>';
           }
 
           // ルーム名がない場合はmembersから生成
@@ -4761,7 +4780,7 @@
           return `
             <div class="share-room-item" onclick="sendNoteToRoom('${room.id}', '${escapeHtml(roomName || '無題のルーム')}')">
               <div class="share-room-icon">
-                <i class="bi ${icon}"></i>
+                ${iconHtml}
               </div>
               <div class="share-room-info">
                 <div class="share-room-name">${escapeHtml(roomName || '無題のルーム')}</div>
