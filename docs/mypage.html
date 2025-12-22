@@ -1573,10 +1573,13 @@
     .note-title-input::placeholder {
       color: #9ca3af;
     }
+    /* キャンバス形式のブロックコンテナ */
     .note-blocks-container {
-      flex: 1;
-      padding: 0 16px 120px;
-      min-height: 200px;
+      position: relative;
+      min-height: 600px;
+      height: calc(100vh - 180px);
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
     }
     /* 罫線タイプ */
     .note-blocks-container.paper-lined {
@@ -1595,67 +1598,64 @@
         linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
       background-size: 24px 24px;
     }
+    /* 自由配置ブロック */
     .note-block {
+      position: absolute;
       display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 8px 0;
-      position: relative;
+      flex-direction: column;
+      min-width: 150px;
+      max-width: calc(100% - 32px);
+      background: rgba(255,255,255,0.95);
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border: 1px solid #e5e7eb;
+      overflow: hidden;
+      transition: box-shadow 0.15s;
     }
-    .block-drag-handle {
-      cursor: grab;
-      color: #9ca3af;
-      font-size: 16px;
-      padding: 12px 8px;
-      user-select: none;
-      touch-action: none;
+    .note-block:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    .note-block.dragging {
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      z-index: 1000;
+      opacity: 0.9;
+    }
+    /* ブロックヘッダー（ドラッグハンドル） */
+    .block-header {
       display: flex;
       align-items: center;
-      justify-content: center;
-      min-width: 24px;
-      min-height: 40px;
-      border-radius: 4px;
-      transition: background 0.15s;
+      justify-content: space-between;
+      padding: 4px 8px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e5e7eb;
+      cursor: move;
+      user-select: none;
+      touch-action: none;
     }
-    .block-drag-handle:hover {
-      background: #f3f4f6;
-      color: #6b7280;
-    }
-    .block-drag-handle:active {
+    .block-header:active {
       cursor: grabbing;
       background: #e5e7eb;
     }
-    .block-content {
-      flex: 1;
-      min-width: 0;
-    }
-    /* contenteditableテキストエディタ */
-    .block-text-editor {
-      width: 100%;
-      min-height: 44px;
-      padding: 8px 12px;
-      border: 1px solid transparent;
-      border-radius: 8px;
-      font-size: 16px;
-      line-height: 1.6;
-      outline: none;
-      background: transparent;
-      transition: border-color 0.15s, background 0.15s;
-      word-wrap: break-word;
-      white-space: pre-wrap;
-    }
-    .block-text-editor:empty:before {
-      content: attr(data-placeholder);
+    .block-drag-indicator {
       color: #9ca3af;
-      pointer-events: none;
+      font-size: 12px;
     }
-    .block-text-editor:hover {
-      border-color: #e5e7eb;
-      background: rgba(255,255,255,0.5);
+    .block-delete-btn {
+      background: none;
+      border: none;
+      color: #d1d5db;
+      font-size: 14px;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.15s;
     }
-    .block-text-editor:focus {
-      border-color: #40B4E5;
-      background: rgba(255,255,255,0.8);
+    .block-delete-btn:hover {
+      color: #ef4444;
+      background: rgba(239,68,68,0.1);
+    }
+    .block-content {
+      padding: 8px;
     }
     .block-textarea {
       width: 100%;
@@ -4542,36 +4542,47 @@
       }, 10);
     }
 
-    // 単一ブロックをHTMLに変換
+    // 単一ブロックをHTMLに変換（自由配置対応）
     function renderBlock(block) {
+      // 位置情報（デフォルト値）
+      const x = block.content?.x ?? 16;
+      const y = block.content?.y ?? (block.order * 120 + 16);
+      const posStyle = `left: ${x}px; top: ${y}px;`;
+
       if (block.type === 'text') {
-        const html = block.content?.html || escapeHtml(block.content?.text || '');
+        const textColor = block.content?.color || '#000000';
         return `
-          <div class="note-block" data-block-id="${block.id}">
-            <div class="block-drag-handle">⋮⋮</div>
+          <div class="note-block" data-block-id="${block.id}" style="${posStyle}">
+            <div class="block-header" onmousedown="startDrag(event, '${block.id}')" ontouchstart="startDrag(event, '${block.id}')">
+              <span class="block-drag-indicator"><i class="bi bi-grip-horizontal"></i></span>
+              <button class="block-delete-btn" onclick="deleteBlock('${block.id}')" onmousedown="event.stopPropagation()">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
             <div class="block-content">
-              <div class="block-text-editor"
-                   contenteditable="true"
-                   data-placeholder="テキストを入力..."
-                   data-block-id="${block.id}"
-                   oninput="updateBlockHtml('${block.id}', this.innerHTML)"
-              >${html}</div>
+              <textarea class="block-textarea"
+                        placeholder="テキストを入力..."
+                        style="color: ${textColor};"
+                        oninput="updateBlockContent('${block.id}', this.value); autoResizeTextarea(this);"
+              >${escapeHtml(block.content?.text || '')}</textarea>
               <div class="block-toolbar">
-                <button class="block-toolbar-btn" onclick="applyColorToSelection(event)" title="選択テキストの色を変更">
-                  <i class="bi bi-palette"></i>
+                <button class="block-toolbar-btn" onclick="showColorPopover(event, '${block.id}')" title="文字色">
+                  <span class="block-color-indicator" style="background: ${textColor};"></span>
                 </button>
               </div>
             </div>
-            <button class="block-delete-btn" onclick="deleteBlock('${block.id}')">
-              <i class="bi bi-x"></i>
-            </button>
           </div>
         `;
       } else if (block.type === 'image') {
         const size = block.content?.size || 'large';
         return `
-          <div class="note-block" data-block-id="${block.id}">
-            <div class="block-drag-handle">⋮⋮</div>
+          <div class="note-block" data-block-id="${block.id}" style="${posStyle}">
+            <div class="block-header" onmousedown="startDrag(event, '${block.id}')" ontouchstart="startDrag(event, '${block.id}')">
+              <span class="block-drag-indicator"><i class="bi bi-grip-horizontal"></i></span>
+              <button class="block-delete-btn" onclick="deleteBlock('${block.id}')" onmousedown="event.stopPropagation()">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
             <div class="block-content">
               <div class="block-image size-${size}">
                 <img src="${block.content?.url || ''}" alt="${escapeHtml(block.content?.fileName || '画像')}">
@@ -4582,32 +4593,36 @@
                 <button class="block-size-btn ${size === 'large' ? 'active' : ''}" onclick="changeImageSize('${block.id}', 'large')">L</button>
               </div>
             </div>
-            <button class="block-delete-btn" onclick="deleteBlock('${block.id}')">
-              <i class="bi bi-x"></i>
-            </button>
           </div>
         `;
       } else if (block.type === 'file') {
         return `
-          <div class="note-block" data-block-id="${block.id}">
-            <div class="block-drag-handle">⋮⋮</div>
+          <div class="note-block" data-block-id="${block.id}" style="${posStyle}">
+            <div class="block-header" onmousedown="startDrag(event, '${block.id}')" ontouchstart="startDrag(event, '${block.id}')">
+              <span class="block-drag-indicator"><i class="bi bi-grip-horizontal"></i></span>
+              <button class="block-delete-btn" onclick="deleteBlock('${block.id}')" onmousedown="event.stopPropagation()">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
             <div class="block-content">
               <div class="block-file" onclick="window.open('${block.content?.url || ''}', '_blank')">
                 <i class="bi bi-file-earmark block-file-icon"></i>
                 <span class="block-file-name">${escapeHtml(block.content?.fileName || 'ファイル')}</span>
               </div>
             </div>
-            <button class="block-delete-btn" onclick="deleteBlock('${block.id}')">
-              <i class="bi bi-x"></i>
-            </button>
           </div>
         `;
       } else if (block.type === 'heading') {
         const level = block.content?.level || 'h2';
         const headingColor = block.content?.color || '#000000';
         return `
-          <div class="note-block" data-block-id="${block.id}">
-            <div class="block-drag-handle">⋮⋮</div>
+          <div class="note-block" data-block-id="${block.id}" style="${posStyle}">
+            <div class="block-header" onmousedown="startDrag(event, '${block.id}')" ontouchstart="startDrag(event, '${block.id}')">
+              <span class="block-drag-indicator"><i class="bi bi-grip-horizontal"></i></span>
+              <button class="block-delete-btn" onclick="deleteBlock('${block.id}')" onmousedown="event.stopPropagation()">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
             <div class="block-content">
               <textarea class="block-heading ${level}"
                         placeholder="${level === 'h1' ? '大見出し' : level === 'h2' ? '中見出し' : '小見出し'}"
@@ -4623,51 +4638,99 @@
                 </button>
               </div>
             </div>
-            <button class="block-delete-btn" onclick="deleteBlock('${block.id}')">
-              <i class="bi bi-x"></i>
-            </button>
           </div>
         `;
       }
       return '';
     }
 
-    // Sortable.js初期化
-    function initSortable() {
-      const container = document.getElementById('noteBlocksContainer');
+    // 自由配置ドラッグ機能
+    let dragState = {
+      isDragging: false,
+      blockId: null,
+      startX: 0,
+      startY: 0,
+      blockStartX: 0,
+      blockStartY: 0,
+      element: null
+    };
 
-      if (sortableInstance) {
-        sortableInstance.destroy();
-      }
+    window.startDrag = function(event, blockId) {
+      event.preventDefault();
+      
+      const blockEl = document.querySelector(`.note-block[data-block-id="${blockId}"]`);
+      if (!blockEl) return;
 
-      sortableInstance = new Sortable(container, {
-        animation: 150,
-        handle: '.block-drag-handle',
-        ghostClass: 'sortable-ghost',
-        chosenClass: 'sortable-chosen',
-        onEnd: function(evt) {
-          updateBlockOrder();
-          scheduleNoteSave();
-        }
-      });
+      const touch = event.touches ? event.touches[0] : event;
+      
+      dragState = {
+        isDragging: true,
+        blockId: blockId,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        blockStartX: parseInt(blockEl.style.left) || 0,
+        blockStartY: parseInt(blockEl.style.top) || 0,
+        element: blockEl
+      };
+
+      blockEl.classList.add('dragging');
+      
+      // イベントリスナー追加
+      document.addEventListener('mousemove', onDragMove);
+      document.addEventListener('mouseup', onDragEnd);
+      document.addEventListener('touchmove', onDragMove, { passive: false });
+      document.addEventListener('touchend', onDragEnd);
+    };
+
+    function onDragMove(event) {
+      if (!dragState.isDragging) return;
+      event.preventDefault();
+
+      const touch = event.touches ? event.touches[0] : event;
+      const deltaX = touch.clientX - dragState.startX;
+      const deltaY = touch.clientY - dragState.startY;
+
+      const newX = Math.max(0, dragState.blockStartX + deltaX);
+      const newY = Math.max(0, dragState.blockStartY + deltaY);
+
+      dragState.element.style.left = newX + 'px';
+      dragState.element.style.top = newY + 'px';
     }
 
-    // ブロック順序更新
-    function updateBlockOrder() {
-      const container = document.getElementById('noteBlocksContainer');
-      const blockElements = container.querySelectorAll('.note-block');
+    function onDragEnd(event) {
+      if (!dragState.isDragging) return;
 
-      const newBlocks = [];
-      blockElements.forEach((el, index) => {
-        const blockId = el.dataset.blockId;
-        const block = currentNoteData.blocks.find(b => b.id === blockId);
-        if (block) {
-          block.order = index;
-          newBlocks.push(block);
-        }
-      });
+      // 位置を保存
+      const block = currentNoteData.blocks.find(b => b.id === dragState.blockId);
+      if (block) {
+        if (!block.content) block.content = {};
+        block.content.x = parseInt(dragState.element.style.left) || 0;
+        block.content.y = parseInt(dragState.element.style.top) || 0;
+        scheduleNoteSave();
+      }
 
-      currentNoteData.blocks = newBlocks;
+      dragState.element.classList.remove('dragging');
+      
+      // イベントリスナー削除
+      document.removeEventListener('mousemove', onDragMove);
+      document.removeEventListener('mouseup', onDragEnd);
+      document.removeEventListener('touchmove', onDragMove);
+      document.removeEventListener('touchend', onDragEnd);
+
+      dragState = {
+        isDragging: false,
+        blockId: null,
+        startX: 0,
+        startY: 0,
+        blockStartX: 0,
+        blockStartY: 0,
+        element: null
+      };
+    }
+
+    // initSortableを空関数に（互換性のため残す）
+    function initSortable() {
+      // 自由配置モードでは不要
     }
 
     // UUID生成
@@ -4738,7 +4801,6 @@
 
     // カラー選択ポップオーバー表示
     let currentColorBlockId = null;
-    let savedSelection = null;
     const colorOptions = [
       { color: '#000000', name: '黒' },
       { color: '#6b7280', name: 'グレー' },
@@ -4749,84 +4811,7 @@
       { color: '#8b5cf6', name: '紫' }
     ];
 
-    // 選択範囲を保存
-    function saveSelection() {
-      const sel = window.getSelection();
-      if (sel.rangeCount > 0) {
-        return sel.getRangeAt(0).cloneRange();
-      }
-      return null;
-    }
-
-    // 選択範囲を復元
-    function restoreSelection(range) {
-      if (range) {
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
-    }
-
-    // テキストブロック用: 選択テキストに色を適用
-    window.applyColorToSelection = function(event) {
-      event.stopPropagation();
-      
-      // 選択範囲を保存
-      savedSelection = saveSelection();
-      
-      if (!savedSelection || savedSelection.collapsed) {
-        alert('色を変更するテキストを選択してください');
-        return;
-      }
-
-      closeAllPopovers();
-
-      const overlay = document.getElementById('popoverOverlay');
-      const popover = document.getElementById('blockColorPopover');
-      const grid = document.getElementById('colorPopoverGrid');
-      const btn = event.currentTarget;
-      const rect = btn.getBoundingClientRect();
-
-      // カラーグリッド生成（選択テキスト用）
-      grid.innerHTML = colorOptions.map(opt => `
-        <button class="block-color-option"
-                style="background: ${opt.color};"
-                onclick="applyColorToSelectedText('${opt.color}')"
-                title="${opt.name}"></button>
-      `).join('');
-
-      // ボタンの下に表示
-      popover.style.left = Math.max(8, rect.left - 40) + 'px';
-      popover.style.top = (rect.bottom + 8) + 'px';
-      popover.style.bottom = 'auto';
-
-      overlay.classList.add('active');
-      popover.classList.add('active');
-    };
-
-    // 選択テキストに色を適用
-    window.applyColorToSelectedText = function(color) {
-      if (savedSelection) {
-        restoreSelection(savedSelection);
-        document.execCommand('foreColor', false, color);
-        
-        // ブロックのHTMLを保存
-        const sel = window.getSelection();
-        if (sel.anchorNode) {
-          const editor = sel.anchorNode.nodeType === 3 
-            ? sel.anchorNode.parentElement.closest('.block-text-editor')
-            : sel.anchorNode.closest('.block-text-editor');
-          if (editor) {
-            const blockId = editor.dataset.blockId;
-            updateBlockHtml(blockId, editor.innerHTML);
-          }
-        }
-      }
-      savedSelection = null;
-      closeAllPopovers();
-    };
-
-    // 見出しブロック用: ブロック全体の色を変更
+    // ブロック全体の色を変更
     window.showColorPopover = function(event, blockId) {
       event.stopPropagation();
       closeAllPopovers();
@@ -4865,20 +4850,6 @@
         changeTextColor(currentColorBlockId, color);
       }
       closeAllPopovers();
-    };
-
-    // HTMLコンテンツ更新（テキストブロック用）
-    window.updateBlockHtml = function(blockId, html) {
-      const block = currentNoteData.blocks.find(b => b.id === blockId);
-      if (block) {
-        if (!block.content) block.content = {};
-        block.content.html = html;
-        // プレーンテキストも保存（互換性のため）
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-        block.content.text = temp.textContent || temp.innerText || '';
-        scheduleNoteSave();
-      }
     };
 
     // 見出しブロック追加
