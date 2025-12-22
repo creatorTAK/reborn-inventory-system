@@ -740,7 +740,7 @@ async function getViewingUsers(roomId) {
 
     const viewingUsers = [];
     const now = Date.now();
-    const VIEWING_TIMEOUT_MS = 5 * 60 * 1000; // 5分
+    const VIEWING_TIMEOUT_MS = 60 * 1000; // 1分（通知漏れ防止のため短縮）
 
     viewingSnapshot.forEach(doc => {
       const data = doc.data();
