@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v139-note-block-drag-resize'; // ブロック並替・サイズ変更
-const SW_VERSION = 'v139-note-block-drag-resize'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v140-textarea-auto-resize'; // テキストエリア自動リサイズ
+const SW_VERSION = 'v140-textarea-auto-resize'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',

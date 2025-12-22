@@ -1631,7 +1631,7 @@
     }
     .block-textarea {
       width: 100%;
-      min-height: 60px;
+      min-height: 44px;
       padding: 8px 12px;
       border: 1px solid #e5e7eb;
       border-radius: 8px;
@@ -1640,6 +1640,7 @@
       resize: none;
       outline: none;
       background: rgba(255,255,255,0.9);
+      overflow: hidden; /* 自動リサイズ時にスクロールバー非表示 */
     }
     .block-textarea:focus {
       border-color: #40B4E5;
@@ -4340,6 +4341,11 @@
 
       const html = currentNoteData.blocks.map(block => renderBlock(block)).join('');
       container.innerHTML = html;
+
+      // テキストエリアの高さを自動調整
+      setTimeout(() => {
+        resizeAllTextareas();
+      }, 10);
     }
 
     // 単一ブロックをHTMLに変換
@@ -4351,7 +4357,7 @@
             <div class="block-content">
               <textarea class="block-textarea"
                         placeholder="テキストを入力..."
-                        oninput="updateBlockContent('${block.id}', this.value)"
+                        oninput="updateBlockContent('${block.id}', this.value); autoResizeTextarea(this);"
               >${escapeHtml(block.content?.text || '')}</textarea>
             </div>
             <button class="block-delete-btn" onclick="deleteBlock('${block.id}')">
@@ -4610,6 +4616,20 @@
         scheduleNoteSave();
       }
     };
+
+    // テキストエリア自動リサイズ
+    window.autoResizeTextarea = function(textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = textarea.scrollHeight + 'px';
+    };
+
+    // 全テキストエリアの高さを調整
+    function resizeAllTextareas() {
+      const textareas = document.querySelectorAll('.block-textarea');
+      textareas.forEach(textarea => {
+        autoResizeTextarea(textarea);
+      });
+    }
 
     // 保存スケジュール（デバウンス）
     window.scheduleNoteSave = function() {
