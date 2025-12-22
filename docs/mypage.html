@@ -27,6 +27,8 @@
       background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
       border-radius: 16px;
       padding: 24px;
+      background-size: cover;
+      background-position: center center;
       margin-bottom: 16px;
       color: white;
       text-align: center;
@@ -190,12 +192,55 @@
     .bg-preview.active {
       display: block;
     }
+    .bg-position-adjuster {
+      position: relative;
+      width: 100%;
+      height: 140px;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: grab;
+      background-color: #f0f0f0;
+      margin-bottom: 8px;
+    }
+    .bg-position-adjuster:active {
+      cursor: grabbing;
+    }
     .bg-preview-image {
       width: 100%;
-      height: 120px;
-      border-radius: 12px;
+      height: auto;
+      min-height: 100%;
       object-fit: cover;
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+      transition: none;
+    }
+    .bg-position-hint {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      color: white;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      pointer-events: none;
+    }
+    .bg-position-reset {
+      text-align: center;
       margin-bottom: 8px;
+    }
+    .bg-position-reset-btn {
+      font-size: 12px;
+      color: #6b7280;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+    .bg-position-reset-btn:hover {
+      color: #374151;
     }
     .bg-preview-remove {
       font-size: 13px;
@@ -1614,7 +1659,15 @@
           <input type="file" id="bgImageInput" accept="image/*" style="display: none;" onchange="handleBgImageSelect(event)">
         </div>
         <div class="bg-preview" id="bgPreview">
-          <img class="bg-preview-image" id="bgPreviewImage" src="" alt="プレビュー">
+          <div class="bg-position-adjuster" id="bgPositionAdjuster">
+            <img class="bg-preview-image" id="bgPreviewImage" src="" alt="プレビュー" draggable="false">
+            <div class="bg-position-hint">ドラッグして位置を調整</div>
+          </div>
+          <div class="bg-position-reset">
+            <button type="button" class="bg-position-reset-btn" onclick="resetBgPosition()">
+              <i class="bi bi-arrow-counterclockwise"></i> 位置をリセット
+            </button>
+          </div>
           <button class="bg-preview-remove" onclick="removeBgImage()">
             <i class="bi bi-trash"></i> 画像を削除
           </button>
@@ -1809,9 +1862,10 @@
     let currentUser = null;
     let compensationRecords = [];
     let compensationSettings = {};
-    let userProfileBg = { type: 'gradient', value: 'blue' }; // デフォルト
+    let userProfileBg = { type: 'gradient', value: 'blue', position: 50 }; // デフォルト（position: 0-100で縦位置）
     let selectedBgType = 'gradient';
     let selectedBgValue = 'blue';
+    let selectedBgPosition = 50; // 画像の縦位置（0=上端, 50=中央, 100=下端）
     let pendingBgImageFile = null;
     let userGoal = 0;
     let rankingParticipation = true; // ランキング参加フラグ
@@ -2846,7 +2900,8 @@
     // 背景スタイルを取得
     function getProfileBgStyle() {
       if (userProfileBg.type === 'image' && userProfileBg.value) {
-        return `background-image: url('${userProfileBg.value}'); background-color: transparent;`;
+        const pos = userProfileBg.position !== undefined ? userProfileBg.position : 50;
+        return `background-image: url('${userProfileBg.value}'); background-size: cover; background-position: center ${pos}%;`;
       } else {
         const preset = GRADIENT_PRESETS.find(p => p.id === userProfileBg.value) || GRADIENT_PRESETS[0];
         return `background: ${preset.gradient};`;
@@ -2875,6 +2930,7 @@
       // 現在の設定を選択状態に
       selectedBgType = userProfileBg.type;
       selectedBgValue = userProfileBg.value;
+      selectedBgPosition = userProfileBg.position !== undefined ? userProfileBg.position : 50;
       pendingBgImageFile = null;
 
       // グラデーショングリッドを生成
@@ -2886,6 +2942,10 @@
       if (userProfileBg.type === 'image' && userProfileBg.value) {
         previewImg.src = userProfileBg.value;
         preview.classList.add('active');
+        // 画像が読み込まれたら位置を適用
+        previewImg.onload = function() {
+          applyPreviewPosition();
+        };
       } else {
         preview.classList.remove('active');
         previewImg.src = '';
@@ -2893,6 +2953,9 @@
 
       document.getElementById('bgImageInput').value = '';
       document.getElementById('bgModal').classList.add('active');
+
+      // ドラッグイベントをセットアップ
+      setupBgPositionDrag();
     };
 
     // 背景選択モーダルを閉じる
@@ -2940,12 +3003,20 @@
       // プレビュー表示
       const reader = new FileReader();
       reader.onload = function(e) {
-        document.getElementById('bgPreviewImage').src = e.target.result;
+        const previewImg = document.getElementById('bgPreviewImage');
+        previewImg.src = e.target.result;
         document.getElementById('bgPreview').classList.add('active');
 
         selectedBgType = 'image';
         selectedBgValue = e.target.result; // 一時的にData URLを設定
+        selectedBgPosition = 50; // 新しい画像は中央からスタート
         pendingBgImageFile = file;
+
+        // 画像が読み込まれたら位置を適用
+        previewImg.onload = function() {
+          applyPreviewPosition();
+          setupBgPositionDrag();
+        };
 
         // グラデーションの選択を解除
         renderBgGradientGrid();
@@ -2964,6 +3035,83 @@
       selectedBgType = 'gradient';
       selectedBgValue = userProfileBg.type === 'gradient' ? userProfileBg.value : 'blue';
       renderBgGradientGrid();
+    };
+
+    // 画像位置調整のドラッグ処理をセットアップ
+    function setupBgPositionDrag() {
+      const adjuster = document.getElementById('bgPositionAdjuster');
+      const previewImg = document.getElementById('bgPreviewImage');
+      if (!adjuster || !previewImg) return;
+
+      let isDragging = false;
+      let startY = 0;
+      let startPosition = 0;
+
+      const onStart = (e) => {
+        if (selectedBgType !== 'image') return;
+        isDragging = true;
+        startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+        startPosition = selectedBgPosition;
+        e.preventDefault();
+      };
+
+      const onMove = (e) => {
+        if (!isDragging) return;
+        const currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+        const deltaY = currentY - startY;
+        const containerHeight = adjuster.offsetHeight;
+        const imgHeight = previewImg.offsetHeight;
+
+        // deltaYに応じて位置を変更（上にドラッグ→position増加、下にドラッグ→position減少）
+        const sensitivity = 100 / Math.max(imgHeight - containerHeight, 100);
+        let newPosition = startPosition - (deltaY * sensitivity);
+        newPosition = Math.max(0, Math.min(100, newPosition));
+
+        selectedBgPosition = newPosition;
+        applyPreviewPosition();
+      };
+
+      const onEnd = () => {
+        isDragging = false;
+      };
+
+      // 既存のイベントリスナーを削除
+      adjuster.onmousedown = null;
+      adjuster.ontouchstart = null;
+      document.onmousemove = null;
+      document.ontouchmove = null;
+      document.onmouseup = null;
+      document.ontouchend = null;
+
+      // 新しいイベントリスナーを追加
+      adjuster.onmousedown = onStart;
+      adjuster.ontouchstart = onStart;
+      document.onmousemove = onMove;
+      document.ontouchmove = onMove;
+      document.onmouseup = onEnd;
+      document.ontouchend = onEnd;
+    }
+
+    // プレビュー画像の位置を適用
+    function applyPreviewPosition() {
+      const previewImg = document.getElementById('bgPreviewImage');
+      const adjuster = document.getElementById('bgPositionAdjuster');
+      if (!previewImg || !adjuster) return;
+
+      // 画像の高さとコンテナの高さから、移動可能範囲を計算
+      const containerHeight = adjuster.offsetHeight;
+      const imgHeight = previewImg.naturalHeight * (adjuster.offsetWidth / previewImg.naturalWidth);
+      const maxOffset = Math.max(0, imgHeight - containerHeight);
+
+      // positionに応じてtop位置を計算
+      const topOffset = -(maxOffset * selectedBgPosition / 100);
+      previewImg.style.top = `${topOffset}px`;
+    }
+
+    // 位置をリセット
+    window.resetBgPosition = function() {
+      selectedBgPosition = 50;
+      applyPreviewPosition();
     };
 
     // 背景設定を保存
@@ -2986,28 +3134,32 @@
           console.log('[ProfileBg] 画像アップロード完了:', newBgValue);
         }
 
-        // Firestoreに保存
+        // Firestoreに保存（position情報も含める）
         const userRef = doc(db, 'users', currentUser.email);
         await updateDoc(userRef, {
           profileBackground: {
             type: selectedBgType,
-            value: newBgValue
+            value: newBgValue,
+            position: selectedBgType === 'image' ? selectedBgPosition : 50
           }
         });
 
         // ローカル状態を更新
-        userProfileBg = { type: selectedBgType, value: newBgValue };
+        userProfileBg = {
+          type: selectedBgType,
+          value: newBgValue,
+          position: selectedBgType === 'image' ? selectedBgPosition : 50
+        };
 
-        // プロフィールカードの背景を更新
+        // プロフィールカードの背景を即時反映
         const profileCard = document.getElementById('profileCard');
         if (profileCard) {
           if (userProfileBg.type === 'image') {
-            profileCard.style.backgroundImage = `url('${userProfileBg.value}')`;
-            profileCard.style.background = '';
+            const pos = userProfileBg.position !== undefined ? userProfileBg.position : 50;
+            profileCard.style.cssText = `background-image: url('${userProfileBg.value}'); background-size: cover; background-position: center ${pos}%;`;
           } else {
             const preset = GRADIENT_PRESETS.find(p => p.id === userProfileBg.value) || GRADIENT_PRESETS[0];
-            profileCard.style.backgroundImage = '';
-            profileCard.style.background = preset.gradient;
+            profileCard.style.cssText = `background: ${preset.gradient};`;
           }
         }
 
