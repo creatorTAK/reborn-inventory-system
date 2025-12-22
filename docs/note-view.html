@@ -361,8 +361,25 @@
           // return;
         }
 
+        // Step 3: オーナーのユーザー情報を取得
+        let ownerData = { userName: shareData.ownerEmail.split('@')[0], userIconUrl: '' };
+        try {
+          const userRef = doc(db, 'users', shareData.ownerEmail);
+          const userSnap = await getDocFromServer(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            ownerData = {
+              userName: userData.userName || userData.name || shareData.ownerEmail.split('@')[0],
+              userIconUrl: userData.userIconUrl || userData.photoURL || userData.iconUrl || ''
+            };
+            console.log('[NoteView] Step3 OK - ownerData:', ownerData);
+          }
+        } catch (e) {
+          console.warn('[NoteView] Step3 - ユーザー情報取得失敗（フォールバック使用）:', e);
+        }
+
         // ノートを表示
-        renderNote(noteData, shareData.ownerEmail);
+        renderNote(noteData, ownerData);
 
       } catch (error) {
         console.error('[NoteView] 予期しないエラー:', error);
@@ -370,7 +387,7 @@
       }
     }
 
-    function renderNote(noteData, ownerEmail) {
+    function renderNote(noteData, ownerData) {
       const title = noteData.title || '無題のノート';
       headerTitle.textContent = title;
       document.title = `${title} - フリラ`;
@@ -386,8 +403,9 @@
         });
       }
 
-      // オーナー名（メールの@前）
-      const ownerName = ownerEmail.split('@')[0];
+      // オーナー名とアイコン
+      const ownerName = ownerData.userName || '匿名';
+      const ownerIconUrl = ownerData.userIconUrl || '';
 
       // ブロック描画
       let blocksHtml = '';
@@ -410,12 +428,17 @@
         paperClass = 'paper-grid';
       }
 
+      // アバターHTML（アイコンURLがあれば画像、なければデフォルトアイコン）
+      const avatarHtml = ownerIconUrl
+        ? `<img src="${ownerIconUrl}" alt="${escapeHtml(ownerName)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" onerror="this.outerHTML='<i class=\\'bi bi-person\\'></i>'">`
+        : `<i class="bi bi-person"></i>`;
+
       mainContent.innerHTML = `
         <div class="note-content">
           <h1 class="note-title">${escapeHtml(title)}</h1>
           <div class="note-meta">
             <div class="note-meta-avatar">
-              <i class="bi bi-person"></i>
+              ${avatarHtml}
             </div>
             <div class="note-meta-info">
               <div class="note-meta-name">${escapeHtml(ownerName)}</div>
