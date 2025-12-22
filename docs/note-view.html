@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>ノート - フリラ</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #f9fafb;
+      min-height: 100vh;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    /* ヘッダー */
+    .note-header {
+      position: sticky;
+      top: 0;
+      background: white;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 100;
+      padding-top: calc(12px + env(safe-area-inset-top));
+    }
+    .note-header-back {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #374151;
+      font-size: 20px;
+    }
+    .note-header-back:hover {
+      background: #f3f4f6;
+    }
+    .note-header-title {
+      flex: 1;
+      font-size: 16px;
+      font-weight: 600;
+      color: #1f2937;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .note-header-owner {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    /* ローディング */
+    .note-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 20px;
+      color: #9ca3af;
+    }
+    .note-loading i {
+      font-size: 32px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* エラー */
+    .note-error {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 20px;
+      text-align: center;
+    }
+    .note-error i {
+      font-size: 48px;
+      color: #d1d5db;
+      margin-bottom: 16px;
+    }
+    .note-error-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+    }
+    .note-error-text {
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .note-error-btn {
+      margin-top: 20px;
+      padding: 10px 24px;
+      background: #1E8FBF;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    /* ノートコンテンツ */
+    .note-content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px 16px;
+    }
+    .note-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
+    .note-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .note-meta-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1E8FBF, #0ea5e9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 16px;
+    }
+    .note-meta-info {
+      flex: 1;
+    }
+    .note-meta-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #1f2937;
+    }
+    .note-meta-date {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    /* ブロックコンテナ */
+    .note-blocks {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      min-height: 200px;
+    }
+    .note-blocks.paper-lined {
+      background: repeating-linear-gradient(
+        transparent,
+        transparent 23px,
+        #e5e7eb 23px,
+        #e5e7eb 24px
+      ), white;
+    }
+    .note-blocks.paper-grid {
+      background:
+        linear-gradient(#e5e7eb 1px, transparent 1px),
+        linear-gradient(90deg, #e5e7eb 1px, transparent 1px),
+        white;
+      background-size: 24px 24px;
+    }
+
+    /* ブロック共通 */
+    .note-block {
+      margin-bottom: 16px;
+    }
+    .note-block:last-child {
+      margin-bottom: 0;
+    }
+
+    /* テキストブロック */
+    .block-text {
+      font-size: 15px;
+      line-height: 1.8;
+      color: #374151;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* 画像ブロック */
+    .block-image {
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .block-image img {
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    /* ファイルブロック */
+    .block-file {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      transition: background 0.2s;
+    }
+    .block-file:hover {
+      background: #f3f4f6;
+    }
+    .block-file-icon {
+      font-size: 24px;
+      color: #6b7280;
+    }
+    .block-file-name {
+      font-size: 14px;
+      color: #374151;
+      word-break: break-all;
+    }
+
+    /* 空のブロック */
+    .note-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: #9ca3af;
+    }
+    .note-empty i {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header class="note-header">
+    <button class="note-header-back" onclick="goBack()">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+    <div class="note-header-title" id="headerTitle">ノート</div>
+  </header>
+
+  <main id="mainContent">
+    <div class="note-loading" id="loadingState">
+      <i class="bi bi-arrow-repeat"></i>
+      <p style="margin-top: 12px;">読み込み中...</p>
+    </div>
+  </main>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDeywPVD-PiB5Iu8M-cEVh3YWKXV4Sqp6w",
+      authDomain: "furira.jp",
+      projectId: "reborn-bab00",
+      storageBucket: "reborn-bab00.firebasestorage.app",
+      messagingSenderId: "949011564134",
+      appId: "1:949011564134:web:bf07d81ae8b4c029f3e5f3"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const mainContent = document.getElementById('mainContent');
+    const headerTitle = document.getElementById('headerTitle');
+
+    async function init() {
+      // URLからshareIdを取得
+      const params = new URLSearchParams(window.location.search);
+      const shareId = params.get('id');
+
+      if (!shareId) {
+        showError('共有IDが見つかりません', 'URLを確認してください');
+        return;
+      }
+
+      try {
+        // noteSharesからノート情報を取得
+        const shareRef = doc(db, 'noteShares', shareId);
+        const shareSnap = await getDoc(shareRef);
+
+        if (!shareSnap.exists()) {
+          showError('ノートが見つかりません', 'このノートは削除されたか、共有が解除されています');
+          return;
+        }
+
+        const shareData = shareSnap.data();
+
+        if (!shareData.isActive) {
+          showError('共有が無効です', 'このノートの共有は無効になっています');
+          return;
+        }
+
+        // ノートデータを取得
+        const noteRef = doc(db, 'users', shareData.ownerEmail, 'notes', shareData.noteId);
+        const noteSnap = await getDoc(noteRef);
+
+        if (!noteSnap.exists()) {
+          showError('ノートが見つかりません', 'このノートは削除されています');
+          return;
+        }
+
+        const noteData = noteSnap.data();
+
+        // 公開設定を確認
+        if (!noteData.isPublic) {
+          showError('非公開のノートです', 'このノートは非公開に設定されています');
+          return;
+        }
+
+        // ノートを表示
+        renderNote(noteData, shareData.ownerEmail);
+
+      } catch (error) {
+        console.error('[NoteView] エラー:', error);
+        showError('読み込みエラー', '時間をおいて再度お試しください');
+      }
+    }
+
+    function renderNote(noteData, ownerEmail) {
+      const title = noteData.title || '無題のノート';
+      headerTitle.textContent = title;
+      document.title = `${title} - フリラ`;
+
+      // 日付フォーマット
+      let dateStr = '';
+      if (noteData.updatedAt) {
+        const date = noteData.updatedAt.toDate ? noteData.updatedAt.toDate() : new Date(noteData.updatedAt);
+        dateStr = date.toLocaleDateString('ja-JP', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      }
+
+      // オーナー名（メールの@前）
+      const ownerName = ownerEmail.split('@')[0];
+
+      // ブロック描画
+      let blocksHtml = '';
+      if (noteData.blocks && noteData.blocks.length > 0) {
+        blocksHtml = noteData.blocks.map(block => renderBlock(block)).join('');
+      } else {
+        blocksHtml = `
+          <div class="note-empty">
+            <i class="bi bi-journal-text"></i>
+            <p>コンテンツがありません</p>
+          </div>
+        `;
+      }
+
+      // 罫線タイプクラス
+      let paperClass = '';
+      if (noteData.paperType === 'lined') {
+        paperClass = 'paper-lined';
+      } else if (noteData.paperType === 'grid') {
+        paperClass = 'paper-grid';
+      }
+
+      mainContent.innerHTML = `
+        <div class="note-content">
+          <h1 class="note-title">${escapeHtml(title)}</h1>
+          <div class="note-meta">
+            <div class="note-meta-avatar">
+              <i class="bi bi-person"></i>
+            </div>
+            <div class="note-meta-info">
+              <div class="note-meta-name">${escapeHtml(ownerName)}</div>
+              <div class="note-meta-date">${dateStr}</div>
+            </div>
+          </div>
+          <div class="note-blocks ${paperClass}">
+            ${blocksHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderBlock(block) {
+      if (block.type === 'text') {
+        return `
+          <div class="note-block">
+            <div class="block-text">${escapeHtml(block.content?.text || '')}</div>
+          </div>
+        `;
+      } else if (block.type === 'image') {
+        return `
+          <div class="note-block">
+            <div class="block-image">
+              <img src="${block.content?.url || ''}" alt="${escapeHtml(block.content?.fileName || '画像')}">
+            </div>
+          </div>
+        `;
+      } else if (block.type === 'file') {
+        return `
+          <div class="note-block">
+            <a class="block-file" href="${block.content?.url || ''}" target="_blank">
+              <i class="bi bi-file-earmark block-file-icon"></i>
+              <span class="block-file-name">${escapeHtml(block.content?.fileName || 'ファイル')}</span>
+            </a>
+          </div>
+        `;
+      }
+      return '';
+    }
+
+    function showError(title, message) {
+      mainContent.innerHTML = `
+        <div class="note-error">
+          <i class="bi bi-journal-x"></i>
+          <div class="note-error-title">${escapeHtml(title)}</div>
+          <div class="note-error-text">${escapeHtml(message)}</div>
+          <a href="/" class="note-error-btn">トップへ戻る</a>
+        </div>
+      `;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    window.goBack = function() {
+      if (document.referrer && document.referrer.includes(window.location.origin)) {
+        history.back();
+      } else {
+        window.location.href = '/';
+      }
+    };
+
+    init();
+  </script>
+</body>
+</html>
