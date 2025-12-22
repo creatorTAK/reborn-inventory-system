@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v133-note-view-server-fetch'; // サーバーから直接取得
-const SW_VERSION = 'v133-note-view-server-fetch'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v134-note-view-correct-project'; // 正しいFirebaseプロジェクト
+const SW_VERSION = 'v134-note-view-correct-project'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
