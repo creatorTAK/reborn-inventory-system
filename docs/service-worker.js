@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v126-note-username-fix'; // ユーザー名修正
-const SW_VERSION = 'v126-note-username-fix'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v127-note-roomname-fix'; // ルーム名表示修正
+const SW_VERSION = 'v127-note-roomname-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
