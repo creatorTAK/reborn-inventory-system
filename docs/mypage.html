@@ -1604,19 +1604,13 @@
       min-width: 100px;
       max-width: calc(100% - 32px);
       background: transparent;
-      padding: 8px;
-      border: 2px dashed transparent;
-      border-radius: 8px;
-      transition: border-color 0.15s;
     }
     .note-block.dragging {
       z-index: 1000;
-      opacity: 0.8;
-      border-color: #40B4E5;
+      opacity: 0.7;
     }
     .note-block.selected {
       z-index: 100;
-      border-color: rgba(64,180,229,0.5);
     }
     /* ブロック選択時のコントロール */
     .block-controls {
@@ -1633,6 +1627,28 @@
       z-index: 10;
     }
     .note-block.selected .block-controls {
+      display: flex;
+    }
+    /* ドラッグハンドル */
+    .block-drag-handle {
+      position: absolute;
+      top: -12px;
+      right: -12px;
+      width: 28px;
+      height: 28px;
+      background: #40B4E5;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 14px;
+      cursor: move;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      z-index: 11;
+      touch-action: none;
+    }
+    .note-block.selected .block-drag-handle {
       display: flex;
     }
     .block-ctrl-btn {
@@ -4532,9 +4548,10 @@
         const textColor = block.content?.color || '#000000';
         return `
           <div class="note-block" data-block-id="${block.id}" style="${posStyle}"
-               onclick="selectBlock(event, '${block.id}')"
-               onmousedown="startDrag(event, '${block.id}')"
-               ontouchstart="startDrag(event, '${block.id}')">
+               onclick="selectBlock(event, '${block.id}')">
+            <div class="block-drag-handle" onmousedown="startDrag(event, '${block.id}')" ontouchstart="startDrag(event, '${block.id}')">
+              <i class="bi bi-arrows-move"></i>
+            </div>
             <div class="block-controls">
               <button class="block-color-dot" style="background: ${textColor};" onclick="event.stopPropagation(); showColorPopover(event, '${block.id}')" title="文字色"></button>
               <button class="block-ctrl-btn delete" onclick="event.stopPropagation(); deleteBlock('${block.id}')"><i class="bi bi-trash"></i></button>
@@ -4553,9 +4570,10 @@
         const size = block.content?.size || 'medium';
         return `
           <div class="note-block" data-block-id="${block.id}" style="${posStyle}"
-               onclick="selectBlock(event, '${block.id}')"
-               onmousedown="startDrag(event, '${block.id}')"
-               ontouchstart="startDrag(event, '${block.id}')">
+               onclick="selectBlock(event, '${block.id}')">
+            <div class="block-drag-handle" onmousedown="startDrag(event, '${block.id}')" ontouchstart="startDrag(event, '${block.id}')">
+              <i class="bi bi-arrows-move"></i>
+            </div>
             <div class="block-controls">
               <button class="block-ctrl-btn ${size === 'small' ? 'active' : ''}" onclick="event.stopPropagation(); changeImageSize('${block.id}', 'small')">S</button>
               <button class="block-ctrl-btn ${size === 'medium' ? 'active' : ''}" onclick="event.stopPropagation(); changeImageSize('${block.id}', 'medium')">M</button>
@@ -4570,9 +4588,10 @@
       } else if (block.type === 'file') {
         return `
           <div class="note-block" data-block-id="${block.id}" style="${posStyle}"
-               onclick="selectBlock(event, '${block.id}')"
-               onmousedown="startDrag(event, '${block.id}')"
-               ontouchstart="startDrag(event, '${block.id}')">
+               onclick="selectBlock(event, '${block.id}')">
+            <div class="block-drag-handle" onmousedown="startDrag(event, '${block.id}')" ontouchstart="startDrag(event, '${block.id}')">
+              <i class="bi bi-arrows-move"></i>
+            </div>
             <div class="block-controls">
               <button class="block-ctrl-btn delete" onclick="event.stopPropagation(); deleteBlock('${block.id}')"><i class="bi bi-trash"></i></button>
             </div>
@@ -4589,9 +4608,10 @@
         const headingColor = block.content?.color || '#000000';
         return `
           <div class="note-block" data-block-id="${block.id}" style="${posStyle}"
-               onclick="selectBlock(event, '${block.id}')"
-               onmousedown="startDrag(event, '${block.id}')"
-               ontouchstart="startDrag(event, '${block.id}')">
+               onclick="selectBlock(event, '${block.id}')">
+            <div class="block-drag-handle" onmousedown="startDrag(event, '${block.id}')" ontouchstart="startDrag(event, '${block.id}')">
+              <i class="bi bi-arrows-move"></i>
+            </div>
             <div class="block-controls">
               <button class="block-ctrl-btn ${level === 'h1' ? 'active' : ''}" onclick="event.stopPropagation(); changeHeadingLevel('${block.id}', 'h1')">H1</button>
               <button class="block-ctrl-btn ${level === 'h2' ? 'active' : ''}" onclick="event.stopPropagation(); changeHeadingLevel('${block.id}', 'h2')">H2</button>
@@ -4660,17 +4680,14 @@
     };
 
     window.startDrag = function(event, blockId) {
-      // textarea/inputの場合はドラッグしない
-      if (event.target.tagName === 'TEXTAREA' || event.target.tagName === 'INPUT') {
-        return;
-      }
-      // ボタンクリックの場合もドラッグしない
-      if (event.target.closest('button')) {
-        return;
-      }
+      event.preventDefault();
+      event.stopPropagation();
       
       const blockEl = document.querySelector(`.note-block[data-block-id="${blockId}"]`);
       if (!blockEl) return;
+      
+      // ブロックを選択状態に
+      selectBlock(event, blockId);
 
       const touch = event.touches ? event.touches[0] : event;
       
