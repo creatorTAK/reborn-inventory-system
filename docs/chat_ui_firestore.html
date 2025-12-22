@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-22 v366 - 音声mp4優先（iOS互換） -->
+  <!-- Cache Bust: 2025-12-22 v367 - 音声形式デバッグ -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
@@ -4992,23 +4992,56 @@
           }
         });
 
-        // MediaRecorderを作成（iOS互換のためmp4を優先）
-        // 優先順位: mp4 > webm（mp4はiOS/Safari対応、webmはChrome/Android対応）
-        let mimeType = 'audio/webm'; // デフォルト
-        const mimeTypes = [
-          'audio/mp4',           // iOS Safari対応
-          'audio/webm;codecs=opus', // Chrome高品質
-          'audio/webm',          // Chrome/Firefox
-          'audio/ogg;codecs=opus'   // Firefox
+        // MediaRecorderを作成
+        // iOS Safariでサポートされる形式を確認
+        const testTypes = [
+          'audio/mp4',
+          'audio/aac',
+          'audio/mpeg',
+          'audio/mp4;codecs=mp4a.40.2',
+          'audio/webm',
+          'audio/webm;codecs=opus',
+          'audio/ogg',
+          'audio/ogg;codecs=opus',
+          'audio/wav',
+          ''  // デフォルト
         ];
-        for (const type of mimeTypes) {
+        console.log('[Voice] MediaRecorder サポート形式チェック:');
+        testTypes.forEach(type => {
+          if (type) {
+            console.log(`  ${type}: ${MediaRecorder.isTypeSupported(type)}`);
+          }
+        });
+        
+        // mimeTypeを指定せずにMediaRecorderを作成（ブラウザのデフォルトを使用）
+        // iOS Safariではこの方法が最も互換性が高い
+        let recorderOptions = {};
+        
+        // 優先順位でサポートされる形式を探す
+        const preferredTypes = [
+          'audio/mp4',
+          'audio/aac', 
+          'audio/mp4;codecs=mp4a.40.2',
+          'audio/webm;codecs=opus',
+          'audio/webm'
+        ];
+        
+        for (const type of preferredTypes) {
           if (MediaRecorder.isTypeSupported(type)) {
-            mimeType = type;
+            recorderOptions.mimeType = type;
             break;
           }
         }
-        console.log('[Voice] 録音形式:', mimeType);
-        voiceMediaRecorder = new MediaRecorder(voiceAudioStream, { mimeType });
+        
+        // サポートされる形式が見つからない場合はデフォルトを使用
+        if (recorderOptions.mimeType) {
+          console.log('[Voice] 選択された録音形式:', recorderOptions.mimeType);
+          voiceMediaRecorder = new MediaRecorder(voiceAudioStream, recorderOptions);
+        } else {
+          console.log('[Voice] デフォルト形式を使用');
+          voiceMediaRecorder = new MediaRecorder(voiceAudioStream);
+        }
+        console.log('[Voice] 実際のmimeType:', voiceMediaRecorder.mimeType);
         voiceAudioChunks = [];
 
         voiceMediaRecorder.ondataavailable = (event) => {
@@ -5101,10 +5134,11 @@
           console.log('[Voice] 録音完了:', audioBlob.size, 'bytes, duration:', duration, 's');
 
           // Firebase Storageにアップロード（拡張子を形式から決定）
+          console.log('[Voice] 保存するmimeType:', mimeType);
           let extension = 'm4a'; // デフォルト
           if (mimeType.includes('webm')) extension = 'webm';
           else if (mimeType.includes('ogg')) extension = 'ogg';
-          else if (mimeType.includes('mp4') || mimeType.includes('m4a')) extension = 'm4a';
+          else if (mimeType.includes('mp4') || mimeType.includes('m4a') || mimeType.includes('aac') || mimeType.includes('mpeg')) extension = 'm4a';
           const fileName = `voice_${Date.now()}.${extension}`;
           const storageRef = ref(storage, `chat/${currentRoomId}/voice/${fileName}`);
 
