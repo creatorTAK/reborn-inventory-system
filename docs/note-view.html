@@ -304,9 +304,13 @@
       }
 
       try {
+        console.log('[NoteView] shareId:', shareId);
+
         // noteSharesからノート情報を取得
         const shareRef = doc(db, 'noteShares', shareId);
         const shareSnap = await getDoc(shareRef);
+
+        console.log('[NoteView] shareSnap exists:', shareSnap.exists());
 
         if (!shareSnap.exists()) {
           showError('ノートが見つかりません', 'このノートは削除されたか、共有が解除されています');
@@ -314,6 +318,7 @@
         }
 
         const shareData = shareSnap.data();
+        console.log('[NoteView] shareData:', JSON.stringify(shareData));
 
         if (!shareData.isActive) {
           showError('共有が無効です', 'このノートの共有は無効になっています');
@@ -321,8 +326,12 @@
         }
 
         // ノートデータを取得
+        const notePath = `users/${shareData.ownerEmail}/notes/${shareData.noteId}`;
+        console.log('[NoteView] notePath:', notePath);
         const noteRef = doc(db, 'users', shareData.ownerEmail, 'notes', shareData.noteId);
         const noteSnap = await getDoc(noteRef);
+
+        console.log('[NoteView] noteSnap exists:', noteSnap.exists());
 
         if (!noteSnap.exists()) {
           showError('ノートが見つかりません', 'このノートは削除されています');
@@ -330,6 +339,7 @@
         }
 
         const noteData = noteSnap.data();
+        console.log('[NoteView] noteData.isPublic:', noteData.isPublic);
 
         // 公開設定を確認
         if (!noteData.isPublic) {
@@ -342,6 +352,7 @@
 
       } catch (error) {
         console.error('[NoteView] エラー:', error);
+        console.error('[NoteView] エラー詳細:', error.message, error.code);
         showError('読み込みエラー', '時間をおいて再度お試しください');
       }
     }
@@ -455,6 +466,15 @@
     }
 
     window.goBack = function() {
+      // チャットからwindow.openで開かれた場合はウィンドウを閉じる
+      // window.openerがある場合、またはhistory.lengthが1の場合は新しいタブで開かれた
+      if (window.opener || history.length <= 1) {
+        window.close();
+        // window.close()が効かない場合（ユーザー操作でないとブロックされる場合がある）
+        // フォールバックとして何もしない（ユーザーに手動で閉じてもらう）
+        return;
+      }
+      // 通常のナビゲーションで来た場合は戻る
       if (document.referrer && document.referrer.includes(window.location.origin)) {
         history.back();
       } else {
