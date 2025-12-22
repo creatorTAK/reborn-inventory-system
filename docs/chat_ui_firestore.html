@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-22 v364 - 音声メッセージデバッグ -->
+  <!-- Cache Bust: 2025-12-22 v365 - 音声再生修正・webm互換性チェック -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
@@ -1113,9 +1113,6 @@
     .voice-play-btn i {
       font-size: 16px;
       margin-left: 2px;
-    }
-    .voice-play-btn.playing i::before {
-      content: "\\F4C3"; /* bi-pause-fill */
     }
     .voice-info {
       display: flex;
@@ -5156,7 +5153,22 @@
       }
 
       // 新しい音声を再生
-      const audio = new Audio(voiceUrl);
+      console.log('[Voice] 再生開始:', voiceUrl);
+      
+      const audio = new Audio();
+      
+      // 形式チェック（webmがサポートされているか）
+      const isWebm = voiceUrl.includes('.webm');
+      if (isWebm) {
+        const canPlayWebm = audio.canPlayType('audio/webm');
+        console.log('[Voice] webm対応:', canPlayWebm);
+        if (!canPlayWebm || canPlayWebm === '') {
+          alert('このデバイスではwebm形式の音声を再生できません。録音したデバイスで再生してください。');
+          return;
+        }
+      }
+      
+      audio.src = voiceUrl;
       currentVoiceAudio = audio;
       currentVoiceButton = playBtn;
       currentVoiceMsgId = msgId;
@@ -5165,10 +5177,13 @@
       playBtn.innerHTML = '<i class="bi bi-pause-fill"></i>';
 
       audio.play().catch(err => {
-        console.error('[Voice] 再生エラー:', err);
-        alert('音声の再生に失敗しました');
+        console.error('[Voice] 再生エラー:', err.name, err.message);
+        alert('音声の再生に失敗しました: ' + err.message);
         playBtn.classList.remove('playing');
         playBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
+        currentVoiceAudio = null;
+        currentVoiceButton = null;
+        currentVoiceMsgId = null;
       });
 
       // 再生完了時
@@ -5181,8 +5196,8 @@
       };
 
       // エラー時
-      audio.onerror = function() {
-        console.error('[Voice] 音声読み込みエラー');
+      audio.onerror = function(e) {
+        console.error('[Voice] 音声読み込みエラー:', audio.error?.code, audio.error?.message);
         playBtn.classList.remove('playing');
         playBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
         currentVoiceAudio = null;

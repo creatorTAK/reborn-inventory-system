@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v112-voice-debug'; // 音声メッセージデバッグ
-const SW_VERSION = 'v112-voice-debug'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v113-voice-fix'; // 音声再生修正
+const SW_VERSION = 'v113-voice-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
