@@ -4580,10 +4580,27 @@
     }
 
     // 罫線タイプ選択ポップオーバー表示/非表示
-    window.togglePaperTypePopover = function() {
+    window.togglePaperTypePopover = function(event) {
+      if (event) event.stopPropagation();
       const popover = document.getElementById('paperTypePopover');
-      popover.classList.toggle('active');
+      const isActive = popover.classList.toggle('active');
+
+      // 外側クリックで閉じる処理
+      if (isActive) {
+        setTimeout(() => {
+          document.addEventListener('click', closePaperTypeOnOutsideClick);
+        }, 10);
+      }
     };
+
+    function closePaperTypeOnOutsideClick(event) {
+      const popover = document.getElementById('paperTypePopover');
+      const btn = event.target.closest('[onclick*="togglePaperTypePopover"]');
+      if (!popover.contains(event.target) && !btn) {
+        popover.classList.remove('active');
+        document.removeEventListener('click', closePaperTypeOnOutsideClick);
+      }
+    }
 
     // 罫線タイプ選択
     window.selectPaperType = function(type) {
@@ -4598,7 +4615,10 @@
       }
 
       updatePaperTypeUI(type);
-      togglePaperTypePopover();
+      // ポップオーバーを閉じる
+      const popover = document.getElementById('paperTypePopover');
+      popover.classList.remove('active');
+      document.removeEventListener('click', closePaperTypeOnOutsideClick);
       scheduleNoteSave();
     };
 
@@ -4689,11 +4709,11 @@
 
       try {
         const roomsRef = collection(db, 'rooms');
+        // orderByを外して単純なクエリに（複合インデックス不要）
         const q = query(
           roomsRef,
           where('members', 'array-contains', currentUser.email),
-          orderBy('lastMessageAt', 'desc'),
-          limit(30)
+          limit(50)
         );
         const snapshot = await getDocs(q);
 
