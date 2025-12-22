@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v131-note-view-debug'; // ノート閲覧デバッグ
-const SW_VERSION = 'v131-note-view-debug'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v132-note-view-step-debug'; // ノート閲覧ステップデバッグ
+const SW_VERSION = 'v132-note-view-step-debug'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',

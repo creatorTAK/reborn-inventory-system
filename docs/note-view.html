@@ -306,11 +306,17 @@
       try {
         console.log('[NoteView] shareId:', shareId);
 
-        // noteSharesからノート情報を取得
-        const shareRef = doc(db, 'noteShares', shareId);
-        const shareSnap = await getDoc(shareRef);
-
-        console.log('[NoteView] shareSnap exists:', shareSnap.exists());
+        // Step 1: noteSharesからノート情報を取得
+        let shareSnap;
+        try {
+          const shareRef = doc(db, 'noteShares', shareId);
+          shareSnap = await getDoc(shareRef);
+          console.log('[NoteView] Step1 OK - shareSnap exists:', shareSnap.exists());
+        } catch (e) {
+          console.error('[NoteView] Step1 FAIL - noteShares取得エラー:', e);
+          showError('共有情報の取得エラー', `noteShares: ${e.message}`);
+          return;
+        }
 
         if (!shareSnap.exists()) {
           showError('ノートが見つかりません', 'このノートは削除されたか、共有が解除されています');
@@ -325,13 +331,19 @@
           return;
         }
 
-        // ノートデータを取得
-        const notePath = `users/${shareData.ownerEmail}/notes/${shareData.noteId}`;
-        console.log('[NoteView] notePath:', notePath);
-        const noteRef = doc(db, 'users', shareData.ownerEmail, 'notes', shareData.noteId);
-        const noteSnap = await getDoc(noteRef);
-
-        console.log('[NoteView] noteSnap exists:', noteSnap.exists());
+        // Step 2: ノートデータを取得
+        let noteSnap;
+        try {
+          const notePath = `users/${shareData.ownerEmail}/notes/${shareData.noteId}`;
+          console.log('[NoteView] Step2 - notePath:', notePath);
+          const noteRef = doc(db, 'users', shareData.ownerEmail, 'notes', shareData.noteId);
+          noteSnap = await getDoc(noteRef);
+          console.log('[NoteView] Step2 OK - noteSnap exists:', noteSnap.exists());
+        } catch (e) {
+          console.error('[NoteView] Step2 FAIL - ノート取得エラー:', e);
+          showError('ノートデータの取得エラー', `notes: ${e.message}`);
+          return;
+        }
 
         if (!noteSnap.exists()) {
           showError('ノートが見つかりません', 'このノートは削除されています');
@@ -341,19 +353,19 @@
         const noteData = noteSnap.data();
         console.log('[NoteView] noteData.isPublic:', noteData.isPublic);
 
-        // 公開設定を確認
+        // 公開設定を確認（デバッグのため一時的にスキップ可能）
         if (!noteData.isPublic) {
-          showError('非公開のノートです', 'このノートは非公開に設定されています');
-          return;
+          console.warn('[NoteView] isPublic=false だが表示を試みる（デバッグ用）');
+          // showError('非公開のノートです', 'このノートは非公開に設定されています');
+          // return;
         }
 
         // ノートを表示
         renderNote(noteData, shareData.ownerEmail);
 
       } catch (error) {
-        console.error('[NoteView] エラー:', error);
-        console.error('[NoteView] エラー詳細:', error.message, error.code);
-        showError('読み込みエラー', '時間をおいて再度お試しください');
+        console.error('[NoteView] 予期しないエラー:', error);
+        showError('読み込みエラー', `${error.message || '不明なエラー'} (${error.code || 'N/A'})`);
       }
     }
 
