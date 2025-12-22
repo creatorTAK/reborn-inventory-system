@@ -1386,6 +1386,119 @@ function getDefaultCompensationSettings() {
 }
 
 // ============================================
+// 📧 Resendメール送信ヘルパー
+// ============================================
+
+/**
+ * Cloudflare Worker経由でメールを送信（Resend API使用）
+ * @param {string} to - 送信先メールアドレス
+ * @param {string} subject - 件名
+ * @param {string} textBody - テキスト本文
+ * @param {string} htmlBody - HTML本文
+ */
+async function sendEmailViaCloudflare(to, subject, textBody, htmlBody) {
+  const CLOUDFLARE_WORKER_URL = 'https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send-email';
+
+  try {
+    const response = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: to,
+        subject: subject,
+        text: textBody,
+        html: htmlBody
+      }),
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      console.log(`📧 [sendEmailViaCloudflare] 送信成功: ${to}`);
+      return { success: true, messageId: result.id };
+    } else {
+      console.error(`📧 [sendEmailViaCloudflare] 送信失敗: ${to}`, result);
+      return { success: false, error: result.error || 'Unknown error' };
+    }
+  } catch (error) {
+    console.error(`📧 [sendEmailViaCloudflare] 例外: ${to}`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * タスクリマインダー用のHTMLメールを生成
+ * @param {string} userName - ユーザー名
+ * @param {Array} notifications - 通知一覧
+ */
+function generateReminderEmailHtml(userName, notifications) {
+  const urgentTasks = notifications.filter(n => n.type === 'urgent_reminder');
+  const normalTasks = notifications.filter(n => n.type === 'reminder');
+
+  const taskListHtml = notifications.map(n => {
+    const bgColor = n.type === 'urgent_reminder' ? '#fef2f2' : '#f9fafb';
+    const borderColor = n.type === 'urgent_reminder' ? '#ef4444' : '#e5e7eb';
+    return `
+      <div style="background: ${bgColor}; border-left: 3px solid ${borderColor}; padding: 12px 16px; margin-bottom: 8px; border-radius: 4px;">
+        <div style="font-weight: 600; color: #374151;">${escapeHtml(n.title)}</div>
+        <div style="color: #6b7280; font-size: 14px; margin-top: 4px;">${escapeHtml(n.content)}</div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: linear-gradient(135deg, #40B4E5, #1E8FBF); color: white; padding: 24px; text-align: center; border-radius: 8px 8px 0 0;">
+      <h1 style="margin: 0; font-size: 24px; font-weight: bold;">📋 タスクリマインダー</h1>
+      <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">フリラ物販管理システム</p>
+    </div>
+    <div style="background: #fff; padding: 24px; border: 1px solid #e5e7eb; border-top: none;">
+      <p style="margin: 0 0 16px 0; font-size: 16px;">
+        ${escapeHtml(userName)}さん、おはようございます。
+      </p>
+      <p style="margin: 0 0 20px 0; color: #6b7280;">
+        ${urgentTasks.length > 0 ? `<span style="color: #ef4444; font-weight: 600;">⚠️ 緊急対応が必要なタスクが${urgentTasks.length}件あります。</span><br>` : ''}
+        未完了のタスクが${notifications.length}件あります。ご確認ください。
+      </p>
+
+      <div style="margin-bottom: 24px;">
+        ${taskListHtml}
+      </div>
+
+      <div style="text-align: center; margin-top: 24px;">
+        <a href="https://furira.jp" style="display: inline-block; background: #40B4E5; color: white; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          フリラを開く
+        </a>
+      </div>
+    </div>
+    <div style="background: #f9fafb; padding: 16px; text-align: center; font-size: 12px; color: #9ca3af; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none;">
+      <p style="margin: 0;">このメールは <a href="https://furira.jp" style="color: #40B4E5;">フリラ物販管理システム</a> から自動送信されています。</p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+/**
+ * HTMLエスケープ（メール用）
+ */
+function escapeHtml(text) {
+  if (!text) return '';
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
+// ============================================
 // 🔔 自動リマインダー（毎日9時実行）
 // ============================================
 
@@ -1533,7 +1646,31 @@ exports.dailyTaskReminder = onSchedule({
         }
 
         await batch.commit();
-        console.log(`📧 [dailyTaskReminder] ${userData.displayName || userEmail}: ${notifications.length}件の通知送信`);
+
+        // 📧 Cloudflare Worker経由でメール送信
+        const userName = userData.userName || userData.displayName || userEmail.split('@')[0];
+        const urgentCount = notifications.filter(n => n.type === 'urgent_reminder').length;
+        const subject = urgentCount > 0
+          ? `🚨 【緊急】未完了タスクが${notifications.length}件あります`
+          : `📋 未完了タスクが${notifications.length}件あります`;
+
+        const textBody = notifications.map(n => `${n.title}\n${n.content}`).join('\n\n');
+        const htmlBody = generateReminderEmailHtml(userName, notifications);
+
+        const emailResult = await sendEmailViaCloudflare(
+          userEmail,
+          subject,
+          textBody,
+          htmlBody
+        );
+
+        if (emailResult.success) {
+          console.log(`📧 [dailyTaskReminder] ${userName}: メール送信成功`);
+        } else {
+          console.warn(`📧 [dailyTaskReminder] ${userName}: メール送信失敗 - ${emailResult.error}`);
+        }
+
+        console.log(`📧 [dailyTaskReminder] ${userName}: ${notifications.length}件の通知送信`);
       }
     }
 
