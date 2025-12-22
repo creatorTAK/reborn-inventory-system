@@ -2792,7 +2792,7 @@
   <!-- Firebase SDK (ARCH-001 Phase 3) -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, getDocs, doc, updateDoc, addDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase設定
     const firebaseConfig = {
@@ -3121,6 +3121,22 @@
     }
 
     /**
+     * 「発送までの日数」から期限日数を取得
+     * @param {string} shippingDaysStr - 例: "1~2日で発送"
+     * @returns {number} 期限日数（デフォルト2日）
+     */
+    function parseShippingDays(shippingDaysStr) {
+      if (!shippingDaysStr) return 2; // デフォルト2日
+
+      // "1~2日で発送" → 2, "2~3日で発送" → 3, "4~7日で発送" → 7
+      const match = shippingDaysStr.match(/(\d+)~(\d+)日/);
+      if (match) {
+        return parseInt(match[2], 10); // 最大日数を返す
+      }
+      return 2; // パースできない場合はデフォルト2日
+    }
+
+    /**
      * 担当者に発送タスクを追加
      * @param {Object} productData - 商品データ
      * @param {Object} salesData - 販売データ
@@ -3137,6 +3153,26 @@
         if (!staffEmail) {
           console.warn('⚠️ [ShippingTask] 担当者のメールが不明のためスキップ');
           return;
+        }
+
+        // 配送設定から「発送までの日数」を取得して期限を計算
+        let dueDate = null;
+        try {
+          const shippingDefaultStr = localStorage.getItem('rebornConfig_shippingDefault');
+          if (shippingDefaultStr) {
+            const shippingDefault = JSON.parse(shippingDefaultStr);
+            const shippingDaysStr = shippingDefault['発送までの日数'] || '1~2日で発送';
+            const dueDays = parseShippingDays(shippingDaysStr);
+
+            // 現在日時 + 期限日数
+            dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + dueDays);
+            dueDate.setHours(23, 59, 59, 999); // 期限日の終わりに設定
+
+            console.log(`📅 [ShippingTask] 発送期限: ${dueDays}日後 (${dueDate.toLocaleDateString('ja-JP')})`);
+          }
+        } catch (e) {
+          console.warn('⚠️ [ShippingTask] 配送設定の取得に失敗:', e);
         }
 
         // タスクデータ
@@ -3160,6 +3196,7 @@
         await addDoc(tasksRef, {
           ...taskData,
           createdAt: serverTimestamp(),
+          dueDate: dueDate ? Timestamp.fromDate(dueDate) : null, // 発送期限
           completed: false,
           read: false
         });

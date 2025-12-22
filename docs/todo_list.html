@@ -550,7 +550,7 @@
           </div>
           <div class="task-summary-card">
             <div class="number" style="color: #ef4444;" id="adminTaskOverdue">-</div>
-            <div class="label">3日以上放置</div>
+            <div class="label">期限切れ/放置</div>
           </div>
         </div>
 
@@ -726,6 +726,29 @@
       const completableTaskTypes = ['listing_approval', 'shipping_task'];
       const showCompleteButton = completableTaskTypes.includes(task.type);
 
+      // 期限表示（発送タスクなど）
+      let dueDateHtml = '';
+      if (task.dueDate) {
+        const dueDate = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
+        const now = new Date();
+        const diffTime = dueDate - now;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) {
+          // 期限切れ
+          dueDateHtml = `<span style="color: #ef4444; font-weight: 600; font-size: 11px;">⚠️ 期限切れ（${Math.abs(diffDays)}日超過）</span>`;
+        } else if (diffDays === 0) {
+          // 今日が期限
+          dueDateHtml = `<span style="color: #f59e0b; font-weight: 600; font-size: 11px;">⏰ 本日期限</span>`;
+        } else if (diffDays === 1) {
+          // 明日が期限
+          dueDateHtml = `<span style="color: #f59e0b; font-size: 11px;">📅 明日まで</span>`;
+        } else {
+          // それ以外
+          dueDateHtml = `<span style="color: #6b7280; font-size: 11px;">📅 ${dueDate.getMonth() + 1}/${dueDate.getDate()}まで</span>`;
+        }
+      }
+
       // アクションボタン
       let actionButtons = '';
       if (task.link) {
@@ -745,6 +768,7 @@
               <div class="task-meta">
                 <span class="type-badge ${typeBadgeClass}">${typeLabel}</span>
                 <span>${createdAt}</span>
+                ${dueDateHtml}
               </div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 ${actionButtons}
@@ -1055,14 +1079,22 @@
           let completed = 0;
           let overdue = 0;
 
+          const now = new Date();
           tasksSnapshot.docs.forEach(doc => {
             const task = doc.data();
             if (task.completed) {
               completed++;
             } else {
               pending++;
-              // 3日以上前に作成されたタスクかチェック
-              if (task.createdAt) {
+              // 期限切れチェック（発送タスクはdueDate、それ以外は3日放置）
+              if (task.dueDate) {
+                // dueDateがあるタスク（発送タスク等）
+                const dueDate = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
+                if (dueDate < now) {
+                  overdue++;
+                }
+              } else if (task.createdAt) {
+                // dueDateがないタスクは3日以上放置でカウント
                 const createdDate = task.createdAt.toDate ? task.createdAt.toDate() : new Date(task.createdAt);
                 if (createdDate < threeDaysAgo) {
                   overdue++;
@@ -1112,7 +1144,7 @@
             <div style="display: flex; align-items: center; gap: 12px;">
               <div style="text-align: right;">
                 <div style="font-size: 12px; color: #6b7280;">未完了: <span style="color: ${user.pending > 0 ? '#ef4444' : '#22c55e'}; font-weight: 600;">${user.pending}</span></div>
-                ${user.overdue > 0 ? `<div style="font-size: 11px; color: #ef4444;">⚠️ ${user.overdue}件が3日以上</div>` : `<div style="font-size: 12px; color: #6b7280;">完了: <span style="color: #22c55e;">${user.completed}</span></div>`}
+                ${user.overdue > 0 ? `<div style="font-size: 11px; color: #ef4444;">⚠️ ${user.overdue}件が要対応</div>` : `<div style="font-size: 12px; color: #6b7280;">完了: <span style="color: #22c55e;">${user.completed}</span></div>`}
               </div>
               ${user.pending > 0 ? `
                 <button onclick="sendReminder('${escapeHtml(user.email)}', '${escapeHtml(user.name)}')"
