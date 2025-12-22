@@ -313,22 +313,6 @@
     .remind-btn:active {
       opacity: 0.8;
     }
-    .bulk-remind-btn {
-      width: 100%;
-      padding: 12px;
-      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
     .tasks-container {
       padding: 8px 16px 16px 16px;
       max-width: 600px;
@@ -553,12 +537,6 @@
             <div class="label">期限切れ/放置</div>
           </div>
         </div>
-
-        <!-- 一括リマインドボタン -->
-        <button class="bulk-remind-btn" onclick="sendBulkReminder()">
-          <i class="bi bi-bell"></i>
-          未完了タスクがあるユーザーに一括リマインド
-        </button>
 
         <!-- ユーザー一覧 -->
         <div style="background: #f9fafb; border-radius: 12px; overflow: hidden;">
@@ -857,6 +835,18 @@
       return div.innerHTML;
     }
 
+    // タスク種別のラベルを取得
+    function getTaskTypeLabel(taskType) {
+      const typeLabels = {
+        'shipping_task': '発送',
+        'listing_approval': '出品確認',
+        'inspection': '検品',
+        'photography': '撮影',
+        'other': 'その他'
+      };
+      return typeLabels[taskType] || taskType;
+    }
+
     // 履歴ページへ遷移
     function goToHistory() {
       // ドロップダウンを閉じる
@@ -1076,16 +1066,32 @@
             .get();
 
           let pending = 0;
-          let completed = 0;
+          let completedThisWeek = 0;
           let overdue = 0;
+          const pendingByType = {}; // タスク種別ごとの未完了数
 
           const now = new Date();
+          // 今週の開始日（日曜日）を計算
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - now.getDay());
+          weekStart.setHours(0, 0, 0, 0);
+
           tasksSnapshot.docs.forEach(doc => {
             const task = doc.data();
             if (task.completed) {
-              completed++;
+              // 今週完了したタスクのみカウント
+              const completedAt = task.completedAt?.toDate ? task.completedAt.toDate() :
+                                  (task.completedAt ? new Date(task.completedAt) : null);
+              if (completedAt && completedAt >= weekStart) {
+                completedThisWeek++;
+              }
             } else {
               pending++;
+              // タスク種別ごとにカウント
+              const taskType = task.type || 'other';
+              const typeLabel = getTaskTypeLabel(taskType);
+              pendingByType[typeLabel] = (pendingByType[typeLabel] || 0) + 1;
+
               // 期限切れチェック（発送タスクはdueDate、それ以外は3日放置）
               if (task.dueDate) {
                 // dueDateがあるタスク（発送タスク等）
@@ -1111,9 +1117,9 @@
             name: userData.userName || userData.displayName || userData.name || userEmail.split('@')[0],
             photoURL: userData.photoURL || '',
             pending: pending,
-            completed: completed,
-            overdue: overdue,
-            total: pending + completed
+            completedThisWeek: completedThisWeek,
+            pendingByType: pendingByType,
+            overdue: overdue
           });
         }
 
@@ -1130,7 +1136,13 @@
           return;
         }
 
-        userListEl.innerHTML = usersData.map(user => `
+        userListEl.innerHTML = usersData.map(user => {
+          // 未完了タスクの種別表示を生成
+          const pendingTypeText = user.pending > 0
+            ? Object.entries(user.pendingByType).map(([type, count]) => `${type}: ${count}`).join(', ')
+            : '';
+
+          return `
           <div class="admin-user-item" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: ${user.overdue > 0 ? '#fef2f2' : '#f9fafb'}; border-radius: 8px; margin-bottom: 8px; ${user.overdue > 0 ? 'border-left: 3px solid #ef4444;' : ''}">
             <div style="display: flex; align-items: center; gap: 12px;">
               ${user.photoURL
@@ -1141,20 +1153,18 @@
               }
               <div style="font-weight: 500;">${escapeHtml(user.name)}</div>
             </div>
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <div style="text-align: right;">
-                <div style="font-size: 12px; color: #6b7280;">未完了: <span style="color: ${user.pending > 0 ? '#ef4444' : '#22c55e'}; font-weight: 600;">${user.pending}</span></div>
-                ${user.overdue > 0 ? `<div style="font-size: 11px; color: #ef4444;">⚠️ ${user.overdue}件が要対応</div>` : `<div style="font-size: 12px; color: #6b7280;">完了: <span style="color: #22c55e;">${user.completed}</span></div>`}
+            <div style="text-align: right;">
+              <div style="font-size: 12px; color: #6b7280;">
+                未完了: <span style="color: ${user.pending > 0 ? '#ef4444' : '#22c55e'}; font-weight: 600;">${user.pending}</span>
+                ${pendingTypeText ? `<span style="font-size: 10px; color: #9ca3af; margin-left: 4px;">(${pendingTypeText})</span>` : ''}
               </div>
-              ${user.pending > 0 ? `
-                <button onclick="sendReminder('${escapeHtml(user.email)}', '${escapeHtml(user.name)}')"
-                        style="padding: 6px 12px; background: #6366f1; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
-                  <i class="bi bi-bell"></i> 通知
-                </button>
-              ` : ''}
+              ${user.overdue > 0
+                ? `<div style="font-size: 11px; color: #ef4444;">⚠️ ${user.overdue}件が要対応</div>`
+                : `<div style="font-size: 12px; color: #6b7280;">今週完了: <span style="color: #22c55e;">${user.completedThisWeek}</span></div>`
+              }
             </div>
           </div>
-        `).join('');
+        `}).join('');
 
       } catch (error) {
         console.error('管理者タスクデータ読み込みエラー:', error);
@@ -1180,47 +1190,6 @@
       } catch (error) {
         console.error('リマインダー送信エラー:', error);
         alert('通知の送信に失敗しました');
-      }
-    }
-
-    // 一括リマインダーを送信
-    async function sendBulkReminder() {
-      if (!confirm('未完了タスクがある全ユーザーに通知を送信しますか？')) return;
-
-      const userListEl = document.getElementById('adminUserList');
-      const userItems = userListEl ? userListEl.querySelectorAll('.admin-user-item') : [];
-
-      try {
-        const usersSnapshot = await db.collection('users').get();
-        const now = firebase.firestore.Timestamp.now();
-        let sentCount = 0;
-
-        for (const userDoc of usersSnapshot.docs) {
-          const userEmail = userDoc.id;
-
-          // 未完了タスクがあるか確認
-          const pendingTasksSnapshot = await db.collection('userTasks').doc(userEmail)
-            .collection('tasks')
-            .where('completed', '==', false)
-            .limit(1)
-            .get();
-
-          if (!pendingTasksSnapshot.empty) {
-            await db.collection('users').doc(userEmail).collection('userAnnouncements').add({
-              title: 'タスク未完了のお知らせ',
-              content: '未完了のタスクがあります。確認をお願いします。',
-              createdAt: now,
-              read: false,
-              type: 'reminder'
-            });
-            sentCount++;
-          }
-        }
-
-        alert(`${sentCount}人のユーザーに通知を送信しました`);
-      } catch (error) {
-        console.error('一括リマインダー送信エラー:', error);
-        alert('一括通知の送信に失敗しました');
       }
     }
 
