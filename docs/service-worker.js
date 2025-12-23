@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v154-history-header'; // 完了履歴ヘッダー白化
-const SW_VERSION = 'v154-history-header'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v155-task-archive'; // タスク月別アーカイブ機能
+const SW_VERSION = 'v155-task-archive'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',

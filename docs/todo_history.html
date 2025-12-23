@@ -59,6 +59,86 @@
     .back-button:active {
       background: #f2f2f2;
     }
+    /* 月選択メニューボタン */
+    .month-menu-button {
+      position: absolute;
+      right: 8px;
+      background: transparent;
+      border: none;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #333;
+      font-size: 20px;
+      border-radius: 50%;
+    }
+    .month-menu-button:active {
+      background: #f2f2f2;
+    }
+    /* 月選択ドロップダウン */
+    .month-dropdown {
+      position: fixed;
+      top: 56px;
+      right: 8px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      min-width: 180px;
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 8px 0;
+      display: none;
+      z-index: 1001;
+    }
+    .month-dropdown.active {
+      display: block;
+    }
+    .month-dropdown-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: #333;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .month-dropdown-item:hover {
+      background: #f5f5f5;
+    }
+    .month-dropdown-item.active {
+      background: #e8f4fd;
+      color: #40B4E5;
+      font-weight: 600;
+    }
+    .month-dropdown-item i {
+      margin-right: 10px;
+      font-size: 16px;
+    }
+    .dropdown-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: transparent;
+      z-index: 1000;
+      display: none;
+    }
+    .dropdown-overlay.active {
+      display: block;
+    }
+    /* 現在選択中の月表示 */
+    .current-month-label {
+      font-size: 13px;
+      color: #666;
+      text-align: center;
+      padding: 8px 16px;
+      background: #f9fafb;
+      margin-bottom: 8px;
+    }
     .tasks-container {
       padding: 16px;
       max-width: 600px;
@@ -217,9 +297,22 @@
       <i class="bi bi-chevron-left"></i>
     </button>
     <h1>完了した履歴</h1>
+    <button class="month-menu-button" onclick="toggleMonthDropdown()" title="月を選択">
+      <i class="bi bi-calendar3"></i>
+    </button>
+  </div>
+
+  <!-- ドロップダウンオーバーレイ -->
+  <div class="dropdown-overlay" id="dropdownOverlay" onclick="closeMonthDropdown()"></div>
+
+  <!-- 月選択ドロップダウン -->
+  <div class="month-dropdown" id="monthDropdown">
+    <!-- JavaScriptで動的に生成 -->
   </div>
 
   <div class="tasks-container">
+    <!-- 選択中の月ラベル -->
+    <div class="current-month-label" id="currentMonthLabel"></div>
     <div id="loading" class="loading">
       <i class="bi bi-arrow-repeat"></i> 読み込み中...
     </div>
@@ -243,7 +336,7 @@
     </div>
 
     <div class="info-text">
-      完了したタスクは30日後に自動的に削除されます
+      完了したタスクは1年間保存されます
     </div>
   </div>
 
@@ -274,6 +367,8 @@
     const db = firebase.firestore();
 
     let completedTaskIds = [];
+    let allCompletedTasks = [];
+    let selectedMonth = null; // null = 今月、'YYYY-MM' = 特定月
 
     // 完了タスク一覧を読み込み
     async function loadCompletedTasks() {
@@ -303,23 +398,126 @@
           return dateB - dateA;
         });
 
-        completedTaskIds = completedTasks.map(t => t.id);
+        allCompletedTasks = completedTasks;
 
-        document.getElementById('loading').style.display = 'none';
+        // 月リストを生成
+        generateMonthList();
 
-        if (completedTasks.length === 0) {
-          document.getElementById('completed-tasks').style.display = 'none';
-          document.getElementById('empty-state').style.display = 'block';
-          return;
-        }
-
-        document.getElementById('completed-tasks').style.display = 'block';
-        document.getElementById('completed-tasks-list').innerHTML = completedTasks.map(task => renderTask(task)).join('');
+        // 表示を更新
+        displayTasksForMonth(selectedMonth);
 
       } catch (error) {
         console.error('タスク読み込みエラー:', error);
         document.getElementById('loading').innerHTML = '<i class="bi bi-exclamation-circle"></i> 読み込みエラー';
       }
+    }
+
+    // 月リストを生成
+    function generateMonthList() {
+      const months = new Map();
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+      // 今月は必ず含める
+      months.set(currentMonthKey, formatMonthLabel(currentMonthKey));
+
+      // タスクから月を抽出
+      allCompletedTasks.forEach(task => {
+        if (task.completedAt) {
+          const date = task.completedAt.toDate ? task.completedAt.toDate() : new Date(task.completedAt);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          if (!months.has(monthKey)) {
+            months.set(monthKey, formatMonthLabel(monthKey));
+          }
+        }
+      });
+
+      // 月キーでソート（新しい順）
+      const sortedMonths = Array.from(months.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+
+      // ドロップダウンに月リストを表示
+      const dropdown = document.getElementById('monthDropdown');
+      dropdown.innerHTML = sortedMonths.map(([key, label]) => {
+        const isActive = (selectedMonth === null && key === currentMonthKey) || selectedMonth === key;
+        const isCurrent = key === currentMonthKey;
+        return `
+          <div class="month-dropdown-item ${isActive ? 'active' : ''}" onclick="selectMonth('${key}')">
+            <i class="bi ${isCurrent ? 'bi-calendar-check' : 'bi-calendar3'}"></i>
+            ${label}${isCurrent ? ' (今月)' : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 月ラベルをフォーマット
+    function formatMonthLabel(monthKey) {
+      const [year, month] = monthKey.split('-');
+      return `${year}年${parseInt(month)}月`;
+    }
+
+    // 特定月のタスクを表示
+    function displayTasksForMonth(monthKey) {
+      document.getElementById('loading').style.display = 'none';
+
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const targetMonth = monthKey || currentMonthKey;
+
+      // 月ラベルを更新
+      const monthLabel = document.getElementById('currentMonthLabel');
+      if (targetMonth === currentMonthKey) {
+        monthLabel.textContent = `${formatMonthLabel(targetMonth)}（今月）の完了タスク`;
+      } else {
+        monthLabel.textContent = `${formatMonthLabel(targetMonth)} の完了タスク`;
+      }
+
+      // 該当月のタスクをフィルタ
+      const filteredTasks = allCompletedTasks.filter(task => {
+        if (!task.completedAt) return false;
+        const date = task.completedAt.toDate ? task.completedAt.toDate() : new Date(task.completedAt);
+        const taskMonthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        return taskMonthKey === targetMonth;
+      });
+
+      completedTaskIds = filteredTasks.map(t => t.id);
+
+      if (filteredTasks.length === 0) {
+        document.getElementById('completed-tasks').style.display = 'none';
+        document.getElementById('empty-state').style.display = 'block';
+        return;
+      }
+
+      document.getElementById('empty-state').style.display = 'none';
+      document.getElementById('completed-tasks').style.display = 'block';
+      document.getElementById('completed-tasks-list').innerHTML = filteredTasks.map(task => renderTask(task)).join('');
+    }
+
+    // 月を選択
+    function selectMonth(monthKey) {
+      selectedMonth = monthKey;
+      closeMonthDropdown();
+      displayTasksForMonth(monthKey);
+      generateMonthList(); // アクティブ状態を更新
+    }
+
+    // ドロップダウンを開閉
+    function toggleMonthDropdown() {
+      const dropdown = document.getElementById('monthDropdown');
+      const overlay = document.getElementById('dropdownOverlay');
+      const isActive = dropdown.classList.contains('active');
+
+      if (isActive) {
+        closeMonthDropdown();
+      } else {
+        dropdown.classList.add('active');
+        overlay.classList.add('active');
+      }
+    }
+
+    // ドロップダウンを閉じる
+    function closeMonthDropdown() {
+      document.getElementById('monthDropdown').classList.remove('active');
+      document.getElementById('dropdownOverlay').classList.remove('active');
     }
 
     // タスクをレンダリング
