@@ -2575,7 +2575,7 @@ window.continueProductRegistration = function() {
       discounts.push({
         id: 'follow',
         label: 'フォロー割',
-        icon: '👥'
+        icon: ''
       });
     }
 
@@ -2584,7 +2584,7 @@ window.continueProductRegistration = function() {
       discounts.push({
         id: 'repeat',
         label: 'リピート割',
-        icon: '🔁'
+        icon: ''
       });
     }
 
@@ -2593,7 +2593,7 @@ window.continueProductRegistration = function() {
       discounts.push({
         id: 'matome',
         label: 'まとめ割',
-        icon: '📦'
+        icon: ''
       });
     }
 

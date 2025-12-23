@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v178-desc-icons'; // 商品の説明セクションアイコン削除
-const SW_VERSION = 'v178-desc-icons'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v179-icons-cleanup'; // AI生成・割引・画像ボタンアイコン整理
+const SW_VERSION = 'v179-icons-cleanup'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
