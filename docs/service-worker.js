@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v163-header-flex-fix'; // ヘッダーflexbox修正
-const SW_VERSION = 'v163-header-flex-fix'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v164-simple-icons'; // セクションアイコンシンプル化
+const SW_VERSION = 'v164-simple-icons'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
