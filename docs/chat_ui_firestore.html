@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-23 v372 - Agora音声通話機能実装 -->
+  <!-- Cache Bust: 2025-12-23 v373 - Agora通話エラー詳細表示 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
@@ -7886,8 +7886,20 @@
         await startAgoraCall();
       } catch (err) {
         console.error('通話開始エラー:', err);
-        document.getElementById('callStatus').textContent = '接続に失敗しました';
-        setTimeout(() => endCall(), 2000);
+        // エラーコード別のメッセージ
+        let errorMsg = '接続に失敗しました';
+        if (err.code === 'INVALID_OPERATION') {
+          errorMsg = 'トークンが必要です';
+        } else if (err.code === 'UID_CONFLICT') {
+          errorMsg = 'ユーザーIDの重複';
+        } else if (err.code === 'INVALID_PARAMS') {
+          errorMsg = 'パラメータエラー';
+        } else if (err.message) {
+          errorMsg = err.message.substring(0, 30);
+        }
+        document.getElementById('callStatus').textContent = errorMsg;
+        alert('通話エラー: ' + (err.message || err.code || '不明なエラー'));
+        setTimeout(() => endCall(), 3000);
       }
     };
 
