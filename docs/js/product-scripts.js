@@ -8412,7 +8412,6 @@ window.continueProductRegistration = function() {
   // クリップボードにコピー
   function copyToClipboard(fieldId, buttonId) {
     const field = document.getElementById(fieldId);
-    const button = document.getElementById(buttonId);
 
     if (!field || !field.value.trim()) {
       alert('コピーする内容がありません');
@@ -8421,24 +8420,37 @@ window.continueProductRegistration = function() {
 
     // クリップボードにコピー
     navigator.clipboard.writeText(field.value).then(function() {
-      // アイコンをチェックマークに変更
-      const icon = button.querySelector('i');
-      if (icon) {
-        icon.className = 'bi bi-check';
-        button.style.color = '#22c55e';
-      }
-
-      // 1秒後に元に戻す
-      setTimeout(function() {
-        if (icon) {
-          icon.className = 'bi bi-copy';
-          button.style.color = '';
-        }
-      }, 1000);
+      // トースト通知を表示
+      showCopyToast();
     }).catch(function(err) {
       console.error('クリップボードへのコピーに失敗しました:', err);
       alert('コピーに失敗しました。ブラウザの設定を確認してください。');
     });
+  }
+
+  // コピー完了トースト表示
+  function showCopyToast() {
+    // 既存のトーストがあれば削除
+    const existingToast = document.getElementById('copyToast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    // トースト要素を作成
+    const toast = document.createElement('div');
+    toast.id = 'copyToast';
+    toast.className = 'copy-toast';
+    toast.innerHTML = '<i class="bi bi-check-circle"></i> コピーしました';
+    document.body.appendChild(toast);
+
+    // 表示アニメーション
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    // 1.5秒後にフェードアウトして削除
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 1500);
   }
 
   // テキストエリアの高さを自動調整
