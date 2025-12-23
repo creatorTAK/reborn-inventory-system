@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v161-product-new-header'; // 商品登録新ヘッダー+ブルーセクション
-const SW_VERSION = 'v161-product-new-header'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v162-minimal-header'; // ミニマルヘッダー（タスクと統一）
+const SW_VERSION = 'v162-minimal-header'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
