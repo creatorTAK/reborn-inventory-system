@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v169-copy-icon-btn'; // コピーアイコンボタン
-const SW_VERSION = 'v169-copy-icon-btn'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v170-simple-copy'; // シンプルコピーアイコン
+const SW_VERSION = 'v170-simple-copy'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
