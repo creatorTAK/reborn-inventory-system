@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-23 v373 - Agora通話エラー詳細表示 -->
+  <!-- Cache Bust: 2025-12-23 v374 - Agoraチャンネル名サニタイズ -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
@@ -7846,6 +7846,13 @@
 
     // ========== Agora通話機能 ==========
     const AGORA_APP_ID = '985d836744f549b0a400ab28b49996ae';
+
+    // Agoraチャンネル名サニタイズ（64バイト以内、英数字と_のみ）
+    const sanitizeChannelName = (roomId) => {
+      const safe = (roomId || '').replace(/[^a-zA-Z0-9_]/g, '');
+      return 'room_' + safe.substring(0, 58);
+    };
+
     let agoraClient = null;
     let localAudioTrack = null;
     let callTimerInterval = null;
@@ -7932,8 +7939,9 @@
         setTimeout(() => endCall(), 2000);
       });
 
-      // チャンネルに参加（チャンネル名 = ルームID）
-      const channelName = 'room_' + currentRoomId;
+      // チャンネルに参加（チャンネル名 = ルームIDをサニタイズ）
+      const channelName = sanitizeChannelName(currentRoomId);
+      console.log('Agoraチャンネル名:', channelName, '(元ID:', currentRoomId, ')');
       const uid = await agoraClient.join(AGORA_APP_ID, channelName, null, null);
       console.log('Agoraチャンネル参加:', channelName, 'UID:', uid);
 
@@ -7957,7 +7965,7 @@
         await callRef.set({
           callerId: currentUserEmail,
           callerName: currentUserEmail.split('@')[0],
-          channelName: 'room_' + currentRoomId,
+          channelName: sanitizeChannelName(currentRoomId),
           status: 'calling',
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
