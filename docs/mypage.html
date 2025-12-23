@@ -1714,6 +1714,45 @@
       border-color: #40B4E5;
       background: rgba(255,255,255,0.8);
     }
+    /* リッチテキストブロック */
+    .block-richtext {
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      font-size: 16px;
+      line-height: 1.6;
+      outline: none;
+      background: transparent;
+      transition: border-color 0.15s, background 0.15s;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .block-richtext:hover {
+      border-color: #e5e7eb;
+      background: rgba(255,255,255,0.5);
+    }
+    .block-richtext:focus {
+      border-color: #40B4E5;
+      background: rgba(255,255,255,0.8);
+    }
+    .block-richtext:empty:before {
+      content: attr(data-placeholder);
+      color: #9ca3af;
+      pointer-events: none;
+    }
+    /* フォーマットボタン */
+    .block-ctrl-btn.format {
+      font-family: Georgia, serif;
+      min-width: 24px;
+    }
+    .block-ctrl-btn.format b,
+    .block-ctrl-btn.format i,
+    .block-ctrl-btn.format u,
+    .block-ctrl-btn.format s {
+      font-size: 13px;
+    }
     /* 見出しブロック */
     .block-heading {
       width: 100%;
@@ -4547,6 +4586,8 @@
 
       if (block.type === 'text') {
         const textColor = block.content?.color || '#000000';
+        // HTMLコンテンツ（リッチテキスト対応）
+        const htmlContent = block.content?.html || escapeHtml(block.content?.text || '');
         return `
           <div class="note-block" data-block-id="${block.id}" style="${posStyle}"
                onclick="selectBlock(event, '${block.id}')">
@@ -4554,16 +4595,21 @@
               <i class="bi bi-arrows-move"></i>
             </div>
             <div class="block-controls">
+              <button class="block-ctrl-btn format" onclick="event.stopPropagation(); formatText('bold')" title="太字"><b>B</b></button>
+              <button class="block-ctrl-btn format" onclick="event.stopPropagation(); formatText('italic')" title="斜体"><i>I</i></button>
+              <button class="block-ctrl-btn format" onclick="event.stopPropagation(); formatText('underline')" title="下線"><u>U</u></button>
+              <button class="block-ctrl-btn format" onclick="event.stopPropagation(); formatText('strikeThrough')" title="取消線"><s>S</s></button>
               <button class="block-color-dot" style="background: ${textColor};" onclick="event.stopPropagation(); showColorPopover(event, '${block.id}')" title="文字色"></button>
               <button class="block-ctrl-btn delete" onclick="event.stopPropagation(); deleteBlock('${block.id}')"><i class="bi bi-trash"></i></button>
             </div>
             <div class="block-content">
-              <textarea class="block-textarea"
-                        placeholder="テキストを入力..."
-                        style="color: ${textColor};"
-                        onfocus="selectBlock(event, '${block.id}')"
-                        oninput="updateBlockContent('${block.id}', this.value); autoResizeTextarea(this);"
-              >${escapeHtml(block.content?.text || '')}</textarea>
+              <div class="block-richtext"
+                   contenteditable="true"
+                   data-placeholder="テキストを入力..."
+                   style="color: ${textColor};"
+                   onfocus="selectBlock(event, '${block.id}')"
+                   oninput="updateBlockHtml('${block.id}', this.innerHTML)"
+              >${htmlContent}</div>
             </div>
           </div>
         `;
@@ -4801,11 +4847,11 @@
       initSortable();
       scheduleNoteSave();
 
-      // 新しいtextareaにフォーカス
+      // 新しいリッチテキストにフォーカス
       setTimeout(() => {
-        const textareas = document.querySelectorAll('.block-textarea');
-        if (textareas.length > 0) {
-          textareas[textareas.length - 1].focus();
+        const richtexts = document.querySelectorAll('.block-richtext');
+        if (richtexts.length > 0) {
+          richtexts[richtexts.length - 1].focus();
         }
       }, 100);
     };
@@ -5030,12 +5076,47 @@
       }
     };
 
-    // ブロック内容更新
+    // ブロック内容更新（プレーンテキスト）
     window.updateBlockContent = function(blockId, value) {
       const block = currentNoteData.blocks.find(b => b.id === blockId);
       if (block) {
         block.content.text = value;
         scheduleNoteSave();
+      }
+    };
+
+    // ブロックHTML更新（リッチテキスト）
+    window.updateBlockHtml = function(blockId, html) {
+      const block = currentNoteData.blocks.find(b => b.id === blockId);
+      if (block) {
+        block.content.html = html;
+        // プレーンテキストも保存（検索用）
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        block.content.text = temp.textContent || temp.innerText || '';
+        scheduleNoteSave();
+      }
+    };
+
+    // テキストフォーマット適用
+    window.formatText = function(command) {
+      // 選択範囲を保持しながらフォーマット適用
+      document.execCommand(command, false, null);
+
+      // 変更を保存
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const richtext = range.startContainer.closest ?
+                         range.startContainer.closest('.block-richtext') :
+                         range.startContainer.parentElement?.closest('.block-richtext');
+        if (richtext) {
+          const blockEl = richtext.closest('.note-block');
+          if (blockEl) {
+            const blockId = blockEl.dataset.blockId;
+            updateBlockHtml(blockId, richtext.innerHTML);
+          }
+        }
       }
     };
 
