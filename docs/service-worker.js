@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v153-remove-bius'; // BIUS削除（iOS標準使用）
-const SW_VERSION = 'v153-remove-bius'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v154-history-header'; // 完了履歴ヘッダー白化
+const SW_VERSION = 'v154-history-header'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
