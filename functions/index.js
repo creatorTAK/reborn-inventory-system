@@ -503,6 +503,12 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
       return;
     }
 
+    // 通話履歴メッセージはスキップ（通話終了時の記録）
+    if (messageData.type === 'call') {
+      console.log('⏭️ [onChatMessageCreated] 通話履歴メッセージ、スキップ');
+      return;
+    }
+
     const senderName = messageData.senderName || messageData.userName || '匿名';
     // メッセージタイプに応じた表示テキスト
     let messageText;
@@ -724,6 +730,134 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
 
   } catch (error) {
     console.error('❌ [onChatMessageCreated] エラー:', error);
+  }
+});
+
+/**
+ * 📞 通話着信時のプッシュ通知
+ * rooms/{roomId}/calls/{callId} のドキュメント作成時にトリガー
+ * 発信者以外のルームメンバーに着信通知を送信
+ */
+console.log('🔧 [onIncomingCall] 関数初期化完了');
+
+exports.onIncomingCall = onDocumentCreated('rooms/{roomId}/calls/{callId}', async (event) => {
+  const startTime = Date.now();
+  const roomId = event.params.roomId;
+  const callId = event.params.callId;
+
+  console.log('📞 [onIncomingCall] 通話検知:', roomId, callId);
+
+  try {
+    const callData = event.data.data();
+
+    if (!callData) {
+      console.error('❌ [onIncomingCall] 通話データが空');
+      return;
+    }
+
+    // status が 'calling' の場合のみ通知（着信時）
+    if (callData.status !== 'calling') {
+      console.log('⏭️ [onIncomingCall] ステータスが calling ではない:', callData.status);
+      return;
+    }
+
+    const callerName = callData.callerName || '不明';
+    const callerId = callData.callerId; // メールアドレス
+
+    console.log('📞 [onIncomingCall] 発信者:', callerName, callerId);
+
+    // ルーム情報を取得してメンバーを特定
+    const roomRef = db.collection('rooms').doc(roomId);
+    const roomSnap = await roomRef.get();
+
+    if (!roomSnap.exists) {
+      console.error('❌ [onIncomingCall] ルームが見つかりません:', roomId);
+      return;
+    }
+
+    const roomData = roomSnap.data();
+    const roomName = roomData.name || '通話';
+
+    // memberEmails から発信者以外を取得
+    let targetEmails = [];
+    if (roomData.memberEmails && Array.isArray(roomData.memberEmails)) {
+      targetEmails = roomData.memberEmails.filter(email => email !== callerId);
+    }
+
+    if (targetEmails.length === 0) {
+      console.log('⏭️ [onIncomingCall] 通知対象なし');
+      return;
+    }
+
+    console.log('📞 [onIncomingCall] 通知対象:', targetEmails);
+
+    // 各ユーザーのFCMトークンを取得して通知送信
+    const notificationPromises = targetEmails.map(async (userEmail) => {
+      try {
+        // activeDevices から取得
+        const activeDeviceDoc = await db.collection('activeDevices').doc(userEmail).get();
+
+        if (!activeDeviceDoc.exists) {
+          console.log(`⚠️ [onIncomingCall] activeDevices なし: ${userEmail}`);
+          return;
+        }
+
+        const deviceData = activeDeviceDoc.data();
+        const tokens = Array.isArray(deviceData?.fcmTokens) ? deviceData.fcmTokens.filter(Boolean) : [];
+
+        if (tokens.length === 0) {
+          console.log(`⚠️ [onIncomingCall] FCMトークンなし: ${userEmail}`);
+          return;
+        }
+
+        console.log(`📤 [onIncomingCall] 通知送信: ${userEmail} (${tokens.length}トークン)`);
+
+        // プッシュ通知送信
+        const message = {
+          tokens: tokens,
+          notification: {
+            title: '📞 着信',
+            body: `${callerName}から通話があります`
+          },
+          data: {
+            type: 'incoming_call',
+            roomId: roomId,
+            callId: callId,
+            callerName: callerName,
+            url: '/' // タップでアプリを開く
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'default',
+                badge: 1
+              }
+            }
+          },
+          android: {
+            notification: {
+              sound: 'default',
+              priority: 'high',
+              channelId: 'incoming_call'
+            }
+          }
+        };
+
+        const response = await messaging.sendEachForMulticast(message);
+        console.log(`✅ [onIncomingCall] 送信結果: 成功${response.successCount} 失敗${response.failureCount}`);
+
+      } catch (error) {
+        console.error(`❌ [onIncomingCall] 通知送信エラー (${userEmail}):`, error);
+      }
+    });
+
+    await Promise.allSettled(notificationPromises);
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [onIncomingCall] 完了: ${duration}ms`);
+
+  } catch (error) {
+    console.error('❌ [onIncomingCall] エラー:', error);
   }
 });
 
