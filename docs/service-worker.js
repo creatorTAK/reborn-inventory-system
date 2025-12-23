@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v181-dropdown-menu'; // 設定ドロップダウン形式に変更
-const SW_VERSION = 'v181-dropdown-menu'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v182-settings-links'; // 設定リンク追加
+const SW_VERSION = 'v182-settings-links'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
