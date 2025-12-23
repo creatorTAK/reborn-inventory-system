@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-23 v378 - 着信機能実装 -->
+  <!-- Cache Bust: 2025-12-23 v379 - Firebase v9構文修正 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
@@ -7980,22 +7980,24 @@
     }
 
     // 通話通知をFirestoreに送信
-    let currentCallDocRef = null;  // 現在の通話ドキュメント参照
+    let currentCallDocId = null;  // 現在の通話ドキュメントID
 
     async function sendCallNotification() {
       if (!db || !currentRoomId || !currentUserEmail) return;
 
       try {
-        currentCallDocRef = db.collection('chatRooms').doc(currentRoomId).collection('calls').doc();
-        await currentCallDocRef.set({
+        // Firebase v9 modular syntax
+        const callsRef = collection(db, 'chatRooms', currentRoomId, 'calls');
+        const docRef = await addDoc(callsRef, {
           callerId: currentUserEmail,
           callerName: currentUserEmail.split('@')[0],
           channelName: sanitizeChannelName(currentRoomId),
           roomId: currentRoomId,
           status: 'calling',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          createdAt: serverTimestamp()
         });
-        console.log('★通話通知送信:', currentCallDocRef.id);
+        currentCallDocId = docRef.id;
+        console.log('★通話通知送信:', currentCallDocId);
       } catch (err) {
         console.error('通話通知送信エラー:', err);
       }
@@ -8016,31 +8018,32 @@
 
       console.log('★着信リスナー開始:', currentRoomId);
 
-      // 現在のルームの通話を監視
-      incomingCallListener = db.collection('chatRooms').doc(currentRoomId)
-        .collection('calls')
-        .where('status', '==', 'calling')
-        .onSnapshot(snapshot => {
-          snapshot.docChanges().forEach(change => {
-            if (change.type === 'added') {
-              const callData = change.doc.data();
-              console.log('★通話検知:', callData);
+      // Firebase v9 modular syntax
+      const callsRef = collection(db, 'chatRooms', currentRoomId, 'calls');
+      const callsQuery = query(callsRef, where('status', '==', 'calling'));
 
-              // 自分が発信者でない場合は着信として処理
-              if (callData.callerId !== currentUserEmail) {
-                showIncomingCall(change.doc.id, callData);
-              }
-            } else if (change.type === 'modified') {
-              const callData = change.doc.data();
-              // 通話がキャンセルされた場合
-              if (callData.status === 'cancelled' || callData.status === 'ended') {
-                hideIncomingCall();
-              }
-            } else if (change.type === 'removed') {
+      // 現在のルームの通話を監視
+      incomingCallListener = onSnapshot(callsQuery, (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+          if (change.type === 'added') {
+            const callData = change.doc.data();
+            console.log('★通話検知:', callData);
+
+            // 自分が発信者でない場合は着信として処理
+            if (callData.callerId !== currentUserEmail) {
+              showIncomingCall(change.doc.id, callData);
+            }
+          } else if (change.type === 'modified') {
+            const callData = change.doc.data();
+            // 通話がキャンセルされた場合
+            if (callData.status === 'cancelled' || callData.status === 'ended') {
               hideIncomingCall();
             }
-          });
+          } else if (change.type === 'removed') {
+            hideIncomingCall();
+          }
         });
+      });
     }
 
     // 着信モーダルを表示
@@ -8088,10 +8091,9 @@
       try {
         await joinAgoraCall(currentIncomingCall.channelName);
 
-        // 通話ステータスを更新
-        await db.collection('chatRooms').doc(currentRoomId)
-          .collection('calls').doc(currentIncomingCall.id)
-          .update({ status: 'answered' });
+        // 通話ステータスを更新 (Firebase v9)
+        const callDocRef = doc(db, 'chatRooms', currentRoomId, 'calls', currentIncomingCall.id);
+        await updateDoc(callDocRef, { status: 'answered' });
 
       } catch (err) {
         console.error('通話参加エラー:', err);
@@ -8109,10 +8111,9 @@
       console.log('★着信拒否');
 
       try {
-        // 通話ステータスを更新
-        await db.collection('chatRooms').doc(currentRoomId)
-          .collection('calls').doc(currentIncomingCall.id)
-          .update({ status: 'declined' });
+        // 通話ステータスを更新 (Firebase v9)
+        const callDocRef = doc(db, 'chatRooms', currentRoomId, 'calls', currentIncomingCall.id);
+        await updateDoc(callDocRef, { status: 'declined' });
       } catch (err) {
         console.error('拒否更新エラー:', err);
       }
