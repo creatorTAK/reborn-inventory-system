@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-23 v377 - Agora接続デバッグ追加 -->
+  <!-- Cache Bust: 2025-12-23 v378 - 着信機能実装 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
@@ -3364,6 +3364,11 @@
       // 🎯 Firestoreに閲覧中状態を書き込み（サーバー側で通知除外に使用）
       setViewingStatus(currentRoomId);
 
+      // 🎯 着信リスナーを開始
+      if (typeof startIncomingCallListener === 'function') {
+        startIncomingCallListener();
+      }
+
       // ページ離脱時にSWへ通知 + Firestore更新
       window.addEventListener('pagehide', () => {
         notifySwLeftRoom();
@@ -3376,6 +3381,10 @@
         } else if (document.visibilityState === 'visible') {
           notifySwViewingRoom(currentRoomId);
           setViewingStatus(currentRoomId);
+          // 着信リスナー再開
+          if (typeof startIncomingCallListener === 'function') {
+            startIncomingCallListener();
+          }
         }
       });
 
@@ -7971,21 +7980,185 @@
     }
 
     // 通話通知をFirestoreに送信
+    let currentCallDocRef = null;  // 現在の通話ドキュメント参照
+
     async function sendCallNotification() {
       if (!db || !currentRoomId || !currentUserEmail) return;
 
       try {
-        const callRef = db.collection('chatRooms').doc(currentRoomId).collection('calls').doc();
-        await callRef.set({
+        currentCallDocRef = db.collection('chatRooms').doc(currentRoomId).collection('calls').doc();
+        await currentCallDocRef.set({
           callerId: currentUserEmail,
           callerName: currentUserEmail.split('@')[0],
           channelName: sanitizeChannelName(currentRoomId),
+          roomId: currentRoomId,
           status: 'calling',
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
+        console.log('★通話通知送信:', currentCallDocRef.id);
       } catch (err) {
         console.error('通話通知送信エラー:', err);
       }
+    }
+
+    // ========== 着信検知 ==========
+    let incomingCallListener = null;
+    let currentIncomingCall = null;  // 着信中の通話情報
+
+    // 着信リスナーを開始
+    function startIncomingCallListener() {
+      if (!db || !currentRoomId || !currentUserEmail) return;
+
+      // 既存のリスナーを解除
+      if (incomingCallListener) {
+        incomingCallListener();
+      }
+
+      console.log('★着信リスナー開始:', currentRoomId);
+
+      // 現在のルームの通話を監視
+      incomingCallListener = db.collection('chatRooms').doc(currentRoomId)
+        .collection('calls')
+        .where('status', '==', 'calling')
+        .onSnapshot(snapshot => {
+          snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+              const callData = change.doc.data();
+              console.log('★通話検知:', callData);
+
+              // 自分が発信者でない場合は着信として処理
+              if (callData.callerId !== currentUserEmail) {
+                showIncomingCall(change.doc.id, callData);
+              }
+            } else if (change.type === 'modified') {
+              const callData = change.doc.data();
+              // 通話がキャンセルされた場合
+              if (callData.status === 'cancelled' || callData.status === 'ended') {
+                hideIncomingCall();
+              }
+            } else if (change.type === 'removed') {
+              hideIncomingCall();
+            }
+          });
+        });
+    }
+
+    // 着信モーダルを表示
+    function showIncomingCall(callId, callData) {
+      currentIncomingCall = { id: callId, ...callData };
+
+      document.getElementById('incomingCallerName').textContent = callData.callerName || '不明';
+      document.getElementById('incomingCallStatus').textContent = '着信中...';
+      document.getElementById('incomingCallModal').style.display = 'flex';
+
+      console.log('★着信表示:', callData.callerName);
+    }
+
+    // 着信モーダルを非表示
+    function hideIncomingCall() {
+      currentIncomingCall = null;
+      document.getElementById('incomingCallModal').style.display = 'none';
+    }
+
+    // 着信に応答
+    window.acceptCall = async function() {
+      if (!currentIncomingCall) return;
+
+      console.log('★着信応答:', currentIncomingCall);
+
+      // 着信モーダルを閉じる
+      document.getElementById('incomingCallModal').style.display = 'none';
+
+      // 通話モーダルを表示
+      const modal = document.getElementById('callModal');
+      modal.style.display = 'flex';
+      document.getElementById('callUserName').textContent = currentIncomingCall.callerName;
+      document.getElementById('callStatus').textContent = '接続中...';
+
+      // マイク権限を確認
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        alert('マイクへのアクセスを許可してください');
+        modal.style.display = 'none';
+        return;
+      }
+
+      // Agora通話に参加
+      try {
+        await joinAgoraCall(currentIncomingCall.channelName);
+
+        // 通話ステータスを更新
+        await db.collection('chatRooms').doc(currentRoomId)
+          .collection('calls').doc(currentIncomingCall.id)
+          .update({ status: 'answered' });
+
+      } catch (err) {
+        console.error('通話参加エラー:', err);
+        alert('通話への参加に失敗しました');
+        modal.style.display = 'none';
+      }
+
+      currentIncomingCall = null;
+    };
+
+    // 着信を拒否
+    window.declineCall = async function() {
+      if (!currentIncomingCall) return;
+
+      console.log('★着信拒否');
+
+      try {
+        // 通話ステータスを更新
+        await db.collection('chatRooms').doc(currentRoomId)
+          .collection('calls').doc(currentIncomingCall.id)
+          .update({ status: 'declined' });
+      } catch (err) {
+        console.error('拒否更新エラー:', err);
+      }
+
+      hideIncomingCall();
+    };
+
+    // Agoraチャンネルに参加（応答側用）
+    async function joinAgoraCall(channelName) {
+      // Agoraクライアント作成
+      agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+
+      // イベントリスナー設定
+      agoraClient.on('user-joined', (user) => {
+        console.log('★ユーザーがチャンネルに参加:', user.uid);
+      });
+
+      agoraClient.on('user-published', async (user, mediaType) => {
+        console.log('★ユーザーが公開:', user.uid, mediaType);
+        await agoraClient.subscribe(user, mediaType);
+
+        if (mediaType === 'audio') {
+          user.audioTrack.play();
+          document.getElementById('callStatus').textContent = '通話中';
+          document.getElementById('callStatus').style.animation = 'none';
+          startCallTimer();
+        }
+      });
+
+      agoraClient.on('user-left', (user) => {
+        console.log('★ユーザー退出');
+        document.getElementById('callStatus').textContent = '相手が退出しました';
+        setTimeout(() => endCall(), 2000);
+      });
+
+      // チャンネルに参加
+      console.log('★応答側: チャンネル参加:', channelName);
+      const uid = await agoraClient.join(AGORA_APP_ID, channelName, null, null);
+      console.log('★応答側: 参加成功, UID:', uid);
+
+      // 音声トラック作成・公開
+      localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+      await agoraClient.publish([localAudioTrack]);
+      console.log('★応答側: 音声公開完了');
+
+      document.getElementById('callStatus').textContent = '通話中';
     }
 
     // 通話終了
@@ -8494,7 +8667,7 @@
   </button>
 </div>
 
-<!-- ========== 通話モーダル ========== -->
+<!-- ========== 通話モーダル（発信側） ========== -->
 <div class="call-modal" id="callModal" style="display: none;">
   <div class="call-modal-content">
     <!-- 相手情報 -->
@@ -8520,6 +8693,32 @@
       <button class="call-control-btn" id="callSpeakerBtn" onclick="toggleCallSpeaker()">
         <i class="bi bi-volume-up-fill" id="callSpeakerIcon"></i>
         <span>スピーカー</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 着信モーダル ========== -->
+<div class="call-modal" id="incomingCallModal" style="display: none;">
+  <div class="call-modal-content">
+    <!-- 発信者情報 -->
+    <div class="call-user-info">
+      <div class="call-user-avatar incoming-pulse">
+        <i class="bi bi-telephone-inbound-fill"></i>
+      </div>
+      <div class="call-user-name" id="incomingCallerName">発信者</div>
+      <div class="call-status" id="incomingCallStatus">着信中...</div>
+    </div>
+
+    <!-- 着信コントロール（応答/拒否） -->
+    <div class="call-controls incoming-controls">
+      <button class="call-control-btn call-decline-btn" onclick="declineCall()">
+        <i class="bi bi-telephone-x-fill"></i>
+        <span>拒否</span>
+      </button>
+      <button class="call-control-btn call-accept-btn" onclick="acceptCall()">
+        <i class="bi bi-telephone-fill"></i>
+        <span>応答</span>
       </button>
     </div>
   </div>
@@ -8655,6 +8854,38 @@
 }
 
 .call-end-btn:active i {
+  background: #c62828 !important;
+}
+
+/* 着信モーダル用CSS */
+.incoming-pulse {
+  animation: incoming-ring 1s ease-in-out infinite;
+}
+
+@keyframes incoming-ring {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.incoming-controls {
+  gap: 60px !important;
+}
+
+.call-decline-btn i {
+  background: #e53935 !important;
+  color: white !important;
+}
+
+.call-accept-btn i {
+  background: #4caf50 !important;
+  color: white !important;
+}
+
+.call-accept-btn:active i {
+  background: #388e3c !important;
+}
+
+.call-decline-btn:active i {
   background: #c62828 !important;
 }
 </style>
