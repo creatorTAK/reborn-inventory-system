@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v155-task-archive'; // タスク月別アーカイブ機能
-const SW_VERSION = 'v155-task-archive'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v156-remove-emoji'; // タスク管理の絵文字削除
+const SW_VERSION = 'v156-remove-emoji'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
