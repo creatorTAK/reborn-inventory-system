@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v176-toast-light'; // トースト薄グレー
-const SW_VERSION = 'v176-toast-light'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v177-search-icon'; // ミニセクションアイコン削除・検索バー改善
+const SW_VERSION = 'v177-search-icon'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
