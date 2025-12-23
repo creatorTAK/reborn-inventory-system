@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v186-hint-margin'; // ヒントマージン統一
-const SW_VERSION = 'v186-hint-margin'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v187-hint-top-margin'; // ヒント上部余白追加
+const SW_VERSION = 'v187-hint-top-margin'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
