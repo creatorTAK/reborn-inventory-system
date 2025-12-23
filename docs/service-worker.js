@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v151-richtext'; // リッチテキスト対応
-const SW_VERSION = 'v151-richtext'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v152-format-focus'; // フォーマットボタンフォーカス維持
+const SW_VERSION = 'v152-format-focus'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
