@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v188-agora-voice-call'; // Agora音声通話機能
-const SW_VERSION = 'v188-agora-voice-call'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v189-agora-call-fix'; // 通話機能修正
+const SW_VERSION = 'v189-agora-call-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
