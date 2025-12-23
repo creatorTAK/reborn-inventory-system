@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-22 v371 - Keep送信機能追加 -->
+  <!-- Cache Bust: 2025-12-23 v372 - Agora音声通話機能実装 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
@@ -19,6 +19,8 @@
   -->
 
   <base target="_top">
+  <!-- Agora Web SDK for Voice Call -->
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <!-- REBORN Brand Colors & Theme -->
@@ -7842,11 +7844,196 @@
       }, 1000);
     }
 
-    // ========== 通話機能（準備中） ==========
-    window.showCallPreparing = function() {
+    // ========== Agora通話機能 ==========
+    const AGORA_APP_ID = '985d836744f549b0a400ab28b49996ae';
+    let agoraClient = null;
+    let localAudioTrack = null;
+    let callTimerInterval = null;
+    let callStartTime = null;
+    let isMuted = false;
+    let isSpeakerOn = true;
+
+    // 通話開始
+    window.showCallPreparing = async function() {
       document.getElementById('callButton').blur();
-      alert('通話機能は準備中です');
+
+      // 個別チャットのみ通話可能
+      if (!currentRoomId) {
+        alert('チャットルームを選択してください');
+        return;
+      }
+
+      // マイク権限を確認
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        alert('マイクへのアクセスを許可してください');
+        return;
+      }
+
+      // 通話モーダルを表示
+      const modal = document.getElementById('callModal');
+      modal.style.display = 'flex';
+
+      // 相手の名前を設定
+      const roomName = document.getElementById('headerRoomName').textContent;
+      document.getElementById('callUserName').textContent = roomName;
+      document.getElementById('callStatus').textContent = '接続中...';
+      document.getElementById('callTimer').style.display = 'none';
+
+      // Agora通話を開始
+      try {
+        await startAgoraCall();
+      } catch (err) {
+        console.error('通話開始エラー:', err);
+        document.getElementById('callStatus').textContent = '接続に失敗しました';
+        setTimeout(() => endCall(), 2000);
+      }
     };
+
+    // Agora通話開始
+    async function startAgoraCall() {
+      // Agoraクライアント作成
+      agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+
+      // イベントリスナー設定
+      agoraClient.on('user-published', async (user, mediaType) => {
+        await agoraClient.subscribe(user, mediaType);
+        console.log('リモートユーザー参加:', user.uid);
+
+        if (mediaType === 'audio') {
+          user.audioTrack.play();
+          // 通話開始
+          document.getElementById('callStatus').textContent = '通話中';
+          document.getElementById('callStatus').style.animation = 'none';
+          startCallTimer();
+        }
+      });
+
+      agoraClient.on('user-unpublished', (user) => {
+        console.log('リモートユーザー退出:', user.uid);
+      });
+
+      agoraClient.on('user-left', (user) => {
+        console.log('リモートユーザーが退出しました');
+        document.getElementById('callStatus').textContent = '相手が退出しました';
+        setTimeout(() => endCall(), 2000);
+      });
+
+      // チャンネルに参加（チャンネル名 = ルームID）
+      const channelName = 'room_' + currentRoomId;
+      const uid = await agoraClient.join(AGORA_APP_ID, channelName, null, null);
+      console.log('Agoraチャンネル参加:', channelName, 'UID:', uid);
+
+      // 音声トラック作成・公開
+      localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+      await agoraClient.publish([localAudioTrack]);
+      console.log('音声トラック公開完了');
+
+      document.getElementById('callStatus').textContent = '呼び出し中...';
+
+      // 相手への通知をFirestoreに送信
+      sendCallNotification();
+    }
+
+    // 通話通知をFirestoreに送信
+    async function sendCallNotification() {
+      if (!db || !currentRoomId || !currentUserEmail) return;
+
+      try {
+        const callRef = db.collection('chatRooms').doc(currentRoomId).collection('calls').doc();
+        await callRef.set({
+          callerId: currentUserEmail,
+          callerName: currentUserEmail.split('@')[0],
+          channelName: 'room_' + currentRoomId,
+          status: 'calling',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (err) {
+        console.error('通話通知送信エラー:', err);
+      }
+    }
+
+    // 通話終了
+    window.endCall = async function() {
+      // タイマー停止
+      if (callTimerInterval) {
+        clearInterval(callTimerInterval);
+        callTimerInterval = null;
+      }
+
+      // 音声トラック停止
+      if (localAudioTrack) {
+        localAudioTrack.stop();
+        localAudioTrack.close();
+        localAudioTrack = null;
+      }
+
+      // Agoraチャンネル退出
+      if (agoraClient) {
+        await agoraClient.leave();
+        agoraClient = null;
+      }
+
+      // 状態リセット
+      isMuted = false;
+      isSpeakerOn = true;
+      callStartTime = null;
+      document.getElementById('callMuteBtn').classList.remove('active');
+      document.getElementById('callSpeakerBtn').classList.remove('active');
+      document.getElementById('callMuteIcon').className = 'bi bi-mic-fill';
+
+      // モーダルを閉じる
+      document.getElementById('callModal').style.display = 'none';
+    };
+
+    // ミュート切り替え
+    window.toggleCallMute = function() {
+      if (!localAudioTrack) return;
+
+      isMuted = !isMuted;
+      localAudioTrack.setEnabled(!isMuted);
+
+      const btn = document.getElementById('callMuteBtn');
+      const icon = document.getElementById('callMuteIcon');
+
+      if (isMuted) {
+        btn.classList.add('active');
+        icon.className = 'bi bi-mic-mute-fill';
+      } else {
+        btn.classList.remove('active');
+        icon.className = 'bi bi-mic-fill';
+      }
+    };
+
+    // スピーカー切り替え（プレースホルダー）
+    window.toggleCallSpeaker = function() {
+      isSpeakerOn = !isSpeakerOn;
+      const btn = document.getElementById('callSpeakerBtn');
+      const icon = document.getElementById('callSpeakerIcon');
+
+      if (!isSpeakerOn) {
+        btn.classList.add('active');
+        icon.className = 'bi bi-volume-mute-fill';
+      } else {
+        btn.classList.remove('active');
+        icon.className = 'bi bi-volume-up-fill';
+      }
+      // 実際の音量制御は端末依存のため限定的
+    };
+
+    // 通話タイマー開始
+    function startCallTimer() {
+      callStartTime = Date.now();
+      document.getElementById('callTimer').style.display = 'block';
+
+      callTimerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const seconds = (elapsed % 60).toString().padStart(2, '0');
+        document.getElementById('callTimer').textContent = `${minutes}:${seconds}`;
+      }, 1000);
+    }
 
     // ========== チャット設定ドロップダウン ==========
     function toggleChatSettings(event) {
@@ -8272,6 +8459,171 @@
     </svg>
   </button>
 </div>
+
+<!-- ========== 通話モーダル ========== -->
+<div class="call-modal" id="callModal" style="display: none;">
+  <div class="call-modal-content">
+    <!-- 相手情報 -->
+    <div class="call-user-info">
+      <div class="call-user-avatar" id="callUserAvatar">
+        <i class="bi bi-person-fill"></i>
+      </div>
+      <div class="call-user-name" id="callUserName">相手の名前</div>
+      <div class="call-status" id="callStatus">発信中...</div>
+      <div class="call-timer" id="callTimer" style="display: none;">00:00</div>
+    </div>
+
+    <!-- 通話コントロール -->
+    <div class="call-controls">
+      <button class="call-control-btn" id="callMuteBtn" onclick="toggleCallMute()">
+        <i class="bi bi-mic-fill" id="callMuteIcon"></i>
+        <span>ミュート</span>
+      </button>
+      <button class="call-control-btn call-end-btn" id="callEndBtn" onclick="endCall()">
+        <i class="bi bi-telephone-x-fill"></i>
+        <span>終了</span>
+      </button>
+      <button class="call-control-btn" id="callSpeakerBtn" onclick="toggleCallSpeaker()">
+        <i class="bi bi-volume-up-fill" id="callSpeakerIcon"></i>
+        <span>スピーカー</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 通話モーダル用CSS -->
+<style>
+.call-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  padding: 60px 20px 40px;
+  box-sizing: border-box;
+}
+
+.call-user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 40px;
+}
+
+.call-user-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.call-user-avatar i {
+  font-size: 60px;
+  color: rgba(255,255,255,0.7);
+}
+
+.call-user-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.call-user-name {
+  font-size: 24px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.call-status {
+  font-size: 16px;
+  color: rgba(255,255,255,0.7);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.call-timer {
+  font-size: 20px;
+  color: white;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.call-controls {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 40px;
+}
+
+.call-control-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 12px;
+}
+
+.call-control-btn i {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: white;
+  transition: all 0.2s;
+}
+
+.call-control-btn span {
+  font-size: 12px;
+  color: rgba(255,255,255,0.8);
+}
+
+.call-control-btn:active i {
+  transform: scale(0.95);
+}
+
+.call-control-btn.active i {
+  background: white;
+  color: #1a1a2e;
+}
+
+.call-end-btn i {
+  background: #e53935 !important;
+  color: white !important;
+}
+
+.call-end-btn:active i {
+  background: #c62828 !important;
+}
+</style>
 
 </body>
 </html>
