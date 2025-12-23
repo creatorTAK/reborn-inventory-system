@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v167-desc-auto-height'; // 商品説明テキストエリア高さ自動調整
-const SW_VERSION = 'v167-desc-auto-height'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v168-blue-border-copy-btn'; // 枠をブルーに・コピーボタン修正
+const SW_VERSION = 'v168-blue-border-copy-btn'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
