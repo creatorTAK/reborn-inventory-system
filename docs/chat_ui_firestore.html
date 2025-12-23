@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-23 v376 - Agoraテストモード（トークン不要） -->
+  <!-- Cache Bust: 2025-12-23 v377 - Agora接続デバッグ追加 -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
@@ -7917,9 +7917,16 @@
       agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
       // イベントリスナー設定
+      // ユーザー参加イベント
+      agoraClient.on('user-joined', (user) => {
+        console.log('★ユーザーがチャンネルに参加:', user.uid);
+        document.getElementById('callStatus').textContent = '相手が参加しました...';
+      });
+
       agoraClient.on('user-published', async (user, mediaType) => {
+        console.log('★ユーザーが公開:', user.uid, mediaType);
         await agoraClient.subscribe(user, mediaType);
-        console.log('リモートユーザー参加:', user.uid);
+        console.log('★購読完了:', user.uid);
 
         if (mediaType === 'audio') {
           user.audioTrack.play();
@@ -7940,18 +7947,24 @@
         setTimeout(() => endCall(), 2000);
       });
 
+      // 接続状態変化
+      agoraClient.on('connection-state-change', (curState, prevState) => {
+        console.log('★接続状態:', prevState, '->', curState);
+      });
+
       // チャンネルに参加（チャンネル名 = ルームIDをサニタイズ）
       const channelName = sanitizeChannelName(currentRoomId);
-      console.log('Agoraチャンネル名:', channelName);
+      console.log('★Agoraチャンネル名:', channelName, '元RoomID:', currentRoomId);
       const uid = await agoraClient.join(AGORA_APP_ID, channelName, null, null);
-      console.log('Agoraチャンネル参加:', channelName, 'UID:', uid);
+      console.log('★Agoraチャンネル参加成功! チャンネル:', channelName, 'UID:', uid);
 
       // 音声トラック作成・公開
       localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
       await agoraClient.publish([localAudioTrack]);
-      console.log('音声トラック公開完了');
+      console.log('★音声トラック公開完了');
 
-      document.getElementById('callStatus').textContent = '呼び出し中...';
+      // チャンネル名を表示（デバッグ用）
+      document.getElementById('callStatus').textContent = '呼び出し中... [' + channelName + ']';
 
       // 相手への通知をFirestoreに送信
       sendCallNotification();
