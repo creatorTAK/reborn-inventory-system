@@ -7809,6 +7809,11 @@ window.continueProductRegistration = function() {
       // textareaに設定
       descTextarea.value = preservedContent.trim();
 
+      // テキストエリアの高さを再調整
+      if (typeof autoResizeTextarea === 'function') {
+        autoResizeTextarea(descTextarea);
+      }
+
       console.log('[Reset] 商品説明ブロック完了（割引情報・ハッシュタグ保持）');
     } catch (error) {
       console.error('[Reset] 商品説明ブロックエラー:', error);
@@ -9146,6 +9151,9 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     setupSalesWordEventListeners();
 
     wireDescWatcher();
+
+    // 初期ロード時にテキストエリアの高さを調整
+    updateDesc();
 
     // 商品状態(詳細)イベントリスナー設定を追加
     setupDetailEventListener();
