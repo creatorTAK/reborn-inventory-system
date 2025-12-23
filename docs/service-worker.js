@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v171-no-purple'; // 紫色完全削除
-const SW_VERSION = 'v171-no-purple'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v172-copy-icon-only'; // コピーアイコンのみ
+const SW_VERSION = 'v172-copy-icon-only'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
