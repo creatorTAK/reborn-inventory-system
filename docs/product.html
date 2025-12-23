@@ -26,7 +26,7 @@
 <link rel="stylesheet" href="/css/reborn-theme.css?v=296">
 
 <!-- 外部CSSファイルに移動（トークン削減、ブラウザキャッシュ活用）-->
-<link rel="stylesheet" href="/css/product-styles.css?v=180-guide-mode">
+<link rel="stylesheet" href="/css/product-styles.css?v=181-dropdown-menu">
 <!-- Sortable.js - タッチ対応のドラッグ&ドロップライブラリ -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 </head>
@@ -84,44 +84,40 @@
     <button class="minimal-header-icon" onclick="window.parent.postMessage({type:'openChatRooms'}, '*')" title="お知らせ">
       <i class="bi bi-bell"></i>
     </button>
-    <button class="minimal-header-icon" onclick="toggleSettingsModal()" title="設定">
-      <i class="bi bi-gear"></i>
-    </button>
-  </div>
-</div>
-
-<!-- 設定モーダル -->
-<div id="settingsModal" class="settings-modal" style="display: none;">
-  <div class="settings-modal-backdrop" onclick="toggleSettingsModal()"></div>
-  <div class="settings-modal-content">
-    <div class="settings-modal-header">
-      <span>設定</span>
-      <button onclick="toggleSettingsModal()" class="settings-modal-close"><i class="bi bi-x-lg"></i></button>
-    </div>
-    <div class="settings-modal-body">
-      <div class="settings-item">
-        <div class="settings-item-info">
-          <div class="settings-item-label">ガイドモード</div>
-          <div class="settings-item-desc">各セクションにヒントを表示します（初心者向け）</div>
-        </div>
-        <label class="toggle-switch">
-          <input type="checkbox" id="guideModeToggle" onchange="toggleGuideMode(this.checked)">
-          <span class="toggle-slider"></span>
-        </label>
+    <div style="position: relative;">
+      <button class="minimal-header-icon" onclick="toggleSettingsDropdown(event)" title="設定">
+        <i class="bi bi-gear"></i>
+      </button>
+      <div class="settings-dropdown" id="settingsDropdown">
+        <button class="settings-dropdown-item" onclick="toggleGuideModeFromMenu()">
+          <i class="bi bi-lightbulb" id="guideModeIcon"></i>
+          <span id="guideModeLabel">ガイドモード: オフ</span>
+        </button>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-// ===== 設定モーダル & ガイドモード =====
-function toggleSettingsModal() {
-  const modal = document.getElementById('settingsModal');
-  if (modal.style.display === 'none') {
-    modal.style.display = 'flex';
-  } else {
-    modal.style.display = 'none';
+// ===== 設定ドロップダウン & ガイドモード =====
+function toggleSettingsDropdown(event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById('settingsDropdown');
+  dropdown.classList.toggle('active');
+}
+
+// ドロップダウン外クリックで閉じる
+document.addEventListener('click', function(event) {
+  const dropdown = document.getElementById('settingsDropdown');
+  if (dropdown && !dropdown.contains(event.target)) {
+    dropdown.classList.remove('active');
   }
+});
+
+function toggleGuideModeFromMenu() {
+  const isCurrentlyOn = document.body.classList.contains('guide-mode-on');
+  toggleGuideMode(!isCurrentlyOn);
+  updateGuideModeUI(!isCurrentlyOn);
 }
 
 function toggleGuideMode(isOn) {
@@ -134,15 +130,24 @@ function toggleGuideMode(isOn) {
   }
 }
 
+function updateGuideModeUI(isOn) {
+  const label = document.getElementById('guideModeLabel');
+  const icon = document.getElementById('guideModeIcon');
+  if (isOn) {
+    label.textContent = 'ガイドモード: オン';
+    icon.style.color = '#40B4E5';
+  } else {
+    label.textContent = 'ガイドモード: オフ';
+    icon.style.color = '';
+  }
+}
+
 // ガイドモードの初期化
 document.addEventListener('DOMContentLoaded', function() {
   const guideMode = localStorage.getItem('guideMode');
-  const toggle = document.getElementById('guideModeToggle');
-
-  // デフォルトはオフ（慣れたユーザー向け）
   if (guideMode === 'on') {
-    toggle.checked = true;
     document.body.classList.add('guide-mode-on');
+    updateGuideModeUI(true);
   }
 });
 </script>
