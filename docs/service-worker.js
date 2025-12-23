@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v184-guide-hints'; // ガイドヒント追加
-const SW_VERSION = 'v184-guide-hints'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v185-hint-label'; // ヒント表記に変更
+const SW_VERSION = 'v185-hint-label'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
