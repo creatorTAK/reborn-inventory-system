@@ -8024,11 +8024,28 @@
     function playRingtone() {
       stopRingtone(); // 既存の着信音を停止
 
+      // バイブレーションパターン（音が鳴らない場合のフォールバック）
+      const vibratePattern = () => {
+        if ('vibrate' in navigator) {
+          navigator.vibrate([200, 100, 200, 100, 200]); // ブルブル
+        }
+      };
+
+      // バイブレーションを繰り返し
+      vibratePattern();
+      ringtoneInterval = setInterval(vibratePattern, 2000);
+
+      // Web Audio APIで着信音（ブラウザポリシーで鳴らない場合あり）
       try {
         ringtoneContext = new (window.AudioContext || window.webkitAudioContext)();
 
-        // 着信音パターン: 高音と低音を交互に鳴らす
+        // Suspended状態の場合はresume試行
+        if (ringtoneContext.state === 'suspended') {
+          ringtoneContext.resume();
+        }
+
         const playTone = (frequency, duration) => {
+          if (ringtoneContext.state !== 'running') return;
           const oscillator = ringtoneContext.createOscillator();
           const gainNode = ringtoneContext.createGain();
 
@@ -8045,16 +8062,14 @@
           oscillator.stop(ringtoneContext.currentTime + duration);
         };
 
-        // 着信音パターンを繰り返し再生（880Hz - 440Hz - 880Hz）
+        // 着信音パターン
         const ringPattern = () => {
           playTone(880, 0.15);
           setTimeout(() => playTone(440, 0.15), 150);
           setTimeout(() => playTone(880, 0.15), 300);
         };
 
-        ringPattern(); // 即座に再生
-        ringtoneInterval = setInterval(ringPattern, 1500); // 1.5秒ごとに繰り返し
-
+        setTimeout(ringPattern, 100); // 少し遅延して再生
       } catch (err) {
         console.log('着信音エラー:', err);
       }
@@ -8069,6 +8084,10 @@
       if (ringtoneContext) {
         ringtoneContext.close().catch(() => {});
         ringtoneContext = null;
+      }
+      // バイブレーション停止
+      if ('vibrate' in navigator) {
+        navigator.vibrate(0);
       }
     }
 
@@ -8253,6 +8272,12 @@
 
     // 通話終了
     window.endCall = async function() {
+      // 通話時間を計算
+      let callDuration = 0;
+      if (callStartTime) {
+        callDuration = Math.floor((Date.now() - callStartTime) / 1000);
+      }
+
       // タイマー停止
       if (callTimerInterval) {
         clearInterval(callTimerInterval);
@@ -8270,6 +8295,39 @@
       if (agoraClient) {
         await agoraClient.leave();
         agoraClient = null;
+      }
+
+      // 通話履歴をチャットに送信（通話が成立した場合のみ）
+      if (callDuration > 0 && db && currentRoomId && currentUserName) {
+        try {
+          const minutes = Math.floor(callDuration / 60);
+          const seconds = callDuration % 60;
+          const durationText = minutes > 0
+            ? `${minutes}分${seconds}秒`
+            : `${seconds}秒`;
+
+          await addDoc(collection(db, `rooms/${currentRoomId}/messages`), {
+            text: `📞 通話終了 (${durationText})`,
+            userName: currentUserName,
+            userEmail: currentUserEmail,
+            timestamp: serverTimestamp(),
+            deleted: [],
+            type: 'call',
+            callDuration: callDuration
+          });
+
+          // lastMessage更新
+          const roomRef = doc(db, 'rooms', currentRoomId);
+          await updateDoc(roomRef, {
+            lastMessage: `📞 通話 (${durationText})`,
+            lastMessageAt: serverTimestamp(),
+            lastMessageBy: currentUserName
+          });
+
+          console.log('★通話履歴送信:', durationText);
+        } catch (err) {
+          console.error('通話履歴送信エラー:', err);
+        }
       }
 
       // 状態リセット
