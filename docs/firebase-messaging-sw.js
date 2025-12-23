@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v306d';  // v351: アプリ閲覧中のバッジ二重加算防止
+const CACHE_VERSION = 'v307';  // v161: 商品登録新ヘッダー+ブルーセクション
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
