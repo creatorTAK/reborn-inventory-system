@@ -8421,19 +8421,19 @@ window.continueProductRegistration = function() {
 
     // クリップボードにコピー
     navigator.clipboard.writeText(field.value).then(function() {
-      // ボタンのテキストを「✓ コピー済み」に変更
-      const originalText = button.innerHTML;
-      button.innerHTML = '✓ コピー済み';
-      button.style.background = '#c8e6c9';
-      button.style.borderColor = '#81c784';
-      button.style.color = '#2e7d32';
+      // アイコンをチェックマークに変更
+      const icon = button.querySelector('i');
+      if (icon) {
+        icon.className = 'bi bi-check';
+        button.style.color = '#22c55e';
+      }
 
       // 1秒後に元に戻す
       setTimeout(function() {
-        button.innerHTML = originalText;
-        button.style.background = '#e3f2fd';
-        button.style.borderColor = '#90caf9';
-        button.style.color = '#1976d2';
+        if (icon) {
+          icon.className = 'bi bi-copy';
+          button.style.color = '';
+        }
       }, 1000);
     }).catch(function(err) {
       console.error('クリップボードへのコピーに失敗しました:', err);
