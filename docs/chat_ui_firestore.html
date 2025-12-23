@@ -7896,6 +7896,15 @@
       const roomName = document.getElementById('headerRoomName').textContent;
       document.getElementById('callUserName').textContent = roomName;
       document.getElementById('callStatus').textContent = '接続中...';
+
+      // 相手のアバター画像を設定
+      const avatarContainer = document.getElementById('callUserAvatar');
+      const otherUserIcon = getUserIconUrl(roomName);
+      if (otherUserIcon) {
+        avatarContainer.innerHTML = `<img src="${otherUserIcon}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.outerHTML='<i class=\\'bi bi-person-fill\\'></i>'">`;
+      } else {
+        avatarContainer.innerHTML = '<i class="bi bi-person-fill"></i>';
+      }
       document.getElementById('callTimer').style.display = 'none';
 
       // Agora通話を開始
@@ -7988,9 +7997,11 @@
       try {
         // Firebase v9 modular syntax
         const callsRef = collection(db, 'rooms', currentRoomId, 'calls');
+        const callerIconUrl = getUserIconUrl(currentUserName) || null;
         const docRef = await addDoc(callsRef, {
           callerId: currentUserEmail,
           callerName: currentUserName || currentUserEmail.split('@')[0],
+          callerIcon: callerIconUrl,
           channelName: sanitizeChannelName(currentRoomId),
           roomId: currentRoomId,
           status: 'calling',
@@ -8006,6 +8017,60 @@
     // ========== 着信検知 ==========
     let incomingCallListener = null;
     let currentIncomingCall = null;  // 着信中の通話情報
+    let ringtoneInterval = null;     // 着信音用インターバル
+    let ringtoneContext = null;      // Web Audio API コンテキスト
+
+    // 着信音を再生
+    function playRingtone() {
+      stopRingtone(); // 既存の着信音を停止
+
+      try {
+        ringtoneContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        // 着信音パターン: 高音と低音を交互に鳴らす
+        const playTone = (frequency, duration) => {
+          const oscillator = ringtoneContext.createOscillator();
+          const gainNode = ringtoneContext.createGain();
+
+          oscillator.connect(gainNode);
+          gainNode.connect(ringtoneContext.destination);
+
+          oscillator.frequency.value = frequency;
+          oscillator.type = 'sine';
+
+          gainNode.gain.setValueAtTime(0.3, ringtoneContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ringtoneContext.currentTime + duration);
+
+          oscillator.start(ringtoneContext.currentTime);
+          oscillator.stop(ringtoneContext.currentTime + duration);
+        };
+
+        // 着信音パターンを繰り返し再生（880Hz - 440Hz - 880Hz）
+        const ringPattern = () => {
+          playTone(880, 0.15);
+          setTimeout(() => playTone(440, 0.15), 150);
+          setTimeout(() => playTone(880, 0.15), 300);
+        };
+
+        ringPattern(); // 即座に再生
+        ringtoneInterval = setInterval(ringPattern, 1500); // 1.5秒ごとに繰り返し
+
+      } catch (err) {
+        console.log('着信音エラー:', err);
+      }
+    }
+
+    // 着信音を停止
+    function stopRingtone() {
+      if (ringtoneInterval) {
+        clearInterval(ringtoneInterval);
+        ringtoneInterval = null;
+      }
+      if (ringtoneContext) {
+        ringtoneContext.close().catch(() => {});
+        ringtoneContext = null;
+      }
+    }
 
     // 着信リスナーを開始
     function startIncomingCallListener() {
@@ -8052,7 +8117,21 @@
 
       document.getElementById('incomingCallerName').textContent = callData.callerName || '不明';
       document.getElementById('incomingCallStatus').textContent = '着信中...';
+
+      // 発信者のアバター画像を設定
+      const avatarContainer = document.getElementById('incomingCallerAvatar');
+      if (avatarContainer) {
+        if (callData.callerIcon) {
+          avatarContainer.innerHTML = `<img src="${callData.callerIcon}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.outerHTML='<i class=\\'bi bi-telephone-inbound-fill\\'></i>'">`;
+        } else {
+          avatarContainer.innerHTML = '<i class="bi bi-telephone-inbound-fill"></i>';
+        }
+      }
+
       document.getElementById('incomingCallModal').style.display = 'flex';
+
+      // 着信音を再生
+      playRingtone();
 
       console.log('★着信表示:', callData.callerName);
     }
@@ -8061,6 +8140,7 @@
     function hideIncomingCall() {
       currentIncomingCall = null;
       document.getElementById('incomingCallModal').style.display = 'none';
+      stopRingtone(); // 着信音を停止
     }
 
     // 着信に応答
@@ -8069,14 +8149,23 @@
 
       console.log('★着信応答:', currentIncomingCall);
 
-      // 着信モーダルを閉じる
+      // 着信モーダルを閉じる・着信音停止
       document.getElementById('incomingCallModal').style.display = 'none';
+      stopRingtone();
 
       // 通話モーダルを表示
       const modal = document.getElementById('callModal');
       modal.style.display = 'flex';
       document.getElementById('callUserName').textContent = currentIncomingCall.callerName;
       document.getElementById('callStatus').textContent = '接続中...';
+
+      // 発信者のアバター画像を設定
+      const avatarContainer = document.getElementById('callUserAvatar');
+      if (currentIncomingCall.callerIcon) {
+        avatarContainer.innerHTML = `<img src="${currentIncomingCall.callerIcon}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.outerHTML='<i class=\\'bi bi-person-fill\\'></i>'">`;
+      } else {
+        avatarContainer.innerHTML = '<i class="bi bi-person-fill"></i>';
+      }
 
       // マイク権限を確認
       try {
@@ -8704,7 +8793,7 @@
   <div class="call-modal-content">
     <!-- 発信者情報 -->
     <div class="call-user-info">
-      <div class="call-user-avatar incoming-pulse">
+      <div class="call-user-avatar incoming-pulse" id="incomingCallerAvatar">
         <i class="bi bi-telephone-inbound-fill"></i>
       </div>
       <div class="call-user-name" id="incomingCallerName">発信者</div>

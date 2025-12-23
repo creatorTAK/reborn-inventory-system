@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v190-call-ui-fix'; // 通話UI修正
-const SW_VERSION = 'v190-call-ui-fix'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v191-call-avatar-ringtone'; // アバター・着信音追加
+const SW_VERSION = 'v191-call-avatar-ringtone'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
