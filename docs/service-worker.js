@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v165-text-only'; // セクションヘッダー文字のみ
-const SW_VERSION = 'v165-text-only'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v166-all-text-only'; // 全セクションヘッダー文字のみ
+const SW_VERSION = 'v166-all-text-only'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
