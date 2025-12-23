@@ -8130,6 +8130,9 @@
       });
     }
 
+    // 着信中の通話ドキュメント監視用リスナー
+    let currentCallDocListener = null;
+
     // 着信モーダルを表示
     function showIncomingCall(callId, callData) {
       currentIncomingCall = { id: callId, ...callData };
@@ -8152,6 +8155,26 @@
       // 着信音を再生
       playRingtone();
 
+      // この通話ドキュメントを直接監視（発信者がキャンセルした場合を検出）
+      if (currentCallDocListener) {
+        currentCallDocListener();
+      }
+      const callDocRef = doc(db, 'rooms', currentRoomId, 'calls', callId);
+      currentCallDocListener = onSnapshot(callDocRef, (docSnapshot) => {
+        if (docSnapshot.exists()) {
+          const data = docSnapshot.data();
+          console.log('★通話ドキュメント変更:', data.status);
+          if (data.status === 'cancelled' || data.status === 'ended' || data.status === 'declined') {
+            console.log('★発信者がキャンセル/終了しました');
+            hideIncomingCall();
+          }
+        } else {
+          // ドキュメントが削除された
+          console.log('★通話ドキュメント削除');
+          hideIncomingCall();
+        }
+      });
+
       console.log('★着信表示:', callData.callerName);
     }
 
@@ -8160,6 +8183,12 @@
       currentIncomingCall = null;
       document.getElementById('incomingCallModal').style.display = 'none';
       stopRingtone(); // 着信音を停止
+
+      // 通話ドキュメントリスナーを解除
+      if (currentCallDocListener) {
+        currentCallDocListener();
+        currentCallDocListener = null;
+      }
     }
 
     // 着信に応答
@@ -8268,6 +8297,11 @@
       console.log('★応答側: 音声公開完了');
 
       document.getElementById('callStatus').textContent = '通話中';
+
+      // タイマー開始（まだ開始されていない場合）
+      if (!callStartTime) {
+        startCallTimer();
+      }
     }
 
     // 通話終了
@@ -8295,6 +8329,20 @@
       if (agoraClient) {
         await agoraClient.leave();
         agoraClient = null;
+      }
+
+      // Firestoreの通話ステータスを更新（相手に通知）
+      if (currentCallDocId && db && currentRoomId) {
+        try {
+          const callDocRef = doc(db, 'rooms', currentRoomId, 'calls', currentCallDocId);
+          await updateDoc(callDocRef, {
+            status: callDuration > 0 ? 'ended' : 'cancelled',
+            endedAt: serverTimestamp()
+          });
+          console.log('★通話ステータス更新:', callDuration > 0 ? 'ended' : 'cancelled');
+        } catch (err) {
+          console.error('通話ステータス更新エラー:', err);
+        }
       }
 
       // 通話履歴をチャットに送信（通話が成立した場合のみ）
@@ -8334,6 +8382,7 @@
       isMuted = false;
       isSpeakerOn = true;
       callStartTime = null;
+      currentCallDocId = null;
       document.getElementById('callMuteBtn').classList.remove('active');
       document.getElementById('callSpeakerBtn').classList.remove('active');
       document.getElementById('callMuteIcon').className = 'bi bi-mic-fill';
