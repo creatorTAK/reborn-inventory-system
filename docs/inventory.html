@@ -2020,7 +2020,9 @@
 
         debounceTimer = setTimeout(async () => {
           try {
-            const results = await index.search(query, { hitsPerPage: 10 });
+            // ひらがなをカタカナに変換して検索（例: "ゆにくろ" → "ユニクロ"）
+            const convertedQuery = hiraganaToKatakana(query);
+            const results = await index.search(convertedQuery, { hitsPerPage: 10 });
 
             if (results.hits.length === 0) {
               suggestList.style.display = 'none';
@@ -2065,55 +2067,78 @@
         .replace(/'/g, '&#039;');
     }
 
+    // ひらがなをカタカナに変換
+    function hiraganaToKatakana(str) {
+      return str.replace(/[\u3041-\u3096]/g, function(match) {
+        const chr = match.charCodeAt(0) + 0x60;
+        return String.fromCharCode(chr);
+      });
+    }
+
     // カテゴリ・サイズ・カラーのドロップダウン初期化
     async function initFilterDropdowns() {
       try {
-        // FirestoreApiが読み込まれるまで待機
-        if (typeof FirestoreApi === 'undefined') {
-          console.log('⏳ Firestore API待機中（フィルタドロップダウン）');
+        // Firestoreが初期化されるまで待機
+        if (!window.db) {
+          console.log('⏳ Firestore待機中（フィルタドロップダウン）');
           setTimeout(initFilterDropdowns, 500);
           return;
         }
+        const db = window.db;
 
-        // カテゴリマスタ取得
-        const categories = await FirestoreApi.getMasterData('categories');
+        // カテゴリマスタ取得（categories/master ドキュメント）
         const categorySelect = document.getElementById('filterCategory');
-        if (categorySelect && categories) {
-          // 大分類のみ取得（ユニーク）
-          const mainCategories = [...new Set(categories.map(c => c.大分類).filter(Boolean))];
-          mainCategories.sort();
-          mainCategories.forEach(cat => {
-            const option = document.createElement('option');
-            option.value = cat;
-            option.textContent = cat;
-            categorySelect.appendChild(option);
-          });
+        if (categorySelect) {
+          try {
+            const catDoc = await db.collection('categories').doc('master').get();
+            if (catDoc.exists) {
+              const rows = catDoc.data().rows || [];
+              // 大分類のみ取得（ユニーク）
+              const mainCategories = [...new Set(rows.map(r => r.大分類).filter(Boolean))];
+              mainCategories.sort();
+              mainCategories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = cat;
+                categorySelect.appendChild(option);
+              });
+              console.log('✅ カテゴリ取得:', mainCategories.length + '件');
+            }
+          } catch (e) {
+            console.warn('カテゴリ取得エラー:', e);
+          }
         }
 
-        // サイズマスタ取得
-        const sizes = await FirestoreApi.getMasterData('sizes');
+        // masterOptionsコレクションからサイズ・カラーを取得
         const sizeSelect = document.getElementById('filterSize');
-        if (sizeSelect && sizes) {
-          const sizeList = sizes.map(s => s.サイズ || s.name).filter(Boolean);
-          sizeList.forEach(size => {
-            const option = document.createElement('option');
-            option.value = size;
-            option.textContent = size;
-            sizeSelect.appendChild(option);
-          });
-        }
-
-        // カラーマスタ取得
-        const colors = await FirestoreApi.getMasterData('colors');
         const colorSelect = document.getElementById('filterColor');
-        if (colorSelect && colors) {
-          const colorList = colors.map(c => c.カラー || c.name).filter(Boolean);
-          colorList.forEach(color => {
-            const option = document.createElement('option');
-            option.value = color;
-            option.textContent = color;
-            colorSelect.appendChild(option);
+
+        try {
+          const snapshot = await db.collection('masterOptions').get();
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.fieldName === 'サイズ' && data.items && sizeSelect) {
+              data.items.forEach(size => {
+                const option = document.createElement('option');
+                option.value = size;
+                option.textContent = size;
+                sizeSelect.appendChild(option);
+              });
+              console.log('✅ サイズ取得:', data.items.length + '件');
+            }
+            // カラーは masterOptions にない可能性があるので、カラー/配色/トーンを使用
+            if ((data.fieldName === 'カラー' || data.fieldName === 'カラー/配色/トーン') && data.items && colorSelect) {
+              data.items.forEach(color => {
+                const option = document.createElement('option');
+                option.value = color;
+                option.textContent = color;
+                colorSelect.appendChild(option);
+              });
+              console.log('✅ カラー取得:', data.items.length + '件');
+            }
           });
+        } catch (e) {
+          console.warn('masterOptions取得エラー:', e);
         }
 
         console.log('✅ フィルタドロップダウン初期化完了');
