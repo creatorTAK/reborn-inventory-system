@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v198-card-transparent'; // カード背景透明化
-const SW_VERSION = 'v198-card-transparent'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v199-all-cards-transparent'; // 全特殊コンテンツ背景透明化
+const SW_VERSION = 'v199-all-cards-transparent'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
