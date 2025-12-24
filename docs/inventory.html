@@ -348,6 +348,77 @@
       color: #1f2937;
       font-weight: 600;
     }
+
+    /* 滞留状況バー */
+    .aging-section {
+      background: #fff;
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid #e5e7eb;
+    }
+    .aging-header {
+      margin-bottom: 10px;
+    }
+    .aging-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+    }
+    .aging-title i {
+      margin-right: 6px;
+      color: #6b7280;
+    }
+    .aging-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .aging-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .aging-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 80px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .aging-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .aging-dot.green { background: #10b981; }
+    .aging-dot.yellow { background: #f59e0b; }
+    .aging-dot.orange { background: #f97316; }
+    .aging-dot.red { background: #ef4444; }
+    .aging-bar-container {
+      flex: 1;
+      height: 16px;
+      background: #f3f4f6;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .aging-bar {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+    .aging-bar.green { background: linear-gradient(90deg, #10b981, #34d399); }
+    .aging-bar.yellow { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .aging-bar.orange { background: linear-gradient(90deg, #f97316, #fb923c); }
+    .aging-bar.red { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .aging-count {
+      min-width: 40px;
+      text-align: right;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+    }
   </style>
 </head>
 <body>
@@ -745,6 +816,55 @@
         </div>
       </div>
     </div>
+
+    <!-- 滞留状況（出品中商品のみ） -->
+    <div class="aging-section mt-3" id="agingSection" style="display: none;">
+      <div class="aging-header">
+        <span class="aging-title"><i class="bi bi-clock-history"></i> 出品中 滞留状況</span>
+      </div>
+      <div class="aging-bars">
+        <div class="aging-row">
+          <div class="aging-label">
+            <span class="aging-dot green"></span>
+            <span>7日以内</span>
+          </div>
+          <div class="aging-bar-container">
+            <div class="aging-bar green" id="agingBar7" style="width: 0%;"></div>
+          </div>
+          <div class="aging-count" id="agingCount7">0件</div>
+        </div>
+        <div class="aging-row">
+          <div class="aging-label">
+            <span class="aging-dot yellow"></span>
+            <span>8-14日</span>
+          </div>
+          <div class="aging-bar-container">
+            <div class="aging-bar yellow" id="agingBar14" style="width: 0%;"></div>
+          </div>
+          <div class="aging-count" id="agingCount14">0件</div>
+        </div>
+        <div class="aging-row">
+          <div class="aging-label">
+            <span class="aging-dot orange"></span>
+            <span>15-30日</span>
+          </div>
+          <div class="aging-bar-container">
+            <div class="aging-bar orange" id="agingBar30" style="width: 0%;"></div>
+          </div>
+          <div class="aging-count" id="agingCount30">0件</div>
+        </div>
+        <div class="aging-row">
+          <div class="aging-label">
+            <span class="aging-dot red"></span>
+            <span>30日超過</span>
+          </div>
+          <div class="aging-bar-container">
+            <div class="aging-bar red" id="agingBarOver30" style="width: 0%;"></div>
+          </div>
+          <div class="aging-count" id="agingCountOver30">0件</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 検索・フィルタ -->
@@ -1096,11 +1216,106 @@
         document.getElementById('statSold').textContent = stats.statusCounts.sold;
         document.getElementById('statWithdrawn').textContent = stats.statusCounts.withdrawn;
 
+        // 滞留状況計算（出品中のみ）
+        updateAgingDisplay(products);
+
         console.log('✅ [FIRESTORE] ダッシュボード統計読み込み完了');
       }).catch(function(error) {
         hideLoading();
         console.error('❌ [FIRESTORE ERROR]:', error);
         showError('読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
+      });
+    }
+
+    // 滞留状況表示を更新（出品中のみ）
+    function updateAgingDisplay(products) {
+      const agingSection = document.getElementById('agingSection');
+      if (!agingSection) return;
+
+      // 出品中の商品のみを対象
+      const listedProducts = products.filter(p => p.status === '出品中');
+
+      if (listedProducts.length === 0) {
+        agingSection.style.display = 'none';
+        return;
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // 滞留日数でカテゴリ分け
+      const categories = {
+        within7: [],    // 0-7日
+        within14: [],   // 8-14日
+        within30: [],   // 15-30日
+        over30: []      // 30日超過
+      };
+
+      listedProducts.forEach(product => {
+        let listingDate = null;
+
+        // listingDate または listingStartDate を使用
+        if (product.listingDate) {
+          listingDate = product.listingDate.toDate ? product.listingDate.toDate() : new Date(product.listingDate);
+        } else if (product.listingStartDate) {
+          listingDate = product.listingStartDate.toDate ? product.listingStartDate.toDate() : new Date(product.listingStartDate);
+        } else if (product.createdAt) {
+          // フォールバック: 作成日を使用
+          listingDate = product.createdAt.toDate ? product.createdAt.toDate() : new Date(product.createdAt);
+        }
+
+        if (!listingDate || isNaN(listingDate.getTime())) {
+          // 日付が不明な場合は30日超過として扱う
+          categories.over30.push(product);
+          return;
+        }
+
+        listingDate.setHours(0, 0, 0, 0);
+        const diffTime = today - listingDate;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays <= 7) {
+          categories.within7.push(product);
+        } else if (diffDays <= 14) {
+          categories.within14.push(product);
+        } else if (diffDays <= 30) {
+          categories.within30.push(product);
+        } else {
+          categories.over30.push(product);
+        }
+      });
+
+      const total = listedProducts.length;
+
+      // バーの幅を計算（パーセンテージ）
+      const percentages = {
+        within7: (categories.within7.length / total * 100).toFixed(1),
+        within14: (categories.within14.length / total * 100).toFixed(1),
+        within30: (categories.within30.length / total * 100).toFixed(1),
+        over30: (categories.over30.length / total * 100).toFixed(1)
+      };
+
+      // DOM更新
+      document.getElementById('agingBar7').style.width = percentages.within7 + '%';
+      document.getElementById('agingCount7').textContent = categories.within7.length + '件';
+
+      document.getElementById('agingBar14').style.width = percentages.within14 + '%';
+      document.getElementById('agingCount14').textContent = categories.within14.length + '件';
+
+      document.getElementById('agingBar30').style.width = percentages.within30 + '%';
+      document.getElementById('agingCount30').textContent = categories.within30.length + '件';
+
+      document.getElementById('agingBarOver30').style.width = percentages.over30 + '%';
+      document.getElementById('agingCountOver30').textContent = categories.over30.length + '件';
+
+      // セクション表示
+      agingSection.style.display = 'block';
+
+      console.log('📊 [AGING] 滞留状況:', {
+        '7日以内': categories.within7.length,
+        '8-14日': categories.within14.length,
+        '15-30日': categories.within30.length,
+        '30日超過': categories.over30.length
       });
     }
 
