@@ -8,6 +8,8 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <!-- Algolia Search SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/algoliasearch@4/dist/algoliasearch-lite.umd.js"></script>
   <!-- REBORN Theme -->
   <link rel="stylesheet" href="/css/reborn-theme.css?v=296">
   <style>
@@ -157,10 +159,37 @@
     }
     .search-section .accordion-body {
       padding: 12px;
-      background: #f8f9fa;
+      background: #fff;
       border: 1px solid #dee2e6;
       border-top: none;
       border-radius: 0 0 6px 6px;
+    }
+    /* ブランド検索サジェスト */
+    .filter-brand-suggest {
+      position: relative;
+    }
+    .filter-brand-suggest-list {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #dee2e6;
+      border-top: none;
+      border-radius: 0 0 6px 6px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .filter-brand-suggest-list .suggest-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .filter-brand-suggest-list .suggest-item:hover {
+      background: #f0f9ff;
     }
     /* カスタムページネーション */
     .custom-pagination {
@@ -1068,41 +1097,30 @@
           <div id="collapseFilters" class="accordion-collapse collapse" data-bs-parent="#advancedFilters">
             <div class="accordion-body">
               <div class="row g-2">
-                <div class="col-6">
+                <div class="col-12">
                   <label for="filterBrand" class="form-label small">ブランド</label>
-                  <div class="position-relative">
-                    <input type="text" class="form-control form-control-sm pe-5" id="filterBrand" placeholder="UNIQLO">
-                    <button type="button" class="btn-clear-search" data-clear="filterBrand" style="display: none;">
-                      <i class="bi bi-x-circle-fill"></i>
-                    </button>
+                  <div class="filter-brand-suggest">
+                    <input type="text" class="form-control form-control-sm" id="filterBrand" placeholder="ブランド名を入力..." autocomplete="off">
+                    <div class="filter-brand-suggest-list" id="filterBrandSuggestList"></div>
                   </div>
                 </div>
                 <div class="col-6">
                   <label for="filterCategory" class="form-label small">カテゴリ</label>
-                  <div class="position-relative">
-                    <input type="text" class="form-control form-control-sm pe-5" id="filterCategory" placeholder="メンズ">
-                    <button type="button" class="btn-clear-search" data-clear="filterCategory" style="display: none;">
-                      <i class="bi bi-x-circle-fill"></i>
-                    </button>
-                  </div>
+                  <select class="form-select form-select-sm" id="filterCategory">
+                    <option value="">すべて</option>
+                  </select>
                 </div>
                 <div class="col-6">
                   <label for="filterSize" class="form-label small">サイズ</label>
-                  <div class="position-relative">
-                    <input type="text" class="form-control form-control-sm pe-5" id="filterSize" placeholder="M">
-                    <button type="button" class="btn-clear-search" data-clear="filterSize" style="display: none;">
-                      <i class="bi bi-x-circle-fill"></i>
-                    </button>
-                  </div>
+                  <select class="form-select form-select-sm" id="filterSize">
+                    <option value="">すべて</option>
+                  </select>
                 </div>
-                <div class="col-6">
+                <div class="col-12">
                   <label for="filterColor" class="form-label small">カラー</label>
-                  <div class="position-relative">
-                    <input type="text" class="form-control form-control-sm pe-5" id="filterColor" placeholder="ブルー">
-                    <button type="button" class="btn-clear-search" data-clear="filterColor" style="display: none;">
-                      <i class="bi bi-x-circle-fill"></i>
-                    </button>
-                  </div>
+                  <select class="form-select form-select-sm" id="filterColor">
+                    <option value="">すべて</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -1237,6 +1255,9 @@
       // 管理番号検索の頭文字プルダウンを初期化
       initMgmtSearchDropdowns();
 
+      // 詳細フィルタの初期化（ブランド検索、ドロップダウン）
+      initAdvancedFilters();
+
       // イベントリスナー
       document.getElementById('btnSearch').addEventListener('click', () => {
         currentPage = 1;
@@ -1254,24 +1275,8 @@
         clearSearchBtn.style.display = this.value.length > 0 ? 'flex' : 'none';
       });
 
-      // 詳細フィルタのクリアボタン制御
-      const filterInputIds = ['filterBrand', 'filterCategory', 'filterSize', 'filterColor'];
-      filterInputIds.forEach(function(inputId) {
-        const input = document.getElementById(inputId);
-        const clearBtn = document.querySelector('[data-clear="' + inputId + '"]');
-        
-        if (input && clearBtn) {
-          input.addEventListener('input', function() {
-            clearBtn.style.display = this.value.length > 0 ? 'flex' : 'none';
-          });
-          
-          clearBtn.addEventListener('click', function() {
-            input.value = '';
-            clearBtn.style.display = 'none';
-            input.focus();
-          });
-        }
-      });
+      // ブランドフィルタは入力中にサジェストリスト非表示時のみ閉じる処理
+      // （サジェスト選択や検索時に処理するため、ここでは不要）
 
       // 検索条件に戻るボタン
       document.getElementById('btnBackToSearch').addEventListener('click', showSearchView);
@@ -1771,17 +1776,19 @@
 
     // フィルタリセット
     function resetFilters() {
+      // テキスト検索をクリア
       document.getElementById('searchText').value = '';
       document.getElementById('clearSearchText').style.display = 'none';
+
+      // 詳細フィルタをクリア
       document.getElementById('filterBrand').value = '';
       document.getElementById('filterCategory').value = '';
       document.getElementById('filterSize').value = '';
       document.getElementById('filterColor').value = '';
 
-      // 詳細フィルタのクリアボタンも非表示
-      document.querySelectorAll('[data-clear]').forEach(function(btn) {
-        btn.style.display = 'none';
-      });
+      // ブランドサジェストを閉じる
+      const suggestList = document.getElementById('filterBrandSuggestList');
+      if (suggestList) suggestList.style.display = 'none';
 
       // 管理番号検索をクリア
       clearMgmtSearch();
@@ -1963,6 +1970,156 @@
       clearMgmtSearch();
       currentPage = 1;
       loadDashboardAndSearch();
+    }
+
+    // ========================================
+    // 詳細フィルタ初期化
+    // ========================================
+
+    // Algolia設定
+    const ALGOLIA_APP_ID = 'P68RUXXTYN';
+    const ALGOLIA_SEARCH_KEY = '12758e11bbd889f72177b459d296ed50';
+    const ALGOLIA_INDEX_NAME = 'brands';
+
+    function initAdvancedFilters() {
+      // ブランド検索（Algolia）の初期化
+      initBrandFilter();
+
+      // カテゴリ・サイズ・カラーのドロップダウン初期化
+      initFilterDropdowns();
+    }
+
+    // ブランドフィルタ（Algoliaサジェスト）
+    function initBrandFilter() {
+      const input = document.getElementById('filterBrand');
+      const suggestList = document.getElementById('filterBrandSuggestList');
+
+      if (!input || !suggestList) return;
+
+      // Algoliaクライアント初期化
+      if (typeof window.algoliasearch === 'undefined') {
+        console.warn('⚠️ Algolia SDKが読み込まれていません');
+        return;
+      }
+
+      const searchClient = window.algoliasearch(ALGOLIA_APP_ID, ALGOLIA_SEARCH_KEY);
+      const index = searchClient.initIndex(ALGOLIA_INDEX_NAME);
+
+      let debounceTimer = null;
+
+      // 入力時にサジェスト検索
+      input.addEventListener('input', function() {
+        const query = this.value.trim();
+
+        clearTimeout(debounceTimer);
+
+        if (query.length < 1) {
+          suggestList.style.display = 'none';
+          return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+          try {
+            const results = await index.search(query, { hitsPerPage: 10 });
+
+            if (results.hits.length === 0) {
+              suggestList.style.display = 'none';
+              return;
+            }
+
+            suggestList.innerHTML = results.hits.map(hit => {
+              const displayName = hit.displayName || hit.name || hit.objectID;
+              return `<div class="suggest-item" data-value="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>`;
+            }).join('');
+
+            suggestList.style.display = 'block';
+          } catch (error) {
+            console.error('Algolia検索エラー:', error);
+          }
+        }, 200);
+      });
+
+      // サジェスト選択
+      suggestList.addEventListener('click', function(e) {
+        if (e.target.classList.contains('suggest-item')) {
+          input.value = e.target.dataset.value;
+          suggestList.style.display = 'none';
+        }
+      });
+
+      // フォーカスアウトで閉じる（遅延付き）
+      input.addEventListener('blur', function() {
+        setTimeout(() => {
+          suggestList.style.display = 'none';
+        }, 200);
+      });
+    }
+
+    // HTMLエスケープ
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // カテゴリ・サイズ・カラーのドロップダウン初期化
+    async function initFilterDropdowns() {
+      try {
+        // FirestoreApiが読み込まれるまで待機
+        if (typeof FirestoreApi === 'undefined') {
+          console.log('⏳ Firestore API待機中（フィルタドロップダウン）');
+          setTimeout(initFilterDropdowns, 500);
+          return;
+        }
+
+        // カテゴリマスタ取得
+        const categories = await FirestoreApi.getMasterData('categories');
+        const categorySelect = document.getElementById('filterCategory');
+        if (categorySelect && categories) {
+          // 大分類のみ取得（ユニーク）
+          const mainCategories = [...new Set(categories.map(c => c.大分類).filter(Boolean))];
+          mainCategories.sort();
+          mainCategories.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat;
+            option.textContent = cat;
+            categorySelect.appendChild(option);
+          });
+        }
+
+        // サイズマスタ取得
+        const sizes = await FirestoreApi.getMasterData('sizes');
+        const sizeSelect = document.getElementById('filterSize');
+        if (sizeSelect && sizes) {
+          const sizeList = sizes.map(s => s.サイズ || s.name).filter(Boolean);
+          sizeList.forEach(size => {
+            const option = document.createElement('option');
+            option.value = size;
+            option.textContent = size;
+            sizeSelect.appendChild(option);
+          });
+        }
+
+        // カラーマスタ取得
+        const colors = await FirestoreApi.getMasterData('colors');
+        const colorSelect = document.getElementById('filterColor');
+        if (colorSelect && colors) {
+          const colorList = colors.map(c => c.カラー || c.name).filter(Boolean);
+          colorList.forEach(color => {
+            const option = document.createElement('option');
+            option.value = color;
+            option.textContent = color;
+            colorSelect.appendChild(option);
+          });
+        }
+
+        console.log('✅ フィルタドロップダウン初期化完了');
+      } catch (error) {
+        console.error('フィルタドロップダウン初期化エラー:', error);
+      }
     }
 
     // 商品詳細表示
