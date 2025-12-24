@@ -1327,6 +1327,13 @@
                 </select>
               </div>
               <div class="mt-2">
+                <label class="form-label">検品担当者 <small class="text-muted">（任意）</small></label>
+                <select class="form-select" id="entryInspectionAssignee">
+                  <option value="">-- 指定しない --</option>
+                </select>
+                <small class="text-muted">指定すると担当者に検品タスクが作成されます</small>
+              </div>
+              <div class="mt-2">
                 <label class="form-label">仕入金額 <span class="text-danger">*</span></label>
                 <div class="input-group">
                   <span class="input-group-text">¥</span>
@@ -2497,8 +2504,51 @@
           status: 'pending', // pending / shipped / received / completed
           remainingCount: batchData.itemCount, // カウントダウン用（未登録数）
           registeredCount: 0, // 登録済み数
+          // 検品担当者
+          inspectionAssignee: batchData.inspectionAssignee || '',
+          inspectionAssigneeUserId: batchData.inspectionAssigneeUserId || null,
+          inspectionStatus: batchData.inspectionAssignee ? 'pending' : 'not_assigned' // pending / completed / not_assigned
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
+
+        // 検品担当者が指定されている場合、検品タスクを作成
+        if (batchData.inspectionAssignee && batchData.inspectionAssigneeUserId) {
+          try {
+            // userIdからメールアドレスを取得
+            const userDoc = await db.collection('users').doc(batchData.inspectionAssigneeUserId).get();
+            if (userDoc.exists) {
+              const userData = userDoc.data();
+              const staffEmail = userData.email;
+              if (staffEmail) {
+                const inspectionTaskRef = db.collection('userTasks').doc(staffEmail).collection('tasks').doc();
+                await inspectionTaskRef.set({
+                  type: 'inspection_task',
+                  title: `検品作業: ${batchData.supplier} (${batchData.itemCount}点)`,
+                  description: `仕入先: ${batchData.supplier}\n仕入日: ${batchData.purchaseDate}\n点数: ${batchData.itemCount}点`,
+                  createdAt: new Date().toISOString(),
+                  completed: false,
+                  priority: 'normal',
+                  link: `/purchase.html`, // 仕入管理ページへのリンク
+                  relatedData: {
+                    batchId: batchId,
+                    supplier: batchData.supplier,
+                    itemCount: batchData.itemCount,
+                    purchaseDate: batchData.purchaseDate,
+                    staffEmail: staffEmail,
+                    staffName: batchData.inspectionAssignee
+                  }
+                });
+                console.log('🔍 [仕入バッチ] 検品タスク作成完了:', staffEmail);
+              } else {
+                console.warn('検品担当者のメールアドレスが見つかりません:', batchData.inspectionAssigneeUserId);
+              }
+            } else {
+              console.warn('検品担当者のユーザー情報が見つかりません:', batchData.inspectionAssigneeUserId);
+            }
+          } catch (taskError) {
+            console.error('検品タスク作成エラー（続行）:', taskError);
+          }
+        }
 
         // スロットを保存
         const slots = [];
@@ -4034,6 +4084,17 @@
         });
         document.getElementById('entryAssigneeIndividual').innerHTML = assigneeSelect.innerHTML;
         updateAllEntryItemAssignees();
+        // 検品担当者セレクトも同じデータで更新（userIdがある発送先のみ）
+        const inspectionAssigneeSelect = document.getElementById('entryInspectionAssignee');
+        if (inspectionAssigneeSelect) {
+          inspectionAssigneeSelect.innerHTML = '<option value="">-- 指定しない --</option>';
+          entryAssigneesData.forEach(item => {
+            // userIdが設定されている発送先のみ検品担当者として選択可能
+            if (item.userId) {
+              inspectionAssigneeSelect.innerHTML += `<option value="${item.name}" data-user-id="${item.userId}">${item.note ? item.name + '（' + item.note + '）' : item.name} 📱</option>`;
+            }
+          });
+        }
         console.log('📥 [仕入登録] 発送先読み込み完了:', entryAssigneesData.length, '件');
       } else {
         console.error('発送先読み込みエラー:', assigneesResult.reason);
@@ -6062,6 +6123,11 @@
       const assignee = assigneeSelect.value;
       const assigneeUserId = assigneeSelect.selectedOptions[0]?.dataset?.userId || null;
       const memo = document.getElementById('entryMemo')?.value || '';
+      
+      // 検品担当者
+      const inspectionAssigneeSelect = document.getElementById('entryInspectionAssignee');
+      const inspectionAssignee = inspectionAssigneeSelect?.value || '';
+      const inspectionAssigneeUserId = inspectionAssigneeSelect?.selectedOptions[0]?.dataset?.userId || null;
 
       // 一括入力用検品情報を収集（個別入力と同じ構造）
       const batchCatL0 = document.getElementById('batch-cat-l0')?.value || '';
@@ -6128,7 +6194,10 @@
           assignee,
           assigneeUserId,
           memo,
-          items  // 検品情報を含むitems配列を追加
+          items,  // 検品情報を含むitems配列を追加
+          // 検品担当者
+          inspectionAssignee,
+          inspectionAssigneeUserId
         });
       } catch (error) {
         alert('保存に失敗しました: ' + error.message);

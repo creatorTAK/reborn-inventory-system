@@ -1559,7 +1559,7 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
   // 報酬対象のタスクタイプをチェック
   // type または taskType フィールドを確認
   const taskType = afterData.type || afterData.taskType;
-  const compensationTaskTypes = ['listing_approval', 'shipping_task', 'inventory_action'];
+  const compensationTaskTypes = ['listing_approval', 'shipping_task', 'inventory_action', 'inspection_task'];
   if (!compensationTaskTypes.includes(taskType)) {
     console.log('⏭️ [onTaskCompleted] 報酬対象外のタスクタイプ:', taskType);
     return null;
@@ -1588,15 +1588,19 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       // タスクに設定された報酬額を優先、なければ設定から取得
       unitPrice = afterData.compensation || settings.taskRates?.editing || 50;
       description = '追加編集報酬';
+    } else if (taskType === 'inspection_task') {
+      taskTypeKey = 'inspection';
+      unitPrice = settings.taskRates?.inspection || 50;
+      description = '検品作業報酬';
     }
 
     // 担当スタッフ（タスクを実行した人ではなく、実際の作業者）を取得
-    // inventory_action タスクの場合は userEmail（タスク担当者）を使用
+    // inventory_action / inspection_task タスクの場合は userEmail（タスク担当者）を使用
     let staffEmail = null;
     let staffName = '不明';
 
-    if (taskType === 'inventory_action') {
-      // 滞留タスクはタスク担当者が作業者
+    if (taskType === 'inventory_action' || taskType === 'inspection_task') {
+      // タスク担当者が作業者
       staffEmail = userEmail;
       // ユーザー情報を取得
       const userDoc = await db.collection('users').doc(userEmail).get();
