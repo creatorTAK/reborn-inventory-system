@@ -1163,8 +1163,51 @@
       transform: scale(0.98);
     }
     .note-share-icon {
-      font-size: 28px;
+      font-size: 24px;
       flex-shrink: 0;
+      color: #374151;
+    }
+
+    /* 通話履歴カード */
+    .call-history-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #f8fafc;
+      border-radius: 10px;
+      min-width: 160px;
+    }
+    .call-history-icon {
+      font-size: 18px;
+      color: #1f2937;
+      flex-shrink: 0;
+    }
+    .call-history-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .call-history-label {
+      font-size: 13px;
+      color: #374151;
+      font-weight: 500;
+    }
+    .call-history-duration {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    /* 自分が送った通話履歴カード */
+    .message-item-mine .call-history-card {
+      background: rgba(255,255,255,0.15);
+    }
+    .message-item-mine .call-history-icon {
+      color: white;
+    }
+    .message-item-mine .call-history-label {
+      color: white;
+    }
+    .message-item-mine .call-history-duration {
+      color: rgba(255,255,255,0.8);
     }
     .note-share-info {
       flex: 1;
@@ -5123,7 +5166,7 @@
         // ノートアイコン
         const noteIcon = document.createElement('div');
         noteIcon.className = 'note-share-icon';
-        noteIcon.innerHTML = '📝';
+        noteIcon.innerHTML = '<i class="bi bi-journal-text"></i>';
         noteCard.appendChild(noteIcon);
 
         // ノート情報
@@ -5149,6 +5192,44 @@
         noteCard.appendChild(noteArrow);
 
         bubble.appendChild(noteCard);
+      }
+      // 通話履歴メッセージの場合
+      else if (msg.type === 'call') {
+        const callCard = document.createElement('div');
+        callCard.className = 'call-history-card';
+
+        // 通話アイコン（シンプルな黒）
+        const callIcon = document.createElement('div');
+        callIcon.className = 'call-history-icon';
+        callIcon.innerHTML = '<i class="bi bi-telephone-fill"></i>';
+        callCard.appendChild(callIcon);
+
+        // 通話情報
+        const callInfo = document.createElement('div');
+        callInfo.className = 'call-history-info';
+
+        const callLabel = document.createElement('div');
+        callLabel.className = 'call-history-label';
+        callLabel.textContent = '通話終了';
+
+        const callDuration = document.createElement('div');
+        callDuration.className = 'call-history-duration';
+        // 通話時間を表示
+        if (msg.callDuration) {
+          const minutes = Math.floor(msg.callDuration / 60);
+          const seconds = msg.callDuration % 60;
+          callDuration.textContent = minutes > 0 ? `${minutes}分${seconds}秒` : `${seconds}秒`;
+        } else {
+          // 古い形式のメッセージからパース
+          const match = (msg.text || '').match(/\((.+)\)/);
+          callDuration.textContent = match ? match[1] : '';
+        }
+
+        callInfo.appendChild(callLabel);
+        callInfo.appendChild(callDuration);
+        callCard.appendChild(callInfo);
+
+        bubble.appendChild(callCard);
       }
       // テキストメッセージの場合
       else {
@@ -7386,7 +7467,7 @@
         // チャットにメッセージ送信
         const messagesRef = collection(db, `rooms/${currentRoomId}/messages`);
         await addDoc(messagesRef, {
-          text: `📝 ノートを共有しました\n\n「${noteTitle}」\n${shareUrl}`,
+          text: `ノートを共有しました\n\n「${noteTitle}」\n${shareUrl}`,
           userName: currentUserName,
           userEmail: currentUserEmail,
           timestamp: serverTimestamp(),
@@ -7402,7 +7483,7 @@
         // ルームのlastMessageを更新
         const roomRef = doc(db, 'rooms', currentRoomId);
         await updateDoc(roomRef, {
-          lastMessage: `📝 ノートを共有しました`,
+          lastMessage: 'ノートを共有しました',
           lastMessageAt: serverTimestamp()
         });
 
@@ -8361,7 +8442,7 @@
             : `${seconds}秒`;
 
           await addDoc(collection(db, `rooms/${currentRoomId}/messages`), {
-            text: `📞 通話終了 (${durationText})`,
+            text: `通話終了 (${durationText})`,
             userName: currentUserName,
             userEmail: currentUserEmail,
             timestamp: serverTimestamp(),
@@ -8373,7 +8454,7 @@
           // lastMessage更新
           const roomRef = doc(db, 'rooms', currentRoomId);
           await updateDoc(roomRef, {
-            lastMessage: `📞 通話 (${durationText})`,
+            lastMessage: `通話 (${durationText})`,
             lastMessageAt: serverTimestamp(),
             lastMessageBy: currentUserName
           });

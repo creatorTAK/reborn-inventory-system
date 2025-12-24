@@ -816,7 +816,7 @@ exports.onIncomingCall = onDocumentCreated('rooms/{roomId}/calls/{callId}', asyn
         const message = {
           tokens: tokens,
           notification: {
-            title: '📞 着信',
+            title: '着信',
             body: `${callerName}から通話があります`
           },
           data: {
