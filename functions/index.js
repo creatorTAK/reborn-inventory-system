@@ -1590,8 +1590,10 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       description = '追加編集報酬';
     } else if (taskType === 'inspection_task') {
       taskTypeKey = 'inspection';
-      unitPrice = settings.taskRates?.inspection || 50;
-      description = '検品作業報酬';
+      unitPrice = settings.taskRates?.inspection || 30;
+      // 検品点数を取得（registeredCount または expectedCount）
+      const inspectionItemCount = afterData.registeredCount || afterData.expectedCount || afterData.relatedData?.itemCount || 1;
+      description = `検品作業報酬 (${inspectionItemCount}点)`;
     }
 
     // 担当スタッフ（タスクを実行した人ではなく、実際の作業者）を取得
@@ -1630,6 +1632,17 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       // 報酬はスキップするが、検品ステータス更新は実行する
       if (taskType === 'inspection_task') {
         try {
+          // 新フロー: inspectionRequestId がある場合
+          const inspectionRequestId = afterData.inspectionRequestId;
+          if (inspectionRequestId) {
+            await db.collection('inspectionRequests').doc(inspectionRequestId).update({
+              status: 'completed',
+              completedAt: new Date().toISOString()
+            });
+            console.log('✅ [onTaskCompleted] 検品依頼ステータス更新完了（報酬なし）:', inspectionRequestId);
+          }
+
+          // 旧フロー: batchId がある場合
           const batchId = afterData.relatedData?.batchId;
           if (batchId) {
             await db.collection('purchaseBatches').doc(batchId).update({
@@ -1647,6 +1660,15 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
 
     // 報酬記録を作成
     const now = new Date();
+
+    // 検品タスクの場合は点数ベースで報酬を計算
+    let itemCount = 1;
+    let totalAmount = unitPrice;
+    if (taskType === 'inspection_task') {
+      itemCount = afterData.registeredCount || afterData.expectedCount || afterData.relatedData?.itemCount || 1;
+      totalAmount = unitPrice * itemCount;
+    }
+
     const compensationRecord = {
       taskId: taskId,
       taskType: taskType,
@@ -1654,10 +1676,13 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       staffEmail: staffEmail,
       staffName: staffName,
       unitPrice: unitPrice,
+      itemCount: itemCount,
+      totalAmount: totalAmount,
       description: description,
       // inventory_action の場合は直接フィールドを参照
       productId: afterData.productId || afterData.relatedData?.productId || null,
       managementNumber: afterData.managementNumber || afterData.relatedData?.managementNumber || null,
+      inspectionRequestId: afterData.inspectionRequestId || null,
       completedAt: afterData.completedAt || now.toISOString(),
       recordedAt: now.toISOString(),
       yearMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
@@ -1716,9 +1741,20 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       }
     }
 
-    // 🔍 検品タスク完了時にバッチのinspectionStatusを更新
+    // 🔍 検品タスク完了時の処理
     if (taskType === 'inspection_task') {
       try {
+        // 新フロー: inspectionRequestId がある場合
+        const inspectionRequestId = afterData.inspectionRequestId;
+        if (inspectionRequestId) {
+          await db.collection('inspectionRequests').doc(inspectionRequestId).update({
+            status: 'completed',
+            completedAt: new Date().toISOString()
+          });
+          console.log('✅ [onTaskCompleted] 検品依頼ステータス更新完了:', inspectionRequestId);
+        }
+
+        // 旧フロー: batchId がある場合（後方互換性）
         const batchId = afterData.relatedData?.batchId;
         if (batchId) {
           await db.collection('purchaseBatches').doc(batchId).update({
@@ -1726,12 +1762,14 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
             inspectionCompletedAt: new Date().toISOString()
           });
           console.log('✅ [onTaskCompleted] 検品ステータス更新完了:', batchId);
-        } else {
-          console.warn('⚠️ [onTaskCompleted] 検品タスクにbatchIdがありません');
+        }
+
+        if (!inspectionRequestId && !batchId) {
+          console.warn('⚠️ [onTaskCompleted] 検品タスクにinspectionRequestIdもbatchIdもありません');
         }
       } catch (batchError) {
         console.error('⚠️ [onTaskCompleted] 検品ステータス更新エラー（継続）:', batchError);
-        // バッチ更新エラーは致命的ではないので継続
+        // ステータス更新エラーは致命的ではないので継続
       }
     }
 

@@ -7,7 +7,7 @@
   <title>仕入管理 - FURIRA</title>
   <script>
     // v312: A-ONE 70面ラベル余白微調整
-    console.log('🔴🔴🔴 purchase.html v343-PDF loaded 🔴🔴🔴');
+    console.log('🔴🔴🔴 purchase.html v344-inspection-request loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -1269,6 +1269,11 @@
           📦 発送進捗
         </button>
       </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="inspection-request-tab" data-bs-toggle="tab" data-bs-target="#inspection-request-content" type="button" role="tab" onclick="loadInspectionRequests()">
+          📋 検品依頼
+        </button>
+      </li>
     </ul>
 
     <!-- タブコンテンツ -->
@@ -2046,6 +2051,57 @@
           </div>
         </div>
       </div>
+
+      <!-- 検品依頼タブ -->
+      <div class="tab-pane fade" id="inspection-request-content" role="tabpanel">
+        <div class="alert alert-info small mb-3">
+          <i class="bi bi-info-circle"></i> 検品作業の依頼を作成・管理します。担当者にタスクとして割り当てられます。
+        </div>
+
+        <!-- 新規依頼作成ボタン -->
+        <div class="mb-3">
+          <button class="btn btn-warning" onclick="showCreateInspectionRequestModal()">
+            <i class="bi bi-plus-circle"></i> 新規検品依頼
+          </button>
+        </div>
+
+        <!-- フィルター -->
+        <div class="row g-2 mb-3">
+          <div class="col-auto">
+            <select class="form-select form-select-sm" id="inspectionRequestStatusFilter" onchange="filterInspectionRequests()">
+              <option value="all">すべて</option>
+              <option value="pending">未着手</option>
+              <option value="in_progress">作業中</option>
+              <option value="completed">完了</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 依頼一覧テーブル -->
+        <div class="data-table-container">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>依頼日</th>
+                  <th>仕入先</th>
+                  <th>予定点数</th>
+                  <th>担当者</th>
+                  <th>期限</th>
+                  <th>進捗</th>
+                  <th>ステータス</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="inspectionRequestBody">
+                <tr>
+                  <td colspan="8" class="text-center text-muted py-4">タブをクリックしてデータを読み込んでください</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2283,6 +2339,50 @@
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
           <button type="button" class="btn btn-warning" onclick="downloadPaymentNoticePDF()">
             <i class="bi bi-download"></i> PDF出力
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 検品依頼作成モーダル -->
+  <div class="modal fade" id="createInspectionRequestModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title">📋 新規検品依頼</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">仕入先 <span class="text-danger">*</span></label>
+            <select class="form-select" id="inspectionRequestSupplier" required>
+              <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">予定点数 <span class="text-danger">*</span></label>
+            <input type="number" class="form-control" id="inspectionRequestCount" min="1" placeholder="商品点数を入力" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">担当者 <span class="text-danger">*</span></label>
+            <select class="form-select" id="inspectionRequestAssignee" required>
+              <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">期限</label>
+            <input type="date" class="form-control" id="inspectionRequestDueDate">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">備考</label>
+            <textarea class="form-control" id="inspectionRequestNote" rows="2" placeholder="特記事項があれば入力"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-warning" onclick="createInspectionRequest()">
+            <i class="bi bi-check-circle"></i> 依頼を作成
           </button>
         </div>
       </div>
@@ -2578,10 +2678,81 @@
         }
 
         console.log('📦 [仕入バッチ] 保存完了:', batchId, 'スロット数:', slots.length);
+
+        // 検品依頼との紐付け処理
+        try {
+          await updateInspectionRequestProgress(batchData.supplier, batchData.itemCount);
+        } catch (irError) {
+          console.error('検品依頼更新エラー（続行）:', irError);
+        }
+
         return { batchId, slots };
       } catch (error) {
         console.error('仕入バッチ保存エラー:', error);
         throw error;
+      }
+    }
+
+    /**
+     * 検品依頼の進捗を更新
+     * @param {string} supplier - 仕入先名
+     * @param {number} addedCount - 追加された商品数
+     */
+    async function updateInspectionRequestProgress(supplier, addedCount) {
+      const currentUserEmail = firebase.auth().currentUser?.email;
+      if (!currentUserEmail) {
+        console.log('📋 [検品依頼] ユーザー未認証のためスキップ');
+        return;
+      }
+
+      // この仕入先・担当者でアクティブな検品依頼を検索
+      const requestsSnapshot = await db.collection('inspectionRequests')
+        .where('supplier', '==', supplier)
+        .where('assigneeEmail', '==', currentUserEmail)
+        .where('status', 'in', ['pending', 'in_progress'])
+        .limit(1)
+        .get();
+
+      if (requestsSnapshot.empty) {
+        console.log('📋 [検品依頼] 該当する依頼なし:', supplier, currentUserEmail);
+        return;
+      }
+
+      const requestDoc = requestsSnapshot.docs[0];
+      const requestData = requestDoc.data();
+      const newRegisteredCount = (requestData.registeredCount || 0) + addedCount;
+      const isCompleted = newRegisteredCount >= requestData.expectedCount;
+
+      // 検品依頼を更新
+      await db.collection('inspectionRequests').doc(requestDoc.id).update({
+        registeredCount: newRegisteredCount,
+        status: isCompleted ? 'completed' : 'in_progress',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log('📋 [検品依頼] 進捗更新:', requestDoc.id, newRegisteredCount, '/', requestData.expectedCount);
+
+      // 関連タスクを更新
+      const tasksSnapshot = await db.collection('userTasks')
+        .doc(currentUserEmail)
+        .collection('tasks')
+        .where('inspectionRequestId', '==', requestDoc.id)
+        .limit(1)
+        .get();
+
+      if (!tasksSnapshot.empty) {
+        const taskDoc = tasksSnapshot.docs[0];
+        const remaining = Math.max(0, requestData.expectedCount - newRegisteredCount);
+        
+        await taskDoc.ref.update({
+          registeredCount: newRegisteredCount,
+          remainingCount: remaining,
+          status: isCompleted ? 'completed' : 'in_progress',
+          completed: isCompleted,
+          completedAt: isCompleted ? firebase.firestore.FieldValue.serverTimestamp() : null
+        });
+
+        console.log('✅ [検品依頼] タスク更新:', taskDoc.id, 'completed:', isCompleted);
       }
     }
 
@@ -7612,6 +7783,323 @@
      */
     function filterDispatchProgress() {
       renderDispatchProgress();
+    }
+
+    // =====================================================
+    // 検品依頼関連
+    // =====================================================
+
+    let inspectionRequestsData = [];
+
+    /**
+     * 検品依頼一覧を読み込む
+     */
+    async function loadInspectionRequests() {
+      const tbody = document.getElementById('inspectionRequestBody');
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">データを読み込んでいます...</td></tr>';
+
+      try {
+        // 直近3ヶ月の依頼を取得
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+        const requestsSnapshot = await db.collection('inspectionRequests')
+          .where('createdAt', '>=', threeMonthsAgo)
+          .orderBy('createdAt', 'desc')
+          .limit(100)
+          .get();
+
+        inspectionRequestsData = [];
+
+        requestsSnapshot.forEach(doc => {
+          const data = doc.data();
+          inspectionRequestsData.push({
+            id: doc.id,
+            ...data
+          });
+        });
+
+        console.log('📋 [検品依頼] データ取得:', inspectionRequestsData.length, '件');
+
+        renderInspectionRequests();
+
+      } catch (error) {
+        console.error('検品依頼データ読み込みエラー:', error);
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">データの読み込みに失敗しました</td></tr>';
+      }
+    }
+
+    /**
+     * 検品依頼テーブルを描画
+     */
+    function renderInspectionRequests() {
+      const tbody = document.getElementById('inspectionRequestBody');
+      const filter = document.getElementById('inspectionRequestStatusFilter').value;
+
+      // フィルタリング
+      let filteredData = inspectionRequestsData;
+      if (filter !== 'all') {
+        filteredData = inspectionRequestsData.filter(req => req.status === filter);
+      }
+
+      if (filteredData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">該当するデータがありません</td></tr>';
+        return;
+      }
+
+      let html = '';
+      filteredData.forEach(req => {
+        const createdAt = req.createdAt?.toDate ? req.createdAt.toDate().toLocaleDateString('ja-JP') : '-';
+        const supplier = req.supplier || '-';
+        const expectedCount = req.expectedCount || 0;
+        const assigneeName = req.assigneeName || '-';
+        const dueDate = req.dueDate || '-';
+        const registeredCount = req.registeredCount || 0;
+        const status = req.status || 'pending';
+
+        // ステータスバッジ
+        let statusBadge = '';
+        switch(status) {
+          case 'pending':
+            statusBadge = '<span class="badge bg-secondary">未着手</span>';
+            break;
+          case 'in_progress':
+            statusBadge = '<span class="badge bg-warning text-dark">作業中</span>';
+            break;
+          case 'completed':
+            statusBadge = '<span class="badge bg-success">完了</span>';
+            break;
+          default:
+            statusBadge = '<span class="badge bg-secondary">' + status + '</span>';
+        }
+
+        // 進捗表示
+        let progressHtml = '-';
+        if (expectedCount > 0) {
+          const remaining = expectedCount - registeredCount;
+          const progressPercent = Math.round((registeredCount / expectedCount) * 100);
+          const progressColor = progressPercent === 100 ? '#10b981' : '#3b82f6';
+          progressHtml = `
+            <div style="min-width: 100px;">
+              <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                <span>${registeredCount}/${expectedCount}</span>
+                <span>残${remaining}</span>
+              </div>
+              <div style="background: #e5e7eb; border-radius: 4px; height: 6px; overflow: hidden;">
+                <div style="background: ${progressColor}; height: 100%; width: ${progressPercent}%;"></div>
+              </div>
+            </div>
+          `;
+        }
+
+        // 操作ボタン
+        let actionHtml = '';
+        if (status === 'pending' || status === 'in_progress') {
+          actionHtml = `
+            <button class="btn btn-sm btn-outline-danger" onclick="cancelInspectionRequest('${req.id}')" title="キャンセル">
+              <i class="bi bi-x-circle"></i>
+            </button>
+          `;
+        }
+
+        html += `
+          <tr>
+            <td>${createdAt}</td>
+            <td>${supplier}</td>
+            <td class="text-center">${expectedCount}</td>
+            <td>${assigneeName}</td>
+            <td>${dueDate}</td>
+            <td>${progressHtml}</td>
+            <td>${statusBadge}</td>
+            <td>${actionHtml}</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    /**
+     * 検品依頼フィルター
+     */
+    function filterInspectionRequests() {
+      renderInspectionRequests();
+    }
+
+    /**
+     * 検品依頼作成モーダルを表示
+     */
+    async function showCreateInspectionRequestModal() {
+      // 仕入先リストを読み込み
+      const supplierSelect = document.getElementById('inspectionRequestSupplier');
+      supplierSelect.innerHTML = '<option value="">読み込み中...</option>';
+
+      try {
+        const suppliersSnapshot = await db.collection('suppliers').get();
+        let supplierOptions = '<option value="">選択してください</option>';
+        suppliersSnapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.name) {
+            supplierOptions += `<option value="${data.name}">${data.name}</option>`;
+          }
+        });
+        supplierSelect.innerHTML = supplierOptions;
+      } catch (error) {
+        console.error('仕入先読み込みエラー:', error);
+        supplierSelect.innerHTML = '<option value="">エラー</option>';
+      }
+
+      // 担当者リストを読み込み（報酬対象ユーザーのみ）
+      const assigneeSelect = document.getElementById('inspectionRequestAssignee');
+      assigneeSelect.innerHTML = '<option value="">読み込み中...</option>';
+
+      try {
+        const usersSnapshot = await db.collection('users').get();
+        let assigneeOptions = '<option value="">選択してください</option>';
+        usersSnapshot.forEach(doc => {
+          const userData = doc.data();
+          // 報酬カウント対象外のユーザーは除外
+          if (userData.excludeFromCompensation === true) return;
+          const displayName = userData.displayName || userData.name || doc.id;
+          const email = doc.id;
+          assigneeOptions += `<option value="${email}" data-name="${displayName}">${displayName}</option>`;
+        });
+        assigneeSelect.innerHTML = assigneeOptions;
+      } catch (error) {
+        console.error('ユーザー読み込みエラー:', error);
+        assigneeSelect.innerHTML = '<option value="">エラー</option>';
+      }
+
+      // フォームをリセット
+      document.getElementById('inspectionRequestCount').value = '';
+      document.getElementById('inspectionRequestDueDate').value = '';
+      document.getElementById('inspectionRequestNote').value = '';
+
+      // モーダルを表示
+      const modal = new bootstrap.Modal(document.getElementById('createInspectionRequestModal'));
+      modal.show();
+    }
+
+    /**
+     * 検品依頼を作成
+     */
+    async function createInspectionRequest() {
+      const supplier = document.getElementById('inspectionRequestSupplier').value;
+      const expectedCount = parseInt(document.getElementById('inspectionRequestCount').value) || 0;
+      const assigneeSelect = document.getElementById('inspectionRequestAssignee');
+      const assigneeEmail = assigneeSelect.value;
+      const assigneeName = assigneeSelect.options[assigneeSelect.selectedIndex]?.dataset?.name || '';
+      const dueDate = document.getElementById('inspectionRequestDueDate').value;
+      const note = document.getElementById('inspectionRequestNote').value;
+
+      // バリデーション
+      if (!supplier) {
+        alert('仕入先を選択してください');
+        return;
+      }
+      if (expectedCount <= 0) {
+        alert('予定点数を入力してください');
+        return;
+      }
+      if (!assigneeEmail) {
+        alert('担当者を選択してください');
+        return;
+      }
+
+      try {
+        // 検品依頼を作成
+        const requestRef = await db.collection('inspectionRequests').add({
+          supplier: supplier,
+          expectedCount: expectedCount,
+          registeredCount: 0,
+          assigneeEmail: assigneeEmail,
+          assigneeName: assigneeName,
+          dueDate: dueDate || null,
+          note: note,
+          status: 'pending',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdBy: firebase.auth().currentUser?.email || 'unknown'
+        });
+
+        console.log('📋 [検品依頼] 作成完了:', requestRef.id);
+
+        // 担当者にタスクを作成
+        await db.collection('userTasks').doc(assigneeEmail).collection('tasks').add({
+          type: 'inspection_task',
+          title: `検品作業: ${supplier} (${expectedCount}点)`,
+          description: `仕入先「${supplier}」から${expectedCount}点の商品を検品してください。${note ? '\n備考: ' + note : ''}`,
+          inspectionRequestId: requestRef.id,
+          supplier: supplier,
+          expectedCount: expectedCount,
+          remainingCount: expectedCount,
+          registeredCount: 0,
+          dueDate: dueDate || null,
+          status: 'pending',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        console.log('✅ [検品依頼] タスク作成完了:', assigneeEmail);
+
+        // モーダルを閉じる
+        bootstrap.Modal.getInstance(document.getElementById('createInspectionRequestModal')).hide();
+
+        // 一覧を更新
+        await loadInspectionRequests();
+
+        alert('検品依頼を作成しました');
+
+      } catch (error) {
+        console.error('検品依頼作成エラー:', error);
+        alert('検品依頼の作成に失敗しました: ' + error.message);
+      }
+    }
+
+    /**
+     * 検品依頼をキャンセル
+     */
+    async function cancelInspectionRequest(requestId) {
+      if (!confirm('この検品依頼をキャンセルしますか？\n関連するタスクも削除されます。')) {
+        return;
+      }
+
+      try {
+        // 依頼情報を取得
+        const requestDoc = await db.collection('inspectionRequests').doc(requestId).get();
+        if (!requestDoc.exists) {
+          alert('依頼が見つかりません');
+          return;
+        }
+
+        const requestData = requestDoc.data();
+
+        // 関連タスクを削除
+        const tasksSnapshot = await db.collection('userTasks')
+          .doc(requestData.assigneeEmail)
+          .collection('tasks')
+          .where('inspectionRequestId', '==', requestId)
+          .get();
+
+        const batch = db.batch();
+        tasksSnapshot.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+
+        // 依頼を削除
+        batch.delete(db.collection('inspectionRequests').doc(requestId));
+
+        await batch.commit();
+
+        console.log('🗑️ [検品依頼] キャンセル完了:', requestId);
+
+        // 一覧を更新
+        await loadInspectionRequests();
+
+        alert('検品依頼をキャンセルしました');
+
+      } catch (error) {
+        console.error('検品依頼キャンセルエラー:', error);
+        alert('キャンセルに失敗しました: ' + error.message);
+      }
     }
 
     // フォームリセット
