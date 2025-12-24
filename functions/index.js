@@ -1623,6 +1623,28 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       return null;
     }
 
+    // 報酬カウント対象外フラグをチェック
+    const staffUserDoc = await db.collection('users').doc(staffEmail).get();
+    if (staffUserDoc.exists && staffUserDoc.data().excludeFromCompensation === true) {
+      console.log('⏭️ [onTaskCompleted] 報酬カウント対象外ユーザー:', staffEmail);
+      // 報酬はスキップするが、検品ステータス更新は実行する
+      if (taskType === 'inspection_task') {
+        try {
+          const batchId = afterData.relatedData?.batchId;
+          if (batchId) {
+            await db.collection('purchaseBatches').doc(batchId).update({
+              inspectionStatus: 'completed',
+              inspectionCompletedAt: new Date().toISOString()
+            });
+            console.log('✅ [onTaskCompleted] 検品ステータス更新完了（報酬なし）:', batchId);
+          }
+        } catch (batchError) {
+          console.error('⚠️ [onTaskCompleted] 検品ステータス更新エラー:', batchError);
+        }
+      }
+      return { success: true, skipped: true, reason: 'excludeFromCompensation' };
+    }
+
     // 報酬記録を作成
     const now = new Date();
     const compensationRecord = {
