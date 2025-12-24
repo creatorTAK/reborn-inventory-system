@@ -7,7 +7,7 @@
   <title>仕入管理 - FURIRA</title>
   <script>
     // v312: A-ONE 70面ラベル余白微調整
-    console.log('🔴🔴🔴 purchase.html v345-fix-assignee-display loaded 🔴🔴🔴');
+    console.log('🔴🔴🔴 purchase.html v346-minimal-header loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -1129,105 +1129,125 @@
     </div>
   </div>
 
-  <!-- 統一ヘッダー（チャット/タスク/ヘルプと同一構造） -->
+  <!-- ミニマルヘッダー（タスク/マイページと同一構造） -->
   <style>
-    .page-header {
-      background: linear-gradient(135deg, var(--reborn-primary, #40B4E5) 0%, var(--reborn-primary-dark, #1E8FBF) 100%);
-      padding: 28px 20px;
-      color: white;
-      text-align: center;
+    .minimal-header {
+      background: #ffffff;
+      height: 56px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       position: sticky;
       top: 0;
       z-index: 1000;
+      border-bottom: 1px solid #f0f0f0;
     }
-    .page-header h1 {
-      font-size: 22px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin: 0;
-    }
-    .page-header h1 i {
-      font-size: 22px;
-    }
-    .page-header .back-button {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      left: 16px;
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
-      border-radius: 50%;
-      width: 42px;
-      height: 42px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .minimal-header-logo {
+      width: 100px;
+      height: auto;
       cursor: pointer;
-      color: white;
-      font-size: 20px;
     }
-    .page-header .back-button:active {
-      background: rgba(255, 255, 255, 0.3);
-    }
-    .page-header .header-actions {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      right: 16px;
+    .minimal-header-icons {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 2px;
     }
-    .page-header .header-actions .btn {
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
-      color: white;
-      border-radius: 50%;
+    .minimal-header-icon {
       width: 36px;
       height: 36px;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .page-header .header-actions .btn:active {
-      background: rgba(255, 255, 255, 0.3);
-    }
-    .page-header .menu-button {
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
       border-radius: 50%;
-      width: 42px;
-      height: 42px;
+      border: none;
+      background: transparent;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      color: white;
+      color: #606060;
       font-size: 20px;
+      transition: background 0.2s;
+      position: relative;
     }
-    .page-header .menu-button:active {
-      background: rgba(255, 255, 255, 0.3);
+    .minimal-header-icon:hover {
+      background: #f2f2f2;
+    }
+    .minimal-header-icon:active {
+      background: #e5e5e5;
+    }
+    /* 設定ドロップダウン */
+    .settings-dropdown {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      min-width: 200px;
+      padding: 8px 0;
+      display: none;
+      z-index: 1001;
+    }
+    .settings-dropdown.active {
+      display: block;
+    }
+    .settings-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border: none;
+      background: none;
+      width: 100%;
+      font-size: 14px;
+      color: #374151;
+      cursor: pointer;
+      text-align: left;
+    }
+    .settings-dropdown-item:hover {
+      background: #f3f4f6;
+    }
+    .settings-dropdown-item i {
+      font-size: 18px;
+      color: #6b7280;
+      width: 20px;
+      text-align: center;
+    }
+    .announce-dot {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 8px;
+      height: 8px;
+      background: #ef4444;
+      border-radius: 50%;
+      display: none;
+    }
+    .announce-dot.visible {
+      display: block;
     }
   </style>
-  <div class="page-header">
-    <button class="back-button" title="戻る" onclick="goBack()">
-      <i class="bi bi-chevron-left"></i>
-    </button>
-    <h1>仕入管理</h1>
-    <div class="header-actions">
-      <button class="btn" onclick="openPaymentNoticeModal()" title="支払通知書発行">
-        <i class="bi bi-file-text"></i>
+  <div class="minimal-header">
+    <img src="/images/furira-square-logo.png?v=20251209" alt="Furira" class="minimal-header-logo" onclick="window.parent.postMessage({type:'navigate', page:'home'}, '*')">
+    <div class="minimal-header-icons">
+      <button class="minimal-header-icon" title="通知" onclick="openAnnouncePage()">
+        <i class="bi bi-bell"></i>
+        <span class="announce-dot" id="announceDot"></span>
       </button>
-      <button class="btn" onclick="openExportModal()" title="データ出力">
-        <i class="bi bi-download"></i>
-      </button>
-      <button class="menu-button" onclick="window.parent.postMessage({type:'toggleDrawer'}, '*')" title="メニュー">
-        <i class="bi bi-list"></i>
-      </button>
+      <div style="position: relative;">
+        <button class="minimal-header-icon" title="設定" onclick="toggleSettingsDropdown(event)">
+          <i class="bi bi-gear"></i>
+        </button>
+        <div class="settings-dropdown" id="settingsDropdown">
+          <button class="settings-dropdown-item" onclick="openPaymentNoticeModal(); closeSettingsDropdown();">
+            <i class="bi bi-file-text"></i>
+            <span>支払通知書発行</span>
+          </button>
+          <button class="settings-dropdown-item" onclick="openExportModal(); closeSettingsDropdown();">
+            <i class="bi bi-download"></i>
+            <span>仕入帳出力</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -3274,14 +3294,47 @@
       }
     }
 
-    function goBack() {
-      const isInIframe = window.self !== window.top;
-      if (isInIframe) {
-        window.top.postMessage({ type: 'goBack' }, '*');
-      } else {
-        window.location.href = '/menu_home.html';
+    // ============================================
+    // ミニマルヘッダー関連
+    // ============================================
+
+    /**
+     * 設定ドロップダウンの表示切り替え
+     */
+    function toggleSettingsDropdown(event) {
+      event.stopPropagation();
+      const dropdown = document.getElementById('settingsDropdown');
+      dropdown.classList.toggle('active');
+    }
+
+    /**
+     * 設定ドロップダウンを閉じる
+     */
+    function closeSettingsDropdown() {
+      const dropdown = document.getElementById('settingsDropdown');
+      if (dropdown) {
+        dropdown.classList.remove('active');
       }
     }
+
+    /**
+     * お知らせページを開く
+     */
+    function openAnnouncePage() {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'navigate', page: 'announce' }, '*');
+      } else {
+        window.location.href = '/announce.html';
+      }
+    }
+
+    // ドロップダウン外クリックで閉じる
+    document.addEventListener('click', (event) => {
+      const dropdown = document.getElementById('settingsDropdown');
+      if (dropdown && !event.target.closest('.settings-dropdown') && !event.target.closest('.minimal-header-icon')) {
+        dropdown.classList.remove('active');
+      }
+    });
 
     // ============================================
     // 帳簿出力機能（確定申告対応）
