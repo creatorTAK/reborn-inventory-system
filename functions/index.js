@@ -791,8 +791,20 @@ exports.onIncomingCall = onDocumentCreated('rooms/{roomId}/calls/{callId}', asyn
 
     console.log('📞 [onIncomingCall] 通知対象:', targetEmails);
 
+    // 🎯 閲覧中ユーザーを通知対象から除外（通話画面を開いている場合は通知不要）
+    const viewingUsers = await getViewingUsers(roomId);
+    console.log('👀 [onIncomingCall] 閲覧中ユーザー:', viewingUsers);
+
+    const filteredTargetEmails = targetEmails.filter(email => !viewingUsers.includes(email));
+    console.log(`📞 [onIncomingCall] 閲覧中除外後: ${filteredTargetEmails.length}人 (${targetEmails.length - filteredTargetEmails.length}人除外)`);
+
+    if (filteredTargetEmails.length === 0) {
+      console.log('⏭️ [onIncomingCall] 全員閲覧中のため通知スキップ');
+      return;
+    }
+
     // 各ユーザーのFCMトークンを取得して通知送信
-    const notificationPromises = targetEmails.map(async (userEmail) => {
+    const notificationPromises = filteredTargetEmails.map(async (userEmail) => {
       try {
         // activeDevices から取得
         const activeDeviceDoc = await db.collection('activeDevices').doc(userEmail).get();
