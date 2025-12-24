@@ -7,7 +7,7 @@
   <title>仕入管理 - FURIRA</title>
   <script>
     // v312: A-ONE 70面ラベル余白微調整
-    console.log('🔴🔴🔴 purchase.html v347-tab-consolidation loaded 🔴🔴🔴');
+    console.log('🔴🔴🔴 purchase.html v348-label-history-modal loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -1275,6 +1275,10 @@
           <i class="bi bi-gear"></i>
         </button>
         <div class="settings-dropdown" id="settingsDropdown">
+          <button class="settings-dropdown-item" onclick="openLabelPrintHistoryModal(); closeSettingsDropdown();">
+            <i class="bi bi-clock-history"></i>
+            <span>ラベル印刷履歴</span>
+          </button>
           <button class="settings-dropdown-item" onclick="openPaymentNoticeModal(); closeSettingsDropdown();">
             <i class="bi bi-file-text"></i>
             <span>支払通知書発行</span>
@@ -1322,18 +1326,6 @@
     <div class="tab-content">
       <!-- 仕入登録タブ -->
       <div class="tab-pane fade show active" id="entry-content" role="tabpanel">
-        <!-- 印刷履歴セクション（常時表示） -->
-        <div class="mb-3">
-          <button class="btn btn-sm btn-outline-secondary w-100" type="button" onclick="toggleLabelPrintHistory()">
-            <i class="bi bi-clock-history"></i> ラベル印刷履歴
-          </button>
-          <div id="labelPrintHistoryPanel" class="mt-2 border rounded p-2 bg-light" style="display: none; max-height: 300px; overflow-y: auto;">
-            <div id="labelPrintHistoryList" class="list-group list-group-flush">
-              <!-- 動的に生成 -->
-            </div>
-          </div>
-        </div>
-
         <!-- 入力モード切替 -->
         <div class="entry-mode-tabs mb-3">
           <div class="entry-mode-tab active" onclick="setEntryMode('individual')" id="entryModeIndividual">
@@ -2366,6 +2358,23 @@
           <button type="button" class="btn btn-warning" onclick="downloadPaymentNoticePDF()">
             <i class="bi bi-download"></i> PDF出力
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ラベル印刷履歴モーダル -->
+  <div class="modal fade" id="labelPrintHistoryModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-clock-history"></i> ラベル印刷履歴</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="max-height: 400px;">
+          <div id="labelPrintHistoryList" class="list-group list-group-flush">
+            <!-- 動的に生成 -->
+          </div>
         </div>
       </div>
     </div>
@@ -7117,21 +7126,13 @@
     }
 
     // 印刷履歴パネル表示切り替え
-    async function toggleLabelPrintHistory() {
-      // 即座にフォーカス解除（グレー残り防止）
-      document.activeElement.blur();
-
-      const panel = document.getElementById('labelPrintHistoryPanel');
-      const btn = document.querySelector('[onclick="toggleLabelPrintHistory()"]');
-
-      if (panel.style.display === 'none') {
-        panel.style.display = 'block';
-        btn.innerHTML = '<i class="bi bi-chevron-up"></i> 印刷履歴を閉じる';
-        await renderLabelPrintHistory();
-      } else {
-        panel.style.display = 'none';
-        btn.innerHTML = '<i class="bi bi-clock-history"></i> ラベル印刷履歴';
-      }
+    /**
+     * ラベル印刷履歴モーダルを開く
+     */
+    async function openLabelPrintHistoryModal() {
+      const modal = new bootstrap.Modal(document.getElementById('labelPrintHistoryModal'));
+      modal.show();
+      await renderLabelPrintHistory();
     }
 
     // 印刷履歴を描画
@@ -7260,11 +7261,12 @@
           lastReprintAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        // 履歴パネルを閉じる
-        const panel = document.getElementById('labelPrintHistoryPanel');
-        if (panel) panel.style.display = 'none';
-        const btn = document.querySelector('[onclick="toggleLabelPrintHistory()"]');
-        if (btn) btn.innerHTML = '<i class="bi bi-clock-history"></i> 印刷履歴を表示';
+        // 履歴モーダルを閉じる
+        const modalEl = document.getElementById('labelPrintHistoryModal');
+        if (modalEl) {
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
+        }
 
         // 印刷実行（履歴保存はスキップ、事前に開いたウィンドウを渡す）
         await printEntryLabelSheetWithWindow(pdfWindow, true);
