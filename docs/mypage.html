@@ -739,6 +739,48 @@
       color: #1f2937;
     }
 
+    /* 報酬単価カード */
+    .rate-card {
+      background: white;
+      border-radius: 16px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .rate-title {
+      font-size: 14px;
+      color: #374151;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .rate-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .rate-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #f9fafb;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .rate-item-icon {
+      font-size: 16px;
+    }
+    .rate-item-name {
+      color: #6b7280;
+    }
+    .rate-item-value {
+      font-weight: 600;
+      color: #1f2937;
+    }
+
     /* ランキングカード */
     .ranking-card {
       background: white;
@@ -2944,36 +2986,38 @@
       window.parent.postMessage({ type: 'navigate', page: 'feedback' }, '*');
     };
 
-    // 報酬設定を取得（localStorageからconfig経由）
+    // 報酬設定を取得（Firestoreを優先）
     async function loadCompensationSettings() {
       try {
-        // localStorageからconfig読み込み
+        // Firestoreから取得（優先）
+        const docRef = doc(db, 'settings', 'compensation');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          compensationSettings = docSnap.data();
+          console.log('報酬設定を読み込み（Firestore）:', compensationSettings);
+          return;
+        }
+
+        // Firestoreにない場合はlocalStorageを確認
         const configStr = localStorage.getItem('config');
         if (configStr) {
           const config = JSON.parse(configStr);
           if (config.報酬設定) {
             compensationSettings = config.報酬設定;
-            console.log('報酬設定を読み込み:', compensationSettings);
+            console.log('報酬設定を読み込み（localStorage）:', compensationSettings);
             return;
           }
         }
 
-        // Firestoreからも取得試行
-        const docRef = doc(db, 'settings', 'compensation');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          compensationSettings = docSnap.data();
-        } else {
-          // デフォルト設定
-          compensationSettings = {
-            taskRates: { listing: 100, shipping: 100, photography: 50, inspection: 30 },
-            mypage: { enabled: true, allowedUsers: [] }
-          };
-        }
+        // デフォルト設定
+        compensationSettings = {
+          taskRates: { listing: 100, shipping: 100, editing: 50 },
+          mypage: { enabled: true, allowedUsers: [] }
+        };
       } catch (error) {
         console.error('報酬設定取得エラー:', error);
         compensationSettings = {
-          taskRates: { listing: 100, shipping: 100 },
+          taskRates: { listing: 100, shipping: 100, editing: 50 },
           mypage: { enabled: true, allowedUsers: [] }
         };
       }
@@ -3166,6 +3210,29 @@
             </div>
             ${getMilestoneMessage(progressPercent)}
           </div>` : ''}
+        </div>
+
+        <!-- 報酬単価（全員に表示） -->
+        <div class="rate-card">
+          <div class="rate-title">📋 報酬単価</div>
+          <div class="rate-items">
+            <div class="rate-item">
+              <span class="rate-item-icon">📦</span>
+              <span class="rate-item-name">商品出品</span>
+              <span class="rate-item-value">¥${(compensationSettings.taskRates?.listing || 100).toLocaleString()}/件</span>
+            </div>
+            <div class="rate-item">
+              <span class="rate-item-icon">🚚</span>
+              <span class="rate-item-name">梱包・発送</span>
+              <span class="rate-item-value">¥${(compensationSettings.taskRates?.shipping || 100).toLocaleString()}/件</span>
+            </div>
+            ${compensationSettings.taskRates?.editing ? `
+            <div class="rate-item">
+              <span class="rate-item-icon">✏️</span>
+              <span class="rate-item-name">追加編集</span>
+              <span class="rate-item-value">¥${compensationSettings.taskRates.editing.toLocaleString()}/件</span>
+            </div>` : ''}
+          </div>
         </div>
 
         <!-- 内訳（担当タスクのみ表示） -->
