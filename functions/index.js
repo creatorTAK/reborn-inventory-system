@@ -84,13 +84,7 @@ exports.onProductCreated = onDocumentCreated('products/{productId}', async (even
       }
     }
 
-    // 📸 商品撮影報酬カウント（画像が1枚以上ある場合）
-    try {
-      await recordPhotographyCompensation(productData, productId);
-    } catch (photoError) {
-      console.error('❌ [onProductCreated] 撮影報酬記録エラー:', photoError);
-      // エラーでも処理継続
-    }
+    // 📸 商品撮影報酬は listing_approval タスク承認時にカウント（onTaskCompleted）
 
   } catch (error) {
     console.error('❌ [onProductCreated] エラー:', error);
@@ -195,86 +189,6 @@ async function updateRegistrationCountdown(purchaseSlotId) {
 
   } catch (error) {
     console.error('❌ [updateRegistrationCountdown] エラー:', error);
-    throw error;
-  }
-}
-
-/**
- * 📸 商品撮影報酬記録
- * 商品登録時に画像が1枚以上ある場合、撮影タスクとして報酬を記録
- * 撮影者 = 商品登録者
- * 1商品 = 1カウント
- */
-async function recordPhotographyCompensation(productData, productId) {
-  console.log('📸 [recordPhotographyCompensation] 開始:', productId);
-
-  // 画像URLを確認
-  const imageUrls = productData.images?.imageUrls || [];
-  if (imageUrls.length === 0) {
-    console.log('📸 [recordPhotographyCompensation] 画像なし、スキップ');
-    return;
-  }
-
-  console.log(`📸 [recordPhotographyCompensation] 画像${imageUrls.length}枚検出`);
-
-  // 登録者情報
-  const staffName = productData.createdBy || '不明';
-  const staffEmail = productData.createdByEmail;
-
-  if (!staffEmail) {
-    console.warn('📸 [recordPhotographyCompensation] 登録者メールなし、スキップ');
-    return;
-  }
-
-  try {
-    // 報酬設定を取得
-    const settingsDoc = await db.collection('settings').doc('compensation').get();
-    const settings = settingsDoc.exists ? settingsDoc.data() : getDefaultCompensationSettings();
-    const unitPrice = settings.taskRates?.photography || 50;
-
-    console.log(`📸 [recordPhotographyCompensation] 報酬単価: ¥${unitPrice}`);
-
-    // 管理番号と商品名を取得
-    const managementNumber = productData.managementNumber || productId;
-    const brandName = productData.brand?.nameEn || productData.brand?.nameKana || '';
-    const itemName = productData.itemName || '';
-    const productName = (brandName ? brandName + ' ' : '') + (itemName || '');
-
-    // 報酬記録を作成
-    const now = new Date();
-    const compensationRecord = {
-      type: 'photography',
-      taskType: 'photography',
-      description: '商品撮影報酬',
-      staffName: staffName,
-      staffEmail: staffEmail,
-      unitPrice: unitPrice,
-      quantity: 1,
-      totalAmount: unitPrice,
-      productId: productId,
-      managementNumber: managementNumber,
-      productName: productName,
-      imageCount: imageUrls.length,
-      recordedAt: now.toISOString(),
-      completedAt: now.toISOString(),
-      yearMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
-      autoRecorded: true, // 自動記録フラグ
-      source: 'onProductCreated'
-    };
-
-    // Firestoreに報酬記録を保存
-    await db.collection('compensationRecords').add(compensationRecord);
-
-    console.log('✅ [recordPhotographyCompensation] 撮影報酬記録完了:', {
-      staffName,
-      staffEmail,
-      unitPrice,
-      managementNumber,
-      imageCount: imageUrls.length
-    });
-
-  } catch (error) {
-    console.error('❌ [recordPhotographyCompensation] エラー:', error);
     throw error;
   }
 }
@@ -1734,6 +1648,47 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       unitPrice,
       productId: compensationRecord.productId
     });
+
+    // 📸 listing_approval の場合、商品に画像があれば撮影報酬も記録
+    if (taskType === 'listing_approval' && compensationRecord.productId) {
+      try {
+        const productDoc = await db.collection('products').doc(compensationRecord.productId).get();
+        if (productDoc.exists) {
+          const productData = productDoc.data();
+          const imageUrls = productData.images?.imageUrls || [];
+
+          if (imageUrls.length > 0) {
+            const photographyUnitPrice = settings.taskRates?.photography || 50;
+            const photographyRecord = {
+              taskId: taskId,
+              taskType: 'listing_approval_photography',
+              taskTypeKey: 'photography',
+              staffEmail: staffEmail,
+              staffName: staffName,
+              unitPrice: photographyUnitPrice,
+              description: '商品撮影報酬',
+              productId: compensationRecord.productId,
+              managementNumber: compensationRecord.managementNumber,
+              imageCount: imageUrls.length,
+              completedAt: afterData.completedAt || now.toISOString(),
+              recordedAt: now.toISOString(),
+              yearMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+              approvedBy: userEmail
+            };
+
+            await db.collection('compensationRecords').add(photographyRecord);
+            console.log('✅ [onTaskCompleted] 撮影報酬も記録:', {
+              staffName,
+              photographyUnitPrice,
+              imageCount: imageUrls.length
+            });
+          }
+        }
+      } catch (photoError) {
+        console.error('⚠️ [onTaskCompleted] 撮影報酬記録エラー（継続）:', photoError);
+        // 撮影報酬のエラーは致命的ではないので継続
+      }
+    }
 
     return { success: true, compensation: compensationRecord };
 
