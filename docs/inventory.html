@@ -2079,20 +2079,23 @@
     async function initFilterDropdowns() {
       try {
         // Firestoreが初期化されるまで待機
-        if (!window.db) {
+        if (!window.db || !window.firestoreGetDoc) {
           console.log('⏳ Firestore待機中（フィルタドロップダウン）');
           setTimeout(initFilterDropdowns, 500);
           return;
         }
+
         const db = window.db;
+        const { firestoreCollection, firestoreDoc, firestoreGetDoc, firestoreGetDocs } = window;
 
         // カテゴリマスタ取得（categories/master ドキュメント）
         const categorySelect = document.getElementById('filterCategory');
         if (categorySelect) {
           try {
-            const catDoc = await db.collection('categories').doc('master').get();
-            if (catDoc.exists) {
-              const rows = catDoc.data().rows || [];
+            const catDocRef = firestoreDoc(db, 'categories', 'master');
+            const catDocSnap = await firestoreGetDoc(catDocRef);
+            if (catDocSnap.exists()) {
+              const rows = catDocSnap.data().rows || [];
               // 大分類のみ取得（ユニーク）
               const mainCategories = [...new Set(rows.map(r => r.大分類).filter(Boolean))];
               mainCategories.sort();
@@ -2114,9 +2117,10 @@
         const colorSelect = document.getElementById('filterColor');
 
         try {
-          const snapshot = await db.collection('masterOptions').get();
-          snapshot.forEach(doc => {
-            const data = doc.data();
+          const masterOptionsRef = firestoreCollection(db, 'masterOptions');
+          const snapshot = await firestoreGetDocs(masterOptionsRef);
+          snapshot.forEach(docSnap => {
+            const data = docSnap.data();
             if (data.fieldName === 'サイズ' && data.items && sizeSelect) {
               data.items.forEach(size => {
                 const option = document.createElement('option');
@@ -3581,7 +3585,7 @@
   <!-- Firebase SDK (ARCH-001 Phase 3) -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-    import { getFirestore, collection, getDocs, doc, updateDoc, addDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getFirestore, collection, getDocs, getDoc, doc, updateDoc, addDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
     // Firebase設定
     const firebaseConfig = {
@@ -3596,6 +3600,13 @@
     // Firebase初期化
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+
+    // グローバルにdbと関数を公開（フィルタドロップダウン等で使用）
+    window.db = db;
+    window.firestoreCollection = collection;
+    window.firestoreDoc = doc;
+    window.firestoreGetDoc = getDoc;
+    window.firestoreGetDocs = getDocs;
 
     // 商品一覧取得関数
     async function getProductList() {
