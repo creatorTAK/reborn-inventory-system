@@ -194,79 +194,120 @@
     </div>
   </div>
 
-  <!-- 統一ヘッダー（チャット/タスク/ヘルプと同一構造） -->
+  <!-- ミニマルヘッダー（メインページ用） -->
   <style>
-    .page-header {
-      background: linear-gradient(135deg, var(--reborn-primary, #40B4E5) 0%, var(--reborn-primary-dark, #1E8FBF) 100%);
-      padding: 28px 20px;
-      color: white;
-      text-align: center;
+    .minimal-header {
+      background: #ffffff;
+      height: 56px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       position: sticky;
       top: 0;
       z-index: 1000;
+      border-bottom: 1px solid #f0f0f0;
     }
-    .page-header h1 {
-      font-size: 22px;
-      font-weight: 600;
+    .minimal-header-logo {
+      width: 100px;
+      height: auto;
+      cursor: pointer;
+    }
+    .minimal-header-icons {
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin: 0;
+      gap: 2px;
     }
-    .page-header h1 i {
-      font-size: 22px;
-    }
-    .page-header .back-button {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      left: 16px;
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
+    .minimal-header-icon {
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
-      width: 42px;
-      height: 42px;
+      border: none;
+      background: transparent;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      color: white;
+      color: #606060;
       font-size: 20px;
+      transition: background 0.2s;
     }
-    .page-header .back-button:active {
-      background: rgba(255, 255, 255, 0.3);
+    .minimal-header-icon:hover {
+      background: #f2f2f2;
     }
-    .page-header .menu-button {
+    .minimal-header-icon:active {
+      background: #e5e5e5;
+    }
+    /* 設定ドロップダウン */
+    .settings-dropdown {
       position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      right: 16px;
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
-      border-radius: 50%;
-      width: 42px;
-      height: 42px;
+      top: 100%;
+      right: 0;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      min-width: 200px;
+      padding: 8px 0;
+      z-index: 1001;
+      display: none;
+    }
+    .settings-dropdown.show {
+      display: block;
+    }
+    .settings-dropdown-item {
       display: flex;
       align-items: center;
-      justify-content: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-size: 14px;
+      color: #374151;
       cursor: pointer;
-      color: white;
-      font-size: 20px;
+      transition: background 0.15s;
     }
-    .page-header .menu-button:active {
-      background: rgba(255, 255, 255, 0.3);
+    .settings-dropdown-item:hover {
+      background: #f3f4f6;
+    }
+    .settings-dropdown-item i {
+      font-size: 18px;
+      color: #6b7280;
     }
   </style>
-  <div class="page-header">
-    <button class="back-button" id="back-button" title="戻る">
-      <i class="bi bi-chevron-left"></i>
-    </button>
-    <h1>入出庫履歴</h1>
-    <button class="menu-button" onclick="window.parent.postMessage({type:'toggleDrawer'}, '*')" title="メニュー">
-      <i class="bi bi-list"></i>
-    </button>
+  <div class="minimal-header">
+    <img src="/images/furira-square-logo.png?v=20251209" alt="フリラ" class="minimal-header-logo" onclick="window.parent.postMessage({type:'navigateToPage', page:'home'}, '*')" title="メニューに戻る">
+    <div class="minimal-header-icons">
+      <button class="minimal-header-icon" onclick="window.parent.postMessage({type:'openChatRooms'}, '*')" title="お知らせ">
+        <i class="bi bi-bell"></i>
+      </button>
+      <div style="position: relative;">
+        <button class="minimal-header-icon" onclick="toggleSettingsDropdown(event)" title="設定">
+          <i class="bi bi-gear"></i>
+        </button>
+        <div class="settings-dropdown" id="settingsDropdown">
+          <button class="settings-dropdown-item" onclick="window.parent.postMessage({type:'navigate', page:'config-system'}, '*')">
+            <i class="bi bi-gear-wide-connected"></i>
+            <span>システム設定</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
+  <script>
+  function toggleSettingsDropdown(event) {
+    event.stopPropagation();
+    const dropdown = document.getElementById('settingsDropdown');
+    dropdown.classList.toggle('show');
+  }
+  document.addEventListener('click', function(e) {
+    const dropdown = document.getElementById('settingsDropdown');
+    if (dropdown && !e.target.closest('.settings-dropdown') && !e.target.closest('.minimal-header-icon')) {
+      dropdown.classList.remove('show');
+    }
+  });
+  </script>
 
   <div class="container-fluid">
 
@@ -816,18 +857,7 @@
     }
   }
   
-  document.addEventListener('DOMContentLoaded', () => {
-    console.log('[inventory_history_viewer] DOMContentLoaded fired');
-    const backButton = document.getElementById('back-button');
-    console.log('[inventory_history_viewer] backButton element:', backButton);
-    
-    if (backButton) {
-      backButton.addEventListener('click', goBack);
-      console.log('[inventory_history_viewer] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
-    } else {
-      console.error('[inventory_history_viewer] ❌ 戻るボタンが見つかりません');
-    }
-  });
+  // ミニマルヘッダー: 戻るボタンは廃止、ロゴタップでホームに戻る
 </script>
 
 </body>
