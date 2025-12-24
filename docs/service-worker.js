@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v196-simple-icons'; // 通話・ノートアイコンシンプル化
-const SW_VERSION = 'v196-simple-icons'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v197-note-icon-fix'; // 送信側ノートアイコン白色修正
+const SW_VERSION = 'v197-note-icon-fix'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
