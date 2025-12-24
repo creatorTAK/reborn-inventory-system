@@ -470,6 +470,11 @@
       white-space: nowrap;
       flex: 1;
     }
+    .room-last-message i {
+      font-size: 12px;
+      margin-right: 2px;
+      vertical-align: middle;
+    }
     .unread-badge {
       background: #ef4444;
       color: white;
@@ -2282,20 +2287,39 @@
       // isBlockedRoom は上で既に定義済み
       if (isBlockedRoom) {
         // ブロック中: メッセージを非表示
-        lastMessage.textContent = '🚫 ブロック中';
+        lastMessage.innerHTML = '<i class="bi bi-slash-circle"></i> ブロック中';
         lastMessage.style.color = '#9ca3af';
         lastMessage.style.fontStyle = 'italic';
       } else if (room.lastMessage) {
         const sender = room.lastMessageBy || '';
+
+        // lastMessageにアイコンを追加する関数
+        const formatLastMessage = (msg) => {
+          // 特定のメッセージパターンにアイコンを追加
+          if (msg.match(/^通話\s*\(/)) {
+            return '<i class="bi bi-telephone-fill"></i> ' + msg;
+          } else if (msg === '音声メッセージ' || msg === '🎤 音声メッセージ') {
+            return '<i class="bi bi-mic-fill"></i> 音声メッセージ';
+          } else if (msg === 'ノートを共有しました' || msg.startsWith('📝')) {
+            return '<i class="bi bi-journal-text"></i> ノートを共有しました';
+          } else if (msg === '画像を送信しました') {
+            return '<i class="bi bi-image"></i> 画像';
+          } else if (msg === '（ファイル）' || msg.includes('ファイルを送信')) {
+            return '<i class="bi bi-file-earmark-fill"></i> ファイル';
+          }
+          // 既存の絵文字を除去（旧データ対応）
+          return msg.replace(/^[📞📝🎤📎📦🖼️]\s*/, '');
+        };
 
         // 表示ロジック:
         // - 個別チャット（type='direct'）: 送信者名なし
         // - システムルーム（sender='システム'）: 送信者名なし
         // - グループチャット: 送信者名あり
         if (room.type === 'direct' || sender === 'システム') {
-          lastMessage.textContent = room.lastMessage;
+          lastMessage.innerHTML = formatLastMessage(room.lastMessage);
         } else {
-          lastMessage.textContent = `${sender}: ${room.lastMessage}`;
+          const escapedSender = sender.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          lastMessage.innerHTML = `${escapedSender}: ${formatLastMessage(room.lastMessage)}`;
         }
       } else {
         lastMessage.textContent = 'メッセージはまだありません';
