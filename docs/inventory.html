@@ -419,6 +419,30 @@
       font-weight: 600;
       color: #374151;
     }
+    /* 商品カード滞留日数バッジ */
+    .aging-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+      margin-left: 4px;
+    }
+    .aging-badge.green {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .aging-badge.yellow {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .aging-badge.orange {
+      background: #ffedd5;
+      color: #9a3412;
+    }
+    .aging-badge.red {
+      background: #fee2e2;
+      color: #991b1b;
+    }
   </style>
 </head>
 <body>
@@ -1319,6 +1343,43 @@
       });
     }
 
+    // 商品の滞留日数を計算（商品カード用）
+    function calculateAgingDays(product) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let listingDate = null;
+
+      // listingDate または listingStartDate を使用
+      if (product.listingDate) {
+        listingDate = product.listingDate.toDate ? product.listingDate.toDate() : new Date(product.listingDate);
+      } else if (product.listingStartDate) {
+        listingDate = product.listingStartDate.toDate ? product.listingStartDate.toDate() : new Date(product.listingStartDate);
+      } else if (product.createdAt) {
+        // フォールバック: 作成日を使用
+        listingDate = product.createdAt.toDate ? product.createdAt.toDate() : new Date(product.createdAt);
+      }
+
+      if (!listingDate || isNaN(listingDate.getTime())) {
+        return { days: -1, colorClass: '' };
+      }
+
+      listingDate.setHours(0, 0, 0, 0);
+      const diffTime = today - listingDate;
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      let colorClass = 'green';
+      if (diffDays > 30) {
+        colorClass = 'red';
+      } else if (diffDays > 14) {
+        colorClass = 'orange';
+      } else if (diffDays > 7) {
+        colorClass = 'yellow';
+      }
+
+      return { days: diffDays, colorClass };
+    }
+
     // ダッシュボードと商品一覧を一度に読み込み（検索実行時）
     function loadDashboardAndSearch(showLoadingIndicator = true) {
       const startTime = performance.now();
@@ -1458,6 +1519,16 @@
       products.forEach(product => {
         console.log('[DEBUG CLIENT] Product:', product.managementNumber, 'images:', product.images);
         const statusClass = getStatusClass(product.status);
+
+        // 滞留日数計算（出品中のみ表示）
+        let agingBadgeHtml = '';
+        if (product.status === '出品中') {
+          const agingInfo = calculateAgingDays(product);
+          if (agingInfo.days >= 0) {
+            agingBadgeHtml = `<span class="aging-badge ${agingInfo.colorClass}">${agingInfo.days}日</span>`;
+          }
+        }
+
         // images配列（R2保存）→ imageUrl1（AI用）→ placeholder の優先順位
         const originalImageUrl = (product.images && product.images.length > 0)
           ? product.images[0]
@@ -1478,7 +1549,10 @@
               </div>
               <div class="card-body p-2">
                 <div class="d-flex justify-content-between align-items-start mb-1">
-                  <span class="badge ${statusClass} status-badge">${product.status}</span>
+                  <div>
+                    <span class="badge ${statusClass} status-badge">${product.status}</span>
+                    ${agingBadgeHtml}
+                  </div>
                   <small class="text-muted">${product.managementNumber}</small>
                 </div>
                 <h6 class="card-title mb-1 small">${product.productName || ''}</h6>
