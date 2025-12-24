@@ -3030,7 +3030,11 @@
       });
       document.getElementById('profilePopupCallBtn').addEventListener('click', function() {
         if (currentProfileUser) {
-          alert('通話機能は準備中です');
+          // プロフィールから通話を開始
+          const userName = currentProfileUser.userName;
+          const iconUrl = currentProfileUser.iconUrl;
+          closeProfilePopup();
+          showCallPreparing(userName, iconUrl);
         }
       });
 
@@ -7871,10 +7875,12 @@
     let isSpeakerOn = true;
 
     // 通話開始
-    window.showCallPreparing = async function() {
-      document.getElementById('callButton').blur();
+    // targetUserName, targetIconUrl: プロフィールポップアップからの通話時に指定
+    window.showCallPreparing = async function(targetUserName, targetIconUrl) {
+      const callButton = document.getElementById('callButton');
+      if (callButton) callButton.blur();
 
-      // 個別チャットのみ通話可能
+      // チャットルームが必要
       if (!currentRoomId) {
         alert('チャットルームを選択してください');
         return;
@@ -7892,16 +7898,16 @@
       const modal = document.getElementById('callModal');
       modal.style.display = 'flex';
 
-      // 相手の名前を設定
-      const roomName = document.getElementById('headerRoomName').textContent;
-      document.getElementById('callUserName').textContent = roomName;
+      // 相手の名前を設定（引数があればそれを使用、なければルーム名から取得）
+      const displayName = targetUserName || document.getElementById('headerRoomName').textContent;
+      document.getElementById('callUserName').textContent = displayName;
       document.getElementById('callStatus').textContent = '接続中...';
 
       // 相手のアバター画像を設定
       const avatarContainer = document.getElementById('callUserAvatar');
-      const otherUserIcon = getUserIconUrl(roomName);
-      if (otherUserIcon) {
-        avatarContainer.innerHTML = `<img src="${otherUserIcon}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.outerHTML='<i class=\\'bi bi-person-fill\\'></i>'">`;
+      const iconUrl = targetIconUrl || getUserIconUrl(displayName);
+      if (iconUrl) {
+        avatarContainer.innerHTML = `<img src="${iconUrl}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.outerHTML='<i class=\\'bi bi-person-fill\\'></i>'">`;
       } else {
         avatarContainer.innerHTML = '<i class="bi bi-person-fill"></i>';
       }

@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v194-call-push-notify'; // 着信プッシュ通知追加
-const SW_VERSION = 'v194-call-push-notify'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v195-profile-call'; // プロフィールから通話対応
+const SW_VERSION = 'v195-profile-call'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
