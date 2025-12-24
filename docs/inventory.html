@@ -1032,10 +1032,12 @@
         <button type="button" class="btn btn-primary btn-sm flex-grow-1" onclick="searchByManagementNumber()">
           <i class="bi bi-search"></i> 検索
         </button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearMgmtSearch()">
-          <i class="bi bi-x"></i>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearMgmtSearchAndReload()">
+          <i class="bi bi-arrow-counterclockwise"></i> リセット
         </button>
       </div>
+      <!-- 管理番号検索用の隠しフィールド -->
+      <input type="hidden" id="mgmtSearchValue">
     </div>
 
     <!-- 商品名・ブランド検索 -->
@@ -1497,6 +1499,7 @@
       const params = {
         statuses: statusValues,  // 配列として渡す
         searchText: document.getElementById('searchText').value.trim(),
+        mgmtSearchText: document.getElementById('mgmtSearchValue').value.trim(),  // 管理番号検索（独立）
         brand: document.getElementById('filterBrand').value.trim(),
         category: document.getElementById('filterCategory').value.trim(),
         size: document.getElementById('filterSize').value.trim(),
@@ -1529,11 +1532,18 @@
           filteredProducts = filteredProducts.filter(p => params.statuses.includes(p.status));
         }
 
-        // テキスト検索
+        // 管理番号検索（独立・前方一致）
+        if (params.mgmtSearchText) {
+          const mgmtLower = params.mgmtSearchText.toLowerCase();
+          filteredProducts = filteredProducts.filter(p =>
+            p.managementNumber && p.managementNumber.toLowerCase().startsWith(mgmtLower)
+          );
+        }
+
+        // テキスト検索（商品名・ブランド）
         if (params.searchText) {
           const searchLower = params.searchText.toLowerCase();
           filteredProducts = filteredProducts.filter(p =>
-            (p.managementNumber && p.managementNumber.toLowerCase().includes(searchLower)) ||
             (p.productName && p.productName.toLowerCase().includes(searchLower)) ||
             (p.brand && p.brand.toLowerCase().includes(searchLower))
           );
@@ -1776,6 +1786,9 @@
       document.getElementById('searchText').value = '';
       document.getElementById('clearSearchText').style.display = 'none';
 
+      // 管理番号検索をクリア
+      clearMgmtSearch();
+
       // 詳細フィルタをクリア
       document.getElementById('filterBrand').value = '';
       document.getElementById('filterCategory').value = '';
@@ -1899,9 +1912,12 @@
         return;
       }
 
-      // 検索テキストに設定して検索実行
-      document.getElementById('searchText').value = searchMgmtNumber;
-      document.getElementById('clearSearchText').style.display = 'flex';
+      // 管理番号検索用の隠しフィールドに設定（テキスト検索フィールドは使わない）
+      document.getElementById('mgmtSearchValue').value = searchMgmtNumber;
+
+      // テキスト検索はクリア（管理番号検索とは独立）
+      document.getElementById('searchText').value = '';
+      document.getElementById('clearSearchText').style.display = 'none';
 
       // ステータスは全てチェック
       document.querySelectorAll('input[type="checkbox"][id^="status"]').forEach(cb => {
@@ -1921,6 +1937,14 @@
       document.getElementById('mgmtSearchSecond').disabled = true;
       document.getElementById('mgmtSearchSecond').innerHTML = '<option value="">棚番号</option>';
       document.getElementById('mgmtSearchNumber').value = '';
+      document.getElementById('mgmtSearchValue').value = '';
+    }
+
+    // 管理番号検索をクリアして再検索
+    function clearMgmtSearchAndReload() {
+      clearMgmtSearch();
+      currentPage = 1;
+      loadDashboardAndSearch();
     }
 
     // 商品詳細表示
