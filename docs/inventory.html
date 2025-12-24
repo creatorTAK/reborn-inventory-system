@@ -934,11 +934,39 @@
       </div>
     </div>
 
+    <!-- 管理番号検索 -->
+    <div class="mb-3">
+      <label class="form-label small">管理番号で検索</label>
+      <div class="row g-2">
+        <div class="col-4">
+          <select class="form-select form-select-sm" id="mgmtSearchFirst" onchange="onMgmtSearchFirstChange()">
+            <option value="">頭文字</option>
+          </select>
+        </div>
+        <div class="col-4">
+          <select class="form-select form-select-sm" id="mgmtSearchSecond" disabled onchange="onMgmtSearchSecondChange()">
+            <option value="">棚番号</option>
+          </select>
+        </div>
+        <div class="col-4">
+          <input type="text" class="form-control form-control-sm" id="mgmtSearchNumber" placeholder="連番" inputmode="numeric" pattern="[0-9]*">
+        </div>
+      </div>
+      <div class="mt-2 d-flex gap-2">
+        <button type="button" class="btn btn-primary btn-sm flex-grow-1" onclick="searchByManagementNumber()">
+          <i class="bi bi-search"></i> 管理番号検索
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearMgmtSearch()">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+    </div>
+
     <!-- テキスト検索 -->
     <div class="mb-3">
-      <label for="searchText" class="form-label small">商品名・管理番号で検索</label>
+      <label for="searchText" class="form-label small">商品名・ブランドで検索</label>
       <div class="position-relative">
-        <input type="text" class="form-control form-control-sm pe-5" id="searchText" placeholder="例: AA-1001, UNIQLO">
+        <input type="text" class="form-control form-control-sm pe-5" id="searchText" placeholder="例: UNIQLO, Tシャツ">
         <button type="button" class="btn-clear-search" id="clearSearchText" style="display: none;" onclick="clearSearchText()">
           <i class="bi bi-x-circle-fill"></i>
         </button>
@@ -1140,6 +1168,9 @@
       waitForFirestoreApi(function() {
         loadDashboard();  // UX改善: 初期表示は統計のみ、検索ボタンで商品表示
       });
+
+      // 管理番号検索の頭文字プルダウンを初期化
+      initMgmtSearchDropdowns();
 
       // イベントリスナー
       document.getElementById('btnSearch').addEventListener('click', () => {
@@ -1660,20 +1691,23 @@
       document.getElementById('filterCategory').value = '';
       document.getElementById('filterSize').value = '';
       document.getElementById('filterColor').value = '';
-      
+
       // 詳細フィルタのクリアボタンも非表示
       document.querySelectorAll('[data-clear]').forEach(function(btn) {
         btn.style.display = 'none';
       });
-      
+
+      // 管理番号検索をクリア
+      clearMgmtSearch();
+
       // ステータスは全てチェック
       document.querySelectorAll('input[type="checkbox"][id^="status"]').forEach(cb => {
         cb.checked = true;
       });
-      
+
       document.getElementById('sortBy').value = 'registeredAt';
       document.getElementById('sortOrder').value = 'desc';
-      
+
       currentPage = 1;
       loadDashboardAndSearch();
     }
@@ -1722,6 +1756,113 @@
       currentPage = 1;
       showResultsView();
       loadDashboardAndSearch();
+    }
+
+    // ========================================
+    // 管理番号検索機能
+    // ========================================
+
+    // 管理番号設定をキャッシュ
+    let mgmtNumberConfig = null;
+
+    // 管理番号検索プルダウンを初期化
+    function initMgmtSearchDropdowns() {
+      // localStorageから管理番号設定を読み込み
+      try {
+        const configStr = localStorage.getItem('rebornConfig_managementNumber');
+        if (configStr) {
+          mgmtNumberConfig = JSON.parse(configStr);
+          console.log('📦 管理番号設定読み込み:', mgmtNumberConfig);
+        }
+      } catch (e) {
+        console.warn('管理番号設定の読み込みエラー:', e);
+      }
+
+      // 頭文字プルダウンを生成（A-Z）
+      const firstSelect = document.getElementById('mgmtSearchFirst');
+      if (firstSelect) {
+        let options = '<option value="">頭文字</option>';
+        for (let i = 65; i <= 90; i++) {
+          const char = String.fromCharCode(i);
+          options += `<option value="${char}">${char}</option>`;
+        }
+        firstSelect.innerHTML = options;
+      }
+    }
+
+    // 頭文字変更時
+    function onMgmtSearchFirstChange() {
+      const firstSelect = document.getElementById('mgmtSearchFirst');
+      const secondSelect = document.getElementById('mgmtSearchSecond');
+      const firstChar = firstSelect.value;
+
+      if (!firstChar) {
+        secondSelect.innerHTML = '<option value="">棚番号</option>';
+        secondSelect.disabled = true;
+        return;
+      }
+
+      // 棚番号プルダウンを生成（頭文字 + A-Z）
+      let options = '<option value="">棚番号</option>';
+      for (let i = 65; i <= 90; i++) {
+        const char = String.fromCharCode(i);
+        const shelfCode = firstChar + char;
+        options += `<option value="${shelfCode}">${shelfCode}</option>`;
+      }
+      secondSelect.innerHTML = options;
+      secondSelect.disabled = false;
+    }
+
+    // 棚番号変更時（オプション：将来の拡張用）
+    function onMgmtSearchSecondChange() {
+      // 現状は何もしない
+    }
+
+    // 管理番号で検索
+    function searchByManagementNumber() {
+      const firstChar = document.getElementById('mgmtSearchFirst').value;
+      const shelfCode = document.getElementById('mgmtSearchSecond').value;
+      const seqNumber = document.getElementById('mgmtSearchNumber').value.trim();
+
+      // 管理番号を組み立て
+      let searchMgmtNumber = '';
+
+      if (shelfCode && seqNumber) {
+        // 完全一致検索（例：AA-1001）
+        searchMgmtNumber = shelfCode + '-' + seqNumber;
+      } else if (shelfCode) {
+        // 棚番号のみ（例：AA-）- 前方一致
+        searchMgmtNumber = shelfCode + '-';
+      } else if (firstChar) {
+        // 頭文字のみ（例：A）- 前方一致
+        searchMgmtNumber = firstChar;
+      } else {
+        alert('頭文字を選択してください');
+        return;
+      }
+
+      // 検索テキストに設定して検索実行
+      document.getElementById('searchText').value = searchMgmtNumber;
+      document.getElementById('clearSearchText').style.display = 'flex';
+
+      // ステータスは全てチェック
+      document.querySelectorAll('input[type="checkbox"][id^="status"]').forEach(cb => {
+        cb.checked = true;
+      });
+
+      // 検索実行
+      currentPage = 1;
+      showResultsView();
+      loadDashboardAndSearch();
+    }
+
+    // 管理番号検索をクリア
+    function clearMgmtSearch() {
+      document.getElementById('mgmtSearchFirst').value = '';
+      document.getElementById('mgmtSearchSecond').value = '';
+      document.getElementById('mgmtSearchSecond').disabled = true;
+      document.getElementById('mgmtSearchSecond').innerHTML = '<option value="">棚番号</option>';
+      document.getElementById('mgmtSearchNumber').value = '';
     }
 
     // 商品詳細表示
