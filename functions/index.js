@@ -1582,10 +1582,10 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       unitPrice = settings.taskRates?.shipping || 100;
       description = '梱包発送報酬';
     } else if (taskType === 'inventory_action') {
-      taskTypeKey = 'inventory_review';
+      taskTypeKey = 'editing';
       // タスクに設定された報酬額を優先、なければ設定から取得
-      unitPrice = afterData.compensation || settings.taskRates?.inventory_review || 50;
-      description = '滞留商品対策報酬';
+      unitPrice = afterData.compensation || settings.taskRates?.editing || 50;
+      description = '追加編集報酬';
     }
 
     // 担当スタッフ（タスクを実行した人ではなく、実際の作業者）を取得
@@ -1990,18 +1990,23 @@ exports.dailyInventoryAgingCheck = onSchedule({
   const startTime = Date.now();
 
   try {
-    // 設定を取得（閾値やタスク担当者設定）
-    const settingsDoc = await db.collection('settings').doc('inventoryAging').get();
-    const settings = settingsDoc.exists ? settingsDoc.data() : {};
+    // 滞留設定を取得（閾値やタスク担当者設定）
+    const agingSettingsDoc = await db.collection('settings').doc('inventoryAging').get();
+    const agingSettings = agingSettingsDoc.exists ? agingSettingsDoc.data() : {};
+
+    // 報酬設定を取得
+    const compensationSettingsDoc = await db.collection('settings').doc('compensation').get();
+    const compensationSettings = compensationSettingsDoc.exists ? compensationSettingsDoc.data() : {};
 
     // デフォルト設定
-    const warningDays = settings.warningDays || 14;
-    const actionDays = settings.actionDays || 30;
-    const assigneeType = settings.assigneeType || 'registrant'; // 'registrant' or 'fixed'
-    const fixedAssignee = settings.fixedAssignee || null;
-    const compensationAmount = settings.compensationAmount || 50; // 報酬額
+    const warningDays = agingSettings.warningDays || 14;
+    const actionDays = agingSettings.actionDays || 30;
+    const assigneeType = agingSettings.assigneeType || 'registrant'; // 'registrant' or 'fixed'
+    const fixedAssignee = agingSettings.fixedAssignee || null;
+    // 報酬額は報酬設定から取得
+    const compensationAmount = compensationSettings.taskRates?.editing || 50;
 
-    console.log(`📋 [設定] 警告: ${warningDays}日, 対策: ${actionDays}日, 担当: ${assigneeType}`);
+    console.log(`📋 [設定] 警告: ${warningDays}日, 対策: ${actionDays}日, 担当: ${assigneeType}, 報酬: ¥${compensationAmount}`);
 
     // 出品中の商品を取得
     const productsSnapshot = await db.collection('products')
@@ -2084,7 +2089,7 @@ exports.dailyInventoryAgingCheck = onSchedule({
             createdAt: FieldValue.serverTimestamp(),
             dueDate: dueDate,
             compensation: compensationAmount,
-            compensationType: 'inventory_review',
+            compensationType: 'editing',
             priority: 'high'
           });
 
