@@ -8372,42 +8372,54 @@ ${prompt || '（未設定）'}
         const permissionOrder = { owner: 1, admin: 2, staff: 3, outsourcing: 4 };
         users.sort((a, b) => (permissionOrder[a.permissionId] || 99) - (permissionOrder[b.permissionId] || 99));
 
-        if (users.length === 0) {
-          container.innerHTML = '<div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">ユーザーが登録されていません</div>';
+        // 管理者（owner, admin）を除外し、スタッフのみ表示
+        const staffUsers = users.filter(u => u.permissionId === 'staff' || u.permissionId === 'outsourcing');
+
+        if (staffUsers.length === 0) {
+          container.innerHTML = '<div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">対象スタッフがいません</div>';
           return;
         }
 
         // ユーザータスク設定をキャッシュ
-        users.forEach(u => {
+        staffUsers.forEach(u => {
           window.userTaskAssignments[u.email] = u.assignedTasks;
         });
 
         // ユーザーリストを描画
-        container.innerHTML = users.map(user => {
-          const permissionBadge = getPermissionBadgeStyle(user.permissionId);
+        container.innerHTML = staffUsers.map(user => {
           const avatarHtml = user.photoURL
             ? `<img src="${escapeHtml(user.photoURL)}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">`
             : `<div style="width: 32px; height: 32px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 14px;">👤</div>`;
 
-          const listingChecked = user.assignedTasks.includes('listing') ? 'checked' : '';
-          const shippingChecked = user.assignedTasks.includes('shipping') ? 'checked' : '';
+          // 全タスク種別のチェック状態
+          const tasks = [
+            { id: 'listing', icon: '📦', name: '出品' },
+            { id: 'shipping', icon: '🚚', name: '発送' },
+            { id: 'photography', icon: '📸', name: '撮影' },
+            { id: 'inspection', icon: '🔍', name: '検品' },
+            { id: 'stocktaking', icon: '📊', name: '棚卸' },
+            { id: 'editing', icon: '✏️', name: '編集' }
+          ];
+
+          const checkboxes = tasks.map(task => {
+            const checked = user.assignedTasks.includes(task.id) ? 'checked' : '';
+            return `
+              <label style="display: flex; align-items: center; gap: 3px; cursor: pointer;">
+                <input type="checkbox" class="task-assign-checkbox" data-email="${escapeHtml(user.email)}" data-task="${task.id}" ${checked} style="width: 14px; height: 14px; accent-color: #6b7280;">
+                <span style="font-size: 10px; color: #6b7280;">${task.icon}</span>
+              </label>
+            `;
+          }).join('');
 
           return `
             <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
               ${avatarHtml}
               <div style="flex: 1; min-width: 0;">
                 <div style="font-size: 13px; color: #374151; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(user.name)}</div>
-                <span style="${permissionBadge}">${escapeHtml(user.permissionDisplay)}</span>
+                <span style="font-size: 10px; color: #9ca3af; background: #f3f4f6; padding: 2px 6px; border-radius: 4px;">${escapeHtml(user.permissionDisplay)}</span>
               </div>
-              <div style="display: flex; gap: 12px; flex-shrink: 0;">
-                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                  <input type="checkbox" class="task-assign-checkbox" data-email="${escapeHtml(user.email)}" data-task="listing" ${listingChecked} style="width: 14px; height: 14px; accent-color: #3b82f6;">
-                  <span style="font-size: 11px; color: #4b5563;">📦出品</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-                  <input type="checkbox" class="task-assign-checkbox" data-email="${escapeHtml(user.email)}" data-task="shipping" ${shippingChecked} style="width: 14px; height: 14px; accent-color: #10b981;">
-                  <span style="font-size: 11px; color: #4b5563;">🚚発送</span>
-                </label>
+              <div style="display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end;">
+                ${checkboxes}
               </div>
             </div>
           `;
