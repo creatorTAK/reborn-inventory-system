@@ -1555,9 +1555,11 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
   });
 
   // 報酬対象のタスクタイプをチェック
-  const compensationTaskTypes = ['listing_approval', 'shipping_task'];
-  if (!compensationTaskTypes.includes(afterData.type)) {
-    console.log('⏭️ [onTaskCompleted] 報酬対象外のタスクタイプ:', afterData.type);
+  // type または taskType フィールドを確認
+  const taskType = afterData.type || afterData.taskType;
+  const compensationTaskTypes = ['listing_approval', 'shipping_task', 'inventory_action'];
+  if (!compensationTaskTypes.includes(taskType)) {
+    console.log('⏭️ [onTaskCompleted] 報酬対象外のタスクタイプ:', taskType);
     return null;
   }
 
@@ -1571,25 +1573,44 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
     let unitPrice = 0;
     let description = '';
 
-    if (afterData.type === 'listing_approval') {
+    if (taskType === 'listing_approval') {
       taskTypeKey = 'listing';
       unitPrice = settings.taskRates?.listing || 100;
       description = '出品作業報酬';
-    } else if (afterData.type === 'shipping_task') {
+    } else if (taskType === 'shipping_task') {
       taskTypeKey = 'shipping';
       unitPrice = settings.taskRates?.shipping || 100;
       description = '梱包発送報酬';
+    } else if (taskType === 'inventory_action') {
+      taskTypeKey = 'inventory_review';
+      // タスクに設定された報酬額を優先、なければ設定から取得
+      unitPrice = afterData.compensation || settings.taskRates?.inventory_review || 50;
+      description = '滞留商品対策報酬';
     }
 
     // 担当スタッフ（タスクを実行した人ではなく、実際の作業者）を取得
-    const staffEmail = afterData.relatedData?.staffEmail ||
-                       afterData.relatedData?.assignedTo ||
-                       afterData.relatedData?.createdByEmail ||
-                       null;
-    const staffName = afterData.relatedData?.staffName ||
-                      afterData.relatedData?.assignedToName ||
-                      afterData.relatedData?.createdBy ||
-                      '不明';
+    // inventory_action タスクの場合は userEmail（タスク担当者）を使用
+    let staffEmail = null;
+    let staffName = '不明';
+
+    if (taskType === 'inventory_action') {
+      // 滞留タスクはタスク担当者が作業者
+      staffEmail = userEmail;
+      // ユーザー情報を取得
+      const userDoc = await db.collection('users').doc(userEmail).get();
+      if (userDoc.exists) {
+        staffName = userDoc.data().userName || userDoc.data().displayName || userEmail.split('@')[0];
+      }
+    } else {
+      staffEmail = afterData.relatedData?.staffEmail ||
+                   afterData.relatedData?.assignedTo ||
+                   afterData.relatedData?.createdByEmail ||
+                   null;
+      staffName = afterData.relatedData?.staffName ||
+                  afterData.relatedData?.assignedToName ||
+                  afterData.relatedData?.createdBy ||
+                  '不明';
+    }
 
     if (!staffEmail) {
       console.warn('⚠️ [onTaskCompleted] 担当スタッフのメールが不明:', afterData);
@@ -1600,14 +1621,15 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
     const now = new Date();
     const compensationRecord = {
       taskId: taskId,
-      taskType: afterData.type,
+      taskType: taskType,
       taskTypeKey: taskTypeKey,
       staffEmail: staffEmail,
       staffName: staffName,
       unitPrice: unitPrice,
       description: description,
-      productId: afterData.relatedData?.productId || null,
-      managementNumber: afterData.relatedData?.managementNumber || null,
+      // inventory_action の場合は直接フィールドを参照
+      productId: afterData.productId || afterData.relatedData?.productId || null,
+      managementNumber: afterData.managementNumber || afterData.relatedData?.managementNumber || null,
       completedAt: afterData.completedAt || now.toISOString(),
       recordedAt: now.toISOString(),
       yearMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
@@ -1949,6 +1971,268 @@ exports.dailyTaskReminder = onSchedule({
 
   } catch (error) {
     console.error('❌ [dailyTaskReminder] エラー:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * 滞留商品チェック（毎日9時実行）
+ * - 出品中の商品をチェック
+ * - 14日以上: 警告タスク作成
+ * - 30日以上: 対策タスク作成（報酬付き）
+ */
+exports.dailyInventoryAgingCheck = onSchedule({
+  schedule: '0 0 * * *', // UTC 0:00 = JST 9:00
+  timeZone: 'Asia/Tokyo',
+  region: 'asia-northeast1'
+}, async (event) => {
+  console.log('📦 [dailyInventoryAgingCheck] 滞留商品チェック開始');
+  const startTime = Date.now();
+
+  try {
+    // 設定を取得（閾値やタスク担当者設定）
+    const settingsDoc = await db.collection('settings').doc('inventoryAging').get();
+    const settings = settingsDoc.exists ? settingsDoc.data() : {};
+
+    // デフォルト設定
+    const warningDays = settings.warningDays || 14;
+    const actionDays = settings.actionDays || 30;
+    const assigneeType = settings.assigneeType || 'registrant'; // 'registrant' or 'fixed'
+    const fixedAssignee = settings.fixedAssignee || null;
+    const compensationAmount = settings.compensationAmount || 50; // 報酬額
+
+    console.log(`📋 [設定] 警告: ${warningDays}日, 対策: ${actionDays}日, 担当: ${assigneeType}`);
+
+    // 出品中の商品を取得
+    const productsSnapshot = await db.collection('products')
+      .where('status', '==', '出品中')
+      .get();
+
+    console.log(`📦 [dailyInventoryAgingCheck] 出品中商品数: ${productsSnapshot.size}`);
+
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    let warningTasksCreated = 0;
+    let actionTasksCreated = 0;
+
+    for (const productDoc of productsSnapshot.docs) {
+      const product = productDoc.data();
+      const productId = productDoc.id;
+
+      // 出品日を取得
+      let listingDate = null;
+      if (product.listingDate) {
+        listingDate = product.listingDate.toDate ? product.listingDate.toDate() : new Date(product.listingDate);
+      } else if (product.listingStartDate) {
+        listingDate = product.listingStartDate.toDate ? product.listingStartDate.toDate() : new Date(product.listingStartDate);
+      } else if (product.createdAt) {
+        listingDate = product.createdAt.toDate ? product.createdAt.toDate() : new Date(product.createdAt);
+      }
+
+      if (!listingDate || isNaN(listingDate.getTime())) {
+        console.log(`⏭️ [${product.managementNumber}] 出品日不明 - スキップ`);
+        continue;
+      }
+
+      listingDate.setHours(0, 0, 0, 0);
+      const diffTime = now - listingDate;
+      const agingDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      // タスク担当者を決定
+      let assigneeEmail = null;
+      if (assigneeType === 'fixed' && fixedAssignee) {
+        assigneeEmail = fixedAssignee;
+      } else {
+        // 商品登録者を担当者にする
+        assigneeEmail = product.userEmail || product.registrantEmail || null;
+      }
+
+      if (!assigneeEmail) {
+        console.log(`⏭️ [${product.managementNumber}] 担当者不明 - スキップ`);
+        continue;
+      }
+
+      // 既存タスクをチェック（重複作成防止）
+      const existingTasksSnapshot = await db.collection('userTasks')
+        .doc(assigneeEmail)
+        .collection('tasks')
+        .where('productId', '==', productId)
+        .where('taskType', 'in', ['inventory_warning', 'inventory_action'])
+        .where('completed', '==', false)
+        .get();
+
+      const existingWarning = existingTasksSnapshot.docs.find(d => d.data().taskType === 'inventory_warning');
+      const existingAction = existingTasksSnapshot.docs.find(d => d.data().taskType === 'inventory_action');
+
+      // 30日以上: 対策タスク
+      if (agingDays >= actionDays && !existingAction) {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 3); // 3日以内に対応
+
+        await db.collection('userTasks')
+          .doc(assigneeEmail)
+          .collection('tasks')
+          .add({
+            title: `【要対策】${product.productName || product.managementNumber} - ${agingDays}日滞留`,
+            taskType: 'inventory_action',
+            productId: productId,
+            managementNumber: product.managementNumber,
+            productName: product.productName || '',
+            agingDays: agingDays,
+            completed: false,
+            createdAt: FieldValue.serverTimestamp(),
+            dueDate: dueDate,
+            compensation: compensationAmount,
+            compensationType: 'inventory_review',
+            priority: 'high'
+          });
+
+        actionTasksCreated++;
+        console.log(`🔴 [${product.managementNumber}] 対策タスク作成 (${agingDays}日)`);
+
+        // 警告タスクがあれば完了にする
+        if (existingWarning) {
+          await db.collection('userTasks')
+            .doc(assigneeEmail)
+            .collection('tasks')
+            .doc(existingWarning.id)
+            .update({
+              completed: true,
+              completedAt: FieldValue.serverTimestamp(),
+              completedReason: '対策タスクに昇格'
+            });
+        }
+      }
+      // 14日以上30日未満: 警告タスク
+      else if (agingDays >= warningDays && agingDays < actionDays && !existingWarning) {
+        await db.collection('userTasks')
+          .doc(assigneeEmail)
+          .collection('tasks')
+          .add({
+            title: `【要確認】${product.productName || product.managementNumber} - ${agingDays}日滞留`,
+            taskType: 'inventory_warning',
+            productId: productId,
+            managementNumber: product.managementNumber,
+            productName: product.productName || '',
+            agingDays: agingDays,
+            completed: false,
+            createdAt: FieldValue.serverTimestamp(),
+            dueDate: null, // 警告は期限なし
+            compensation: 0,
+            priority: 'medium'
+          });
+
+        warningTasksCreated++;
+        console.log(`🟡 [${product.managementNumber}] 警告タスク作成 (${agingDays}日)`);
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [dailyInventoryAgingCheck] 完了: 警告${warningTasksCreated}件, 対策${actionTasksCreated}件 (${duration}ms)`);
+
+    return {
+      success: true,
+      warningTasksCreated,
+      actionTasksCreated
+    };
+
+  } catch (error) {
+    console.error('❌ [dailyInventoryAgingCheck] エラー:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * 商品更新時の滞留タスク自動完了
+ * - ステータス変更（出品中 → 他）
+ * - 価格変更
+ * - 説明変更
+ * の場合、滞留タスクを自動完了
+ */
+exports.onProductUpdatedForAgingTask = onDocumentUpdated('products/{productId}', async (event) => {
+  const beforeData = event.data.before.data();
+  const afterData = event.data.after.data();
+  const productId = event.params.productId;
+
+  // 変更検知
+  const statusChanged = beforeData.status !== afterData.status;
+  const priceChanged = beforeData.listingAmount !== afterData.listingAmount;
+  const descriptionChanged = beforeData.description !== afterData.description;
+  const wasListed = beforeData.status === '出品中';
+
+  // 出品中でなかった場合はスキップ
+  if (!wasListed) {
+    return null;
+  }
+
+  // 何か対策を講じた場合
+  const actionTaken = statusChanged || priceChanged || descriptionChanged;
+
+  if (!actionTaken) {
+    return null;
+  }
+
+  console.log(`📦 [onProductUpdatedForAgingTask] 商品更新検知: ${afterData.managementNumber}`);
+  console.log(`  - ステータス変更: ${statusChanged}`);
+  console.log(`  - 価格変更: ${priceChanged}`);
+  console.log(`  - 説明変更: ${descriptionChanged}`);
+
+  try {
+    // 担当者を特定
+    const assigneeEmail = afterData.userEmail || afterData.registrantEmail;
+    if (!assigneeEmail) {
+      console.log(`⏭️ [${afterData.managementNumber}] 担当者不明 - スキップ`);
+      return null;
+    }
+
+    // この商品の未完了滞留タスクを検索
+    const tasksSnapshot = await db.collection('userTasks')
+      .doc(assigneeEmail)
+      .collection('tasks')
+      .where('productId', '==', productId)
+      .where('taskType', 'in', ['inventory_warning', 'inventory_action'])
+      .where('completed', '==', false)
+      .get();
+
+    if (tasksSnapshot.empty) {
+      console.log(`📝 [${afterData.managementNumber}] 未完了の滞留タスクなし`);
+      return null;
+    }
+
+    const batch = db.batch();
+    let completedCount = 0;
+
+    for (const taskDoc of tasksSnapshot.docs) {
+      const taskData = taskDoc.data();
+      let completedReason = '';
+
+      if (statusChanged) {
+        completedReason = `ステータス変更: ${beforeData.status} → ${afterData.status}`;
+      } else if (priceChanged) {
+        completedReason = `価格変更: ¥${beforeData.listingAmount} → ¥${afterData.listingAmount}`;
+      } else if (descriptionChanged) {
+        completedReason = '商品説明を更新';
+      }
+
+      batch.update(taskDoc.ref, {
+        completed: true,
+        completedAt: FieldValue.serverTimestamp(),
+        completedReason: completedReason,
+        completedBy: 'auto' // 自動完了
+      });
+
+      completedCount++;
+      console.log(`✅ [${afterData.managementNumber}] タスク自動完了: ${taskData.taskType} - ${completedReason}`);
+    }
+
+    await batch.commit();
+    console.log(`📦 [onProductUpdatedForAgingTask] ${completedCount}件のタスクを自動完了`);
+
+    return { success: true, completedCount };
+
+  } catch (error) {
+    console.error('❌ [onProductUpdatedForAgingTask] エラー:', error);
     return { success: false, error: error.message };
   }
 });
