@@ -5851,7 +5851,8 @@
 
       console.log('📤 Firestoreに設定を保存中...');
 
-      return window.db.collection('settings').doc('common').set({
+      // 共通設定を保存
+      const commonPromise = window.db.collection('settings').doc('common').set({
         conditionButtons: config['商品状態ボタン'] || [],
         hashtag: config['ハッシュタグ'] || {},
         discount: config['割引情報'] || {},
@@ -5862,9 +5863,20 @@
         aiSettings: config['AI生成設定'] || {},
         designTheme: config['デザインテーマ'] || 'modern',
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      })
+      });
+
+      // 報酬設定を別途保存（settings/compensation）
+      const compensationPromise = config['報酬設定']
+        ? window.db.collection('settings').doc('compensation').set({
+            ...config['報酬設定'],
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true })
+        : Promise.resolve();
+
+      return Promise.all([commonPromise, compensationPromise])
       .then(() => {
-              return true;
+        console.log('✅ Firestore保存完了（共通設定 + 報酬設定）');
+        return true;
       })
       .catch((e) => {
         console.error('❌ Firestore保存エラー:', e);
@@ -8049,7 +8061,35 @@ ${prompt || '（未設定）'}
     }
 
     /**
-     * 報酬設定を読み込み
+     * Firestoreから報酬設定を読み込み
+     */
+    async function loadCompensationSettingsFromFirestore() {
+      if (!window.db) {
+        console.warn('⚠️ Firestoreが初期化されていません。localStorageから読み込みます。');
+        const config = JSON.parse(localStorage.getItem('config') || '{}');
+        loadCompensationSettings(config);
+        return;
+      }
+
+      try {
+        const doc = await window.db.collection('settings').doc('compensation').get();
+        if (doc.exists) {
+          const settings = doc.data();
+          console.log('📥 Firestoreから報酬設定を読み込み:', settings);
+          loadCompensationSettings({ 報酬設定: settings });
+        } else {
+          console.log('報酬設定がFirestoreにありません。デフォルトを使用します。');
+        }
+      } catch (error) {
+        console.error('❌ 報酬設定読み込みエラー:', error);
+        // フォールバック: localStorageから読み込み
+        const config = JSON.parse(localStorage.getItem('config') || '{}');
+        loadCompensationSettings(config);
+      }
+    }
+
+    /**
+     * 報酬設定を読み込み（UIに反映）
      */
     function loadCompensationSettings(config) {
       if (!config || !config.報酬設定) {
@@ -10068,8 +10108,8 @@ ${prompt || '（未設定）'}
     const compensationTab = document.getElementById('system-compensation-tab');
     if (compensationTab) {
       compensationTab.addEventListener('shown.bs.tab', async function() {
-        const config = JSON.parse(localStorage.getItem('config') || '{}');
-        loadCompensationSettings(config);
+        // Firestoreから報酬設定を読み込み
+        await loadCompensationSettingsFromFirestore();
         // マイページ対象ユーザー一覧を読み込み
         await loadMypageUserList();
         // ユーザー別タスク担当設定を読み込み
@@ -10079,8 +10119,8 @@ ${prompt || '（未設定）'}
 
     // ページ読み込み時に報酬設定を初期化
     setTimeout(async function() {
-      const config = JSON.parse(localStorage.getItem('config') || '{}');
-      loadCompensationSettings(config);
+      // Firestoreから報酬設定を読み込み
+      await loadCompensationSettingsFromFirestore();
       // マイページ対象ユーザー一覧を読み込み（報酬設定タブが表示されている場合）
       if (document.getElementById('system-compensation')?.classList.contains('active')) {
         await loadMypageUserList();
