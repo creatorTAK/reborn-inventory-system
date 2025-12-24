@@ -1694,6 +1694,25 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       }
     }
 
+    // 🔍 検品タスク完了時にバッチのinspectionStatusを更新
+    if (taskType === 'inspection_task') {
+      try {
+        const batchId = afterData.relatedData?.batchId;
+        if (batchId) {
+          await db.collection('purchaseBatches').doc(batchId).update({
+            inspectionStatus: 'completed',
+            inspectionCompletedAt: new Date().toISOString()
+          });
+          console.log('✅ [onTaskCompleted] 検品ステータス更新完了:', batchId);
+        } else {
+          console.warn('⚠️ [onTaskCompleted] 検品タスクにbatchIdがありません');
+        }
+      } catch (batchError) {
+        console.error('⚠️ [onTaskCompleted] 検品ステータス更新エラー（継続）:', batchError);
+        // バッチ更新エラーは致命的ではないので継続
+      }
+    }
+
     return { success: true, compensation: compensationRecord };
 
   } catch (error) {

@@ -2037,13 +2037,15 @@
                   <th>仕入先</th>
                   <th>点数</th>
                   <th>発送先</th>
+                  <th>検品担当</th>
+                  <th>検品</th>
                   <th>ステータス</th>
                   <th>登録進捗</th>
                 </tr>
               </thead>
               <tbody id="dispatchProgressBody">
                 <tr>
-                  <td colspan="6" class="text-center text-muted py-4">タブをクリックしてデータを読み込んでください</td>
+                  <td colspan="8" class="text-center text-muted py-4">タブをクリックしてデータを読み込んでください</td>
                 </tr>
               </tbody>
             </table>
@@ -7493,7 +7495,7 @@
      */
     async function loadDispatchProgress() {
       const tbody = document.getElementById('dispatchProgressBody');
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">データを読み込んでいます...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">データを読み込んでいます...</td></tr>';
 
       try {
         // 直近3ヶ月のバッチを取得
@@ -7522,7 +7524,7 @@
 
       } catch (error) {
         console.error('発送進捗データ読み込みエラー:', error);
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">データの読み込みに失敗しました</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">データの読み込みに失敗しました</td></tr>';
       }
     }
 
@@ -7540,7 +7542,7 @@
       }
 
       if (filteredData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">該当するデータがありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">該当するデータがありません</td></tr>';
         return;
       }
 
@@ -7550,6 +7552,8 @@
         const supplier = batch.supplier || '-';
         const itemCount = batch.itemCount || 0;
         const assignee = batch.assignee || '-';
+        const inspectionAssignee = batch.inspectionAssignee || '-';
+        const inspectionStatus = batch.inspectionStatus || 'not_assigned';
         const status = batch.status || 'pending';
         const registeredCount = batch.registeredCount || 0;
         const remainingCount = batch.remainingCount ?? itemCount;
@@ -7576,6 +7580,22 @@
             statusBadge = '<span class="badge bg-secondary">' + status + '</span>';
         }
 
+        // 検品ステータスバッジ
+        let inspectionBadge = '';
+        switch(inspectionStatus) {
+          case 'not_assigned':
+            inspectionBadge = '<span class="badge bg-light text-muted">-</span>';
+            break;
+          case 'pending':
+            inspectionBadge = '<span class="badge bg-warning text-dark">検品中</span>';
+            break;
+          case 'completed':
+            inspectionBadge = '<span class="badge bg-success">完了</span>';
+            break;
+          default:
+            inspectionBadge = '<span class="badge bg-light text-muted">-</span>';
+        }
+
         // 進捗表示
         let progressHtml = '-';
         if (status !== 'pending' && itemCount > 0) {
@@ -7600,6 +7620,8 @@
             <td>${supplier}</td>
             <td class="text-center">${itemCount}</td>
             <td>${assignee}</td>
+            <td>${inspectionAssignee}</td>
+            <td>${inspectionBadge}</td>
             <td>${statusBadge}</td>
             <td>${progressHtml}</td>
           </tr>
