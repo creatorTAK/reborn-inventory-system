@@ -480,6 +480,10 @@
       background: #fef3c7;
       color: #92400e;
     }
+    .type-badge.revision_request {
+      background: #fef2f2;
+      color: #dc2626;
+    }
     .type-badge.default {
       background: #e0e7ff;
       color: #3730a3;
@@ -707,9 +711,9 @@
         iconHtml = getTypeIcon(task.type);
       }
 
-      // 完了ボタンを表示するタスクタイプ（報酬対象タスクのみ）
+      // 完了ボタンを表示するタスクタイプ（報酬対象タスクのみ + revision_request）
       // 初期設定タスク（shipping_info_registration, bank_account_registration）は設定保存時に自動完了
-      const completableTaskTypes = ['listing_approval', 'shipping_task'];
+      const completableTaskTypes = ['listing_approval', 'shipping_task', 'revision_request'];
       const showCompleteButton = completableTaskTypes.includes(task.type);
 
       // 期限表示（発送タスクなど）
@@ -765,7 +769,16 @@
         actionButtons += `<div class="task-action" onclick="handleTaskClick('${task.id}', '${task.link}')"><i class="bi bi-arrow-right-circle"></i> 対応する</div>`;
       }
       if (showCompleteButton) {
-        actionButtons += `<div class="task-action complete-btn" onclick="completeTask('${task.id}', '${task.type}')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 完了</div>`;
+        // listing_approvalの場合は「承認」と「却下」ボタンを表示
+        if (task.type === 'listing_approval') {
+          actionButtons += `<div class="task-action complete-btn" onclick="completeTask('${task.id}', '${task.type}')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 承認</div>`;
+          actionButtons += `<div class="task-action reject-btn" onclick="openRejectModal('${task.id}', '${task.type}')" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); margin-left: 8px;"><i class="bi bi-x-circle"></i> 却下</div>`;
+        } else if (task.type === 'revision_request') {
+          // revision_requestの場合は「修正完了」ボタンを表示
+          actionButtons += `<div class="task-action complete-btn" onclick="completeTask('${task.id}', '${task.type}')" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 修正完了</div>`;
+        } else {
+          actionButtons += `<div class="task-action complete-btn" onclick="completeTask('${task.id}', '${task.type}')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 完了</div>`;
+        }
       }
 
       return `
@@ -798,10 +811,12 @@
       const rewardTaskTypes = ['listing_approval', 'shipping_task', 'product_registration_task'];
       const isRewardTask = rewardTaskTypes.includes(taskType);
 
-      // receiving_taskの場合は商品登録タスクが作成される旨を通知
+      // タスクタイプ別の確認メッセージ
       let confirmMsg;
       if (taskType === 'receiving_task') {
         confirmMsg = '受取を完了しますか？\n（商品登録タスクが自動で作成されます）';
+      } else if (taskType === 'revision_request') {
+        confirmMsg = '修正を完了しますか？\n（管理者に再承認タスクが送信されます）';
       } else if (isRewardTask) {
         confirmMsg = 'このタスクを完了にしますか？\n（報酬が自動記録されます）';
       } else {
@@ -812,14 +827,23 @@
 
       try {
         const taskRef = db.collection('userTasks').doc(userEmail).collection('tasks').doc(taskId);
+        const taskDoc = await taskRef.get();
+        
+        if (!taskDoc.exists) {
+          alert('タスクが見つかりません');
+          return;
+        }
+        
+        const taskData = taskDoc.data();
 
         // receiving_taskの場合は商品登録タスクを作成
         if (taskType === 'receiving_task') {
-          const taskDoc = await taskRef.get();
-          if (taskDoc.exists) {
-            const taskData = taskDoc.data();
-            await createProductRegistrationTask(taskData.relatedData);
-          }
+          await createProductRegistrationTask(taskData.relatedData);
+        }
+
+        // revision_requestの場合は管理者に再承認タスクを作成
+        if (taskType === 'revision_request') {
+          await createReApprovalTask(taskData);
         }
 
         await taskRef.update({
@@ -833,6 +857,58 @@
       } catch (error) {
         console.error('❌ [Task] タスク完了エラー:', error);
         alert('タスクの完了に失敗しました');
+      }
+    }
+
+    /**
+     * 再承認タスクを作成（revision_request完了時）
+     * 管理者に出品確認タスクを再作成する
+     */
+    async function createReApprovalTask(revisionTaskData) {
+      const relatedData = revisionTaskData.relatedData || {};
+      const productId = relatedData.productId;
+      const managementNumber = relatedData.managementNumber;
+      const rejectedBy = relatedData.rejectedBy; // 元の却下者（管理者）
+
+      if (!rejectedBy) {
+        console.warn('⚠️ [Task] 再承認タスク作成スキップ: 却下者情報がありません');
+        return;
+      }
+
+      try {
+        // 商品情報を取得して登録者情報を取得
+        let staffName = 'スタッフ';
+        if (productId) {
+          const productDoc = await db.collection('products').doc(productId).get();
+          if (productDoc.exists) {
+            const productData = productDoc.data();
+            staffName = productData.registrant || staffName;
+          }
+        }
+
+        // 管理者（却下者）に再承認タスクを作成
+        const reApprovalTaskRef = db.collection('userTasks').doc(rejectedBy).collection('tasks').doc();
+        await reApprovalTaskRef.set({
+          type: 'listing_approval',
+          title: `再確認: ${managementNumber || '商品'}`,
+          description: `${staffName}さんが修正を完了しました。再度確認してください。`,
+          createdAt: new Date().toISOString(),
+          completed: false,
+          priority: 'high',
+          link: productId ? `/product.html?edit=${productId}` : null,
+          relatedData: {
+            productId: productId,
+            managementNumber: managementNumber,
+            staffEmail: userEmail,
+            staffName: staffName,
+            isReApproval: true
+          }
+        });
+
+        console.log('✅ [Task] 再承認タスク作成:', rejectedBy);
+      } catch (error) {
+        console.error('❌ [Task] 再承認タスク作成エラー:', error);
+        throw error;
       }
     }
 
@@ -907,7 +983,8 @@
         'shipping_info_registration': '📦',
         'bank_account_registration': '🏦',
         'receiving_task': '📬',
-        'product_registration_task': '📝'
+        'product_registration_task': '📝',
+        'revision_request': '🔄'
       };
       return icons[type] || '📋';
     }
@@ -922,7 +999,8 @@
         'shipping_info_registration': '初期設定',
         'bank_account_registration': '初期設定',
         'receiving_task': '仕入商品受取',
-        'product_registration_task': '商品登録'
+        'product_registration_task': '商品登録',
+        'revision_request': '修正依頼'
       };
       return labels[type] || 'タスク';
     }
@@ -1310,9 +1388,132 @@
       }
     }
 
+    // ============================================
+    // 却下機能
+    // ============================================
+
+    let rejectingTaskId = null;
+    let rejectingTaskType = null;
+
+    /**
+     * 却下理由入力モーダルを開く
+     */
+    function openRejectModal(taskId, taskType) {
+      rejectingTaskId = taskId;
+      rejectingTaskType = taskType;
+      document.getElementById('rejectReason').value = '';
+      document.getElementById('rejectModal').style.display = 'flex';
+    }
+
+    /**
+     * 却下モーダルを閉じる
+     */
+    function closeRejectModal() {
+      rejectingTaskId = null;
+      rejectingTaskType = null;
+      document.getElementById('rejectModal').style.display = 'none';
+    }
+
+    /**
+     * 却下を実行
+     */
+    async function submitReject() {
+      const reason = document.getElementById('rejectReason').value.trim();
+      if (!reason) {
+        alert('却下理由を入力してください');
+        return;
+      }
+
+      if (!rejectingTaskId) {
+        alert('タスクが選択されていません');
+        return;
+      }
+
+      try {
+        // 元のタスクを取得
+        const taskRef = db.collection('userTasks').doc(userEmail).collection('tasks').doc(rejectingTaskId);
+        const taskDoc = await taskRef.get();
+        if (!taskDoc.exists) {
+          alert('タスクが見つかりません');
+          return;
+        }
+
+        const taskData = taskDoc.data();
+        const staffEmail = taskData.relatedData?.staffEmail || taskData.relatedData?.createdByEmail;
+        const staffName = taskData.relatedData?.staffName || taskData.relatedData?.createdBy || '担当者';
+        const productId = taskData.relatedData?.productId;
+        const managementNumber = taskData.relatedData?.managementNumber;
+
+        if (!staffEmail) {
+          alert('担当者の情報が見つかりません');
+          return;
+        }
+
+        // 元のタスクを却下状態に更新
+        await taskRef.update({
+          rejected: true,
+          rejectedAt: new Date().toISOString(),
+          rejectedBy: userEmail,
+          rejectReason: reason,
+          completed: false
+        });
+
+        // 担当者に修正依頼タスクを作成
+        const revisionTaskRef = db.collection('userTasks').doc(staffEmail).collection('tasks').doc();
+        await revisionTaskRef.set({
+          type: 'revision_request',
+          title: `修正依頼: ${taskData.title || '出品確認'}`,
+          description: `【却下理由】\n${reason}`,
+          createdAt: new Date().toISOString(),
+          completed: false,
+          priority: 'high',
+          link: productId ? `/product.html?edit=${productId}` : null,
+          relatedData: {
+            originalTaskId: rejectingTaskId,
+            originalTaskType: rejectingTaskType,
+            productId: productId,
+            managementNumber: managementNumber,
+            rejectedBy: userEmail,
+            rejectReason: reason
+          }
+        });
+
+        console.log('✅ [Task] タスク却下完了:', rejectingTaskId);
+        console.log('✅ [Task] 修正依頼タスク作成:', staffEmail);
+
+        closeRejectModal();
+        alert(`${staffName}さんに修正依頼を送信しました`);
+        loadTasks(); // 再読み込み
+
+      } catch (error) {
+        console.error('❌ [Task] 却下エラー:', error);
+        alert('却下処理に失敗しました');
+      }
+    }
+
     // 初期化
     loadTasks();
     checkAdminStatus(); // 管理者チェック
   </script>
+
+  <!-- 却下理由入力モーダル -->
+  <div id="rejectModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: white; border-radius: 16px; width: 100%; max-width: 400px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+      <div style="padding: 20px; border-bottom: 1px solid #e5e7eb;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #1f2937;">却下理由</h3>
+          <button onclick="closeRejectModal()" style="background: none; border: none; font-size: 24px; color: #9ca3af; cursor: pointer; padding: 0; line-height: 1;">&times;</button>
+        </div>
+      </div>
+      <div style="padding: 20px;">
+        <p style="margin: 0 0 12px 0; font-size: 14px; color: #6b7280;">修正が必要な理由を入力してください。担当者に通知されます。</p>
+        <textarea id="rejectReason" placeholder="例: 画像が暗いので撮り直してください" style="width: 100%; height: 120px; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; resize: none; box-sizing: border-box;"></textarea>
+      </div>
+      <div style="padding: 16px 20px; background: #f9fafb; display: flex; gap: 12px;">
+        <button onclick="closeRejectModal()" style="flex: 1; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; background: white; font-size: 14px; font-weight: 500; color: #374151; cursor: pointer;">キャンセル</button>
+        <button onclick="submitReject()" style="flex: 1; padding: 12px; border: none; border-radius: 8px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); font-size: 14px; font-weight: 500; color: white; cursor: pointer;">却下する</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
