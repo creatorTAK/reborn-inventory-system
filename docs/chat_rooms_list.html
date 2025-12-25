@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-21-v353 - プロフィールポップアップに相手の背景設定を適用 -->
+  <!-- Cache Bust: 2025-12-25-v354 - sessionStorageキャッシュで即時表示 -->
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1442,6 +1442,85 @@
     let currentUserBlockedList = []; // ブロック中ユーザーリスト（LINE風ブロック）
     let roomUnreadCounts = new Map(); // ルームごとの未読数を追跡（バッジ同期用）
 
+    // ========================================
+    // sessionStorageキャッシュ（即時表示用）
+    // ========================================
+    const CHAT_ROOMS_CACHE_KEY = 'reborn_chat_rooms_cache';
+    const CHAT_USERS_CACHE_KEY = 'reborn_chat_users_cache';
+    const CHAT_CACHE_DURATION_MS = 5 * 60 * 1000; // 5分
+
+    // ルーム一覧をキャッシュに保存
+    function saveRoomsToCache(rooms) {
+      try {
+        const data = {
+          rooms: rooms,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem(CHAT_ROOMS_CACHE_KEY, JSON.stringify(data));
+        console.log('💾 [CACHE] ルーム一覧をキャッシュに保存:', rooms.length + '件');
+      } catch (e) {
+        console.warn('ルームキャッシュ保存エラー:', e);
+      }
+    }
+
+    // ルーム一覧をキャッシュから復元
+    function restoreRoomsFromCache() {
+      try {
+        const cached = sessionStorage.getItem(CHAT_ROOMS_CACHE_KEY);
+        if (!cached) return null;
+
+        const data = JSON.parse(cached);
+        const age = Date.now() - (data.timestamp || 0);
+
+        if (age > CHAT_CACHE_DURATION_MS) {
+          console.log('📊 [CACHE] ルームキャッシュ期限切れ');
+          return null;
+        }
+
+        console.log('⚡ [CACHE] ルームキャッシュから復元 (' + data.rooms.length + '件, 経過: ' + Math.round(age / 1000) + '秒)');
+        return data.rooms;
+      } catch (e) {
+        console.warn('ルームキャッシュ読み込みエラー:', e);
+        return null;
+      }
+    }
+
+    // ユーザー一覧をキャッシュに保存
+    function saveUsersToCache(users) {
+      try {
+        const data = {
+          users: users,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem(CHAT_USERS_CACHE_KEY, JSON.stringify(data));
+        console.log('💾 [CACHE] ユーザー一覧をキャッシュに保存:', users.length + '件');
+      } catch (e) {
+        console.warn('ユーザーキャッシュ保存エラー:', e);
+      }
+    }
+
+    // ユーザー一覧をキャッシュから復元
+    function restoreUsersFromCache() {
+      try {
+        const cached = sessionStorage.getItem(CHAT_USERS_CACHE_KEY);
+        if (!cached) return null;
+
+        const data = JSON.parse(cached);
+        const age = Date.now() - (data.timestamp || 0);
+
+        if (age > CHAT_CACHE_DURATION_MS) {
+          console.log('📊 [CACHE] ユーザーキャッシュ期限切れ');
+          return null;
+        }
+
+        console.log('⚡ [CACHE] ユーザーキャッシュから復元 (' + data.users.length + '件)');
+        return data.users;
+      } catch (e) {
+        console.warn('ユーザーキャッシュ読み込みエラー:', e);
+        return null;
+      }
+    }
+
     // プロフィール背景グラデーションプリセット
     const GRADIENT_PRESETS = [
       { id: 'blue', gradient: 'linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%)' },
@@ -1635,14 +1714,7 @@
       // v323: Keepドットの状態を復元
       restoreKeepDotState();
 
-      // 🔧 v299: 読み込み直後にスケルトンUIを表示（データ取得完了まで表示）
-      const skeleton = document.getElementById('skeleton-loader');
-      if (skeleton) {
-        skeleton.classList.add('active');
-        console.log('[Rooms List] ✅ スケルトンUI表示（初期化中）');
-      }
-
-      // ユーザー名設定
+      // ユーザー名設定（キャッシュ表示に必要なので先に実行）
       if (isGAS) {
         if (gasUserNameParam && gasUserNameParam.trim() !== '') {
           try {
@@ -1667,6 +1739,37 @@
         document.getElementById('userInfo').textContent = `👤 ${currentUserName}`;
         console.log('[PWA] ユーザー名設定:', currentUserName);
         console.log('[PWA] ユーザーEmail設定:', currentUserEmail);
+      }
+
+      // ========================================
+      // キャッシュ優先表示（ローディングなし）
+      // ========================================
+      const cachedUsers = restoreUsersFromCache();
+      const cachedRooms = restoreRoomsFromCache();
+
+      if (cachedUsers && cachedRooms && cachedRooms.length > 0) {
+        console.log('⚡ [CACHE] キャッシュから即時表示');
+
+        // ユーザーキャッシュを復元
+        usersCache = cachedUsers;
+
+        // ルームを即座に描画（スケルトンなし）
+        const container = document.getElementById('roomsContainer');
+        container.innerHTML = '';
+        cachedRooms.forEach(room => appendRoom(room));
+
+        console.log('✅ [CACHE] ルーム一覧即時表示完了:', cachedRooms.length + '件');
+
+        // バックグラウンドでFirestoreリスナーを開始（リアルタイム更新用）
+        startListening();
+        return;
+      }
+
+      // キャッシュがない場合はスケルトンUIを表示
+      const skeleton = document.getElementById('skeleton-loader');
+      if (skeleton) {
+        skeleton.classList.add('active');
+        console.log('[Rooms List] ✅ スケルトンUI表示（初期化中）');
       }
 
       // ユーザー一覧を取得してキャッシュ（アイコン表示用）
@@ -1696,6 +1799,8 @@
 
             if (users.length > 0) {
               usersCache = users;
+              // sessionStorageにも保存
+              saveUsersToCache(users);
               console.log('[User Cache] ユーザー一覧キャッシュ完了:', usersCache.length + '件');
               console.log('[User Cache] usersCache内容:', usersCache);
             } else {
@@ -1953,6 +2058,15 @@
         // ソートされた順序で表示
         visibleRooms.forEach(room => appendRoom(room));
         const visibleRoomCount = visibleRooms.length;
+
+        // キャッシュに保存（次回即時表示用）
+        // Timestampをミリ秒に変換してシリアライズ可能にする
+        const roomsForCache = visibleRooms.map(room => ({
+          ...room,
+          lastMessageAt: room.lastMessageAt?.toMillis?.() || room.lastMessageAt || 0,
+          createdAt: room.createdAt?.toMillis?.() || room.createdAt || 0
+        }));
+        saveRoomsToCache(roomsForCache);
 
         // フィルタリング後に表示するルームがない場合
         if (visibleRoomCount === 0) {
