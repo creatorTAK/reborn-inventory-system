@@ -1319,9 +1319,23 @@
       if (paginationArea) paginationArea.innerHTML = '';
 
       const apiCallTime = performance.now();
+      let isCompleted = false;
+
+      // タイムアウト処理（10秒で強制終了）
+      const timeoutId = setTimeout(function() {
+        if (!isCompleted) {
+          isCompleted = true;
+          console.warn('⚠️ [TIMEOUT] ダッシュボード読み込みタイムアウト（10秒）');
+          hideLoading();
+        }
+      }, 10000);
 
       // 🔥 Firestore API呼び出し (ARCH-001 Phase 3)
       FirestoreApi.getProductList().then(function(products) {
+        if (isCompleted) return; // タイムアウト済みの場合はスキップ
+        isCompleted = true;
+        clearTimeout(timeoutId);
+
         const apiResponseTime = performance.now();
         const duration = (apiResponseTime - apiCallTime).toFixed(0);
         console.log('📊 [DASHBOARD] API応答受信:', duration + 'ms');
@@ -1362,6 +1376,10 @@
 
         console.log('✅ [FIRESTORE] ダッシュボード統計読み込み完了');
       }).catch(function(error) {
+        if (isCompleted) return; // タイムアウト済みの場合はスキップ
+        isCompleted = true;
+        clearTimeout(timeoutId);
+
         hideLoading();
         console.error('❌ [FIRESTORE ERROR]:', error);
         showError('読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
@@ -1541,8 +1559,25 @@
       console.log('🔥 [FIRESTORE] 商品一覧取得開始 (Phase 3)');
       console.log('🔍 [DEBUG] フィルタパラメータ:', params);
 
+      let isCompleted = false;
+
+      // タイムアウト処理（10秒で強制終了）
+      const timeoutId = setTimeout(function() {
+        if (!isCompleted) {
+          isCompleted = true;
+          console.warn('⚠️ [TIMEOUT] 商品一覧読み込みタイムアウト（10秒）');
+          if (showLoadingIndicator) {
+            hideLoading();
+          }
+        }
+      }, 10000);
+
       // 🔥 Firestore API呼び出し (ARCH-001 Phase 3)
       FirestoreApi.getProductList().then(function(products) {
+        if (isCompleted) return; // タイムアウト済みの場合はスキップ
+        isCompleted = true;
+        clearTimeout(timeoutId);
+
         const apiResponseTime = performance.now();
         const duration = (apiResponseTime - apiCallTime).toFixed(0);
         console.log('🔥 [FIRESTORE] API応答受信:', duration + 'ms');
@@ -1633,6 +1668,10 @@
         console.log('✅ [FIRESTORE] 合計時間:', (renderEndTime - startTime).toFixed(0) + 'ms');
         console.log('📊 [FIRESTORE] 統計:', stats.total + '件中' + paginatedProducts.length + '件表示');
       }).catch(function(error) {
+        if (isCompleted) return; // タイムアウト済みの場合はスキップ
+        isCompleted = true;
+        clearTimeout(timeoutId);
+
         const errorTime = performance.now();
         console.error('❌ [FIRESTORE ERROR]:', error);
         console.error('❌ [PERF] API失敗:', (errorTime - apiCallTime).toFixed(0) + 'ms');
