@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Cache Bust: 2025-12-22-v355 - 設定統合（個人情報・通知設定・アイコン編集） -->
+  <!-- Cache Bust: 2025-12-25-v356 - 背景画像Base64キャッシュ（Fetch API方式） -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <base target="_top">
@@ -2857,7 +2857,46 @@
 
     // キャッシュ関連定数
     const MYPAGE_CACHE_KEY = 'reborn_mypage_cache';
+    const MYPAGE_BG_IMAGE_CACHE_KEY = 'reborn_mypage_bg_image';
     const MYPAGE_CACHE_DURATION_MS = 3 * 60 * 1000; // 3分
+
+    // 背景画像をBase64でキャッシュ（Fetch API方式 - CORS問題回避）
+    async function cacheBgImageAsBase64(imageUrl) {
+      if (!imageUrl) return;
+
+      try {
+        // Fetch APIでBlobとして取得
+        const response = await fetch(imageUrl, { mode: 'cors' });
+        if (!response.ok) {
+          console.warn('背景画像取得エラー:', response.status);
+          return;
+        }
+        const blob = await response.blob();
+
+        // BlobをBase64に変換
+        const reader = new FileReader();
+        reader.onloadend = function() {
+          const base64 = reader.result;
+          sessionStorage.setItem(MYPAGE_BG_IMAGE_CACHE_KEY, base64);
+          console.log('🖼️ [CACHE] 背景画像をBase64でキャッシュ完了 (' + Math.round(base64.length / 1024) + 'KB)');
+        };
+        reader.onerror = function() {
+          console.warn('背景画像Base64変換エラー');
+        };
+        reader.readAsDataURL(blob);
+      } catch (e) {
+        console.warn('背景画像キャッシュエラー:', e);
+      }
+    }
+
+    // キャッシュされた背景画像Base64を取得
+    function getCachedBgImage() {
+      try {
+        return sessionStorage.getItem(MYPAGE_BG_IMAGE_CACHE_KEY);
+      } catch (e) {
+        return null;
+      }
+    }
 
     // キャッシュからデータを復元
     function restoreFromCache() {
@@ -2985,6 +3024,11 @@
 
         // キャッシュに保存
         saveToCache();
+
+        // 背景画像がある場合はBase64でキャッシュ（次回用）
+        if (userProfileBg.type === 'image' && userProfileBg.value) {
+          cacheBgImageAsBase64(userProfileBg.value);
+        }
 
         const duration = (performance.now() - startTime).toFixed(0);
         console.log('✅ [FIRESTORE] マイページ初期化完了 (' + duration + 'ms)');
@@ -4005,11 +4049,14 @@
     // 背景カスタマイズ機能
     // ========================================
 
-    // 背景スタイルを取得
+    // 背景スタイルを取得（Base64キャッシュ優先）
     function getProfileBgStyle() {
       if (userProfileBg.type === 'image' && userProfileBg.value) {
         const pos = userProfileBg.position !== undefined ? userProfileBg.position : 50;
-        return `background-image: url('${userProfileBg.value}'); background-size: cover; background-position: center ${pos}%;`;
+        // Base64キャッシュがあればそれを使用（即座に表示）
+        const cachedBase64 = getCachedBgImage();
+        const imageUrl = cachedBase64 || userProfileBg.value;
+        return `background-image: url('${imageUrl}'); background-size: cover; background-position: center ${pos}%;`;
       } else {
         const preset = GRADIENT_PRESETS.find(p => p.id === userProfileBg.value) || GRADIENT_PRESETS[0];
         return `background: ${preset.gradient};`;
@@ -4272,6 +4319,16 @@
         }
 
         closeBgModal();
+
+        // キャッシュを更新（次回即時表示用）
+        saveToCache();
+        if (userProfileBg.type === 'image' && userProfileBg.value) {
+          cacheBgImageAsBase64(userProfileBg.value);
+        } else {
+          // グラデーションの場合は画像キャッシュをクリア
+          sessionStorage.removeItem(MYPAGE_BG_IMAGE_CACHE_KEY);
+        }
+
         console.log('[ProfileBg] 背景設定を保存:', userProfileBg);
       } catch (error) {
         console.error('[ProfileBg] 保存エラー:', error);
