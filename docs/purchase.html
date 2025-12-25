@@ -6,8 +6,8 @@
   <base target="_top">
   <title>仕入管理 - FURIRA</title>
   <script>
-    // v312: A-ONE 70面ラベル余白微調整
-    console.log('🔴🔴🔴 purchase.html v348-label-history-modal loaded 🔴🔴🔴');
+    // v349: 傷・汚れマーキング 個別入力モードに表/裏トグル・番号付きマーカー追加
+    console.log('🔴🔴🔴 purchase.html v349-individual-damage-marker-toggle loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -5927,16 +5927,23 @@
               </div>
 
               <div class="damage-marker-canvas-container" id="damage-marker-container-${itemId}">
-                <!-- アイテム選択 -->
-                <select class="form-select damage-marker-item-select" id="damage-marker-item-${itemId}" onchange="loadDamageMarkerImage(${itemId})">
-                  <option value="">-- アイテムを選択 --</option>
-                  <option value="tshirt_front">Tシャツ（前面）</option>
-                  <option value="tshirt_back">Tシャツ（背面）</option>
-                  <option value="pants_front">パンツ（前面）</option>
-                  <option value="pants_back">パンツ（背面）</option>
-                  <option value="hoodie_front">パーカー（前面）</option>
-                  <option value="hoodie_back">パーカー（背面）</option>
-                </select>
+                <!-- 小分類未選択時のメッセージ -->
+                <div id="damage-marker-no-category-${itemId}" class="damage-marker-no-category">
+                  <i class="bi bi-info-circle"></i>
+                  <span>小分類を選択すると画像が表示されます</span>
+                </div>
+
+                <!-- 表/裏 トグルボタン -->
+                <div class="damage-marker-side-toggle" id="damage-marker-side-toggle-${itemId}" style="display: none;">
+                  <button type="button" class="side-toggle-btn active" id="side-front-btn-${itemId}" onclick="switchDamageMarkerSide(${itemId}, 'front')">
+                    <i class="bi bi-front"></i> 表
+                    <span class="side-saved-badge" id="front-saved-badge-${itemId}" style="display: none;">●</span>
+                  </button>
+                  <button type="button" class="side-toggle-btn" id="side-back-btn-${itemId}" onclick="switchDamageMarkerSide(${itemId}, 'back')">
+                    <i class="bi bi-back"></i> 裏
+                    <span class="side-saved-badge" id="back-saved-badge-${itemId}" style="display: none;">●</span>
+                  </button>
+                </div>
 
                 <!-- Canvasエリア -->
                 <div class="damage-marker-canvas-wrapper" id="damage-marker-wrapper-${itemId}" style="display: none;">
@@ -6398,6 +6405,10 @@
         if (l4El) l4El.style.display = 'none';
       }
       if (l5El) l5El.style.display = 'none';
+
+      // 傷・汚れマーキング：小分類に連動して画像を読み込み
+      loadDamageMarkerBySubcategory(itemId, l3);
+
       updateEntryItem(itemId);
     }
 
@@ -8896,19 +8907,10 @@
     }
 
     // ========================================
-    // 傷・汚れマーキング機能（オブジェクト方式）
+    // 傷・汚れマーキング機能（表/裏対応版）
     // ========================================
-    const damageMarkerState = new Map(); // itemId -> state object
-
-    // 利用可能な衣類画像
-    const CLOTHING_IMAGES = {
-      tshirt_front: '/images/clothing/tshirt_front.png',
-      tshirt_back: '/images/clothing/tshirt_back.png',
-      pants_front: '/images/clothing/pants_front.png',
-      pants_back: '/images/clothing/pants_back.png',
-      hoodie_front: '/images/clothing/hoodie_front.png',
-      hoodie_back: '/images/clothing/hoodie_back.png'
-    };
+    // itemId -> { front: state, back: state, currentSide: 'front'/'back', currentSubcategory: string }
+    const damageMarkerState = new Map();
 
     // マーキングパネルの開閉
     function toggleDamageMarker(itemId) {
@@ -8924,33 +8926,151 @@
       }
     }
 
-    // 衣類画像の読み込み
-    function loadDamageMarkerImage(itemId) {
-      const select = document.getElementById(`damage-marker-item-${itemId}`);
-      const selectedItem = select.value;
-
-      if (!selectedItem) {
-        document.getElementById(`damage-marker-wrapper-${itemId}`).style.display = 'none';
-        document.getElementById(`damage-marker-tools-${itemId}`).style.display = 'none';
-        document.getElementById(`damage-marker-note-${itemId}`).style.display = 'none';
-        document.getElementById(`damage-marker-actions-${itemId}`).style.display = 'none';
-        document.getElementById(`damage-marker-object-controls-${itemId}`).style.display = 'none';
-        return;
-      }
-
-      const imagePath = CLOTHING_IMAGES[selectedItem];
-      if (!imagePath) {
-        alert('この衣類の画像はまだ準備中です');
-        select.value = '';
-        return;
-      }
-
-      initDamageMarkerCanvas(itemId, imagePath);
+    // 現在のアイテムの状態を取得
+    function getCurrentItemState(itemId) {
+      const itemState = damageMarkerState.get(itemId);
+      if (!itemState) return null;
+      return itemState[itemState.currentSide];
     }
 
-    // Canvas初期化（オブジェクト方式）
-    function initDamageMarkerCanvas(itemId, imagePath) {
-      console.log('📍 [マーキング] Canvas初期化開始:', itemId, imagePath);
+    // 次に使用する番号を取得（個別入力用）
+    function getNextItemMarkerNumber(itemId) {
+      const state = getCurrentItemState(itemId);
+      if (!state) return 1;
+
+      let maxNumber = 0;
+      state.objects.forEach(obj => {
+        if (obj.type === 'circle' && obj.number) {
+          maxNumber = Math.max(maxNumber, obj.number);
+        }
+      });
+      return maxNumber + 1;
+    }
+
+    // 補足説明に番号を追加（個別入力用）
+    function appendItemMarkerNumberToNotes(itemId, number) {
+      const noteEl = document.getElementById(`damage-marker-note-text-${itemId}`);
+      if (!noteEl) return;
+
+      const circledNum = getCircledNumber(number);
+      const currentText = noteEl.value;
+
+      if (currentText.trim()) {
+        noteEl.value = currentText + '\n' + circledNum + ' ';
+      } else {
+        noteEl.value = circledNum + ' ';
+      }
+
+      noteEl.focus();
+      noteEl.setSelectionRange(noteEl.value.length, noteEl.value.length);
+    }
+
+    // 小分類変更時に呼び出される画像読み込み（個別入力用）
+    function loadDamageMarkerBySubcategory(itemId, subcategory) {
+      const noCategoryMsg = document.getElementById(`damage-marker-no-category-${itemId}`);
+      const sideToggle = document.getElementById(`damage-marker-side-toggle-${itemId}`);
+
+      if (!subcategory) {
+        noCategoryMsg.style.display = 'flex';
+        sideToggle.style.display = 'none';
+        hideDamageMarkerCanvas(itemId);
+        return;
+      }
+
+      // アイテム状態を初期化または更新
+      let itemState = damageMarkerState.get(itemId);
+      if (!itemState || itemState.currentSubcategory !== subcategory) {
+        itemState = {
+          front: null,
+          back: null,
+          currentSide: 'front',
+          currentSubcategory: subcategory,
+          savedFront: null,
+          savedBack: null
+        };
+        damageMarkerState.set(itemId, itemState);
+        // バッジをリセット
+        document.getElementById(`front-saved-badge-${itemId}`).style.display = 'none';
+        document.getElementById(`back-saved-badge-${itemId}`).style.display = 'none';
+      }
+
+      const images = SUBCATEGORY_IMAGES[subcategory];
+      if (!images) {
+        noCategoryMsg.innerHTML = '<i class="bi bi-exclamation-circle"></i><span>この小分類の画像は準備中です</span>';
+        noCategoryMsg.style.display = 'flex';
+        sideToggle.style.display = 'none';
+        hideDamageMarkerCanvas(itemId);
+        return;
+      }
+
+      noCategoryMsg.style.display = 'none';
+      sideToggle.style.display = 'flex';
+      updateItemSideToggleUI(itemId, 'front');
+      loadDamageMarkerImage(itemId, images.front, 'front');
+    }
+
+    // 表/裏切り替え（個別入力用）
+    function switchDamageMarkerSide(itemId, side) {
+      const itemState = damageMarkerState.get(itemId);
+      if (!itemState) return;
+
+      const subcategory = itemState.currentSubcategory;
+      const images = SUBCATEGORY_IMAGES[subcategory];
+      if (!images) return;
+
+      itemState.currentSide = side;
+      updateItemSideToggleUI(itemId, side);
+
+      const savedState = itemState[side];
+      if (savedState) {
+        renderDamageMarker(itemId);
+        document.getElementById(`damage-marker-wrapper-${itemId}`).style.display = 'block';
+        document.getElementById(`damage-marker-tools-${itemId}`).style.display = 'flex';
+        document.getElementById(`damage-marker-actions-${itemId}`).style.display = 'flex';
+        document.getElementById(`damage-marker-note-${itemId}`).style.display = 'block';
+      } else {
+        const imagePath = side === 'front' ? images.front : images.back;
+        loadDamageMarkerImage(itemId, imagePath, side);
+      }
+    }
+
+    // トグルボタンのUI更新（個別入力用）
+    function updateItemSideToggleUI(itemId, activeSide) {
+      const frontBtn = document.getElementById(`side-front-btn-${itemId}`);
+      const backBtn = document.getElementById(`side-back-btn-${itemId}`);
+
+      if (frontBtn) frontBtn.classList.toggle('active', activeSide === 'front');
+      if (backBtn) backBtn.classList.toggle('active', activeSide === 'back');
+    }
+
+    // Canvasを非表示（個別入力用）
+    function hideDamageMarkerCanvas(itemId) {
+      const wrapper = document.getElementById(`damage-marker-wrapper-${itemId}`);
+      const tools = document.getElementById(`damage-marker-tools-${itemId}`);
+      const note = document.getElementById(`damage-marker-note-${itemId}`);
+      const actions = document.getElementById(`damage-marker-actions-${itemId}`);
+      const controls = document.getElementById(`damage-marker-object-controls-${itemId}`);
+
+      if (wrapper) wrapper.style.display = 'none';
+      if (tools) tools.style.display = 'none';
+      if (note) note.style.display = 'none';
+      if (actions) actions.style.display = 'none';
+      if (controls) controls.style.display = 'none';
+    }
+
+    // 衣類画像の読み込み（表/裏対応版）
+    function loadDamageMarkerImage(itemId, imagePath, side) {
+      if (!imagePath) {
+        hideDamageMarkerCanvas(itemId);
+        return;
+      }
+
+      initDamageMarkerCanvas(itemId, imagePath, side);
+    }
+
+    // Canvas初期化（オブジェクト方式・表/裏対応版）
+    function initDamageMarkerCanvas(itemId, imagePath, side = 'front') {
+      console.log('📍 [マーキング] Canvas初期化開始:', itemId, imagePath, side);
       const canvas = document.getElementById(`damage-marker-canvas-${itemId}`);
       const ctx = canvas.getContext('2d');
 
@@ -8972,7 +9092,7 @@
         canvas.height = height;
 
         // オブジェクト方式の状態管理
-        const state = {
+        const sideState = {
           canvas,
           ctx,
           baseImage: img,
@@ -8988,7 +9108,21 @@
           historyIndex: -1
         };
 
-        damageMarkerState.set(itemId, state);
+        // アイテム状態を取得または初期化
+        let itemState = damageMarkerState.get(itemId);
+        if (!itemState) {
+          itemState = {
+            front: null,
+            back: null,
+            currentSide: side,
+            currentSubcategory: null
+          };
+          damageMarkerState.set(itemId, itemState);
+        }
+        // 該当側の状態を保存
+        itemState[side] = sideState;
+        itemState.currentSide = side;
+
         saveMarkerHistory(itemId);
         renderDamageMarker(itemId);
 
@@ -9007,9 +9141,10 @@
       img.src = imagePath;
     }
 
-    // 全オブジェクトを再描画
+    // 全オブジェクトを再描画（表/裏対応版）
     function renderDamageMarker(itemId) {
-      const state = damageMarkerState.get(itemId);
+      // 新しい状態構造から現在の側の状態を取得
+      const state = getCurrentItemState(itemId);
       if (!state) return;
 
       const { ctx, canvas, baseImage, baseWidth, baseHeight, objects, selectedObject } = state;
@@ -9023,13 +9158,23 @@
         ctx.save();
 
         if (obj.type === 'circle') {
+          // 円を描画
+          ctx.strokeStyle = obj.color;
+          ctx.lineWidth = 3;
           ctx.beginPath();
           ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
-          ctx.strokeStyle = obj.color;
-          ctx.lineWidth = 2;
           ctx.stroke();
 
-          // 選択状態の場合、境界線表示（リサイズハンドルは削除：ボタンで拡大縮小）
+          // 番号を描画（丸数字）
+          if (obj.number) {
+            ctx.fillStyle = obj.color;
+            ctx.font = `bold ${Math.max(14, obj.radius)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(getCircledNumber(obj.number), obj.x, obj.y);
+          }
+
+          // 選択状態の場合、境界線表示
           if (selectedObject === index) {
             ctx.setLineDash([4, 4]);
             ctx.strokeStyle = '#0d9488';
@@ -9111,7 +9256,7 @@
           return;
         }
 
-        const state = damageMarkerState.get(itemId);
+        const state = getCurrentItemState(itemId);
         if (!state) return;
 
         const pos = getPos(e);
@@ -9168,7 +9313,7 @@
           return;
         }
 
-        const state = damageMarkerState.get(itemId);
+        const state = getCurrentItemState(itemId);
         if (!state) return;
 
         const pos = getPos(e);
@@ -9221,7 +9366,7 @@
       };
 
       const handleEnd = (e) => {
-        const state = damageMarkerState.get(itemId);
+        const state = getCurrentItemState(itemId);
         if (!state) return;
 
         const pos = getPos(e);
@@ -9250,16 +9395,20 @@
           // 移動距離10px以下 かつ 500ms以下をタップと判定
           if (distance <= 10 && duration <= 500) {
             if (state.tool === 'circle') {
+              const markerNumber = getNextItemMarkerNumber(itemId);
               state.objects.push({
                 type: 'circle',
                 x: state.touchStartPos.x,
                 y: state.touchStartPos.y,
-                radius: 15,
-                color: state.color
+                radius: 20,
+                color: state.color,
+                number: markerNumber
               });
               state.selectedObject = state.objects.length - 1;
               saveMarkerHistory(itemId);
               showObjectControls(itemId);
+              // 補足説明に番号を自動追加
+              appendItemMarkerNumberToNotes(itemId, markerNumber);
             } else if (state.tool === 'text') {
               const text = prompt('テキストを入力してください:');
               if (text) {
@@ -9355,7 +9504,7 @@
 
     // 選択オブジェクト拡大
     function enlargeSelectedObject(itemId) {
-      const state = damageMarkerState.get(itemId);
+      const state = getCurrentItemState(itemId);
       if (!state || state.selectedObject === null) return;
 
       const obj = state.objects[state.selectedObject];
@@ -9370,7 +9519,7 @@
 
     // 選択オブジェクト縮小
     function shrinkSelectedObject(itemId) {
-      const state = damageMarkerState.get(itemId);
+      const state = getCurrentItemState(itemId);
       if (!state || state.selectedObject === null) return;
 
       const obj = state.objects[state.selectedObject];
@@ -9385,7 +9534,7 @@
 
     // 選択オブジェクト削除
     function deleteSelectedObject(itemId) {
-      const state = damageMarkerState.get(itemId);
+      const state = getCurrentItemState(itemId);
       if (!state || state.selectedObject === null) return;
 
       state.objects.splice(state.selectedObject, 1);
@@ -9397,7 +9546,7 @@
 
     // 履歴保存
     function saveMarkerHistory(itemId) {
-      const state = damageMarkerState.get(itemId);
+      const state = getCurrentItemState(itemId);
       if (!state) return;
 
       // 現在位置以降を削除
@@ -9415,7 +9564,7 @@
 
     // ツール選択
     function setDamageMarkerTool(itemId, tool) {
-      const state = damageMarkerState.get(itemId);
+      const state = getCurrentItemState(itemId);
       if (!state) return;
 
       state.tool = tool;
@@ -9435,7 +9584,7 @@
 
     // 色選択
     function setDamageMarkerColor(itemId, color) {
-      const state = damageMarkerState.get(itemId);
+      const state = getCurrentItemState(itemId);
       if (!state) return;
 
       state.color = color;
@@ -9457,7 +9606,7 @@
 
     // クリア
     function clearDamageMarker(itemId) {
-      const state = damageMarkerState.get(itemId);
+      const state = getCurrentItemState(itemId);
       if (!state) return;
 
       if (!confirm('描いた内容をすべて消去しますか？')) return;
@@ -9471,7 +9620,7 @@
 
     // 元に戻す（Undo）
     function undoDamageMarker(itemId) {
-      const state = damageMarkerState.get(itemId);
+      const state = getCurrentItemState(itemId);
       if (!state || state.historyIndex <= 0) return;
 
       state.historyIndex--;
@@ -9483,7 +9632,7 @@
 
     // やり直す（Redo）
     function redoDamageMarker(itemId) {
-      const state = damageMarkerState.get(itemId);
+      const state = getCurrentItemState(itemId);
       if (!state || state.historyIndex >= state.history.length - 1) return;
 
       state.historyIndex++;
@@ -9495,7 +9644,7 @@
 
     // 保存
     function saveDamageMarker(itemId) {
-      const state = damageMarkerState.get(itemId);
+      const state = getCurrentItemState(itemId);
       if (!state) return;
 
       // 選択解除して最終描画
@@ -9506,11 +9655,19 @@
       const dataUrl = state.canvas.toDataURL('image/png');
 
       const item = entryItems.find(i => i.id === itemId);
-      if (item) {
+      const itemState = damageMarkerState.get(itemId);
+      if (item && itemState) {
         item.damageMarkerImage = dataUrl;
-        item.damageMarkerType = document.getElementById(`damage-marker-item-${itemId}`).value;
+        item.damageMarkerSubcategory = itemState.currentSubcategory || '';
+        item.damageMarkerSide = itemState.currentSide || 'front';
         item.damageMarkerObjects = JSON.parse(JSON.stringify(state.objects));
         item.damageMarkerNote = document.getElementById(`damage-marker-note-text-${itemId}`).value || '';
+
+        // 現在の側に保存済みバッジを表示
+        const side = itemState.currentSide;
+        const badgeId = side === 'front' ? `front-saved-badge-${itemId}` : `back-saved-badge-${itemId}`;
+        const badge = document.getElementById(badgeId);
+        if (badge) badge.style.display = 'inline';
       }
 
       const previewContainer = document.getElementById(`damage-marker-preview-${itemId}`);
