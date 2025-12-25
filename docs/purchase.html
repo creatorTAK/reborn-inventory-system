@@ -815,6 +815,60 @@
       width: 100%;
       max-width: 300px;
     }
+    /* 小分類未選択時のメッセージ */
+    .damage-marker-no-category {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 16px;
+      background: #f3f4f6;
+      border: 1px dashed #9ca3af;
+      border-radius: 8px;
+      color: #6b7280;
+      font-size: 0.85rem;
+    }
+    .damage-marker-no-category i {
+      font-size: 1.1rem;
+    }
+    /* 表/裏トグルボタン */
+    .damage-marker-side-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .side-toggle-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border: 2px solid #d1d5db;
+      border-radius: 8px;
+      background: white;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #6b7280;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .side-toggle-btn:hover {
+      border-color: #f59e0b;
+      color: #92400e;
+    }
+    .side-toggle-btn.active {
+      border-color: #f59e0b;
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .side-saved-badge {
+      position: absolute;
+      top: 4px;
+      right: 8px;
+      color: #22c55e;
+      font-size: 0.6rem;
+    }
     .damage-marker-canvas-wrapper {
       position: relative;
       border: 2px solid #d1d5db;
@@ -1488,16 +1542,23 @@
                     </div>
 
                     <div class="damage-marker-canvas-container" id="batch-damage-marker-container">
-                      <!-- アイテム選択 -->
-                      <select class="form-select damage-marker-item-select" id="batch-damage-marker-item" onchange="loadBatchDamageMarkerImage()">
-                        <option value="">-- アイテムを選択 --</option>
-                        <option value="tshirt_front">Tシャツ（前面）</option>
-                        <option value="tshirt_back">Tシャツ（背面）</option>
-                        <option value="pants_front">パンツ（前面）</option>
-                        <option value="pants_back">パンツ（背面）</option>
-                        <option value="bag">バッグ</option>
-                        <option value="shoes">シューズ</option>
-                      </select>
+                      <!-- 小分類未選択時のメッセージ -->
+                      <div id="batch-damage-marker-no-category" class="damage-marker-no-category">
+                        <i class="bi bi-info-circle"></i>
+                        <span>小分類を選択すると画像が表示されます</span>
+                      </div>
+
+                      <!-- 表/裏 トグルボタン -->
+                      <div class="damage-marker-side-toggle" id="batch-damage-marker-side-toggle" style="display: none;">
+                        <button type="button" class="side-toggle-btn active" id="batch-side-front-btn" onclick="switchBatchDamageMarkerSide('front')">
+                          <i class="bi bi-front"></i> 表
+                          <span class="side-saved-badge" id="batch-front-saved-badge" style="display: none;">●</span>
+                        </button>
+                        <button type="button" class="side-toggle-btn" id="batch-side-back-btn" onclick="switchBatchDamageMarkerSide('back')">
+                          <i class="bi bi-back"></i> 裏
+                          <span class="side-saved-badge" id="batch-back-saved-badge" style="display: none;">●</span>
+                        </button>
+                      </div>
 
                       <!-- Canvasエリア -->
                       <div class="damage-marker-canvas-wrapper" id="batch-damage-marker-wrapper" style="display: none;">
@@ -4486,10 +4547,30 @@
     }
 
     // ========================================
-    // 一括入力用傷・汚れマーキング機能
+    // 一括入力用傷・汚れマーキング機能（表/裏対応版）
     // ========================================
-    let batchDamageMarkerState = null;
-    let batchDamageMarkerSaved = null; // 保存済みデータ
+
+    // 小分類→画像パスのマッピング（画像準備後に追加）
+    // 例: 'トップス': { front: '/images/clothing/tops_front.png', back: '/images/clothing/tops_back.png' }
+    const SUBCATEGORY_IMAGES = {
+      // 画像準備後にここに追加
+      // 'Tシャツ': { front: '/images/clothing/tshirt_front.png', back: '/images/clothing/tshirt_back.png' },
+      // 'パンツ': { front: '/images/clothing/pants_front.png', back: '/images/clothing/pants_back.png' },
+    };
+
+    // 表/裏それぞれの状態を管理
+    let batchDamageMarkerState = {
+      front: null,  // 表面のマーキング状態
+      back: null,   // 裏面のマーキング状態
+      currentSide: 'front',  // 現在表示中の面
+      currentSubcategory: null  // 現在の小分類
+    };
+
+    // 表/裏それぞれの保存済みデータ
+    let batchDamageMarkerSaved = {
+      front: null,
+      back: null
+    };
 
     // マーキングパネルの開閉
     function toggleBatchDamageMarker() {
@@ -4505,33 +4586,145 @@
       }
     }
 
-    // 衣類画像の読み込み
-    function loadBatchDamageMarkerImage() {
-      const select = document.getElementById('batch-damage-marker-item');
-      const selectedItem = select.value;
+    // 小分類変更時に呼び出される画像読み込み
+    function loadBatchDamageMarkerBySubcategory(subcategory) {
+      const noCategoryMsg = document.getElementById('batch-damage-marker-no-category');
+      const sideToggle = document.getElementById('batch-damage-marker-side-toggle');
 
-      if (!selectedItem) {
-        document.getElementById('batch-damage-marker-wrapper').style.display = 'none';
-        document.getElementById('batch-damage-marker-tools').style.display = 'none';
-        document.getElementById('batch-damage-marker-note').style.display = 'none';
-        document.getElementById('batch-damage-marker-actions').style.display = 'none';
-        document.getElementById('batch-damage-marker-object-controls').style.display = 'none';
+      if (!subcategory) {
+        // 小分類未選択時
+        noCategoryMsg.style.display = 'flex';
+        sideToggle.style.display = 'none';
+        hideBatchDamageMarkerCanvas();
+        batchDamageMarkerState.currentSubcategory = null;
         return;
       }
 
-      const imagePath = CLOTHING_IMAGES[selectedItem];
-      if (!imagePath) {
-        console.error('画像が見つかりません:', selectedItem);
+      // 小分類が変更された場合、状態をリセット
+      if (batchDamageMarkerState.currentSubcategory !== subcategory) {
+        batchDamageMarkerState.front = null;
+        batchDamageMarkerState.back = null;
+        batchDamageMarkerState.currentSide = 'front';
+        batchDamageMarkerSaved.front = null;
+        batchDamageMarkerSaved.back = null;
+        // バッジをリセット
+        document.getElementById('batch-front-saved-badge').style.display = 'none';
+        document.getElementById('batch-back-saved-badge').style.display = 'none';
+      }
+
+      batchDamageMarkerState.currentSubcategory = subcategory;
+
+      // 画像パスを取得
+      const images = SUBCATEGORY_IMAGES[subcategory];
+      if (!images) {
+        console.log('📍 小分類の画像が未登録:', subcategory);
+        noCategoryMsg.innerHTML = '<i class="bi bi-exclamation-circle"></i><span>この小分類の画像は準備中です</span>';
+        noCategoryMsg.style.display = 'flex';
+        sideToggle.style.display = 'none';
+        hideBatchDamageMarkerCanvas();
         return;
       }
 
-      initBatchDamageMarkerCanvas(imagePath);
+      // UIを表示
+      noCategoryMsg.style.display = 'none';
+      sideToggle.style.display = 'flex';
+
+      // トグルボタンの状態をリセット
+      updateBatchSideToggleUI('front');
+
+      // 表面を読み込み
+      loadBatchDamageMarkerImage(images.front, 'front');
     }
 
-    // Canvas初期化
-    function initBatchDamageMarkerCanvas(imagePath) {
+    // 表/裏切り替え
+    function switchBatchDamageMarkerSide(side) {
+      const subcategory = batchDamageMarkerState.currentSubcategory;
+      if (!subcategory) return;
+
+      const images = SUBCATEGORY_IMAGES[subcategory];
+      if (!images) return;
+
+      // 現在の状態を保存してから切り替え
+      saveBatchCurrentSideState();
+
+      batchDamageMarkerState.currentSide = side;
+      updateBatchSideToggleUI(side);
+
+      // 切り替え先の状態を復元または新規読み込み
+      const savedState = batchDamageMarkerState[side];
+      if (savedState) {
+        restoreBatchDamageMarkerState(side);
+      } else {
+        const imagePath = side === 'front' ? images.front : images.back;
+        loadBatchDamageMarkerImage(imagePath, side);
+      }
+    }
+
+    // トグルボタンのUI更新
+    function updateBatchSideToggleUI(activeSide) {
+      const frontBtn = document.getElementById('batch-side-front-btn');
+      const backBtn = document.getElementById('batch-side-back-btn');
+
+      frontBtn.classList.toggle('active', activeSide === 'front');
+      backBtn.classList.toggle('active', activeSide === 'back');
+    }
+
+    // 現在の面の状態を保存
+    function saveBatchCurrentSideState() {
+      const side = batchDamageMarkerState.currentSide;
+      const canvas = document.getElementById('batch-damage-marker-canvas');
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      // 現在のCanvas状態を取得（描画オブジェクトなど）
+      if (batchDamageMarkerState[side] && batchDamageMarkerState[side].objects) {
+        // 既存の状態を維持（オブジェクトは参照で保持されている）
+      }
+    }
+
+    // 状態を復元
+    function restoreBatchDamageMarkerState(side) {
+      const state = batchDamageMarkerState[side];
+      if (!state) return;
+
+      // 状態を復元して再描画
+      renderBatchDamageMarker();
+
+      document.getElementById('batch-damage-marker-wrapper').style.display = 'block';
+      document.getElementById('batch-damage-marker-tools').style.display = 'flex';
+      document.getElementById('batch-damage-marker-actions').style.display = 'flex';
+      document.getElementById('batch-damage-marker-note').style.display = 'block';
+    }
+
+    // 現在の面の状態を取得するヘルパー
+    function getCurrentBatchState() {
+      return batchDamageMarkerState[batchDamageMarkerState.currentSide];
+    }
+
+    // Canvasを非表示
+    function hideBatchDamageMarkerCanvas() {
+      document.getElementById('batch-damage-marker-wrapper').style.display = 'none';
+      document.getElementById('batch-damage-marker-tools').style.display = 'none';
+      document.getElementById('batch-damage-marker-note').style.display = 'none';
+      document.getElementById('batch-damage-marker-actions').style.display = 'none';
+      document.getElementById('batch-damage-marker-object-controls').style.display = 'none';
+    }
+
+    // 衣類画像の読み込み（表/裏対応版）
+    function loadBatchDamageMarkerImage(imagePath, side) {
+      if (!imagePath) {
+        hideBatchDamageMarkerCanvas();
+        return;
+      }
+
+      initBatchDamageMarkerCanvas(imagePath, side);
+    }
+
+    // Canvas初期化（表/裏対応版）
+    function initBatchDamageMarkerCanvas(imagePath, side) {
       const canvas = document.getElementById('batch-damage-marker-canvas');
       const ctx = canvas.getContext('2d');
+      const currentSide = side || batchDamageMarkerState.currentSide;
 
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -4544,7 +4737,8 @@
         canvas.width = newWidth;
         canvas.height = newHeight;
 
-        batchDamageMarkerState = {
+        // 該当面の状態を初期化
+        batchDamageMarkerState[currentSide] = {
           ctx,
           canvas,
           baseImage: img,
@@ -4576,11 +4770,13 @@
       img.src = imagePath;
     }
 
-    // 描画
+    // 描画（表/裏対応版）
     function renderBatchDamageMarker() {
-      if (!batchDamageMarkerState) return;
+      const currentSide = batchDamageMarkerState.currentSide;
+      const state = batchDamageMarkerState[currentSide];
+      if (!state) return;
 
-      const { ctx, canvas, baseImage, baseWidth, baseHeight, objects, selectedObject } = batchDamageMarkerState;
+      const { ctx, canvas, baseImage, baseWidth, baseHeight, objects, selectedObject } = state;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(baseImage, 0, 0, baseWidth, baseHeight);
@@ -4666,19 +4862,20 @@
           touchStartTime = Date.now();
         }
 
-        if (!batchDamageMarkerState) return;
+        const state = getCurrentBatchState();
+        if (!state) return;
 
         const pos = getPos(e);
 
         // 既存オブジェクト選択チェック
         const clickedIndex = findObjectAtPosition(pos);
         if (clickedIndex !== -1) {
-          batchDamageMarkerState.selectedObject = clickedIndex;
-          batchDamageMarkerState.dragOffset = {
-            x: pos.x - getObjectCenter(batchDamageMarkerState.objects[clickedIndex]).x,
-            y: pos.y - getObjectCenter(batchDamageMarkerState.objects[clickedIndex]).y
+          state.selectedObject = clickedIndex;
+          state.dragOffset = {
+            x: pos.x - getObjectCenter(state.objects[clickedIndex]).x,
+            y: pos.y - getObjectCenter(state.objects[clickedIndex]).y
           };
-          batchDamageMarkerState.isDragging = true;
+          state.isDragging = true;
           showBatchObjectControls();
           renderBatchDamageMarker();
           if (e.type === 'touchstart') e.preventDefault();
@@ -4686,29 +4883,30 @@
         }
 
         // ペンツールの場合
-        if (batchDamageMarkerState.tool === 'pen') {
-          batchDamageMarkerState.isDrawing = true;
-          batchDamageMarkerState.currentPath = [pos];
+        if (state.tool === 'pen') {
+          state.isDrawing = true;
+          state.currentPath = [pos];
           if (e.type === 'touchstart') e.preventDefault();
         }
       };
 
       const handleMove = (e) => {
-        if (!batchDamageMarkerState) return;
+        const state = getCurrentBatchState();
+        if (!state) return;
 
         const pos = getPos(e);
 
         // ペン描画中
-        if (batchDamageMarkerState.isDrawing && batchDamageMarkerState.tool === 'pen') {
-          batchDamageMarkerState.currentPath.push(pos);
+        if (state.isDrawing && state.tool === 'pen') {
+          state.currentPath.push(pos);
           renderBatchDamageMarker();
-          const { ctx } = batchDamageMarkerState;
-          ctx.strokeStyle = batchDamageMarkerState.color;
+          const { ctx } = state;
+          ctx.strokeStyle = state.color;
           ctx.lineWidth = 3;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
           ctx.beginPath();
-          batchDamageMarkerState.currentPath.forEach((point, i) => {
+          state.currentPath.forEach((point, i) => {
             if (i === 0) ctx.moveTo(point.x, point.y);
             else ctx.lineTo(point.x, point.y);
           });
@@ -4718,11 +4916,11 @@
         }
 
         // ドラッグ中
-        if (batchDamageMarkerState.isDragging && batchDamageMarkerState.selectedObject !== null) {
-          const obj = batchDamageMarkerState.objects[batchDamageMarkerState.selectedObject];
+        if (state.isDragging && state.selectedObject !== null) {
+          const obj = state.objects[state.selectedObject];
           const center = getObjectCenter(obj);
-          const dx = pos.x - batchDamageMarkerState.dragOffset.x - center.x;
-          const dy = pos.y - batchDamageMarkerState.dragOffset.y - center.y;
+          const dx = pos.x - state.dragOffset.x - center.x;
+          const dy = pos.y - state.dragOffset.y - center.y;
           moveObject(obj, dx, dy);
           renderBatchDamageMarker();
           if (e.type === 'touchmove') e.preventDefault();
@@ -4730,7 +4928,8 @@
       };
 
       const handleEnd = (e) => {
-        if (!batchDamageMarkerState) return;
+        const state = getCurrentBatchState();
+        if (!state) return;
 
         const pos = e.changedTouches ? {
           x: (e.changedTouches[0].clientX - canvas.getBoundingClientRect().left) * (canvas.width / canvas.getBoundingClientRect().width),
@@ -4738,24 +4937,24 @@
         } : getPos(e);
 
         // ペン描画終了
-        if (batchDamageMarkerState.isDrawing && batchDamageMarkerState.tool === 'pen') {
-          if (batchDamageMarkerState.currentPath.length > 1) {
-            batchDamageMarkerState.objects.push({
+        if (state.isDrawing && state.tool === 'pen') {
+          if (state.currentPath.length > 1) {
+            state.objects.push({
               type: 'pen',
-              points: [...batchDamageMarkerState.currentPath],
-              color: batchDamageMarkerState.color
+              points: [...state.currentPath],
+              color: state.color
             });
             saveBatchMarkerHistory();
           }
-          batchDamageMarkerState.isDrawing = false;
-          batchDamageMarkerState.currentPath = [];
+          state.isDrawing = false;
+          state.currentPath = [];
           renderBatchDamageMarker();
           return;
         }
 
         // ドラッグ終了
-        if (batchDamageMarkerState.isDragging) {
-          batchDamageMarkerState.isDragging = false;
+        if (state.isDragging) {
+          state.isDragging = false;
           saveBatchMarkerHistory();
           return;
         }
@@ -4774,33 +4973,33 @@
         }
 
         // 新規オブジェクト作成
-        if (batchDamageMarkerState.tool === 'circle') {
-          batchDamageMarkerState.objects.push({
+        if (state.tool === 'circle') {
+          state.objects.push({
             type: 'circle',
             x: pos.x,
             y: pos.y,
             radius: 20,
-            color: batchDamageMarkerState.color
+            color: state.color
           });
           saveBatchMarkerHistory();
           renderBatchDamageMarker();
-        } else if (batchDamageMarkerState.tool === 'text') {
+        } else if (state.tool === 'text') {
           const text = prompt('テキストを入力:');
           if (text) {
-            batchDamageMarkerState.objects.push({
+            state.objects.push({
               type: 'text',
               x: pos.x,
               y: pos.y,
               text,
               fontSize: 16,
-              color: batchDamageMarkerState.color
+              color: state.color
             });
             saveBatchMarkerHistory();
             renderBatchDamageMarker();
           }
         }
 
-        batchDamageMarkerState.selectedObject = null;
+        state.selectedObject = null;
         hideBatchObjectControls();
 
         touchStartPos = null;
@@ -4815,16 +5014,17 @@
       canvas.addEventListener('touchend', handleEnd);
     }
 
-    // オブジェクト検索（共通関数を利用）
+    // オブジェクト検索（表/裏対応版）
     function findObjectAtPosition(pos) {
-      if (!batchDamageMarkerState) return -1;
-      for (let i = batchDamageMarkerState.objects.length - 1; i >= 0; i--) {
-        const obj = batchDamageMarkerState.objects[i];
+      const state = getCurrentBatchState();
+      if (!state) return -1;
+      for (let i = state.objects.length - 1; i >= 0; i--) {
+        const obj = state.objects[i];
         if (obj.type === 'circle') {
           const dist = Math.sqrt(Math.pow(pos.x - obj.x, 2) + Math.pow(pos.y - obj.y, 2));
           if (dist <= obj.radius + 10) return i;
         } else if (obj.type === 'text') {
-          const ctx = batchDamageMarkerState.ctx;
+          const ctx = state.ctx;
           ctx.font = `${obj.fontSize}px sans-serif`;
           const metrics = ctx.measureText(obj.text);
           if (pos.x >= obj.x - 5 && pos.x <= obj.x + metrics.width + 5 &&
@@ -4871,8 +5071,9 @@
     }
 
     function enlargeBatchSelectedObject() {
-      if (!batchDamageMarkerState || batchDamageMarkerState.selectedObject === null) return;
-      const obj = batchDamageMarkerState.objects[batchDamageMarkerState.selectedObject];
+      const state = getCurrentBatchState();
+      if (!state || state.selectedObject === null) return;
+      const obj = state.objects[state.selectedObject];
       if (obj.type === 'circle') obj.radius = Math.min(100, obj.radius + 5);
       else if (obj.type === 'text') obj.fontSize = Math.min(48, obj.fontSize + 2);
       saveBatchMarkerHistory();
@@ -4880,8 +5081,9 @@
     }
 
     function shrinkBatchSelectedObject() {
-      if (!batchDamageMarkerState || batchDamageMarkerState.selectedObject === null) return;
-      const obj = batchDamageMarkerState.objects[batchDamageMarkerState.selectedObject];
+      const state = getCurrentBatchState();
+      if (!state || state.selectedObject === null) return;
+      const obj = state.objects[state.selectedObject];
       if (obj.type === 'circle') obj.radius = Math.max(5, obj.radius - 5);
       else if (obj.type === 'text') obj.fontSize = Math.max(10, obj.fontSize - 2);
       saveBatchMarkerHistory();
@@ -4889,27 +5091,30 @@
     }
 
     function deleteBatchSelectedObject() {
-      if (!batchDamageMarkerState || batchDamageMarkerState.selectedObject === null) return;
-      batchDamageMarkerState.objects.splice(batchDamageMarkerState.selectedObject, 1);
-      batchDamageMarkerState.selectedObject = null;
+      const state = getCurrentBatchState();
+      if (!state || state.selectedObject === null) return;
+      state.objects.splice(state.selectedObject, 1);
+      state.selectedObject = null;
       hideBatchObjectControls();
       saveBatchMarkerHistory();
       renderBatchDamageMarker();
     }
 
-    // 履歴管理
+    // 履歴管理（表/裏対応版）
     function saveBatchMarkerHistory() {
-      if (!batchDamageMarkerState) return;
-      batchDamageMarkerState.history = batchDamageMarkerState.history.slice(0, batchDamageMarkerState.historyIndex + 1);
-      batchDamageMarkerState.history.push(JSON.parse(JSON.stringify(batchDamageMarkerState.objects)));
-      batchDamageMarkerState.historyIndex = batchDamageMarkerState.history.length - 1;
+      const state = getCurrentBatchState();
+      if (!state) return;
+      state.history = state.history.slice(0, state.historyIndex + 1);
+      state.history.push(JSON.parse(JSON.stringify(state.objects)));
+      state.historyIndex = state.history.length - 1;
     }
 
-    // ツール選択
+    // ツール選択（表/裏対応版）
     function setBatchDamageMarkerTool(tool) {
-      if (!batchDamageMarkerState) return;
-      batchDamageMarkerState.tool = tool;
-      batchDamageMarkerState.selectedObject = null;
+      const state = getCurrentBatchState();
+      if (!state) return;
+      state.tool = tool;
+      state.selectedObject = null;
       hideBatchObjectControls();
       renderBatchDamageMarker();
 
@@ -4919,13 +5124,14 @@
       });
     }
 
-    // 色選択
+    // 色選択（表/裏対応版）
     function setBatchDamageMarkerColor(color) {
-      if (!batchDamageMarkerState) return;
-      batchDamageMarkerState.color = color;
+      const state = getCurrentBatchState();
+      if (!state) return;
+      state.color = color;
 
-      if (batchDamageMarkerState.selectedObject !== null) {
-        batchDamageMarkerState.objects[batchDamageMarkerState.selectedObject].color = color;
+      if (state.selectedObject !== null) {
+        state.objects[state.selectedObject].color = color;
         saveBatchMarkerHistory();
         renderBatchDamageMarker();
       }
@@ -4938,67 +5144,86 @@
       });
     }
 
-    // クリア
+    // クリア（表/裏対応版）
     function clearBatchDamageMarker() {
-      if (!batchDamageMarkerState) return;
+      const state = getCurrentBatchState();
+      if (!state) return;
       if (!confirm('描いた内容をすべて消去しますか？')) return;
 
-      batchDamageMarkerState.objects = [];
-      batchDamageMarkerState.selectedObject = null;
+      state.objects = [];
+      state.selectedObject = null;
       hideBatchObjectControls();
       saveBatchMarkerHistory();
       renderBatchDamageMarker();
     }
 
-    // 元に戻す
+    // 元に戻す（表/裏対応版）
     function undoBatchDamageMarker() {
-      if (!batchDamageMarkerState || batchDamageMarkerState.historyIndex <= 0) return;
-      batchDamageMarkerState.historyIndex--;
-      batchDamageMarkerState.objects = JSON.parse(JSON.stringify(batchDamageMarkerState.history[batchDamageMarkerState.historyIndex]));
-      batchDamageMarkerState.selectedObject = null;
+      const state = getCurrentBatchState();
+      if (!state || state.historyIndex <= 0) return;
+      state.historyIndex--;
+      state.objects = JSON.parse(JSON.stringify(state.history[state.historyIndex]));
+      state.selectedObject = null;
       hideBatchObjectControls();
       renderBatchDamageMarker();
     }
 
-    // やり直す
+    // やり直す（表/裏対応版）
     function redoBatchDamageMarker() {
-      if (!batchDamageMarkerState || batchDamageMarkerState.historyIndex >= batchDamageMarkerState.history.length - 1) return;
-      batchDamageMarkerState.historyIndex++;
-      batchDamageMarkerState.objects = JSON.parse(JSON.stringify(batchDamageMarkerState.history[batchDamageMarkerState.historyIndex]));
-      batchDamageMarkerState.selectedObject = null;
+      const state = getCurrentBatchState();
+      if (!state || state.historyIndex >= state.history.length - 1) return;
+      state.historyIndex++;
+      state.objects = JSON.parse(JSON.stringify(state.history[state.historyIndex]));
+      state.selectedObject = null;
       hideBatchObjectControls();
       renderBatchDamageMarker();
     }
 
-    // 保存
+    // 保存（表/裏対応版）
     function saveBatchDamageMarker() {
-      if (!batchDamageMarkerState) return;
+      const currentSide = batchDamageMarkerState.currentSide;
+      const state = batchDamageMarkerState[currentSide];
+      if (!state) return;
 
-      batchDamageMarkerState.selectedObject = null;
+      state.selectedObject = null;
       hideBatchObjectControls();
       renderBatchDamageMarker();
 
       const canvas = document.getElementById('batch-damage-marker-canvas');
       const dataUrl = canvas.toDataURL('image/png');
 
-      batchDamageMarkerSaved = {
+      // 現在の面のデータを保存
+      batchDamageMarkerSaved[currentSide] = {
         image: dataUrl,
-        type: document.getElementById('batch-damage-marker-item').value,
-        objects: JSON.parse(JSON.stringify(batchDamageMarkerState.objects)),
+        subcategory: batchDamageMarkerState.currentSubcategory,
+        side: currentSide,
+        objects: JSON.parse(JSON.stringify(state.objects)),
         note: document.getElementById('batch-damage-marker-note-text').value || ''
       };
+
+      // 保存バッジを表示
+      const badgeId = currentSide === 'front' ? 'batch-front-saved-badge' : 'batch-back-saved-badge';
+      document.getElementById(badgeId).style.display = 'inline';
 
       const previewContainer = document.getElementById('batch-damage-marker-preview');
       const previewImg = document.getElementById('batch-damage-marker-preview-img');
       previewImg.src = dataUrl;
       previewContainer.style.display = 'block';
 
-      alert('マーキングを保存しました');
+      const sideLabel = currentSide === 'front' ? '表' : '裏';
+      alert(`${sideLabel}面のマーキングを保存しました`);
     }
 
-    // 保存済みデータ取得
+    // 保存済みデータ取得（表/裏両方を返す）
     function getBatchDamageMarker() {
-      return batchDamageMarkerSaved;
+      // 表と裏のどちらかにデータがあれば返す
+      if (!batchDamageMarkerSaved.front && !batchDamageMarkerSaved.back) {
+        return null;
+      }
+      return {
+        front: batchDamageMarkerSaved.front,
+        back: batchDamageMarkerSaved.back
+      };
     }
 
     // ========================================
@@ -5091,6 +5316,9 @@
         if (l4El) l4El.style.display = 'none';
       }
       if (l5El) l5El.style.display = 'none';
+
+      // 傷・汚れマーキング：小分類に連動して画像を読み込み
+      loadBatchDamageMarkerBySubcategory(l3);
     }
 
     // 細分類（L4）変更ハンドラ（一括入力）
