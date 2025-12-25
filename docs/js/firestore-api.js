@@ -263,37 +263,28 @@ async function getProductListFromFirestore(filters = {}) {
   try {
     const startTime = performance.now();
 
-    // Firestore初期化
+    // Firestore初期化（compat版）
     const db = await initializeFirestore();
 
-    // Firebase SDKを動的インポート
-    const { collection, getDocs, query, where } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+    // compat版APIでクエリ構築（動的importを廃止）
+    let queryRef = db.collection('products');
 
-    // クエリ構築
-    const productsRef = collection(db, 'products');
-    let q = productsRef;
-
-    // フィルタ適用
-    const constraints = [];
+    // フィルタ適用（compat版のwhere）
     if (filters.status) {
-      constraints.push(where('status', '==', filters.status));
+      queryRef = queryRef.where('status', '==', filters.status);
     }
     if (filters.brand) {
-      constraints.push(where('brand', '==', filters.brand));
+      queryRef = queryRef.where('brand', '==', filters.brand);
     }
     if (filters.category) {
-      constraints.push(where('category', '==', filters.category));
+      queryRef = queryRef.where('category', '==', filters.category);
     }
     if (filters.person) {
-      constraints.push(where('person', '==', filters.person));
+      queryRef = queryRef.where('person', '==', filters.person);
     }
 
-    if (constraints.length > 0) {
-      q = query(productsRef, ...constraints);
-    }
-
-    // データ取得
-    const snapshot = await getDocs(q);
+    // データ取得（compat版）
+    const snapshot = await queryRef.get();
 
     const products = [];
     snapshot.forEach(doc => {

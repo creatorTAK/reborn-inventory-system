@@ -1304,10 +1304,39 @@
       document.getElementById('btnSaveProductStatus').addEventListener('click', saveProductStatus);
     });
 
-    // ダッシュボード統計のみをロード（初期表示用）
+    // キャッシュ関連定数
+    const CACHE_KEY_STATS = 'reborn_inventory_stats';
+    const CACHE_KEY_PRODUCTS = 'reborn_inventory_products';
+    const CACHE_DURATION_MS = 5 * 60 * 1000; // 5分
+
+    // 統計を画面に反映するヘルパー関数
+    function updateStatsDisplay(stats) {
+      document.getElementById('statTotal').textContent = stats.total;
+      document.getElementById('statRegistered').textContent = stats.statusCounts.registered;
+      document.getElementById('statPreparing').textContent = stats.statusCounts.preparingListing;
+      document.getElementById('statListed').textContent = stats.statusCounts.listed;
+      document.getElementById('statSold').textContent = stats.statusCounts.sold;
+      document.getElementById('statWithdrawn').textContent = stats.statusCounts.withdrawn;
+    }
+
+    // 商品データから統計を計算
+    function calculateStats(products) {
+      return {
+        total: products.length,
+        statusCounts: {
+          registered: products.filter(p => p.status === '登録済み').length,
+          preparingListing: products.filter(p => p.status === '出品準備中').length,
+          listed: products.filter(p => p.status === '出品中').length,
+          sold: products.filter(p => p.status === '販売済み').length,
+          withdrawn: products.filter(p => p.status === '取り下げ').length
+        },
+        timestamp: Date.now()
+      };
+    }
+
+    // ダッシュボード統計のみをロード（初期表示用）- キャッシュ優先
     function loadDashboard() {
-      console.log('📊 [DEBUG] ダッシュボード統計のみ読み込み開始');
-      showLoading();
+      console.log('📊 [DEBUG] ダッシュボード統計読み込み開始');
 
       // 商品一覧をクリア（UX改善: 検索前は何も表示しない）
       const productList = document.getElementById('productList');
@@ -1318,6 +1347,28 @@
       if (resultCount) resultCount.textContent = '0';
       if (paginationArea) paginationArea.innerHTML = '';
 
+      // 1. まずキャッシュから即座に表示（ローディング不要）
+      try {
+        const cachedStats = sessionStorage.getItem(CACHE_KEY_STATS);
+        if (cachedStats) {
+          const stats = JSON.parse(cachedStats);
+          const age = Date.now() - (stats.timestamp || 0);
+          if (age < CACHE_DURATION_MS) {
+            console.log('⚡ [CACHE] 統計をキャッシュから即座に表示 (経過: ' + Math.round(age / 1000) + '秒)');
+            updateStatsDisplay(stats);
+            // キャッシュが新鮮な場合はバックグラウンド更新しない
+            return;
+          } else {
+            console.log('📊 [CACHE] キャッシュが古いため表示後にバックグラウンド更新');
+            updateStatsDisplay(stats);  // 古いキャッシュでも一旦表示
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ キャッシュ読み込みエラー:', e);
+      }
+
+      // 2. キャッシュがない/古い場合はFirestoreから取得
+      showLoading();
       const apiCallTime = performance.now();
       let isCompleted = false;
 
@@ -1330,53 +1381,36 @@
         }
       }, 10000);
 
-      // 🔥 Firestore API呼び出し (ARCH-001 Phase 3)
+      // 🔥 Firestore API呼び出し
       FirestoreApi.getProductList().then(function(products) {
-        if (isCompleted) return; // タイムアウト済みの場合はスキップ
+        if (isCompleted) return;
         isCompleted = true;
         clearTimeout(timeoutId);
 
-        const apiResponseTime = performance.now();
-        const duration = (apiResponseTime - apiCallTime).toFixed(0);
-        console.log('📊 [DASHBOARD] API応答受信:', duration + 'ms');
+        const duration = (performance.now() - apiCallTime).toFixed(0);
+        console.log('📊 [FIRESTORE] API応答受信:', duration + 'ms, ' + products.length + '件');
 
         hideLoading();
 
-        // 🔍 デバッグ: ステータス値の分布を確認
-        const statusDebug = {};
-        products.forEach(p => {
-          const status = p.status || '(空)';
-          statusDebug[status] = (statusDebug[status] || 0) + 1;
-        });
-        console.log('🔍 [DEBUG] Firestoreのステータス分布:', statusDebug);
-
         // 統計計算
-        const stats = {
-          total: products.length,
-          statusCounts: {
-            registered: products.filter(p => p.status === '登録済み').length,
-            preparingListing: products.filter(p => p.status === '出品準備中').length,
-            listed: products.filter(p => p.status === '出品中').length,
-            sold: products.filter(p => p.status === '販売済み').length,
-            withdrawn: products.filter(p => p.status === '取り下げ').length
-          }
-        };
+        const stats = calculateStats(products);
+        updateStatsDisplay(stats);
 
-        console.log('🔍 [DEBUG] 統計結果:', stats);
-
-        document.getElementById('statTotal').textContent = stats.total;
-        document.getElementById('statRegistered').textContent = stats.statusCounts.registered;
-        document.getElementById('statPreparing').textContent = stats.statusCounts.preparingListing;
-        document.getElementById('statListed').textContent = stats.statusCounts.listed;
-        document.getElementById('statSold').textContent = stats.statusCounts.sold;
-        document.getElementById('statWithdrawn').textContent = stats.statusCounts.withdrawn;
+        // キャッシュに保存
+        try {
+          sessionStorage.setItem(CACHE_KEY_STATS, JSON.stringify(stats));
+          sessionStorage.setItem(CACHE_KEY_PRODUCTS, JSON.stringify(products));
+          console.log('💾 [CACHE] 統計・商品データをキャッシュに保存');
+        } catch (e) {
+          console.warn('⚠️ キャッシュ保存エラー:', e);
+        }
 
         // 滞留状況計算（出品中のみ）
         updateAgingDisplay(products);
 
         console.log('✅ [FIRESTORE] ダッシュボード統計読み込み完了');
       }).catch(function(error) {
-        if (isCompleted) return; // タイムアウト済みの場合はスキップ
+        if (isCompleted) return;
         isCompleted = true;
         clearTimeout(timeoutId);
 
@@ -1515,16 +1549,8 @@
       return { days: diffDays, colorClass };
     }
 
-    // ダッシュボードと商品一覧を一度に読み込み（検索実行時）
-    function loadDashboardAndSearch(showLoadingIndicator = true) {
-      const startTime = performance.now();
-      console.log('🔍 [PERF] 読み込み開始');
-
-      if (showLoadingIndicator) {
-        showLoading();
-      }
-
-      // フィルタ収集
+    // フィルタパラメータを収集
+    function collectFilterParams() {
       const statusCheckboxes = document.querySelectorAll('input[type="checkbox"][id^="status"]:checked');
       const statusValues = Array.from(statusCheckboxes).map(cb => cb.value);
 
@@ -1541,143 +1567,176 @@
         mgmtSearchText = mgmtFirst;
       }
 
-      const params = {
-        statuses: statusValues,  // 配列として渡す
+      return {
+        statuses: statusValues,
         searchText: document.getElementById('searchText').value.trim(),
-        mgmtSearchText: mgmtSearchText,  // 管理番号検索（ドロップダウンから組み立て）
+        mgmtSearchText: mgmtSearchText,
         brand: document.getElementById('filterBrand').value.trim(),
         category: document.getElementById('filterCategory').value.trim(),
         size: document.getElementById('filterSize').value.trim(),
         color: document.getElementById('filterColor').value.trim(),
         page: currentPage,
-        limit: parseInt(document.getElementById('perPage').value) || 10,  // ✅ 元に戻す：ユーザー選択値を使用
+        limit: parseInt(document.getElementById('perPage').value) || 10,
         sortBy: document.getElementById('sortBy').value,
         sortOrder: document.getElementById('sortOrder').value
       };
+    }
 
-      const apiCallTime = performance.now();
-      console.log('🔥 [FIRESTORE] 商品一覧取得開始 (Phase 3)');
+    // 商品リストにフィルタ・ソート・ページネーション適用
+    function applyFiltersAndDisplay(products, params) {
+      let filteredProducts = products;
+
+      // ステータスフィルタ
+      if (params.statuses && params.statuses.length > 0) {
+        filteredProducts = filteredProducts.filter(p => params.statuses.includes(p.status));
+      }
+
+      // 管理番号検索（前方一致）
+      if (params.mgmtSearchText) {
+        const mgmtLower = params.mgmtSearchText.toLowerCase();
+        filteredProducts = filteredProducts.filter(p =>
+          p.managementNumber && p.managementNumber.toLowerCase().startsWith(mgmtLower)
+        );
+      }
+
+      // テキスト検索（商品名・ブランド）
+      if (params.searchText) {
+        const searchLower = params.searchText.toLowerCase();
+        filteredProducts = filteredProducts.filter(p =>
+          (p.productName && p.productName.toLowerCase().includes(searchLower)) ||
+          (p.brand && p.brand.toLowerCase().includes(searchLower))
+        );
+      }
+
+      // ブランドフィルタ
+      if (params.brand) {
+        filteredProducts = filteredProducts.filter(p => p.brand === params.brand);
+      }
+
+      // カテゴリフィルタ
+      if (params.category) {
+        filteredProducts = filteredProducts.filter(p => p.category === params.category);
+      }
+
+      // ソート
+      filteredProducts.sort((a, b) => {
+        const aVal = a[params.sortBy] || '';
+        const bVal = b[params.sortBy] || '';
+        if (params.sortOrder === 'asc') {
+          return aVal > bVal ? 1 : -1;
+        } else {
+          return aVal < bVal ? 1 : -1;
+        }
+      });
+
+      // ページネーション
+      const totalCount = filteredProducts.length;
+      const totalPages = Math.ceil(totalCount / params.limit);
+      const startIndex = (params.page - 1) * params.limit;
+      const paginatedProducts = filteredProducts.slice(startIndex, startIndex + params.limit);
+
+      // 統計計算・表示
+      const stats = calculateStats(products);
+      updateStatsDisplay(stats);
+
+      // 商品一覧更新
+      displayProducts(paginatedProducts);
+      displayPagination(params.page, totalPages, totalCount);
+      document.getElementById('resultCount').textContent = totalCount;
+
+      return { filteredProducts, paginatedProducts, stats, totalCount };
+    }
+
+    // ダッシュボードと商品一覧を一度に読み込み（検索実行時）- キャッシュ優先
+    function loadDashboardAndSearch(showLoadingIndicator = true) {
+      const startTime = performance.now();
+      console.log('🔍 [PERF] 検索開始');
+
+      const params = collectFilterParams();
       console.log('🔍 [DEBUG] フィルタパラメータ:', params);
 
+      // 1. キャッシュを確認（キャッシュがあればローディングなしで即座に表示）
+      try {
+        const cachedProducts = sessionStorage.getItem(CACHE_KEY_PRODUCTS);
+        if (cachedProducts) {
+          const products = JSON.parse(cachedProducts);
+          const cachedStats = sessionStorage.getItem(CACHE_KEY_STATS);
+          const stats = cachedStats ? JSON.parse(cachedStats) : null;
+          const cacheAge = stats ? Date.now() - (stats.timestamp || 0) : Infinity;
+
+          // キャッシュが新鮮な場合（5分以内）
+          if (cacheAge < CACHE_DURATION_MS) {
+            console.log('⚡ [CACHE] キャッシュから即座に検索結果表示 (経過: ' + Math.round(cacheAge / 1000) + '秒)');
+            const result = applyFiltersAndDisplay(products, params);
+            console.log('✅ [CACHE] 検索完了: ' + result.totalCount + '件ヒット');
+            if (showLoadingIndicator) hideLoading();
+            return; // キャッシュで完結
+          } else {
+            // キャッシュが古い場合も一旦表示（UX向上）
+            console.log('📊 [CACHE] 古いキャッシュを表示後、バックグラウンド更新');
+            applyFiltersAndDisplay(products, params);
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ キャッシュ読み込みエラー:', e);
+      }
+
+      // 2. Firestoreから取得（キャッシュがない/古い場合）
+      if (showLoadingIndicator) showLoading();
+
+      const apiCallTime = performance.now();
       let isCompleted = false;
 
-      // タイムアウト処理（10秒で強制終了）
+      // タイムアウト処理（10秒）
       const timeoutId = setTimeout(function() {
         if (!isCompleted) {
           isCompleted = true;
           console.warn('⚠️ [TIMEOUT] 商品一覧読み込みタイムアウト（10秒）');
-          if (showLoadingIndicator) {
-            hideLoading();
-          }
+          if (showLoadingIndicator) hideLoading();
         }
       }, 10000);
 
-      // 🔥 Firestore API呼び出し (ARCH-001 Phase 3)
-      FirestoreApi.getProductList().then(function(products) {
-        if (isCompleted) return; // タイムアウト済みの場合はスキップ
+      // Phase C: ステータスフィルタをサーバーサイドで適用（単一ステータスの場合のみ）
+      const firestoreFilters = {};
+      if (params.statuses && params.statuses.length === 1) {
+        firestoreFilters.status = params.statuses[0];
+        console.log('🔥 [FIRESTORE] サーバーサイドフィルタ適用: status=' + params.statuses[0]);
+      }
+
+      FirestoreApi.getProductList(firestoreFilters).then(function(products) {
+        if (isCompleted) return;
         isCompleted = true;
         clearTimeout(timeoutId);
 
-        const apiResponseTime = performance.now();
-        const duration = (apiResponseTime - apiCallTime).toFixed(0);
-        console.log('🔥 [FIRESTORE] API応答受信:', duration + 'ms');
+        const duration = (performance.now() - apiCallTime).toFixed(0);
+        console.log('🔥 [FIRESTORE] API応答:', duration + 'ms, ' + products.length + '件');
 
-        if (showLoadingIndicator) {
-          hideLoading();
-        }
+        if (showLoadingIndicator) hideLoading();
 
-        // クライアント側でフィルタリング
-        let filteredProducts = products;
+        // 全データでフィルタ・表示
+        const result = applyFiltersAndDisplay(products, params);
 
-        // ステータスフィルタ
-        if (params.statuses && params.statuses.length > 0) {
-          filteredProducts = filteredProducts.filter(p => params.statuses.includes(p.status));
-        }
-
-        // 管理番号検索（独立・前方一致）
-        if (params.mgmtSearchText) {
-          const mgmtLower = params.mgmtSearchText.toLowerCase();
-          filteredProducts = filteredProducts.filter(p =>
-            p.managementNumber && p.managementNumber.toLowerCase().startsWith(mgmtLower)
-          );
-        }
-
-        // テキスト検索（商品名・ブランド）
-        if (params.searchText) {
-          const searchLower = params.searchText.toLowerCase();
-          filteredProducts = filteredProducts.filter(p =>
-            (p.productName && p.productName.toLowerCase().includes(searchLower)) ||
-            (p.brand && p.brand.toLowerCase().includes(searchLower))
-          );
-        }
-
-        // ブランドフィルタ
-        if (params.brand) {
-          filteredProducts = filteredProducts.filter(p => p.brand === params.brand);
-        }
-
-        // カテゴリフィルタ
-        if (params.category) {
-          filteredProducts = filteredProducts.filter(p => p.category === params.category);
-        }
-
-        // ソート
-        filteredProducts.sort((a, b) => {
-          const aVal = a[params.sortBy] || '';
-          const bVal = b[params.sortBy] || '';
-          if (params.sortOrder === 'asc') {
-            return aVal > bVal ? 1 : -1;
-          } else {
-            return aVal < bVal ? 1 : -1;
+        // キャッシュ更新（全件取得の場合のみ）
+        if (Object.keys(firestoreFilters).length === 0) {
+          try {
+            const stats = calculateStats(products);
+            sessionStorage.setItem(CACHE_KEY_STATS, JSON.stringify(stats));
+            sessionStorage.setItem(CACHE_KEY_PRODUCTS, JSON.stringify(products));
+            console.log('💾 [CACHE] キャッシュ更新完了');
+          } catch (e) {
+            console.warn('⚠️ キャッシュ保存エラー:', e);
           }
-        });
+        }
 
-        // ページネーション
-        const totalCount = filteredProducts.length;
-        const totalPages = Math.ceil(totalCount / params.limit);
-        const startIndex = (params.page - 1) * params.limit;
-        const paginatedProducts = filteredProducts.slice(startIndex, startIndex + params.limit);
-
-        // 統計計算
-        const stats = {
-          total: products.length,
-          statusCounts: {
-            registered: products.filter(p => p.status === '登録済み').length,
-            preparingListing: products.filter(p => p.status === '出品準備中').length,
-            listed: products.filter(p => p.status === '出品中').length,
-            sold: products.filter(p => p.status === '販売済み').length,
-            withdrawn: products.filter(p => p.status === '取り下げ').length
-          }
-        };
-
-        // ダッシュボード更新
-        document.getElementById('statTotal').textContent = stats.total;
-        document.getElementById('statRegistered').textContent = stats.statusCounts.registered;
-        document.getElementById('statPreparing').textContent = stats.statusCounts.preparingListing;
-        document.getElementById('statListed').textContent = stats.statusCounts.listed;
-        document.getElementById('statSold').textContent = stats.statusCounts.sold;
-        document.getElementById('statWithdrawn').textContent = stats.statusCounts.withdrawn;
-
-        // 商品一覧更新
-        displayProducts(paginatedProducts);
-        displayPagination(params.page, totalPages, totalCount);
-        document.getElementById('resultCount').textContent = totalCount;
-
-        const renderEndTime = performance.now();
-        console.log('🔥 [FIRESTORE] 画面描画完了:', (renderEndTime - apiResponseTime).toFixed(0) + 'ms');
-        console.log('✅ [FIRESTORE] 合計時間:', (renderEndTime - startTime).toFixed(0) + 'ms');
-        console.log('📊 [FIRESTORE] 統計:', stats.total + '件中' + paginatedProducts.length + '件表示');
+        const totalTime = (performance.now() - startTime).toFixed(0);
+        console.log('✅ [FIRESTORE] 検索完了: ' + result.totalCount + '件ヒット (' + totalTime + 'ms)');
       }).catch(function(error) {
-        if (isCompleted) return; // タイムアウト済みの場合はスキップ
+        if (isCompleted) return;
         isCompleted = true;
         clearTimeout(timeoutId);
 
-        const errorTime = performance.now();
         console.error('❌ [FIRESTORE ERROR]:', error);
-        console.error('❌ [PERF] API失敗:', (errorTime - apiCallTime).toFixed(0) + 'ms');
-        if (showLoadingIndicator) {
-          hideLoading();
-        }
+        if (showLoadingIndicator) hideLoading();
         showError('読み込みエラー: ' + (error ? (error.message || error) : 'Unknown error'));
       });
     }
