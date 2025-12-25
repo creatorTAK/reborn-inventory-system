@@ -4701,6 +4701,51 @@
       return batchDamageMarkerState[batchDamageMarkerState.currentSide];
     }
 
+    // 数字を丸数字に変換（①②③...⑳、それ以降は(21)形式）
+    function getCircledNumber(num) {
+      const circledNumbers = ['', '①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩',
+                              '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳'];
+      if (num >= 1 && num <= 20) {
+        return circledNumbers[num];
+      }
+      return `(${num})`;
+    }
+
+    // 次に使用する番号を取得（表/裏それぞれで管理）
+    function getNextMarkerNumber() {
+      const state = getCurrentBatchState();
+      if (!state) return 1;
+
+      // 現在の最大番号を取得
+      let maxNumber = 0;
+      state.objects.forEach(obj => {
+        if (obj.type === 'circle' && obj.number) {
+          maxNumber = Math.max(maxNumber, obj.number);
+        }
+      });
+      return maxNumber + 1;
+    }
+
+    // 補足説明に番号を追加
+    function appendMarkerNumberToNotes(number) {
+      const noteEl = document.getElementById('batch-damage-marker-note-text');
+      if (!noteEl) return;
+
+      const circledNum = getCircledNumber(number);
+      const currentText = noteEl.value;
+
+      // 既存テキストがある場合は改行を追加
+      if (currentText.trim()) {
+        noteEl.value = currentText + '\n' + circledNum + ' ';
+      } else {
+        noteEl.value = circledNum + ' ';
+      }
+
+      // カーソルを末尾に移動
+      noteEl.focus();
+      noteEl.setSelectionRange(noteEl.value.length, noteEl.value.length);
+    }
+
     // Canvasを非表示
     function hideBatchDamageMarkerCanvas() {
       document.getElementById('batch-damage-marker-wrapper').style.display = 'none';
@@ -4784,11 +4829,21 @@
       objects.forEach((obj, index) => {
         ctx.save();
         if (obj.type === 'circle') {
+          // 円を描画
           ctx.strokeStyle = obj.color;
           ctx.lineWidth = 3;
           ctx.beginPath();
           ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
           ctx.stroke();
+
+          // 番号を描画（丸数字）
+          if (obj.number) {
+            ctx.fillStyle = obj.color;
+            ctx.font = `bold ${Math.max(14, obj.radius)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(getCircledNumber(obj.number), obj.x, obj.y);
+          }
 
           if (index === selectedObject) {
             ctx.setLineDash([5, 5]);
@@ -4974,15 +5029,19 @@
 
         // 新規オブジェクト作成
         if (state.tool === 'circle') {
+          const markerNumber = getNextMarkerNumber();
           state.objects.push({
             type: 'circle',
             x: pos.x,
             y: pos.y,
             radius: 20,
-            color: state.color
+            color: state.color,
+            number: markerNumber
           });
           saveBatchMarkerHistory();
           renderBatchDamageMarker();
+          // 補足説明に番号を自動追加
+          appendMarkerNumberToNotes(markerNumber);
         } else if (state.tool === 'text') {
           const text = prompt('テキストを入力:');
           if (text) {
