@@ -2855,9 +2855,55 @@
     let noteSaveTimer = null;
     let sortableInstance = null;
 
-    // 初期化
+    // キャッシュ関連定数
+    const MYPAGE_CACHE_KEY = 'reborn_mypage_cache';
+    const MYPAGE_CACHE_DURATION_MS = 3 * 60 * 1000; // 3分
+
+    // キャッシュからデータを復元
+    function restoreFromCache() {
+      try {
+        const cached = sessionStorage.getItem(MYPAGE_CACHE_KEY);
+        if (!cached) return null;
+
+        const data = JSON.parse(cached);
+        const age = Date.now() - (data.timestamp || 0);
+
+        if (age > MYPAGE_CACHE_DURATION_MS) {
+          console.log('📊 [CACHE] マイページキャッシュ期限切れ');
+          return null;
+        }
+
+        console.log('⚡ [CACHE] マイページキャッシュから復元 (経過: ' + Math.round(age / 1000) + '秒)');
+        return data;
+      } catch (e) {
+        console.warn('キャッシュ読み込みエラー:', e);
+        return null;
+      }
+    }
+
+    // キャッシュにデータを保存
+    function saveToCache() {
+      try {
+        const data = {
+          compensationSettings,
+          compensationRecords,
+          userGoal,
+          rankingParticipation,
+          allUsersRankingPrefs,
+          assignedTasks,
+          userProfileBg,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem(MYPAGE_CACHE_KEY, JSON.stringify(data));
+        console.log('💾 [CACHE] マイページデータをキャッシュに保存');
+      } catch (e) {
+        console.warn('キャッシュ保存エラー:', e);
+      }
+    }
+
+    // 初期化（キャッシュ優先 + 並列実行）
     async function init() {
-      showLoading(true);
+      const startTime = performance.now();
 
       // ユーザー情報取得
       currentUser = {
@@ -2870,12 +2916,37 @@
 
       if (!currentUser.email) {
         showNotEligible('ログインが必要です', 'ユーザー情報が見つかりません。再度ログインしてください。');
-        showLoading(false);
         return;
       }
 
+      // 1. キャッシュを確認（キャッシュがあればローディングなしで即座に表示）
+      const cached = restoreFromCache();
+      if (cached) {
+        // キャッシュからデータを復元
+        compensationSettings = cached.compensationSettings || {};
+        compensationRecords = cached.compensationRecords || [];
+        userGoal = cached.userGoal || 0;
+        rankingParticipation = cached.rankingParticipation !== false;
+        allUsersRankingPrefs = cached.allUsersRankingPrefs || {};
+        assignedTasks = cached.assignedTasks || ['listing', 'shipping'];
+        userProfileBg = cached.userProfileBg || { type: 'gradient', value: 'blue', position: 50 };
+
+        // 即座に描画（ローディングなし）
+        renderMyPage();
+        checkAdminAccess();
+
+        // お知らせはバックグラウンドで読み込み
+        initAnnouncements().catch(e => console.warn('お知らせ読み込みエラー:', e));
+
+        console.log('✅ [CACHE] マイページ即時表示完了 (' + (performance.now() - startTime).toFixed(0) + 'ms)');
+        return;
+      }
+
+      // 2. キャッシュがない場合はFirestoreから取得
+      showLoading(true);
+
       try {
-        // 報酬設定を取得
+        // まず報酬設定を取得（checkEligibilityに必要）
         await loadCompensationSettings();
 
         // 報酬対象者かチェック
@@ -2887,29 +2958,29 @@
           return;
         }
 
-        // ユーザーの目標を取得
-        await loadUserGoal();
-
-        // ユーザーの担当タスクを取得
-        await loadAssignedTasks();
-
-        // 全ユーザーのランキング参加設定を取得
-        await loadAllUsersRankingPrefs();
-
-        // 報酬データを取得
-        await loadCompensationData();
-
-        // ユーザーの背景設定を取得
-        await loadUserProfileBg();
+        // 残りのデータを並列で取得（高速化）
+        console.log('🚀 [PARALLEL] 並列データ取得開始');
+        await Promise.all([
+          loadUserGoal(),
+          loadAssignedTasks(),
+          loadAllUsersRankingPrefs(),
+          loadCompensationData(),
+          loadUserProfileBg(),
+          initAnnouncements()
+        ]);
+        console.log('✅ [PARALLEL] 並列データ取得完了');
 
         // 画面を描画
         renderMyPage();
 
-        // お知らせを読み込んでバッジを更新
-        await initAnnouncements();
-
         // 管理者メニュー表示チェック
         checkAdminAccess();
+
+        // キャッシュに保存
+        saveToCache();
+
+        const duration = (performance.now() - startTime).toFixed(0);
+        console.log('✅ [FIRESTORE] マイページ初期化完了 (' + duration + 'ms)');
       } catch (error) {
         console.error('初期化エラー:', error);
         showNotEligible('エラーが発生しました', 'データの読み込み中にエラーが発生しました。');
