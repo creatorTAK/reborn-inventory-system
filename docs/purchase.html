@@ -6,8 +6,8 @@
   <base target="_top">
   <title>仕入管理 - FURIRA</title>
   <script>
-    // v349: 傷・汚れマーキング 個別入力モードに表/裏トグル・番号付きマーカー追加
-    console.log('🔴🔴🔴 purchase.html v349-individual-damage-marker-toggle loaded 🔴🔴🔴');
+    // v350: 傷・汚れマーキング 表/裏で番号連動
+    console.log('🔴🔴🔴 purchase.html v350-damage-marker-number-sync loaded 🔴🔴🔴');
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(reg => reg.update());
@@ -4710,18 +4710,22 @@
       return `(${num})`;
     }
 
-    // 次に使用する番号を取得（表/裏それぞれで管理）
+    // 次に使用する番号を取得（表/裏で連動）
     function getNextMarkerNumber() {
-      const state = getCurrentBatchState();
-      if (!state) return 1;
-
-      // 現在の最大番号を取得
+      // 表と裏の両方から最大番号を取得（番号を連動させる）
       let maxNumber = 0;
-      state.objects.forEach(obj => {
-        if (obj.type === 'circle' && obj.number) {
-          maxNumber = Math.max(maxNumber, obj.number);
+
+      ['front', 'back'].forEach(side => {
+        const state = batchDamageMarkerState[side];
+        if (state && state.objects) {
+          state.objects.forEach(obj => {
+            if (obj.type === 'circle' && obj.number) {
+              maxNumber = Math.max(maxNumber, obj.number);
+            }
+          });
         }
       });
+
       return maxNumber + 1;
     }
 
@@ -8933,17 +8937,25 @@
       return itemState[itemState.currentSide];
     }
 
-    // 次に使用する番号を取得（個別入力用）
+    // 次に使用する番号を取得（個別入力用・表/裏で連動）
     function getNextItemMarkerNumber(itemId) {
-      const state = getCurrentItemState(itemId);
-      if (!state) return 1;
+      const itemState = damageMarkerState.get(itemId);
+      if (!itemState) return 1;
 
+      // 表と裏の両方から最大番号を取得（番号を連動させる）
       let maxNumber = 0;
-      state.objects.forEach(obj => {
-        if (obj.type === 'circle' && obj.number) {
-          maxNumber = Math.max(maxNumber, obj.number);
+
+      ['front', 'back'].forEach(side => {
+        const state = itemState[side];
+        if (state && state.objects) {
+          state.objects.forEach(obj => {
+            if (obj.type === 'circle' && obj.number) {
+              maxNumber = Math.max(maxNumber, obj.number);
+            }
+          });
         }
       });
+
       return maxNumber + 1;
     }
 
