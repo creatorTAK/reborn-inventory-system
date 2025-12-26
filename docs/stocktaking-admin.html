@@ -378,7 +378,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/js/firestore-api.js"></script>
-  <script src="/js/stocktaking-period-api.js"></script>
+  <script src="/js/stocktaking-period-api.js?v=2"></script>
   <script>
     // ============================================
     // グローバル変数
@@ -750,7 +750,7 @@
         return;
       }
 
-      if (!confirm('この棚卸期間を開始しますか？\n開始すると、各スタッフの対象商品が集計されます。')) {
+      if (!confirm('この棚卸期間を開始しますか？\n開始すると、各スタッフの対象商品が集計され、通知とタスクが作成されます。')) {
         return;
       }
 
@@ -758,8 +758,38 @@
         showLoading(true);
         periodDetailModal.hide();
 
+        // 1. 期間をアクティブ化（スタッフ進捗を初期化）
         const result = await StocktakingPeriodAPI.activateStocktakingPeriod(periodId);
-        alert(`棚卸を開始しました\n${result.totalStaff}スタッフ、${result.totalProducts}商品が対象です`);
+        console.log('[Admin] 期間アクティブ化結果:', result);
+
+        // 2. 期間データを取得
+        const period = await StocktakingPeriodAPI.getStocktakingPeriod(periodId);
+        period.id = periodId;
+
+        // 3. 担当者に通知を送信
+        let notifyResult = { sent: 0 };
+        try {
+          notifyResult = await StocktakingPeriodAPI.sendStocktakingNotifications(period, result);
+          console.log('[Admin] 通知送信結果:', notifyResult);
+        } catch (notifyError) {
+          console.error('[Admin] 通知送信エラー:', notifyError);
+        }
+
+        // 4. やることリストにタスク追加
+        let taskResult = { created: 0 };
+        try {
+          taskResult = await StocktakingPeriodAPI.createStocktakingTasks(period, result);
+          console.log('[Admin] タスク作成結果:', taskResult);
+        } catch (taskError) {
+          console.error('[Admin] タスク作成エラー:', taskError);
+        }
+
+        // 結果メッセージ
+        let message = `棚卸を開始しました\n\n`;
+        message += `📊 対象: ${result.totalStaff}スタッフ、${result.totalProducts}商品\n`;
+        message += `📨 通知: ${notifyResult.sent}件送信\n`;
+        message += `📋 タスク: ${taskResult.created}件作成`;
+        alert(message);
 
         await loadData();
       } catch (error) {
@@ -790,7 +820,18 @@
         showLoading(true);
         confirmModal.hide();
 
+        // 1. 期間を完了
         await StocktakingPeriodAPI.completeStocktakingPeriod(periodId);
+
+        // 2. やることリストのタスクを完了にする
+        try {
+          const taskResult = await StocktakingPeriodAPI.completeStocktakingTasks(periodId);
+          console.log('棚卸タスク完了:', taskResult);
+        } catch (taskError) {
+          console.error('タスク完了処理エラー:', taskError);
+          // タスク完了に失敗しても期間終了は成功としてマーク
+        }
+
         alert('棚卸期間を終了しました');
 
         await loadData();

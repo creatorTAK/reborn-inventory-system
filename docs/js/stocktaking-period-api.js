@@ -237,6 +237,182 @@ async function completeStocktakingPeriod(periodId) {
 }
 
 // ============================================
+// 通知・タスク機能
+// ============================================
+
+/**
+ * FCMワーカーのエンドポイント
+ */
+const FCM_WORKER_URL = 'https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send';
+
+/**
+ * 棚卸担当者に通知を送信
+ * @param {Object} period - 期間データ
+ * @param {Object} staffProgress - スタッフ進捗データ
+ * @returns {Promise<Object>} 送信結果
+ */
+async function sendStocktakingNotifications(period, staffProgress) {
+  const db = await getFirestoreInstance();
+
+  // 対象ユーザーのFCMトークンを取得
+  const tokens = [];
+  const targetEmails = Object.keys(staffProgress.staffCounts || {});
+
+  if (targetEmails.length === 0) {
+    console.log('[Stocktaking API] 通知対象者なし');
+    return { sent: 0, failed: 0 };
+  }
+
+  for (const email of targetEmails) {
+    try {
+      const userDoc = await db.collection('users').doc(email).get();
+      if (userDoc.exists) {
+        const fcmToken = userDoc.data().fcmToken;
+        if (fcmToken) {
+          tokens.push(fcmToken);
+        }
+      }
+    } catch (e) {
+      console.warn('[Stocktaking API] トークン取得エラー:', email, e);
+    }
+  }
+
+  if (tokens.length === 0) {
+    console.log('[Stocktaking API] 有効なFCMトークンなし');
+    return { sent: 0, failed: 0, noTokens: true };
+  }
+
+  // 終了日をフォーマット
+  const endDate = period.endDate?.toDate ? period.endDate.toDate() : new Date(period.endDate);
+  const endDateStr = `${endDate.getMonth() + 1}/${endDate.getDate()}`;
+
+  // 通知を送信
+  try {
+    const response = await fetch(FCM_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tokens: tokens,
+        title: '📋 棚卸期間が開始されました',
+        body: `「${period.name}」が開始されました。${endDateStr}までに棚卸を完了してください。`,
+        data: {
+          type: 'stocktaking_period_started',
+          periodId: period.id,
+          periodName: period.name
+        }
+      })
+    });
+
+    if (response.ok) {
+      console.log('[Stocktaking API] ✅ 通知送信成功:', tokens.length, '件');
+      return { sent: tokens.length, failed: 0 };
+    } else {
+      console.error('[Stocktaking API] 通知送信エラー:', response.status);
+      return { sent: 0, failed: tokens.length };
+    }
+  } catch (error) {
+    console.error('[Stocktaking API] 通知送信例外:', error);
+    return { sent: 0, failed: tokens.length, error: error.message };
+  }
+}
+
+/**
+ * 棚卸タスクをやることリストに追加
+ * @param {Object} period - 期間データ
+ * @param {Object} staffProgress - スタッフ進捗データ
+ * @returns {Promise<Object>} 作成結果
+ */
+async function createStocktakingTasks(period, staffProgress) {
+  const db = await getFirestoreInstance();
+
+  const staffCounts = staffProgress.staffCounts || {};
+  const staffNames = staffProgress.staffNames || {};
+  const targetEmails = Object.keys(staffCounts);
+
+  if (targetEmails.length === 0) {
+    console.log('[Stocktaking API] タスク作成対象者なし');
+    return { created: 0 };
+  }
+
+  // 終了日をフォーマット
+  const endDate = period.endDate?.toDate ? period.endDate.toDate() : new Date(period.endDate);
+  const endDateStr = `${endDate.getFullYear()}/${endDate.getMonth() + 1}/${endDate.getDate()}`;
+
+  const batch = db.batch();
+  let createdCount = 0;
+
+  for (const email of targetEmails) {
+    const productCount = staffCounts[email] || 0;
+
+    // タスクドキュメント参照を作成
+    const taskRef = db.collection('userTasks').doc(email).collection('tasks').doc();
+
+    batch.set(taskRef, {
+      type: 'stocktaking_period',
+      title: `📋 ${period.name}`,
+      description: `期限: ${endDateStr}まで\n対象商品: ${productCount}件\n\n棚卸画面から商品の在庫確認を行ってください。`,
+      createdAt: new Date().toISOString(),
+      completed: false,
+      priority: 'high',
+      link: '/stocktaking.html',
+      relatedData: {
+        periodId: period.id,
+        periodName: period.name,
+        totalProducts: productCount,
+        endDate: endDateStr
+      }
+    });
+
+    createdCount++;
+  }
+
+  await batch.commit();
+  console.log('[Stocktaking API] ✅ タスク作成完了:', createdCount, '件');
+
+  return { created: createdCount };
+}
+
+/**
+ * 棚卸期間終了時にタスクを完了にする
+ * @param {string} periodId - 期間ID
+ * @returns {Promise<Object>} 更新結果
+ */
+async function completeStocktakingTasks(periodId) {
+  const db = await getFirestoreInstance();
+
+  // staffProgressから対象ユーザーを取得
+  const progressSnapshot = await db.collection('stocktakingPeriods')
+    .doc(periodId)
+    .collection('staffProgress')
+    .get();
+
+  let updatedCount = 0;
+
+  for (const doc of progressSnapshot.docs) {
+    const email = doc.id;
+
+    // そのユーザーの棚卸タスクを検索
+    const tasksSnapshot = await db.collection('userTasks')
+      .doc(email)
+      .collection('tasks')
+      .where('type', '==', 'stocktaking_period')
+      .where('relatedData.periodId', '==', periodId)
+      .get();
+
+    for (const taskDoc of tasksSnapshot.docs) {
+      await taskDoc.ref.update({
+        completed: true,
+        completedAt: new Date().toISOString()
+      });
+      updatedCount++;
+    }
+  }
+
+  console.log('[Stocktaking API] ✅ タスク完了処理:', updatedCount, '件');
+  return { updated: updatedCount };
+}
+
+// ============================================
 // スタッフ進捗管理
 // ============================================
 
@@ -341,7 +517,7 @@ async function initializeStaffProgress(periodId) {
   console.log('[Stocktaking API] スタッフ進捗初期化完了:', totalStaff, 'スタッフ,', totalProducts, '商品');
   console.log('[Stocktaking API] 対象担当者:', Object.keys(staffCounts).join(', '));
 
-  return { totalStaff, totalProducts };
+  return { totalStaff, totalProducts, staffCounts, staffNames };
 }
 
 /**
@@ -788,6 +964,11 @@ window.StocktakingPeriodAPI = {
   updateStocktakingPeriod,
   activateStocktakingPeriod,
   completeStocktakingPeriod,
+
+  // 通知・タスク
+  sendStocktakingNotifications,
+  createStocktakingTasks,
+  completeStocktakingTasks,
 
   // スタッフ進捗
   getStaffProgress,
