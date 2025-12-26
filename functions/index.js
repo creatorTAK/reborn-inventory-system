@@ -2367,3 +2367,229 @@ exports.onProductUpdatedForAgingTask = onDocumentUpdated('products/{productId}',
     return { success: false, error: error.message };
   }
 });
+
+/**
+ * 📅 報酬支払日通知
+ * 毎日朝9時（JST）に実行
+ * 支払日に該当する場合、該当ユーザーにプッシュ通知を送信
+ */
+exports.paymentDayNotification = onSchedule({
+  schedule: '0 0 * * *', // UTC 0:00 = JST 9:00
+  timeZone: 'Asia/Tokyo',
+  region: 'asia-northeast1'
+}, async (event) => {
+  console.log('💰 [paymentDayNotification] 支払日通知チェック開始');
+  const startTime = Date.now();
+
+  try {
+    // 報酬設定を取得
+    const settingsDoc = await db.collection('settings').doc('compensation').get();
+    if (!settingsDoc.exists) {
+      console.log('⏭️ [paymentDayNotification] 報酬設定が見つかりません');
+      return { success: false, reason: 'no_settings' };
+    }
+
+    const settings = settingsDoc.data();
+    const paymentDaySetting = settings.options?.paymentDay || '翌月5日';
+    const cutoffDay = settings.options?.cutoffDay || '末日';
+
+    console.log(`📋 [paymentDayNotification] 設定: 支払日=${paymentDaySetting}, 締日=${cutoffDay}`);
+
+    // 今日が支払日かチェック
+    const today = new Date();
+    const todayDate = today.getDate();
+    const todayMonth = today.getMonth();
+    const todayYear = today.getFullYear();
+
+    let isPaymentDay = false;
+    let paymentDayNumber = 0;
+
+    // 支払日の日付を取得
+    if (paymentDaySetting === '翌月末日') {
+      // 月末日（今月の最終日）
+      const lastDay = new Date(todayYear, todayMonth + 1, 0).getDate();
+      isPaymentDay = (todayDate === lastDay);
+      paymentDayNumber = lastDay;
+    } else {
+      // 翌月X日の場合
+      const match = paymentDaySetting.match(/翌月(\d+)日/);
+      if (match) {
+        paymentDayNumber = parseInt(match[1], 10);
+        isPaymentDay = (todayDate === paymentDayNumber);
+      }
+    }
+
+    console.log(`📅 [paymentDayNotification] 今日=${todayDate}日, 支払日=${paymentDayNumber}日, 該当=${isPaymentDay}`);
+
+    if (!isPaymentDay) {
+      console.log('⏭️ [paymentDayNotification] 今日は支払日ではありません');
+      return { success: true, isPaymentDay: false };
+    }
+
+    // 対象期間を計算（前月の締め日基準）
+    let periodStart, periodEnd;
+
+    // 締め日の計算
+    const prevMonth = todayMonth === 0 ? 11 : todayMonth - 1;
+    const prevMonthYear = todayMonth === 0 ? todayYear - 1 : todayYear;
+    const twoMonthsAgo = prevMonth === 0 ? 11 : prevMonth - 1;
+    const twoMonthsAgoYear = prevMonth === 0 ? prevMonthYear - 1 : prevMonthYear;
+
+    if (cutoffDay === '末日') {
+      // 前月末日締めの場合：前月1日〜前月末日
+      periodStart = new Date(prevMonthYear, prevMonth, 1, 0, 0, 0, 0);
+      periodEnd = new Date(prevMonthYear, prevMonth + 1, 0, 23, 59, 59, 999);
+    } else if (cutoffDay === '15日') {
+      // 15日締めの場合：前々月16日〜前月15日
+      periodStart = new Date(twoMonthsAgoYear, twoMonthsAgo, 16, 0, 0, 0, 0);
+      periodEnd = new Date(prevMonthYear, prevMonth, 15, 23, 59, 59, 999);
+    } else if (cutoffDay === '20日') {
+      // 20日締めの場合：前々月21日〜前月20日
+      periodStart = new Date(twoMonthsAgoYear, twoMonthsAgo, 21, 0, 0, 0, 0);
+      periodEnd = new Date(prevMonthYear, prevMonth, 20, 23, 59, 59, 999);
+    } else if (cutoffDay === '25日') {
+      // 25日締めの場合：前々月26日〜前月25日
+      periodStart = new Date(twoMonthsAgoYear, twoMonthsAgo, 26, 0, 0, 0, 0);
+      periodEnd = new Date(prevMonthYear, prevMonth, 25, 23, 59, 59, 999);
+    } else {
+      // デフォルト：前月1日〜末日
+      periodStart = new Date(prevMonthYear, prevMonth, 1, 0, 0, 0, 0);
+      periodEnd = new Date(prevMonthYear, prevMonth + 1, 0, 23, 59, 59, 999);
+    }
+
+    console.log(`📆 [paymentDayNotification] 対象期間: ${periodStart.toISOString()} 〜 ${periodEnd.toISOString()}`);
+
+    // 報酬レコードを取得
+    const recordsSnapshot = await db.collection('compensationRecords').get();
+
+    if (recordsSnapshot.empty) {
+      console.log('⏭️ [paymentDayNotification] 報酬レコードがありません');
+      return { success: true, isPaymentDay: true, notificationsSent: 0 };
+    }
+
+    // スタッフごとに集計
+    const staffTotals = new Map();
+
+    recordsSnapshot.forEach(doc => {
+      const data = doc.data();
+      const staffEmail = data.staffEmail;
+      if (!staffEmail) return;
+
+      // 完了日を取得
+      const completedAtRaw = data.completedAt || data.recordedAt;
+      if (!completedAtRaw) return;
+
+      let completedAt;
+      if (typeof completedAtRaw === 'string') {
+        completedAt = new Date(completedAtRaw);
+      } else if (completedAtRaw.toDate) {
+        completedAt = completedAtRaw.toDate();
+      } else {
+        completedAt = new Date(completedAtRaw);
+      }
+
+      // 期間内かチェック
+      if (completedAt >= periodStart && completedAt <= periodEnd) {
+        if (!staffTotals.has(staffEmail)) {
+          staffTotals.set(staffEmail, {
+            email: staffEmail,
+            name: data.staffName || staffEmail.split('@')[0],
+            totalAmount: 0,
+            recordCount: 0
+          });
+        }
+        const staff = staffTotals.get(staffEmail);
+        staff.totalAmount += (data.unitPrice || 0);
+        staff.recordCount += 1;
+      }
+    });
+
+    console.log(`👥 [paymentDayNotification] 対象スタッフ: ${staffTotals.size}人`);
+
+    if (staffTotals.size === 0) {
+      console.log('⏭️ [paymentDayNotification] 対象期間の報酬レコードがありません');
+      return { success: true, isPaymentDay: true, notificationsSent: 0 };
+    }
+
+    // 各スタッフに通知を送信
+    let notificationsSent = 0;
+    const periodLabel = `${periodStart.getMonth() + 1}月分`;
+
+    for (const [email, staffData] of staffTotals) {
+      try {
+        // 1. userAnnouncementsに追加
+        await db.collection('users')
+          .doc(email)
+          .collection('userAnnouncements')
+          .add({
+            title: `💰 ${periodLabel}の報酬明細が届きました`,
+            content: `今月の報酬は ¥${staffData.totalAmount.toLocaleString()} です。マイページで詳細をご確認ください。`,
+            createdAt: FieldValue.serverTimestamp(),
+            read: false,
+            type: 'compensation_statement',
+            data: {
+              period: periodLabel,
+              amount: staffData.totalAmount,
+              recordCount: staffData.recordCount
+            }
+          });
+
+        console.log(`📋 [paymentDayNotification] アナウンス追加: ${email}`);
+
+        // 2. FCM通知を送信
+        const deviceDoc = await db.collection('activeDevices').doc(email).get();
+        if (deviceDoc.exists) {
+          const deviceData = deviceDoc.data();
+          const tokens = Array.isArray(deviceData?.fcmTokens) ? deviceData.fcmTokens.filter(Boolean) : [];
+
+          if (tokens.length > 0) {
+            const message = {
+              tokens: tokens,
+              notification: {
+                title: `💰 ${periodLabel}の報酬明細`,
+                body: `今月の報酬は ¥${staffData.totalAmount.toLocaleString()} です`
+              },
+              data: {
+                type: 'compensation_statement',
+                url: '/mypage.html'
+              },
+              webpush: {
+                notification: {
+                  icon: '/icons/icon-192.png',
+                  badge: '/icons/badge-72.png'
+                },
+                fcm_options: {
+                  link: 'https://furira.jp/mypage.html'
+                }
+              }
+            };
+
+            const response = await messaging.sendEachForMulticast(message);
+            console.log(`📤 [paymentDayNotification] FCM送信: ${email} - 成功${response.successCount} 失敗${response.failureCount}`);
+          }
+        }
+
+        notificationsSent++;
+
+      } catch (error) {
+        console.error(`❌ [paymentDayNotification] 通知エラー (${email}):`, error);
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [paymentDayNotification] 完了: ${notificationsSent}件通知 (${duration}ms)`);
+
+    return {
+      success: true,
+      isPaymentDay: true,
+      periodStart: periodStart.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+      notificationsSent,
+      staffCount: staffTotals.size
+    };
+
+  } catch (error) {
+    console.error('❌ [paymentDayNotification] エラー:', error);
+    return { success: false, error: error.message };
+  }
+});
