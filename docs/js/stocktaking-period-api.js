@@ -241,19 +241,52 @@ async function completeStocktakingPeriod(periodId) {
 // ============================================
 
 /**
+ * 棚卸タスクが有効なユーザー一覧を取得
+ * @returns {Promise<Set<string>>} 棚卸担当者のメールアドレスSet
+ */
+async function getStocktakingEnabledUsers() {
+  const db = await getFirestoreInstance();
+
+  const usersSnapshot = await db.collection('users').get();
+  const enabledUsers = new Set();
+
+  usersSnapshot.docs.forEach(doc => {
+    const data = doc.data();
+    const assignedTasks = data.assignedTasks || [];
+
+    // assignedTasksに'stocktaking'が含まれているか確認
+    if (assignedTasks.includes('stocktaking')) {
+      enabledUsers.add(doc.id); // doc.idはメールアドレス
+    }
+  });
+
+  console.log('[Stocktaking API] 棚卸担当者:', enabledUsers.size, '名');
+  return enabledUsers;
+}
+
+/**
  * スタッフ進捗を初期化（期間アクティブ化時に呼び出し）
+ * タスク担当設定で「棚卸」が有効なユーザーのみ対象
  * @param {string} periodId - 期間ID
  * @returns {Promise<Object>} 集計結果
  */
 async function initializeStaffProgress(periodId) {
   const db = await getFirestoreInstance();
 
-  // 販売済み以外のpurchaseSlotsを取得
+  // 1. 棚卸タスクが有効なユーザーを取得
+  const stocktakingUsers = await getStocktakingEnabledUsers();
+
+  if (stocktakingUsers.size === 0) {
+    console.warn('[Stocktaking API] 棚卸担当者が設定されていません');
+    return { totalStaff: 0, totalProducts: 0, warning: '棚卸担当者が設定されていません' };
+  }
+
+  // 2. 販売済み以外のpurchaseSlotsを取得
   const slotsSnapshot = await db.collection('purchaseSlots')
     .where('status', '!=', 'sold')
     .get();
 
-  // スタッフ別に商品数を集計
+  // 3. 棚卸担当者の商品のみを集計
   const staffCounts = {};
   const staffNames = {};
 
@@ -262,6 +295,11 @@ async function initializeStaffProgress(periodId) {
     const email = data.personEmail || data.person || 'unknown';
     const name = data.person || 'unknown';
 
+    // 棚卸タスクが有効なユーザーのみ対象
+    if (!stocktakingUsers.has(email)) {
+      return; // スキップ
+    }
+
     if (!staffCounts[email]) {
       staffCounts[email] = 0;
       staffNames[email] = name;
@@ -269,7 +307,7 @@ async function initializeStaffProgress(periodId) {
     staffCounts[email]++;
   });
 
-  // 各スタッフの進捗ドキュメントを作成
+  // 4. 各スタッフの進捗ドキュメントを作成
   const batch = db.batch();
   let totalStaff = 0;
   let totalProducts = 0;
@@ -301,6 +339,7 @@ async function initializeStaffProgress(periodId) {
 
   await batch.commit();
   console.log('[Stocktaking API] スタッフ進捗初期化完了:', totalStaff, 'スタッフ,', totalProducts, '商品');
+  console.log('[Stocktaking API] 対象担当者:', Object.keys(staffCounts).join(', '));
 
   return { totalStaff, totalProducts };
 }
@@ -687,7 +726,15 @@ async function getMyStocktakingProducts(periodId) {
 
   // ユーザー情報を取得（person名との紐付け用）
   const userDoc = await db.collection('users').doc(currentUser.email).get();
-  const userName = userDoc.exists ? userDoc.data().userName : null;
+  const userData = userDoc.exists ? userDoc.data() : {};
+  const userName = userData.userName || null;
+
+  // 棚卸タスクが有効か確認
+  const assignedTasks = userData.assignedTasks || [];
+  if (!assignedTasks.includes('stocktaking')) {
+    console.warn('[Stocktaking API] このユーザーは棚卸タスクが割り当てられていません');
+    return []; // 棚卸担当でない場合は空配列を返す
+  }
 
   // 販売済み以外の商品を取得
   const slotsSnapshot = await db.collection('purchaseSlots')
