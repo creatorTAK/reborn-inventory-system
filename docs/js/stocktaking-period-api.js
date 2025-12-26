@@ -677,6 +677,94 @@ async function updatePeriodStats(periodId) {
 }
 
 // ============================================
+// 報酬記録機能
+// ============================================
+
+/**
+ * 報酬設定を取得
+ * @returns {Object} 報酬設定（taskRatesを含む）
+ */
+function getCompensationSettings() {
+  try {
+    const config = JSON.parse(localStorage.getItem('config') || '{}');
+    return config['報酬設定'] || {
+      taskRates: {
+        listing: 100,
+        shipping: 100,
+        photography: 50,
+        inspection: 30,
+        stocktaking: 20,
+        editing: 50
+      }
+    };
+  } catch {
+    return {
+      taskRates: {
+        listing: 100,
+        shipping: 100,
+        photography: 50,
+        inspection: 30,
+        stocktaking: 20,
+        editing: 50
+      }
+    };
+  }
+}
+
+/**
+ * 棚卸報酬レコードを作成
+ * @param {Object} params - パラメータ
+ * @param {string} params.periodId - 期間ID
+ * @param {string} params.slotId - スロットID
+ * @param {string} params.staffEmail - スタッフメール
+ * @param {string} params.staffName - スタッフ名
+ * @param {string} params.managementNumber - 管理番号
+ * @param {string} params.productName - 商品名
+ * @returns {Promise<string|null>} 作成された報酬レコードID、または既存の場合はnull
+ */
+async function createStocktakingCompensationRecord(params) {
+  const db = await getFirestoreInstance();
+  const { periodId, slotId, staffEmail, staffName, managementNumber, productName } = params;
+
+  // 報酬設定から単価を取得
+  const settings = getCompensationSettings();
+  const unitPrice = settings.taskRates?.stocktaking || 20;
+
+  // 重複チェック（同じ期間+スロットで既に報酬記録があるか）
+  const recordId = `stocktaking_${periodId}_${slotId}`;
+  const existingDoc = await db.collection('compensationRecords').doc(recordId).get();
+
+  if (existingDoc.exists) {
+    console.log('[Stocktaking API] 報酬記録は既に存在:', recordId);
+    return null; // 既存の場合は作成しない
+  }
+
+  // 報酬レコードを作成
+  const compensationData = {
+    staffEmail: staffEmail,
+    staffName: staffName || staffEmail.split('@')[0],
+    taskTypeKey: 'stocktaking',
+    taskType: 'stocktaking_task',
+    description: `棚卸確認: ${managementNumber || slotId}`,
+    managementNumber: managementNumber || '',
+    productName: productName || '',
+    unitPrice: unitPrice,
+    completedAt: new Date().toISOString(),
+    recordedAt: new Date().toISOString(),
+    relatedData: {
+      periodId: periodId,
+      slotId: slotId,
+      type: 'stocktaking'
+    }
+  };
+
+  await db.collection('compensationRecords').doc(recordId).set(compensationData);
+  console.log('[Stocktaking API] ✅ 報酬記録作成:', recordId, unitPrice, '円');
+
+  return recordId;
+}
+
+// ============================================
 // チェック結果管理
 // ============================================
 
@@ -689,13 +777,14 @@ async function updatePeriodStats(periodId) {
 async function saveCheckResult(periodId, checkData) {
   const db = await getFirestoreInstance();
   const currentUser = firebase.auth().currentUser;
+  const staffEmail = currentUser?.email || checkData.staffEmail;
 
   const docData = {
     slotId: checkData.slotId,
     productId: checkData.productId || null,
     managementNumber: checkData.managementNumber || '',
     productName: checkData.productName || '',
-    staffEmail: currentUser?.email || checkData.staffEmail,
+    staffEmail: staffEmail,
     staffName: checkData.staffName || '',
     bookQuantity: checkData.bookQuantity || 1,
     actualQuantity: checkData.actualQuantity,
@@ -717,10 +806,31 @@ async function saveCheckResult(periodId, checkData) {
     .collection('checkResults')
     .doc(checkData.slotId);
 
+  // 既存のチェック結果を確認（新規チェックの場合のみ報酬を記録）
+  const existingCheck = await docRef.get();
+  const isNewCheck = !existingCheck.exists;
+
   await docRef.set(docData, { merge: true });
 
+  // 新規チェックの場合のみ報酬レコードを作成
+  if (isNewCheck) {
+    try {
+      await createStocktakingCompensationRecord({
+        periodId,
+        slotId: checkData.slotId,
+        staffEmail: staffEmail,
+        staffName: checkData.staffName,
+        managementNumber: checkData.managementNumber,
+        productName: checkData.productName
+      });
+    } catch (compensationError) {
+      console.error('[Stocktaking API] 報酬記録作成エラー:', compensationError);
+      // 報酬記録に失敗しても棚卸チェック自体は成功とする
+    }
+  }
+
   // スタッフ進捗を再計算
-  await recalculateStaffProgress(periodId, currentUser?.email || checkData.staffEmail);
+  await recalculateStaffProgress(periodId, staffEmail);
 
   console.log('[Stocktaking API] チェック結果保存:', checkData.slotId);
   return checkData.slotId;
@@ -980,6 +1090,10 @@ window.StocktakingPeriodAPI = {
   getCheckResult,
   getCheckResults,
   excludeProduct,
+
+  // 報酬
+  getCompensationSettings,
+  createStocktakingCompensationRecord,
 
   // ユーティリティ
   isPeriodActive,
