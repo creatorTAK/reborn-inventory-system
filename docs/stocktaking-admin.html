@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>棚卸管理 - FURIRA</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="/css/reborn-theme.css?v=338-stocktaking-admin">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+    }
+    .content-container {
+      padding: 16px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* ヘッダー */
+    .page-header {
+      background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+      color: white;
+      padding: 20px 16px;
+      margin-bottom: 16px;
+    }
+    .page-header h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0;
+    }
+    .page-header .subtitle {
+      font-size: 0.8rem;
+      opacity: 0.9;
+      margin-top: 4px;
+    }
+
+    /* カード */
+    .card-section {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .card-section h6 {
+      color: #374151;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-section h6 i {
+      color: #40B4E5;
+    }
+
+    /* 期間リスト */
+    .period-item {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid #e5e7eb;
+      transition: all 0.2s;
+    }
+    .period-item:hover {
+      border-color: #40B4E5;
+    }
+    .period-item.active {
+      border: 2px solid #10b981;
+      background: #f0fdf4;
+    }
+
+    /* ステータスバッジ */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .status-badge.draft { background: #e5e7eb; color: #374151; }
+    .status-badge.active { background: #d1fae5; color: #065f46; }
+    .status-badge.completed { background: #dbeafe; color: #1e40af; }
+
+    /* サマリーグリッド */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .summary-card {
+      background: white;
+      padding: 12px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .summary-card.highlight {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+    }
+    .summary-card.highlight .summary-label { color: rgba(255,255,255,0.8); }
+    .summary-card.highlight .summary-value { color: white; }
+    .summary-label {
+      font-size: 0.7rem;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .summary-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    /* プログレスバー */
+    .progress-custom {
+      height: 10px;
+      background: #e5e7eb;
+      border-radius: 5px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+    .progress-custom .bar {
+      height: 100%;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      transition: width 0.3s;
+    }
+
+    /* スタッフ進捗テーブル */
+    .staff-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .staff-table th {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #6b7280;
+      text-align: left;
+      padding: 8px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .staff-table td {
+      padding: 12px 8px;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 0.875rem;
+    }
+    .staff-table tr:hover {
+      background: #f9fafb;
+    }
+    .staff-status {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    .staff-status.not_started { background: #e5e7eb; color: #6b7280; }
+    .staff-status.in_progress { background: #fef3c7; color: #92400e; }
+    .staff-status.completed { background: #d1fae5; color: #065f46; }
+
+    /* ボタン */
+    .btn-primary-custom {
+      background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+      border: none;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      width: 100%;
+    }
+    .btn-primary-custom:hover {
+      background: linear-gradient(135deg, #1E8FBF 0%, #176a92 100%);
+      color: white;
+    }
+    .btn-outline-custom {
+      background: white;
+      border: 2px solid #40B4E5;
+      color: #40B4E5;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+    .btn-outline-custom:hover {
+      background: #40B4E5;
+      color: white;
+    }
+
+    /* フォーム */
+    .form-label-custom {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    .form-control-custom {
+      border-radius: 8px;
+      border: 1px solid #d1d5db;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+    }
+    .form-control-custom:focus {
+      border-color: #40B4E5;
+      box-shadow: 0 0 0 3px rgba(64, 180, 229, 0.1);
+    }
+
+    /* 空状態 */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #9ca3af;
+    }
+    .empty-state i {
+      font-size: 3rem;
+      margin-bottom: 12px;
+    }
+
+    /* ローディング */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+  </style>
+</head>
+<body>
+  <!-- ローディング -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="text-center">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="mt-2 text-muted">読み込み中...</p>
+    </div>
+  </div>
+
+  <!-- ヘッダー -->
+  <div class="page-header">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <h1><i class="bi bi-clipboard-check me-2"></i>棚卸管理</h1>
+        <div class="subtitle">期間設定・進捗確認</div>
+      </div>
+      <a href="/stocktaking.html" class="btn btn-sm btn-light">
+        <i class="bi bi-arrow-left"></i> 戻る
+      </a>
+    </div>
+  </div>
+
+  <div class="content-container">
+    <!-- アクティブ期間セクション -->
+    <div id="activePeriodSection" class="card-section" style="display: none;">
+      <h6><i class="bi bi-calendar-check"></i> 実施中の棚卸</h6>
+      <div id="activePeriodContent"></div>
+    </div>
+
+    <!-- 全体進捗ダッシュボード -->
+    <div id="progressDashboard" class="card-section" style="display: none;">
+      <h6><i class="bi bi-graph-up"></i> 進捗状況</h6>
+      <div class="summary-grid" id="summaryGrid"></div>
+      <div class="progress-custom">
+        <div class="bar" id="overallProgressBar" style="width: 0%"></div>
+      </div>
+      <div class="text-center text-muted" style="font-size: 0.8rem;">
+        <span id="progressText">0件中 0件完了</span>
+      </div>
+
+      <!-- スタッフ別進捗 -->
+      <h6 class="mt-4"><i class="bi bi-people"></i> 担当者別進捗</h6>
+      <div class="table-responsive">
+        <table class="staff-table" id="staffProgressTable">
+          <thead>
+            <tr>
+              <th>担当者</th>
+              <th>対象</th>
+              <th>完了</th>
+              <th>進捗</th>
+              <th>差異</th>
+              <th>状態</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 新規期間作成 -->
+    <div class="card-section">
+      <h6><i class="bi bi-plus-circle"></i> 新規棚卸期間</h6>
+      <form id="createPeriodForm">
+        <div class="mb-3">
+          <label class="form-label-custom">期間名</label>
+          <input type="text" class="form-control form-control-custom" id="periodName"
+                 placeholder="例: 2025年1月棚卸" required>
+        </div>
+        <div class="row mb-3">
+          <div class="col-6">
+            <label class="form-label-custom">開始日</label>
+            <input type="date" class="form-control form-control-custom" id="startDate" required>
+          </div>
+          <div class="col-6">
+            <label class="form-label-custom">終了日</label>
+            <input type="date" class="form-control form-control-custom" id="endDate" required>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary-custom">
+          <i class="bi bi-plus-lg me-1"></i> 期間を作成
+        </button>
+      </form>
+    </div>
+
+    <!-- 期間一覧 -->
+    <div class="card-section">
+      <h6><i class="bi bi-list-ul"></i> 棚卸期間一覧</h6>
+      <div id="periodsList"></div>
+    </div>
+  </div>
+
+  <!-- 期間詳細モーダル -->
+  <div class="modal fade" id="periodDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="periodDetailTitle">期間詳細</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="periodDetailBody"></div>
+        <div class="modal-footer" id="periodDetailFooter"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 確認モーダル -->
+  <div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="confirmTitle">確認</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="confirmBody"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-primary" id="confirmBtn">実行</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/firestore-api.js"></script>
+  <script src="/js/stocktaking-period-api.js"></script>
+  <script>
+    // ============================================
+    // グローバル変数
+    // ============================================
+    let currentUser = null;
+    let activePeriod = null;
+    let allPeriods = [];
+    let staffProgress = [];
+    let periodDetailModal = null;
+    let confirmModal = null;
+
+    // ============================================
+    // 初期化
+    // ============================================
+    document.addEventListener('DOMContentLoaded', async () => {
+      periodDetailModal = new bootstrap.Modal(document.getElementById('periodDetailModal'));
+      confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+
+      // 認証チェック
+      firebase.auth().onAuthStateChanged(async (user) => {
+        if (user) {
+          currentUser = user;
+          await loadData();
+        } else {
+          window.location.href = '/index.html';
+        }
+      });
+
+      // フォーム送信
+      document.getElementById('createPeriodForm').addEventListener('submit', handleCreatePeriod);
+
+      // 日付のデフォルト値を設定
+      setDefaultDates();
+    });
+
+    function setDefaultDates() {
+      const today = new Date();
+      const nextWeek = new Date(today);
+      nextWeek.setDate(today.getDate() + 7);
+
+      document.getElementById('startDate').value = formatDateForInput(today);
+      document.getElementById('endDate').value = formatDateForInput(nextWeek);
+    }
+
+    function formatDateForInput(date) {
+      return date.toISOString().split('T')[0];
+    }
+
+    // ============================================
+    // データ読み込み
+    // ============================================
+    async function loadData() {
+      try {
+        showLoading(true);
+
+        // アクティブ期間を取得
+        activePeriod = await StocktakingPeriodAPI.getActiveStocktakingPeriod();
+
+        // 全期間を取得
+        allPeriods = await StocktakingPeriodAPI.getAllStocktakingPeriods();
+
+        // アクティブ期間がある場合は進捗を取得
+        if (activePeriod) {
+          staffProgress = await StocktakingPeriodAPI.getAllStaffProgress(activePeriod.id);
+        }
+
+        renderUI();
+      } catch (error) {
+        console.error('データ読み込みエラー:', error);
+        alert('データの読み込みに失敗しました');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // ============================================
+    // UI描画
+    // ============================================
+    function renderUI() {
+      renderActivePeriod();
+      renderProgressDashboard();
+      renderPeriodsList();
+    }
+
+    function renderActivePeriod() {
+      const section = document.getElementById('activePeriodSection');
+      const content = document.getElementById('activePeriodContent');
+
+      if (!activePeriod) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'block';
+
+      const remainingDays = StocktakingPeriodAPI.getRemainingDays(activePeriod);
+      const periodRange = StocktakingPeriodAPI.formatPeriodRange(activePeriod.startDate, activePeriod.endDate);
+
+      content.innerHTML = `
+        <div class="period-item active">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <strong>${activePeriod.name}</strong>
+              <span class="status-badge active ms-2">実施中</span>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="showCompletePeriodConfirm('${activePeriod.id}')">
+              <i class="bi bi-stop-circle"></i> 終了
+            </button>
+          </div>
+          <div class="text-muted" style="font-size: 0.85rem;">
+            <i class="bi bi-calendar3 me-1"></i> ${periodRange}
+            <span class="ms-3">
+              <i class="bi bi-hourglass-split me-1"></i> 残り${remainingDays > 0 ? remainingDays + '日' : '終了'}
+            </span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderProgressDashboard() {
+      const dashboard = document.getElementById('progressDashboard');
+
+      if (!activePeriod) {
+        dashboard.style.display = 'none';
+        return;
+      }
+
+      dashboard.style.display = 'block';
+
+      const stats = activePeriod.stats || {};
+      const progress = StocktakingPeriodAPI.calculateProgress(stats.checkedProducts || 0, stats.totalProducts || 0);
+
+      // サマリーグリッド
+      document.getElementById('summaryGrid').innerHTML = `
+        <div class="summary-card">
+          <div class="summary-label">対象スタッフ</div>
+          <div class="summary-value">${stats.totalStaff || 0}</div>
+        </div>
+        <div class="summary-card highlight">
+          <div class="summary-label">完了スタッフ</div>
+          <div class="summary-value">${stats.completedStaff || 0}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">対象商品</div>
+          <div class="summary-value">${stats.totalProducts || 0}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">差異件数</div>
+          <div class="summary-value ${stats.discrepancyCount > 0 ? 'text-danger' : ''}">${stats.discrepancyCount || 0}</div>
+        </div>
+      `;
+
+      // プログレスバー
+      document.getElementById('overallProgressBar').style.width = `${progress}%`;
+      document.getElementById('progressText').textContent =
+        `${stats.totalProducts || 0}件中 ${stats.checkedProducts || 0}件完了 (${progress}%)`;
+
+      // スタッフ進捗テーブル
+      const tbody = document.querySelector('#staffProgressTable tbody');
+      if (staffProgress.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">スタッフデータがありません</td></tr>';
+      } else {
+        tbody.innerHTML = staffProgress.map(staff => {
+          const staffProgressPercent = StocktakingPeriodAPI.calculateProgress(
+            staff.checkedProducts || 0,
+            staff.totalProducts || 0
+          );
+          const statusClass = staff.status || 'not_started';
+          const statusLabel = {
+            'not_started': '未開始',
+            'in_progress': '進行中',
+            'completed': '完了'
+          }[statusClass] || statusClass;
+
+          return `
+            <tr>
+              <td><strong>${staff.staffName || staff.staffEmail}</strong></td>
+              <td>${staff.totalProducts || 0}</td>
+              <td>${staff.checkedProducts || 0}</td>
+              <td>
+                <div style="width: 80px; display: inline-block;">
+                  <div class="progress-custom" style="height: 6px;">
+                    <div class="bar" style="width: ${staffProgressPercent}%"></div>
+                  </div>
+                </div>
+                <span class="ms-1" style="font-size: 0.75rem;">${staffProgressPercent}%</span>
+              </td>
+              <td class="${staff.discrepancyProducts > 0 ? 'text-danger' : ''}">${staff.discrepancyProducts || 0}</td>
+              <td><span class="staff-status ${statusClass}">${statusLabel}</span></td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    function renderPeriodsList() {
+      const container = document.getElementById('periodsList');
+
+      if (allPeriods.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="bi bi-calendar-x"></i>
+            <p>棚卸期間がありません</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = allPeriods.map(period => {
+        const statusClass = period.status || 'draft';
+        const statusLabel = {
+          'draft': '下書き',
+          'active': '実施中',
+          'completed': '完了'
+        }[statusClass] || statusClass;
+
+        const periodRange = StocktakingPeriodAPI.formatPeriodRange(period.startDate, period.endDate);
+
+        return `
+          <div class="period-item ${period.id === activePeriod?.id ? 'active' : ''}"
+               onclick="showPeriodDetail('${period.id}')">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <strong>${period.name}</strong>
+                <span class="status-badge ${statusClass} ms-2">${statusLabel}</span>
+              </div>
+              <i class="bi bi-chevron-right text-muted"></i>
+            </div>
+            <div class="text-muted mt-1" style="font-size: 0.8rem;">
+              <i class="bi bi-calendar3 me-1"></i> ${periodRange}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ============================================
+    // 期間作成
+    // ============================================
+    async function handleCreatePeriod(e) {
+      e.preventDefault();
+
+      const name = document.getElementById('periodName').value.trim();
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      if (!name || !startDate || !endDate) {
+        alert('すべての項目を入力してください');
+        return;
+      }
+
+      if (new Date(startDate) > new Date(endDate)) {
+        alert('終了日は開始日より後に設定してください');
+        return;
+      }
+
+      try {
+        showLoading(true);
+        await StocktakingPeriodAPI.createStocktakingPeriod({ name, startDate, endDate });
+        alert('棚卸期間を作成しました');
+
+        // フォームリセット
+        document.getElementById('createPeriodForm').reset();
+        setDefaultDates();
+
+        // データ再読み込み
+        await loadData();
+      } catch (error) {
+        console.error('期間作成エラー:', error);
+        alert('期間の作成に失敗しました: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // ============================================
+    // 期間詳細表示
+    // ============================================
+    function showPeriodDetail(periodId) {
+      const period = allPeriods.find(p => p.id === periodId);
+      if (!period) return;
+
+      const periodRange = StocktakingPeriodAPI.formatPeriodRange(period.startDate, period.endDate);
+      const statusLabel = {
+        'draft': '下書き',
+        'active': '実施中',
+        'completed': '完了'
+      }[period.status] || period.status;
+
+      document.getElementById('periodDetailTitle').textContent = period.name;
+      document.getElementById('periodDetailBody').innerHTML = `
+        <div class="mb-3">
+          <strong>ステータス:</strong>
+          <span class="status-badge ${period.status}">${statusLabel}</span>
+        </div>
+        <div class="mb-3">
+          <strong>期間:</strong> ${periodRange}
+        </div>
+        ${period.stats ? `
+          <div class="mb-3">
+            <strong>統計:</strong>
+            <ul class="mb-0 mt-2">
+              <li>スタッフ: ${period.stats.completedStaff || 0}/${period.stats.totalStaff || 0}人完了</li>
+              <li>商品: ${period.stats.checkedProducts || 0}/${period.stats.totalProducts || 0}件チェック</li>
+              <li>差異: ${period.stats.discrepancyCount || 0}件</li>
+            </ul>
+          </div>
+        ` : ''}
+      `;
+
+      // フッターボタン
+      let footerHtml = '';
+      if (period.status === 'draft') {
+        footerHtml = `
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+          <button type="button" class="btn btn-danger" onclick="deletePeriod('${period.id}')">削除</button>
+          <button type="button" class="btn btn-success" onclick="activatePeriod('${period.id}')">
+            <i class="bi bi-play-fill"></i> 開始
+          </button>
+        `;
+      } else if (period.status === 'active') {
+        footerHtml = `
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+          <button type="button" class="btn btn-danger" onclick="showCompletePeriodConfirm('${period.id}')">
+            <i class="bi bi-stop-fill"></i> 終了
+          </button>
+        `;
+      } else {
+        footerHtml = `<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>`;
+      }
+      document.getElementById('periodDetailFooter').innerHTML = footerHtml;
+
+      periodDetailModal.show();
+    }
+
+    // ============================================
+    // 期間アクティブ化
+    // ============================================
+    async function activatePeriod(periodId) {
+      // 既にアクティブな期間があるかチェック
+      if (activePeriod) {
+        alert('既に実施中の棚卸期間があります。先に終了してください。');
+        return;
+      }
+
+      if (!confirm('この棚卸期間を開始しますか？\n開始すると、各スタッフの対象商品が集計されます。')) {
+        return;
+      }
+
+      try {
+        showLoading(true);
+        periodDetailModal.hide();
+
+        const result = await StocktakingPeriodAPI.activateStocktakingPeriod(periodId);
+        alert(`棚卸を開始しました\n${result.totalStaff}スタッフ、${result.totalProducts}商品が対象です`);
+
+        await loadData();
+      } catch (error) {
+        console.error('期間アクティブ化エラー:', error);
+        alert('開始に失敗しました: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // ============================================
+    // 期間終了確認
+    // ============================================
+    function showCompletePeriodConfirm(periodId) {
+      document.getElementById('confirmTitle').textContent = '棚卸終了の確認';
+      document.getElementById('confirmBody').innerHTML = `
+        <p>この棚卸期間を終了しますか？</p>
+        <p class="text-muted small">終了後は編集できなくなります。</p>
+      `;
+      document.getElementById('confirmBtn').onclick = () => completePeriod(periodId);
+
+      periodDetailModal.hide();
+      confirmModal.show();
+    }
+
+    async function completePeriod(periodId) {
+      try {
+        showLoading(true);
+        confirmModal.hide();
+
+        await StocktakingPeriodAPI.completeStocktakingPeriod(periodId);
+        alert('棚卸期間を終了しました');
+
+        await loadData();
+      } catch (error) {
+        console.error('期間終了エラー:', error);
+        alert('終了に失敗しました: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // ============================================
+    // 期間削除
+    // ============================================
+    async function deletePeriod(periodId) {
+      if (!confirm('この棚卸期間を削除しますか？\n※下書き状態のみ削除可能です')) {
+        return;
+      }
+
+      try {
+        showLoading(true);
+        periodDetailModal.hide();
+
+        const db = await initializeFirestore();
+        await db.collection('stocktakingPeriods').doc(periodId).delete();
+        alert('棚卸期間を削除しました');
+
+        await loadData();
+      } catch (error) {
+        console.error('期間削除エラー:', error);
+        alert('削除に失敗しました: ' + error.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // ============================================
+    // ユーティリティ
+    // ============================================
+    function showLoading(show) {
+      document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+    }
+  </script>
+</body>
+</html>

@@ -10,6 +10,8 @@
   <!-- html5-qrcode for QR scanning -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- QRCode.js for QR generation (棚卸ではスキャンのみ使用、生成は不要) -->
+  <!-- 期間ベース棚卸API -->
+  <script src="/js/stocktaking-period-api.js" defer></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -500,14 +502,35 @@
         <div class="settings-dropdown" id="settingsDropdown">
           <button class="settings-dropdown-item" onclick="openNewCheckModal(); closeSettingsDropdown();">
             <i class="bi bi-plus-lg"></i>
-            <span>新規棚卸</span>
+            <span>新規棚卸（単日）</span>
           </button>
+          <a href="/stocktaking-admin.html" class="settings-dropdown-item" style="text-decoration: none; color: inherit;">
+            <i class="bi bi-calendar-range"></i>
+            <span>期間棚卸管理</span>
+          </a>
         </div>
       </div>
     </div>
   </div>
 
   <div class="content-container">
+    <!-- 期間棚卸バナー（アクティブ期間がある場合に表示） -->
+    <div id="periodBanner" class="card-section" style="display: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; margin-bottom: 16px;">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <div class="fw-bold" id="periodBannerName">期間棚卸実施中</div>
+          <div style="font-size: 0.85rem; opacity: 0.9;" id="periodBannerInfo">期間: - | 残り: -日</div>
+        </div>
+        <div id="periodBannerProgress" style="text-align: right;">
+          <div style="font-size: 1.5rem; font-weight: 700;">0%</div>
+          <div style="font-size: 0.75rem; opacity: 0.9;">完了</div>
+        </div>
+      </div>
+      <div class="progress mt-2" style="height: 6px; background: rgba(255,255,255,0.3); border-radius: 3px;">
+        <div class="progress-bar" id="periodProgressBar" role="progressbar" style="width: 0%; background: white;"></div>
+      </div>
+    </div>
+
     <!-- タブ -->
     <ul class="nav nav-tabs-custom" role="tablist">
       <li class="nav-item" role="presentation">
@@ -935,6 +958,10 @@
         document.getElementById('checkName').value = `${jstDate.getFullYear()}年${jstDate.getMonth() + 1}月棚卸`;
 
         await loadData();
+
+        // 期間ベース棚卸の初期化
+        await initializePeriodStocktaking();
+
         console.log('📋 [棚卸] 初期化完了');
       } catch (error) {
         console.error('初期化エラー:', error);
@@ -1673,6 +1700,241 @@
     document.getElementById('searchInput')?.addEventListener('keypress', function(e) {
       if (e.key === 'Enter') searchProduct();
     });
+
+    // ============================================
+    // 期間ベース棚卸機能
+    // ============================================
+
+    let activePeriod = null;          // アクティブな棚卸期間
+    let currentUserEmail = null;      // 現在のユーザーメール
+    let currentUserName = null;       // 現在のユーザー名
+    let periodCheckItems = {};        // 期間棚卸のチェック結果
+    let myStocktakingProducts = [];   // 自分の担当商品
+
+    /**
+     * 期間ベース棚卸の初期化
+     */
+    async function initializePeriodStocktaking() {
+      console.log('[期間棚卸] 初期化開始...');
+
+      // ユーザー情報を取得
+      const currentUser = firebase.auth().currentUser;
+      if (!currentUser) {
+        console.log('[期間棚卸] ユーザー未ログイン');
+        return;
+      }
+
+      currentUserEmail = currentUser.email;
+
+      // ユーザー名を取得
+      try {
+        const userDoc = await window.db.collection('users').doc(currentUserEmail).get();
+        if (userDoc.exists) {
+          currentUserName = userDoc.data().userName || currentUserEmail;
+        }
+      } catch (e) {
+        console.log('[期間棚卸] ユーザー名取得エラー:', e);
+      }
+
+      // StocktakingPeriodAPIが準備できるまで待機
+      let waitCount = 0;
+      while (!window.StocktakingPeriodAPI && waitCount < 50) {
+        await new Promise(r => setTimeout(r, 100));
+        waitCount++;
+      }
+
+      if (!window.StocktakingPeriodAPI) {
+        console.log('[期間棚卸] StocktakingPeriodAPI未読み込み');
+        return;
+      }
+
+      // アクティブな期間を取得
+      try {
+        activePeriod = await StocktakingPeriodAPI.getActiveStocktakingPeriod();
+
+        if (activePeriod) {
+          console.log('[期間棚卸] アクティブ期間あり:', activePeriod.name);
+          await loadPeriodStocktakingData();
+          showPeriodBanner();
+        } else {
+          console.log('[期間棚卸] アクティブ期間なし');
+          hidePeriodBanner();
+        }
+      } catch (error) {
+        console.error('[期間棚卸] 初期化エラー:', error);
+      }
+    }
+
+    /**
+     * 期間棚卸のデータを読み込み
+     */
+    async function loadPeriodStocktakingData() {
+      if (!activePeriod || !currentUserEmail) return;
+
+      try {
+        // 自分のチェック結果を取得
+        const results = await StocktakingPeriodAPI.getCheckResults(activePeriod.id, currentUserEmail);
+        periodCheckItems = {};
+        results.forEach(r => {
+          periodCheckItems[r.slotId] = r;
+        });
+
+        // 自分の進捗を取得
+        const progress = await StocktakingPeriodAPI.getStaffProgress(activePeriod.id, currentUserEmail);
+
+        // バナーを更新
+        if (progress) {
+          updatePeriodBannerProgress(progress);
+        }
+
+        console.log('[期間棚卸] データ読み込み完了:', Object.keys(periodCheckItems).length, '件チェック済み');
+      } catch (error) {
+        console.error('[期間棚卸] データ読み込みエラー:', error);
+      }
+    }
+
+    /**
+     * 期間バナーを表示
+     */
+    function showPeriodBanner() {
+      const banner = document.getElementById('periodBanner');
+      if (!banner || !activePeriod) return;
+
+      banner.style.display = 'block';
+      document.getElementById('periodBannerName').textContent = activePeriod.name;
+
+      const periodRange = StocktakingPeriodAPI.formatPeriodRange(activePeriod.startDate, activePeriod.endDate);
+      const remainingDays = StocktakingPeriodAPI.getRemainingDays(activePeriod);
+      document.getElementById('periodBannerInfo').textContent =
+        `期間: ${periodRange} | 残り: ${remainingDays > 0 ? remainingDays + '日' : '終了'}`;
+    }
+
+    /**
+     * 期間バナーを非表示
+     */
+    function hidePeriodBanner() {
+      const banner = document.getElementById('periodBanner');
+      if (banner) {
+        banner.style.display = 'none';
+      }
+    }
+
+    /**
+     * 期間バナーの進捗を更新
+     */
+    function updatePeriodBannerProgress(progress) {
+      const percent = StocktakingPeriodAPI.calculateProgress(
+        progress.checkedProducts || 0,
+        progress.totalProducts || 0
+      );
+
+      document.getElementById('periodBannerProgress').innerHTML = `
+        <div style="font-size: 1.5rem; font-weight: 700;">${percent}%</div>
+        <div style="font-size: 0.75rem; opacity: 0.9;">${progress.checkedProducts || 0}/${progress.totalProducts || 0}件</div>
+      `;
+      document.getElementById('periodProgressBar').style.width = `${percent}%`;
+    }
+
+    /**
+     * 期間棚卸用にカウント結果を保存
+     */
+    async function savePeriodCount(slotId) {
+      if (!activePeriod) {
+        // 期間棚卸がアクティブでない場合は通常の保存
+        return false;
+      }
+
+      const actualQty = parseInt(document.getElementById('actualQtyInput').value);
+      const note = document.getElementById('countNote').value;
+
+      if (isNaN(actualQty) || actualQty < 0) {
+        alert('実在庫数を入力してください');
+        return true; // 処理済み
+      }
+
+      const slot = allPurchaseSlots.find(s => s.id === slotId);
+      const bookQty = slot?.quantity || 1;
+
+      showLoading();
+      try {
+        await StocktakingPeriodAPI.saveCheckResult(activePeriod.id, {
+          slotId,
+          productId: slot?.productId || '',
+          managementNumber: slot?.managementNumber || '',
+          productName: slot?.productName || '',
+          staffName: currentUserName || currentUserEmail,
+          bookQuantity: bookQty,
+          actualQuantity: actualQty,
+          note
+        });
+
+        // ローカル更新
+        periodCheckItems[slotId] = {
+          slotId,
+          bookQuantity: bookQty,
+          actualQuantity: actualQty,
+          difference: actualQty - bookQty
+        };
+
+        clearCountInput();
+
+        // 進捗を再読み込み
+        await loadPeriodStocktakingData();
+        updateCountTab();
+
+        // 完了チェック
+        const progress = await StocktakingPeriodAPI.getStaffProgress(activePeriod.id, currentUserEmail);
+        if (progress && progress.status === 'completed') {
+          alert('全商品のチェックが完了しました！');
+        }
+
+      } catch (error) {
+        console.error('[期間棚卸] 保存エラー:', error);
+        alert('保存に失敗しました');
+      } finally {
+        hideLoading();
+      }
+
+      return true; // 処理済み
+    }
+
+    /**
+     * 担当者でフィルタリングした商品を取得
+     */
+    function getMyAssignedSlots() {
+      if (!currentUserEmail && !currentUserName) {
+        return allPurchaseSlots;
+      }
+
+      return allPurchaseSlots.filter(slot => {
+        // personEmail または person でマッチング
+        const personEmail = slot.personEmail || '';
+        const person = slot.person || '';
+
+        return personEmail === currentUserEmail ||
+               person === currentUserEmail ||
+               person === currentUserName;
+      });
+    }
+
+    /**
+     * 期間棚卸用のチェック済み判定
+     */
+    function isPeriodChecked(slotId) {
+      return !!periodCheckItems[slotId];
+    }
+
+    // オリジナルのsaveCount関数をラップ
+    const originalSaveCount = saveCount;
+    saveCount = async function(slotId) {
+      // 期間棚卸がアクティブな場合は期間用の保存を使用
+      if (activePeriod) {
+        const handled = await savePeriodCount(slotId);
+        if (handled) return;
+      }
+      // 通常の保存
+      await originalSaveCount(slotId);
+    };
 
     // フォールバック: DOMContentLoadedでも初期化を試みる
     let initialized = false;

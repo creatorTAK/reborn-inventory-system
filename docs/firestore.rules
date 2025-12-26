@@ -460,6 +460,34 @@ service cloud.firestore {
     }
 
     // ========================================
+    // 期間ベース棚卸コレクション (STOCKTAKING-001)
+    // ========================================
+    match /stocktakingPeriods/{periodId} {
+      // 読み取り: 全員許可（棚卸期間一覧・詳細表示用）
+      allow read: if true;
+
+      // 【MVP暫定】書き込みを全員許可（期間作成・更新のため）
+      // TODO: 本番環境では管理者のみ書き込み可能に変更
+      allow write: if true;
+
+      // サブコレクション: スタッフ進捗
+      match /staffProgress/{staffEmail} {
+        allow read: if true;
+        // 自分の進捗か管理者のみ書き込み可能
+        // TODO: 本番環境では request.auth.token.email == staffEmail に変更
+        allow write: if true;
+      }
+
+      // サブコレクション: チェック結果
+      match /checkResults/{resultId} {
+        allow read: if true;
+        // 認証済みユーザーのみ書き込み可能
+        // TODO: 本番環境では request.auth != null に変更
+        allow write: if true;
+      }
+    }
+
+    // ========================================
     // 在庫調整履歴コレクション (STOCK-001)
     // ========================================
     match /inventoryAdjustments/{adjustmentId} {
