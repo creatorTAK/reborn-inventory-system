@@ -668,6 +668,26 @@
       border-bottom: none;
     }
 
+    /* 傷・汚れマーキング表/裏トグル（QRスキャン結果用） */
+    .qr-dm-side-btn {
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+      color: #374151;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .qr-dm-side-btn:hover {
+      background: #e5e7eb;
+    }
+    .qr-dm-side-btn.active {
+      background: #14b8a6;
+      border-color: #14b8a6;
+      color: white;
+    }
+
     /* スキャン履歴 */
     .qr-history-item {
       background: #f9fafb;
@@ -6783,9 +6803,8 @@
           brand: batchBrand,
           brandKana: batchBrandKana,
           accessories: batchAccessories,
-          damageMarkerImage: batchDamageMarker?.image || null,
-          damageMarkerType: batchDamageMarker?.type || null,
-          damageMarkerNote: batchDamageMarker?.note || null
+          damageMarkerFront: batchDamageMarker?.front || null,
+          damageMarkerBack: batchDamageMarker?.back || null
         });
       }
 
@@ -7015,9 +7034,8 @@
             supplier: item.supplier,
             purchaseDate: item.purchaseDate,
             assignee: item.assignee,
-            damageMarkerImage: item.damageMarkerImage || null,
-            damageMarkerType: item.damageMarkerType || null,
-            damageMarkerNote: item.damageMarkerNote || null,
+            damageMarkerFront: item.damageMarkerFront || null,
+            damageMarkerBack: item.damageMarkerBack || null,
             // INV-010: 商品タイプ・数量・SKU
             itemType: item.itemType || 'unique',
             quantity: item.quantity || 1,
@@ -8685,10 +8703,9 @@
             cnd: slotData.condition || '',
             acc: slotData.accessories || [],
             nt: slotData.note || '',
-            // 傷・汚れマーキング
-            dmImg: slotData.damageMarkerImage || null,
-            dmType: slotData.damageMarkerType || null,
-            dmNote: slotData.damageMarkerNote || ''
+            // 傷・汚れマーキング（表/裏）
+            dmFront: slotData.damageMarkerFront || null,
+            dmBack: slotData.damageMarkerBack || null
           };
 
           showQRCheckResult(qrData);
@@ -8729,6 +8746,18 @@
       // 継続してスキャン（エラーは無視）
     }
 
+    // 傷・汚れマーキング表/裏切り替え（QRスキャン結果用）
+    function toggleQRDamageMarkerSide(btn, side) {
+      // ボタンのアクティブ状態を切り替え
+      document.querySelectorAll('.qr-dm-side-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      // 画像の表示を切り替え
+      document.querySelectorAll('.qr-dm-image').forEach(img => img.style.display = 'none');
+      const targetImg = document.querySelector(`.qr-dm-${side}`);
+      if (targetImg) targetImg.style.display = 'block';
+    }
+
     // スキャン結果を表示
     function showQRCheckResult(qrData) {
       const resultDiv = document.getElementById('qrCheckResult');
@@ -8767,10 +8796,10 @@
       const condition = qrData.cnd || '';
       const accessories = qrData.acc || [];
       const note = qrData.nt || '';
-      // 傷・汚れマーキング
-      const damageMarkerImage = qrData.dmImg || null;
-      const damageMarkerType = qrData.dmType || '';
-      const damageMarkerNote = qrData.dmNote || '';
+      // 傷・汚れマーキング（表/裏）
+      const damageMarkerFront = qrData.dmFront || null;
+      const damageMarkerBack = qrData.dmBack || null;
+      const hasDamageMarker = damageMarkerFront || damageMarkerBack;
       // INV-010: 商品タイプ・数量・SKU
       const itemType = qrData.itemType || 'unique';
       const quantity = qrData.quantity || 1;
@@ -8876,15 +8905,39 @@
             ` : ''}
           </div>
           ` : ''}
-          ${damageMarkerImage ? `
+          ${hasDamageMarker ? `
           <div class="qr-result-section">
             <div class="qr-result-section-title">
-              <i class="bi bi-pencil-square me-1"></i>傷・汚れマーキング
+              <i class="bi bi-pencil-square me-1"></i>商品状態（詳細）
             </div>
             <div style="text-align: center; margin-top: 10px;">
-              <img src="${damageMarkerImage}" alt="マーキング画像" style="max-width: 200px; border: 1px solid #d1d5db; border-radius: 8px;">
-              ${damageMarkerType ? `<div style="font-size: 0.8rem; color: #6b7280; margin-top: 4px;">${damageMarkerType}</div>` : ''}
-              ${damageMarkerNote ? `<div style="font-size: 0.85rem; color: #374151; margin-top: 6px; padding: 8px; background: #f9fafb; border-radius: 6px;">${damageMarkerNote}</div>` : ''}
+              <!-- 表/裏トグル -->
+              <div class="damage-marker-side-toggle" style="display: flex; justify-content: center; gap: 8px; margin-bottom: 12px;">
+                ${damageMarkerFront ? `
+                <button type="button" class="btn btn-sm qr-dm-side-btn active" data-side="front" onclick="toggleQRDamageMarkerSide(this, 'front')">
+                  <i class="bi bi-phone"></i> 表
+                </button>
+                ` : ''}
+                ${damageMarkerBack ? `
+                <button type="button" class="btn btn-sm qr-dm-side-btn ${!damageMarkerFront ? 'active' : ''}" data-side="back" onclick="toggleQRDamageMarkerSide(this, 'back')">
+                  <i class="bi bi-phone-flip"></i> 裏
+                </button>
+                ` : ''}
+              </div>
+              <!-- 表の画像 -->
+              ${damageMarkerFront ? `
+              <div class="qr-dm-image qr-dm-front" style="display: block;">
+                <img src="${damageMarkerFront.image}" alt="マーキング画像（表）" style="max-width: 200px; border: 1px solid #d1d5db; border-radius: 8px;">
+                ${damageMarkerFront.note ? `<div style="font-size: 0.85rem; color: #374151; margin-top: 6px; padding: 8px; background: #f9fafb; border-radius: 6px;">${damageMarkerFront.note}</div>` : ''}
+              </div>
+              ` : ''}
+              <!-- 裏の画像 -->
+              ${damageMarkerBack ? `
+              <div class="qr-dm-image qr-dm-back" style="display: ${!damageMarkerFront ? 'block' : 'none'};">
+                <img src="${damageMarkerBack.image}" alt="マーキング画像（裏）" style="max-width: 200px; border: 1px solid #d1d5db; border-radius: 8px;">
+                ${damageMarkerBack.note ? `<div style="font-size: 0.85rem; color: #374151; margin-top: 6px; padding: 8px; background: #f9fafb; border-radius: 6px;">${damageMarkerBack.note}</div>` : ''}
+              </div>
+              ` : ''}
             </div>
           </div>
           ` : ''}
@@ -9745,17 +9798,39 @@
       const item = entryItems.find(i => i.id === itemId);
       const itemState = damageMarkerState.get(itemId);
       if (item && itemState) {
-        item.damageMarkerImage = dataUrl;
-        item.damageMarkerSubcategory = itemState.currentSubcategory || '';
-        item.damageMarkerSide = itemState.currentSide || 'front';
-        item.damageMarkerObjects = JSON.parse(JSON.stringify(state.objects));
-        item.damageMarkerNote = document.getElementById(`damage-marker-note-text-${itemId}`).value || '';
+        const side = itemState.currentSide;
+        const note = document.getElementById(`damage-marker-note-text-${itemId}`).value || '';
+        
+        // 表/裏それぞれに保存
+        if (!item.damageMarkerFront) item.damageMarkerFront = null;
+        if (!item.damageMarkerBack) item.damageMarkerBack = null;
+        
+        if (side === 'front') {
+          item.damageMarkerFront = {
+            image: dataUrl,
+            subcategory: itemState.currentSubcategory || '',
+            fineCategory: itemState.currentFineCategory || '',
+            objects: JSON.parse(JSON.stringify(state.objects)),
+            note: note
+          };
+        } else {
+          item.damageMarkerBack = {
+            image: dataUrl,
+            subcategory: itemState.currentSubcategory || '',
+            fineCategory: itemState.currentFineCategory || '',
+            objects: JSON.parse(JSON.stringify(state.objects)),
+            note: note
+          };
+        }
 
         // 現在の側に保存済みバッジを表示
-        const side = itemState.currentSide;
         const badgeId = side === 'front' ? `front-saved-badge-${itemId}` : `back-saved-badge-${itemId}`;
         const badge = document.getElementById(badgeId);
         if (badge) badge.style.display = 'inline';
+        
+        // 個別入力の状態にも保存
+        itemState.savedFront = item.damageMarkerFront;
+        itemState.savedBack = item.damageMarkerBack;
       }
 
       const previewContainer = document.getElementById(`damage-marker-preview-${itemId}`);
