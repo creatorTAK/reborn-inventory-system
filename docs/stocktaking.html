@@ -775,7 +775,12 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-  <!-- Firebase SDK -->
+  <!-- Firebase SDK (compat版 - stocktaking-period-api.js用) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+  <!-- Firebase SDK (モジュール版 - 既存棚卸機能用) -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, addDoc, deleteDoc, query, where, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -1717,23 +1722,49 @@
     async function initializePeriodStocktaking() {
       console.log('[期間棚卸] 初期化開始...');
 
-      // ユーザー情報を取得
-      const currentUser = firebase.auth().currentUser;
-      if (!currentUser) {
-        console.log('[期間棚卸] ユーザー未ログイン');
+      // URLパラメータからユーザー名を取得
+      const urlParams = new URLSearchParams(window.location.search);
+      const userName = urlParams.get('userName');
+
+      if (!userName) {
+        console.log('[期間棚卸] ユーザー名未取得（URLパラメータなし）');
         return;
       }
 
-      currentUserEmail = currentUser.email;
+      currentUserName = decodeURIComponent(userName);
+      console.log('[期間棚卸] ユーザー名:', currentUserName);
 
-      // ユーザー名を取得
+      // ユーザーのメールアドレスを取得（compat版dbを使用）
       try {
-        const userDoc = await window.db.collection('users').doc(currentUserEmail).get();
-        if (userDoc.exists) {
-          currentUserName = userDoc.data().userName || currentUserEmail;
+        // compat版Firestoreが初期化されるまで待機
+        let db = window.db;
+        if (!db && typeof firebase !== 'undefined') {
+          if (!firebase.apps.length) {
+            firebase.initializeApp({
+              apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+              authDomain: "furira.jp",
+              projectId: "reborn-chat"
+            });
+          }
+          db = firebase.firestore();
+          window.db = db;
+        }
+
+        if (db && typeof db.collection === 'function') {
+          const usersSnapshot = await db.collection('users').where('userName', '==', currentUserName).get();
+          if (!usersSnapshot.empty) {
+            const userData = usersSnapshot.docs[0].data();
+            currentUserEmail = usersSnapshot.docs[0].id || userData.email;
+            console.log('[期間棚卸] ユーザーメール:', currentUserEmail);
+          } else {
+            currentUserEmail = currentUserName;
+          }
+        } else {
+          currentUserEmail = currentUserName;
         }
       } catch (e) {
-        console.log('[期間棚卸] ユーザー名取得エラー:', e);
+        console.log('[期間棚卸] ユーザー情報取得エラー:', e);
+        currentUserEmail = currentUserName;
       }
 
       // StocktakingPeriodAPIが準備できるまで待機

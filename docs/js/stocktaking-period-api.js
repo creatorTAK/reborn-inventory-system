@@ -10,6 +10,50 @@
  */
 
 // ============================================
+// Firebase初期化（compat版）
+// ============================================
+
+const FIREBASE_CONFIG_PERIOD = {
+  apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+  authDomain: "furira.jp",
+  projectId: "reborn-chat",
+  storageBucket: "reborn-chat.firebasestorage.app",
+  messagingSenderId: "345706548795",
+  appId: "1:345706548795:web:058a553da6b4b74db5161e"
+};
+
+// compat版Firebaseを初期化（既存の初期化があれば使用）
+function initializeFirebaseCompat() {
+  if (typeof firebase === 'undefined') {
+    console.warn('[Stocktaking Period API] firebase compat SDKが読み込まれていません');
+    return null;
+  }
+
+  if (!firebase.apps.length) {
+    firebase.initializeApp(FIREBASE_CONFIG_PERIOD);
+  }
+
+  return firebase.firestore();
+}
+
+// Firestoreインスタンスを取得（初期化済みのものがあればそれを使用）
+async function getFirestoreInstance() {
+  // window.dbがあればそれを使用（他のページとの互換性）
+  if (window.db && typeof window.db.collection === 'function') {
+    return window.db;
+  }
+
+  // compat版で初期化
+  const db = initializeFirebaseCompat();
+  if (db) {
+    window.db = db;
+    return db;
+  }
+
+  throw new Error('Firestoreの初期化に失敗しました');
+}
+
+// ============================================
 // 棚卸期間管理
 // ============================================
 
@@ -19,7 +63,7 @@
  * @returns {Promise<string>} 作成されたドキュメントID
  */
 async function createStocktakingPeriod(periodData) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   const docData = {
     name: periodData.name,
@@ -51,7 +95,7 @@ async function createStocktakingPeriod(periodData) {
  * @returns {Promise<Object|null>} アクティブな期間、またはnull
  */
 async function getActiveStocktakingPeriod() {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   const snapshot = await db.collection('stocktakingPeriods')
     .where('status', '==', 'active')
@@ -77,7 +121,7 @@ async function getActiveStocktakingPeriod() {
  * @returns {Promise<Object|null>} 期間データ
  */
 async function getStocktakingPeriod(periodId) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   const doc = await db.collection('stocktakingPeriods').doc(periodId).get();
 
@@ -99,7 +143,7 @@ async function getStocktakingPeriod(periodId) {
  * @returns {Promise<Array>} 期間リスト
  */
 async function getAllStocktakingPeriods(limit = 20) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   const snapshot = await db.collection('stocktakingPeriods')
     .orderBy('createdAt', 'desc')
@@ -121,7 +165,7 @@ async function getAllStocktakingPeriods(limit = 20) {
  * @returns {Promise<void>}
  */
 async function updateStocktakingPeriod(periodId, updates) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   const updateData = {
     ...updates,
@@ -146,7 +190,7 @@ async function updateStocktakingPeriod(periodId, updates) {
  * @returns {Promise<Object>} 初期化結果（スタッフ数、商品数）
  */
 async function activateStocktakingPeriod(periodId) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   // 既にアクティブな期間がないか確認
   const activePeriod = await getActiveStocktakingPeriod();
@@ -181,7 +225,7 @@ async function activateStocktakingPeriod(periodId) {
  * @returns {Promise<void>}
  */
 async function completeStocktakingPeriod(periodId) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   await db.collection('stocktakingPeriods').doc(periodId).update({
     status: 'completed',
@@ -202,7 +246,7 @@ async function completeStocktakingPeriod(periodId) {
  * @returns {Promise<Object>} 集計結果
  */
 async function initializeStaffProgress(periodId) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   // 販売済み以外のpurchaseSlotsを取得
   const slotsSnapshot = await db.collection('purchaseSlots')
@@ -268,7 +312,7 @@ async function initializeStaffProgress(periodId) {
  * @returns {Promise<Object|null>} 進捗データ
  */
 async function getStaffProgress(periodId, staffEmail) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   const doc = await db.collection('stocktakingPeriods')
     .doc(periodId)
@@ -294,7 +338,7 @@ async function getStaffProgress(periodId, staffEmail) {
  * @returns {Promise<Array>} 全スタッフの進捗リスト
  */
 async function getAllStaffProgress(periodId) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   const snapshot = await db.collection('stocktakingPeriods')
     .doc(periodId)
@@ -317,7 +361,7 @@ async function getAllStaffProgress(periodId) {
  * @returns {Promise<void>}
  */
 async function recalculateStaffProgress(periodId, staffEmail) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   // チェック結果を集計
   const resultsSnapshot = await db.collection('stocktakingPeriods')
@@ -388,7 +432,7 @@ async function recalculateStaffProgress(periodId, staffEmail) {
  * @returns {Promise<void>}
  */
 async function updatePeriodStats(periodId) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   // 全スタッフの進捗を集計
   const allProgress = await getAllStaffProgress(periodId);
@@ -428,7 +472,7 @@ async function updatePeriodStats(periodId) {
  * @returns {Promise<string>} 保存されたドキュメントID
  */
 async function saveCheckResult(periodId, checkData) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
   const currentUser = firebase.auth().currentUser;
 
   const docData = {
@@ -474,7 +518,7 @@ async function saveCheckResult(periodId, checkData) {
  * @returns {Promise<Object|null>} チェック結果
  */
 async function getCheckResult(periodId, slotId) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   const doc = await db.collection('stocktakingPeriods')
     .doc(periodId)
@@ -500,7 +544,7 @@ async function getCheckResult(periodId, slotId) {
  * @returns {Promise<Array>} チェック結果リスト
  */
 async function getCheckResults(periodId, staffEmail = null) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   let query = db.collection('stocktakingPeriods')
     .doc(periodId)
@@ -527,7 +571,7 @@ async function getCheckResults(periodId, staffEmail = null) {
  * @returns {Promise<void>}
  */
 async function excludeProduct(periodId, slotId, reason) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
 
   // チェック結果があれば除外ステータスに更新
   const resultRef = db.collection('stocktakingPeriods')
@@ -634,7 +678,7 @@ function calculateProgress(checked, total) {
  * @returns {Promise<Array>} 商品リスト
  */
 async function getMyStocktakingProducts(periodId) {
-  const db = await initializeFirestore();
+  const db = await getFirestoreInstance();
   const currentUser = firebase.auth().currentUser;
 
   if (!currentUser) {
