@@ -2899,7 +2899,7 @@
             大分類: String(r.大分類 || '').trim(),
             中分類: String(r.中分類 || '').trim(),
             小分類: String(r.小分類 || '').trim(),
-            細分類: String(r.細分類 || '').trim(),
+            細分類: String(r.細分類1 || r.細分類 || '').trim(),
             細分類2: String(r.細分類2 || '').trim(),
             アイテム名: String(r.アイテム名 || '').trim()
           }));
@@ -4550,12 +4550,45 @@
     // 一括入力用傷・汚れマーキング機能（表/裏対応版）
     // ========================================
 
-    // 小分類→画像パスのマッピング（画像準備後に追加）
-    // 例: 'トップス': { front: '/images/clothing/tops_front.png', back: '/images/clothing/tops_back.png' }
+    // 小分類・細分類→画像パスのマッピング（画像準備後に追加）
+    // 細分類がある場合は細分類を優先して検索
     const SUBCATEGORY_IMAGES = {
-      'Tシャツ': { front: '/images/clothing/tshirt_front.png', back: '/images/clothing/tshirt_back.png' },
-      // 'パンツ': { front: '/images/clothing/pants_front.png', back: '/images/clothing/pants_back.png' },
+      // === トップス ===
+      'Tシャツ': { front: '/images/clothing/tshirt_front-Photoroom.png', back: '/images/clothing/tshirt_back-Photoroom.png' },
+      // シャツは細分類で分岐
+      '半袖シャツ': { front: '/images/clothing/shirt_short_front-Photoroom.png', back: '/images/clothing/shirt_short_back-Photoroom.png' },
+      '長袖シャツ': { front: '/images/clothing/shirt_long_front-Photoroom.png', back: '/images/clothing/shirt_long_back-Photoroom.png' },
+      'ポロシャツ': { front: '/images/clothing/polo_front-Photoroom.png', back: '/images/clothing/polo_back-Photoroom.png' },
+      '七分・長袖カットソー': { front: '/images/clothing/longsleeve_front-Photoroom.png', back: '/images/clothing/longsleeve_back-Photoroom.png' },
+      'パーカー': { front: '/images/clothing/hoodie_front-Photoroom.png', back: '/images/clothing/hoodie_back-Photoroom.png' },
+      'トレーナー・スウェット': { front: '/images/clothing/sweatshirt_front-Photoroom.png', back: '/images/clothing/sweatshirt_back-Photoroom.png' },
+      'ニット・セーター': { front: '/images/clothing/sweater_front-Photoroom.png', back: '/images/clothing/sweater_back-Photoroom.png' },
+      'カーディガン': { front: '/images/clothing/cardigan_front-Photoroom.png', back: '/images/clothing/cardigan_back-Photoroom.png' },
+      'ジャージ': { front: '/images/clothing/jersey_front-Photoroom.png', back: '/images/clothing/jersey_back-Photoroom.png' },
+      'ベスト': { front: '/images/clothing/vest_front-Photoroom.png', back: '/images/clothing/vest_back-Photoroom.png' },
+      'タンクトップ・ノースリーブトップス': { front: '/images/clothing/tanktop_front-Photoroom.png', back: '/images/clothing/tanktop_back-Photoroom.png' },
     };
+
+    // 細分類で画像を判定する必要がある小分類のリスト
+    const SUBCATEGORY_NEEDS_FINE = ['シャツ'];
+
+    // 小分類が細分類での判定を必要とするかチェック
+    function needsFineCategoryForImage(subcategory) {
+      return SUBCATEGORY_NEEDS_FINE.includes(subcategory);
+    }
+
+    // 画像マッピングを検索（細分類 → 小分類の順で検索）
+    function findDamageMarkerImages(subcategory, fineCategory) {
+      // 細分類があれば細分類で検索
+      if (fineCategory && SUBCATEGORY_IMAGES[fineCategory]) {
+        return SUBCATEGORY_IMAGES[fineCategory];
+      }
+      // 小分類で検索
+      if (subcategory && SUBCATEGORY_IMAGES[subcategory]) {
+        return SUBCATEGORY_IMAGES[subcategory];
+      }
+      return null;
+    }
 
     // 表/裏それぞれの状態を管理
     let batchDamageMarkerState = {
@@ -4585,22 +4618,40 @@
       }
     }
 
-    // 小分類変更時に呼び出される画像読み込み
-    function loadBatchDamageMarkerBySubcategory(subcategory) {
+    // 小分類・細分類変更時に呼び出される画像読み込み
+    function loadBatchDamageMarkerBySubcategory(subcategory, fineCategory = '') {
       const noCategoryMsg = document.getElementById('batch-damage-marker-no-category');
       const sideToggle = document.getElementById('batch-damage-marker-side-toggle');
 
       if (!subcategory) {
         // 小分類未選択時
+        noCategoryMsg.innerHTML = '<i class="bi bi-info-circle"></i><span>小分類を選択すると画像が表示されます</span>';
         noCategoryMsg.style.display = 'flex';
         sideToggle.style.display = 'none';
         hideBatchDamageMarkerCanvas();
         batchDamageMarkerState.currentSubcategory = null;
+        batchDamageMarkerState.currentFineCategory = null;
         return;
       }
 
-      // 小分類が変更された場合、状態をリセット
-      if (batchDamageMarkerState.currentSubcategory !== subcategory) {
+      // 細分類での判定が必要な小分類で、細分類が未選択の場合
+      if (needsFineCategoryForImage(subcategory) && !fineCategory) {
+        console.log('📍 細分類選択待ち:', subcategory);
+        noCategoryMsg.innerHTML = '<i class="bi bi-info-circle"></i><span>細分類を選択すると画像が表示されます</span>';
+        noCategoryMsg.style.display = 'flex';
+        sideToggle.style.display = 'none';
+        hideBatchDamageMarkerCanvas();
+        batchDamageMarkerState.currentSubcategory = subcategory;
+        batchDamageMarkerState.currentFineCategory = null;
+        return;
+      }
+
+      // 検索キーを作成（細分類があれば細分類、なければ小分類）
+      const searchKey = fineCategory || subcategory;
+
+      // カテゴリが変更された場合、状態をリセット
+      const prevKey = batchDamageMarkerState.currentFineCategory || batchDamageMarkerState.currentSubcategory;
+      if (prevKey !== searchKey) {
         batchDamageMarkerState.front = null;
         batchDamageMarkerState.back = null;
         batchDamageMarkerState.currentSide = 'front';
@@ -4612,12 +4663,13 @@
       }
 
       batchDamageMarkerState.currentSubcategory = subcategory;
+      batchDamageMarkerState.currentFineCategory = fineCategory;
 
-      // 画像パスを取得
-      const images = SUBCATEGORY_IMAGES[subcategory];
+      // 画像パスを取得（細分類 → 小分類の順で検索）
+      const images = findDamageMarkerImages(subcategory, fineCategory);
       if (!images) {
-        console.log('📍 小分類の画像が未登録:', subcategory);
-        noCategoryMsg.innerHTML = '<i class="bi bi-exclamation-circle"></i><span>この小分類の画像は準備中です</span>';
+        console.log('📍 画像が未登録:', subcategory, fineCategory);
+        noCategoryMsg.innerHTML = '<i class="bi bi-exclamation-circle"></i><span>この分類の画像は準備中です</span>';
         noCategoryMsg.style.display = 'flex';
         sideToggle.style.display = 'none';
         hideBatchDamageMarkerCanvas();
@@ -5406,6 +5458,9 @@
       } else {
         if (l5El) l5El.style.display = 'none';
       }
+
+      // 傷・汚れマーキング：細分類に連動して画像を読み込み（シャツなど細分類で判定が必要な場合）
+      loadBatchDamageMarkerBySubcategory(l3, l4);
     }
 
     // 細分類2（L5）変更ハンドラ（一括入力）
@@ -6440,6 +6495,10 @@
       } else {
         if (l5El) l5El.style.display = 'none';
       }
+
+      // 傷・汚れマーキング：細分類に連動して画像を読み込み（シャツなど細分類で判定が必要な場合）
+      loadDamageMarkerBySubcategory(itemId, l3, l4);
+
       updateEntryItem(itemId);
     }
 
@@ -8977,26 +9036,42 @@
       noteEl.setSelectionRange(noteEl.value.length, noteEl.value.length);
     }
 
-    // 小分類変更時に呼び出される画像読み込み（個別入力用）
-    function loadDamageMarkerBySubcategory(itemId, subcategory) {
+    // 小分類・細分類変更時に呼び出される画像読み込み（個別入力用）
+    function loadDamageMarkerBySubcategory(itemId, subcategory, fineCategory = '') {
       const noCategoryMsg = document.getElementById(`damage-marker-no-category-${itemId}`);
       const sideToggle = document.getElementById(`damage-marker-side-toggle-${itemId}`);
 
       if (!subcategory) {
+        noCategoryMsg.innerHTML = '<i class="bi bi-info-circle"></i><span>小分類を選択すると画像が表示されます</span>';
         noCategoryMsg.style.display = 'flex';
         sideToggle.style.display = 'none';
         hideDamageMarkerCanvas(itemId);
         return;
       }
 
+      // 細分類での判定が必要な小分類で、細分類が未選択の場合
+      if (needsFineCategoryForImage(subcategory) && !fineCategory) {
+        console.log('📍 個別入力 細分類選択待ち:', subcategory, itemId);
+        noCategoryMsg.innerHTML = '<i class="bi bi-info-circle"></i><span>細分類を選択すると画像が表示されます</span>';
+        noCategoryMsg.style.display = 'flex';
+        sideToggle.style.display = 'none';
+        hideDamageMarkerCanvas(itemId);
+        return;
+      }
+
+      // 検索キーを作成（細分類があれば細分類、なければ小分類）
+      const searchKey = fineCategory || subcategory;
+
       // アイテム状態を初期化または更新
       let itemState = damageMarkerState.get(itemId);
-      if (!itemState || itemState.currentSubcategory !== subcategory) {
+      const prevKey = itemState?.currentFineCategory || itemState?.currentSubcategory;
+      if (!itemState || prevKey !== searchKey) {
         itemState = {
           front: null,
           back: null,
           currentSide: 'front',
           currentSubcategory: subcategory,
+          currentFineCategory: fineCategory,
           savedFront: null,
           savedBack: null
         };
@@ -9006,9 +9081,9 @@
         document.getElementById(`back-saved-badge-${itemId}`).style.display = 'none';
       }
 
-      const images = SUBCATEGORY_IMAGES[subcategory];
+      const images = findDamageMarkerImages(subcategory, fineCategory);
       if (!images) {
-        noCategoryMsg.innerHTML = '<i class="bi bi-exclamation-circle"></i><span>この小分類の画像は準備中です</span>';
+        noCategoryMsg.innerHTML = '<i class="bi bi-exclamation-circle"></i><span>この分類の画像は準備中です</span>';
         noCategoryMsg.style.display = 'flex';
         sideToggle.style.display = 'none';
         hideDamageMarkerCanvas(itemId);
@@ -9027,7 +9102,8 @@
       if (!itemState) return;
 
       const subcategory = itemState.currentSubcategory;
-      const images = SUBCATEGORY_IMAGES[subcategory];
+      const fineCategory = itemState.currentFineCategory;
+      const images = findDamageMarkerImages(subcategory, fineCategory);
       if (!images) return;
 
       itemState.currentSide = side;
