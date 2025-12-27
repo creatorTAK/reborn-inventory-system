@@ -277,13 +277,13 @@ async function loadMaster(category, type) {
       currentTab.classList.add('active');
     }
 
-    // ヘッダータイトルをカテゴリに応じて変更
+    // ヘッダータイトルをカテゴリに応じて変更（v208: シンプルなタイトルに統一）
     const headerTitle = document.getElementById('headerTitle');
     if (headerTitle) {
       if (category === 'product') {
-        headerTitle.innerHTML = '<i class="bi bi-box"></i> 商品関連マスタ管理';
+        headerTitle.textContent = '商品マスタ管理';
       } else if (category === 'business') {
-        headerTitle.innerHTML = '<i class="bi bi-building"></i> 業務関連マスタ管理';
+        headerTitle.textContent = '業務マスタ管理';
       }
     }
   }
