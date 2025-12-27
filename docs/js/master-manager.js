@@ -33,6 +33,9 @@ let selectedMasterData = new Set(); // 選択されたマスタID
 // キャッシュ管理
 let masterCache = {}; // カテゴリ/タイプごとのキャッシュ {collection: [...]}
 
+// 件数管理（動的更新）
+let masterTotalCount = 0; // 現在のマスタの総件数
+
 // アコーディオン展開状態管理
 let expandedGroups = new Set(); // 展開中のグループ名
 
@@ -329,6 +332,14 @@ async function loadMaster(category, type) {
   // ヘッダーにマスタ種別を表示
   updateMasterTypeDisplay();
 
+  // 検索プレースホルダーを更新（カスタム設定がある場合）
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput && currentMasterConfig.searchPlaceholder) {
+    searchInput.placeholder = currentMasterConfig.searchPlaceholder;
+  } else if (searchInput) {
+    searchInput.placeholder = '絞り込み検索...';
+  }
+
   // initialDisplay設定チェック
   const initialDisplay = currentMasterConfig.initialDisplay !== undefined
     ? currentMasterConfig.initialDisplay
@@ -342,6 +353,14 @@ async function loadMaster(category, type) {
     // 空の状態で初期化
     allMasterData = [];
     filteredMasterData = [];
+
+    // 総件数取得（emptyState.showTotalCountがtrueの場合）
+    if (currentMasterConfig.emptyState?.showTotalCount) {
+      fetchAndDisplayTotalCount();
+    } else {
+      masterTotalCount = 0;
+    }
+
     renderMasterList();
     updateStats();
   } else {
@@ -357,6 +376,47 @@ function updateMasterTypeDisplay() {
   const masterTypeDisplay = document.getElementById('master-type-display');
   if (masterTypeDisplay && currentMasterConfig) {
     masterTypeDisplay.textContent = currentMasterConfig.label;
+  }
+}
+
+/**
+ * 総件数を非同期で取得して表示を更新
+ * Firestoreの count() クエリを使用（高速）
+ */
+async function fetchAndDisplayTotalCount() {
+  try {
+    // 先に「読み込み中」表示
+    masterTotalCount = -1;
+    updateEmptyStateCount();
+
+    // Firestoreから件数取得（数十ms）
+    const count = await window.getMasterCount(currentMasterConfig.collection);
+    masterTotalCount = count;
+
+    // 表示更新
+    updateEmptyStateCount();
+    console.log(`📊 [Master Manager] 総件数更新: ${count.toLocaleString()}件`);
+
+  } catch (error) {
+    console.error('❌ [Master Manager] 件数取得エラー:', error);
+    masterTotalCount = -1;
+    updateEmptyStateCount();
+  }
+}
+
+/**
+ * 空状態の件数表示を更新
+ */
+function updateEmptyStateCount() {
+  const countDisplay = document.getElementById('emptyStateTotalCount');
+  if (!countDisplay) return;
+
+  if (masterTotalCount === -1) {
+    countDisplay.textContent = '読み込み中...';
+  } else if (masterTotalCount > 0) {
+    countDisplay.textContent = `登録数: ${masterTotalCount.toLocaleString()}件`;
+  } else {
+    countDisplay.textContent = '';
   }
 }
 
@@ -604,17 +664,60 @@ function renderMasterList() {
 
     // 検索入力があるかどうかで文言を変更
     const hasSearchQuery = searchInput && searchInput.value.trim().length > 0;
+    const emptyStateIcon = emptyState.querySelector('.empty-state i, .empty-state-icon');
     const emptyStateText = emptyState.querySelector('.empty-state-text');
     const emptyStateHint = emptyState.querySelector('.empty-state-hint');
+    const emptyStateTotalCount = emptyState.querySelector('#emptyStateTotalCount');
+    const emptyStateAddBtn = emptyState.querySelector('#emptyStateAddBtn');
+
+    // カスタムemptyState設定があるか確認
+    const customEmptyState = currentMasterConfig?.emptyState;
 
     if (hasSearchQuery) {
       // 検索後に0件の場合
+      if (emptyStateIcon) emptyStateIcon.className = 'bi bi-inbox';
       if (emptyStateText) emptyStateText.textContent = 'データが見つかりません';
       if (emptyStateHint) emptyStateHint.textContent = '検索条件を変更してください';
+      if (emptyStateTotalCount) emptyStateTotalCount.classList.add('hidden');
+      if (emptyStateAddBtn) emptyStateAddBtn.classList.add('hidden');
+    } else if (customEmptyState) {
+      // カスタムemptyState設定がある場合
+      if (emptyStateIcon && customEmptyState.icon) {
+        emptyStateIcon.textContent = customEmptyState.icon;
+        emptyStateIcon.className = 'empty-state-icon';
+        emptyStateIcon.style.fontSize = '48px';
+        emptyStateIcon.style.marginBottom = '12px';
+      }
+      if (emptyStateText) {
+        emptyStateText.textContent = customEmptyState.message || '検索して絞り込んでください';
+      }
+      if (emptyStateHint) {
+        emptyStateHint.textContent = customEmptyState.hint || '';
+      }
+      // 件数表示
+      if (emptyStateTotalCount) {
+        if (customEmptyState.showTotalCount) {
+          emptyStateTotalCount.classList.remove('hidden');
+          updateEmptyStateCount();
+        } else {
+          emptyStateTotalCount.classList.add('hidden');
+        }
+      }
+      // 追加ボタン表示
+      if (emptyStateAddBtn) {
+        if (customEmptyState.showAddButton) {
+          emptyStateAddBtn.classList.remove('hidden');
+        } else {
+          emptyStateAddBtn.classList.add('hidden');
+        }
+      }
     } else {
-      // 検索前の初期状態
+      // デフォルトの空状態
+      if (emptyStateIcon) emptyStateIcon.className = 'bi bi-inbox';
       if (emptyStateText) emptyStateText.textContent = '検索して絞り込んでください';
       if (emptyStateHint) emptyStateHint.textContent = '';
+      if (emptyStateTotalCount) emptyStateTotalCount.classList.add('hidden');
+      if (emptyStateAddBtn) emptyStateAddBtn.classList.add('hidden');
     }
     return;
   }
@@ -1195,6 +1298,13 @@ window.addMaster = async function() {
       allMasterData.push(newItem);
       filteredMasterData.push(newItem);
 
+      // 件数を更新（動的カウント）
+      if (masterTotalCount > 0) {
+        masterTotalCount++;
+        updateEmptyStateCount();
+        console.log(`📊 [Master Manager] 件数更新: ${masterTotalCount.toLocaleString()}件`);
+      }
+
       // 画面を即座に更新
       renderMasterList();
       updateStats();
@@ -1481,6 +1591,13 @@ window.confirmDelete = async function() {
         masterCache[currentMasterConfig.collection] = masterCache[currentMasterConfig.collection].filter(
           item => item.id !== masterToDelete.id
         );
+      }
+
+      // 件数を更新（動的カウント）
+      if (masterTotalCount > 0) {
+        masterTotalCount--;
+        updateEmptyStateCount();
+        console.log(`📊 [Master Manager] 件数更新: ${masterTotalCount.toLocaleString()}件`);
       }
 
       renderMasterList();

@@ -1085,6 +1085,33 @@ async function getMasterData(collectionName, options = {}) {
 }
 
 /**
+ * 汎用マスタ件数取得（高速カウントクエリ）
+ *
+ * Firestoreの count() クエリを使用してサーバー側でカウント
+ * ドキュメントをダウンロードしないため、51,000件でも高速（数十ms）
+ *
+ * @param {string} collectionName - Firestoreコレクション名
+ * @returns {Promise<number>} 件数
+ */
+async function getMasterCount(collectionName) {
+  try {
+    const db = await initializeFirestore();
+
+    // compat版 count() クエリ
+    const countSnapshot = await db.collection(collectionName).count().get();
+    const count = countSnapshot.data().count;
+
+    console.log(`📊 [Master API] ${collectionName}件数取得: ${count.toLocaleString()}件`);
+    return count;
+
+  } catch (error) {
+    console.error(`❌ [Master API] ${collectionName}件数取得エラー:`, error);
+    // エラー時は-1を返す（表示しない）
+    return -1;
+  }
+}
+
+/**
  * 汎用マスタ作成
  * 
  * @param {string} collection - Firestoreコレクション名
@@ -1551,6 +1578,7 @@ if (typeof module !== 'undefined' && module.exports) {
     deleteBrand,
     updateBrand,
     getMasterData,
+    getMasterCount,
     createMaster,
     updateMaster,
     deleteMaster,
@@ -1594,6 +1622,7 @@ if (typeof window !== 'undefined') {
     deleteBrand,
     updateBrand,
     getMasterData,
+    getMasterCount,
     createMaster,
     updateMaster,
     deleteMaster,
@@ -1637,6 +1666,7 @@ export {
   deleteBrand,
   updateBrand,
   getMasterData,
+  getMasterCount,
   createMaster,
   updateMaster,
   deleteMaster,

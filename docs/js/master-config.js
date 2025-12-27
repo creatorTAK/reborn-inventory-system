@@ -48,6 +48,15 @@ const masterCategories = {
         bulkDelete: true, // 一括削除機能
         maxDisplayResults: 100, // 表示上限
         initialDisplay: 0, // 初期表示件数（0=検索後のみ表示）
+        // カスタムUI設定（ガイダンス強化）
+        emptyState: {
+          icon: '🏷️',
+          showTotalCount: true,
+          message: 'ブランド名で検索',
+          hint: '例: NIKE, グッチ, シャネル',
+          showAddButton: true
+        },
+        searchPlaceholder: 'ブランド名を入力（英語・カナ対応）'
       },
       
       category: {
@@ -76,6 +85,15 @@ const masterCategories = {
         bulkDelete: true,
         maxDisplayResults: 100,
         initialDisplay: 0, // 初期表示件数（0=検索後のみ表示）
+        // カスタムUI設定（ガイダンス強化）
+        emptyState: {
+          icon: '📁',
+          showTotalCount: true,
+          message: 'カテゴリ名で検索',
+          hint: '例: レディース, Tシャツ, バッグ',
+          showAddButton: true
+        },
+        searchPlaceholder: 'カテゴリ名を入力'
       },
       
       material: {
