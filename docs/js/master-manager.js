@@ -1091,7 +1091,6 @@ function createTreeItemCard(item) {
   card.innerHTML = `
     <div class="tree-item-content">
       <span class="tree-item-name">${escapeHtml(displayName)}</span>
-      ${item.usageCount !== undefined ? `<span class="tree-item-usage">${item.usageCount}回使用</span>` : ''}
     </div>
     <div class="tree-item-actions">
       <button class="btn-icon btn-edit" onclick="showEditModal('${item.id}')" title="編集">
