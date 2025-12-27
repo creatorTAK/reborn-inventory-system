@@ -1925,6 +1925,71 @@ let addTargetLevelIndex = -1; // -1 = アイテム名（最下層）
 let batchAddMode = false;
 
 /**
+ * 指定レベルの既存項目を取得
+ * @param {string} targetField - 取得したいレベルのフィールド名
+ * @param {Object} parentSelections - 親階層の選択値
+ * @param {Array} levels - 階層設定
+ * @returns {Array} 既存の値一覧
+ */
+function getExistingItemsAtLevel(targetField, parentSelections, levels) {
+  const categories = masterCache[currentMasterConfig.collection] || [];
+
+  // 親階層でフィルタリング
+  const filtered = categories.filter(cat => {
+    for (const [field, value] of Object.entries(parentSelections)) {
+      if (value && cat[field] !== value) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // 対象フィールドのユニーク値を取得
+  const uniqueValues = [...new Set(filtered.map(c => c[targetField]).filter(Boolean))];
+  uniqueValues.sort((a, b) => a.localeCompare(b, 'ja'));
+
+  return uniqueValues;
+}
+
+/**
+ * 既存項目リストをレンダリング
+ * @param {string} containerId - コンテナのID
+ * @param {Array} items - 表示する項目
+ * @param {string} levelLabel - 階層ラベル
+ */
+function renderExistingItems(containerId, items, levelLabel) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  if (items.length === 0) {
+    container.innerHTML = `<div style="color: #9ca3af; font-size: 12px; padding: 8px 0;">既存の${levelLabel}はありません</div>`;
+    return;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; margin-top: 6px; max-height: 150px; overflow-y: auto;';
+
+  const header = document.createElement('div');
+  header.style.cssText = 'font-size: 11px; color: #64748b; margin-bottom: 6px; font-weight: 500;';
+  header.textContent = `既存の${levelLabel}（${items.length}件）`;
+  wrapper.appendChild(header);
+
+  const itemsContainer = document.createElement('div');
+  itemsContainer.style.cssText = 'display: flex; flex-wrap: wrap; gap: 4px;';
+
+  items.forEach(item => {
+    const chip = document.createElement('span');
+    chip.style.cssText = 'background: #e2e8f0; color: #475569; font-size: 12px; padding: 2px 8px; border-radius: 4px; white-space: nowrap;';
+    chip.textContent = item;
+    itemsContainer.appendChild(chip);
+  });
+
+  wrapper.appendChild(itemsContainer);
+  container.innerHTML = '';
+  container.appendChild(wrapper);
+}
+
+/**
  * カスケード追加モーダル表示（カテゴリ用）
  */
 
@@ -2170,12 +2235,24 @@ function rebuildCascadeAddForm(levels, cascadeConfig) {
     }
 
     select.addEventListener('change', () => {
-      onCascadeParentSelectChange(levelConfig.field, select.value, index, parentLevels, cascadeConfig);
+      onCascadeParentSelectChange(levelConfig.field, select.value, index, parentLevels, cascadeConfig, levels);
     });
 
     formGroup.appendChild(select);
+
+    // 既存項目表示用コンテナ（次の階層の既存項目を表示）
+    const existingContainer = document.createElement('div');
+    existingContainer.id = `existing-items-${levelConfig.field}`;
+    formGroup.appendChild(existingContainer);
+
     container.appendChild(formGroup);
   });
+
+  // ========== 追加対象レベルの既存項目表示用コンテナ ==========
+  const existingTargetContainer = document.createElement('div');
+  existingTargetContainer.id = 'existing-items-target';
+  existingTargetContainer.style.marginTop = '8px';
+  container.appendChild(existingTargetContainer);
 
   // ========== 追加対象の階層は入力フィールド ==========
   if (targetIndex >= 0 && targetIndex < levels.length) {
@@ -2270,12 +2347,12 @@ function rebuildCascadeAddForm(levels, cascadeConfig) {
 /**
  * 親階層セレクト変更時の処理（追加モード専用）
  */
-function onCascadeParentSelectChange(changedField, value, changedIndex, parentLevels, cascadeConfig) {
+function onCascadeParentSelectChange(changedField, value, changedIndex, parentLevels, cascadeConfig, levels) {
   cascadeSelections[changedField] = value;
 
   const categories = masterCache[currentMasterConfig.collection] || [];
 
-  // 後続のセレクトをリセット
+  // 後続のセレクトをリセット + 既存項目表示をクリア
   for (let i = changedIndex + 1; i < parentLevels.length; i++) {
     const field = parentLevels[i].field;
     const select = document.getElementById(`cascade-${field}`);
@@ -2293,7 +2370,15 @@ function onCascadeParentSelectChange(changedField, value, changedIndex, parentLe
         if (formGroup) formGroup.style.display = 'none';
       }
     }
+
+    // 既存項目表示をクリア
+    const existingContainer = document.getElementById(`existing-items-${field}`);
+    if (existingContainer) existingContainer.innerHTML = '';
   }
+
+  // 追加対象レベルの既存項目をクリア
+  const existingTargetContainer = document.getElementById('existing-items-target');
+  if (existingTargetContainer) existingTargetContainer.innerHTML = '';
 
   // 次のセレクトを有効化
   if (value && changedIndex < parentLevels.length - 1) {
@@ -2333,7 +2418,29 @@ function onCascadeParentSelectChange(changedField, value, changedIndex, parentLe
         option.textContent = val;
         nextSelect.appendChild(option);
       });
+
+      // 次の階層の既存項目を表示
+      renderExistingItems(`existing-items-${changedField}`, uniqueValues, nextLevel.label);
     }
+  }
+
+  // 最後の親階層を選択した場合、追加対象レベルの既存項目を表示
+  if (value && changedIndex === parentLevels.length - 1) {
+    const targetIndex = addTargetLevelIndex;
+    let targetField, targetLabel;
+
+    if (targetIndex >= 0 && targetIndex < levels.length) {
+      // 特定階層を追加する場合
+      targetField = levels[targetIndex].field;
+      targetLabel = levels[targetIndex].label;
+    } else {
+      // アイテム名を追加する場合
+      targetField = cascadeConfig.itemNameField || 'itemName';
+      targetLabel = cascadeConfig.itemNameLabel || 'アイテム名';
+    }
+
+    const existingItems = getExistingItemsAtLevel(targetField, cascadeSelections, levels);
+    renderExistingItems('existing-items-target', existingItems, targetLabel);
   }
 
   updateCascadePreview();
