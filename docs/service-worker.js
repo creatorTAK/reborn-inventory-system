@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v210-title-fade-in'; // タイトル初期非表示→フェードイン
-const SW_VERSION = 'v210-title-fade-in'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v211-dropdown-restore'; // ドロップダウンメニュー復元
+const SW_VERSION = 'v211-dropdown-restore'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
