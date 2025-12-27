@@ -39,6 +39,9 @@ let masterTotalCount = 0; // 現在のマスタの総件数
 // アコーディオン展開状態管理
 let expandedGroups = new Set(); // 展開中のグループ名
 
+// プラットフォーム管理
+let currentPlatform = null; // 現在選択中のプラットフォーム
+
 // ============================================
 // ユーティリティ関数（カタカナ⇔ひらがな変換）
 // ============================================
@@ -332,6 +335,16 @@ async function loadMaster(category, type) {
   // ヘッダーにマスタ種別を表示
   updateMasterTypeDisplay();
 
+  // プラットフォームタブの表示/非表示
+  if (currentMasterConfig.platformSupport) {
+    showPlatformTabs();
+    // デフォルトプラットフォームを設定
+    currentPlatform = currentMasterConfig.defaultPlatform || currentMasterConfig.platforms[0]?.id;
+  } else {
+    hidePlatformTabs();
+    currentPlatform = null;
+  }
+
   // 検索プレースホルダーを更新（カスタム設定がある場合）
   const searchInput = document.getElementById('searchInput');
   if (searchInput && currentMasterConfig.searchPlaceholder) {
@@ -356,7 +369,12 @@ async function loadMaster(category, type) {
 
     // 総件数取得（emptyState.showTotalCountがtrueの場合）
     if (currentMasterConfig.emptyState?.showTotalCount) {
-      fetchAndDisplayTotalCount();
+      // プラットフォーム別管理の場合はプラットフォーム別件数を取得
+      if (currentMasterConfig.platformSupport && currentPlatform) {
+        fetchAndDisplayTotalCountByPlatform();
+      } else {
+        fetchAndDisplayTotalCount();
+      }
     } else {
       masterTotalCount = 0;
     }
@@ -376,6 +394,158 @@ function updateMasterTypeDisplay() {
   const masterTypeDisplay = document.getElementById('master-type-display');
   if (masterTypeDisplay && currentMasterConfig) {
     masterTypeDisplay.textContent = currentMasterConfig.label;
+  }
+}
+
+// ============================================
+// プラットフォームタブ関連
+// ============================================
+
+/**
+ * プラットフォームタブを表示
+ */
+function showPlatformTabs() {
+  let container = document.getElementById('platformTabsContainer');
+
+  // コンテナがなければ作成
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'platformTabsContainer';
+    container.className = 'platform-tabs-container';
+    container.style.cssText = `
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e0e0e0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    `;
+
+    // stats-infoの上に挿入
+    const statsInfo = document.querySelector('.stats-info');
+    if (statsInfo && statsInfo.parentNode) {
+      statsInfo.parentNode.insertBefore(container, statsInfo);
+    }
+  }
+
+  // タブを生成
+  const platforms = currentMasterConfig.platforms || [];
+  container.innerHTML = platforms.map(p => `
+    <button class="platform-tab ${p.id === currentPlatform ? 'active' : ''}"
+            data-platform="${p.id}"
+            onclick="selectPlatformTab('${p.id}')"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              padding: 8px 16px;
+              border: none;
+              border-radius: 20px;
+              background: ${p.id === currentPlatform ? '#007bff' : '#fff'};
+              color: ${p.id === currentPlatform ? '#fff' : '#333'};
+              font-size: 13px;
+              font-weight: 500;
+              cursor: pointer;
+              white-space: nowrap;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+              transition: all 0.2s ease;
+            ">
+      <img src="${p.icon}" alt="${p.name}" style="width: 18px; height: 18px; border-radius: 4px;">
+      <span>${p.name}</span>
+    </button>
+  `).join('');
+
+  container.style.display = 'flex';
+}
+
+/**
+ * プラットフォームタブを非表示
+ */
+function hidePlatformTabs() {
+  const container = document.getElementById('platformTabsContainer');
+  if (container) {
+    container.style.display = 'none';
+  }
+}
+
+/**
+ * プラットフォームタブ選択
+ */
+window.selectPlatformTab = async function(platformId) {
+  if (currentPlatform === platformId) return;
+
+  currentPlatform = platformId;
+
+  // タブのアクティブ状態を更新
+  const container = document.getElementById('platformTabsContainer');
+  if (container) {
+    container.querySelectorAll('.platform-tab').forEach(tab => {
+      const isActive = tab.dataset.platform === platformId;
+      tab.classList.toggle('active', isActive);
+      tab.style.background = isActive ? '#007bff' : '#fff';
+      tab.style.color = isActive ? '#fff' : '#333';
+    });
+  }
+
+  console.log(`🔄 [Master Manager] プラットフォーム切り替え: ${platformId}`);
+
+  // キャッシュクリア（プラットフォーム別データを再取得するため）
+  delete masterCache[currentMasterConfig.collection];
+
+  // ツリービューのキャッシュもクリア
+  if (typeof expandedTreeNodes !== 'undefined') {
+    expandedTreeNodes.clear();
+  }
+
+  // データ再読み込み
+  allMasterData = [];
+  filteredMasterData = [];
+
+  // 総件数取得
+  if (currentMasterConfig.emptyState?.showTotalCount) {
+    fetchAndDisplayTotalCountByPlatform();
+  }
+
+  renderMasterList();
+  updateStats();
+};
+
+/**
+ * プラットフォーム別の総件数を取得
+ */
+async function fetchAndDisplayTotalCountByPlatform() {
+  try {
+    masterTotalCount = -1;
+    updateEmptyStateCount();
+
+    // プラットフォームでフィルタリングした件数を取得
+    // TODO: Firestore側でplatformフィールドでのカウントクエリを実装
+    // 暫定: 全件取得してフィルタリング
+    let categories = [];
+    if (window.masterCacheManager) {
+      categories = await window.masterCacheManager.getCategories();
+    } else {
+      categories = await window.getMasterData(currentMasterConfig.collection);
+    }
+
+    // プラットフォームでフィルタリング
+    const filtered = categories.filter(cat => cat.platform === currentPlatform);
+    masterTotalCount = filtered.length;
+
+    // キャッシュに保存（フィルタ済み）
+    masterCache[currentMasterConfig.collection] = filtered;
+    allMasterData = filtered;
+    filteredMasterData = filtered;
+
+    updateEmptyStateCount();
+    renderMasterList();
+
+    console.log(`📊 [Master Manager] ${currentPlatform}の件数: ${masterTotalCount}件`);
+  } catch (error) {
+    console.error('❌ [Master Manager] プラットフォーム別件数取得エラー:', error);
+    masterTotalCount = -2;
+    updateEmptyStateCount();
   }
 }
 
@@ -2132,8 +2302,12 @@ window.addCascadeItem = async function() {
     return;
   }
 
-  // 将来のマルチプラットフォーム用
-  data.platforms = ['mercari'];  // デフォルトでメルカリ
+  // プラットフォーム設定（選択中のプラットフォームを保存）
+  if (currentPlatform) {
+    data.platform = currentPlatform;
+  } else {
+    data.platform = 'mercari';  // デフォルト
+  }
 
   try {
     showLoading(true);

@@ -62,6 +62,17 @@ const masterCategories = {
         label: 'カテゴリ',
         collection: 'categories',
         description: '商品カテゴリを管理（7階層対応）',
+        // プラットフォーム別管理
+        platformSupport: true,
+        platforms: [
+          { id: 'mercari', name: 'メルカリ', icon: '/images/platform/mercari.png' },
+          { id: 'mercari-shops', name: 'メルカリShops', icon: '/images/platform/mercari-shops.png' },
+          { id: 'yahoo-fleamarket', name: 'Yahoo!フリマ', icon: '/images/platform/yahoo-fleamarket.png' },
+          { id: 'yahoo-auction', name: 'Yahoo!オークション', icon: '/images/platform/yahoo-auction.png' },
+          { id: 'rakuma', name: 'ラクマ', icon: '/images/platform/rakuma.png' },
+          { id: 'base', name: 'BASE', icon: '/images/platform/base.png' }
+        ],
+        defaultPlatform: 'mercari',
         // ツリービュー表示モード
         viewMode: 'tree',
         treeConfig: {
