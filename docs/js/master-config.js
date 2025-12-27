@@ -62,6 +62,24 @@ const masterCategories = {
         label: 'カテゴリ',
         collection: 'categories',
         description: '商品カテゴリを管理',
+        // ツリービュー表示モード
+        viewMode: 'tree',
+        treeConfig: {
+          levelFields: ['level1', 'level2', 'level3'],  // 階層フィールド
+          itemNameField: 'itemName',                    // アイテム名フィールド
+          defaultExpanded: false                        // 初期状態は折りたたみ
+        },
+        // アイテム名追加用カスケード設定
+        cascadeAdd: {
+          enabled: true,
+          levels: [
+            { field: 'level1', label: '大分類' },
+            { field: 'level2', label: '中分類' },
+            { field: 'level3', label: '小分類' }
+          ],
+          itemNameLabel: 'アイテム名',
+          platformField: 'platforms'  // 将来のマルチプラットフォーム用
+        },
         fields: [
           {
             name: 'fullPath',
@@ -82,13 +100,13 @@ const masterCategories = {
         searchable: true,
         usageCount: true,
         bulkDelete: true,
-        maxDisplayResults: 100,
+        maxDisplayResults: 500,  // ツリービューでは多めに取得
         initialDisplay: 0, // 初期表示件数（0=検索後のみ表示）
         // カスタムUI設定（ガイダンス強化）
         emptyState: {
           icon: '📁',
           showTotalCount: true,
-          message: 'カテゴリ名で検索',
+          message: 'カテゴリ名で検索、または下のツリーから選択',
           hint: '例: レディース, Tシャツ, バッグ'
         },
         searchPlaceholder: 'カテゴリ名を入力'

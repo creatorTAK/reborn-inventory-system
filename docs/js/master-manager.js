@@ -718,8 +718,12 @@ function renderMasterList() {
   container.classList.remove('hidden');
   emptyState.classList.add('hidden');
 
-  // groupByが設定されている場合はアコーディオン表示
-  if (currentMasterConfig.groupBy) {
+  // viewModeに応じた表示方式を選択
+  if (currentMasterConfig.viewMode === 'tree') {
+    // ツリービュー表示（カテゴリ用）
+    renderCategoryTreeView(container);
+  } else if (currentMasterConfig.groupBy) {
+    // アコーディオン表示
     renderAccordionList(container);
   } else {
     // 従来のフラットリスト表示
@@ -866,6 +870,240 @@ window.toggleAccordion = function(groupKey) {
       }
     }
   });
+}
+
+// ============================================
+// カテゴリツリービュー
+// ============================================
+
+// 展開状態を管理するSet（ツリービュー用）
+const expandedTreeNodes = new Set();
+
+/**
+ * フラットなカテゴリデータをツリー構造に変換
+ * @param {Array} categories - カテゴリデータ配列
+ * @returns {Object} ツリー構造
+ */
+function buildCategoryTree(categories) {
+  const tree = {};
+  const treeConfig = currentMasterConfig.treeConfig || {};
+  const levelFields = treeConfig.levelFields || ['level1', 'level2', 'level3'];
+
+  categories.forEach(cat => {
+    const levels = levelFields.map(f => cat[f]).filter(Boolean);
+
+    let current = tree;
+    levels.forEach((level, index) => {
+      if (!current[level]) {
+        current[level] = {
+          name: level,
+          count: 0,
+          children: {},
+          items: [],
+          level: index + 1,
+          path: levels.slice(0, index + 1).join(' > ')
+        };
+      }
+      current[level].count++;
+
+      // 最終レベルの場合、アイテムとして登録
+      if (index === levels.length - 1) {
+        current[level].items.push(cat);
+      }
+
+      current = current[level].children;
+    });
+  });
+
+  return tree;
+}
+
+/**
+ * カテゴリツリービューをレンダリング
+ * @param {HTMLElement} container - コンテナ要素
+ */
+function renderCategoryTreeView(container) {
+  // ツリー構造を構築
+  const tree = buildCategoryTree(filteredMasterData);
+
+  // 検索時は全ノードを展開
+  const searchInput = document.getElementById('searchInput');
+  const hasSearchQuery = searchInput && searchInput.value.trim().length > 0;
+  if (hasSearchQuery) {
+    // 検索結果がある場合は全て展開
+    expandAllTreeNodes(tree);
+  }
+
+  // ツリーをレンダリング
+  const treeWrapper = document.createElement('div');
+  treeWrapper.className = 'category-tree-wrapper';
+
+  renderTreeLevel(tree, treeWrapper, 1);
+
+  container.appendChild(treeWrapper);
+}
+
+/**
+ * ツリーの全ノードを展開状態にする
+ */
+function expandAllTreeNodes(tree, parentPath = '') {
+  Object.keys(tree).forEach(key => {
+    const node = tree[key];
+    const nodePath = parentPath ? `${parentPath} > ${key}` : key;
+    expandedTreeNodes.add(nodePath);
+
+    if (Object.keys(node.children).length > 0) {
+      expandAllTreeNodes(node.children, nodePath);
+    }
+  });
+}
+
+/**
+ * ツリーの1レベルをレンダリング
+ * @param {Object} tree - ツリー構造
+ * @param {HTMLElement} container - コンテナ要素
+ * @param {number} level - 現在のレベル（1〜）
+ */
+function renderTreeLevel(tree, container, level) {
+  const sortedKeys = Object.keys(tree).sort((a, b) => a.localeCompare(b, 'ja'));
+
+  sortedKeys.forEach(key => {
+    const node = tree[key];
+    const hasChildren = Object.keys(node.children).length > 0;
+    const hasItems = node.items.length > 0;
+    const nodePath = node.path;
+    const isExpanded = expandedTreeNodes.has(nodePath);
+
+    // ノードヘッダー
+    const nodeContainer = document.createElement('div');
+    nodeContainer.className = `category-tree-node level-${level}`;
+
+    const nodeHeader = document.createElement('div');
+    nodeHeader.className = `category-tree-header ${isExpanded ? 'expanded' : ''} ${hasChildren || hasItems ? 'has-children' : ''}`;
+    nodeHeader.innerHTML = `
+      <div class="tree-node-content">
+        ${hasChildren || hasItems ? `<i class="bi ${isExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} toggle-icon"></i>` : '<span class="tree-spacer"></span>'}
+        <span class="tree-node-name">${escapeHtml(key)}</span>
+        <span class="tree-node-count">(${node.count}件)</span>
+      </div>
+    `;
+
+    if (hasChildren || hasItems) {
+      nodeHeader.addEventListener('click', () => toggleTreeNode(nodePath, node, level));
+    }
+
+    nodeContainer.appendChild(nodeHeader);
+
+    // 子要素コンテナ
+    const childrenContainer = document.createElement('div');
+    childrenContainer.className = `category-tree-children ${isExpanded ? 'expanded' : ''}`;
+    childrenContainer.setAttribute('data-path', nodePath);
+
+    const childrenInner = document.createElement('div');
+    childrenInner.className = 'tree-children-inner';
+
+    if (isExpanded) {
+      // 子ノードをレンダリング
+      if (hasChildren) {
+        renderTreeLevel(node.children, childrenInner, level + 1);
+      }
+
+      // アイテムをレンダリング（最終レベルのみ）
+      if (hasItems && !hasChildren) {
+        node.items.forEach(item => {
+          const itemEl = createTreeItemCard(item);
+          childrenInner.appendChild(itemEl);
+        });
+      }
+    }
+
+    childrenContainer.appendChild(childrenInner);
+    nodeContainer.appendChild(childrenContainer);
+
+    container.appendChild(nodeContainer);
+  });
+}
+
+/**
+ * ツリーノードの展開/収納を切り替え
+ */
+window.toggleTreeNode = function(nodePath, node, level) {
+  const isCurrentlyExpanded = expandedTreeNodes.has(nodePath);
+
+  if (isCurrentlyExpanded) {
+    expandedTreeNodes.delete(nodePath);
+  } else {
+    expandedTreeNodes.add(nodePath);
+  }
+
+  // 該当ノードのみ更新
+  const container = document.querySelector(`.category-tree-children[data-path="${CSS.escape(nodePath)}"]`);
+  const header = container?.previousElementSibling;
+
+  if (container && header) {
+    const icon = header.querySelector('.toggle-icon');
+    const childrenInner = container.querySelector('.tree-children-inner');
+
+    if (expandedTreeNodes.has(nodePath)) {
+      header.classList.add('expanded');
+      container.classList.add('expanded');
+      if (icon) icon.className = 'bi bi-chevron-down toggle-icon';
+
+      // コンテンツを動的に生成
+      if (childrenInner && childrenInner.children.length === 0) {
+        const hasChildren = Object.keys(node.children).length > 0;
+        const hasItems = node.items.length > 0;
+
+        if (hasChildren) {
+          renderTreeLevel(node.children, childrenInner, level + 1);
+        }
+
+        if (hasItems && !hasChildren) {
+          node.items.forEach(item => {
+            const itemEl = createTreeItemCard(item);
+            childrenInner.appendChild(itemEl);
+          });
+        }
+      }
+    } else {
+      header.classList.remove('expanded');
+      container.classList.remove('expanded');
+      if (icon) icon.className = 'bi bi-chevron-right toggle-icon';
+    }
+  }
+}
+
+/**
+ * ツリーアイテムカードを作成
+ * @param {Object} item - カテゴリアイテム
+ * @returns {HTMLElement} カード要素
+ */
+function createTreeItemCard(item) {
+  const card = document.createElement('div');
+  card.className = 'tree-item-card';
+  card.setAttribute('data-master-id', item.id);
+
+  // 表示名を決定（itemNameまたはfullPath）
+  const treeConfig = currentMasterConfig.treeConfig || {};
+  const itemNameField = treeConfig.itemNameField || 'itemName';
+  const displayName = item[itemNameField] || item.fullPath || item.id;
+
+  card.innerHTML = `
+    <div class="tree-item-content">
+      <span class="tree-item-name">${escapeHtml(displayName)}</span>
+      ${item.usageCount !== undefined ? `<span class="tree-item-usage">${item.usageCount}回使用</span>` : ''}
+    </div>
+    <div class="tree-item-actions">
+      <button class="btn-icon btn-edit" onclick="showEditModal('${item.id}')" title="編集">
+        <i class="bi bi-pencil"></i>
+      </button>
+      <button class="btn-icon btn-delete" onclick="showDeleteModal('${item.id}')" title="削除">
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+  `;
+
+  return card;
 }
 
 /**
