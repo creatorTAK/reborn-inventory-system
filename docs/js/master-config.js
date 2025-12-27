@@ -53,8 +53,7 @@ const masterCategories = {
           icon: '🏷️',
           showTotalCount: true,
           message: 'ブランド名で検索',
-          hint: '例: NIKE, グッチ, シャネル',
-          showAddButton: true
+          hint: '例: NIKE, グッチ, シャネル'
         },
         searchPlaceholder: 'ブランド名を入力（英語・カナ対応）'
       },
@@ -90,8 +89,7 @@ const masterCategories = {
           icon: '📁',
           showTotalCount: true,
           message: 'カテゴリ名で検索',
-          hint: '例: レディース, Tシャツ, バッグ',
-          showAddButton: true
+          hint: '例: レディース, Tシャツ, バッグ'
         },
         searchPlaceholder: 'カテゴリ名を入力'
       },
