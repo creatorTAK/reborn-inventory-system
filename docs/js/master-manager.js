@@ -413,51 +413,44 @@ function updateMasterTypeDisplay() {
 function showPlatformTabs() {
   let container = document.getElementById('platformTabsContainer');
 
-  // プラットフォーム設定を読み込み（商品登録と同じロジック）
-  let enabledPlatformIds = ['mercari']; // デフォルト
-  let customPlatformsConfig = []; // カスタムプラットフォーム定義
-  
+  // プラットフォーム設定を読み込み
+  let platforms = [];
+
   try {
     const config = JSON.parse(localStorage.getItem('config') || '{}');
     const platformSettings = config.プラットフォーム設定;
-    
+
     if (platformSettings?.platforms && Array.isArray(platformSettings.platforms)) {
-      const enabled = platformSettings.platforms
+      // 有効なプラットフォームのみ取得（編集済みのname/iconを含む）
+      platforms = platformSettings.platforms
         .filter(p => p.enabled)
-        .map(p => p.id);
-      
-      if (enabled.length > 0) {
-        enabledPlatformIds = enabled;
-      }
+        .map(p => {
+          // デフォルトアイコンを設定
+          const defaultConfig = (currentMasterConfig.platforms || []).find(dp => dp.id === p.id);
+          return {
+            id: p.id,
+            name: p.name || defaultConfig?.name || p.id,
+            icon: p.icon || defaultConfig?.icon || '/images/platform/default.png'
+          };
+        });
     }
-    
-    // カスタムプラットフォーム定義を取得
-    if (platformSettings?.customPlatforms && Array.isArray(platformSettings.customPlatforms)) {
-      customPlatformsConfig = platformSettings.customPlatforms;
+
+    // プラットフォーム設定がない場合はデフォルト（メルカリのみ）
+    if (platforms.length === 0) {
+      const mercariConfig = (currentMasterConfig.platforms || []).find(p => p.id === 'mercari');
+      platforms = [{
+        id: 'mercari',
+        name: mercariConfig?.name || 'メルカリ',
+        icon: mercariConfig?.icon || '/images/platform/mercari.png'
+      }];
     }
-    
-    console.log(`🔧 [Master Manager] 有効なプラットフォーム: ${enabledPlatformIds.join(', ')}`);
-    console.log(`🔧 [Master Manager] カスタムプラットフォーム: ${customPlatformsConfig.map(p => p.id).join(', ') || 'なし'}`);
+
+    console.log(`🔧 [Master Manager] 有効なプラットフォーム: ${platforms.map(p => p.id).join(', ')}`);
   } catch (e) {
     console.error('❌ [Master Manager] プラットフォーム設定読み込みエラー:', e);
+    // エラー時はデフォルト
+    platforms = [{ id: 'mercari', name: 'メルカリ', icon: '/images/platform/mercari.png' }];
   }
-
-  // デフォルトプラットフォーム + カスタムプラットフォームをマージ
-  const allPlatforms = [...(currentMasterConfig.platforms || [])];
-  
-  // カスタムプラットフォームを追加（重複除外）
-  customPlatformsConfig.forEach(cp => {
-    if (!allPlatforms.some(p => p.id === cp.id)) {
-      allPlatforms.push({
-        id: cp.id,
-        name: cp.name,
-        icon: cp.icon || '/images/platform/default.png'
-      });
-    }
-  });
-  
-  // 有効なプラットフォームのみフィルタリング
-  const platforms = allPlatforms.filter(p => enabledPlatformIds.includes(p.id));
 
   // 有効なプラットフォームが1つ以下なら非表示
   if (platforms.length <= 1) {

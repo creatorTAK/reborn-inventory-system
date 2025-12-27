@@ -1696,6 +1696,72 @@
   </div>
 </div>
 
+<!-- プラットフォーム編集モーダル -->
+<div id="platformEditModal" class="mnb-modal">
+  <div class="mnb-modal-content" style="max-width: 400px;">
+    <div class="mnb-modal-title" id="platformEditModalTitle">プラットフォームを編集</div>
+
+    <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+      <!-- アイコンプレビュー＆アップロード -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div id="platformIconPreview" style="
+          width: 80px; height: 80px; border-radius: 12px; border: 2px dashed #d1d5db;
+          display: flex; align-items: center; justify-content: center; overflow: hidden;
+          background: #f9fafb; cursor: pointer;
+        " onclick="document.getElementById('platformIconInput').click()">
+          <span style="color: #9ca3af; font-size: 24px;">📷</span>
+        </div>
+        <input type="file" id="platformIconInput" accept="image/*" style="display: none;" onchange="previewPlatformIcon(event)">
+        <button type="button" onclick="document.getElementById('platformIconInput').click()" style="
+          padding: 6px 12px; font-size: 12px; background: #f3f4f6; color: #374151;
+          border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer;
+        ">画像を選択</button>
+        <div id="platformIconUploadStatus" style="font-size: 11px; color: #6b7280;"></div>
+      </div>
+
+      <!-- プラットフォームID（読み取り専用） -->
+      <div>
+        <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">プラットフォームID</label>
+        <input type="text" id="editPlatformId" readonly style="
+          width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 6px;
+          font-size: 16px; box-sizing: border-box; background: #f3f4f6; color: #6b7280;
+        ">
+      </div>
+
+      <!-- 表示名 -->
+      <div>
+        <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">表示名 *</label>
+        <input type="text" id="editPlatformName" placeholder="例: メルカリ" style="
+          width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 6px;
+          font-size: 16px; box-sizing: border-box;
+        ">
+      </div>
+
+      <!-- 説明 -->
+      <div>
+        <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">説明</label>
+        <input type="text" id="editPlatformDesc" placeholder="例: フリマアプリ" style="
+          width: 100%; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 6px;
+          font-size: 16px; box-sizing: border-box;
+        ">
+      </div>
+
+      <!-- 削除ボタン（カスタムのみ表示） -->
+      <div id="editPlatformDeleteSection" style="display: none; padding-top: 8px; border-top: 1px solid #fecaca;">
+        <button type="button" onclick="deletePlatformFromEdit()" style="
+          width: 100%; padding: 10px; background: #fef2f2; color: #ef4444;
+          border: 1px solid #fecaca; border-radius: 6px; font-size: 14px; cursor: pointer;
+        ">このプラットフォームを削除</button>
+      </div>
+    </div>
+
+    <div class="mnb-modal-actions">
+      <button type="button" class="mnb-modal-btn mnb-modal-btn-secondary" onclick="closePlatformEditModal()">キャンセル</button>
+      <button type="button" class="mnb-modal-btn mnb-modal-btn-primary" onclick="savePlatformEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // 管理番号ビルダーシステム (PWA対応 @916)
   const ManagementNumberBuilder = {
@@ -8018,33 +8084,29 @@ ${prompt || '（未設定）'}
       container.innerHTML = sortedPlatforms.map((p, index) => {
         const isFirst = index === 0;
         const isLast = index === sortedPlatforms.length - 1;
-        const statusColor = p.status === '実装済' ? '#10b981' : (p.status === 'カスタム' ? '#8b5cf6' : '#f59e0b');
 
         return `
         <div class="platform-item" data-platform-id="${p.id}" style="display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: ${p.isCustom ? '#fefce8' : '#f9fafb'};">
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            <button type="button" onclick="movePlatformUp('${p.id}')" ${isFirst ? 'disabled' : ''} style="
-              width: 24px; height: 20px; border: 1px solid #e5e7eb; border-radius: 4px;
+          <input type="checkbox" id="platform-${p.id}" value="${p.id}" style="width: 18px; height: 18px; accent-color: #40B4E5; flex-shrink: 0;">
+          <div onclick="openPlatformEditModal('${p.id}')" style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer;">
+            <img src="${p.icon}" alt="${p.name}" style="width: 36px; height: 36px; object-fit: contain; flex-shrink: 0;" onerror="this.style.display='none'">
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-weight: 600; color: #374151; font-size: 14px;">${p.name}</div>
+              <div style="font-size: 11px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.description}</div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px; flex-shrink: 0;">
+            <button type="button" onclick="event.stopPropagation(); movePlatformUp('${p.id}')" ${isFirst ? 'disabled' : ''} style="
+              width: 28px; height: 22px; border: 1px solid #e5e7eb; border-radius: 4px;
               background: ${isFirst ? '#f3f4f6' : '#fff'}; cursor: ${isFirst ? 'not-allowed' : 'pointer'};
-              color: ${isFirst ? '#d1d5db' : '#6b7280'}; font-size: 10px;
+              color: ${isFirst ? '#d1d5db' : '#6b7280'}; font-size: 12px;
             ">▲</button>
-            <button type="button" onclick="movePlatformDown('${p.id}')" ${isLast ? 'disabled' : ''} style="
-              width: 24px; height: 20px; border: 1px solid #e5e7eb; border-radius: 4px;
+            <button type="button" onclick="event.stopPropagation(); movePlatformDown('${p.id}')" ${isLast ? 'disabled' : ''} style="
+              width: 28px; height: 22px; border: 1px solid #e5e7eb; border-radius: 4px;
               background: ${isLast ? '#f3f4f6' : '#fff'}; cursor: ${isLast ? 'not-allowed' : 'pointer'};
-              color: ${isLast ? '#d1d5db' : '#6b7280'}; font-size: 10px;
+              color: ${isLast ? '#d1d5db' : '#6b7280'}; font-size: 12px;
             ">▼</button>
           </div>
-          <input type="checkbox" id="platform-${p.id}" value="${p.id}" style="width: 18px; height: 18px; accent-color: #40B4E5;">
-          <img src="${p.icon}" alt="${p.name}" style="width: 36px; height: 36px; object-fit: contain;" onerror="this.style.display='none'">
-          <div style="flex: 1; min-width: 0;">
-            <div style="font-weight: 600; color: #374151; font-size: 14px;">${p.name}</div>
-            <div style="font-size: 11px; color: #6b7280;">${p.description}</div>
-          </div>
-          <span style="font-size: 10px; background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 10px; white-space: nowrap;">${p.status}</span>
-          ${p.isCustom ? `<button type="button" onclick="removeCustomPlatform('${p.id}')" style="
-            padding: 4px 8px; font-size: 10px; background: #fef2f2; color: #ef4444;
-            border: 1px solid #fecaca; border-radius: 4px; cursor: pointer;
-          ">削除</button>` : ''}
         </div>
         `;
       }).join('');
@@ -8113,12 +8175,15 @@ ${prompt || '（未設定）'}
       platformOrder.forEach(id => {
         const checkbox = document.getElementById('platform-' + id);
         const customPlatform = customPlatforms.find(cp => cp.id === id);
+        const editedPlatform = platformEdits[id];
+        const defaultPlatform = defaultPlatformDefs.find(p => p.id === id);
 
         if (checkbox) {
           platforms.push({
             id: id,
-            name: customPlatform?.name,
-            description: customPlatform?.description,
+            name: editedPlatform?.name || customPlatform?.name || defaultPlatform?.name,
+            description: editedPlatform?.description || customPlatform?.description || defaultPlatform?.description,
+            icon: editedPlatform?.icon || customPlatform?.icon || defaultPlatform?.icon,
             enabled: checkbox.checked,
             isCustom: !!customPlatform
           });
@@ -8129,7 +8194,8 @@ ${prompt || '（未設定）'}
         registrationMode: modeRadio?.value || 'individual',
         platforms: platforms,
         platformOrder: platformOrder,
-        customPlatforms: customPlatforms
+        customPlatforms: customPlatforms,
+        platformEdits: platformEdits // デフォルトプラットフォームの編集を保存
       };
 
       console.log('プラットフォーム設定を収集:', result);
@@ -8172,6 +8238,22 @@ ${prompt || '（未設定）'}
       // 並び順を読み込み
       if (settings.platformOrder && Array.isArray(settings.platformOrder)) {
         platformOrder = settings.platformOrder;
+      }
+
+      // デフォルトプラットフォームの編集を読み込み
+      if (settings.platformEdits && typeof settings.platformEdits === 'object') {
+        platformEdits = settings.platformEdits;
+        // defaultPlatformDefsに編集を適用
+        Object.entries(platformEdits).forEach(([id, edit]) => {
+          const index = defaultPlatformDefs.findIndex(p => p.id === id);
+          if (index !== -1) {
+            defaultPlatformDefs[index].name = edit.name;
+            defaultPlatformDefs[index].description = edit.description;
+            if (edit.icon) {
+              defaultPlatformDefs[index].icon = edit.icon;
+            }
+          }
+        });
       }
 
       // 再レンダリング
@@ -8282,6 +8364,208 @@ ${prompt || '（未設定）'}
       restorePlatformCheckStates();
 
       console.log('🗑️ カスタムプラットフォーム削除:', id);
+    }
+
+    // ============================================
+    // プラットフォーム編集モーダル
+    // ============================================
+
+    let currentEditingPlatformId = null;
+    let pendingIconFile = null;
+    let platformEdits = {}; // デフォルトプラットフォームの編集を保存
+
+    /**
+     * プラットフォーム編集モーダルを開く
+     */
+    function openPlatformEditModal(platformId) {
+      currentEditingPlatformId = platformId;
+      pendingIconFile = null;
+
+      // プラットフォーム情報を取得
+      const customPlatform = customPlatforms.find(p => p.id === platformId);
+      const defaultPlatform = defaultPlatformDefs.find(p => p.id === platformId);
+      const editedPlatform = platformEdits[platformId];
+      const isCustom = !!customPlatform;
+
+      // 編集済みデータがあればそれを使用
+      const platform = editedPlatform || customPlatform || defaultPlatform;
+      if (!platform) {
+        console.error('プラットフォームが見つかりません:', platformId);
+        return;
+      }
+
+      // フォームに値をセット
+      document.getElementById('editPlatformId').value = platform.id;
+      document.getElementById('editPlatformName').value = platform.name;
+      document.getElementById('editPlatformDesc').value = platform.description || '';
+
+      // アイコンプレビュー
+      const preview = document.getElementById('platformIconPreview');
+      if (platform.icon) {
+        preview.innerHTML = `<img src="${platform.icon}" style="width: 100%; height: 100%; object-fit: contain;" onerror="this.parentElement.innerHTML='<span style=\\'color: #9ca3af; font-size: 24px;\\'>📷</span>'">`;
+      } else {
+        preview.innerHTML = '<span style="color: #9ca3af; font-size: 24px;">📷</span>';
+      }
+
+      // アップロードステータスをクリア
+      document.getElementById('platformIconUploadStatus').textContent = '';
+
+      // カスタムプラットフォームのみ削除ボタンを表示
+      document.getElementById('editPlatformDeleteSection').style.display = isCustom ? 'block' : 'none';
+
+      // モーダルを開く
+      document.getElementById('platformEditModal').classList.add('active');
+    }
+
+    /**
+     * プラットフォーム編集モーダルを閉じる
+     */
+    function closePlatformEditModal() {
+      document.getElementById('platformEditModal').classList.remove('active');
+      currentEditingPlatformId = null;
+      pendingIconFile = null;
+      document.getElementById('platformIconInput').value = '';
+    }
+
+    /**
+     * アイコン画像をプレビュー
+     */
+    function previewPlatformIcon(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // ファイルサイズチェック（2MB以下）
+      if (file.size > 2 * 1024 * 1024) {
+        alert('画像サイズは2MB以下にしてください。');
+        return;
+      }
+
+      pendingIconFile = file;
+
+      // プレビュー表示
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const preview = document.getElementById('platformIconPreview');
+        preview.innerHTML = `<img src="${e.target.result}" style="width: 100%; height: 100%; object-fit: contain;">`;
+        document.getElementById('platformIconUploadStatus').textContent = '✓ 画像を選択しました';
+        document.getElementById('platformIconUploadStatus').style.color = '#10b981';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    /**
+     * 画像をFirebase Storageにアップロード
+     */
+    async function uploadPlatformIcon(file, platformId) {
+      if (!window.storage) {
+        console.error('Firebase Storage が初期化されていません');
+        return null;
+      }
+
+      const timestamp = Date.now();
+      const extension = file.name.split('.').pop().toLowerCase();
+      const path = `platform-icons/${platformId}_${timestamp}.${extension}`;
+
+      try {
+        const storageRef = window.storage.ref(path);
+        const snapshot = await storageRef.put(file);
+        const downloadURL = await snapshot.ref.getDownloadURL();
+        console.log('✅ 画像アップロード成功:', downloadURL);
+        return downloadURL;
+      } catch (error) {
+        console.error('❌ 画像アップロードエラー:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * プラットフォーム編集を保存
+     */
+    async function savePlatformEdit() {
+      if (!currentEditingPlatformId) return;
+
+      const name = document.getElementById('editPlatformName').value.trim();
+      const description = document.getElementById('editPlatformDesc').value.trim();
+
+      if (!name) {
+        alert('表示名は必須です。');
+        return;
+      }
+
+      const statusEl = document.getElementById('platformIconUploadStatus');
+
+      // 画像アップロードがあれば実行
+      let iconUrl = null;
+      if (pendingIconFile) {
+        statusEl.textContent = 'アップロード中...';
+        statusEl.style.color = '#6b7280';
+
+        try {
+          iconUrl = await uploadPlatformIcon(pendingIconFile, currentEditingPlatformId);
+          statusEl.textContent = '✓ アップロード完了';
+          statusEl.style.color = '#10b981';
+        } catch (error) {
+          statusEl.textContent = '❌ アップロード失敗';
+          statusEl.style.color = '#ef4444';
+          alert('画像のアップロードに失敗しました。');
+          return;
+        }
+      }
+
+      // カスタムプラットフォームの場合
+      const customIndex = customPlatforms.findIndex(p => p.id === currentEditingPlatformId);
+      if (customIndex !== -1) {
+        customPlatforms[customIndex].name = name;
+        customPlatforms[customIndex].description = description;
+        if (iconUrl) {
+          customPlatforms[customIndex].icon = iconUrl;
+        }
+      } else {
+        // デフォルトプラットフォームの編集を保存
+        const defaultPlatform = defaultPlatformDefs.find(p => p.id === currentEditingPlatformId);
+        if (defaultPlatform) {
+          platformEdits[currentEditingPlatformId] = {
+            ...defaultPlatform,
+            name: name,
+            description: description,
+            icon: iconUrl || platformEdits[currentEditingPlatformId]?.icon || defaultPlatform.icon
+          };
+
+          // defaultPlatformDefs も更新（表示用）
+          const defIndex = defaultPlatformDefs.findIndex(p => p.id === currentEditingPlatformId);
+          if (defIndex !== -1) {
+            defaultPlatformDefs[defIndex].name = name;
+            defaultPlatformDefs[defIndex].description = description;
+            if (iconUrl) {
+              defaultPlatformDefs[defIndex].icon = iconUrl;
+            }
+          }
+        }
+      }
+
+      // チェック状態を保存
+      savePlatformCheckStates();
+
+      // 再レンダリング
+      renderAllPlatforms();
+
+      // チェック状態を復元
+      restorePlatformCheckStates();
+
+      // モーダルを閉じる
+      closePlatformEditModal();
+
+      console.log('✅ プラットフォーム編集を保存:', currentEditingPlatformId);
+    }
+
+    /**
+     * 編集画面から削除
+     */
+    function deletePlatformFromEdit() {
+      if (currentEditingPlatformId) {
+        closePlatformEditModal();
+        removeCustomPlatform(currentEditingPlatformId);
+      }
     }
 
     /**
@@ -9473,6 +9757,7 @@ ${prompt || '（未設定）'}
   <!-- Firebase SDK (compat版: UMD形式) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 
   <!-- Firebase初期化（product.htmlと同じパターン：即座に実行） -->
   <script>
@@ -9491,7 +9776,9 @@ ${prompt || '（未設定）'}
       if (typeof firebase !== 'undefined') {
         const app = firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        const storage = firebase.storage();
         window.db = db; // グローバルに公開
+        window.storage = storage; // Storage公開
         window.firestoreReady = true;
 
         // 発送方法カテゴリ一覧を読み込んでプルダウンに設定
