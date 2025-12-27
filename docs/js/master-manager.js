@@ -417,23 +417,21 @@ async function fetchAndDisplayTotalCount() {
  * 空状態の件数表示を更新
  */
 function updateEmptyStateCount() {
-  // アクションバーの件数バッジを更新
-  const badge = document.getElementById('totalCountBadge');
-  const countText = document.getElementById('totalCountText');
-  if (!badge || !countText) return;
+  // アクションバーの件数テキストを更新
+  const countEl = document.getElementById('totalCountBadge');
+  if (!countEl) return;
 
   if (masterTotalCount === -1) {
-    // 読み込み中
-    countText.textContent = '読み込み中...';
-    badge.classList.remove('hidden');
+    // 読み込み中 - 非表示
+    countEl.classList.add('hidden');
   } else if (masterTotalCount === -2) {
     // エラーまたは取得不可 - 非表示
-    badge.classList.add('hidden');
+    countEl.classList.add('hidden');
   } else if (masterTotalCount > 0) {
-    countText.textContent = `${masterTotalCount.toLocaleString()}件`;
-    badge.classList.remove('hidden');
+    countEl.textContent = `${masterTotalCount.toLocaleString()}件`;
+    countEl.classList.remove('hidden');
   } else {
-    badge.classList.add('hidden');
+    countEl.classList.add('hidden');
   }
 }
 
