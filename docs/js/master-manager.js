@@ -475,6 +475,88 @@ function hidePlatformTabs() {
   }
 }
 
+
+/**
+ * プラットフォーム間でカテゴリデータをコピー
+ * @param {string} sourcePlatform - コピー元プラットフォーム（例: 'mercari'）
+ * @param {string} targetPlatform - コピー先プラットフォーム（例: 'mercari-shops'）
+ */
+window.copyPlatformCategories = async function(sourcePlatform, targetPlatform) {
+  if (!confirm(`「${sourcePlatform}」のカテゴリを「${targetPlatform}」にコピーしますか？\n既存の「${targetPlatform}」データは上書きされません。`)) {
+    return;
+  }
+
+  console.log(`🔄 [Master Manager] カテゴリコピー開始: ${sourcePlatform} → ${targetPlatform}`);
+
+  try {
+    // 全カテゴリ取得
+    let categories = [];
+    if (window.masterCacheManager) {
+      categories = await window.masterCacheManager.getCategories();
+    } else {
+      categories = await window.getMasterData('categories');
+    }
+
+    // ソースプラットフォームのデータを抽出
+    const sourceData = categories.filter(cat => {
+      const catPlatform = cat.platform || 'mercari';
+      return catPlatform === sourcePlatform;
+    });
+
+    // ターゲットプラットフォームの既存データを取得
+    const existingTargetData = categories.filter(cat => cat.platform === targetPlatform);
+    const existingKeys = new Set(existingTargetData.map(cat => 
+      `${cat.superCategory || ''}|${cat.level1 || ''}|${cat.level2 || ''}|${cat.level3 || ''}|${cat.level4 || ''}|${cat.level5 || ''}|${cat.itemName || ''}`
+    ));
+
+    console.log(`📊 [Master Manager] ${sourcePlatform}: ${sourceData.length}件, ${targetPlatform}既存: ${existingTargetData.length}件`);
+
+    // Firestoreにコピー（重複チェック付き）
+    const db = firebase.firestore();
+    const batch = db.batch();
+    let copyCount = 0;
+
+    for (const cat of sourceData) {
+      const key = `${cat.superCategory || ''}|${cat.level1 || ''}|${cat.level2 || ''}|${cat.level3 || ''}|${cat.level4 || ''}|${cat.level5 || ''}|${cat.itemName || ''}`;
+      
+      if (!existingKeys.has(key)) {
+        const newDoc = db.collection('categories').doc();
+        const newData = { ...cat, platform: targetPlatform };
+        delete newData.id; // IDは新規生成
+        batch.set(newDoc, newData);
+        copyCount++;
+
+        // バッチ制限（500件）に達したらコミット
+        if (copyCount % 400 === 0) {
+          await batch.commit();
+          console.log(`✅ [Master Manager] ${copyCount}件コミット完了`);
+        }
+      }
+    }
+
+    if (copyCount > 0) {
+      await batch.commit();
+    }
+
+    console.log(`✅ [Master Manager] カテゴリコピー完了: ${copyCount}件追加`);
+    alert(`${copyCount}件のカテゴリを「${targetPlatform}」にコピーしました。`);
+
+    // キャッシュクリア
+    if (window.masterCacheManager) {
+      window.masterCacheManager.clearCache('categories');
+    }
+
+    // 画面更新
+    if (currentMasterConfig?.platformSupport) {
+      fetchAndDisplayTotalCountByPlatform();
+    }
+
+  } catch (error) {
+    console.error('❌ [Master Manager] カテゴリコピーエラー:', error);
+    alert('カテゴリコピー中にエラーが発生しました: ' + error.message);
+  }
+};
+
 /**
  * プラットフォームタブ選択
  */
