@@ -1584,6 +1584,9 @@ let cascadeOptions = {};
 /**
  * カスケード追加モーダル表示（カテゴリ用）
  */
+// 追加する階層のインデックス（グローバル状態）
+let addTargetLevelIndex = -1; // -1 = アイテム名（最下層）
+
 async function showCascadeAddModal() {
   const modal = document.getElementById('addModal');
   const modalBody = document.getElementById('addModalBody');
@@ -1599,10 +1602,11 @@ async function showCascadeAddModal() {
   // 状態リセット
   cascadeSelections = {};
   cascadeOptions = {};
+  addTargetLevelIndex = -1; // デフォルトはアイテム名
 
   // モーダルタイトル
   if (modalTitle) {
-    modalTitle.textContent = 'アイテム名を追加';
+    modalTitle.textContent = 'カテゴリを追加';
   }
 
   // 送信ボタン
@@ -1655,97 +1659,57 @@ async function showCascadeAddModal() {
   description.className = 'cascade-description';
   description.innerHTML = `
     <p style="color: #666; font-size: 14px; margin-bottom: 16px;">
-      親カテゴリを選択して、新しいアイテム名を追加します。
+      追加する階層を選択し、親カテゴリを選んで新しい値を入力します。
     </p>
   `;
   modalBody.appendChild(description);
 
-  // hideLabels: true の場合、最初のセレクトボックスの上に「カテゴリー」ラベルを追加
-  if (cascadeConfig.hideLabels) {
-    const categoryLabel = document.createElement('label');
-    categoryLabel.className = 'form-label';
-    categoryLabel.textContent = 'カテゴリー';
-    categoryLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
-    categoryLabel.style.marginBottom = '8px';
-    categoryLabel.style.display = 'block';
-    modalBody.appendChild(categoryLabel);
-  }
+  // ========== 追加する階層選択 ==========
+  const targetLevelGroup = document.createElement('div');
+  targetLevelGroup.className = 'form-group';
+  targetLevelGroup.style.marginBottom = '20px';
+  targetLevelGroup.style.paddingBottom = '16px';
+  targetLevelGroup.style.borderBottom = '1px solid #e0e0e0';
 
-  // 各レベルのセレクトボックス
+  const targetLevelLabel = document.createElement('label');
+  targetLevelLabel.className = 'form-label';
+  targetLevelLabel.textContent = '追加する階層';
+  targetLevelLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
+
+  const targetLevelSelect = document.createElement('select');
+  targetLevelSelect.id = 'cascade-targetLevel';
+  targetLevelSelect.className = 'form-input';
+
+  // 階層選択肢を追加（各レベル + アイテム名）
   levels.forEach((levelConfig, index) => {
-    const formGroup = document.createElement('div');
-    formGroup.className = 'form-group';
-    formGroup.dataset.field = levelConfig.field;
+    const option = document.createElement('option');
+    option.value = index.toString();
+    option.textContent = levelConfig.label;
+    targetLevelSelect.appendChild(option);
+  });
+  // アイテム名オプション
+  const itemNameOption = document.createElement('option');
+  itemNameOption.value = '-1';
+  itemNameOption.textContent = cascadeConfig.itemNameLabel || 'アイテム名';
+  itemNameOption.selected = true;
+  targetLevelSelect.appendChild(itemNameOption);
 
-    // conditional: true のフィールドは初期非表示
-    if (levelConfig.conditional) {
-      formGroup.style.display = 'none';
-    }
-
-    // hideLabels設定に基づいてラベル表示を制御
-    if (!cascadeConfig.hideLabels) {
-      const label = document.createElement('label');
-      label.className = 'form-label';
-      label.htmlFor = `cascade-${levelConfig.field}`;
-      label.textContent = levelConfig.label;
-      label.innerHTML += ' <span style="color: #ff4757;">*</span>';
-      formGroup.appendChild(label);
-    }
-
-    const select = document.createElement('select');
-    select.id = `cascade-${levelConfig.field}`;
-    select.className = 'form-input';
-    select.disabled = index > 0; // 最初のレベル以外は無効
-
-    // 選択肢を設定（hideLabelsの場合は「--選択--」に統一）
-    const defaultOption = document.createElement('option');
-    defaultOption.value = '';
-    defaultOption.textContent = cascadeConfig.hideLabels ? '--選択--' : `${levelConfig.label}を選択`;
-    select.appendChild(defaultOption);
-
-    if (index === 0) {
-      // superCategoryOptionsがある場合は固定選択肢を使用
-      const options = cascadeConfig.superCategoryOptions || cascadeOptions[levelConfig.field];
-      (options || []).forEach(value => {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = value;
-        select.appendChild(option);
-      });
-    }
-
-    // 変更イベント
-    select.addEventListener('change', () => {
-      onCascadeSelectChange(levelConfig.field, select.value, index, levels);
-    });
-
-    formGroup.appendChild(select);
-    modalBody.appendChild(formGroup);
+  // 階層選択変更イベント
+  targetLevelSelect.addEventListener('change', () => {
+    addTargetLevelIndex = parseInt(targetLevelSelect.value, 10);
+    rebuildCascadeAddForm(levels, cascadeConfig);
   });
 
-  // アイテム名入力フィールド
-  const itemNameGroup = document.createElement('div');
-  itemNameGroup.className = 'form-group';
-  itemNameGroup.style.marginTop = '24px';
+  targetLevelGroup.appendChild(targetLevelLabel);
+  targetLevelGroup.appendChild(targetLevelSelect);
+  modalBody.appendChild(targetLevelGroup);
 
-  const itemNameLabel = document.createElement('label');
-  itemNameLabel.className = 'form-label';
-  itemNameLabel.htmlFor = 'cascade-itemName';
-  itemNameLabel.textContent = cascadeConfig.itemNameLabel || 'アイテム名';
-  itemNameLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
+  // ========== 動的フォームコンテナ ==========
+  const dynamicFormContainer = document.createElement('div');
+  dynamicFormContainer.id = 'cascade-dynamic-form';
+  modalBody.appendChild(dynamicFormContainer);
 
-  const itemNameInput = document.createElement('input');
-  itemNameInput.type = 'text';
-  itemNameInput.id = 'cascade-itemName';
-  itemNameInput.className = 'form-input';
-  itemNameInput.placeholder = '例: 半袖プリントTシャツ';
-  itemNameInput.addEventListener('input', updateCascadePreview);
-
-  itemNameGroup.appendChild(itemNameLabel);
-  itemNameGroup.appendChild(itemNameInput);
-  modalBody.appendChild(itemNameGroup);
-
-  // プレビュー表示
+  // ========== プレビュー表示 ==========
   const previewGroup = document.createElement('div');
   previewGroup.className = 'form-group';
   previewGroup.style.marginTop = '24px';
@@ -1765,13 +1729,205 @@ async function showCascadeAddModal() {
     color: #999;
     min-height: 20px;
   `;
-  previewBox.textContent = '親カテゴリを選択してください';
+  previewBox.textContent = '階層を選択してください';
 
   previewGroup.appendChild(previewLabel);
   previewGroup.appendChild(previewBox);
   modalBody.appendChild(previewGroup);
 
+  // 初期フォーム生成（アイテム名追加モード）
+  rebuildCascadeAddForm(levels, cascadeConfig);
+
   modal.classList.remove('hidden');
+}
+
+/**
+ * 追加する階層に応じてフォームを再構築
+ */
+function rebuildCascadeAddForm(levels, cascadeConfig) {
+  const container = document.getElementById('cascade-dynamic-form');
+  if (!container) return;
+
+  container.innerHTML = '';
+  cascadeSelections = {};
+
+  const targetIndex = addTargetLevelIndex;
+  const categories = masterCache[currentMasterConfig.collection] || [];
+
+  // カテゴリーラベル
+  const categoryLabel = document.createElement('label');
+  categoryLabel.className = 'form-label';
+  categoryLabel.textContent = 'カテゴリー';
+  categoryLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
+  categoryLabel.style.marginBottom = '8px';
+  categoryLabel.style.display = 'block';
+  container.appendChild(categoryLabel);
+
+  // ========== 親階層（選択した階層より上）はプルダウン ==========
+  const parentLevels = targetIndex === -1 ? levels : levels.slice(0, targetIndex);
+
+  parentLevels.forEach((levelConfig, index) => {
+    const formGroup = document.createElement('div');
+    formGroup.className = 'form-group';
+    formGroup.dataset.field = levelConfig.field;
+    formGroup.style.marginBottom = '8px';
+
+    // conditional フィールドは初期非表示
+    if (levelConfig.conditional && index > 0) {
+      formGroup.style.display = 'none';
+    }
+
+    const select = document.createElement('select');
+    select.id = `cascade-${levelConfig.field}`;
+    select.className = 'form-input';
+    select.disabled = index > 0;
+
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = '--選択--';
+    select.appendChild(defaultOption);
+
+    if (index === 0) {
+      const options = cascadeConfig.superCategoryOptions || cascadeOptions[levelConfig.field];
+      (options || []).forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+    }
+
+    select.addEventListener('change', () => {
+      onCascadeParentSelectChange(levelConfig.field, select.value, index, parentLevels, cascadeConfig);
+    });
+
+    formGroup.appendChild(select);
+    container.appendChild(formGroup);
+  });
+
+  // ========== 追加対象の階層は入力フィールド ==========
+  if (targetIndex >= 0 && targetIndex < levels.length) {
+    // 特定の階層を追加する場合
+    const targetLevel = levels[targetIndex];
+
+    const inputGroup = document.createElement('div');
+    inputGroup.className = 'form-group';
+    inputGroup.style.marginTop = '16px';
+
+    const inputLabel = document.createElement('label');
+    inputLabel.className = 'form-label';
+    inputLabel.htmlFor = 'cascade-newValue';
+    inputLabel.textContent = `新しい${targetLevel.label}`;
+    inputLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'cascade-newValue';
+    input.className = 'form-input';
+    input.placeholder = `例: 新しい${targetLevel.label}を入力`;
+    input.addEventListener('input', updateCascadePreview);
+
+    inputGroup.appendChild(inputLabel);
+    inputGroup.appendChild(input);
+    container.appendChild(inputGroup);
+  } else {
+    // アイテム名を追加する場合（従来の動作）
+    const itemNameGroup = document.createElement('div');
+    itemNameGroup.className = 'form-group';
+    itemNameGroup.style.marginTop = '16px';
+
+    const itemNameLabel = document.createElement('label');
+    itemNameLabel.className = 'form-label';
+    itemNameLabel.htmlFor = 'cascade-itemName';
+    itemNameLabel.textContent = cascadeConfig.itemNameLabel || 'アイテム名';
+    itemNameLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
+
+    const itemNameInput = document.createElement('input');
+    itemNameInput.type = 'text';
+    itemNameInput.id = 'cascade-itemName';
+    itemNameInput.className = 'form-input';
+    itemNameInput.placeholder = '例: 半袖プリントTシャツ';
+    itemNameInput.addEventListener('input', updateCascadePreview);
+
+    itemNameGroup.appendChild(itemNameLabel);
+    itemNameGroup.appendChild(itemNameInput);
+    container.appendChild(itemNameGroup);
+  }
+
+  // プレビュー更新
+  updateCascadePreview();
+}
+
+/**
+ * 親階層セレクト変更時の処理（追加モード専用）
+ */
+function onCascadeParentSelectChange(changedField, value, changedIndex, parentLevels, cascadeConfig) {
+  cascadeSelections[changedField] = value;
+
+  const categories = masterCache[currentMasterConfig.collection] || [];
+
+  // 後続のセレクトをリセット
+  for (let i = changedIndex + 1; i < parentLevels.length; i++) {
+    const field = parentLevels[i].field;
+    const select = document.getElementById(`cascade-${field}`);
+    if (select) {
+      select.innerHTML = '';
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = '--選択--';
+      select.appendChild(defaultOption);
+      select.disabled = true;
+      cascadeSelections[field] = '';
+
+      if (parentLevels[i].conditional) {
+        const formGroup = select.closest('.form-group');
+        if (formGroup) formGroup.style.display = 'none';
+      }
+    }
+  }
+
+  // 次のセレクトを有効化
+  if (value && changedIndex < parentLevels.length - 1) {
+    const nextLevel = parentLevels[changedIndex + 1];
+    const nextSelect = document.getElementById(`cascade-${nextLevel.field}`);
+    if (nextSelect) {
+      nextSelect.disabled = false;
+
+      const filteredCategories = categories.filter(cat => {
+        for (let i = 0; i <= changedIndex; i++) {
+          const field = parentLevels[i].field;
+          if (cat[field] !== cascadeSelections[field]) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      const uniqueValues = [...new Set(filteredCategories.map(c => c[nextLevel.field]).filter(Boolean))];
+      uniqueValues.sort((a, b) => a.localeCompare(b, 'ja'));
+
+      if (nextLevel.conditional) {
+        const formGroup = nextSelect.closest('.form-group');
+        if (formGroup) {
+          formGroup.style.display = uniqueValues.length > 0 ? '' : 'none';
+        }
+        if (uniqueValues.length === 0) {
+          nextSelect.disabled = true;
+          updateCascadePreview();
+          return;
+        }
+      }
+
+      uniqueValues.forEach(val => {
+        const option = document.createElement('option');
+        option.value = val;
+        option.textContent = val;
+        nextSelect.appendChild(option);
+      });
+    }
+  }
+
+  updateCascadePreview();
 }
 
 /**
@@ -1863,26 +2019,43 @@ function updateCascadePreview() {
 
   const cascadeConfig = currentMasterConfig.cascadeAdd;
   const levels = cascadeConfig.levels;
+  const targetIndex = addTargetLevelIndex;
 
-  // 選択されたレベルを結合
-  const selectedLevels = levels.map(l => cascadeSelections[l.field]).filter(Boolean);
+  // 親階層の選択値を取得
+  const parentLevels = targetIndex === -1 ? levels : levels.slice(0, targetIndex);
+  const selectedParents = parentLevels.map(l => cascadeSelections[l.field]).filter(Boolean);
+
+  // 新規入力値を取得
+  const newValue = document.getElementById('cascade-newValue')?.value.trim() || '';
   const itemName = document.getElementById('cascade-itemName')?.value.trim() || '';
 
-  if (selectedLevels.length === 0) {
+  if (selectedParents.length === 0 && targetIndex !== 0) {
     previewBox.textContent = '親カテゴリを選択してください';
     previewBox.style.color = '#999';
     return;
   }
 
-  let fullPath = selectedLevels.join(' > ');
-  if (itemName) {
-    fullPath += ` > ${itemName}`;
-    previewBox.style.color = '#333';
+  let fullPath = selectedParents.join(' > ');
+
+  if (targetIndex >= 0 && targetIndex < levels.length) {
+    // 特定の階層を追加する場合
+    if (newValue) {
+      fullPath = fullPath ? `${fullPath} > ${newValue}` : newValue;
+      previewBox.style.color = '#333';
+    } else {
+      previewBox.style.color = '#666';
+    }
   } else {
-    previewBox.style.color = '#666';
+    // アイテム名を追加する場合
+    if (itemName) {
+      fullPath += ` > ${itemName}`;
+      previewBox.style.color = '#333';
+    } else {
+      previewBox.style.color = '#666';
+    }
   }
 
-  previewBox.textContent = fullPath;
+  previewBox.textContent = fullPath || '階層を選択してください';
 }
 
 /**
@@ -1895,35 +2068,61 @@ window.addCascadeItem = async function() {
 
   const cascadeConfig = currentMasterConfig.cascadeAdd;
   const levels = cascadeConfig.levels;
+  const targetIndex = addTargetLevelIndex;
 
   // バリデーション
-  let hasError = false;
   const data = {};
 
-  // レベルの選択値をチェック
-  for (const levelConfig of levels) {
+  // 親階層（追加対象より上）の選択値をチェック
+  const parentLevels = targetIndex === -1 ? levels : levels.slice(0, targetIndex);
+
+  for (let i = 0; i < parentLevels.length; i++) {
+    const levelConfig = parentLevels[i];
     const value = cascadeSelections[levelConfig.field];
+
+    // conditionalフィールドで選択肢がない場合はスキップ可能
+    if (levelConfig.conditional) {
+      const select = document.getElementById(`cascade-${levelConfig.field}`);
+      if (select && select.options.length <= 1) {
+        continue; // 選択肢がない場合はスキップ
+      }
+    }
+
     if (!value) {
       showError(errorMessage, `${levelConfig.label}を選択してください`);
-      hasError = true;
-      break;
+      return;
     }
     data[levelConfig.field] = value;
   }
 
-  if (hasError) return;
+  // 追加対象の値をチェック
+  if (targetIndex >= 0 && targetIndex < levels.length) {
+    // 特定の階層を追加する場合
+    const targetLevel = levels[targetIndex];
+    const newValue = document.getElementById('cascade-newValue')?.value.trim();
+    if (!newValue) {
+      showError(errorMessage, `${targetLevel.label}を入力してください`);
+      return;
+    }
+    data[targetLevel.field] = newValue;
 
-  // アイテム名をチェック
-  const itemName = document.getElementById('cascade-itemName')?.value.trim();
-  if (!itemName) {
-    showError(errorMessage, 'アイテム名を入力してください');
-    return;
+    // fullPath生成（親階層 + 新規値）
+    const parentValues = parentLevels.map(l => data[l.field]).filter(Boolean);
+    data.fullPath = [...parentValues, newValue].join(' > ');
+
+  } else {
+    // アイテム名を追加する場合（従来の動作）
+    const itemName = document.getElementById('cascade-itemName')?.value.trim();
+    if (!itemName) {
+      showError(errorMessage, 'アイテム名を入力してください');
+      return;
+    }
+    data.itemName = itemName;
+
+    // fullPath生成
+    const levelValues = parentLevels.map(l => data[l.field]).filter(Boolean);
+    data.fullPath = [...levelValues, itemName].join(' > ');
   }
-  data.itemName = itemName;
-
-  // fullPath生成
-  const levelValues = levels.map(l => data[l.field]);
-  data.fullPath = [...levelValues, itemName].join(' > ');
 
   // 重複チェック
   const categories = masterCache[currentMasterConfig.collection] || [];
