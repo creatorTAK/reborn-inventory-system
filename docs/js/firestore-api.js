@@ -1099,9 +1099,9 @@ async function getMasterCount(collectionName) {
     if (window.firestoreModular && window.firestoreModular.getCountFromServer) {
       const { getFirestore, collection, getCountFromServer } = window.firestoreModular;
 
-      // Firebase appを取得（compat版と共有）
-      const app = firebase.app();
-      const db = getFirestore(app);
+      // デフォルトのFirebaseアプリからFirestoreを取得
+      // compat版と同じアプリインスタンスを共有
+      const db = getFirestore();
       const coll = collection(db, collectionName);
 
       // サーバー側でカウント（高速）
