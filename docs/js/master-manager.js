@@ -1507,16 +1507,23 @@ function updateStats() {
   const totalItems = masterCache[collection] ? masterCache[collection].length : 0;
   const initialDisplay = currentMasterConfig?.initialDisplay;
 
+  // 検索クエリがあるかどうかをチェック
+  const searchInput = document.getElementById('searchInput');
+  const hasSearchQuery = searchInput && searchInput.value.trim().length > 0;
+
   if (statsText) {
     const resultCount = filteredMasterData.length;
 
-    // 検索結果がある場合は件数のみ表示（総件数は非表示）
-    if (resultCount > 0) {
+    if (hasSearchQuery && resultCount > 0) {
+      // 検索結果がある場合のみ「検索結果:」を表示
       statsText.textContent = `検索結果: ${resultCount.toLocaleString()}件`;
-      // 検索結果表示時は総件数を非表示
+      if (totalCountEl) totalCountEl.classList.add('hidden');
+    } else if (resultCount > 0) {
+      // 検索なしでデータがある場合は件数のみ表示
+      statsText.textContent = `${resultCount.toLocaleString()}件`;
       if (totalCountEl) totalCountEl.classList.add('hidden');
     } else {
-      // 検索専用モード（initialDisplay: 0）の場合は空欄
+      // データなしの場合
       if (initialDisplay === 0) {
         statsText.textContent = '';
         // 総件数を表示（showTotalCountがtrueの場合のみ）
