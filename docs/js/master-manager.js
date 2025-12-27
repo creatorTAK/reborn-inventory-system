@@ -422,10 +422,10 @@ function showPlatformTabs() {
       -webkit-overflow-scrolling: touch;
     `;
 
-    // stats-infoの上に挿入
-    const statsInfo = document.querySelector('.stats-info');
-    if (statsInfo && statsInfo.parentNode) {
-      statsInfo.parentNode.insertBefore(container, statsInfo);
+    // action-barの上に挿入
+    const actionBar = document.querySelector('.action-bar');
+    if (actionBar && actionBar.parentNode) {
+      actionBar.parentNode.insertBefore(container, actionBar);
     }
   }
 
