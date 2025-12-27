@@ -1097,15 +1097,26 @@ async function getMasterCount(collectionName) {
   try {
     const db = await initializeFirestore();
 
-    // compat版 count() クエリ
-    const countSnapshot = await db.collection(collectionName).count().get();
-    const count = countSnapshot.data().count;
+    // Firebase SDK 10.x compat版では count() が AggregateQuery として動作
+    // まずcount()メソッドの存在確認
+    const collectionRef = db.collection(collectionName);
 
-    console.log(`📊 [Master API] ${collectionName}件数取得: ${count.toLocaleString()}件`);
-    return count;
+    if (typeof collectionRef.count === 'function') {
+      // count()メソッドが利用可能な場合
+      const countSnapshot = await collectionRef.count().get();
+      const count = countSnapshot.data().count;
+      console.log(`📊 [Master API] ${collectionName}件数取得(count): ${count.toLocaleString()}件`);
+      return count;
+    } else {
+      // count()メソッドが利用不可の場合、メタデータから取得を試みる
+      // フォールバック: 件数不明として-1を返す
+      console.warn(`⚠️ [Master API] count()メソッド未対応: ${collectionName}`);
+      return -1;
+    }
 
   } catch (error) {
     console.error(`❌ [Master API] ${collectionName}件数取得エラー:`, error);
+    console.error(`エラー詳細:`, error.message || error);
     // エラー時は-1を返す（表示しない）
     return -1;
   }

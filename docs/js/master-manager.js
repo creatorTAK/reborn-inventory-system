@@ -391,6 +391,15 @@ async function fetchAndDisplayTotalCount() {
 
     // Firestoreから件数取得（数十ms）
     const count = await window.getMasterCount(currentMasterConfig.collection);
+
+    if (count === -1) {
+      // APIがエラーを返した場合
+      console.warn('⚠️ [Master Manager] 件数取得失敗（API側エラー）');
+      masterTotalCount = -2; // エラー状態
+      updateEmptyStateCount();
+      return;
+    }
+
     masterTotalCount = count;
 
     // 表示更新
@@ -399,7 +408,7 @@ async function fetchAndDisplayTotalCount() {
 
   } catch (error) {
     console.error('❌ [Master Manager] 件数取得エラー:', error);
-    masterTotalCount = -1;
+    masterTotalCount = -2; // エラー状態
     updateEmptyStateCount();
   }
 }
@@ -412,9 +421,15 @@ function updateEmptyStateCount() {
   if (!countDisplay) return;
 
   if (masterTotalCount === -1) {
+    // 読み込み中
     countDisplay.textContent = '読み込み中...';
+  } else if (masterTotalCount === -2) {
+    // エラーまたは取得不可 - 非表示
+    countDisplay.textContent = '';
+    countDisplay.classList.add('hidden');
   } else if (masterTotalCount > 0) {
     countDisplay.textContent = `登録数: ${masterTotalCount.toLocaleString()}件`;
+    countDisplay.classList.remove('hidden');
   } else {
     countDisplay.textContent = '';
   }
