@@ -1096,12 +1096,10 @@ async function getMasterData(collectionName, options = {}) {
 async function getMasterCount(collectionName) {
   try {
     // Modular SDK（window.firestoreModular）が利用可能か確認
-    if (window.firestoreModular && window.firestoreModular.getCountFromServer) {
-      const { getFirestore, collection, getCountFromServer } = window.firestoreModular;
+    if (window.firestoreModular && window.firestoreModular.db && window.firestoreModular.getCountFromServer) {
+      const { db, collection, getCountFromServer } = window.firestoreModular;
 
-      // デフォルトのFirebaseアプリからFirestoreを取得
-      // compat版と同じアプリインスタンスを共有
-      const db = getFirestore();
+      // 既に初期化済みのFirestoreインスタンスを使用
       const coll = collection(db, collectionName);
 
       // サーバー側でカウント（高速）
