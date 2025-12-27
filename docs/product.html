@@ -1442,17 +1442,25 @@ AI生成
 
       // 有効なプラットフォームのみ表示
       if (platformSettings.platforms && Array.isArray(platformSettings.platforms)) {
-        const enabledPlatforms = platformSettings.platforms
-          .filter(p => p.enabled)
-          .map(p => p.id);
+        const enabledPlatforms = platformSettings.platforms.filter(p => p.enabled);
 
-        console.log('[Platform] 有効なプラットフォーム:', enabledPlatforms);
+        console.log('[Platform] 有効なプラットフォーム:', enabledPlatforms.map(p => p.id));
 
-        if (enabledPlatforms.length > 0) {
-          hidePlatformTabsExcept(enabledPlatforms);
+        // カスタムプラットフォームのタブを動的に追加
+        enabledPlatforms.forEach(p => {
+          if (!window.platformConfig[p.id]) {
+            // 新しいカスタムプラットフォーム → タブとconfigを追加
+            addCustomPlatformTab(p);
+          }
+        });
+
+        const enabledIds = enabledPlatforms.map(p => p.id);
+
+        if (enabledIds.length > 0) {
+          hidePlatformTabsExcept(enabledIds);
 
           // 最初の有効なプラットフォームを選択
-          selectPlatform(enabledPlatforms[0]);
+          selectPlatform(enabledIds[0]);
         } else {
           // 何も有効でない場合はメルカリをデフォルト表示
           hidePlatformTabsExcept(['mercari']);
@@ -1467,6 +1475,42 @@ AI生成
       // エラー時はメルカリのみ表示
       hidePlatformTabsExcept(['mercari']);
     }
+  }
+
+  // カスタムプラットフォームのタブを動的に追加
+  function addCustomPlatformTab(platform) {
+    const tabsContainer = document.getElementById('platformTabs');
+    if (!tabsContainer) return;
+
+    // 既にタブが存在する場合はスキップ
+    if (document.querySelector(`.platform-tab[data-platform="${platform.id}"]`)) {
+      return;
+    }
+
+    // タブボタンを作成
+    const tabButton = document.createElement('button');
+    tabButton.className = 'platform-tab';
+    tabButton.dataset.platform = platform.id;
+    tabButton.onclick = function() { selectPlatform(platform.id); };
+
+    const iconSrc = platform.icon || '/images/platform/default.png';
+    tabButton.innerHTML = `
+      <img src="${iconSrc}" alt="${platform.name}" class="platform-logo" style="width:18px;height:18px;" onerror="this.src='/images/platform/default.png'">
+      <span>${platform.name}</span>
+    `;
+
+    tabsContainer.appendChild(tabButton);
+
+    // platformConfigに追加
+    window.platformConfig[platform.id] = {
+      name: platform.name,
+      enabled: true,
+      color: '#40B4E5',
+      features: ['custom'],
+      isCustom: true
+    };
+
+    console.log('[Platform] カスタムプラットフォームタブ追加:', platform.id);
   }
 
   // 指定されたプラットフォーム以外を非表示
@@ -1522,14 +1566,25 @@ AI生成
     allContents.forEach(content => {
       content.style.display = 'none';
     });
-    const targetContent = document.getElementById('platform-content-' + platformId);
+
+    // カスタムプラットフォームの場合はメルカリのコンテンツを使用
+    let contentId = 'platform-content-' + platformId;
+    let targetContent = document.getElementById(contentId);
+
+    if (!targetContent && config.isCustom) {
+      // カスタムプラットフォーム → メルカリのコンテンツを使用
+      contentId = 'platform-content-mercari';
+      targetContent = document.getElementById(contentId);
+      console.log('[Platform] カスタムプラットフォーム - メルカリフォームを使用:', platformId);
+    }
+
     if (targetContent) {
       targetContent.style.display = 'block';
     }
 
     // グローバル変数を更新
     window.currentPlatform = platformId;
-    console.log('[Platform] 切り替え:', config.name, config.enabled ? '(実装済)' : '(準備中)');
+    console.log('[Platform] 切り替え:', config.name, config.isCustom ? '(カスタム)' : (config.enabled ? '(実装済)' : '(準備中)'));
   }
 
   // プラットフォーム変更時のコールバック（将来実装用）
