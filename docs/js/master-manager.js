@@ -488,7 +488,7 @@ function showPlatformTabs() {
   }
 
   // デフォルトプラットフォームが有効リストにない場合、最初の有効なものを使用
-  if (!enabledPlatformIds.includes(currentPlatform)) {
+  if (!platforms.some(p => p.id === currentPlatform)) {
     currentPlatform = platforms[0].id;
   }
 
