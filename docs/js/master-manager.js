@@ -415,6 +415,8 @@ function showPlatformTabs() {
 
   // プラットフォーム設定を読み込み（商品登録と同じロジック）
   let enabledPlatformIds = ['mercari']; // デフォルト
+  let customPlatformsConfig = []; // カスタムプラットフォーム定義
+  
   try {
     const config = JSON.parse(localStorage.getItem('config') || '{}');
     const platformSettings = config.プラットフォーム設定;
@@ -428,13 +430,33 @@ function showPlatformTabs() {
         enabledPlatformIds = enabled;
       }
     }
+    
+    // カスタムプラットフォーム定義を取得
+    if (platformSettings?.customPlatforms && Array.isArray(platformSettings.customPlatforms)) {
+      customPlatformsConfig = platformSettings.customPlatforms;
+    }
+    
     console.log(`🔧 [Master Manager] 有効なプラットフォーム: ${enabledPlatformIds.join(', ')}`);
+    console.log(`🔧 [Master Manager] カスタムプラットフォーム: ${customPlatformsConfig.map(p => p.id).join(', ') || 'なし'}`);
   } catch (e) {
     console.error('❌ [Master Manager] プラットフォーム設定読み込みエラー:', e);
   }
 
-  // 設定から有効なプラットフォームのみフィルタリング
-  const allPlatforms = currentMasterConfig.platforms || [];
+  // デフォルトプラットフォーム + カスタムプラットフォームをマージ
+  const allPlatforms = [...(currentMasterConfig.platforms || [])];
+  
+  // カスタムプラットフォームを追加（重複除外）
+  customPlatformsConfig.forEach(cp => {
+    if (!allPlatforms.some(p => p.id === cp.id)) {
+      allPlatforms.push({
+        id: cp.id,
+        name: cp.name,
+        icon: cp.icon || '/images/platform/default.png'
+      });
+    }
+  });
+  
+  // 有効なプラットフォームのみフィルタリング
   const platforms = allPlatforms.filter(p => enabledPlatformIds.includes(p.id));
 
   // 有効なプラットフォームが1つ以下なら非表示
@@ -480,6 +502,7 @@ function showPlatformTabs() {
   // タブを生成（商品登録CSSと完全一致）
   container.innerHTML = platforms.map(p => {
     const isActive = p.id === currentPlatform;
+    const iconSrc = p.icon || '/images/platform/default.png';
     
     return `
     <button class="platform-tab ${isActive ? 'active' : ''}"
@@ -502,7 +525,7 @@ function showPlatformTabs() {
               white-space: nowrap;
               margin-bottom: -2px;
             ">
-      <img src="${p.icon}" alt="${p.name}" style="width: 18px; height: 18px;" onerror="this.style.display='none'">
+      <img src="${iconSrc}" alt="${p.name}" style="width: 18px; height: 18px;" onerror="this.innerHTML='🌐';this.style.fontSize='16px'">
       <span>${p.name}</span>
     </button>
   `;
