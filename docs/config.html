@@ -3974,6 +3974,23 @@
                 <h4 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 12px 0;">➕ 新規プラットフォーム追加</h4>
 
                 <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <!-- アイコン画像アップロード -->
+                  <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                    <div id="newPlatformIconPreview" style="
+                      width: 64px; height: 64px; border-radius: 12px; border: 2px dashed #d1d5db;
+                      display: flex; align-items: center; justify-content: center; overflow: hidden;
+                      background: #f9fafb; cursor: pointer;
+                    " onclick="document.getElementById('newPlatformIconInput').click()">
+                      <span style="color: #9ca3af; font-size: 24px;">📷</span>
+                    </div>
+                    <input type="file" id="newPlatformIconInput" accept="image/*" style="display: none;" onchange="previewNewPlatformIcon(event)">
+                    <button type="button" onclick="document.getElementById('newPlatformIconInput').click()" style="
+                      padding: 6px 12px; font-size: 12px; background: #f3f4f6; color: #374151;
+                      border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer;
+                    ">アイコン画像を選択</button>
+                    <div id="newPlatformIconStatus" style="font-size: 11px; color: #6b7280;"></div>
+                  </div>
+
                   <div>
                     <label style="font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px;">プラットフォームID（英数字・ハイフン）*</label>
                     <input type="text" id="newPlatformId" placeholder="例: shopify" style="
@@ -8273,6 +8290,9 @@ ${prompt || '（未設定）'}
       savePlatformCheckStates();
     }
 
+    // 新規プラットフォーム追加用のアイコンファイル
+    let pendingNewPlatformIconFile = null;
+
     /**
      * 新規プラットフォーム追加フォームを表示
      */
@@ -8283,6 +8303,20 @@ ${prompt || '（未設定）'}
         document.getElementById('newPlatformId').value = '';
         document.getElementById('newPlatformName').value = '';
         document.getElementById('newPlatformDesc').value = '';
+        // アイコンプレビューをリセット
+        const preview = document.getElementById('newPlatformIconPreview');
+        if (preview) {
+          preview.innerHTML = '<span style="color: #9ca3af; font-size: 24px;">📷</span>';
+        }
+        const status = document.getElementById('newPlatformIconStatus');
+        if (status) {
+          status.textContent = '';
+        }
+        const fileInput = document.getElementById('newPlatformIconInput');
+        if (fileInput) {
+          fileInput.value = '';
+        }
+        pendingNewPlatformIconFile = null;
         document.getElementById('newPlatformId').focus();
       }
     }
@@ -8295,12 +8329,39 @@ ${prompt || '（未設定）'}
       if (form) {
         form.style.display = 'none';
       }
+      pendingNewPlatformIconFile = null;
+    }
+
+    /**
+     * 新規プラットフォームのアイコン画像をプレビュー
+     */
+    function previewNewPlatformIcon(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // ファイルサイズチェック（2MB以下）
+      if (file.size > 2 * 1024 * 1024) {
+        alert('画像サイズは2MB以下にしてください。');
+        return;
+      }
+
+      pendingNewPlatformIconFile = file;
+
+      // プレビュー表示
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const preview = document.getElementById('newPlatformIconPreview');
+        preview.innerHTML = `<img src="${e.target.result}" style="width: 100%; height: 100%; object-fit: contain;">`;
+        document.getElementById('newPlatformIconStatus').textContent = '✓ 画像を選択しました';
+        document.getElementById('newPlatformIconStatus').style.color = '#10b981';
+      };
+      reader.readAsDataURL(file);
     }
 
     /**
      * カスタムプラットフォームを追加
      */
-    function addCustomPlatform() {
+    async function addCustomPlatform() {
       const id = document.getElementById('newPlatformId').value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
       const name = document.getElementById('newPlatformName').value.trim();
       const description = document.getElementById('newPlatformDesc').value.trim() || 'カスタム';
@@ -8317,11 +8378,32 @@ ${prompt || '（未設定）'}
         return;
       }
 
+      // アイコンをアップロード（選択されていれば）
+      let iconUrl = '/images/platform/default.png';
+      if (pendingNewPlatformIconFile) {
+        const statusEl = document.getElementById('newPlatformIconStatus');
+        statusEl.textContent = 'アップロード中...';
+        statusEl.style.color = '#6b7280';
+
+        try {
+          const uploadedUrl = await uploadPlatformIcon(pendingNewPlatformIconFile, id);
+          if (uploadedUrl) {
+            iconUrl = uploadedUrl;
+            statusEl.textContent = '✓ アップロード完了';
+            statusEl.style.color = '#10b981';
+          }
+        } catch (error) {
+          console.error('アイコンアップロードエラー:', error);
+          statusEl.textContent = 'アップロード失敗（デフォルトアイコンを使用）';
+          statusEl.style.color = '#ef4444';
+        }
+      }
+
       // チェック状態を保存
       savePlatformCheckStates();
 
       // 追加
-      customPlatforms.push({ id, name, description, icon: '/images/platform/default.png' });
+      customPlatforms.push({ id, name, description, icon: iconUrl });
       platformOrder.push(id);
 
       // 再レンダリング
@@ -8337,7 +8419,7 @@ ${prompt || '（未設定）'}
 
       hideAddPlatformForm();
 
-      console.log('✅ カスタムプラットフォーム追加:', { id, name, description });
+      console.log('✅ カスタムプラットフォーム追加:', { id, name, description, icon: iconUrl });
     }
 
     /**
@@ -12716,6 +12798,21 @@ ${prompt || '（未設定）'}
       alert('エラー: ' + error.message);
     }
   }
+
+  // プラットフォーム設定関連の関数をグローバルに登録
+  window.openPlatformEditModal = openPlatformEditModal;
+  window.closePlatformEditModal = closePlatformEditModal;
+  window.savePlatformEdit = savePlatformEdit;
+  window.deletePlatformFromEdit = deletePlatformFromEdit;
+  window.previewPlatformIcon = previewPlatformIcon;
+  window.showAddPlatformForm = showAddPlatformForm;
+  window.hideAddPlatformForm = hideAddPlatformForm;
+  window.addCustomPlatform = addCustomPlatform;
+  window.removeCustomPlatform = removeCustomPlatform;
+  window.movePlatformUp = movePlatformUp;
+  window.movePlatformDown = movePlatformDown;
+  window.previewNewPlatformIcon = previewNewPlatformIcon;
+  window.renderAllPlatforms = renderAllPlatforms;
 
 </script>
 
