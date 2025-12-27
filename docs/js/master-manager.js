@@ -1303,6 +1303,12 @@ window.showAddModal = async function() {
     return;
   }
 
+  // カスケード追加モードの場合は専用UIを表示
+  if (currentMasterConfig.cascadeAdd && currentMasterConfig.cascadeAdd.enabled) {
+    showCascadeAddModal();
+    return;
+  }
+
   // fieldsが未定義の場合はエラー
   if (!currentMasterConfig.fields || currentMasterConfig.fields.length === 0) {
     console.error('[Master Manager] マスタ設定にfieldsが定義されていません:', currentMasterConfig);
@@ -1468,6 +1474,10 @@ window.hideAddModal = function() {
   // 編集モードをリセット
   masterToEdit = null;
 
+  // カスケードモードをリセット
+  cascadeSelections = {};
+  cascadeOptions = {};
+
   // モーダルを追加モードに戻す
   const modalTitle = document.getElementById('addModalTitle');
   const submitBtn = document.getElementById('addSubmitBtn');
@@ -1558,6 +1568,376 @@ window.addMaster = async function() {
     console.error('❌ [Master Manager] 追加エラー:', error);
     const detailedError = `エラー: ${error.message || '追加に失敗しました'}`;
     showError(errorMessage, detailedError);
+  } finally {
+    showLoading(false);
+  }
+};
+
+// ============================================
+// カスケード追加UI（カテゴリ用）
+// ============================================
+
+// カスケード選択の状態管理
+let cascadeSelections = {};
+let cascadeOptions = {};
+
+/**
+ * カスケード追加モーダル表示（カテゴリ用）
+ */
+async function showCascadeAddModal() {
+  const modal = document.getElementById('addModal');
+  const modalBody = document.getElementById('addModalBody');
+  const modalTitle = document.getElementById('addModalTitle');
+  const errorMessage = document.getElementById('addErrorMessage');
+  const submitBtn = document.getElementById('addSubmitBtn');
+
+  if (!modal || !modalBody) {
+    console.error('[Master Manager] モーダル要素が見つかりません');
+    return;
+  }
+
+  // 状態リセット
+  cascadeSelections = {};
+  cascadeOptions = {};
+
+  // モーダルタイトル
+  if (modalTitle) {
+    modalTitle.textContent = 'アイテム名を追加';
+  }
+
+  // 送信ボタン
+  if (submitBtn) {
+    submitBtn.textContent = '追加';
+    submitBtn.setAttribute('onclick', 'addCascadeItem()');
+  }
+
+  // エラーメッセージクリア
+  if (errorMessage) {
+    errorMessage.textContent = '';
+    errorMessage.classList.add('hidden');
+  }
+
+  // カスケード設定を取得
+  const cascadeConfig = currentMasterConfig.cascadeAdd;
+  const levels = cascadeConfig.levels;
+
+  // キャッシュまたはFirestoreからカテゴリデータを取得
+  let categories = masterCache[currentMasterConfig.collection];
+  if (!categories || categories.length === 0) {
+    showLoading(true);
+    try {
+      if (window.masterCacheManager) {
+        categories = await window.masterCacheManager.getCategories();
+      } else {
+        categories = await window.getMasterData(currentMasterConfig.collection);
+      }
+      masterCache[currentMasterConfig.collection] = categories || [];
+    } catch (error) {
+      console.error('❌ [Master Manager] カテゴリ取得エラー:', error);
+      categories = [];
+    }
+    showLoading(false);
+  }
+
+  // 各レベルのユニーク値を抽出
+  levels.forEach((levelConfig, index) => {
+    const field = levelConfig.field;
+    const uniqueValues = [...new Set(categories.map(c => c[field]).filter(Boolean))];
+    uniqueValues.sort((a, b) => a.localeCompare(b, 'ja'));
+    cascadeOptions[field] = uniqueValues;
+  });
+
+  // フォーム生成
+  modalBody.innerHTML = '';
+
+  // 説明文
+  const description = document.createElement('div');
+  description.className = 'cascade-description';
+  description.innerHTML = `
+    <p style="color: #666; font-size: 14px; margin-bottom: 16px;">
+      親カテゴリを選択して、新しいアイテム名を追加します。
+    </p>
+  `;
+  modalBody.appendChild(description);
+
+  // 各レベルのセレクトボックス
+  levels.forEach((levelConfig, index) => {
+    const formGroup = document.createElement('div');
+    formGroup.className = 'form-group';
+
+    const label = document.createElement('label');
+    label.className = 'form-label';
+    label.htmlFor = `cascade-${levelConfig.field}`;
+    label.textContent = levelConfig.label;
+    label.innerHTML += ' <span style="color: #ff4757;">*</span>';
+
+    const select = document.createElement('select');
+    select.id = `cascade-${levelConfig.field}`;
+    select.className = 'form-input';
+    select.disabled = index > 0; // 最初のレベル以外は無効
+
+    // 選択肢を設定
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = `${levelConfig.label}を選択`;
+    select.appendChild(defaultOption);
+
+    if (index === 0) {
+      // 最初のレベルは全ての選択肢を表示
+      cascadeOptions[levelConfig.field].forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+    }
+
+    // 変更イベント
+    select.addEventListener('change', () => {
+      onCascadeSelectChange(levelConfig.field, select.value, index, levels);
+    });
+
+    formGroup.appendChild(label);
+    formGroup.appendChild(select);
+    modalBody.appendChild(formGroup);
+  });
+
+  // アイテム名入力フィールド
+  const itemNameGroup = document.createElement('div');
+  itemNameGroup.className = 'form-group';
+  itemNameGroup.style.marginTop = '24px';
+
+  const itemNameLabel = document.createElement('label');
+  itemNameLabel.className = 'form-label';
+  itemNameLabel.htmlFor = 'cascade-itemName';
+  itemNameLabel.textContent = cascadeConfig.itemNameLabel || 'アイテム名';
+  itemNameLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
+
+  const itemNameInput = document.createElement('input');
+  itemNameInput.type = 'text';
+  itemNameInput.id = 'cascade-itemName';
+  itemNameInput.className = 'form-input';
+  itemNameInput.placeholder = '例: 半袖プリントTシャツ';
+  itemNameInput.addEventListener('input', updateCascadePreview);
+
+  itemNameGroup.appendChild(itemNameLabel);
+  itemNameGroup.appendChild(itemNameInput);
+  modalBody.appendChild(itemNameGroup);
+
+  // プレビュー表示
+  const previewGroup = document.createElement('div');
+  previewGroup.className = 'form-group';
+  previewGroup.style.marginTop = '24px';
+
+  const previewLabel = document.createElement('label');
+  previewLabel.className = 'form-label';
+  previewLabel.textContent = 'プレビュー';
+  previewLabel.style.color = '#666';
+
+  const previewBox = document.createElement('div');
+  previewBox.id = 'cascade-preview';
+  previewBox.style.cssText = `
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #999;
+    min-height: 20px;
+  `;
+  previewBox.textContent = '親カテゴリを選択してください';
+
+  previewGroup.appendChild(previewLabel);
+  previewGroup.appendChild(previewBox);
+  modalBody.appendChild(previewGroup);
+
+  modal.classList.remove('hidden');
+}
+
+/**
+ * カスケードセレクト変更時の処理
+ */
+function onCascadeSelectChange(changedField, value, changedIndex, levels) {
+  // 選択値を保存
+  cascadeSelections[changedField] = value;
+
+  // 後続のレベルをリセット
+  for (let i = changedIndex + 1; i < levels.length; i++) {
+    const field = levels[i].field;
+    const select = document.getElementById(`cascade-${field}`);
+    if (select) {
+      select.innerHTML = '';
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = `${levels[i].label}を選択`;
+      select.appendChild(defaultOption);
+      select.disabled = true;
+      cascadeSelections[field] = '';
+    }
+  }
+
+  // 次のレベルの選択肢を更新
+  if (value && changedIndex < levels.length - 1) {
+    const nextLevel = levels[changedIndex + 1];
+    const nextSelect = document.getElementById(`cascade-${nextLevel.field}`);
+    if (nextSelect) {
+      nextSelect.disabled = false;
+
+      // フィルタリングした選択肢を取得
+      const categories = masterCache[currentMasterConfig.collection] || [];
+      const filteredCategories = categories.filter(cat => {
+        // 全ての上位レベルが一致するか確認
+        for (let i = 0; i <= changedIndex; i++) {
+          const field = levels[i].field;
+          if (cat[field] !== cascadeSelections[field]) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      // ユニークな値を取得
+      const uniqueValues = [...new Set(filteredCategories.map(c => c[nextLevel.field]).filter(Boolean))];
+      uniqueValues.sort((a, b) => a.localeCompare(b, 'ja'));
+
+      // 選択肢を追加
+      uniqueValues.forEach(val => {
+        const option = document.createElement('option');
+        option.value = val;
+        option.textContent = val;
+        nextSelect.appendChild(option);
+      });
+    }
+  }
+
+  // プレビュー更新
+  updateCascadePreview();
+}
+
+/**
+ * カスケードプレビュー更新
+ */
+function updateCascadePreview() {
+  const previewBox = document.getElementById('cascade-preview');
+  if (!previewBox) return;
+
+  const cascadeConfig = currentMasterConfig.cascadeAdd;
+  const levels = cascadeConfig.levels;
+
+  // 選択されたレベルを結合
+  const selectedLevels = levels.map(l => cascadeSelections[l.field]).filter(Boolean);
+  const itemName = document.getElementById('cascade-itemName')?.value.trim() || '';
+
+  if (selectedLevels.length === 0) {
+    previewBox.textContent = '親カテゴリを選択してください';
+    previewBox.style.color = '#999';
+    return;
+  }
+
+  let fullPath = selectedLevels.join(' > ');
+  if (itemName) {
+    fullPath += ` > ${itemName}`;
+    previewBox.style.color = '#333';
+  } else {
+    previewBox.style.color = '#666';
+  }
+
+  previewBox.textContent = fullPath;
+}
+
+/**
+ * カスケードアイテム追加実行
+ */
+window.addCascadeItem = async function() {
+  const errorMessage = document.getElementById('addErrorMessage');
+
+  if (!errorMessage) return;
+
+  const cascadeConfig = currentMasterConfig.cascadeAdd;
+  const levels = cascadeConfig.levels;
+
+  // バリデーション
+  let hasError = false;
+  const data = {};
+
+  // レベルの選択値をチェック
+  for (const levelConfig of levels) {
+    const value = cascadeSelections[levelConfig.field];
+    if (!value) {
+      showError(errorMessage, `${levelConfig.label}を選択してください`);
+      hasError = true;
+      break;
+    }
+    data[levelConfig.field] = value;
+  }
+
+  if (hasError) return;
+
+  // アイテム名をチェック
+  const itemName = document.getElementById('cascade-itemName')?.value.trim();
+  if (!itemName) {
+    showError(errorMessage, 'アイテム名を入力してください');
+    return;
+  }
+  data.itemName = itemName;
+
+  // fullPath生成
+  const levelValues = levels.map(l => data[l.field]);
+  data.fullPath = [...levelValues, itemName].join(' > ');
+
+  // 重複チェック
+  const categories = masterCache[currentMasterConfig.collection] || [];
+  const duplicate = categories.find(cat => cat.fullPath === data.fullPath);
+  if (duplicate) {
+    showError(errorMessage, 'このカテゴリは既に存在します');
+    return;
+  }
+
+  // 将来のマルチプラットフォーム用
+  data.platforms = ['mercari'];  // デフォルトでメルカリ
+
+  try {
+    showLoading(true);
+
+    // Firestore APIで追加
+    const result = await window.createMaster(currentMasterConfig.collection, data, true);
+
+    if (result.success) {
+      console.log(`✅ [Master Manager] カスケード追加成功: ${data.fullPath}`);
+
+      // キャッシュクリア
+      delete masterCache[currentMasterConfig.collection];
+
+      // 新しいアイテムをローカルデータに追加
+      const newItem = {
+        id: result.id,
+        ...data,
+        usageCount: 0
+      };
+      allMasterData.push(newItem);
+      filteredMasterData.push(newItem);
+
+      // 件数更新
+      if (masterTotalCount > 0) {
+        masterTotalCount++;
+        updateEmptyStateCount();
+      }
+
+      // ツリービューのキャッシュをクリア（展開状態はリセット）
+      expandedTreeNodes.clear();
+
+      // 画面更新
+      renderMasterList();
+      updateStats();
+
+      hideAddModal();
+      alert(`アイテムを追加しました:\n${data.fullPath}`);
+    } else {
+      showError(errorMessage, result.error || '追加に失敗しました');
+    }
+
+  } catch (error) {
+    console.error('❌ [Master Manager] カスケード追加エラー:', error);
+    showError(errorMessage, `エラー: ${error.message || '追加に失敗しました'}`);
   } finally {
     showLoading(false);
   }
