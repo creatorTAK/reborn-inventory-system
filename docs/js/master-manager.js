@@ -1664,12 +1664,22 @@ async function showCascadeAddModal() {
   levels.forEach((levelConfig, index) => {
     const formGroup = document.createElement('div');
     formGroup.className = 'form-group';
+    formGroup.dataset.field = levelConfig.field;
 
-    const label = document.createElement('label');
-    label.className = 'form-label';
-    label.htmlFor = `cascade-${levelConfig.field}`;
-    label.textContent = levelConfig.label;
-    label.innerHTML += ' <span style="color: #ff4757;">*</span>';
+    // conditional: true のフィールドは初期非表示
+    if (levelConfig.conditional) {
+      formGroup.style.display = 'none';
+    }
+
+    // hideLabels設定に基づいてラベル表示を制御
+    if (!cascadeConfig.hideLabels) {
+      const label = document.createElement('label');
+      label.className = 'form-label';
+      label.htmlFor = `cascade-${levelConfig.field}`;
+      label.textContent = levelConfig.label;
+      label.innerHTML += ' <span style="color: #ff4757;">*</span>';
+      formGroup.appendChild(label);
+    }
 
     const select = document.createElement('select');
     select.id = `cascade-${levelConfig.field}`;
@@ -1683,8 +1693,9 @@ async function showCascadeAddModal() {
     select.appendChild(defaultOption);
 
     if (index === 0) {
-      // 最初のレベルは全ての選択肢を表示
-      cascadeOptions[levelConfig.field].forEach(value => {
+      // superCategoryOptionsがある場合は固定選択肢を使用
+      const options = cascadeConfig.superCategoryOptions || cascadeOptions[levelConfig.field];
+      (options || []).forEach(value => {
         const option = document.createElement('option');
         option.value = value;
         option.textContent = value;
@@ -1697,7 +1708,6 @@ async function showCascadeAddModal() {
       onCascadeSelectChange(levelConfig.field, select.value, index, levels);
     });
 
-    formGroup.appendChild(label);
     formGroup.appendChild(select);
     modalBody.appendChild(formGroup);
   });
@@ -1772,6 +1782,12 @@ function onCascadeSelectChange(changedField, value, changedIndex, levels) {
       select.appendChild(defaultOption);
       select.disabled = true;
       cascadeSelections[field] = '';
+
+      // conditionalフィールドは非表示に戻す
+      if (levels[i].conditional) {
+        const formGroup = select.closest('.form-group');
+        if (formGroup) formGroup.style.display = 'none';
+      }
     }
   }
 
@@ -1798,6 +1814,19 @@ function onCascadeSelectChange(changedField, value, changedIndex, levels) {
       // ユニークな値を取得
       const uniqueValues = [...new Set(filteredCategories.map(c => c[nextLevel.field]).filter(Boolean))];
       uniqueValues.sort((a, b) => a.localeCompare(b, 'ja'));
+
+      // conditionalフィールドの表示制御（選択肢がある場合のみ表示）
+      if (nextLevel.conditional) {
+        const formGroup = nextSelect.closest('.form-group');
+        if (formGroup) {
+          formGroup.style.display = uniqueValues.length > 0 ? '' : 'none';
+        }
+        // 選択肢がない場合はスキップ
+        if (uniqueValues.length === 0) {
+          nextSelect.disabled = true;
+          return;
+        }
+      }
 
       // 選択肢を追加
       uniqueValues.forEach(val => {
@@ -2035,12 +2064,21 @@ async function showCascadeEditModal(item) {
   levels.forEach((levelConfig, index) => {
     const formGroup = document.createElement('div');
     formGroup.className = 'form-group';
+    formGroup.dataset.field = levelConfig.field;
 
-    const label = document.createElement('label');
-    label.className = 'form-label';
-    label.htmlFor = `cascade-${levelConfig.field}`;
-    label.textContent = levelConfig.label;
-    label.innerHTML += ' <span style="color: #ff4757;">*</span>';
+    // conditional: true のフィールドは選択肢がない場合非表示
+    // 編集時は既存データがあれば表示
+    const hasExistingValue = !!item[levelConfig.field];
+
+    // hideLabels設定に基づいてラベル表示を制御
+    if (!cascadeConfig.hideLabels) {
+      const label = document.createElement('label');
+      label.className = 'form-label';
+      label.htmlFor = `cascade-${levelConfig.field}`;
+      label.textContent = levelConfig.label;
+      label.innerHTML += ' <span style="color: #ff4757;">*</span>';
+      formGroup.appendChild(label);
+    }
 
     const select = document.createElement('select');
     select.id = `cascade-${levelConfig.field}`;
@@ -2055,8 +2093,8 @@ async function showCascadeEditModal(item) {
     // 選択肢をフィルタリングして追加
     let filteredValues;
     if (index === 0) {
-      // 最初のレベルは全ての選択肢を表示
-      filteredValues = cascadeOptions[levelConfig.field];
+      // superCategoryOptionsがある場合は固定選択肢を使用
+      filteredValues = cascadeConfig.superCategoryOptions || cascadeOptions[levelConfig.field];
     } else {
       // 2番目以降は上位レベルでフィルタリング
       const filteredCategories = categories.filter(cat => {
@@ -2072,7 +2110,14 @@ async function showCascadeEditModal(item) {
       filteredValues.sort((a, b) => a.localeCompare(b, 'ja'));
     }
 
-    filteredValues.forEach(value => {
+    // conditionalフィールドの表示制御
+    if (levelConfig.conditional) {
+      if (filteredValues.length === 0 && !hasExistingValue) {
+        formGroup.style.display = 'none';
+      }
+    }
+
+    (filteredValues || []).forEach(value => {
       const option = document.createElement('option');
       option.value = value;
       option.textContent = value;
@@ -2087,7 +2132,6 @@ async function showCascadeEditModal(item) {
       onCascadeSelectChange(levelConfig.field, select.value, index, levels);
     });
 
-    formGroup.appendChild(label);
     formGroup.appendChild(select);
     modalBody.appendChild(formGroup);
   });

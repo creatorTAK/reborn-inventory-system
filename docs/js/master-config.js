@@ -61,24 +61,44 @@ const masterCategories = {
       category: {
         label: 'カテゴリ',
         collection: 'categories',
-        description: '商品カテゴリを管理',
+        description: '商品カテゴリを管理（7階層対応）',
         // ツリービュー表示モード
         viewMode: 'tree',
         treeConfig: {
-          levelFields: ['level1', 'level2', 'level3'],  // 階層フィールド
-          itemNameField: 'itemName',                    // アイテム名フィールド
-          defaultExpanded: false                        // 初期状態は折りたたみ
+          // 6階層（特大分類〜細分類2）+ アイテム名
+          levelFields: ['superCategory', 'level1', 'level2', 'level3', 'level4', 'level5'],
+          itemNameField: 'itemName',
+          defaultExpanded: false
         },
-        // アイテム名追加用カスケード設定
+        // カスケード追加・編集設定（商品登録と同じ構造）
         cascadeAdd: {
           enabled: true,
+          hideLabels: true,  // ラベル非表示（アイテム名のみ表示）
           levels: [
-            { field: 'level1', label: '大分類' },
-            { field: 'level2', label: '中分類' },
-            { field: 'level3', label: '小分類' }
+            { field: 'superCategory', label: '特大分類', conditional: false },
+            { field: 'level1', label: '大分類', conditional: false },
+            { field: 'level2', label: '中分類', conditional: false },
+            { field: 'level3', label: '小分類', conditional: false },
+            { field: 'level4', label: '細分類', conditional: true },   // 条件付き表示
+            { field: 'level5', label: '細分類2', conditional: true }   // 条件付き表示
+          ],
+          // 特大分類の固定選択肢（商品登録と同じ）
+          superCategoryOptions: [
+            'ファッション',
+            'ベビー・キッズ',
+            '家電・カメラ・AV機器',
+            'ゲーム・おもちゃ',
+            'スポーツ・アウトドア',
+            'コスメ・ヘルスケア',
+            'ハンドメイド・手芸',
+            'インテリア・住まい',
+            '食品・飲料',
+            '本・雑誌・漫画',
+            'CD・DVD・ブルーレイ',
+            'その他'
           ],
           itemNameLabel: 'アイテム名',
-          platformField: 'platforms'  // 将来のマルチプラットフォーム用
+          platformField: 'platforms'
         },
         fields: [
           {
@@ -86,23 +106,22 @@ const masterCategories = {
             label: 'カテゴリフルパス',
             required: true,
             type: 'text',
-            placeholder: '例: レディース > トップス > Tシャツ',
+            placeholder: '例: ファッション > レディース > トップス > シャツ > 半袖シャツ',
             validation: {
               minLength: 1,
-              maxLength: 200
+              maxLength: 300
             }
           }
         ],
         displayFields: ['fullPath'],
-        searchFields: ['fullPath', 'level1', 'level2', 'level3', 'level4', 'level5', 'itemName'],
+        searchFields: ['fullPath', 'superCategory', 'level1', 'level2', 'level3', 'level4', 'level5', 'itemName'],
         sortBy: 'fullPath',
         sortOrder: 'asc',
         searchable: true,
         usageCount: true,
         bulkDelete: true,
-        maxDisplayResults: 500,  // ツリービューでは多めに取得
-        initialDisplay: 0, // 初期表示件数（0=検索後のみ表示）
-        // カスタムUI設定（ガイダンス強化）
+        maxDisplayResults: 500,
+        initialDisplay: 0,
         emptyState: {
           icon: '📁',
           showTotalCount: true,
