@@ -1095,29 +1095,41 @@ async function getMasterData(collectionName, options = {}) {
  */
 async function getMasterCount(collectionName) {
   try {
-    const db = await initializeFirestore();
+    // Modular SDK（window.firestoreModular）が利用可能か確認
+    if (window.firestoreModular && window.firestoreModular.getCountFromServer) {
+      const { getFirestore, collection, getCountFromServer } = window.firestoreModular;
 
-    // Firebase SDK 10.x compat版では count() が AggregateQuery として動作
-    // まずcount()メソッドの存在確認
+      // Firebase appを取得（compat版と共有）
+      const app = firebase.app();
+      const db = getFirestore(app);
+      const coll = collection(db, collectionName);
+
+      // サーバー側でカウント（高速）
+      const snapshot = await getCountFromServer(coll);
+      const count = snapshot.data().count;
+
+      console.log(`📊 [Master API] ${collectionName}件数取得(modular): ${count.toLocaleString()}件`);
+      return count;
+    }
+
+    // フォールバック: compat版のcount()を試行
+    const db = await initializeFirestore();
     const collectionRef = db.collection(collectionName);
 
     if (typeof collectionRef.count === 'function') {
-      // count()メソッドが利用可能な場合
       const countSnapshot = await collectionRef.count().get();
       const count = countSnapshot.data().count;
-      console.log(`📊 [Master API] ${collectionName}件数取得(count): ${count.toLocaleString()}件`);
+      console.log(`📊 [Master API] ${collectionName}件数取得(compat): ${count.toLocaleString()}件`);
       return count;
-    } else {
-      // count()メソッドが利用不可の場合、メタデータから取得を試みる
-      // フォールバック: 件数不明として-1を返す
-      console.warn(`⚠️ [Master API] count()メソッド未対応: ${collectionName}`);
-      return -1;
     }
+
+    // どちらも利用不可
+    console.warn(`⚠️ [Master API] count()メソッド未対応: ${collectionName}`);
+    return -1;
 
   } catch (error) {
     console.error(`❌ [Master API] ${collectionName}件数取得エラー:`, error);
     console.error(`エラー詳細:`, error.message || error);
-    // エラー時は-1を返す（表示しない）
     return -1;
   }
 }
