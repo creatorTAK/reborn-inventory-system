@@ -277,7 +277,7 @@ async function loadMaster(category, type) {
       currentTab.classList.add('active');
     }
 
-    // ヘッダータイトルをカテゴリに応じて変更（v208: シンプルなタイトルに統一）
+    // ヘッダータイトルをカテゴリに応じて変更（v209: 初期非表示→設定後に表示）
     const headerTitle = document.getElementById('headerTitle');
     if (headerTitle) {
       if (category === 'product') {
@@ -285,6 +285,8 @@ async function loadMaster(category, type) {
       } else if (category === 'business') {
         headerTitle.textContent = '業務マスタ管理';
       }
+      // タイトル設定後に表示
+      headerTitle.classList.add('visible');
     }
   }
 
