@@ -1918,11 +1918,15 @@ window.addMaster = async function() {
 let cascadeSelections = {};
 let cascadeOptions = {};
 
+// 追加する階層のインデックス（グローバル状態）
+let addTargetLevelIndex = -1; // -1 = アイテム名（最下層）
+
+// 一括追加モード（複数アイテムを同時登録）
+let batchAddMode = false;
+
 /**
  * カスケード追加モーダル表示（カテゴリ用）
  */
-// 追加する階層のインデックス（グローバル状態）
-let addTargetLevelIndex = -1; // -1 = アイテム名（最下層）
 
 async function showCascadeAddModal() {
   const modal = document.getElementById('addModal');
@@ -1940,6 +1944,7 @@ async function showCascadeAddModal() {
   cascadeSelections = {};
   cascadeOptions = {};
   addTargetLevelIndex = -1; // デフォルトはアイテム名
+  batchAddMode = false; // 一括追加モードリセット
 
   // モーダルタイトル
   if (modalTitle) {
@@ -2040,6 +2045,36 @@ async function showCascadeAddModal() {
   targetLevelGroup.appendChild(targetLevelLabel);
   targetLevelGroup.appendChild(targetLevelSelect);
   modalBody.appendChild(targetLevelGroup);
+
+  // ========== 一括追加モードトグル ==========
+  const batchModeGroup = document.createElement('div');
+  batchModeGroup.className = 'form-group';
+  batchModeGroup.style.cssText = 'margin-bottom: 16px; display: flex; align-items: center; gap: 10px;';
+
+  const batchModeLabel = document.createElement('label');
+  batchModeLabel.style.cssText = 'font-size: 14px; color: #374151; cursor: pointer; display: flex; align-items: center; gap: 8px;';
+
+  const batchModeCheckbox = document.createElement('input');
+  batchModeCheckbox.type = 'checkbox';
+  batchModeCheckbox.id = 'cascade-batch-mode';
+  batchModeCheckbox.checked = batchAddMode;
+  batchModeCheckbox.style.cssText = 'width: 18px; height: 18px; accent-color: #40B4E5; cursor: pointer;';
+
+  batchModeCheckbox.addEventListener('change', () => {
+    batchAddMode = batchModeCheckbox.checked;
+    rebuildCascadeAddForm(levels, cascadeConfig);
+  });
+
+  batchModeLabel.appendChild(batchModeCheckbox);
+  batchModeLabel.appendChild(document.createTextNode('一括追加モード（複数同時登録）'));
+
+  const batchModeHint = document.createElement('span');
+  batchModeHint.style.cssText = 'font-size: 11px; color: #9ca3af;';
+  batchModeHint.textContent = '※1行に1つずつ入力';
+
+  batchModeGroup.appendChild(batchModeLabel);
+  batchModeGroup.appendChild(batchModeHint);
+  modalBody.appendChild(batchModeGroup);
 
   // ========== 動的フォームコンテナ ==========
   const dynamicFormContainer = document.createElement('div');
@@ -2154,21 +2189,39 @@ function rebuildCascadeAddForm(levels, cascadeConfig) {
     const inputLabel = document.createElement('label');
     inputLabel.className = 'form-label';
     inputLabel.htmlFor = 'cascade-newValue';
-    inputLabel.textContent = `新しい${targetLevel.label}`;
+    inputLabel.textContent = batchAddMode ? `新しい${targetLevel.label}（複数可）` : `新しい${targetLevel.label}`;
     inputLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.id = 'cascade-newValue';
-    input.className = 'form-input';
-    input.placeholder = `例: 新しい${targetLevel.label}を入力`;
-    input.addEventListener('input', updateCascadePreview);
-
     inputGroup.appendChild(inputLabel);
-    inputGroup.appendChild(input);
+
+    if (batchAddMode) {
+      // 一括追加モード: テキストエリア
+      const textarea = document.createElement('textarea');
+      textarea.id = 'cascade-newValue';
+      textarea.className = 'form-input';
+      textarea.placeholder = `1行に1つずつ入力\n例:\n値1\n値2\n値3`;
+      textarea.style.cssText = 'min-height: 120px; resize: vertical; font-size: 16px;';
+      textarea.addEventListener('input', updateCascadePreview);
+      inputGroup.appendChild(textarea);
+
+      const hint = document.createElement('div');
+      hint.style.cssText = 'font-size: 11px; color: #9ca3af; margin-top: 4px;';
+      hint.textContent = '複数入力すると一度に追加されます';
+      inputGroup.appendChild(hint);
+    } else {
+      // 通常モード: テキストフィールド
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = 'cascade-newValue';
+      input.className = 'form-input';
+      input.placeholder = `例: 新しい${targetLevel.label}を入力`;
+      input.addEventListener('input', updateCascadePreview);
+      inputGroup.appendChild(input);
+    }
+
     container.appendChild(inputGroup);
   } else {
-    // アイテム名を追加する場合（従来の動作）
+    // アイテム名を追加する場合
     const itemNameGroup = document.createElement('div');
     itemNameGroup.className = 'form-group';
     itemNameGroup.style.marginTop = '16px';
@@ -2176,18 +2229,37 @@ function rebuildCascadeAddForm(levels, cascadeConfig) {
     const itemNameLabel = document.createElement('label');
     itemNameLabel.className = 'form-label';
     itemNameLabel.htmlFor = 'cascade-itemName';
-    itemNameLabel.textContent = cascadeConfig.itemNameLabel || 'アイテム名';
+    const labelText = cascadeConfig.itemNameLabel || 'アイテム名';
+    itemNameLabel.textContent = batchAddMode ? `${labelText}（複数可）` : labelText;
     itemNameLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
 
-    const itemNameInput = document.createElement('input');
-    itemNameInput.type = 'text';
-    itemNameInput.id = 'cascade-itemName';
-    itemNameInput.className = 'form-input';
-    itemNameInput.placeholder = '例: 半袖プリントTシャツ';
-    itemNameInput.addEventListener('input', updateCascadePreview);
-
     itemNameGroup.appendChild(itemNameLabel);
-    itemNameGroup.appendChild(itemNameInput);
+
+    if (batchAddMode) {
+      // 一括追加モード: テキストエリア
+      const textarea = document.createElement('textarea');
+      textarea.id = 'cascade-itemName';
+      textarea.className = 'form-input';
+      textarea.placeholder = `1行に1つずつ入力\n例:\n半袖プリントTシャツ\n長袖プリントTシャツ\nノースリーブTシャツ`;
+      textarea.style.cssText = 'min-height: 120px; resize: vertical; font-size: 16px;';
+      textarea.addEventListener('input', updateCascadePreview);
+      itemNameGroup.appendChild(textarea);
+
+      const hint = document.createElement('div');
+      hint.style.cssText = 'font-size: 11px; color: #9ca3af; margin-top: 4px;';
+      hint.textContent = '複数入力すると一度に追加されます';
+      itemNameGroup.appendChild(hint);
+    } else {
+      // 通常モード: テキストフィールド
+      const itemNameInput = document.createElement('input');
+      itemNameInput.type = 'text';
+      itemNameInput.id = 'cascade-itemName';
+      itemNameInput.className = 'form-input';
+      itemNameInput.placeholder = '例: 半袖プリントTシャツ';
+      itemNameInput.addEventListener('input', updateCascadePreview);
+      itemNameGroup.appendChild(itemNameInput);
+    }
+
     container.appendChild(itemNameGroup);
   }
 
@@ -2407,11 +2479,9 @@ window.addCascadeItem = async function() {
   const levels = cascadeConfig.levels;
   const targetIndex = addTargetLevelIndex;
 
-  // バリデーション
-  const data = {};
-
   // 親階層（追加対象より上）の選択値をチェック
   const parentLevels = targetIndex === -1 ? levels : levels.slice(0, targetIndex);
+  const baseData = {};
 
   for (let i = 0; i < parentLevels.length; i++) {
     const levelConfig = parentLevels[i];
@@ -2421,7 +2491,7 @@ window.addCascadeItem = async function() {
     if (levelConfig.conditional) {
       const select = document.getElementById(`cascade-${levelConfig.field}`);
       if (select && select.options.length <= 1) {
-        continue; // 選択肢がない場合はスキップ
+        continue;
       }
     }
 
@@ -2429,81 +2499,128 @@ window.addCascadeItem = async function() {
       showError(errorMessage, `${levelConfig.label}を選択してください`);
       return;
     }
-    data[levelConfig.field] = value;
+    baseData[levelConfig.field] = value;
   }
 
-  // 追加対象の値をチェック
+  // 追加対象の値を取得
+  let newValues = [];
+
   if (targetIndex >= 0 && targetIndex < levels.length) {
     // 特定の階層を追加する場合
     const targetLevel = levels[targetIndex];
-    const newValue = document.getElementById('cascade-newValue')?.value.trim();
-    if (!newValue) {
+    const inputValue = document.getElementById('cascade-newValue')?.value.trim();
+    if (!inputValue) {
       showError(errorMessage, `${targetLevel.label}を入力してください`);
       return;
     }
-    data[targetLevel.field] = newValue;
 
-    // fullPath生成（親階層 + 新規値）
-    const parentValues = parentLevels.map(l => data[l.field]).filter(Boolean);
-    data.fullPath = [...parentValues, newValue].join(' > ');
-
+    if (batchAddMode) {
+      // 一括追加: 改行で分割
+      newValues = inputValue.split('\n').map(v => v.trim()).filter(v => v.length > 0);
+    } else {
+      newValues = [inputValue];
+    }
   } else {
-    // アイテム名を追加する場合（従来の動作）
-    const itemName = document.getElementById('cascade-itemName')?.value.trim();
-    if (!itemName) {
+    // アイテム名を追加する場合
+    const inputValue = document.getElementById('cascade-itemName')?.value.trim();
+    if (!inputValue) {
       showError(errorMessage, 'アイテム名を入力してください');
       return;
     }
-    data.itemName = itemName;
 
-    // fullPath生成
-    const levelValues = parentLevels.map(l => data[l.field]).filter(Boolean);
-    data.fullPath = [...levelValues, itemName].join(' > ');
+    if (batchAddMode) {
+      // 一括追加: 改行で分割
+      newValues = inputValue.split('\n').map(v => v.trim()).filter(v => v.length > 0);
+    } else {
+      newValues = [inputValue];
+    }
   }
 
-  // 重複チェック
-  const categories = masterCache[currentMasterConfig.collection] || [];
-  const duplicate = categories.find(cat => cat.fullPath === data.fullPath);
-  if (duplicate) {
-    showError(errorMessage, 'このカテゴリは既に存在します');
+  if (newValues.length === 0) {
+    showError(errorMessage, '追加するアイテムを入力してください');
     return;
   }
 
-  // プラットフォーム設定（選択中のプラットフォームを保存）
-  if (currentPlatform) {
-    data.platform = currentPlatform;
-  } else {
-    data.platform = 'mercari';  // デフォルト
+  // 重複チェック用
+  const categories = masterCache[currentMasterConfig.collection] || [];
+  const existingPaths = new Set(categories.map(c => c.fullPath));
+
+  // 追加するアイテムリストを生成
+  const itemsToAdd = [];
+  const duplicates = [];
+
+  for (const value of newValues) {
+    const data = { ...baseData };
+
+    if (targetIndex >= 0 && targetIndex < levels.length) {
+      const targetLevel = levels[targetIndex];
+      data[targetLevel.field] = value;
+      const parentValues = parentLevels.map(l => data[l.field]).filter(Boolean);
+      data.fullPath = [...parentValues, value].join(' > ');
+    } else {
+      data.itemName = value;
+      const levelValues = parentLevels.map(l => data[l.field]).filter(Boolean);
+      data.fullPath = [...levelValues, value].join(' > ');
+    }
+
+    // 重複チェック
+    if (existingPaths.has(data.fullPath)) {
+      duplicates.push(value);
+      continue;
+    }
+
+    // プラットフォーム設定
+    data.platform = currentPlatform || 'mercari';
+
+    itemsToAdd.push(data);
+    existingPaths.add(data.fullPath); // 同一バッチ内の重複も防止
+  }
+
+  if (itemsToAdd.length === 0) {
+    if (duplicates.length > 0) {
+      showError(errorMessage, `すべて重複しています:\n${duplicates.join(', ')}`);
+    } else {
+      showError(errorMessage, '追加するアイテムがありません');
+    }
+    return;
   }
 
   try {
     showLoading(true);
 
-    // Firestore APIで追加
-    const result = await window.createMaster(currentMasterConfig.collection, data, true);
+    let successCount = 0;
+    const addedItems = [];
 
-    if (result.success) {
-      console.log(`✅ [Master Manager] カスケード追加成功: ${data.fullPath}`);
+    // 順番に追加（並列だと大量追加時に問題が起きる可能性があるため）
+    for (const data of itemsToAdd) {
+      const result = await window.createMaster(currentMasterConfig.collection, data, true);
+
+      if (result.success) {
+        successCount++;
+        const newItem = {
+          id: result.id,
+          ...data,
+          usageCount: 0
+        };
+        addedItems.push(newItem);
+        allMasterData.push(newItem);
+        filteredMasterData.push(newItem);
+      }
+    }
+
+    if (successCount > 0) {
+      console.log(`✅ [Master Manager] カスケード追加成功: ${successCount}件`);
 
       // キャッシュクリア
       delete masterCache[currentMasterConfig.collection];
 
-      // 新しいアイテムをローカルデータに追加
-      const newItem = {
-        id: result.id,
-        ...data,
-        usageCount: 0
-      };
-      allMasterData.push(newItem);
-      filteredMasterData.push(newItem);
-
       // 件数更新
       if (masterTotalCount > 0) {
-        masterTotalCount++;
+        masterTotalCount += successCount;
         updateEmptyStateCount();
       }
 
-      // ツリービューのキャッシュをクリア（展開状態はリセット）
+      // ツリービューのキャッシュをクリア
       expandedTreeNodes.clear();
 
       // 画面更新
@@ -2511,9 +2628,18 @@ window.addCascadeItem = async function() {
       updateStats();
 
       hideAddModal();
-      alert(`アイテムを追加しました:\n${data.fullPath}`);
+
+      // 結果メッセージ
+      let message = `${successCount}件のアイテムを追加しました`;
+      if (duplicates.length > 0) {
+        message += `\n\n※重複スキップ: ${duplicates.length}件`;
+      }
+      if (successCount <= 5) {
+        message += '\n\n' + addedItems.map(i => i.fullPath).join('\n');
+      }
+      alert(message);
     } else {
-      showError(errorMessage, result.error || '追加に失敗しました');
+      showError(errorMessage, '追加に失敗しました');
     }
 
   } catch (error) {
