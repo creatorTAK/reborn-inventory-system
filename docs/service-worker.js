@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v207-all-headers-unified'; // 全ページヘッダー統一完了
-const SW_VERSION = 'v207-all-headers-unified'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v208-bell-icon-added'; // マスタ管理・設定管理にベルアイコン追加
+const SW_VERSION = 'v208-bell-icon-added'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
