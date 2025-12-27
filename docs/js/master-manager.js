@@ -1943,6 +1943,308 @@ window.addCascadeItem = async function() {
   }
 };
 
+/**
+ * カスケード編集モーダル表示（カテゴリ用）
+ * @param {Object} item - 編集対象のアイテム
+ */
+async function showCascadeEditModal(item) {
+  const modal = document.getElementById('addModal');
+  const modalBody = document.getElementById('addModalBody');
+  const modalTitle = document.getElementById('addModalTitle');
+  const errorMessage = document.getElementById('addErrorMessage');
+  const submitBtn = document.getElementById('addSubmitBtn');
+
+  if (!modal || !modalBody) {
+    console.error('[Master Manager] モーダル要素が見つかりません');
+    return;
+  }
+
+  // 状態リセット
+  cascadeSelections = {};
+  cascadeOptions = {};
+
+  // モーダルタイトル
+  if (modalTitle) {
+    modalTitle.textContent = 'カテゴリを編集';
+  }
+
+  // 送信ボタン
+  if (submitBtn) {
+    submitBtn.textContent = '更新';
+    submitBtn.setAttribute('onclick', 'updateCascadeItem()');
+  }
+
+  // エラーメッセージクリア
+  if (errorMessage) {
+    errorMessage.textContent = '';
+    errorMessage.classList.add('hidden');
+  }
+
+  // カスケード設定を取得
+  const cascadeConfig = currentMasterConfig.cascadeAdd;
+  const levels = cascadeConfig.levels;
+
+  // キャッシュまたはFirestoreからカテゴリデータを取得
+  let categories = masterCache[currentMasterConfig.collection];
+  if (!categories || categories.length === 0) {
+    showLoading(true);
+    try {
+      if (window.masterCacheManager) {
+        categories = await window.masterCacheManager.getCategories();
+      } else {
+        categories = await window.getMasterData(currentMasterConfig.collection);
+      }
+      masterCache[currentMasterConfig.collection] = categories || [];
+    } catch (error) {
+      console.error('❌ [Master Manager] カテゴリ取得エラー:', error);
+      categories = [];
+    }
+    showLoading(false);
+  }
+
+  // 各レベルのユニーク値を抽出
+  levels.forEach((levelConfig, index) => {
+    const field = levelConfig.field;
+    const uniqueValues = [...new Set(categories.map(c => c[field]).filter(Boolean))];
+    uniqueValues.sort((a, b) => a.localeCompare(b, 'ja'));
+    cascadeOptions[field] = uniqueValues;
+  });
+
+  // フォーム生成
+  modalBody.innerHTML = '';
+
+  // 説明文
+  const description = document.createElement('div');
+  description.className = 'cascade-description';
+  description.innerHTML = `
+    <p style="color: #666; font-size: 14px; margin-bottom: 16px;">
+      カテゴリの各階層とアイテム名を編集できます。
+    </p>
+  `;
+  modalBody.appendChild(description);
+
+  // 既存のデータから選択状態を復元
+  levels.forEach((levelConfig, index) => {
+    const existingValue = item[levelConfig.field];
+    if (existingValue) {
+      cascadeSelections[levelConfig.field] = existingValue;
+    }
+  });
+
+  // 各レベルのセレクトボックス
+  levels.forEach((levelConfig, index) => {
+    const formGroup = document.createElement('div');
+    formGroup.className = 'form-group';
+
+    const label = document.createElement('label');
+    label.className = 'form-label';
+    label.htmlFor = `cascade-${levelConfig.field}`;
+    label.textContent = levelConfig.label;
+    label.innerHTML += ' <span style="color: #ff4757;">*</span>';
+
+    const select = document.createElement('select');
+    select.id = `cascade-${levelConfig.field}`;
+    select.className = 'form-input';
+
+    // 選択肢を設定
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = `${levelConfig.label}を選択`;
+    select.appendChild(defaultOption);
+
+    // 選択肢をフィルタリングして追加
+    let filteredValues;
+    if (index === 0) {
+      // 最初のレベルは全ての選択肢を表示
+      filteredValues = cascadeOptions[levelConfig.field];
+    } else {
+      // 2番目以降は上位レベルでフィルタリング
+      const filteredCategories = categories.filter(cat => {
+        for (let i = 0; i < index; i++) {
+          const field = levels[i].field;
+          if (cat[field] !== cascadeSelections[field]) {
+            return false;
+          }
+        }
+        return true;
+      });
+      filteredValues = [...new Set(filteredCategories.map(c => c[levelConfig.field]).filter(Boolean))];
+      filteredValues.sort((a, b) => a.localeCompare(b, 'ja'));
+    }
+
+    filteredValues.forEach(value => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      if (value === item[levelConfig.field]) {
+        option.selected = true;
+      }
+      select.appendChild(option);
+    });
+
+    // 変更イベント
+    select.addEventListener('change', () => {
+      onCascadeSelectChange(levelConfig.field, select.value, index, levels);
+    });
+
+    formGroup.appendChild(label);
+    formGroup.appendChild(select);
+    modalBody.appendChild(formGroup);
+  });
+
+  // アイテム名入力フィールド
+  const itemNameGroup = document.createElement('div');
+  itemNameGroup.className = 'form-group';
+  itemNameGroup.style.marginTop = '24px';
+
+  const itemNameLabel = document.createElement('label');
+  itemNameLabel.className = 'form-label';
+  itemNameLabel.htmlFor = 'cascade-itemName';
+  itemNameLabel.textContent = cascadeConfig.itemNameLabel || 'アイテム名';
+  itemNameLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
+
+  const itemNameInput = document.createElement('input');
+  itemNameInput.type = 'text';
+  itemNameInput.id = 'cascade-itemName';
+  itemNameInput.className = 'form-input';
+  itemNameInput.placeholder = '例: 半袖プリントTシャツ';
+  itemNameInput.value = item.itemName || '';
+  itemNameInput.addEventListener('input', updateCascadePreview);
+
+  itemNameGroup.appendChild(itemNameLabel);
+  itemNameGroup.appendChild(itemNameInput);
+  modalBody.appendChild(itemNameGroup);
+
+  // プレビュー表示
+  const previewGroup = document.createElement('div');
+  previewGroup.className = 'form-group';
+  previewGroup.style.marginTop = '24px';
+
+  const previewLabel = document.createElement('label');
+  previewLabel.className = 'form-label';
+  previewLabel.textContent = 'プレビュー';
+  previewLabel.style.color = '#666';
+
+  const previewBox = document.createElement('div');
+  previewBox.id = 'cascade-preview';
+  previewBox.style.cssText = `
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #333;
+    min-height: 20px;
+  `;
+
+  // 初期プレビュー
+  const initialPath = item.fullPath || '';
+  previewBox.textContent = initialPath;
+
+  previewGroup.appendChild(previewLabel);
+  previewGroup.appendChild(previewBox);
+  modalBody.appendChild(previewGroup);
+
+  modal.classList.remove('hidden');
+
+  // 初期プレビュー更新
+  updateCascadePreview();
+}
+
+/**
+ * カスケードアイテム更新実行
+ */
+window.updateCascadeItem = async function() {
+  const errorMessage = document.getElementById('addErrorMessage');
+
+  if (!errorMessage || !masterToEdit) {
+    console.error('[Master Manager] 更新対象がありません');
+    return;
+  }
+
+  const cascadeConfig = currentMasterConfig.cascadeAdd;
+  const levels = cascadeConfig.levels;
+
+  // バリデーション
+  let hasError = false;
+  const data = {};
+
+  // レベルの選択値をチェック
+  for (const levelConfig of levels) {
+    const value = cascadeSelections[levelConfig.field];
+    if (!value) {
+      showError(errorMessage, `${levelConfig.label}を選択してください`);
+      hasError = true;
+      break;
+    }
+    data[levelConfig.field] = value;
+  }
+
+  if (hasError) return;
+
+  // アイテム名をチェック
+  const itemName = document.getElementById('cascade-itemName')?.value.trim();
+  if (!itemName) {
+    showError(errorMessage, 'アイテム名を入力してください');
+    return;
+  }
+  data.itemName = itemName;
+
+  // fullPath生成
+  const levelValues = levels.map(l => data[l.field]);
+  data.fullPath = [...levelValues, itemName].join(' > ');
+
+  // 重複チェック（自分自身は除外）
+  const categories = masterCache[currentMasterConfig.collection] || [];
+  const duplicate = categories.find(cat => cat.fullPath === data.fullPath && cat.id !== masterToEdit.id);
+  if (duplicate) {
+    showError(errorMessage, 'このカテゴリは既に存在します');
+    return;
+  }
+
+  try {
+    showLoading(true);
+
+    // Firestore APIで更新
+    const result = await window.updateMaster(currentMasterConfig.collection, masterToEdit.id, data);
+
+    if (result.success) {
+      console.log(`✅ [Master Manager] カスケード更新成功: ${data.fullPath}`);
+
+      // ローカルデータを更新
+      const updateLocalData = (dataArray) => {
+        const index = dataArray.findIndex(m => m.id === masterToEdit.id);
+        if (index !== -1) {
+          dataArray[index] = { ...dataArray[index], ...data };
+        }
+      };
+
+      updateLocalData(allMasterData);
+      updateLocalData(filteredMasterData);
+      if (masterCache[currentMasterConfig.collection]) {
+        updateLocalData(masterCache[currentMasterConfig.collection]);
+      }
+
+      // ツリービューのキャッシュをクリア
+      expandedTreeNodes.clear();
+
+      // 画面更新
+      renderMasterList();
+      updateStats();
+
+      hideAddModal();
+      alert(`カテゴリを更新しました:\n${data.fullPath}`);
+    } else {
+      showError(errorMessage, result.error || '更新に失敗しました');
+    }
+
+  } catch (error) {
+    console.error('❌ [Master Manager] カスケード更新エラー:', error);
+    showError(errorMessage, `エラー: ${error.message || '更新に失敗しました'}`);
+  } finally {
+    showLoading(false);
+  }
+};
+
 // ============================================
 // マスタ編集
 // ============================================
@@ -1978,6 +2280,12 @@ window.showEditModal = function(masterId) {
   if (!currentMasterConfig) {
     console.error('[Master Manager] マスタが選択されていません');
     alert('マスタを選択してください');
+    return;
+  }
+
+  // カスケード編集モードの場合は専用UIを表示
+  if (currentMasterConfig.cascadeAdd && currentMasterConfig.cascadeAdd.enabled) {
+    showCascadeEditModal(item);
     return;
   }
 
