@@ -337,9 +337,9 @@ async function loadMaster(category, type) {
 
   // プラットフォームタブの表示/非表示
   if (currentMasterConfig.platformSupport) {
-    showPlatformTabs();
-    // デフォルトプラットフォームを設定
+    // デフォルトプラットフォームを先に設定（showPlatformTabsで使用するため）
     currentPlatform = currentMasterConfig.defaultPlatform || currentMasterConfig.platforms[0]?.id;
+    showPlatformTabs();
   } else {
     hidePlatformTabs();
     currentPlatform = null;
@@ -414,9 +414,9 @@ function showPlatformTabs() {
     container.className = 'platform-tabs-container';
     container.style.cssText = `
       display: flex;
-      gap: 8px;
-      padding: 12px 16px;
-      background: #f8f9fa;
+      gap: 0;
+      padding: 0 16px;
+      background: #fff;
       border-bottom: 1px solid #e0e0e0;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
@@ -429,32 +429,39 @@ function showPlatformTabs() {
     }
   }
 
-  // タブを生成
+  // タブを生成（商品登録と同じスタイル）
   const platforms = currentMasterConfig.platforms || [];
-  container.innerHTML = platforms.map(p => `
-    <button class="platform-tab ${p.id === currentPlatform ? 'active' : ''}"
+  container.innerHTML = platforms.map(p => {
+    const isActive = p.id === currentPlatform || 
+                     (p.id === 'mercari-shops' && currentPlatform === 'mercari') ||
+                     (p.id === 'mercari' && currentPlatform === 'mercari-shops');
+    // mercari-shopsはmercariと連動（視覚的に）
+    const effectivePlatform = p.sharesWith || p.id;
+    
+    return `
+    <button class="platform-tab ${isActive ? 'active' : ''}"
             data-platform="${p.id}"
             onclick="selectPlatformTab('${p.id}')"
             style="
               display: flex;
               align-items: center;
               gap: 6px;
-              padding: 8px 16px;
+              padding: 12px 16px;
               border: none;
-              border-radius: 20px;
-              background: ${p.id === currentPlatform ? '#007bff' : '#fff'};
-              color: ${p.id === currentPlatform ? '#fff' : '#333'};
-              font-size: 13px;
-              font-weight: 500;
+              border-bottom: ${isActive ? '3px solid #007bff' : '3px solid transparent'};
+              background: ${isActive ? '#e3f2fd' : 'transparent'};
+              color: ${isActive ? '#007bff' : '#666'};
+              font-size: 14px;
+              font-weight: ${isActive ? '600' : '500'};
               cursor: pointer;
               white-space: nowrap;
-              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
               transition: all 0.2s ease;
             ">
-      <img src="${p.icon}" alt="${p.name}" style="width: 18px; height: 18px; border-radius: 4px;">
+      <img src="${p.icon}" alt="${p.name}" style="width: 20px; height: 20px; border-radius: 4px;" onerror="this.style.display='none'">
       <span>${p.name}</span>
     </button>
-  `).join('');
+  `;
+  }).join('');
 
   container.style.display = 'flex';
 }
@@ -472,23 +479,33 @@ function hidePlatformTabs() {
 /**
  * プラットフォームタブ選択
  */
-window.selectPlatformTab = async function(platformId) {
-  if (currentPlatform === platformId) return;
+window.selectPlatformTab = async function selectPlatformTab(platformId) {
+  // メルカリShopsはメルカリと同じデータを共有
+  const effectivePlatform = (platformId === 'mercari-shops') ? 'mercari' : platformId;
+  
+  if (currentPlatform === effectivePlatform) return;
 
-  currentPlatform = platformId;
+  currentPlatform = effectivePlatform;
 
-  // タブのアクティブ状態を更新
+  // タブのアクティブ状態を更新（商品登録と同じスタイル）
   const container = document.getElementById('platformTabsContainer');
   if (container) {
     container.querySelectorAll('.platform-tab').forEach(tab => {
-      const isActive = tab.dataset.platform === platformId;
+      const tabPlatform = tab.dataset.platform;
+      // mercariとmercari-shopsは連動
+      const isActive = tabPlatform === platformId || 
+                       (tabPlatform === 'mercari-shops' && platformId === 'mercari') ||
+                       (tabPlatform === 'mercari' && platformId === 'mercari-shops');
+      
       tab.classList.toggle('active', isActive);
-      tab.style.background = isActive ? '#007bff' : '#fff';
-      tab.style.color = isActive ? '#fff' : '#333';
+      tab.style.background = isActive ? '#e3f2fd' : 'transparent';
+      tab.style.color = isActive ? '#007bff' : '#666';
+      tab.style.fontWeight = isActive ? '600' : '500';
+      tab.style.borderBottom = isActive ? '3px solid #007bff' : '3px solid transparent';
     });
   }
 
-  console.log(`🔄 [Master Manager] プラットフォーム切り替え: ${platformId}`);
+  console.log(`🔄 [Master Manager] プラットフォーム切り替え: ${platformId} → 実効: ${effectivePlatform}`);
 
   // キャッシュクリア（プラットフォーム別データを再取得するため）
   delete masterCache[currentMasterConfig.collection];
@@ -520,8 +537,6 @@ async function fetchAndDisplayTotalCountByPlatform() {
     updateEmptyStateCount();
 
     // プラットフォームでフィルタリングした件数を取得
-    // TODO: Firestore側でplatformフィールドでのカウントクエリを実装
-    // 暫定: 全件取得してフィルタリング
     let categories = [];
     if (window.masterCacheManager) {
       categories = await window.masterCacheManager.getCategories();
@@ -530,7 +545,13 @@ async function fetchAndDisplayTotalCountByPlatform() {
     }
 
     // プラットフォームでフィルタリング
-    const filtered = categories.filter(cat => cat.platform === currentPlatform);
+    // platformフィールドがないデータは 'mercari' として扱う（後方互換性）
+    // mercari-shopsはmercariと同じデータを使用
+    const targetPlatform = currentPlatform; // selectPlatformTabで既にmercari-shops→mercariに変換済み
+    const filtered = categories.filter(cat => {
+      const catPlatform = cat.platform || 'mercari'; // デフォルトはmercari
+      return catPlatform === targetPlatform;
+    });
     masterTotalCount = filtered.length;
 
     // キャッシュに保存（フィルタ済み）
