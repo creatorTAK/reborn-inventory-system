@@ -1660,6 +1660,17 @@ async function showCascadeAddModal() {
   `;
   modalBody.appendChild(description);
 
+  // hideLabels: true の場合、最初のセレクトボックスの上に「カテゴリー」ラベルを追加
+  if (cascadeConfig.hideLabels) {
+    const categoryLabel = document.createElement('label');
+    categoryLabel.className = 'form-label';
+    categoryLabel.textContent = 'カテゴリー';
+    categoryLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
+    categoryLabel.style.marginBottom = '8px';
+    categoryLabel.style.display = 'block';
+    modalBody.appendChild(categoryLabel);
+  }
+
   // 各レベルのセレクトボックス
   levels.forEach((levelConfig, index) => {
     const formGroup = document.createElement('div');
@@ -1686,10 +1697,10 @@ async function showCascadeAddModal() {
     select.className = 'form-input';
     select.disabled = index > 0; // 最初のレベル以外は無効
 
-    // 選択肢を設定
+    // 選択肢を設定（hideLabelsの場合は「--選択--」に統一）
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
-    defaultOption.textContent = `${levelConfig.label}を選択`;
+    defaultOption.textContent = cascadeConfig.hideLabels ? '--選択--' : `${levelConfig.label}を選択`;
     select.appendChild(defaultOption);
 
     if (index === 0) {
@@ -1771,6 +1782,7 @@ function onCascadeSelectChange(changedField, value, changedIndex, levels) {
   cascadeSelections[changedField] = value;
 
   // 後続のレベルをリセット
+  const cascadeConfig = currentMasterConfig.cascadeAdd;
   for (let i = changedIndex + 1; i < levels.length; i++) {
     const field = levels[i].field;
     const select = document.getElementById(`cascade-${field}`);
@@ -1778,7 +1790,7 @@ function onCascadeSelectChange(changedField, value, changedIndex, levels) {
       select.innerHTML = '';
       const defaultOption = document.createElement('option');
       defaultOption.value = '';
-      defaultOption.textContent = `${levels[i].label}を選択`;
+      defaultOption.textContent = cascadeConfig.hideLabels ? '--選択--' : `${levels[i].label}を選択`;
       select.appendChild(defaultOption);
       select.disabled = true;
       cascadeSelections[field] = '';
@@ -2060,6 +2072,17 @@ async function showCascadeEditModal(item) {
     }
   });
 
+  // hideLabels: true の場合、最初のセレクトボックスの上に「カテゴリー」ラベルを追加
+  if (cascadeConfig.hideLabels) {
+    const categoryLabel = document.createElement('label');
+    categoryLabel.className = 'form-label';
+    categoryLabel.textContent = 'カテゴリー';
+    categoryLabel.innerHTML += ' <span style="color: #ff4757;">*</span>';
+    categoryLabel.style.marginBottom = '8px';
+    categoryLabel.style.display = 'block';
+    modalBody.appendChild(categoryLabel);
+  }
+
   // 各レベルのセレクトボックス
   levels.forEach((levelConfig, index) => {
     const formGroup = document.createElement('div');
@@ -2084,10 +2107,10 @@ async function showCascadeEditModal(item) {
     select.id = `cascade-${levelConfig.field}`;
     select.className = 'form-input';
 
-    // 選択肢を設定
+    // 選択肢を設定（hideLabelsの場合は「--選択--」に統一）
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
-    defaultOption.textContent = `${levelConfig.label}を選択`;
+    defaultOption.textContent = cascadeConfig.hideLabels ? '--選択--' : `${levelConfig.label}を選択`;
     select.appendChild(defaultOption);
 
     // 選択肢をフィルタリングして追加
