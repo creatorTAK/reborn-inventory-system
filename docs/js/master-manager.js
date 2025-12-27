@@ -413,6 +413,42 @@ function updateMasterTypeDisplay() {
 function showPlatformTabs() {
   let container = document.getElementById('platformTabsContainer');
 
+  // プラットフォーム設定を読み込み（商品登録と同じロジック）
+  let enabledPlatformIds = ['mercari']; // デフォルト
+  try {
+    const config = JSON.parse(localStorage.getItem('config') || '{}');
+    const platformSettings = config.プラットフォーム設定;
+    
+    if (platformSettings?.platforms && Array.isArray(platformSettings.platforms)) {
+      const enabled = platformSettings.platforms
+        .filter(p => p.enabled)
+        .map(p => p.id);
+      
+      if (enabled.length > 0) {
+        enabledPlatformIds = enabled;
+      }
+    }
+    console.log(`🔧 [Master Manager] 有効なプラットフォーム: ${enabledPlatformIds.join(', ')}`);
+  } catch (e) {
+    console.error('❌ [Master Manager] プラットフォーム設定読み込みエラー:', e);
+  }
+
+  // 設定から有効なプラットフォームのみフィルタリング
+  const allPlatforms = currentMasterConfig.platforms || [];
+  const platforms = allPlatforms.filter(p => enabledPlatformIds.includes(p.id));
+
+  // 有効なプラットフォームが1つ以下なら非表示
+  if (platforms.length <= 1) {
+    if (container) {
+      container.style.display = 'none';
+    }
+    // 唯一のプラットフォームをデフォルトに設定
+    if (platforms.length === 1) {
+      currentPlatform = platforms[0].id;
+    }
+    return;
+  }
+
   // コンテナがなければ作成
   if (!container) {
     container = document.createElement('div');
@@ -436,8 +472,12 @@ function showPlatformTabs() {
     }
   }
 
+  // デフォルトプラットフォームが有効リストにない場合、最初の有効なものを使用
+  if (!enabledPlatformIds.includes(currentPlatform)) {
+    currentPlatform = platforms[0].id;
+  }
+
   // タブを生成（商品登録CSSと完全一致）
-  const platforms = currentMasterConfig.platforms || [];
   container.innerHTML = platforms.map(p => {
     const isActive = p.id === currentPlatform;
     
