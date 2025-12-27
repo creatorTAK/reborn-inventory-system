@@ -8113,7 +8113,7 @@ ${prompt || '（未設定）'}
         const isLast = index === sortedPlatforms.length - 1;
 
         return `
-        <div class="platform-item" data-platform-id="${p.id}" style="display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: ${p.isCustom ? '#fefce8' : '#f9fafb'};">
+        <div class="platform-item" data-platform-id="${p.id}" style="display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb;">
           <input type="checkbox" id="platform-${p.id}" value="${p.id}" style="width: 18px; height: 18px; accent-color: #40B4E5; flex-shrink: 0;">
           <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
             <img src="${p.icon}" alt="${p.name}" style="width: 36px; height: 36px; object-fit: contain; flex-shrink: 0;" onerror="this.style.display='none'">
@@ -8433,13 +8433,16 @@ ${prompt || '（未設定）'}
 
       hideAddPlatformForm();
 
+      // プラットフォーム設定を永続化
+      await persistPlatformSettings();
+
       console.log('✅ カスタムプラットフォーム追加:', { id, name, description, icon: iconUrl });
     }
 
     /**
      * カスタムプラットフォームを削除
      */
-    function removeCustomPlatform(id) {
+    async function removeCustomPlatform(id) {
       if (!confirm(`「${customPlatforms.find(p => p.id === id)?.name || id}」を削除しますか？`)) {
         return;
       }
@@ -8458,6 +8461,9 @@ ${prompt || '（未設定）'}
 
       // チェック状態を復元（削除されたものは復元されない）
       restorePlatformCheckStates();
+
+      // プラットフォーム設定を永続化
+      await persistPlatformSettings();
 
       console.log('🗑️ カスタムプラットフォーム削除:', id);
     }
@@ -8513,9 +8519,23 @@ ${prompt || '（未設定）'}
       const uploadStatus = document.getElementById('platformIconUploadStatus');
       if (uploadStatus) uploadStatus.textContent = '';
 
-      // カスタムプラットフォームのみ削除ボタンを表示
+      // 削除ボタンを表示（カスタムとデフォルトで文言を変更）
       const deleteSection = document.getElementById('editPlatformDeleteSection');
-      if (deleteSection) deleteSection.style.display = isCustom ? 'block' : 'none';
+      const deleteButton = deleteSection?.querySelector('button');
+      if (deleteSection) {
+        deleteSection.style.display = 'block';
+        if (deleteButton) {
+          if (isCustom) {
+            deleteButton.textContent = 'このプラットフォームを削除';
+            deleteButton.style.background = '#fef2f2';
+            deleteButton.style.color = '#ef4444';
+          } else {
+            deleteButton.textContent = 'このプラットフォームを一覧から非表示にする';
+            deleteButton.style.background = '#fef9e7';
+            deleteButton.style.color = '#d97706';
+          }
+        }
+      }
 
       // モーダルを開く - body直下に移動して表示
       const modal = document.getElementById('platformEditModal');
@@ -8629,6 +8649,36 @@ ${prompt || '（未設定）'}
     }
 
     /**
+     * プラットフォーム設定を永続化（localStorage + Firestore）
+     */
+    async function persistPlatformSettings() {
+      try {
+        const platformSettings = collectPlatformSettings();
+
+        // localStorageに保存
+        localStorage.setItem(CONFIG_STORAGE_KEYS.PLATFORM, JSON.stringify(platformSettings));
+        console.log('✅ プラットフォーム設定をlocalStorageに保存:', platformSettings);
+
+        // Firestoreにも保存
+        if (window.db) {
+          const userId = localStorage.getItem('userId');
+          if (userId) {
+            await window.db.collection('configs').doc(userId).set({
+              'プラットフォーム設定': platformSettings
+            }, { merge: true });
+            console.log('✅ プラットフォーム設定をFirestoreに保存');
+          }
+        }
+
+        // postMessageで商品登録画面に通知
+        notifyConfigChange();
+
+      } catch (error) {
+        console.error('❌ プラットフォーム設定の永続化エラー:', error);
+      }
+    }
+
+    /**
      * プラットフォーム編集を保存
      */
     async function savePlatformEdit() {
@@ -8705,16 +8755,48 @@ ${prompt || '（未設定）'}
       // モーダルを閉じる
       closePlatformEditModal();
 
+      // プラットフォーム設定を永続化（localStorage + Firestore）
+      await persistPlatformSettings();
+
       console.log('✅ プラットフォーム編集を保存:', currentEditingPlatformId);
     }
 
     /**
-     * 編集画面から削除
+     * 編集画面から削除/非表示
      */
-    function deletePlatformFromEdit() {
-      if (currentEditingPlatformId) {
+    async function deletePlatformFromEdit() {
+      if (!currentEditingPlatformId) return;
+
+      const platformId = currentEditingPlatformId;
+      const isCustom = customPlatforms.some(p => p.id === platformId);
+
+      if (isCustom) {
+        // カスタムプラットフォームは完全削除
         closePlatformEditModal();
-        removeCustomPlatform(currentEditingPlatformId);
+        await removeCustomPlatform(platformId);
+      } else {
+        // デフォルトプラットフォームは非表示（platformOrderから削除）
+        const platformName = defaultPlatformDefs.find(p => p.id === platformId)?.name || platformId;
+        if (!confirm(`「${platformName}」を一覧から非表示にしますか？\n\n※再表示するには「新規プラットフォーム追加」から同じIDで追加してください。`)) {
+          return;
+        }
+
+        closePlatformEditModal();
+
+        // チェック状態を保存
+        savePlatformCheckStates();
+
+        // platformOrderから削除
+        platformOrder = platformOrder.filter(pId => pId !== platformId);
+
+        // 再レンダリング
+        renderAllPlatforms();
+        restorePlatformCheckStates();
+
+        // プラットフォーム設定を永続化
+        await persistPlatformSettings();
+
+        console.log('👁️ プラットフォーム非表示:', platformId);
       }
     }
 
