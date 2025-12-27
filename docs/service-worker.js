@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v205-cache-bust'; // キャッシュ強制更新
-const SW_VERSION = 'v205-cache-bust'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v206-header-unified'; // ヘッダー統一（戻る+3本線）
+const SW_VERSION = 'v206-header-unified'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
