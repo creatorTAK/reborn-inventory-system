@@ -66,7 +66,7 @@ const masterCategories = {
         platformSupport: true,
         platforms: [
           { id: 'mercari', name: 'メルカリ', icon: '/images/platform/mercari.png' },
-          { id: 'mercari-shops', name: 'メルカリShops', icon: '/images/platform/mercari-shops.png', sharesWith: 'mercari' },
+          { id: 'mercari-shops', name: 'メルカリShops', icon: '/images/platform/mercari-shops.png' },
           { id: 'yahoo-fleamarket', name: 'Yahoo!フリマ', icon: '/images/platform/yahoo-fleamarket.png' },
           { id: 'yahoo-auction', name: 'Yahoo!オークション', icon: '/images/platform/yahoo-auction.png' },
           { id: 'rakuma', name: 'ラクマ', icon: '/images/platform/rakuma.png' },

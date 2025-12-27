@@ -412,14 +412,15 @@ function showPlatformTabs() {
     container = document.createElement('div');
     container.id = 'platformTabsContainer';
     container.className = 'platform-tabs-container';
+    // 商品登録と同じスタイル（product-styles.css準拠）
     container.style.cssText = `
       display: flex;
-      gap: 0;
-      padding: 0 16px;
-      background: #fff;
-      border-bottom: 1px solid #e0e0e0;
+      background: #ffffff;
+      border-bottom: 2px solid #e5e7eb;
       overflow-x: auto;
+      overflow-y: hidden;
       -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     `;
 
     // action-barの上に挿入
@@ -429,35 +430,33 @@ function showPlatformTabs() {
     }
   }
 
-  // タブを生成（商品登録と同じスタイル）
+  // タブを生成（商品登録CSSと完全一致）
   const platforms = currentMasterConfig.platforms || [];
   container.innerHTML = platforms.map(p => {
-    const isActive = p.id === currentPlatform || 
-                     (p.id === 'mercari-shops' && currentPlatform === 'mercari') ||
-                     (p.id === 'mercari' && currentPlatform === 'mercari-shops');
-    // mercari-shopsはmercariと連動（視覚的に）
-    const effectivePlatform = p.sharesWith || p.id;
+    const isActive = p.id === currentPlatform;
     
     return `
     <button class="platform-tab ${isActive ? 'active' : ''}"
             data-platform="${p.id}"
             onclick="selectPlatformTab('${p.id}')"
             style="
+              flex: 0 0 auto;
               display: flex;
               align-items: center;
               gap: 6px;
-              padding: 12px 16px;
-              border: none;
-              border-bottom: ${isActive ? '3px solid #007bff' : '3px solid transparent'};
-              background: ${isActive ? '#e3f2fd' : 'transparent'};
-              color: ${isActive ? '#007bff' : '#666'};
-              font-size: 14px;
+              padding: 10px 14px;
+              font-size: 12px;
               font-weight: ${isActive ? '600' : '500'};
+              color: ${isActive ? '#40B4E5' : '#6b7280'};
+              background: ${isActive ? 'rgba(64, 180, 229, 0.08)' : 'transparent'};
+              border: none;
+              border-bottom: 3px solid ${isActive ? '#40B4E5' : 'transparent'};
               cursor: pointer;
-              white-space: nowrap;
               transition: all 0.2s ease;
+              white-space: nowrap;
+              margin-bottom: -2px;
             ">
-      <img src="${p.icon}" alt="${p.name}" style="width: 20px; height: 20px; border-radius: 4px;" onerror="this.style.display='none'">
+      <img src="${p.icon}" alt="${p.name}" style="width: 18px; height: 18px;" onerror="this.style.display='none'">
       <span>${p.name}</span>
     </button>
   `;
@@ -480,32 +479,25 @@ function hidePlatformTabs() {
  * プラットフォームタブ選択
  */
 window.selectPlatformTab = async function selectPlatformTab(platformId) {
-  // メルカリShopsはメルカリと同じデータを共有
-  const effectivePlatform = (platformId === 'mercari-shops') ? 'mercari' : platformId;
-  
-  if (currentPlatform === effectivePlatform) return;
+  if (currentPlatform === platformId) return;
 
-  currentPlatform = effectivePlatform;
+  currentPlatform = platformId;
 
-  // タブのアクティブ状態を更新（商品登録と同じスタイル）
+  // タブのアクティブ状態を更新（商品登録CSSと完全一致）
   const container = document.getElementById('platformTabsContainer');
   if (container) {
     container.querySelectorAll('.platform-tab').forEach(tab => {
-      const tabPlatform = tab.dataset.platform;
-      // mercariとmercari-shopsは連動
-      const isActive = tabPlatform === platformId || 
-                       (tabPlatform === 'mercari-shops' && platformId === 'mercari') ||
-                       (tabPlatform === 'mercari' && platformId === 'mercari-shops');
+      const isActive = tab.dataset.platform === platformId;
       
       tab.classList.toggle('active', isActive);
-      tab.style.background = isActive ? '#e3f2fd' : 'transparent';
-      tab.style.color = isActive ? '#007bff' : '#666';
+      tab.style.color = isActive ? '#40B4E5' : '#6b7280';
+      tab.style.background = isActive ? 'rgba(64, 180, 229, 0.08)' : 'transparent';
       tab.style.fontWeight = isActive ? '600' : '500';
-      tab.style.borderBottom = isActive ? '3px solid #007bff' : '3px solid transparent';
+      tab.style.borderBottom = isActive ? '3px solid #40B4E5' : '3px solid transparent';
     });
   }
 
-  console.log(`🔄 [Master Manager] プラットフォーム切り替え: ${platformId} → 実効: ${effectivePlatform}`);
+  console.log(`🔄 [Master Manager] プラットフォーム切り替え: ${platformId}`);
 
   // キャッシュクリア（プラットフォーム別データを再取得するため）
   delete masterCache[currentMasterConfig.collection];
@@ -546,11 +538,9 @@ async function fetchAndDisplayTotalCountByPlatform() {
 
     // プラットフォームでフィルタリング
     // platformフィールドがないデータは 'mercari' として扱う（後方互換性）
-    // mercari-shopsはmercariと同じデータを使用
-    const targetPlatform = currentPlatform; // selectPlatformTabで既にmercari-shops→mercariに変換済み
     const filtered = categories.filter(cat => {
       const catPlatform = cat.platform || 'mercari'; // デフォルトはmercari
-      return catPlatform === targetPlatform;
+      return catPlatform === currentPlatform;
     });
     masterTotalCount = filtered.length;
 
