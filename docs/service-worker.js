@@ -1,8 +1,8 @@
 // Service Worker for REBORN PWA
 // プッシュ通知とオフライン対応の基盤
 
-const CACHE_NAME = 'reborn-v203-label-short'; // ラベル短縮（商品マスタ/業務マスタ）
-const SW_VERSION = 'v203-label-short'; // 確認用バージョン
+const CACHE_NAME = 'reborn-v204-master-label'; // 商品マスタ管理/業務マスタ管理
+const SW_VERSION = 'v204-master-label'; // 確認用バージョン
 const urlsToCache = [
   '/',
   '/index.html',
