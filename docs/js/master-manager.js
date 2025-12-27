@@ -339,6 +339,12 @@ async function loadMaster(category, type) {
   if (currentMasterConfig.platformSupport) {
     // デフォルトプラットフォームを先に設定（showPlatformTabsで使用するため）
     currentPlatform = currentMasterConfig.defaultPlatform || currentMasterConfig.platforms[0]?.id;
+    
+    // キャッシュクリア（新しいプラットフォームデータを取得するため）
+    if (window.masterCacheManager && typeof window.masterCacheManager.clearCache === 'function') {
+      window.masterCacheManager.clearCache('categories');
+    }
+    
     showPlatformTabs();
   } else {
     hidePlatformTabs();
@@ -584,6 +590,11 @@ window.selectPlatformTab = async function selectPlatformTab(platformId) {
   // キャッシュクリア（プラットフォーム別データを再取得するため）
   delete masterCache[currentMasterConfig.collection];
 
+  // masterCacheManagerのキャッシュもクリア
+  if (window.masterCacheManager && typeof window.masterCacheManager.clearCache === 'function') {
+    window.masterCacheManager.clearCache('categories');
+  }
+
   // ツリービューのキャッシュもクリア
   if (typeof expandedTreeNodes !== 'undefined') {
     expandedTreeNodes.clear();
@@ -595,7 +606,7 @@ window.selectPlatformTab = async function selectPlatformTab(platformId) {
 
   // 総件数取得
   if (currentMasterConfig.emptyState?.showTotalCount) {
-    fetchAndDisplayTotalCountByPlatform();
+    await fetchAndDisplayTotalCountByPlatform();
   }
 
   renderMasterList();
