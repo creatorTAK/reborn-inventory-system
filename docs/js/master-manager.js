@@ -417,21 +417,23 @@ async function fetchAndDisplayTotalCount() {
  * 空状態の件数表示を更新
  */
 function updateEmptyStateCount() {
-  const countDisplay = document.getElementById('emptyStateTotalCount');
-  if (!countDisplay) return;
+  // アクションバーの件数バッジを更新
+  const badge = document.getElementById('totalCountBadge');
+  const countText = document.getElementById('totalCountText');
+  if (!badge || !countText) return;
 
   if (masterTotalCount === -1) {
     // 読み込み中
-    countDisplay.textContent = '読み込み中...';
+    countText.textContent = '読み込み中...';
+    badge.classList.remove('hidden');
   } else if (masterTotalCount === -2) {
     // エラーまたは取得不可 - 非表示
-    countDisplay.textContent = '';
-    countDisplay.classList.add('hidden');
+    badge.classList.add('hidden');
   } else if (masterTotalCount > 0) {
-    countDisplay.textContent = `登録数: ${masterTotalCount.toLocaleString()}件`;
-    countDisplay.classList.remove('hidden');
+    countText.textContent = `${masterTotalCount.toLocaleString()}件`;
+    badge.classList.remove('hidden');
   } else {
-    countDisplay.textContent = '';
+    badge.classList.add('hidden');
   }
 }
 
@@ -682,7 +684,6 @@ function renderMasterList() {
     const emptyStateIcon = emptyState.querySelector('.empty-state i, .empty-state-icon');
     const emptyStateText = emptyState.querySelector('.empty-state-text');
     const emptyStateHint = emptyState.querySelector('.empty-state-hint');
-    const emptyStateTotalCount = emptyState.querySelector('#emptyStateTotalCount');
 
     // カスタムemptyState設定があるか確認
     const customEmptyState = currentMasterConfig?.emptyState;
@@ -692,7 +693,6 @@ function renderMasterList() {
       if (emptyStateIcon) emptyStateIcon.className = 'bi bi-inbox';
       if (emptyStateText) emptyStateText.textContent = 'データが見つかりません';
       if (emptyStateHint) emptyStateHint.textContent = '検索条件を変更してください';
-      if (emptyStateTotalCount) emptyStateTotalCount.classList.add('hidden');
     } else if (customEmptyState) {
       // カスタムemptyState設定がある場合
       if (emptyStateIcon && customEmptyState.icon) {
@@ -707,21 +707,11 @@ function renderMasterList() {
       if (emptyStateHint) {
         emptyStateHint.textContent = customEmptyState.hint || '';
       }
-      // 件数表示
-      if (emptyStateTotalCount) {
-        if (customEmptyState.showTotalCount) {
-          emptyStateTotalCount.classList.remove('hidden');
-          updateEmptyStateCount();
-        } else {
-          emptyStateTotalCount.classList.add('hidden');
-        }
-      }
     } else {
       // デフォルトの空状態
       if (emptyStateIcon) emptyStateIcon.className = 'bi bi-inbox';
       if (emptyStateText) emptyStateText.textContent = '検索して絞り込んでください';
       if (emptyStateHint) emptyStateHint.textContent = '';
-      if (emptyStateTotalCount) emptyStateTotalCount.classList.add('hidden');
     }
     return;
   }
