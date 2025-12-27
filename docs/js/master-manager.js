@@ -428,7 +428,7 @@ function updateEmptyStateCount() {
     // エラーまたは取得不可 - 非表示
     countEl.classList.add('hidden');
   } else if (masterTotalCount > 0) {
-    countEl.textContent = `（${masterTotalCount.toLocaleString()}件）`;
+    countEl.textContent = `${masterTotalCount.toLocaleString()}件`;
     countEl.classList.remove('hidden');
   } else {
     countEl.classList.add('hidden');
@@ -991,6 +991,7 @@ function createMasterCard(item, useLabeled = false) {
  */
 function updateStats() {
   const statsText = document.getElementById('statsText');
+  const totalCountEl = document.getElementById('totalCountBadge');
   const collection = currentMasterConfig?.collection;
   const totalItems = masterCache[collection] ? masterCache[collection].length : 0;
   const initialDisplay = currentMasterConfig?.initialDisplay;
@@ -998,16 +999,23 @@ function updateStats() {
   if (statsText) {
     const resultCount = filteredMasterData.length;
 
-    // 検索結果がある場合は件数のみ表示（「全〇件」は不要）
+    // 検索結果がある場合は件数のみ表示（総件数は非表示）
     if (resultCount > 0) {
       statsText.textContent = `検索結果: ${resultCount.toLocaleString()}件`;
+      // 検索結果表示時は総件数を非表示
+      if (totalCountEl) totalCountEl.classList.add('hidden');
     } else {
       // 検索専用モード（initialDisplay: 0）の場合は空欄
       if (initialDisplay === 0) {
         statsText.textContent = '';
+        // 総件数を表示（showTotalCountがtrueの場合のみ）
+        if (totalCountEl && currentMasterConfig?.emptyState?.showTotalCount && masterTotalCount > 0) {
+          totalCountEl.classList.remove('hidden');
+        }
       } else {
         // 通常モード
         statsText.textContent = `全${totalItems.toLocaleString()}件`;
+        if (totalCountEl) totalCountEl.classList.add('hidden');
       }
     }
   }
