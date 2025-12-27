@@ -417,7 +417,7 @@ async function fetchAndDisplayTotalCount() {
  * 空状態の件数表示を更新
  */
 function updateEmptyStateCount() {
-  // アクションバーの件数テキストを更新
+  // アクションバーの件数テキストを更新（stats-info内）
   const countEl = document.getElementById('totalCountBadge');
   if (!countEl) return;
 
@@ -428,7 +428,7 @@ function updateEmptyStateCount() {
     // エラーまたは取得不可 - 非表示
     countEl.classList.add('hidden');
   } else if (masterTotalCount > 0) {
-    countEl.textContent = `${masterTotalCount.toLocaleString()}件`;
+    countEl.textContent = `（${masterTotalCount.toLocaleString()}件）`;
     countEl.classList.remove('hidden');
   } else {
     countEl.classList.add('hidden');
