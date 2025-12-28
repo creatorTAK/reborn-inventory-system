@@ -414,12 +414,29 @@ class MasterCacheManager {
     await this.initialize();
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(['metadata'], 'readwrite');
-      const store = transaction.objectStore('metadata');
-      store.delete(collection);
+      // メタデータとデータ両方を削除するトランザクション
+      const storesToClear = ['metadata'];
+      
+      // コレクションストアが存在すれば追加
+      if (this.db.objectStoreNames.contains(collection)) {
+        storesToClear.push(collection);
+      }
+      
+      const transaction = this.db.transaction(storesToClear, 'readwrite');
+      
+      // メタデータ削除
+      const metaStore = transaction.objectStore('metadata');
+      metaStore.delete(collection);
+      
+      // データストアをクリア（存在する場合）
+      if (storesToClear.includes(collection)) {
+        const dataStore = transaction.objectStore(collection);
+        dataStore.clear();
+        console.log(`[MasterCache] ${collection}: データストアをクリア`);
+      }
 
       transaction.oncomplete = () => {
-        console.log(`[MasterCache] ${collection}: ✅ キャッシュ無効化完了`);
+        console.log(`[MasterCache] ${collection}: ✅ キャッシュ完全無効化完了（メタデータ+データ）`);
         // プリロードPromiseもクリア
         delete this.preloadPromises[collection];
         resolve();
