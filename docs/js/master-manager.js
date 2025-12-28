@@ -4578,19 +4578,26 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
       const catPlatform = cat.platform || cat.platformId || 'mercari';
       if (catPlatform !== sourcePlatformId) return false;
 
-      // superCategoryでマッチング（ツリーの最上位ノード）
-      if (cat.superCategory === nodePath) return true;
+      // nodePathの階層数を確認（">" で分割）
+      const nodePathParts = nodePath.split(' > ');
+      const isTopLevel = nodePathParts.length === 1;
 
-      // superCategory + fullPath でマッチング
-      if (cat.superCategory && cat.fullPath) {
-        const fullPathWithSuper = `${cat.superCategory} > ${cat.fullPath}`;
-        if (fullPathWithSuper.startsWith(nodePath)) return true;
+      if (isTopLevel) {
+        // トップレベルノード（特大カテゴリ）の場合
+        // superCategoryが完全一致するもののみ
+        return cat.superCategory === nodePath;
+      } else {
+        // 中間ノードの場合
+        // superCategory + fullPath の組み合わせでマッチング
+        if (cat.superCategory && cat.fullPath) {
+          const fullPathWithSuper = `${cat.superCategory} > ${cat.fullPath}`;
+          // 完全一致または、nodePath + " > " で始まるもの
+          if (fullPathWithSuper === nodePath || fullPathWithSuper.startsWith(nodePath + ' > ')) {
+            return true;
+          }
+        }
+        return false;
       }
-
-      // fullPathのみでマッチング（フォールバック）
-      if (cat.fullPath && cat.fullPath.startsWith(nodePath)) return true;
-
-      return false;
     });
 
     console.log(`📋 [Master Manager] コピー元: ${sourceCategories.length}件`);
@@ -4607,8 +4614,37 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
       return;
     }
 
+    // コピー先の既存カテゴリを取得（重複チェック用）
+    const existingTargetCategories = allCategories.filter(cat => {
+      const catPlatform = cat.platform || cat.platformId || 'mercari';
+      return catPlatform === targetPlatformId;
+    });
+
+    // 既存データのキー（superCategory + fullPath）をSetに格納
+    const existingKeys = new Set();
+    existingTargetCategories.forEach(cat => {
+      const key = `${cat.superCategory || ''}::${cat.fullPath || ''}`;
+      existingKeys.add(key);
+    });
+
+    console.log(`📋 [Copy] コピー先の既存カテゴリ: ${existingTargetCategories.length}件`);
+
+    // 重複を除外した新規カテゴリのみ抽出
+    const newCategories = sourceCategories.filter(cat => {
+      const key = `${cat.superCategory || ''}::${cat.fullPath || ''}`;
+      return !existingKeys.has(key);
+    });
+
+    console.log(`📋 [Copy] 新規作成対象: ${newCategories.length}件（重複除外: ${sourceCategories.length - newCategories.length}件）`);
+
+    if (newCategories.length === 0) {
+      showLoading(false);
+      alert(`⚠️ すべてのカテゴリが既にコピー先に存在します`);
+      return;
+    }
+
     // 新しいカテゴリを作成
-    const createPromises = sourceCategories.map(async (cat) => {
+    const createPromises = newCategories.map(async (cat) => {
       const newCat = { ...cat };
       delete newCat.id; // 新しいIDを生成させる
       delete newCat.createdAt; // createMasterが設定する
@@ -4627,10 +4663,15 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
 
     showLoading(false);
 
-    if (successCount === sourceCategories.length) {
-      alert(`✅ ${successCount}件をコピーしました`);
+    const skippedCount = sourceCategories.length - newCategories.length;
+    if (successCount === newCategories.length) {
+      if (skippedCount > 0) {
+        alert(`✅ ${successCount}件をコピーしました\n（${skippedCount}件は既に存在するためスキップ）`);
+      } else {
+        alert(`✅ ${successCount}件をコピーしました`);
+      }
     } else {
-      alert(`⚠️ ${successCount}/${sourceCategories.length}件をコピーしました`);
+      alert(`⚠️ ${successCount}/${newCategories.length}件をコピーしました`);
     }
 
     // キャッシュクリア（コピー先を見るときに再読み込みされる）
