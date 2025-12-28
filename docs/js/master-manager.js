@@ -1633,10 +1633,18 @@ function showTreeInlineAddForm(nodePath, level, pathArray, nodeContainer) {
   });
 
   // 追加ボタン
-  formContainer.querySelector('.inline-form-submit').addEventListener('click', async () => {
+  const submitBtn = formContainer.querySelector('.inline-form-submit');
+  submitBtn.addEventListener('click', async () => {
+    // 連打防止
+    if (submitBtn.disabled) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '追加中...';
+
     const inputValue = textarea.value.trim();
     if (!inputValue) {
       showToast('追加する名前を入力してください', 'warning');
+      submitBtn.disabled = false;
+      submitBtn.textContent = '追加する';
       return;
     }
 
@@ -1644,6 +1652,8 @@ function showTreeInlineAddForm(nodePath, level, pathArray, nodeContainer) {
     const newValues = inputValue.split('\n').map(v => v.trim()).filter(v => v.length > 0);
     if (newValues.length === 0) {
       showToast('追加する名前を入力してください', 'warning');
+      submitBtn.disabled = false;
+      submitBtn.textContent = '追加する';
       return;
     }
 
