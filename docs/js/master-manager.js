@@ -1755,18 +1755,36 @@ async function addTreeItems(pathArray, newValues, isItemName) {
   if (addedCount > 0) {
     showToast(`${addedCount}件追加しました${duplicateCount > 0 ? `（${duplicateCount}件は重複のためスキップ）` : ''}`, 'success');
 
-    // IndexedDBキャッシュをクリア（古いデータとの混在を防ぐ）
+    // IndexedDBキャッシュをクリア（完了を待ってからリロード）
+    if (window.masterCacheManager) {
+      // masterCacheManagerの状態をリセット
+      window.masterCacheManager.isInitialized = false;
+      window.masterCacheManager.db = null;
+    }
     if (window.indexedDB) {
       try {
-        indexedDB.deleteDatabase('RebornMasterCache');
-        console.log('[Master Manager] IndexedDBキャッシュをクリアしました');
+        await new Promise((resolve, reject) => {
+          const deleteRequest = indexedDB.deleteDatabase('RebornMasterCache');
+          deleteRequest.onsuccess = () => {
+            console.log('[Master Manager] IndexedDBキャッシュ削除完了');
+            resolve();
+          };
+          deleteRequest.onerror = () => {
+            console.warn('[Master Manager] IndexedDBキャッシュ削除エラー:', deleteRequest.error);
+            reject(deleteRequest.error);
+          };
+          deleteRequest.onblocked = () => {
+            console.warn('[Master Manager] IndexedDBキャッシュ削除がブロックされました');
+            resolve(); // ブロックされても続行
+          };
+        });
       } catch (e) {
         console.warn('[Master Manager] IndexedDBキャッシュクリア失敗:', e);
       }
     }
 
     // ツリー再描画（Firestoreから再取得）
-    await loadMasterData(currentCategory, currentMasterType);
+    await loadMasterData();
   } else if (duplicateCount > 0) {
     showToast(`すべて重複のため追加されませんでした（${duplicateCount}件）`, 'warning');
   }
