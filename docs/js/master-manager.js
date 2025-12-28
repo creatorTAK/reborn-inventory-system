@@ -1025,17 +1025,41 @@ async function performSearch(query) {
       ? currentMasterConfig.initialDisplay
       : (currentMasterConfig.maxDisplayResults || 100);
 
-    if (initialDisplay === 0) {
+    // ツリービュー（カテゴリ）は検索クリア時もツリーを表示
+    if (currentMasterConfig.viewMode === 'tree') {
+      console.log('🔄 [Master Manager] 検索クリア（ツリービュー: 全データ復元）');
+      const cachedData = masterCache[collection] || [];
+
+      if (cachedData.length > 0) {
+        allMasterData = cachedData;
+        filteredMasterData = [...cachedData];
+      } else {
+        // キャッシュが空の場合はデータを再読み込み
+        console.log('🔄 [Master Manager] キャッシュ空のため再読み込み');
+        if (currentMasterConfig.platformSupport) {
+          await fetchAndDisplayTotalCountByPlatform();
+        } else {
+          await loadMasterData();
+        }
+        return; // 上記関数がrenderMasterListを呼ぶので早期リターン
+      }
+    } else if (initialDisplay === 0) {
       // 検索専用モード（ブランド等）: 空表示
       console.log('🔄 [Master Manager] 検索クリア（検索専用モード）');
       allMasterData = [];
       filteredMasterData = [];
     } else {
-      // 通常モード（カテゴリ等）: キャッシュから全データ復元
+      // 通常モード: キャッシュから全データ復元
       console.log('🔄 [Master Manager] 検索クリア（全データ復元）');
       const cachedData = masterCache[collection] || [];
-      allMasterData = cachedData;
-      filteredMasterData = [...cachedData];
+
+      if (cachedData.length > 0) {
+        allMasterData = cachedData;
+        filteredMasterData = [...cachedData];
+      } else {
+        await loadMasterData();
+        return;
+      }
     }
   }
 
@@ -1508,10 +1532,14 @@ function expandAllTreeNodes(tree, parentPath = '') {
   Object.keys(tree).forEach(key => {
     const node = tree[key];
     const nodePath = parentPath ? `${parentPath} > ${key}` : key;
-    expandedTreeNodes.add(nodePath);
 
-    if (Object.keys(node.children).length > 0) {
-      expandAllTreeNodes(node.children, nodePath);
+    // 結果があるノードのみ展開（count > 0）
+    if (node.count > 0) {
+      expandedTreeNodes.add(nodePath);
+
+      if (Object.keys(node.children).length > 0) {
+        expandAllTreeNodes(node.children, nodePath);
+      }
     }
   });
 }
