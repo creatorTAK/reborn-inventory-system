@@ -4027,6 +4027,12 @@ window.confirmDelete = async function() {
           item => item.id !== masterToDelete.id
         );
       }
+      
+      // IndexedDBキャッシュも無効化
+      if (window.masterCacheManager && window.masterCacheManager.invalidateCache) {
+        await window.masterCacheManager.invalidateCache(currentMasterConfig.collection);
+        console.log('✅ [Delete] IndexedDBキャッシュ無効化完了');
+      }
 
       // 件数を更新（動的カウント）
       if (masterTotalCount > 0) {
@@ -4135,6 +4141,12 @@ window.deleteSelected = async function() {
 
     // キャッシュクリア
     delete masterCache[currentMasterConfig.collection];
+    
+    // IndexedDBキャッシュも無効化
+    if (window.masterCacheManager && window.masterCacheManager.invalidateCache) {
+      await window.masterCacheManager.invalidateCache(currentMasterConfig.collection);
+      console.log('✅ [BulkDelete] IndexedDBキャッシュ無効化完了');
+    }
 
     // 選択モードOFF
     window.toggleSelectionMode();
@@ -4416,6 +4428,13 @@ async function deleteTreeNode(nodePath, nodeName) {
 
     // キャッシュクリア＆再読み込み
     delete masterCache[collection];
+    
+    // IndexedDBキャッシュも無効化
+    if (window.masterCacheManager && window.masterCacheManager.invalidateCache) {
+      await window.masterCacheManager.invalidateCache(collection);
+      console.log('✅ [Delete] IndexedDBキャッシュ無効化完了');
+    }
+    
     await fetchAndDisplayTotalCountByPlatform();
 
   } catch (error) {
