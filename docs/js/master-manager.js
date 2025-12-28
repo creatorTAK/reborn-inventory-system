@@ -1738,7 +1738,18 @@ async function addTreeItems(pathArray, newValues, isItemName) {
   // 結果通知
   if (addedCount > 0) {
     showToast(`${addedCount}件追加しました${duplicateCount > 0 ? `（${duplicateCount}件は重複のためスキップ）` : ''}`, 'success');
-    // ツリー再描画
+
+    // IndexedDBキャッシュをクリア（古いデータとの混在を防ぐ）
+    if (window.indexedDB) {
+      try {
+        indexedDB.deleteDatabase('RebornMasterCache');
+        console.log('[Master Manager] IndexedDBキャッシュをクリアしました');
+      } catch (e) {
+        console.warn('[Master Manager] IndexedDBキャッシュクリア失敗:', e);
+      }
+    }
+
+    // ツリー再描画（Firestoreから再取得）
     await loadMasterData(currentCategory, currentMasterType);
   } else if (duplicateCount > 0) {
     showToast(`すべて重複のため追加されませんでした（${duplicateCount}件）`, 'warning');
