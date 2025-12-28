@@ -1604,12 +1604,8 @@ function showTreeInlineAddForm(nodePath, level, pathArray, nodeContainer) {
     formContainer.remove();
   });
 
-  // Enterキーで追加（Shift+Enterは改行）
+  // Escapeキーでキャンセル（Enterは改行として許可 - iOS対応）
   textarea.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      formContainer.querySelector('.inline-form-submit').click();
-    }
     if (e.key === 'Escape') {
       formContainer.remove();
     }
