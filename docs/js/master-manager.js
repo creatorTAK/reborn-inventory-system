@@ -4429,11 +4429,40 @@ async function deleteTreeNode(nodePath, nodeName) {
 let copyModalData = null;
 
 /**
+ * 設定画面のプラットフォーム設定を取得（連動）
+ * @returns {Array} プラットフォームリスト
+ */
+function getAvailablePlatforms() {
+  try {
+    // 設定画面のプラットフォーム設定を参照（localStorage）
+    const configStr = localStorage.getItem('config');
+    if (configStr) {
+      const config = JSON.parse(configStr);
+      const platformSettings = config['プラットフォーム設定'];
+      if (platformSettings && platformSettings.platforms && platformSettings.platforms.length > 0) {
+        // enabled: true のプラットフォームのみ返す
+        const enabledPlatforms = platformSettings.platforms.filter(p => p.enabled);
+        if (enabledPlatforms.length > 0) {
+          console.log('📋 [Copy] 設定画面のプラットフォームを使用:', enabledPlatforms.map(p => p.name));
+          return enabledPlatforms;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ [Copy] プラットフォーム設定の読み込みに失敗:', e);
+  }
+
+  // フォールバック: master-config.js の設定を使用
+  console.log('📋 [Copy] フォールバック: master-config.jsの設定を使用');
+  return currentMasterConfig.platforms || [];
+}
+
+/**
  * ツリーノードコピーモーダル表示（タップ式UI）
  */
 function showTreeNodeCopyModal(nodePath, nodeName, pathArray, node) {
-  // 利用可能なプラットフォームを取得
-  const platforms = currentMasterConfig.platforms || [];
+  // 設定画面のプラットフォーム設定と連動
+  const platforms = getAvailablePlatforms();
   const currentPlatformId = currentPlatform || 'mercari';
 
   // 現在のプラットフォーム以外を選択肢に
