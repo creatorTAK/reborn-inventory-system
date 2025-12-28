@@ -43,6 +43,46 @@ let expandedGroups = new Set(); // 展開中のグループ名
 let currentPlatform = null; // 現在選択中のプラットフォーム
 
 // ============================================
+// トースト通知
+// ============================================
+
+/**
+ * トースト通知を表示
+ * @param {string} message - 表示メッセージ
+ * @param {string} type - 'success' | 'warning' | 'error'
+ */
+function showToast(message, type = 'success') {
+  // 既存のトーストを削除
+  const existingToast = document.querySelector('.master-toast');
+  if (existingToast) existingToast.remove();
+
+  const toast = document.createElement('div');
+  toast.className = `master-toast master-toast-${type}`;
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    z-index: 10000;
+    animation: toastFadeIn 0.3s ease;
+    background: ${type === 'success' ? '#4CAF50' : type === 'warning' ? '#FF9800' : '#F44336'};
+  `;
+
+  document.body.appendChild(toast);
+
+  // 3秒後に自動削除
+  setTimeout(() => {
+    toast.style.animation = 'toastFadeOut 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// ============================================
 // ユーティリティ関数（カタカナ⇔ひらがな変換）
 // ============================================
 
