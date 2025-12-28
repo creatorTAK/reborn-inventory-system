@@ -1306,8 +1306,12 @@ function buildCategoryTreeWithSuperCategory(categories) {
     };
   });
 
-  // マッピングされなかったデータを追跡（デバッグ用）
-  const unmappedData = [];
+  // デバッグ用カウンター
+  const debugStats = {
+    total: categories.length,
+    skipped: 0,
+    bySuperCategory: {}
+  };
 
   // カテゴリデータをツリーに追加
   categories.forEach(cat => {
@@ -1334,8 +1338,8 @@ function buildCategoryTreeWithSuperCategory(categories) {
           // マッピングにない場合はそのまま（新しいsuperCategoryとして扱う）
           superCategory = firstPart;
           subLevels = pathParts.slice(1);
-          // デバッグ: マッピングされなかったデータを記録
-          unmappedData.push({ firstPart, fullPath: cat.fullPath, id: cat.id });
+          // デバッグ: マッピングされなかったデータを出力
+          console.warn('[CategoryTree] マッピングなし:', { firstPart, fullPath: cat.fullPath });
         }
       }
     }
@@ -1345,7 +1349,14 @@ function buildCategoryTreeWithSuperCategory(categories) {
       subLevels = levelFields.slice(1).map(f => cat[f]).filter(Boolean);
     }
 
-    if (!superCategory) return;
+    if (!superCategory) {
+      debugStats.skipped++;
+      console.warn('[CategoryTree] スキップ: superCategoryなし', { id: cat.id, fullPath: cat.fullPath });
+      return;
+    }
+
+    // デバッグ: superCategoryごとの件数を追跡
+    debugStats.bySuperCategory[superCategory] = (debugStats.bySuperCategory[superCategory] || 0) + 1;
 
     // 該当する特大分類がなければ作成
     if (!tree[superCategory]) {
@@ -1389,10 +1400,16 @@ function buildCategoryTreeWithSuperCategory(categories) {
     });
   });
 
-  // デバッグ: マッピングされなかったデータを出力
-  if (unmappedData.length > 0) {
-    console.warn('[CategoryTree] マッピングされなかったデータ:', unmappedData);
-  }
+  // デバッグ: 統計情報を出力
+  console.log('[CategoryTree] 統計:', debugStats);
+
+  // ツリー内の件数合計を計算
+  let treeTotal = 0;
+  Object.keys(tree).forEach(key => {
+    treeTotal += tree[key].count;
+    console.log(`[CategoryTree] ${key}: ${tree[key].count}件`);
+  });
+  console.log(`[CategoryTree] ツリー合計: ${treeTotal}件 / 入力: ${categories.length}件`);
 
   return tree;
 }
