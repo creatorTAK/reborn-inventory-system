@@ -1677,11 +1677,15 @@ function showTreeInlineAddForm(nodePath, level, pathArray, nodeContainer) {
  * @param {boolean} isItemName - アイテム名として追加するか
  */
 async function addTreeItems(pathArray, newValues, isItemName) {
+  console.log('[addTreeItems] 開始:', { pathArray, newValues, isItemName });
+
   const treeConfig = currentMasterConfig.treeConfig || {};
   const levelFields = treeConfig.levelFields || [];
   const itemNameField = treeConfig.itemNameField || 'itemName';
   const cascadeConfig = currentMasterConfig.cascadeAdd || {};
   const platformField = cascadeConfig.platformField || 'platforms';
+
+  console.log('[addTreeItems] levelFields:', levelFields);
 
   // 現在のプラットフォームを取得
   const selectedPlatforms = getSelectedPlatforms();
@@ -1713,6 +1717,8 @@ async function addTreeItems(pathArray, newValues, isItemName) {
     // fullPath を生成
     const pathParts = [...pathArray, newValue];
     newItem.fullPath = pathParts.join(' > ');
+
+    console.log('[addTreeItems] 生成データ:', { newItem, pathParts });
 
     // プラットフォーム設定
     if (selectedPlatforms.length > 0) {
