@@ -4562,6 +4562,16 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
 
     // コピー元のカテゴリを取得
     const allCategories = masterCache[collection] || allMasterData;
+
+    // デバッグログ
+    console.log(`📋 [Copy Debug] nodePath: "${nodePath}"`);
+    console.log(`📋 [Copy Debug] sourcePlatformId: "${sourcePlatformId}"`);
+    console.log(`📋 [Copy Debug] allCategories count: ${allCategories ? allCategories.length : 0}`);
+    if (allCategories && allCategories.length > 0) {
+      console.log(`📋 [Copy Debug] サンプルfullPath: "${allCategories[0].fullPath}"`);
+      console.log(`📋 [Copy Debug] サンプルplatformId: "${allCategories[0].platformId}"`);
+    }
+
     const sourceCategories = allCategories.filter(cat => {
       if (cat.platformId !== sourcePlatformId) return false;
       return cat.fullPath && cat.fullPath.startsWith(nodePath);
@@ -4571,6 +4581,12 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
 
     if (sourceCategories.length === 0) {
       showLoading(false);
+      // デバッグ情報を表示
+      const platformMatch = allCategories.filter(cat => cat.platformId === sourcePlatformId);
+      console.log(`📋 [Copy Debug] platformIdマッチ: ${platformMatch.length}件`);
+      if (platformMatch.length > 0) {
+        console.log(`📋 [Copy Debug] fullPathサンプル:`, platformMatch.slice(0, 3).map(c => c.fullPath));
+      }
       alert('コピー元のカテゴリが見つかりませんでした');
       return;
     }
