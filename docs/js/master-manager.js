@@ -1052,12 +1052,21 @@ function renderMasterList() {
   if (currentMasterConfig.viewMode === 'tree') {
     // ツリービュー表示（カテゴリ用）
     renderCategoryTreeView(container);
+    // ツリービューでは上部の「新規追加」ボタンを非表示（ツリー内に追加機能あり）
+    const actionBarAddBtn = document.querySelector('.action-bar .btn-add');
+    if (actionBarAddBtn) actionBarAddBtn.style.display = 'none';
   } else if (currentMasterConfig.groupBy) {
     // アコーディオン表示
     renderAccordionList(container);
+    // 上部の「新規追加」ボタンを表示
+    const actionBarAddBtn = document.querySelector('.action-bar .btn-add');
+    if (actionBarAddBtn) actionBarAddBtn.style.display = '';
   } else {
     // 従来のフラットリスト表示
     renderFlatList(container);
+    // 上部の「新規追加」ボタンを表示
+    const actionBarAddBtn = document.querySelector('.action-bar .btn-add');
+    if (actionBarAddBtn) actionBarAddBtn.style.display = '';
   }
 }
 
@@ -1268,9 +1277,99 @@ function renderCategoryTreeView(container) {
   const treeWrapper = document.createElement('div');
   treeWrapper.className = 'category-tree-wrapper';
 
+  // ルートレベル追加ボタン（最上位カテゴリ追加用）
+  const rootAddContainer = document.createElement('div');
+  rootAddContainer.className = 'tree-root-add-container';
+  rootAddContainer.innerHTML = `
+    <button class="tree-root-add-btn" title="新規カテゴリを追加">
+      <i class="bi bi-plus-circle"></i>
+      <span>新規追加</span>
+    </button>
+  `;
+  rootAddContainer.querySelector('.tree-root-add-btn').addEventListener('click', () => {
+    showRootLevelAddForm(rootAddContainer);
+  });
+  treeWrapper.appendChild(rootAddContainer);
+
   renderTreeLevel(tree, treeWrapper, 1);
 
   container.appendChild(treeWrapper);
+}
+
+/**
+ * ルートレベル（最上位）の追加フォームを表示
+ */
+function showRootLevelAddForm(containerAfter) {
+  // 既存のインラインフォームがあれば削除
+  const existingForm = document.querySelector('.tree-inline-add-form');
+  if (existingForm) {
+    existingForm.remove();
+  }
+
+  // インラインフォームを作成
+  const formContainer = document.createElement('div');
+  formContainer.className = 'tree-inline-add-form';
+  formContainer.style.marginLeft = '0';
+  formContainer.innerHTML = `
+    <div class="inline-form-header">
+      <span class="inline-form-path">新規カテゴリを追加</span>
+      <button class="inline-form-close" title="閉じる"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="inline-form-body">
+      <textarea class="inline-form-input" placeholder="追加するカテゴリ名を入力（複数行で一括追加可能）" rows="3"></textarea>
+      <div class="inline-form-hint">1行に1つずつ入力すると一括追加できます</div>
+      <div class="inline-form-actions">
+        <button class="inline-form-cancel">キャンセル</button>
+        <button class="inline-form-submit">追加する</button>
+      </div>
+    </div>
+  `;
+
+  containerAfter.after(formContainer);
+
+  // フォーカス
+  const textarea = formContainer.querySelector('.inline-form-input');
+  textarea.focus();
+
+  // 閉じるボタン
+  formContainer.querySelector('.inline-form-close').addEventListener('click', () => {
+    formContainer.remove();
+  });
+
+  // キャンセルボタン
+  formContainer.querySelector('.inline-form-cancel').addEventListener('click', () => {
+    formContainer.remove();
+  });
+
+  // 追加ボタン
+  formContainer.querySelector('.inline-form-submit').addEventListener('click', async () => {
+    const inputValue = textarea.value.trim();
+    if (!inputValue) {
+      showToast('追加するカテゴリ名を入力してください', 'warning');
+      return;
+    }
+
+    const newValues = inputValue.split('\n').map(v => v.trim()).filter(v => v.length > 0);
+    if (newValues.length === 0) {
+      showToast('追加するカテゴリ名を入力してください', 'warning');
+      return;
+    }
+
+    // ルートレベル追加（pathArrayは空）
+    await addTreeItems([], newValues, false);
+    formContainer.remove();
+  });
+
+  // Enterキーで追加
+  textarea.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      formContainer.querySelector('.inline-form-submit').click();
+    }
+    if (e.key === 'Escape') {
+      formContainer.remove();
+    }
+  });
 }
 
 /**
@@ -1294,8 +1393,11 @@ function expandAllTreeNodes(tree, parentPath = '') {
  * @param {HTMLElement} container - コンテナ要素
  * @param {number} level - 現在のレベル（1〜）
  */
-function renderTreeLevel(tree, container, level) {
+function renderTreeLevel(tree, container, level, parentPathArray = []) {
   const sortedKeys = Object.keys(tree).sort((a, b) => a.localeCompare(b, 'ja'));
+  const treeConfig = currentMasterConfig.treeConfig || {};
+  const levelFields = treeConfig.levelFields || [];
+  const maxLevels = levelFields.length;
 
   sortedKeys.forEach(key => {
     const node = tree[key];
@@ -1303,6 +1405,7 @@ function renderTreeLevel(tree, container, level) {
     const hasItems = node.items.length > 0;
     const nodePath = node.path;
     const isExpanded = expandedTreeNodes.has(nodePath);
+    const currentPathArray = [...parentPathArray, key];
 
     // ノードヘッダー
     const nodeContainer = document.createElement('div');
@@ -1310,16 +1413,37 @@ function renderTreeLevel(tree, container, level) {
 
     const nodeHeader = document.createElement('div');
     nodeHeader.className = `category-tree-header ${isExpanded ? 'expanded' : ''} ${hasChildren || hasItems ? 'has-children' : ''}`;
+
+    // [+]ボタンを追加（子カテゴリまたはアイテム追加用）
+    const canAddChildren = level <= maxLevels; // アイテム名も追加可能
+    const addBtnHtml = canAddChildren ? `<button class="tree-add-btn" data-path="${escapeHtml(nodePath)}" data-level="${level}" title="ここに追加"><i class="bi bi-plus"></i></button>` : '';
+
     nodeHeader.innerHTML = `
       <div class="tree-node-content">
         ${hasChildren || hasItems ? `<i class="bi ${isExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} toggle-icon"></i>` : '<span class="tree-spacer"></span>'}
         <span class="tree-node-name">${escapeHtml(key)}</span>
         <span class="tree-node-count">(${node.count}件)</span>
+        ${addBtnHtml}
       </div>
     `;
 
+    // 展開/収納のクリックイベント（[+]ボタン以外）
+    const nodeContent = nodeHeader.querySelector('.tree-node-content');
     if (hasChildren || hasItems) {
-      nodeHeader.addEventListener('click', () => toggleTreeNode(nodePath, node, level));
+      nodeContent.addEventListener('click', (e) => {
+        if (!e.target.closest('.tree-add-btn')) {
+          toggleTreeNode(nodePath, node, level);
+        }
+      });
+    }
+
+    // [+]ボタンのクリックイベント
+    const addBtn = nodeHeader.querySelector('.tree-add-btn');
+    if (addBtn) {
+      addBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showTreeInlineAddForm(nodePath, level, currentPathArray, nodeContainer);
+      });
     }
 
     nodeContainer.appendChild(nodeHeader);
@@ -1335,7 +1459,7 @@ function renderTreeLevel(tree, container, level) {
     if (isExpanded) {
       // 子ノードをレンダリング
       if (hasChildren) {
-        renderTreeLevel(node.children, childrenInner, level + 1);
+        renderTreeLevel(node.children, childrenInner, level + 1, currentPathArray);
       }
 
       // アイテムをレンダリング（最終レベルのみ）
@@ -1352,6 +1476,203 @@ function renderTreeLevel(tree, container, level) {
 
     container.appendChild(nodeContainer);
   });
+}
+
+/**
+ * ツリー上でのインライン追加フォームを表示
+ * @param {string} nodePath - 親ノードのパス（例: "メンズ > トップス"）
+ * @param {number} level - 親ノードのレベル
+ * @param {Array} pathArray - パス配列（例: ["メンズ", "トップス"]）
+ * @param {HTMLElement} nodeContainer - ノードコンテナ要素
+ */
+function showTreeInlineAddForm(nodePath, level, pathArray, nodeContainer) {
+  // 既存のインラインフォームがあれば削除
+  const existingForm = document.querySelector('.tree-inline-add-form');
+  if (existingForm) {
+    existingForm.remove();
+  }
+
+  const treeConfig = currentMasterConfig.treeConfig || {};
+  const levelFields = treeConfig.levelFields || [];
+  const itemNameField = treeConfig.itemNameField || 'itemName';
+  const maxLevels = levelFields.length;
+
+  // 追加対象レベルを決定（現在レベルの次 or アイテム名）
+  const nextLevel = level + 1;
+  const isAddingItemName = nextLevel > maxLevels;
+  const targetLabel = isAddingItemName ? 'アイテム名' : `階層${nextLevel}`;
+
+  // インラインフォームを作成
+  const formContainer = document.createElement('div');
+  formContainer.className = 'tree-inline-add-form';
+  formContainer.innerHTML = `
+    <div class="inline-form-header">
+      <span class="inline-form-path">${escapeHtml(nodePath)} に追加</span>
+      <button class="inline-form-close" title="閉じる"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="inline-form-body">
+      <textarea class="inline-form-input" placeholder="追加する名前を入力（複数行で一括追加可能）" rows="3"></textarea>
+      <div class="inline-form-hint">1行に1つずつ入力すると一括追加できます</div>
+      <div class="inline-form-actions">
+        <button class="inline-form-cancel">キャンセル</button>
+        <button class="inline-form-submit">追加する</button>
+      </div>
+    </div>
+  `;
+
+  // ノードの子要素コンテナの後に挿入
+  const childrenContainer = nodeContainer.querySelector('.category-tree-children');
+  if (childrenContainer) {
+    childrenContainer.after(formContainer);
+  } else {
+    nodeContainer.appendChild(formContainer);
+  }
+
+  // フォーカス
+  const textarea = formContainer.querySelector('.inline-form-input');
+  textarea.focus();
+
+  // 閉じるボタン
+  formContainer.querySelector('.inline-form-close').addEventListener('click', () => {
+    formContainer.remove();
+  });
+
+  // キャンセルボタン
+  formContainer.querySelector('.inline-form-cancel').addEventListener('click', () => {
+    formContainer.remove();
+  });
+
+  // 追加ボタン
+  formContainer.querySelector('.inline-form-submit').addEventListener('click', async () => {
+    const inputValue = textarea.value.trim();
+    if (!inputValue) {
+      showToast('追加する名前を入力してください', 'warning');
+      return;
+    }
+
+    // 複数行対応
+    const newValues = inputValue.split('\n').map(v => v.trim()).filter(v => v.length > 0);
+    if (newValues.length === 0) {
+      showToast('追加する名前を入力してください', 'warning');
+      return;
+    }
+
+    // 追加処理
+    await addTreeItems(pathArray, newValues, isAddingItemName);
+    formContainer.remove();
+  });
+
+  // Enterキーで追加（Shift+Enterは改行）
+  textarea.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      formContainer.querySelector('.inline-form-submit').click();
+    }
+    if (e.key === 'Escape') {
+      formContainer.remove();
+    }
+  });
+}
+
+/**
+ * ツリーにアイテムを追加
+ * @param {Array} pathArray - 親パス配列
+ * @param {Array} newValues - 追加する値の配列
+ * @param {boolean} isItemName - アイテム名として追加するか
+ */
+async function addTreeItems(pathArray, newValues, isItemName) {
+  const treeConfig = currentMasterConfig.treeConfig || {};
+  const levelFields = treeConfig.levelFields || [];
+  const itemNameField = treeConfig.itemNameField || 'itemName';
+  const cascadeConfig = currentMasterConfig.cascadeAdd || {};
+  const platformField = cascadeConfig.platformField || 'platforms';
+
+  // 現在のプラットフォームを取得
+  const selectedPlatforms = getSelectedPlatforms();
+
+  let addedCount = 0;
+  let duplicateCount = 0;
+  const categories = masterCache[currentMasterConfig.collection] || [];
+
+  for (const newValue of newValues) {
+    // 親階層の値を設定
+    const newItem = {};
+    pathArray.forEach((value, index) => {
+      if (index < levelFields.length) {
+        newItem[levelFields[index]] = value;
+      }
+    });
+
+    if (isItemName) {
+      // アイテム名として追加
+      newItem[itemNameField] = newValue;
+    } else {
+      // 次の階層として追加
+      const nextLevelIndex = pathArray.length;
+      if (nextLevelIndex < levelFields.length) {
+        newItem[levelFields[nextLevelIndex]] = newValue;
+      }
+    }
+
+    // fullPath を生成
+    const pathParts = [...pathArray, newValue];
+    newItem.fullPath = pathParts.join(' > ');
+
+    // プラットフォーム設定
+    if (selectedPlatforms.length > 0) {
+      newItem[platformField] = selectedPlatforms;
+    }
+
+    // 重複チェック
+    const isDuplicate = categories.some(cat => cat.fullPath === newItem.fullPath);
+    if (isDuplicate) {
+      duplicateCount++;
+      continue;
+    }
+
+    // Firestoreに追加
+    try {
+      const docRef = await firebase.firestore()
+        .collection(currentMasterConfig.collection)
+        .add({
+          ...newItem,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+      newItem.id = docRef.id;
+      masterCache[currentMasterConfig.collection].push(newItem);
+      addedCount++;
+    } catch (error) {
+      console.error('[Master Manager] 追加エラー:', error);
+      showToast(`追加エラー: ${error.message}`, 'error');
+    }
+  }
+
+  // 結果通知
+  if (addedCount > 0) {
+    showToast(`${addedCount}件追加しました${duplicateCount > 0 ? `（${duplicateCount}件は重複のためスキップ）` : ''}`, 'success');
+    // ツリー再描画
+    await loadMasterData(currentCategory, currentMasterType);
+  } else if (duplicateCount > 0) {
+    showToast(`すべて重複のため追加されませんでした（${duplicateCount}件）`, 'warning');
+  }
+}
+
+/**
+ * 選択されているプラットフォームを取得
+ */
+function getSelectedPlatforms() {
+  const platformTabs = document.querySelectorAll('.platform-tab.active');
+  if (platformTabs.length === 0) return [];
+
+  // 「すべて」タブがアクティブな場合は空配列
+  const activeTab = document.querySelector('.platform-tab.active');
+  if (activeTab && activeTab.dataset.platform === 'all') {
+    return [];
+  }
+
+  return Array.from(platformTabs).map(tab => tab.dataset.platform).filter(Boolean);
 }
 
 /**
