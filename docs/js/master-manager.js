@@ -725,15 +725,23 @@ async function fetchAndDisplayTotalCountByPlatform() {
       categories = await window.getMasterData(currentMasterConfig.collection);
     }
 
-    // プラットフォームでフィルタリング
-    // platformフィールドがないデータは 'mercari' として扱う（後方互換性）
-    const filtered = categories.filter(cat => {
-      const catPlatform = cat.platform || 'mercari'; // デフォルトはmercari
-      return catPlatform === currentPlatform;
-    });
+    // カテゴリはプラットフォーム共通（フィルターしない）
+    // 他のマスタはプラットフォームでフィルタリング
+    let filtered;
+    if (currentMasterConfig.collection === 'categories') {
+      // カテゴリは全件表示（プラットフォーム共通）
+      filtered = categories;
+      console.log(`📊 [Master Manager] カテゴリ: プラットフォーム共通 ${categories.length}件`);
+    } else {
+      // 他のマスタはプラットフォームでフィルタリング
+      filtered = categories.filter(cat => {
+        const catPlatform = cat.platform || 'mercari';
+        return catPlatform === currentPlatform;
+      });
+    }
     masterTotalCount = filtered.length;
 
-    // キャッシュに保存（フィルタ済み）
+    // キャッシュに保存
     masterCache[currentMasterConfig.collection] = filtered;
     allMasterData = filtered;
     filteredMasterData = filtered;
