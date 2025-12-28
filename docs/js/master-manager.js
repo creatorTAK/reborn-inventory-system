@@ -1020,10 +1020,23 @@ async function performSearch(query) {
       }
     }
   } else {
-    // 検索クエリなし = 空表示（initialDisplay: 0の場合）
-    console.log('🔄 [Master Manager] 検索クリア');
-    allMasterData = [];
-    filteredMasterData = [];
+    // 検索クエリなし
+    const initialDisplay = currentMasterConfig.initialDisplay !== undefined
+      ? currentMasterConfig.initialDisplay
+      : (currentMasterConfig.maxDisplayResults || 100);
+
+    if (initialDisplay === 0) {
+      // 検索専用モード（ブランド等）: 空表示
+      console.log('🔄 [Master Manager] 検索クリア（検索専用モード）');
+      allMasterData = [];
+      filteredMasterData = [];
+    } else {
+      // 通常モード（カテゴリ等）: キャッシュから全データ復元
+      console.log('🔄 [Master Manager] 検索クリア（全データ復元）');
+      const cachedData = masterCache[collection] || [];
+      allMasterData = cachedData;
+      filteredMasterData = [...cachedData];
+    }
   }
 
   renderMasterList();
