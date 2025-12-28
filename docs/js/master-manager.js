@@ -4635,6 +4635,12 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
 
     // キャッシュクリア（コピー先を見るときに再読み込みされる）
     delete masterCache[collection];
+    
+    // IndexedDBキャッシュも無効化
+    if (window.masterCacheManager && window.masterCacheManager.invalidateCache) {
+      await window.masterCacheManager.invalidateCache(collection);
+      console.log('✅ [Copy] IndexedDBキャッシュ無効化完了');
+    }
 
   } catch (error) {
     showLoading(false);

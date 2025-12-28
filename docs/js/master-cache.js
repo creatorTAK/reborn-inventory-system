@@ -406,6 +406,32 @@ class MasterCacheManager {
     };
   }
 
+
+  /**
+   * キャッシュ無効化（次回アクセス時にFirestoreから再取得させる）
+   */
+  async invalidateCache(collection) {
+    await this.initialize();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['metadata'], 'readwrite');
+      const store = transaction.objectStore('metadata');
+      store.delete(collection);
+
+      transaction.oncomplete = () => {
+        console.log(`[MasterCache] ${collection}: ✅ キャッシュ無効化完了`);
+        // プリロードPromiseもクリア
+        delete this.preloadPromises[collection];
+        resolve();
+      };
+
+      transaction.onerror = () => {
+        console.error(`[MasterCache] ${collection}: キャッシュ無効化エラー`, transaction.error);
+        reject(transaction.error);
+      };
+    });
+  }
+
   // ========================================
   // 便利メソッド（後方互換性のため）
   // ========================================
