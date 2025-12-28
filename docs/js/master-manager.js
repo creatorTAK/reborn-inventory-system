@@ -1938,6 +1938,12 @@ async function addTreeItems(pathArray, newValues, isItemName) {
     if (selectedPlatforms.length > 0) {
       newItem[platformField] = selectedPlatforms;
     }
+    
+    // platformId設定（削除・フィルタリング用 - 必須）
+    const activePlatformId = currentPlatform || 'mercari';
+    newItem.platformId = activePlatformId;
+    newItem.platform = activePlatformId;
+    console.log(`[addTreeItems] platformId設定: ${activePlatformId}`);
 
     // 重複チェック
     const isDuplicate = categories.some(cat => cat.fullPath === newItem.fullPath);
