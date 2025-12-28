@@ -1800,6 +1800,9 @@ window.toggleTreeNode = function(nodePath, node, level) {
     expandedTreeNodes.add(nodePath);
   }
 
+  // nodePathからparentPathArrayを構築
+  const parentPathArray = nodePath.split(' > ');
+
   // 該当ノードのみ更新
   const container = document.querySelector(`.category-tree-children[data-path="${CSS.escape(nodePath)}"]`);
   const header = container?.previousElementSibling;
@@ -1819,7 +1822,7 @@ window.toggleTreeNode = function(nodePath, node, level) {
         const hasItems = node.items.length > 0;
 
         if (hasChildren) {
-          renderTreeLevel(node.children, childrenInner, level + 1);
+          renderTreeLevel(node.children, childrenInner, level + 1, parentPathArray);
         }
 
         if (hasItems && !hasChildren) {
