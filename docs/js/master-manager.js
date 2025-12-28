@@ -1903,10 +1903,11 @@ async function addTreeItems(pathArray, newValues, isItemName) {
   // 現在のプラットフォームを取得
   const selectedPlatforms = getSelectedPlatforms();
 
-  let addedCount = 0;
-  let duplicateCount = 0;
   const categories = masterCache[currentMasterConfig.collection] || [];
+  const itemsToAdd = [];
+  let duplicateCount = 0;
 
+  // ステップ1: 追加対象のアイテムを準備（重複チェック含む）
   for (const newValue of newValues) {
     // 親階層の値を設定
     const newItem = {};
@@ -1945,7 +1946,21 @@ async function addTreeItems(pathArray, newValues, isItemName) {
       continue;
     }
 
-    // Firestoreに追加
+    itemsToAdd.push(newItem);
+  }
+
+  // 追加対象がない場合は早期リターン
+  if (itemsToAdd.length === 0) {
+    if (duplicateCount > 0) {
+      showToast(`すべて重複のため追加されませんでした（${duplicateCount}件）`, 'warning');
+    }
+    return;
+  }
+
+  // ステップ2: Firestoreに並列書き込み（高速化）
+  console.log(`[addTreeItems] ${itemsToAdd.length}件を並列でFirestoreに書き込み開始...`);
+  
+  const writePromises = itemsToAdd.map(async (newItem) => {
     try {
       const docRef = await firebase.firestore()
         .collection(currentMasterConfig.collection)
@@ -1955,21 +1970,40 @@ async function addTreeItems(pathArray, newValues, isItemName) {
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-      newItem.id = docRef.id;
-      masterCache[currentMasterConfig.collection].push(newItem);
-      addedCount++;
+      return { success: true, id: docRef.id, item: newItem };
     } catch (error) {
       console.error('[Master Manager] 追加エラー:', error);
-      showToast(`追加エラー: ${error.message}`, 'error');
+      return { success: false, error: error.message, item: newItem };
     }
-  }
+  });
+
+  const results = await Promise.all(writePromises);
+  
+  // 結果を集計
+  const successResults = results.filter(r => r.success);
+  const failedResults = results.filter(r => !r.success);
+  const addedCount = successResults.length;
+
+  // ローカルキャッシュに追加
+  successResults.forEach(r => {
+    r.item.id = r.id;
+    masterCache[currentMasterConfig.collection].push(r.item);
+  });
+
+  console.log(`[addTreeItems] 書き込み完了: 成功${addedCount}件, 失敗${failedResults.length}件`);
 
   // 結果通知
   if (addedCount > 0) {
-    showToast(`${addedCount}件追加しました${duplicateCount > 0 ? `（${duplicateCount}件は重複のためスキップ）` : ''}`, 'success');
+    let message = `${addedCount}件追加しました`;
+    if (duplicateCount > 0) {
+      message += `（${duplicateCount}件は重複のためスキップ）`;
+    }
+    if (failedResults.length > 0) {
+      message += `（${failedResults.length}件は失敗）`;
+    }
+    showToast(message, 'success');
 
     // キャッシュを無効化（メタデータのみ削除、データは保持）
-    // 次回の完全リロード時にキャッシュが更新される
     if (window.masterCacheManager && window.masterCacheManager.db) {
       try {
         const transaction = window.masterCacheManager.db.transaction(['metadata'], 'readwrite');
@@ -2000,8 +2034,8 @@ async function addTreeItems(pathArray, newValues, isItemName) {
       // フォールバック: 通常のloadMasterData
       await loadMasterData();
     }
-  } else if (duplicateCount > 0) {
-    showToast(`すべて重複のため追加されませんでした（${duplicateCount}件）`, 'warning');
+  } else if (failedResults.length > 0) {
+    showToast(`追加に失敗しました（${failedResults.length}件）`, 'error');
   }
 }
 
