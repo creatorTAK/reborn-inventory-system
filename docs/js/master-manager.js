@@ -4573,8 +4573,23 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
     }
 
     const sourceCategories = allCategories.filter(cat => {
-      if (cat.platformId !== sourcePlatformId) return false;
-      return cat.fullPath && cat.fullPath.startsWith(nodePath);
+      // platformIdチェック（未設定の場合はmercariとして扱う）
+      const catPlatformId = cat.platformId || 'mercari';
+      if (catPlatformId !== sourcePlatformId) return false;
+
+      // superCategoryでマッチング（ツリーの最上位ノード）
+      if (cat.superCategory === nodePath) return true;
+
+      // superCategory + fullPath でマッチング
+      if (cat.superCategory && cat.fullPath) {
+        const fullPathWithSuper = `${cat.superCategory} > ${cat.fullPath}`;
+        if (fullPathWithSuper.startsWith(nodePath)) return true;
+      }
+
+      // fullPathのみでマッチング（フォールバック）
+      if (cat.fullPath && cat.fullPath.startsWith(nodePath)) return true;
+
+      return false;
     });
 
     console.log(`📋 [Master Manager] コピー元: ${sourceCategories.length}件`);
