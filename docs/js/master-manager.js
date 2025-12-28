@@ -1614,6 +1614,14 @@ function showTreeInlineAddForm(nodePath, level, pathArray, nodeContainer) {
   const textarea = formContainer.querySelector('.inline-form-input');
   textarea.focus();
 
+  // テキストエリアの高さを自動調整
+  const autoResizeTextarea = () => {
+    textarea.style.height = 'auto';
+    const newHeight = Math.min(textarea.scrollHeight, 200); // 最大200px
+    textarea.style.height = newHeight + 'px';
+  };
+  textarea.addEventListener('input', autoResizeTextarea);
+
   // 閉じるボタン
   formContainer.querySelector('.inline-form-close').addEventListener('click', () => {
     formContainer.remove();
