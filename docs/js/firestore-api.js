@@ -1707,6 +1707,7 @@ export {
 // グローバルスコープに公開（非モジュールスクリプトから使用するため）
 // master-cache.js 等の通常スクリプトから window.initializeFirestore でアクセス可能
 window.initializeFirestore = initializeFirestore;
+window.createMaster = createMaster;
 
 // 初期化Promiseをグローバルに公開（バックグラウンドプリロード用）
 // master-cache.js から await window.firestoreReady で初期化完了を待機可能

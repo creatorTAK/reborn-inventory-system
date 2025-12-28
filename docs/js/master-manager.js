@@ -4610,11 +4610,12 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
     const createPromises = sourceCategories.map(async (cat) => {
       const newCat = { ...cat };
       delete newCat.id; // 新しいIDを生成させる
+      delete newCat.createdAt; // createMasterが設定する
+      delete newCat.updatedAt; // createMasterが設定する
       newCat.platformId = targetPlatformId;
-      newCat.createdAt = new Date().toISOString();
-      newCat.updatedAt = new Date().toISOString();
 
-      return window.addMaster(collection, newCat);
+      // firestore-api.js の createMaster を使用
+      return window.createMaster(collection, newCat);
     });
 
     const results = await Promise.all(createPromises);
