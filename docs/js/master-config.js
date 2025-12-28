@@ -108,6 +108,12 @@ const masterCategories = {
             'CD・DVD・ブルーレイ',
             'その他'
           ],
+          // 既存データ互換：level1（メンズ等）からsuperCategoryへのマッピング
+          // fullPathが「メンズ > ...」形式の場合、「ファッション > メンズ > ...」として扱う
+          level1ToSuperCategoryMap: {
+            'メンズ': 'ファッション',
+            'レディース': 'ファッション'
+          },
           itemNameLabel: 'アイテム名',
           platformField: 'platforms'
         },

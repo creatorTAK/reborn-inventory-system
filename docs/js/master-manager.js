@@ -1290,6 +1290,7 @@ function buildCategoryTreeWithSuperCategory(categories) {
   const cascadeConfig = currentMasterConfig.cascadeAdd || {};
   const treeConfig = currentMasterConfig.treeConfig || {};
   const superCategoryOptions = cascadeConfig.superCategoryOptions || [];
+  const level1ToSuperCategoryMap = cascadeConfig.level1ToSuperCategoryMap || {};
   const levelFields = treeConfig.levelFields || ['superCategory', 'level1', 'level2', 'level3', 'level4', 'level5'];
 
   // 特大分類オプションをルートノードとして初期化
@@ -1309,13 +1310,34 @@ function buildCategoryTreeWithSuperCategory(categories) {
   categories.forEach(cat => {
     // superCategoryを取得（フィールドがない場合はfullPathから推測）
     let superCategory = cat.superCategory || cat[levelFields[0]];
+    let subLevels = [];
 
-    // fullPathから特大分類を推測（"ファッション > メンズ > ..." → "ファッション"）
-    if (!superCategory && cat.fullPath) {
+    // fullPathから階層を推測
+    if (cat.fullPath) {
       const pathParts = cat.fullPath.split(' > ');
       if (pathParts.length > 0) {
-        superCategory = pathParts[0];
+        const firstPart = pathParts[0];
+
+        // 最初の要素がsuperCategoryOptionsに含まれているか確認
+        if (superCategoryOptions.includes(firstPart)) {
+          // 正常なフォーマット: "ファッション > メンズ > ..."
+          superCategory = firstPart;
+          subLevels = pathParts.slice(1);
+        } else if (level1ToSuperCategoryMap[firstPart]) {
+          // 既存データ互換: "メンズ > ..." → "ファッション" + ["メンズ", ...]
+          superCategory = level1ToSuperCategoryMap[firstPart];
+          subLevels = pathParts; // 全体がsubLevels（superCategoryは推測値）
+        } else {
+          // マッピングにない場合はそのまま（新しいsuperCategoryとして扱う）
+          superCategory = firstPart;
+          subLevels = pathParts.slice(1);
+        }
       }
+    }
+
+    // フィールドからsubLevelsを取得（fullPathがない場合のフォールバック）
+    if (subLevels.length === 0) {
+      subLevels = levelFields.slice(1).map(f => cat[f]).filter(Boolean);
     }
 
     if (!superCategory) return;
@@ -1334,16 +1356,6 @@ function buildCategoryTreeWithSuperCategory(categories) {
     }
 
     tree[superCategory].count++;
-
-    // level1以降の階層を構築（フィールドがない場合はfullPathから推測）
-    let subLevels = levelFields.slice(1).map(f => cat[f]).filter(Boolean);
-
-    // fullPathから階層を推測
-    if (subLevels.length === 0 && cat.fullPath) {
-      const pathParts = cat.fullPath.split(' > ');
-      // 最初の要素（superCategory）を除いた残りがsubLevels
-      subLevels = pathParts.slice(1);
-    }
 
     let current = tree[superCategory].children;
     let currentPath = superCategory;
