@@ -725,15 +725,22 @@ async function fetchAndDisplayTotalCountByPlatform() {
       categories = await window.getMasterData(currentMasterConfig.collection);
     }
 
-    // カテゴリはプラットフォーム共通（フィルターしない）
-    // 他のマスタはプラットフォームでフィルタリング
+    // プラットフォームでフィルタリング
+    // メルカリとメルカリShopsはカテゴリを共有
+    const mercariGroup = ['mercari', 'mercari-shops'];
+    const isMercariGroup = mercariGroup.includes(currentPlatform);
+
     let filtered;
-    if (currentMasterConfig.collection === 'categories') {
-      // カテゴリは全件表示（プラットフォーム共通）
-      filtered = categories;
-      console.log(`📊 [Master Manager] カテゴリ: プラットフォーム共通 ${categories.length}件`);
+    if (currentMasterConfig.collection === 'categories' && isMercariGroup) {
+      // メルカリ/メルカリShopsはカテゴリ共通（platformなし = メルカリ共通）
+      filtered = categories.filter(cat => {
+        const catPlatform = cat.platform;
+        // platformがない、またはメルカリグループのものを表示
+        return !catPlatform || mercariGroup.includes(catPlatform);
+      });
+      console.log(`📊 [Master Manager] カテゴリ: メルカリ共通 ${filtered.length}件`);
     } else {
-      // 他のマスタはプラットフォームでフィルタリング
+      // 他のプラットフォーム、または他のマスタはプラットフォームでフィルタリング
       filtered = categories.filter(cat => {
         const catPlatform = cat.platform || 'mercari';
         return catPlatform === currentPlatform;
