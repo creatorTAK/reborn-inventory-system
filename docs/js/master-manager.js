@@ -1755,36 +1755,38 @@ async function addTreeItems(pathArray, newValues, isItemName) {
   if (addedCount > 0) {
     showToast(`${addedCount}件追加しました${duplicateCount > 0 ? `（${duplicateCount}件は重複のためスキップ）` : ''}`, 'success');
 
-    // IndexedDBキャッシュをクリア（完了を待ってからリロード）
-    if (window.masterCacheManager) {
-      // masterCacheManagerの状態をリセット
-      window.masterCacheManager.isInitialized = false;
-      window.masterCacheManager.db = null;
-    }
-    if (window.indexedDB) {
+    // キャッシュを無効化（メタデータのみ削除、データは保持）
+    // 次回の完全リロード時にキャッシュが更新される
+    if (window.masterCacheManager && window.masterCacheManager.db) {
       try {
-        await new Promise((resolve, reject) => {
-          const deleteRequest = indexedDB.deleteDatabase('RebornMasterCache');
-          deleteRequest.onsuccess = () => {
-            console.log('[Master Manager] IndexedDBキャッシュ削除完了');
-            resolve();
-          };
-          deleteRequest.onerror = () => {
-            console.warn('[Master Manager] IndexedDBキャッシュ削除エラー:', deleteRequest.error);
-            reject(deleteRequest.error);
-          };
-          deleteRequest.onblocked = () => {
-            console.warn('[Master Manager] IndexedDBキャッシュ削除がブロックされました');
-            resolve(); // ブロックされても続行
-          };
-        });
+        const transaction = window.masterCacheManager.db.transaction(['metadata'], 'readwrite');
+        const store = transaction.objectStore('metadata');
+        store.delete(currentMasterConfig.collection);
+        console.log('[Master Manager] キャッシュメタデータを無効化');
       } catch (e) {
-        console.warn('[Master Manager] IndexedDBキャッシュクリア失敗:', e);
+        console.warn('[Master Manager] キャッシュ無効化失敗:', e);
       }
     }
 
-    // ツリー再描画（Firestoreから再取得）
-    await loadMasterData();
+    // 直接Firestoreから取得して即座に表示（キャッシュ保存をスキップ）
+    try {
+      console.log('[Master Manager] Firestoreから直接取得開始...');
+      const freshData = await window.getMasterData(currentMasterConfig.collection);
+
+      if (freshData && freshData.length > 0) {
+        allMasterData = freshData;
+        filteredMasterData = freshData;
+        masterCache[currentMasterConfig.collection] = freshData;
+        console.log(`[Master Manager] Firestore直接取得完了: ${freshData.length}件`);
+      }
+
+      renderMasterList();
+      updateStats();
+    } catch (error) {
+      console.error('[Master Manager] Firestore直接取得エラー:', error);
+      // フォールバック: 通常のloadMasterData
+      await loadMasterData();
+    }
   } else if (duplicateCount > 0) {
     showToast(`すべて重複のため追加されませんでした（${duplicateCount}件）`, 'warning');
   }
