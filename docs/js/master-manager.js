@@ -275,6 +275,60 @@ function setupEventListeners() {
       await performSearch(query);
     }, 500); // デバウンス時間500ms
   });
+
+  // ルートカテゴリ追加のイベントリスナー
+  const rootCategoryInput = document.getElementById('rootCategoryInput');
+  const rootCategoryBtn = document.getElementById('rootCategoryBtn');
+
+  if (rootCategoryInput && rootCategoryBtn) {
+    // ボタンクリック
+    rootCategoryBtn.addEventListener('click', () => {
+      addRootCategory();
+    });
+
+    // Enterキーで追加
+    rootCategoryInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addRootCategory();
+      }
+    });
+  }
+}
+
+/**
+ * ルートカテゴリを追加
+ */
+async function addRootCategory() {
+  const input = document.getElementById('rootCategoryInput');
+  const btn = document.getElementById('rootCategoryBtn');
+
+  if (!input || !btn) return;
+
+  const value = input.value.trim();
+  if (!value) {
+    showToast('カテゴリ名を入力してください', 'warning');
+    return;
+  }
+
+  // 連打防止
+  if (btn.disabled) return;
+  btn.disabled = true;
+
+  try {
+    // addTreeItemsを使ってルートカテゴリを追加
+    // pathArray = [] (空) → ルートレベルに追加
+    await addTreeItems([], [value], false);
+
+    // 入力をクリア
+    input.value = '';
+
+  } catch (error) {
+    console.error('[Master Manager] ルートカテゴリ追加エラー:', error);
+    showToast(`エラー: ${error.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ============================================
@@ -1096,6 +1150,18 @@ function renderMasterList() {
       if (emptyStateText) emptyStateText.textContent = '検索して絞り込んでください';
       if (emptyStateHint) emptyStateHint.textContent = '';
     }
+
+    // 空状態でもツリービューの場合はルートカテゴリ追加入力を表示
+    const rootCategoryAddEmpty = document.getElementById('rootCategoryAdd');
+    const actionBarAddBtnEmpty = document.querySelector('.action-bar .btn-add');
+    if (currentMasterConfig?.viewMode === 'tree') {
+      if (rootCategoryAddEmpty) rootCategoryAddEmpty.classList.remove('hidden');
+      if (actionBarAddBtnEmpty) actionBarAddBtnEmpty.style.display = 'none';
+    } else {
+      if (rootCategoryAddEmpty) rootCategoryAddEmpty.classList.add('hidden');
+      if (actionBarAddBtnEmpty) actionBarAddBtnEmpty.style.display = '';
+    }
+
     return;
   }
 
@@ -1104,24 +1170,30 @@ function renderMasterList() {
   emptyState.classList.add('hidden');
 
   // viewModeに応じた表示方式を選択
+  const actionBarAddBtn = document.querySelector('.action-bar .btn-add');
+  const rootCategoryAdd = document.getElementById('rootCategoryAdd');
+
   if (currentMasterConfig.viewMode === 'tree') {
     // ツリービュー表示（カテゴリ用）
     renderCategoryTreeView(container);
     // ツリービューでは上部の「新規追加」ボタンを非表示（ツリー内に追加機能あり）
-    const actionBarAddBtn = document.querySelector('.action-bar .btn-add');
     if (actionBarAddBtn) actionBarAddBtn.style.display = 'none';
+    // ルートカテゴリ追加入力を表示
+    if (rootCategoryAdd) rootCategoryAdd.classList.remove('hidden');
   } else if (currentMasterConfig.groupBy) {
     // アコーディオン表示
     renderAccordionList(container);
     // 上部の「新規追加」ボタンを表示
-    const actionBarAddBtn = document.querySelector('.action-bar .btn-add');
     if (actionBarAddBtn) actionBarAddBtn.style.display = '';
+    // ルートカテゴリ追加入力を非表示
+    if (rootCategoryAdd) rootCategoryAdd.classList.add('hidden');
   } else {
     // 従来のフラットリスト表示
     renderFlatList(container);
     // 上部の「新規追加」ボタンを表示
-    const actionBarAddBtn = document.querySelector('.action-bar .btn-add');
     if (actionBarAddBtn) actionBarAddBtn.style.display = '';
+    // ルートカテゴリ追加入力を非表示
+    if (rootCategoryAdd) rootCategoryAdd.classList.add('hidden');
   }
 }
 
