@@ -275,60 +275,6 @@ function setupEventListeners() {
       await performSearch(query);
     }, 500); // デバウンス時間500ms
   });
-
-  // ルートカテゴリ追加のイベントリスナー
-  const rootCategoryInput = document.getElementById('rootCategoryInput');
-  const rootCategoryBtn = document.getElementById('rootCategoryBtn');
-
-  if (rootCategoryInput && rootCategoryBtn) {
-    // ボタンクリック
-    rootCategoryBtn.addEventListener('click', () => {
-      addRootCategory();
-    });
-
-    // Enterキーで追加
-    rootCategoryInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        addRootCategory();
-      }
-    });
-  }
-}
-
-/**
- * ルートカテゴリを追加
- */
-async function addRootCategory() {
-  const input = document.getElementById('rootCategoryInput');
-  const btn = document.getElementById('rootCategoryBtn');
-
-  if (!input || !btn) return;
-
-  const value = input.value.trim();
-  if (!value) {
-    showToast('カテゴリ名を入力してください', 'warning');
-    return;
-  }
-
-  // 連打防止
-  if (btn.disabled) return;
-  btn.disabled = true;
-
-  try {
-    // addTreeItemsを使ってルートカテゴリを追加
-    // pathArray = [] (空) → ルートレベルに追加
-    await addTreeItems([], [value], false);
-
-    // 入力をクリア
-    input.value = '';
-
-  } catch (error) {
-    console.error('[Master Manager] ルートカテゴリ追加エラー:', error);
-    showToast(`エラー: ${error.message}`, 'error');
-  } finally {
-    btn.disabled = false;
-  }
 }
 
 // ============================================
@@ -1151,15 +1097,13 @@ function renderMasterList() {
       if (emptyStateHint) emptyStateHint.textContent = '';
     }
 
-    // 空状態でもツリービューの場合はルートカテゴリ追加入力を表示
-    const rootCategoryAddEmpty = document.getElementById('rootCategoryAdd');
+    // 空状態での新規追加ボタン表示制御
     const actionBarAddBtnEmpty = document.querySelector('.action-bar .btn-add');
     if (currentMasterConfig?.viewMode === 'tree') {
-      if (rootCategoryAddEmpty) rootCategoryAddEmpty.classList.remove('hidden');
+      // ツリービューでは上部の新規追加ボタンを非表示（ツリー内に追加機能あり）
       if (actionBarAddBtnEmpty) actionBarAddBtnEmpty.style.display = 'none';
     } else {
-      if (rootCategoryAddEmpty) rootCategoryAddEmpty.classList.add('hidden');
-      // ブランド等の非ツリービューでは新規追加ボタンを表示
+      // 非ツリービューでは新規追加ボタンを表示
       if (actionBarAddBtnEmpty) actionBarAddBtnEmpty.style.display = 'flex';
     }
 
@@ -1172,29 +1116,22 @@ function renderMasterList() {
 
   // viewModeに応じた表示方式を選択
   const actionBarAddBtn = document.querySelector('.action-bar .btn-add');
-  const rootCategoryAdd = document.getElementById('rootCategoryAdd');
 
   if (currentMasterConfig.viewMode === 'tree') {
     // ツリービュー表示（カテゴリ用）
     renderCategoryTreeView(container);
     // ツリービューでは上部の「新規追加」ボタンを非表示（ツリー内に追加機能あり）
     if (actionBarAddBtn) actionBarAddBtn.style.display = 'none';
-    // ルートカテゴリ追加入力を表示
-    if (rootCategoryAdd) rootCategoryAdd.classList.remove('hidden');
   } else if (currentMasterConfig.groupBy) {
     // アコーディオン表示
     renderAccordionList(container);
     // 上部の「新規追加」ボタンを表示
     if (actionBarAddBtn) actionBarAddBtn.style.display = 'flex';
-    // ルートカテゴリ追加入力を非表示
-    if (rootCategoryAdd) rootCategoryAdd.classList.add('hidden');
   } else {
     // 従来のフラットリスト表示
     renderFlatList(container);
     // 上部の「新規追加」ボタンを表示
     if (actionBarAddBtn) actionBarAddBtn.style.display = 'flex';
-    // ルートカテゴリ追加入力を非表示
-    if (rootCategoryAdd) rootCategoryAdd.classList.add('hidden');
   }
 }
 
@@ -1404,6 +1341,15 @@ function renderCategoryTreeView(container) {
   // ツリーをレンダリング
   const treeWrapper = document.createElement('div');
   treeWrapper.className = 'category-tree-wrapper';
+
+  // ルートカテゴリ追加ボタン（ツリー最上部）
+  const rootAddBtn = document.createElement('div');
+  rootAddBtn.className = 'tree-root-add-btn';
+  rootAddBtn.innerHTML = '<i class="bi bi-plus-circle"></i><span>新規カテゴリを追加</span>';
+  rootAddBtn.addEventListener('click', () => {
+    showRootCategoryAddForm(treeWrapper);
+  });
+  treeWrapper.appendChild(rootAddBtn);
 
   renderTreeLevel(tree, treeWrapper, 1, []); // 明示的に空配列を渡す
 
@@ -1752,6 +1698,103 @@ function showTreeInlineAddForm(nodePath, level, pathArray, nodeContainer) {
 
   // Escapeキーでキャンセル（Enterは改行として許可 - iOS対応）
   textarea.addEventListener('keydown', async (e) => {
+    if (e.key === 'Escape') {
+      formContainer.remove();
+    }
+  });
+}
+
+/**
+ * ルートカテゴリ追加フォームを表示（ツリー最上部用）
+ * @param {HTMLElement} treeWrapper - ツリーラッパー要素
+ */
+function showRootCategoryAddForm(treeWrapper) {
+  // 既存のインラインフォームがあれば削除
+  const existingForm = document.querySelector('.tree-inline-add-form');
+  if (existingForm) {
+    existingForm.remove();
+  }
+
+  // インラインフォームを作成
+  const formContainer = document.createElement('div');
+  formContainer.className = 'tree-inline-add-form';
+  formContainer.style.marginLeft = '0'; // ルートレベルなのでインデントなし
+  formContainer.innerHTML = `
+    <div class="inline-form-header">
+      <span class="inline-form-path">新規カテゴリを追加</span>
+      <button class="inline-form-close" title="閉じる"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="inline-form-body">
+      <textarea class="inline-form-input" placeholder="追加するカテゴリ名を入力（複数行で一括追加可能）" rows="3"></textarea>
+      <div class="inline-form-hint">1行に1つずつ入力すると一括追加できます（例: ファッション、家電、スポーツ）</div>
+      <div class="inline-form-actions">
+        <button class="inline-form-cancel">キャンセル</button>
+        <button class="inline-form-submit">追加する</button>
+      </div>
+    </div>
+  `;
+
+  // ルート追加ボタンの後に挿入
+  const rootAddBtn = treeWrapper.querySelector('.tree-root-add-btn');
+  if (rootAddBtn) {
+    rootAddBtn.after(formContainer);
+  } else {
+    treeWrapper.prepend(formContainer);
+  }
+
+  // フォーカス
+  const textarea = formContainer.querySelector('.inline-form-input');
+  textarea.focus();
+
+  // テキストエリアの高さを自動調整
+  const autoResizeTextarea = () => {
+    textarea.style.height = 'auto';
+    const newHeight = Math.min(textarea.scrollHeight, 200);
+    textarea.style.height = newHeight + 'px';
+  };
+  textarea.addEventListener('input', autoResizeTextarea);
+
+  // 閉じるボタン
+  formContainer.querySelector('.inline-form-close').addEventListener('click', () => {
+    formContainer.remove();
+  });
+
+  // キャンセルボタン
+  formContainer.querySelector('.inline-form-cancel').addEventListener('click', () => {
+    formContainer.remove();
+  });
+
+  // 追加ボタン
+  const submitBtn = formContainer.querySelector('.inline-form-submit');
+  submitBtn.addEventListener('click', async () => {
+    if (submitBtn.disabled) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '追加中...';
+
+    const inputValue = textarea.value.trim();
+    if (!inputValue) {
+      showToast('カテゴリ名を入力してください', 'warning');
+      submitBtn.disabled = false;
+      submitBtn.textContent = '追加する';
+      return;
+    }
+
+    // 複数行対応
+    const newValues = inputValue.split('\n').map(v => v.trim()).filter(v => v.length > 0);
+    if (newValues.length === 0) {
+      showToast('カテゴリ名を入力してください', 'warning');
+      submitBtn.disabled = false;
+      submitBtn.textContent = '追加する';
+      return;
+    }
+
+    // ルートレベルに追加（pathArray = []）
+    await addTreeItems([], newValues, false);
+    formContainer.remove();
+  });
+
+  // Escapeキーでキャンセル
+  textarea.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       formContainer.remove();
     }
