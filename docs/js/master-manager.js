@@ -1575,12 +1575,29 @@ function renderTreeLevel(tree, container, level, parentPathArray = []) {
     const canAddChildren = level <= maxLevels; // アイテム名も追加可能
     const addBtnHtml = canAddChildren ? `<button class="tree-add-btn" data-path="${escapeHtml(nodePath)}" data-level="${level}" title="ここに追加"><i class="bi bi-plus"></i></button>` : '';
 
+    // ケバブメニューボタン（編集・コピー・削除）
+    const kebabBtnHtml = `
+      <div class="tree-kebab-wrapper" style="position: relative;">
+        <button class="tree-kebab-btn" data-path="${escapeHtml(nodePath)}" data-level="${level}" data-name="${escapeHtml(key)}" title="メニュー">
+          <i class="bi bi-three-dots-vertical"></i>
+        </button>
+        <div class="tree-kebab-dropdown">
+          <button class="tree-kebab-item" data-action="edit"><i class="bi bi-pencil"></i>編集</button>
+          <button class="tree-kebab-item" data-action="copy"><i class="bi bi-copy"></i>コピー</button>
+          <button class="tree-kebab-item danger" data-action="delete"><i class="bi bi-trash"></i>削除</button>
+        </div>
+      </div>
+    `;
+
     nodeHeader.innerHTML = `
       <div class="tree-node-content">
         ${hasChildren || hasItems ? `<i class="bi ${isExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} toggle-icon"></i>` : '<span class="tree-spacer"></span>'}
         <span class="tree-node-name">${escapeHtml(key)}</span>
         <span class="tree-node-count">(${node.count}件)</span>
+      </div>
+      <div class="tree-node-actions">
         ${addBtnHtml}
+        ${kebabBtnHtml}
       </div>
     `;
 
@@ -1600,6 +1617,30 @@ function renderTreeLevel(tree, container, level, parentPathArray = []) {
       addBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         showTreeInlineAddForm(nodePath, level, currentPathArray, nodeContainer);
+      });
+    }
+
+    // ケバブメニューのイベント
+    const kebabBtn = nodeHeader.querySelector('.tree-kebab-btn');
+    const kebabDropdown = nodeHeader.querySelector('.tree-kebab-dropdown');
+    if (kebabBtn && kebabDropdown) {
+      kebabBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // 他のドロップダウンを閉じる
+        document.querySelectorAll('.tree-kebab-dropdown.show').forEach(d => {
+          if (d !== kebabDropdown) d.classList.remove('show');
+        });
+        kebabDropdown.classList.toggle('show');
+      });
+
+      // メニュー項目のクリック
+      kebabDropdown.querySelectorAll('.tree-kebab-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const action = item.getAttribute('data-action');
+          kebabDropdown.classList.remove('show');
+          handleTreeNodeAction(action, nodePath, key, currentPathArray, node);
+        });
       });
     }
 
@@ -4208,5 +4249,292 @@ window.goBack = function() {
  * グローバル関数公開（HTML onclickから呼び出し可能にする）
  */
 window.loadMaster = loadMaster;
+
+// ========================================
+// ツリーノード操作（編集・コピー・削除）
+// ========================================
+
+/**
+ * ツリーノードのアクション処理
+ */
+function handleTreeNodeAction(action, nodePath, nodeName, pathArray, node) {
+  console.log(`🔧 [Master Manager] ツリーノードアクション: ${action}`, { nodePath, nodeName, pathArray });
+
+  switch (action) {
+    case 'edit':
+      showTreeNodeEditModal(nodePath, nodeName, pathArray);
+      break;
+    case 'copy':
+      showTreeNodeCopyModal(nodePath, nodeName, pathArray, node);
+      break;
+    case 'delete':
+      showTreeNodeDeleteConfirm(nodePath, nodeName, node);
+      break;
+  }
+}
+
+/**
+ * ツリーノード編集モーダル表示
+ */
+function showTreeNodeEditModal(nodePath, nodeName, pathArray) {
+  const newName = prompt(`「${nodeName}」を編集:\n\n新しい名前を入力してください`, nodeName);
+
+  if (!newName || newName.trim() === '' || newName === nodeName) {
+    return; // キャンセルまたは変更なし
+  }
+
+  const trimmedName = newName.trim();
+
+  // 確認
+  if (!confirm(`「${nodeName}」を「${trimmedName}」に変更します。\n\nこの階層以下のすべてのカテゴリのパスも更新されます。\n\n続行しますか？`)) {
+    return;
+  }
+
+  renameTreeNode(nodePath, nodeName, trimmedName, pathArray);
+}
+
+/**
+ * ツリーノードの名前変更を実行
+ */
+async function renameTreeNode(nodePath, oldName, newName, pathArray) {
+  showLoading(true);
+
+  try {
+    const collection = currentMasterConfig.collection;
+
+    // 現在のプラットフォームを取得
+    const platformId = currentPlatform || 'mercari';
+
+    // 対象のカテゴリを検索（このノード以下のすべて）
+    const allCategories = masterCache[collection] || allMasterData;
+    const targetCategories = allCategories.filter(cat => {
+      // platformId一致
+      if (cat.platformId !== platformId) return false;
+      // fullPathがこのノードで始まる
+      return cat.fullPath && cat.fullPath.startsWith(nodePath);
+    });
+
+    console.log(`📝 [Master Manager] 名前変更対象: ${targetCategories.length}件`);
+
+    // 新しいパスを計算
+    const newPathArray = [...pathArray.slice(0, -1), newName];
+    const newNodePath = newPathArray.join(' > ');
+
+    // 各カテゴリのfullPathを更新
+    const updatePromises = targetCategories.map(async (cat) => {
+      const newFullPath = cat.fullPath.replace(nodePath, newNodePath);
+
+      // 階層フィールドも更新（level1, level2など）
+      const updates = { fullPath: newFullPath };
+      const levelIndex = pathArray.length; // 1-indexed
+      const levelField = `level${levelIndex}`;
+      if (cat[levelField] === oldName) {
+        updates[levelField] = newName;
+      }
+
+      return window.updateMaster(collection, cat.id, updates);
+    });
+
+    const results = await Promise.all(updatePromises);
+    const successCount = results.filter(r => r && r.success).length;
+
+    showLoading(false);
+
+    if (successCount === targetCategories.length) {
+      alert(`✅ ${successCount}件のカテゴリを更新しました`);
+    } else {
+      alert(`⚠️ ${successCount}/${targetCategories.length}件を更新しました`);
+    }
+
+    // キャッシュクリア＆再読み込み
+    delete masterCache[collection];
+    await fetchAndDisplayTotalCountByPlatform();
+
+  } catch (error) {
+    showLoading(false);
+    console.error('❌ [Master Manager] 名前変更エラー:', error);
+    alert('名前変更中にエラーが発生しました');
+  }
+}
+
+/**
+ * ツリーノード削除確認
+ */
+function showTreeNodeDeleteConfirm(nodePath, nodeName, node) {
+  const count = node.count || 0;
+  const message = count > 0
+    ? `「${nodeName}」とその配下の${count}件のカテゴリを削除しますか？\n\n⚠️ この操作は取り消せません。`
+    : `「${nodeName}」を削除しますか？\n\n⚠️ この操作は取り消せません。`;
+
+  if (!confirm(message)) {
+    return;
+  }
+
+  deleteTreeNode(nodePath, nodeName);
+}
+
+/**
+ * ツリーノードの削除を実行
+ */
+async function deleteTreeNode(nodePath, nodeName) {
+  showLoading(true);
+
+  try {
+    const collection = currentMasterConfig.collection;
+    const platformId = currentPlatform || 'mercari';
+
+    // 対象のカテゴリを検索（このノード以下のすべて）
+    const allCategories = masterCache[collection] || allMasterData;
+    const targetCategories = allCategories.filter(cat => {
+      if (cat.platformId !== platformId) return false;
+      return cat.fullPath && cat.fullPath.startsWith(nodePath);
+    });
+
+    console.log(`🗑️ [Master Manager] 削除対象: ${targetCategories.length}件`);
+
+    if (targetCategories.length === 0) {
+      showLoading(false);
+      alert('削除対象が見つかりませんでした');
+      return;
+    }
+
+    // 削除実行
+    const deletePromises = targetCategories.map(cat =>
+      window.deleteMaster(collection, cat.id)
+    );
+
+    const results = await Promise.all(deletePromises);
+    const successCount = results.filter(r => r && r.success).length;
+
+    showLoading(false);
+
+    if (successCount === targetCategories.length) {
+      alert(`✅ ${successCount}件を削除しました`);
+    } else {
+      alert(`⚠️ ${successCount}/${targetCategories.length}件を削除しました`);
+    }
+
+    // キャッシュクリア＆再読み込み
+    delete masterCache[collection];
+    await fetchAndDisplayTotalCountByPlatform();
+
+  } catch (error) {
+    showLoading(false);
+    console.error('❌ [Master Manager] 削除エラー:', error);
+    alert('削除中にエラーが発生しました');
+  }
+}
+
+/**
+ * ツリーノードコピーモーダル表示
+ */
+function showTreeNodeCopyModal(nodePath, nodeName, pathArray, node) {
+  // 利用可能なプラットフォームを取得
+  const platforms = currentMasterConfig.platforms || [];
+  const currentPlatformId = currentPlatform || 'mercari';
+
+  // 現在のプラットフォーム以外を選択肢に
+  const otherPlatforms = platforms.filter(p => {
+    // メルカリグループの場合は除外
+    const mercariGroup = ['mercari', 'mercari-shops'];
+    if (mercariGroup.includes(currentPlatformId) && mercariGroup.includes(p.id)) {
+      return false;
+    }
+    return p.id !== currentPlatformId;
+  });
+
+  if (otherPlatforms.length === 0) {
+    alert('コピー先のプラットフォームがありません');
+    return;
+  }
+
+  // シンプルなプロンプトで選択
+  const platformOptions = otherPlatforms.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
+  const choice = prompt(
+    `「${nodeName}」（${node.count}件）をコピー\n\nコピー先を選択（番号を入力）:\n${platformOptions}`
+  );
+
+  if (!choice) return;
+
+  const index = parseInt(choice, 10) - 1;
+  if (isNaN(index) || index < 0 || index >= otherPlatforms.length) {
+    alert('無効な選択です');
+    return;
+  }
+
+  const targetPlatform = otherPlatforms[index];
+
+  if (!confirm(`「${nodeName}」（${node.count}件）を「${targetPlatform.name}」にコピーしますか？`)) {
+    return;
+  }
+
+  copyTreeNodeToPlatform(nodePath, nodeName, targetPlatform.id, node);
+}
+
+/**
+ * ツリーノードを別プラットフォームにコピー
+ */
+async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node) {
+  showLoading(true);
+
+  try {
+    const collection = currentMasterConfig.collection;
+    const sourcePlatformId = currentPlatform || 'mercari';
+
+    // コピー元のカテゴリを取得
+    const allCategories = masterCache[collection] || allMasterData;
+    const sourceCategories = allCategories.filter(cat => {
+      if (cat.platformId !== sourcePlatformId) return false;
+      return cat.fullPath && cat.fullPath.startsWith(nodePath);
+    });
+
+    console.log(`📋 [Master Manager] コピー元: ${sourceCategories.length}件`);
+
+    if (sourceCategories.length === 0) {
+      showLoading(false);
+      alert('コピー元のカテゴリが見つかりませんでした');
+      return;
+    }
+
+    // 新しいカテゴリを作成
+    const createPromises = sourceCategories.map(async (cat) => {
+      const newCat = { ...cat };
+      delete newCat.id; // 新しいIDを生成させる
+      newCat.platformId = targetPlatformId;
+      newCat.createdAt = new Date().toISOString();
+      newCat.updatedAt = new Date().toISOString();
+
+      return window.addMaster(collection, newCat);
+    });
+
+    const results = await Promise.all(createPromises);
+    const successCount = results.filter(r => r && r.success).length;
+
+    showLoading(false);
+
+    if (successCount === sourceCategories.length) {
+      alert(`✅ ${successCount}件をコピーしました`);
+    } else {
+      alert(`⚠️ ${successCount}/${sourceCategories.length}件をコピーしました`);
+    }
+
+    // キャッシュクリア（コピー先を見るときに再読み込みされる）
+    delete masterCache[collection];
+
+  } catch (error) {
+    showLoading(false);
+    console.error('❌ [Master Manager] コピーエラー:', error);
+    alert('コピー中にエラーが発生しました');
+  }
+}
+
+// ドキュメントクリックでケバブメニューを閉じる
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.tree-kebab-wrapper')) {
+    document.querySelectorAll('.tree-kebab-dropdown.show').forEach(d => {
+      d.classList.remove('show');
+    });
+  }
+});
 
 console.log('✅ [Master Manager] モジュール読み込み完了');
