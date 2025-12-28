@@ -4425,8 +4425,11 @@ async function deleteTreeNode(nodePath, nodeName) {
   }
 }
 
+// コピーモーダル用の一時データ保存
+let copyModalData = null;
+
 /**
- * ツリーノードコピーモーダル表示
+ * ツリーノードコピーモーダル表示（タップ式UI）
  */
 function showTreeNodeCopyModal(nodePath, nodeName, pathArray, node) {
   // 利用可能なプラットフォームを取得
@@ -4448,27 +4451,66 @@ function showTreeNodeCopyModal(nodePath, nodeName, pathArray, node) {
     return;
   }
 
-  // シンプルなプロンプトで選択
-  const platformOptions = otherPlatforms.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
-  const choice = prompt(
-    `「${nodeName}」（${node.count}件）をコピー\n\nコピー先を選択（番号を入力）:\n${platformOptions}`
-  );
+  // データを保存
+  copyModalData = { nodePath, nodeName, node };
 
-  if (!choice) return;
+  // モーダル情報を更新
+  const infoEl = document.getElementById('copyModalInfo');
+  if (infoEl) {
+    infoEl.innerHTML = `
+      <div style="font-weight: 600; color: #333;">「${nodeName}」</div>
+      <div style="font-size: 13px; color: #666; margin-top: 4px;">${node.count}件のカテゴリをコピー</div>
+    `;
+  }
 
-  const index = parseInt(choice, 10) - 1;
-  if (isNaN(index) || index < 0 || index >= otherPlatforms.length) {
-    alert('無効な選択です');
+  // プラットフォームボタンを生成
+  const listEl = document.getElementById('copyPlatformList');
+  if (listEl) {
+    listEl.innerHTML = otherPlatforms.map(p => `
+      <button type="button" class="copy-platform-btn" onclick="selectCopyPlatform('${p.id}', '${p.name}')"
+        style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fff; cursor: pointer; transition: all 0.2s; text-align: left;">
+        <img src="${p.icon}" alt="${p.name}" style="width: 32px; height: 32px; border-radius: 6px; object-fit: contain; background: #f5f5f5; padding: 4px;" onerror="this.style.display='none'">
+        <span style="font-size: 15px; font-weight: 500; color: #333;">${p.name}</span>
+        <i class="bi bi-chevron-right" style="margin-left: auto; color: #999;"></i>
+      </button>
+    `).join('');
+  }
+
+  // モーダル表示
+  const modal = document.getElementById('copyModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+}
+
+/**
+ * コピー先プラットフォーム選択
+ */
+function selectCopyPlatform(platformId, platformName) {
+  if (!copyModalData) return;
+
+  const { nodePath, nodeName, node } = copyModalData;
+
+  // モーダルを閉じる
+  hideCopyModal();
+
+  // 確認ダイアログ
+  if (!confirm(`「${nodeName}」（${node.count}件）を「${platformName}」にコピーしますか？`)) {
     return;
   }
 
-  const targetPlatform = otherPlatforms[index];
+  copyTreeNodeToPlatform(nodePath, nodeName, platformId, node);
+}
 
-  if (!confirm(`「${nodeName}」（${node.count}件）を「${targetPlatform.name}」にコピーしますか？`)) {
-    return;
+/**
+ * コピーモーダルを閉じる
+ */
+function hideCopyModal() {
+  const modal = document.getElementById('copyModal');
+  if (modal) {
+    modal.classList.add('hidden');
   }
-
-  copyTreeNodeToPlatform(nodePath, nodeName, targetPlatform.id, node);
+  copyModalData = null;
 }
 
 /**

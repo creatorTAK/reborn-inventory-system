@@ -70,7 +70,8 @@ const masterCategories = {
           { id: 'yahoo-fleamarket', name: 'Yahoo!フリマ', icon: '/images/platform/yahoo-fleamarket.png' },
           { id: 'yahoo-auction', name: 'Yahoo!オークション', icon: '/images/platform/yahoo-auction.png' },
           { id: 'rakuma', name: 'ラクマ', icon: '/images/platform/rakuma.png' },
-          { id: 'base', name: 'BASE', icon: '/images/platform/base.png' }
+          { id: 'base', name: 'BASE', icon: '/images/platform/base.png' },
+          { id: 'shopify', name: 'Shopify', icon: '/images/platform/shopify.png' }
         ],
         defaultPlatform: 'mercari',
         // ツリービュー表示モード
