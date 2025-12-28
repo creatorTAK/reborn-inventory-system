@@ -1306,6 +1306,9 @@ function buildCategoryTreeWithSuperCategory(categories) {
     };
   });
 
+  // マッピングされなかったデータを追跡（デバッグ用）
+  const unmappedData = [];
+
   // カテゴリデータをツリーに追加
   categories.forEach(cat => {
     // superCategoryを取得（フィールドがない場合はfullPathから推測）
@@ -1331,6 +1334,8 @@ function buildCategoryTreeWithSuperCategory(categories) {
           // マッピングにない場合はそのまま（新しいsuperCategoryとして扱う）
           superCategory = firstPart;
           subLevels = pathParts.slice(1);
+          // デバッグ: マッピングされなかったデータを記録
+          unmappedData.push({ firstPart, fullPath: cat.fullPath, id: cat.id });
         }
       }
     }
@@ -1383,6 +1388,11 @@ function buildCategoryTreeWithSuperCategory(categories) {
       current = current[levelValue].children;
     });
   });
+
+  // デバッグ: マッピングされなかったデータを出力
+  if (unmappedData.length > 0) {
+    console.warn('[CategoryTree] マッピングされなかったデータ:', unmappedData);
+  }
 
   return tree;
 }
