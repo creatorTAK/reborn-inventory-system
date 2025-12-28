@@ -1317,7 +1317,7 @@ function renderCategoryTreeView(container) {
   const treeWrapper = document.createElement('div');
   treeWrapper.className = 'category-tree-wrapper';
 
-  renderTreeLevel(tree, treeWrapper, 1);
+  renderTreeLevel(tree, treeWrapper, 1, []); // 明示的に空配列を渡す
 
   container.appendChild(treeWrapper);
 }
