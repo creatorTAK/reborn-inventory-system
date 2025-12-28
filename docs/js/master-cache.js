@@ -7,7 +7,7 @@
 const MASTER_CACHE_CONFIG = {
   DB_NAME: 'RebornMasterCache',
   DB_VERSION: 2, // メタデータストア追加のためバージョンアップ
-  CACHE_TTL: 3600000, // 1時間（ミリ秒）
+  CACHE_TTL: 86400000, // 24時間（ミリ秒）- カテゴリは頻繁に変更されないため
   MAX_RETRY: 3,
   COLLECTIONS: {
     brands: 'brands',
