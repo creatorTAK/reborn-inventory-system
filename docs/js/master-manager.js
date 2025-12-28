@@ -4495,14 +4495,22 @@ function showTreeNodeCopyModal(nodePath, nodeName, pathArray, node) {
   // プラットフォームボタンを生成
   const listEl = document.getElementById('copyPlatformList');
   if (listEl) {
-    listEl.innerHTML = otherPlatforms.map(p => `
+    listEl.innerHTML = otherPlatforms.map(p => {
+      // アイコンのフォールバック（頭文字表示）
+      const initial = (p.name || p.id || '?').charAt(0).toUpperCase();
+      const iconHtml = p.icon
+        ? `<img src="${p.icon}" alt="${p.name}" style="width: 32px; height: 32px; border-radius: 6px; object-fit: contain; background: #f5f5f5; padding: 4px;" onerror="this.outerHTML='<div style=\\'width:32px;height:32px;border-radius:6px;background:#95bf47;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:16px;\\'>${initial}</div>'">`
+        : `<div style="width:32px;height:32px;border-radius:6px;background:#6b7280;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:16px;">${initial}</div>`;
+
+      return `
       <button type="button" class="copy-platform-btn" onclick="selectCopyPlatform('${p.id}', '${p.name}')"
         style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fff; cursor: pointer; transition: all 0.2s; text-align: left;">
-        <img src="${p.icon}" alt="${p.name}" style="width: 32px; height: 32px; border-radius: 6px; object-fit: contain; background: #f5f5f5; padding: 4px;" onerror="this.style.display='none'">
+        ${iconHtml}
         <span style="font-size: 15px; font-weight: 500; color: #333;">${p.name}</span>
         <i class="bi bi-chevron-right" style="margin-left: auto; color: #999;"></i>
       </button>
-    `).join('');
+    `;
+    }).join('');
   }
 
   // モーダル表示
@@ -4515,13 +4523,13 @@ function showTreeNodeCopyModal(nodePath, nodeName, pathArray, node) {
 /**
  * コピー先プラットフォーム選択
  */
-function selectCopyPlatform(platformId, platformName) {
+window.selectCopyPlatform = function(platformId, platformName) {
   if (!copyModalData) return;
 
   const { nodePath, nodeName, node } = copyModalData;
 
   // モーダルを閉じる
-  hideCopyModal();
+  window.hideCopyModal();
 
   // 確認ダイアログ
   if (!confirm(`「${nodeName}」（${node.count}件）を「${platformName}」にコピーしますか？`)) {
@@ -4529,18 +4537,18 @@ function selectCopyPlatform(platformId, platformName) {
   }
 
   copyTreeNodeToPlatform(nodePath, nodeName, platformId, node);
-}
+};
 
 /**
  * コピーモーダルを閉じる
  */
-function hideCopyModal() {
+window.hideCopyModal = function() {
   const modal = document.getElementById('copyModal');
   if (modal) {
     modal.classList.add('hidden');
   }
   copyModalData = null;
-}
+};
 
 /**
  * ツリーノードを別プラットフォームにコピー
