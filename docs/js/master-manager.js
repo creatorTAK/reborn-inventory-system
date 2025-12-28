@@ -1262,8 +1262,8 @@ function buildCategoryTree(categories) {
  * @param {HTMLElement} container - コンテナ要素
  */
 function renderCategoryTreeView(container) {
-  // ツリー構造を構築
-  const tree = buildCategoryTree(filteredMasterData);
+  // ツリー構造を構築（特大分類をルートとして構築）
+  const tree = buildCategoryTreeWithSuperCategory(filteredMasterData);
 
   // 検索時は全ノードを展開
   const searchInput = document.getElementById('searchInput');
@@ -1277,99 +1277,84 @@ function renderCategoryTreeView(container) {
   const treeWrapper = document.createElement('div');
   treeWrapper.className = 'category-tree-wrapper';
 
-  // ルートレベル追加ボタン（最上位カテゴリ追加用）
-  const rootAddContainer = document.createElement('div');
-  rootAddContainer.className = 'tree-root-add-container';
-  rootAddContainer.innerHTML = `
-    <button class="tree-root-add-btn" title="新規カテゴリを追加">
-      <i class="bi bi-plus-circle"></i>
-      <span>新規追加</span>
-    </button>
-  `;
-  rootAddContainer.querySelector('.tree-root-add-btn').addEventListener('click', () => {
-    showRootLevelAddForm(rootAddContainer);
-  });
-  treeWrapper.appendChild(rootAddContainer);
-
   renderTreeLevel(tree, treeWrapper, 1);
 
   container.appendChild(treeWrapper);
 }
 
 /**
- * ルートレベル（最上位）の追加フォームを表示
+ * 特大分類をルートとしてカテゴリツリーを構築
  */
-function showRootLevelAddForm(containerAfter) {
-  // 既存のインラインフォームがあれば削除
-  const existingForm = document.querySelector('.tree-inline-add-form');
-  if (existingForm) {
-    existingForm.remove();
-  }
+function buildCategoryTreeWithSuperCategory(categories) {
+  const tree = {};
+  const cascadeConfig = currentMasterConfig.cascadeAdd || {};
+  const treeConfig = currentMasterConfig.treeConfig || {};
+  const superCategoryOptions = cascadeConfig.superCategoryOptions || [];
+  const levelFields = treeConfig.levelFields || ['superCategory', 'level1', 'level2', 'level3', 'level4', 'level5'];
 
-  // インラインフォームを作成
-  const formContainer = document.createElement('div');
-  formContainer.className = 'tree-inline-add-form';
-  formContainer.style.marginLeft = '0';
-  formContainer.innerHTML = `
-    <div class="inline-form-header">
-      <span class="inline-form-path">新規カテゴリを追加</span>
-      <button class="inline-form-close" title="閉じる"><i class="bi bi-x"></i></button>
-    </div>
-    <div class="inline-form-body">
-      <textarea class="inline-form-input" placeholder="追加するカテゴリ名を入力（複数行で一括追加可能）" rows="3"></textarea>
-      <div class="inline-form-hint">1行に1つずつ入力すると一括追加できます</div>
-      <div class="inline-form-actions">
-        <button class="inline-form-cancel">キャンセル</button>
-        <button class="inline-form-submit">追加する</button>
-      </div>
-    </div>
-  `;
-
-  containerAfter.after(formContainer);
-
-  // フォーカス
-  const textarea = formContainer.querySelector('.inline-form-input');
-  textarea.focus();
-
-  // 閉じるボタン
-  formContainer.querySelector('.inline-form-close').addEventListener('click', () => {
-    formContainer.remove();
+  // 特大分類オプションをルートノードとして初期化
+  superCategoryOptions.forEach(superCat => {
+    tree[superCat] = {
+      name: superCat,
+      count: 0,
+      children: {},
+      items: [],
+      level: 1,
+      path: superCat,
+      isSuperCategory: true
+    };
   });
 
-  // キャンセルボタン
-  formContainer.querySelector('.inline-form-cancel').addEventListener('click', () => {
-    formContainer.remove();
+  // カテゴリデータをツリーに追加
+  categories.forEach(cat => {
+    const superCategory = cat.superCategory || cat[levelFields[0]];
+    if (!superCategory) return;
+
+    // 該当する特大分類がなければ作成
+    if (!tree[superCategory]) {
+      tree[superCategory] = {
+        name: superCategory,
+        count: 0,
+        children: {},
+        items: [],
+        level: 1,
+        path: superCategory,
+        isSuperCategory: true
+      };
+    }
+
+    tree[superCategory].count++;
+
+    // level1以降の階層を構築
+    const subLevels = levelFields.slice(1).map(f => cat[f]).filter(Boolean);
+    let current = tree[superCategory].children;
+    let currentPath = superCategory;
+
+    subLevels.forEach((levelValue, index) => {
+      currentPath = `${currentPath} > ${levelValue}`;
+
+      if (!current[levelValue]) {
+        current[levelValue] = {
+          name: levelValue,
+          count: 0,
+          children: {},
+          items: [],
+          level: index + 2, // +2 because superCategory is level 1
+          path: currentPath
+        };
+      }
+      current[levelValue].count++;
+
+      // 最終レベルの場合、アイテムとして登録
+      if (index === subLevels.length - 1) {
+        current[levelValue].items.push(cat);
+      }
+
+      current = current[levelValue].children;
+    });
   });
 
-  // 追加ボタン
-  formContainer.querySelector('.inline-form-submit').addEventListener('click', async () => {
-    const inputValue = textarea.value.trim();
-    if (!inputValue) {
-      showToast('追加するカテゴリ名を入力してください', 'warning');
-      return;
-    }
-
-    const newValues = inputValue.split('\n').map(v => v.trim()).filter(v => v.length > 0);
-    if (newValues.length === 0) {
-      showToast('追加するカテゴリ名を入力してください', 'warning');
-      return;
-    }
-
-    // ルートレベル追加（pathArrayは空）
-    await addTreeItems([], newValues, false);
-    formContainer.remove();
-  });
-
-  // Enterキーで追加
-  textarea.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      formContainer.querySelector('.inline-form-submit').click();
-    }
-    if (e.key === 'Escape') {
-      formContainer.remove();
-    }
-  });
+  return tree;
 }
 
 /**
