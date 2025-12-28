@@ -1159,7 +1159,8 @@ function renderMasterList() {
       if (actionBarAddBtnEmpty) actionBarAddBtnEmpty.style.display = 'none';
     } else {
       if (rootCategoryAddEmpty) rootCategoryAddEmpty.classList.add('hidden');
-      if (actionBarAddBtnEmpty) actionBarAddBtnEmpty.style.display = '';
+      // ブランド等の非ツリービューでは新規追加ボタンを表示
+      if (actionBarAddBtnEmpty) actionBarAddBtnEmpty.style.display = 'flex';
     }
 
     return;
@@ -1184,14 +1185,14 @@ function renderMasterList() {
     // アコーディオン表示
     renderAccordionList(container);
     // 上部の「新規追加」ボタンを表示
-    if (actionBarAddBtn) actionBarAddBtn.style.display = '';
+    if (actionBarAddBtn) actionBarAddBtn.style.display = 'flex';
     // ルートカテゴリ追加入力を非表示
     if (rootCategoryAdd) rootCategoryAdd.classList.add('hidden');
   } else {
     // 従来のフラットリスト表示
     renderFlatList(container);
     // 上部の「新規追加」ボタンを表示
-    if (actionBarAddBtn) actionBarAddBtn.style.display = '';
+    if (actionBarAddBtn) actionBarAddBtn.style.display = 'flex';
     // ルートカテゴリ追加入力を非表示
     if (rootCategoryAdd) rootCategoryAdd.classList.add('hidden');
   }
