@@ -4545,6 +4545,13 @@ function showTreeNodeCopyModal(nodePath, nodeName, pathArray, node) {
 window.selectCopyPlatform = function(platformId, platformName) {
   if (!copyModalData) return;
 
+  // platformId検証（早期チェック）
+  if (!platformId || platformId === 'undefined' || platformId === 'null') {
+    console.error('❌ [selectCopyPlatform] 無効なplatformId:', platformId);
+    alert('❌ プラットフォームが正しく選択されていません');
+    return;
+  }
+
   const { nodePath, nodeName, node } = copyModalData;
 
   // モーダルを閉じる
@@ -4555,6 +4562,7 @@ window.selectCopyPlatform = function(platformId, platformName) {
     return;
   }
 
+  console.log(`📋 [selectCopyPlatform] コピー開始: platformId="${platformId}"`);
   copyTreeNodeToPlatform(nodePath, nodeName, platformId, node);
 };
 
@@ -4576,6 +4584,26 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
   showLoading(true);
 
   try {
+    // ====== platform検証（undefined/空文字対策） ======
+    const validPlatformIds = ['mercari', 'mercari-shops', 'yahoo-fleamarket', 'rakuma', 'ebay'];
+    
+    if (!targetPlatformId || typeof targetPlatformId !== 'string' || targetPlatformId.trim() === '') {
+      showLoading(false);
+      console.error('❌ [Copy] 無効なtargetPlatformId:', targetPlatformId);
+      alert('❌ コピー先プラットフォームが正しく選択されていません');
+      return;
+    }
+    
+    if (!validPlatformIds.includes(targetPlatformId)) {
+      showLoading(false);
+      console.error('❌ [Copy] 未知のプラットフォームID:', targetPlatformId);
+      alert(`❌ 未知のプラットフォームID: ${targetPlatformId}`);
+      return;
+    }
+    
+    console.log(`✅ [Copy] platformId検証OK: "${targetPlatformId}"`);
+    // ===============================================
+
     const collection = currentMasterConfig.collection;
     const sourcePlatformId = currentPlatform || 'mercari';
 
@@ -4668,10 +4696,17 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
       delete newCat.id; // 新しいIDを生成させる
       delete newCat.createdAt; // createMasterが設定する
       delete newCat.updatedAt; // createMasterが設定する
-      // platformフィールドを設定（フィルタリング時に使用）
+      
+      // platformフィールドを設定（防御的検証付き）
+      if (!targetPlatformId || targetPlatformId === 'undefined') {
+        console.error('❌ [Copy] 致命的エラー: targetPlatformIdが無効', targetPlatformId);
+        throw new Error('platformIdが無効です');
+      }
       newCat.platform = targetPlatformId;
       // platformIdも設定（互換性のため）
       newCat.platformId = targetPlatformId;
+      
+      console.log(`📋 [Copy] カテゴリ作成: ${newCat.superCategory} > ${newCat.fullPath} → platform: ${newCat.platform}`);
 
       // firestore-api.js の createMaster を使用
       return window.createMaster(collection, newCat);
