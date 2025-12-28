@@ -4573,9 +4573,10 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
     }
 
     const sourceCategories = allCategories.filter(cat => {
-      // platformIdチェック（未設定の場合はmercariとして扱う）
-      const catPlatformId = cat.platformId || 'mercari';
-      if (catPlatformId !== sourcePlatformId) return false;
+      // platformチェック（未設定の場合はmercariとして扱う）
+      // 注: 既存データは platform フィールドを使用
+      const catPlatform = cat.platform || cat.platformId || 'mercari';
+      if (catPlatform !== sourcePlatformId) return false;
 
       // superCategoryでマッチング（ツリーの最上位ノード）
       if (cat.superCategory === nodePath) return true;
@@ -4612,6 +4613,9 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
       delete newCat.id; // 新しいIDを生成させる
       delete newCat.createdAt; // createMasterが設定する
       delete newCat.updatedAt; // createMasterが設定する
+      // platformフィールドを設定（フィルタリング時に使用）
+      newCat.platform = targetPlatformId;
+      // platformIdも設定（互換性のため）
       newCat.platformId = targetPlatformId;
 
       // firestore-api.js の createMaster を使用
