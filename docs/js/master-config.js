@@ -166,6 +166,38 @@ const masterCategories = {
         }
       },
 
+      // 商品属性マスタ（18カテゴリ統合・ドロップダウン切替）
+      attribute: {
+        label: '商品属性',
+        description: '商品属性（18カテゴリ）を管理',
+        type: 'masterOptionsDropdown',
+        masterOptionsCategories: [
+          { key: '生地・素材・質感系', label: '生地・素材・質感系', icon: 'bi-layers' },
+          { key: '季節感・機能性', label: '季節感・機能性', icon: 'bi-sun' },
+          { key: '着用シーン・イベント', label: '着用シーン・イベント', icon: 'bi-calendar-event' },
+          { key: '見た目・印象', label: '見た目・印象', icon: 'bi-eye' },
+          { key: 'トレンド表現', label: 'トレンド表現', icon: 'bi-graph-up-arrow' },
+          { key: 'サイズ感・体型カバー', label: 'サイズ感・体型カバー', icon: 'bi-arrows-angle-expand' },
+          { key: '年代・テイスト・スタイル', label: '年代・テイスト・スタイル', icon: 'bi-person' },
+          { key: 'カラー/配色/トーン', label: 'カラー/配色/トーン', icon: 'bi-palette' },
+          { key: '柄・模様', label: '柄・模様', icon: 'bi-grid-3x3' },
+          { key: 'ディテール・仕様', label: 'ディテール・仕様', icon: 'bi-gear' },
+          { key: 'シルエット/ライン', label: 'シルエット/ライン', icon: 'bi-body-text' },
+          { key: 'ネックライン', label: 'ネックライン', icon: 'bi-chevron-down' },
+          { key: '襟・衿', label: '襟・衿', icon: 'bi-chevron-up' },
+          { key: '袖・袖付け', label: '袖・袖付け', icon: 'bi-arrows' },
+          { key: '丈', label: '丈', icon: 'bi-rulers' },
+          { key: '革/加工', label: '革/加工', icon: 'bi-handbag' },
+          { key: '毛皮/加工', label: '毛皮/加工', icon: 'bi-cloud' },
+          { key: '生産国', label: '生産国', icon: 'bi-globe' }
+        ],
+        emptyState: {
+          icon: '🏷️',
+          message: '商品属性を管理',
+          hint: 'カテゴリを選択して属性値を追加・編集'
+        }
+      },
+
       salesword: {
         label: 'セールスワード',
         collection: 'saleswords',

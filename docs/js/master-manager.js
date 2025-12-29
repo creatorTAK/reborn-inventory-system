@@ -385,6 +385,16 @@ async function loadMaster(category, type) {
     return;
   }
 
+  // masterOptionsDropdownタイプの場合はドロップダウン切替UIを表示
+  if (currentMasterConfig.type === 'masterOptionsDropdown') {
+    console.log('📋 [Master Manager] masterOptionsDropdownタイプ - ドロップダウンUI表示');
+    hidePlatformTabs();
+    hideSearchUI();
+    hideActionBar();
+    await renderMasterOptionsDropdownUI();
+    return;
+  }
+
   // 通常タイプの場合はUI要素を復元
   showSearchUI();
   showActionBar();
@@ -834,6 +844,193 @@ window.deleteMasterOptionItem = async function(fieldIndex, itemIndex) {
     await renderMasterOptionsUI();
   } else {
     fieldData.items.splice(itemIndex, 0, removedItem);
+    alert('削除に失敗しました');
+  }
+};
+
+// ============================================
+// masterOptions ドロップダウン切替UI（商品属性用）
+// ============================================
+
+// 現在選択中のカテゴリインデックス
+let currentDropdownCategoryIndex = 0;
+
+/**
+ * masterOptionsドロップダウンUIをレンダリング
+ */
+async function renderMasterOptionsDropdownUI() {
+  const container = document.getElementById('masterListContainer');
+  const emptyState = document.getElementById('emptyState');
+
+  if (!container) return;
+
+  // 空状態を非表示
+  if (emptyState) emptyState.classList.add('hidden');
+
+  // カテゴリ設定を取得
+  const categories = currentMasterConfig.masterOptionsCategories || [];
+
+  if (categories.length === 0) {
+    container.innerHTML = '<p class="text-center text-muted py-4">カテゴリが設定されていません</p>';
+    return;
+  }
+
+  // 選択中のカテゴリのデータを取得
+  const selectedCategory = categories[currentDropdownCategoryIndex];
+  const items = await getMasterOptionsFieldData(selectedCategory.key);
+
+  // UIを生成
+  container.innerHTML = `
+    <div class="master-options-container">
+      <!-- カテゴリ選択ドロップダウン -->
+      <div class="master-options-dropdown-selector">
+        <label for="attributeCategorySelect">カテゴリ選択</label>
+        <select id="attributeCategorySelect" class="form-select" onchange="changeAttributeCategory(this.value)">
+          ${categories.map((cat, index) => `
+            <option value="${index}" ${index === currentDropdownCategoryIndex ? 'selected' : ''}>
+              ${cat.label}
+            </option>
+          `).join('')}
+        </select>
+      </div>
+
+      <!-- 選択されたカテゴリの内容 -->
+      <div class="master-options-section" data-category-key="${selectedCategory.key}">
+        <div class="master-options-header">
+          <h6><i class="bi ${selectedCategory.icon || 'bi-list'}"></i> ${selectedCategory.label}</h6>
+          <span class="badge bg-secondary">${items.length}件</span>
+        </div>
+        <div class="master-options-list" id="masterOptionsDropdownList">
+          ${items.length === 0 ? `
+            <div class="master-options-empty">
+              <p>このカテゴリにはまだ項目がありません</p>
+            </div>
+          ` : items.map((item, itemIndex) => `
+            <div class="master-options-item" data-item-index="${itemIndex}">
+              <span class="item-text">${escapeHtml(item)}</span>
+              <div class="item-actions">
+                <button class="btn-icon btn-edit" onclick="editDropdownItem(${itemIndex})" title="編集">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn-icon btn-delete" onclick="deleteDropdownItem(${itemIndex})" title="削除">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="master-options-add">
+          <input type="text" class="form-control form-control-sm" id="newDropdownItem" placeholder="新しい${selectedCategory.label}を入力">
+          <button class="btn btn-sm btn-primary" onclick="addDropdownItem()">
+            <i class="bi bi-plus"></i> 追加
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 現在のカテゴリデータを保持
+  window._currentDropdownCategory = selectedCategory;
+  window._currentDropdownItems = items;
+}
+
+/**
+ * カテゴリ変更
+ */
+window.changeAttributeCategory = async function(index) {
+  currentDropdownCategoryIndex = parseInt(index);
+  await renderMasterOptionsDropdownUI();
+};
+
+/**
+ * ドロップダウンUIで項目追加
+ */
+window.addDropdownItem = async function() {
+  const input = document.getElementById('newDropdownItem');
+  const value = input?.value?.trim();
+
+  if (!value) {
+    alert('値を入力してください');
+    return;
+  }
+
+  const category = window._currentDropdownCategory;
+  const items = window._currentDropdownItems;
+
+  if (!category) return;
+
+  // 重複チェック
+  if (items.includes(value)) {
+    alert('この値は既に登録されています');
+    return;
+  }
+
+  // 配列に追加
+  items.push(value);
+
+  // Firestoreに保存
+  const success = await saveMasterOptionsFieldData(category.key, items);
+  if (success) {
+    input.value = '';
+    await renderMasterOptionsDropdownUI();
+  } else {
+    items.pop();
+    alert('保存に失敗しました');
+  }
+};
+
+/**
+ * ドロップダウンUIで項目編集
+ */
+window.editDropdownItem = async function(itemIndex) {
+  const category = window._currentDropdownCategory;
+  const items = window._currentDropdownItems;
+
+  if (!category || !items) return;
+
+  const currentValue = items[itemIndex];
+  const newValue = prompt('新しい値を入力:', currentValue);
+
+  if (newValue === null || newValue.trim() === '') return;
+  if (newValue.trim() === currentValue) return;
+
+  // 重複チェック
+  if (items.includes(newValue.trim()) && newValue.trim() !== currentValue) {
+    alert('この値は既に登録されています');
+    return;
+  }
+
+  const oldValue = items[itemIndex];
+  items[itemIndex] = newValue.trim();
+
+  const success = await saveMasterOptionsFieldData(category.key, items);
+  if (success) {
+    await renderMasterOptionsDropdownUI();
+  } else {
+    items[itemIndex] = oldValue;
+    alert('保存に失敗しました');
+  }
+};
+
+/**
+ * ドロップダウンUIで項目削除
+ */
+window.deleteDropdownItem = async function(itemIndex) {
+  const category = window._currentDropdownCategory;
+  const items = window._currentDropdownItems;
+
+  if (!category || !items) return;
+
+  const value = items[itemIndex];
+  if (!confirm(`「${value}」を削除しますか？`)) return;
+
+  const removedItem = items.splice(itemIndex, 1)[0];
+
+  const success = await saveMasterOptionsFieldData(category.key, items);
+  if (success) {
+    await renderMasterOptionsDropdownUI();
+  } else {
+    items.splice(itemIndex, 0, removedItem);
     alert('削除に失敗しました');
   }
 };
