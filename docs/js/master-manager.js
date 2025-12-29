@@ -2024,6 +2024,9 @@ async function addTreeItems(pathArray, newValues, isItemName) {
         .then(() => console.log('[Master Manager] IndexedDBキャッシュ無効化完了'))
         .catch(e => console.warn('[Master Manager] IndexedDBキャッシュ無効化失敗:', e));
     }
+    
+    // categories/master を自動同期（商品登録・仕入管理連携）
+    syncCategoriesMaster();
   } else if (failedResults.length > 0) {
     showToast(`追加に失敗しました（${failedResults.length}件）`, 'error');
   }
@@ -4460,6 +4463,9 @@ async function deleteTreeNode(nodePath, nodeName) {
     }
     
     await fetchAndDisplayTotalCountByPlatform();
+    
+    // categories/master を自動同期（商品登録・仕入管理連携）
+    syncCategoriesMaster();
 
   } catch (error) {
     showLoading(false);
@@ -4760,6 +4766,9 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
       await window.masterCacheManager.invalidateCache(collection);
       console.log('✅ [Copy] IndexedDBキャッシュ無効化完了');
     }
+    
+    // categories/master を自動同期（商品登録・仕入管理連携）
+    syncCategoriesMaster();
 
   } catch (error) {
     showLoading(false);
@@ -4776,5 +4785,67 @@ document.addEventListener('click', (e) => {
     });
   }
 });
+
+// ============================================
+// categories/master 自動同期（商品登録・仕入管理連携）
+// ============================================
+
+/**
+ * 個別カテゴリドキュメントからcategories/masterを再生成
+ * マスタ管理で追加/削除/コピー後に呼び出される
+ */
+async function syncCategoriesMaster() {
+  // categoriesコレクション以外は対象外
+  if (currentMasterConfig?.collection !== 'categories') {
+    return;
+  }
+  
+  console.log('🔄 [Sync] categories/master 同期開始...');
+  
+  try {
+    const snapshot = await firebase.firestore().collection('categories').get();
+    
+    const rows = [];
+    snapshot.docs.forEach(doc => {
+      if (doc.id === 'master') return; // masterドキュメント自体はスキップ
+      const d = doc.data();
+      
+      if (d.superCategory) {
+        // 新形式: superCategoryを特大分類として使用
+        rows.push({
+          特大分類: d.superCategory,
+          大分類: d.level1 || '',
+          中分類: d.level2 || '',
+          小分類: d.level3 || '',
+          細分類: d.level4 || '',
+          細分類2: d.level5 || '',
+          アイテム名: d.itemName || ''
+        });
+      } else if (d.level1) {
+        // 旧形式: ファッションに属する
+        rows.push({
+          特大分類: 'ファッション',
+          大分類: d.level1 || '',
+          中分類: d.level2 || '',
+          小分類: d.level3 || '',
+          細分類: d.level4 || '',
+          細分類2: d.level5 || '',
+          アイテム名: d.itemName || ''
+        });
+      }
+    });
+    
+    // categories/masterを更新
+    await firebase.firestore().collection('categories').doc('master').set({
+      rows: rows,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    console.log(`✅ [Sync] categories/master 同期完了: ${rows.length}件`);
+    
+  } catch (error) {
+    console.error('❌ [Sync] categories/master 同期エラー:', error);
+  }
+}
 
 console.log('✅ [Master Manager] モジュール読み込み完了');
