@@ -2009,36 +2009,20 @@ async function addTreeItems(pathArray, newValues, isItemName) {
     }
     showToast(message, 'success');
 
-    // キャッシュを無効化（メタデータのみ削除、データは保持）
-    if (window.masterCacheManager && window.masterCacheManager.db) {
-      try {
-        const transaction = window.masterCacheManager.db.transaction(['metadata'], 'readwrite');
-        const store = transaction.objectStore('metadata');
-        store.delete(currentMasterConfig.collection);
-        console.log('[Master Manager] キャッシュメタデータを無効化');
-      } catch (e) {
-        console.warn('[Master Manager] キャッシュ無効化失敗:', e);
-      }
-    }
-
-    // 直接Firestoreから取得して即座に表示（キャッシュ保存をスキップ）
-    try {
-      console.log('[Master Manager] Firestoreから直接取得開始...');
-      const freshData = await window.getMasterData(currentMasterConfig.collection);
-
-      if (freshData && freshData.length > 0) {
-        allMasterData = freshData;
-        filteredMasterData = freshData;
-        masterCache[currentMasterConfig.collection] = freshData;
-        console.log(`[Master Manager] Firestore直接取得完了: ${freshData.length}件`);
-      }
-
-      renderMasterList();
-      updateStats();
-    } catch (error) {
-      console.error('[Master Manager] Firestore直接取得エラー:', error);
-      // フォールバック: 通常のloadMasterData
-      await loadMasterData();
+    // ローカルキャッシュを更新して即座に表示（Firestore再取得をスキップ）
+    allMasterData = masterCache[currentMasterConfig.collection];
+    filteredMasterData = allMasterData;
+    
+    console.log(`[Master Manager] ローカルキャッシュから表示: ${allMasterData.length}件`);
+    
+    renderMasterList();
+    updateStats();
+    
+    // IndexedDBキャッシュを非同期で更新（バックグラウンド）
+    if (window.masterCacheManager && window.masterCacheManager.invalidateCache) {
+      window.masterCacheManager.invalidateCache(currentMasterConfig.collection)
+        .then(() => console.log('[Master Manager] IndexedDBキャッシュ無効化完了'))
+        .catch(e => console.warn('[Master Manager] IndexedDBキャッシュ無効化失敗:', e));
     }
   } else if (failedResults.length > 0) {
     showToast(`追加に失敗しました（${failedResults.length}件）`, 'error');
