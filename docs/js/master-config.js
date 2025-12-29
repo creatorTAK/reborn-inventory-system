@@ -149,87 +149,8 @@ const masterCategories = {
         searchPlaceholder: 'カテゴリ名を入力'
       },
       
-      material: {
-        label: '素材',
-        collection: 'materials',
-        description: '商品素材を管理',
-        fields: [
-          { 
-            name: 'name', 
-            label: '素材名', 
-            required: true, 
-            type: 'text',
-            placeholder: '例: コットン100%',
-            validation: {
-              minLength: 1,
-              maxLength: 100
-            }
-          }
-        ],
-        displayFields: ['name'],
-        searchFields: ['name'],
-        sortBy: 'name',
-        sortOrder: 'asc',
-        searchable: true,
-        usageCount: true,
-        bulkDelete: true,
-        maxDisplayResults: 100
-      },
-      
-      fabric: {
-        label: '生地',
-        collection: 'fabrics',
-        description: '生地種類を管理',
-        fields: [
-          { 
-            name: 'name', 
-            label: '生地名', 
-            required: true, 
-            type: 'text',
-            placeholder: '例: デニム',
-            validation: {
-              minLength: 1,
-              maxLength: 100
-            }
-          }
-        ],
-        displayFields: ['name'],
-        searchFields: ['name'],
-        sortBy: 'name',
-        sortOrder: 'asc',
-        searchable: true,
-        usageCount: true,
-        bulkDelete: true,
-        maxDisplayResults: 100
-      },
-      
-      keyword: {
-        label: 'キーワード',
-        collection: 'keywords',
-        description: '商品検索用キーワードを管理',
-        fields: [
-          { 
-            name: 'keyword', 
-            label: 'キーワード', 
-            required: true, 
-            type: 'text',
-            placeholder: '例: ヴィンテージ',
-            validation: {
-              minLength: 1,
-              maxLength: 50
-            }
-          }
-        ],
-        displayFields: ['keyword'],
-        searchFields: ['keyword'],
-        sortBy: 'keyword',
-        sortOrder: 'asc',
-        searchable: true,
-        usageCount: true,
-        bulkDelete: true,
-        maxDisplayResults: 100
-      },
-      
+      // 削除済み: material, fabric, keyword（データなし・masterOptionsに移行）
+
       salesword: {
         label: 'セールスワード',
         collection: 'saleswords',
@@ -257,64 +178,8 @@ const masterCategories = {
         maxDisplayResults: 100
       },
       
-      attributeCategory: {
-        label: '商品属性カテゴリ',
-        collection: 'attributeCategories',
-        description: '商品属性のカテゴリ（18種類）を管理',
-        fields: [
-          { 
-            name: 'name', 
-            label: 'カテゴリ名', 
-            required: true, 
-            type: 'text',
-            placeholder: '例: 生地・素材・質感系',
-            validation: {
-              minLength: 1,
-              maxLength: 50
-            }
-          },
-          { 
-            name: 'displayOrder', 
-            label: '表示順', 
-            required: false, 
-            type: 'number',
-            placeholder: '例: 1',
-            validation: {
-              min: 1,
-              max: 100
-            }
-          }
-        ],
-        displayFields: ['name', 'displayOrder'],
-        searchFields: ['name'],
-        sortBy: 'displayOrder',
-        sortOrder: 'asc',
-        searchable: true,
-        usageCount: true,
-        bulkDelete: true,
-        maxDisplayResults: 100,
-        defaultData: [
-          { name: '生地・素材・質感系', displayOrder: 1 },
-          { name: '季節感・機能性', displayOrder: 2 },
-          { name: '着用シーン・イベント', displayOrder: 3 },
-          { name: '見た目・印象', displayOrder: 4 },
-          { name: 'トレンド表現', displayOrder: 5 },
-          { name: 'サイズ感・体型カバー', displayOrder: 6 },
-          { name: '年代・テイスト・スタイル', displayOrder: 7 },
-          { name: 'カラー/配色/トーン', displayOrder: 8 },
-          { name: '柄・模様', displayOrder: 9 },
-          { name: 'ディテール・仕様', displayOrder: 10 },
-          { name: 'シルエット/ライン', displayOrder: 11 },
-          { name: 'ネックライン', displayOrder: 12 },
-          { name: '襟・衿', displayOrder: 13 },
-          { name: '袖・袖付け', displayOrder: 14 },
-          { name: '丈', displayOrder: 15 },
-          { name: '革/加工', displayOrder: 16 },
-          { name: '毛皮/加工', displayOrder: 17 },
-          { name: '生産国', displayOrder: 18 }
-        ]
-      },
-      
+      // 削除済み: attributeCategory（masterOptionsに移行済み）
+
       accessory: {
         label: '付属品',
         collection: 'accessories',
