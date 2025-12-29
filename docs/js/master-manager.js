@@ -375,11 +375,15 @@ async function loadMaster(category, type) {
   // ヘッダーにマスタ種別を表示
   updateMasterTypeDisplay();
 
+  // 検索バーを表示し、プレースホルダーを更新
+  showSearchUI();
+  updateSearchPlaceholder();
+  clearSearchInput();
+
   // masterOptionsタイプの場合は専用UIを表示
   if (currentMasterConfig.type === 'masterOptions') {
     console.log('📋 [Master Manager] masterOptionsタイプ - 専用UI表示');
     hidePlatformTabs();
-    hideSearchUI();
     hideActionBar();
     await renderMasterOptionsUI();
     return;
@@ -389,7 +393,6 @@ async function loadMaster(category, type) {
   if (currentMasterConfig.type === 'masterOptionsDropdown') {
     console.log('📋 [Master Manager] masterOptionsDropdownタイプ - ドロップダウンUI表示');
     hidePlatformTabs();
-    hideSearchUI();
     hideActionBar();
     await renderMasterOptionsDropdownUI();
     return;
@@ -399,7 +402,6 @@ async function loadMaster(category, type) {
   if (currentMasterConfig.type === 'simpleList') {
     console.log('📋 [Master Manager] simpleListタイプ - シンプルリストUI表示');
     hidePlatformTabs();
-    hideSearchUI();
     hideActionBar();
     await renderSimpleListUI();
     return;
@@ -409,7 +411,6 @@ async function loadMaster(category, type) {
   if (currentMasterConfig.type === 'categoryWords') {
     console.log('📋 [Master Manager] categoryWordsタイプ - カテゴリ別ワードUI表示');
     hidePlatformTabs();
-    hideSearchUI();
     hideActionBar();
     await renderCategoryWordsUI();
     return;
@@ -419,14 +420,12 @@ async function loadMaster(category, type) {
   if (currentMasterConfig.type === 'categoryWordsDropdown') {
     console.log('📋 [Master Manager] categoryWordsDropdownタイプ - ドロップダウン形式UI表示');
     hidePlatformTabs();
-    hideSearchUI();
     hideActionBar();
     await renderCategoryWordsDropdownUI();
     return;
   }
 
-  // 通常タイプの場合はUI要素を復元
-  showSearchUI();
+  // 通常タイプの場合はアクションバーを表示
   showActionBar();
 
   // プラットフォームタブの表示/非表示
@@ -671,6 +670,90 @@ function showActionBar() {
   }
 }
 
+/**
+ * 検索プレースホルダーを現在のタブに応じて更新
+ */
+function updateSearchPlaceholder() {
+  const searchInput = document.getElementById('searchInput');
+  if (!searchInput || !currentMasterConfig) return;
+
+  const label = currentMasterConfig.label || 'アイテム';
+  searchInput.placeholder = `${label}を検索...`;
+}
+
+/**
+ * 検索入力をクリア
+ */
+function clearSearchInput() {
+  const searchInput = document.getElementById('searchInput');
+  const resultCount = document.getElementById('searchResultCount');
+  if (searchInput) searchInput.value = '';
+  if (resultCount) resultCount.textContent = '';
+}
+
+/**
+ * グローバルフィルター処理（全タブ共通）
+ * タブのタイプに応じて適切なフィルター関数を呼び出す
+ */
+window.handleGlobalFilter = function(query) {
+  if (!currentMasterConfig) return;
+
+  const type = currentMasterConfig.type;
+
+  switch (type) {
+    case 'masterOptions':
+      filterMasterOptions(query);
+      break;
+    case 'masterOptionsDropdown':
+      filterDropdownItems(query);
+      break;
+    case 'simpleList':
+      filterSimpleList(query);
+      break;
+    case 'categoryWords':
+      filterCategoryWords(query);
+      break;
+    case 'categoryWordsDropdown':
+      filterCWDropdownItems(query);
+      break;
+    default:
+      // ブランド・カテゴリ等の通常タイプ
+      filterDefaultList(query);
+      break;
+  }
+};
+
+/**
+ * 通常リスト（ブランド・カテゴリ等）のフィルター処理
+ */
+function filterDefaultList(query) {
+  const normalizedQuery = query.toLowerCase().trim();
+  const items = document.querySelectorAll('#masterListContainer .master-item, #masterListContainer .tree-node');
+  let visible = 0;
+
+  items.forEach(item => {
+    const text = (item.dataset.text || item.textContent || '').toLowerCase();
+    if (!normalizedQuery || text.includes(normalizedQuery)) {
+      item.classList.remove('hidden');
+      visible++;
+    } else {
+      item.classList.add('hidden');
+    }
+  });
+
+  updateSearchResultCount(visible, normalizedQuery);
+}
+
+/**
+ * 検索結果カウントを更新
+ */
+function updateSearchResultCount(count, query) {
+  const resultCount = document.getElementById('searchResultCount');
+  if (resultCount) {
+    resultCount.textContent = query ? `${count}件` : '';
+  }
+}
+
 // ============================================
 // masterOptions 専用UI
 // ============================================
@@ -758,13 +841,6 @@ async function renderMasterOptionsUI() {
   // UIを生成
   container.innerHTML = `
     <div class="master-options-container">
-      <!-- 検索フィルター -->
-      <div class="master-filter-container">
-        <input type="text" class="master-filter-input" id="masterOptionsFilter"
-               placeholder="${placeholder}" oninput="filterMasterOptions(this.value)">
-        <div class="master-filter-count" id="masterOptionsFilterCount">${totalItems}件</div>
-      </div>
-
       ${fieldsData.map((field, fieldIndex) => `
         <div class="master-options-section" data-field-index="${fieldIndex}" data-field-key="${field.key}">
           <div class="master-options-header">
@@ -832,11 +908,8 @@ window.filterMasterOptions = function(query) {
     totalVisible += visibleInSection;
   });
 
-  // 総件数更新
-  const countEl = document.getElementById('masterOptionsFilterCount');
-  if (countEl) {
-    countEl.textContent = normalizedQuery ? `${totalVisible}件 (検索結果)` : `${totalVisible}件`;
-  }
+  // グローバル検索カウント更新
+  updateSearchResultCount(totalVisible, normalizedQuery);
 }
 
 /**
@@ -973,13 +1046,6 @@ async function renderMasterOptionsDropdownUI() {
         </select>
       </div>
 
-      <!-- 検索フィルター -->
-      <div class="master-filter-container">
-        <input type="text" class="master-filter-input" id="dropdownFilter"
-               placeholder="${selectedCategory.label}を検索..." oninput="filterDropdownItems(this.value)">
-        <div class="master-filter-count" id="dropdownFilterCount">${items.length}件</div>
-      </div>
-
       <!-- 選択されたカテゴリの内容 -->
       <div class="master-options-section" data-category-key="${selectedCategory.key}">
         <div class="master-options-header">
@@ -1038,9 +1104,12 @@ window.filterDropdownItems = function(query) {
     }
   });
 
-  // カウント更新
-  document.getElementById('dropdownItemCount').textContent = `${visible}件`;
-  document.getElementById('dropdownFilterCount').textContent = normalizedQuery ? `${visible}件 (検索結果)` : `${visible}件`;
+  // セクション内カウント更新
+  const itemCount = document.getElementById('dropdownItemCount');
+  if (itemCount) itemCount.textContent = `${visible}件`;
+
+  // グローバル検索カウント更新
+  updateSearchResultCount(visible, normalizedQuery);
 }
 
 /**
@@ -1199,13 +1268,6 @@ async function renderSimpleListUI() {
     // UIを生成
     container.innerHTML = `
       <div class="master-options-container">
-        <!-- 検索フィルター -->
-        <div class="master-filter-container">
-          <input type="text" class="master-filter-input" id="simpleListFilter"
-                 placeholder="${label}を検索..." oninput="filterSimpleList(this.value)">
-          <div class="master-filter-count" id="simpleListFilterCount">${items.length}件</div>
-        </div>
-
         <div class="master-options-section">
           <div class="master-options-header">
             <h6><i class="bi ${icon}"></i> ${label}</h6>
@@ -1263,11 +1325,12 @@ window.filterSimpleList = function(query) {
     }
   });
 
-  // カウント更新
+  // セクション内カウント更新
   const countBadge = document.getElementById('simpleListItemCount');
-  const filterCount = document.getElementById('simpleListFilterCount');
   if (countBadge) countBadge.textContent = `${visible}件`;
-  if (filterCount) filterCount.textContent = normalizedQuery ? `${visible}件 (検索結果)` : `${visible}件`;
+
+  // グローバル検索カウント更新
+  updateSearchResultCount(visible, normalizedQuery);
 }
 
 /**
@@ -1417,13 +1480,6 @@ async function renderCategoryWordsUI() {
     // UIを生成（素材タブと同じレイアウト）
     container.innerHTML = `
       <div class="master-options-container">
-        <!-- 検索フィルター -->
-        <div class="master-filter-container">
-          <input type="text" class="master-filter-input" id="categoryWordsFilter"
-                 placeholder="${label}を検索..." oninput="filterCategoryWords(this.value)">
-          <div class="master-filter-count" id="categoryWordsFilterCount">${totalWords}件</div>
-        </div>
-
         ${categories.length === 0 ? `
           <div class="master-options-empty" style="padding: 40px; text-align: center;">
             <p>カテゴリがありません</p>
@@ -1511,11 +1567,8 @@ window.filterCategoryWords = function(query) {
     totalVisible += visibleInSection;
   });
 
-  // 総件数更新
-  const filterCount = document.getElementById('categoryWordsFilterCount');
-  if (filterCount) {
-    filterCount.textContent = normalizedQuery ? `${totalVisible}件 (検索結果)` : `${totalVisible}件`;
-  }
+  // グローバル検索カウント更新
+  updateSearchResultCount(totalVisible, normalizedQuery);
 }
 
 /**
@@ -1743,13 +1796,6 @@ async function renderCategoryWordsDropdownUI() {
           </select>
         </div>
 
-        <!-- 検索フィルター -->
-        <div class="master-filter-container">
-          <input type="text" class="master-filter-input" id="cwDropdownFilter"
-                 placeholder="${escapeHtml(selectedCategory.name)}を検索..." oninput="filterCWDropdownItems(this.value)">
-          <div class="master-filter-count" id="cwDropdownFilterCount">${items.length}件</div>
-        </div>
-
         <!-- 選択されたカテゴリの内容 -->
         <div class="master-options-section" data-category-id="${selectedCategory.id}">
           <div class="master-options-header">
@@ -1824,9 +1870,12 @@ window.filterCWDropdownItems = function(query) {
     }
   });
 
-  // カウント更新
-  document.getElementById('cwDropdownItemCount').textContent = `${visible}件`;
-  document.getElementById('cwDropdownFilterCount').textContent = normalizedQuery ? `${visible}件 (検索結果)` : `${visible}件`;
+  // セクション内カウント更新
+  const itemCount = document.getElementById('cwDropdownItemCount');
+  if (itemCount) itemCount.textContent = `${visible}件`;
+
+  // グローバル検索カウント更新
+  updateSearchResultCount(visible, normalizedQuery);
 }
 
 /**
