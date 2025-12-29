@@ -395,6 +395,16 @@ async function loadMaster(category, type) {
     return;
   }
 
+  // simpleListタイプの場合はシンプルリストUIを表示
+  if (currentMasterConfig.type === 'simpleList') {
+    console.log('📋 [Master Manager] simpleListタイプ - シンプルリストUI表示');
+    hidePlatformTabs();
+    hideSearchUI();
+    hideActionBar();
+    await renderSimpleListUI();
+    return;
+  }
+
   // 通常タイプの場合はUI要素を復元
   showSearchUI();
   showActionBar();
@@ -1032,6 +1042,187 @@ window.deleteDropdownItem = async function(itemIndex) {
   } else {
     items.splice(itemIndex, 0, removedItem);
     alert('削除に失敗しました');
+  }
+};
+
+// ============================================
+// simpleList タイプ（付属品・セールスワード用）
+// ============================================
+
+/**
+ * シンプルリストUIをレンダリング
+ * Firestoreコレクションを読み取り、素材タブと同じUIで表示
+ */
+async function renderSimpleListUI() {
+  const container = document.getElementById('masterListContainer');
+  if (!container) return;
+
+  container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+  const collection = currentMasterConfig.collection;
+  const displayField = currentMasterConfig.displayField || 'name';
+  const orderField = currentMasterConfig.orderField;
+  const label = currentMasterConfig.label;
+  const icon = currentMasterConfig.icon || 'bi-list';
+  const placeholder = currentMasterConfig.placeholder || '新しい項目を入力';
+
+  try {
+    // Firestoreからデータ取得
+    let query = window.db.collection(collection);
+    if (orderField) {
+      query = query.orderBy(orderField, 'asc');
+    } else {
+      query = query.orderBy(displayField, 'asc');
+    }
+
+    const snapshot = await query.get();
+    const items = [];
+    snapshot.forEach(doc => {
+      items.push({ id: doc.id, ...doc.data() });
+    });
+
+    // 現在のデータを保持
+    window._currentSimpleListItems = items;
+
+    // UIを生成
+    container.innerHTML = `
+      <div class="master-options-container">
+        <div class="master-options-section">
+          <div class="master-options-header">
+            <h6><i class="bi ${icon}"></i> ${label}</h6>
+            <span class="badge bg-secondary">${items.length}件</span>
+          </div>
+          <div class="master-options-list" id="simpleListItems">
+            ${items.length === 0 ? `
+              <div class="master-options-empty">
+                <p>まだ項目がありません</p>
+              </div>
+            ` : items.map((item, index) => `
+              <div class="master-options-item" data-id="${item.id}" data-index="${index}">
+                <span class="item-text">${escapeHtml(item[displayField] || '')}</span>
+                <div class="item-actions">
+                  <button class="btn-icon btn-edit" onclick="editSimpleListItem('${item.id}', ${index})" title="編集">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn-icon btn-delete" onclick="deleteSimpleListItem('${item.id}', ${index})" title="削除">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="master-options-add">
+            <input type="text" class="form-control form-control-sm" id="newSimpleListItem" placeholder="${placeholder}">
+            <button class="btn btn-sm btn-primary" onclick="addSimpleListItem()">
+              <i class="bi bi-plus"></i> 追加
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  } catch (error) {
+    console.error('simpleList読み込みエラー:', error);
+    container.innerHTML = `<div class="text-center text-danger py-4">読み込みエラー: ${error.message}</div>`;
+  }
+}
+
+/**
+ * シンプルリストに項目追加
+ */
+window.addSimpleListItem = async function() {
+  const input = document.getElementById('newSimpleListItem');
+  const value = input?.value?.trim();
+
+  if (!value) {
+    alert('値を入力してください');
+    return;
+  }
+
+  const collection = currentMasterConfig.collection;
+  const displayField = currentMasterConfig.displayField || 'name';
+  const orderField = currentMasterConfig.orderField;
+  const items = window._currentSimpleListItems || [];
+
+  // 重複チェック
+  if (items.some(item => item[displayField] === value)) {
+    alert('この値は既に登録されています');
+    return;
+  }
+
+  try {
+    // 新規ドキュメント作成
+    const newData = {
+      [displayField]: value,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    // 表示順がある場合は最大値+1を設定
+    if (orderField) {
+      const maxOrder = items.reduce((max, item) => Math.max(max, item[orderField] || 0), 0);
+      newData[orderField] = maxOrder + 1;
+    }
+
+    await window.db.collection(collection).add(newData);
+    input.value = '';
+    await renderSimpleListUI();
+  } catch (error) {
+    console.error('追加エラー:', error);
+    alert('追加に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * シンプルリストの項目編集
+ */
+window.editSimpleListItem = async function(docId, index) {
+  const items = window._currentSimpleListItems || [];
+  const item = items[index];
+  if (!item) return;
+
+  const displayField = currentMasterConfig.displayField || 'name';
+  const oldValue = item[displayField];
+
+  const newValue = prompt('新しい値を入力:', oldValue);
+  if (!newValue || newValue.trim() === oldValue) return;
+
+  // 重複チェック
+  if (items.some((it, i) => i !== index && it[displayField] === newValue.trim())) {
+    alert('この値は既に登録されています');
+    return;
+  }
+
+  try {
+    await window.db.collection(currentMasterConfig.collection).doc(docId).update({
+      [displayField]: newValue.trim(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await renderSimpleListUI();
+  } catch (error) {
+    console.error('編集エラー:', error);
+    alert('編集に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * シンプルリストの項目削除
+ */
+window.deleteSimpleListItem = async function(docId, index) {
+  const items = window._currentSimpleListItems || [];
+  const item = items[index];
+  if (!item) return;
+
+  const displayField = currentMasterConfig.displayField || 'name';
+  const value = item[displayField];
+
+  if (!confirm(`「${value}」を削除しますか？`)) return;
+
+  try {
+    await window.db.collection(currentMasterConfig.collection).doc(docId).delete();
+    await renderSimpleListUI();
+  } catch (error) {
+    console.error('削除エラー:', error);
+    alert('削除に失敗しました: ' + error.message);
   }
 };
 
