@@ -7067,10 +7067,9 @@ window.continueProductRegistration = function() {
 
     const l0 = (document.getElementById('特大分類')?.value || '').trim();
     if (l0) {
-      // 特大分類が選択されたら大分類を有効化して選択肢を表示
-      // ※現在のマスタデータは特大分類フィールドがないため、全ての大分類を表示
-      // 将来的にマスタデータに特大分類を追加すれば、フィルタリングが可能
-      const l1s = uniqKeepOrder(CAT_ROWS.map(r => r.大分類));
+      // 特大分類が選択されたら、その特大分類に属する大分類のみ表示
+      const filteredRows = CAT_ROWS.filter(r => r.特大分類 === l0);
+      const l1s = uniqKeepOrder(filteredRows.map(r => r.大分類));
       fillSelectSafe(document.getElementById('大分類(カテゴリ)'), l1s);
       debug.log('特大分類選択: ' + l0 + ', 大分類選択肢: ' + l1s.length + '件');
     }
