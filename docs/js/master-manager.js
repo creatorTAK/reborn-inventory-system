@@ -1019,11 +1019,48 @@ async function renderMasterOptionsDropdownUI() {
   // 空状態を非表示
   if (emptyState) emptyState.classList.add('hidden');
 
-  // カテゴリ設定を取得
-  const categories = currentMasterConfig.masterOptionsCategories || [];
+  // カテゴリ設定を取得（設定 + カスタムカテゴリをマージ）
+  let categories = [...(currentMasterConfig.masterOptionsCategories || [])];
+
+  // _indexからカスタムカテゴリを読み込み
+  try {
+    const indexDoc = await window.db.collection('masterOptions').doc('_index').get();
+    if (indexDoc.exists) {
+      const fieldNames = indexDoc.data().fieldNames || [];
+      const existingKeys = new Set(categories.map(c => c.key));
+
+      // 設定に含まれていないカテゴリを追加
+      for (const fieldName of fieldNames) {
+        if (!existingKeys.has(fieldName)) {
+          categories.push({
+            key: fieldName,
+            label: fieldName,
+            icon: 'bi-tag'
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('_index読み込みエラー:', error);
+  }
+
+  // 設定も更新（次回以降のため）
+  currentMasterConfig.masterOptionsCategories = categories;
 
   if (categories.length === 0) {
-    container.innerHTML = '<p class="text-center text-muted py-4">カテゴリが設定されていません</p>';
+    container.innerHTML = `
+      <div class="master-options-container">
+        <div class="master-options-empty" style="padding: 40px; text-align: center;">
+          <p>カテゴリがありません</p>
+          <div class="master-options-add" style="border-top: none; margin-top: 16px;">
+            <input type="text" class="form-control form-control-sm" id="newMasterOptionsCategoryName" placeholder="新しいカテゴリ名">
+            <button class="btn btn-sm btn-outline-primary" onclick="addMasterOptionsCategory()">
+              <i class="bi bi-folder-plus"></i> カテゴリ追加
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
     return;
   }
 
@@ -1078,12 +1115,23 @@ async function renderMasterOptionsDropdownUI() {
           </button>
         </div>
       </div>
+
+      <!-- 新規カテゴリ追加 -->
+      <div class="master-options-section" style="background: #f8f9fa;">
+        <div class="master-options-add" style="border-top: none;">
+          <input type="text" class="form-control form-control-sm" id="newMasterOptionsCategoryName" placeholder="新しいカテゴリ名">
+          <button class="btn btn-sm btn-outline-primary" onclick="addMasterOptionsCategory()">
+            <i class="bi bi-folder-plus"></i> カテゴリ追加
+          </button>
+        </div>
+      </div>
     </div>
   `;
 
   // 現在のカテゴリデータを保持
   window._currentDropdownCategory = selectedCategory;
   window._currentDropdownItems = items;
+  window._currentMasterOptionsCategories = categories;
 }
 
 /**
@@ -1210,6 +1258,77 @@ window.deleteDropdownItem = async function(itemIndex) {
   } else {
     items.splice(itemIndex, 0, removedItem);
     alert('削除に失敗しました');
+  }
+};
+
+/**
+ * masterOptionsに新規カテゴリを追加
+ */
+window.addMasterOptionsCategory = async function() {
+  const input = document.getElementById('newMasterOptionsCategoryName');
+  const categoryName = input?.value?.trim();
+
+  if (!categoryName) {
+    alert('カテゴリ名を入力してください');
+    return;
+  }
+
+  // 既存カテゴリとの重複チェック
+  const existingCategories = window._currentMasterOptionsCategories || [];
+  if (existingCategories.some(cat => cat.key === categoryName || cat.label === categoryName)) {
+    alert('このカテゴリ名は既に存在します');
+    return;
+  }
+
+  try {
+    // フィールド名をURLセーフに変換
+    const safeFieldName = categoryName
+      .replace(/\//g, '_')
+      .replace(/\(/g, '_')
+      .replace(/\)/g, '_')
+      .replace(/\s/g, '_');
+
+    // 1. masterOptionsに新しいドキュメントを作成
+    await window.db.collection('masterOptions').doc(safeFieldName).set({
+      items: [],
+      fieldName: categoryName,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      count: 0
+    });
+
+    // 2. _indexドキュメントを更新（fieldNamesに追加）
+    const indexDoc = await window.db.collection('masterOptions').doc('_index').get();
+    let fieldNames = [];
+    if (indexDoc.exists) {
+      fieldNames = indexDoc.data().fieldNames || [];
+    }
+    if (!fieldNames.includes(categoryName)) {
+      fieldNames.push(categoryName);
+      await window.db.collection('masterOptions').doc('_index').set({
+        fieldNames: fieldNames,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+
+    // 3. 設定のカテゴリ配列に追加（動的に）
+    const newCategory = {
+      key: categoryName,
+      label: categoryName,
+      icon: 'bi-tag'
+    };
+    currentMasterConfig.masterOptionsCategories.push(newCategory);
+
+    // 4. 新しいカテゴリを選択状態にして再描画
+    currentDropdownCategoryIndex = currentMasterConfig.masterOptionsCategories.length - 1;
+
+    input.value = '';
+    await renderMasterOptionsDropdownUI();
+
+    console.log(`✅ [Master Options] 新規カテゴリ追加: ${categoryName}`);
+  } catch (error) {
+    console.error('カテゴリ追加エラー:', error);
+    alert('カテゴリの追加に失敗しました: ' + error.message);
   }
 };
 
