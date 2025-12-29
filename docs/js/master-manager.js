@@ -741,18 +741,29 @@ async function renderMasterOptionsUI() {
     }))
   );
 
+  // 総アイテム数を計算
+  const totalItems = fieldsData.reduce((sum, f) => sum + f.items.length, 0);
+  const placeholder = currentMasterConfig.searchPlaceholder || `${currentMasterConfig.label}を検索...`;
+
   // UIを生成
   container.innerHTML = `
     <div class="master-options-container">
+      <!-- 検索フィルター -->
+      <div class="master-filter-container">
+        <input type="text" class="master-filter-input" id="masterOptionsFilter"
+               placeholder="${placeholder}" oninput="filterMasterOptions(this.value)">
+        <div class="master-filter-count" id="masterOptionsFilterCount">${totalItems}件</div>
+      </div>
+
       ${fieldsData.map((field, fieldIndex) => `
         <div class="master-options-section" data-field-index="${fieldIndex}" data-field-key="${field.key}">
           <div class="master-options-header">
             <h6><i class="bi ${field.icon || 'bi-list'}"></i> ${field.label}</h6>
-            <span class="badge bg-secondary">${field.items.length}件</span>
+            <span class="badge bg-secondary" id="fieldCount_${fieldIndex}">${field.items.length}件</span>
           </div>
           <div class="master-options-list" id="masterOptionsList_${fieldIndex}">
             ${field.items.map((item, itemIndex) => `
-              <div class="master-options-item" data-item-index="${itemIndex}">
+              <div class="master-options-item" data-item-index="${itemIndex}" data-text="${escapeHtml(item.toLowerCase())}">
                 <span class="item-text">${escapeHtml(item)}</span>
                 <div class="item-actions">
                   <button class="btn-icon btn-edit" onclick="editMasterOptionItem(${fieldIndex}, ${itemIndex})" title="編集">
@@ -778,6 +789,44 @@ async function renderMasterOptionsUI() {
 
   // 現在のフィールドデータをグローバルに保持（編集・削除用）
   window._masterOptionsFieldsData = fieldsData;
+}
+
+/**
+ * masterOptionsのフィルター処理
+ */
+window.filterMasterOptions = function(query) {
+  const normalizedQuery = query.toLowerCase().trim();
+  const sections = document.querySelectorAll('.master-options-section');
+  let totalVisible = 0;
+
+  sections.forEach((section, sectionIndex) => {
+    const items = section.querySelectorAll('.master-options-item');
+    let visibleInSection = 0;
+
+    items.forEach(item => {
+      const text = item.dataset.text || '';
+      if (!normalizedQuery || text.includes(normalizedQuery)) {
+        item.classList.remove('hidden');
+        visibleInSection++;
+      } else {
+        item.classList.add('hidden');
+      }
+    });
+
+    // セクション内のカウント更新
+    const badge = section.querySelector(`#fieldCount_${sectionIndex}`);
+    if (badge) {
+      badge.textContent = `${visibleInSection}件`;
+    }
+
+    totalVisible += visibleInSection;
+  });
+
+  // 総件数更新
+  const countEl = document.getElementById('masterOptionsFilterCount');
+  if (countEl) {
+    countEl.textContent = normalizedQuery ? `${totalVisible}件 (検索結果)` : `${totalVisible}件`;
+  }
 }
 
 /**
@@ -914,11 +963,18 @@ async function renderMasterOptionsDropdownUI() {
         </select>
       </div>
 
+      <!-- 検索フィルター -->
+      <div class="master-filter-container">
+        <input type="text" class="master-filter-input" id="dropdownFilter"
+               placeholder="${selectedCategory.label}を検索..." oninput="filterDropdownItems(this.value)">
+        <div class="master-filter-count" id="dropdownFilterCount">${items.length}件</div>
+      </div>
+
       <!-- 選択されたカテゴリの内容 -->
       <div class="master-options-section" data-category-key="${selectedCategory.key}">
         <div class="master-options-header">
           <h6><i class="bi ${selectedCategory.icon || 'bi-list'}"></i> ${selectedCategory.label}</h6>
-          <span class="badge bg-secondary">${items.length}件</span>
+          <span class="badge bg-secondary" id="dropdownItemCount">${items.length}件</span>
         </div>
         <div class="master-options-list" id="masterOptionsDropdownList">
           ${items.length === 0 ? `
@@ -926,7 +982,7 @@ async function renderMasterOptionsDropdownUI() {
               <p>このカテゴリにはまだ項目がありません</p>
             </div>
           ` : items.map((item, itemIndex) => `
-            <div class="master-options-item" data-item-index="${itemIndex}">
+            <div class="master-options-item" data-item-index="${itemIndex}" data-text="${escapeHtml(item.toLowerCase())}">
               <span class="item-text">${escapeHtml(item)}</span>
               <div class="item-actions">
                 <button class="btn-icon btn-edit" onclick="editDropdownItem(${itemIndex})" title="編集">
@@ -952,6 +1008,29 @@ async function renderMasterOptionsDropdownUI() {
   // 現在のカテゴリデータを保持
   window._currentDropdownCategory = selectedCategory;
   window._currentDropdownItems = items;
+}
+
+/**
+ * ドロップダウンUIのフィルター処理
+ */
+window.filterDropdownItems = function(query) {
+  const normalizedQuery = query.toLowerCase().trim();
+  const items = document.querySelectorAll('#masterOptionsDropdownList .master-options-item');
+  let visible = 0;
+
+  items.forEach(item => {
+    const text = item.dataset.text || '';
+    if (!normalizedQuery || text.includes(normalizedQuery)) {
+      item.classList.remove('hidden');
+      visible++;
+    } else {
+      item.classList.add('hidden');
+    }
+  });
+
+  // カウント更新
+  document.getElementById('dropdownItemCount').textContent = `${visible}件`;
+  document.getElementById('dropdownFilterCount').textContent = normalizedQuery ? `${visible}件 (検索結果)` : `${visible}件`;
 }
 
 /**
@@ -1110,10 +1189,17 @@ async function renderSimpleListUI() {
     // UIを生成
     container.innerHTML = `
       <div class="master-options-container">
+        <!-- 検索フィルター -->
+        <div class="master-filter-container">
+          <input type="text" class="master-filter-input" id="simpleListFilter"
+                 placeholder="${label}を検索..." oninput="filterSimpleList(this.value)">
+          <div class="master-filter-count" id="simpleListFilterCount">${items.length}件</div>
+        </div>
+
         <div class="master-options-section">
           <div class="master-options-header">
             <h6><i class="bi ${icon}"></i> ${label}</h6>
-            <span class="badge bg-secondary">${items.length}件</span>
+            <span class="badge bg-secondary" id="simpleListItemCount">${items.length}件</span>
           </div>
           <div class="master-options-list" id="simpleListItems">
             ${items.length === 0 ? `
@@ -1121,7 +1207,7 @@ async function renderSimpleListUI() {
                 <p>まだ項目がありません</p>
               </div>
             ` : items.map((item, index) => `
-              <div class="master-options-item" data-id="${item.id}" data-index="${index}">
+              <div class="master-options-item" data-id="${item.id}" data-index="${index}" data-text="${escapeHtml((item[displayField] || '').toLowerCase())}">
                 <span class="item-text">${escapeHtml(item[displayField] || '')}</span>
                 <div class="item-actions">
                   <button class="btn-icon btn-edit" onclick="editSimpleListItem('${item.id}', ${index})" title="編集">
@@ -1147,6 +1233,31 @@ async function renderSimpleListUI() {
     console.error('simpleList読み込みエラー:', error);
     container.innerHTML = `<div class="text-center text-danger py-4">読み込みエラー: ${error.message}</div>`;
   }
+}
+
+/**
+ * simpleListのフィルター処理
+ */
+window.filterSimpleList = function(query) {
+  const normalizedQuery = query.toLowerCase().trim();
+  const items = document.querySelectorAll('#simpleListItems .master-options-item');
+  let visible = 0;
+
+  items.forEach(item => {
+    const text = item.dataset.text || '';
+    if (!normalizedQuery || text.includes(normalizedQuery)) {
+      item.classList.remove('hidden');
+      visible++;
+    } else {
+      item.classList.add('hidden');
+    }
+  });
+
+  // カウント更新
+  const countBadge = document.getElementById('simpleListItemCount');
+  const filterCount = document.getElementById('simpleListFilterCount');
+  if (countBadge) countBadge.textContent = `${visible}件`;
+  if (filterCount) filterCount.textContent = normalizedQuery ? `${visible}件 (検索結果)` : `${visible}件`;
 }
 
 /**
@@ -1291,18 +1402,27 @@ async function renderCategoryWordsUI() {
     // 総ワード数を計算
     const totalWords = categories.reduce((sum, cat) => sum + cat.words.length, 0);
 
+    const label = currentMasterConfig.label || 'ワード';
+
     // UIを生成（素材タブと同じレイアウト）
     container.innerHTML = `
       <div class="master-options-container">
+        <!-- 検索フィルター -->
+        <div class="master-filter-container">
+          <input type="text" class="master-filter-input" id="categoryWordsFilter"
+                 placeholder="${label}を検索..." oninput="filterCategoryWords(this.value)">
+          <div class="master-filter-count" id="categoryWordsFilterCount">${totalWords}件</div>
+        </div>
+
         ${categories.length === 0 ? `
           <div class="master-options-empty" style="padding: 40px; text-align: center;">
             <p>カテゴリがありません</p>
           </div>
         ` : categories.map((cat, catIndex) => `
-          <div class="master-options-section" data-category-id="${cat.id}">
+          <div class="master-options-section" data-category-id="${cat.id}" data-cat-index="${catIndex}">
             <div class="master-options-header">
               <h6><i class="bi ${icon}"></i> ${escapeHtml(cat.name)}</h6>
-              <span class="badge bg-secondary">${cat.words.length}件</span>
+              <span class="badge bg-secondary" id="categoryWordsCount_${catIndex}">${cat.words.length}件</span>
             </div>
             <div class="master-options-list" id="categoryWordsList_${catIndex}">
               ${cat.words.length === 0 ? `
@@ -1310,7 +1430,7 @@ async function renderCategoryWordsUI() {
                   <p>このカテゴリにはまだ項目がありません</p>
                 </div>
               ` : cat.words.map((word, wordIndex) => `
-                <div class="master-options-item" data-category-index="${catIndex}" data-word-index="${wordIndex}">
+                <div class="master-options-item" data-category-index="${catIndex}" data-word-index="${wordIndex}" data-text="${escapeHtml(word.toLowerCase())}">
                   <span class="item-text">${escapeHtml(word)}</span>
                   <div class="item-actions">
                     <button class="btn-icon btn-edit" onclick="editCategoryWord(${catIndex}, ${wordIndex})" title="編集">
@@ -1348,6 +1468,43 @@ async function renderCategoryWordsUI() {
   } catch (error) {
     console.error('categoryWords読み込みエラー:', error);
     container.innerHTML = `<div class="text-center text-danger py-4">読み込みエラー: ${error.message}</div>`;
+  }
+}
+
+/**
+ * categoryWordsのフィルター処理
+ */
+window.filterCategoryWords = function(query) {
+  const normalizedQuery = query.toLowerCase().trim();
+  const sections = document.querySelectorAll('.master-options-section[data-cat-index]');
+  let totalVisible = 0;
+
+  sections.forEach(section => {
+    const catIndex = section.dataset.catIndex;
+    const items = section.querySelectorAll('.master-options-item');
+    let visibleInSection = 0;
+
+    items.forEach(item => {
+      const text = item.dataset.text || '';
+      if (!normalizedQuery || text.includes(normalizedQuery)) {
+        item.classList.remove('hidden');
+        visibleInSection++;
+      } else {
+        item.classList.add('hidden');
+      }
+    });
+
+    // セクション内のカウント更新
+    const badge = document.getElementById(`categoryWordsCount_${catIndex}`);
+    if (badge) badge.textContent = `${visibleInSection}件`;
+
+    totalVisible += visibleInSection;
+  });
+
+  // 総件数更新
+  const filterCount = document.getElementById('categoryWordsFilterCount');
+  if (filterCount) {
+    filterCount.textContent = normalizedQuery ? `${totalVisible}件 (検索結果)` : `${totalVisible}件`;
   }
 }
 
