@@ -415,6 +415,16 @@ async function loadMaster(category, type) {
     return;
   }
 
+  // categoryWordsDropdownタイプの場合（ドロップダウン形式でカテゴリ選択）
+  if (currentMasterConfig.type === 'categoryWordsDropdown') {
+    console.log('📋 [Master Manager] categoryWordsDropdownタイプ - ドロップダウン形式UI表示');
+    hidePlatformTabs();
+    hideSearchUI();
+    hideActionBar();
+    await renderCategoryWordsDropdownUI();
+    return;
+  }
+
   // 通常タイプの場合はUI要素を復元
   showSearchUI();
   showActionBar();
@@ -1643,6 +1653,324 @@ window.addNewCategory = async function() {
 
     input.value = '';
     await renderCategoryWordsUI();
+  } catch (error) {
+    console.error('カテゴリ追加エラー:', error);
+    alert('カテゴリの追加に失敗しました: ' + error.message);
+  }
+};
+
+// ============================================
+// categoryWordsDropdown タイプ（セールスワード用ドロップダウン形式）
+// カテゴリ → 値配列 の構造を持つコレクションをドロップダウンで選択
+// ============================================
+
+// 現在選択中のカテゴリインデックス（categoryWordsDropdown用）
+let currentCWDropdownCategoryIndex = 0;
+
+/**
+ * カテゴリ別ワード ドロップダウンUIをレンダリング
+ * 商品属性と同様のUIでカテゴリを選択して表示
+ */
+async function renderCategoryWordsDropdownUI() {
+  const container = document.getElementById('masterListContainer');
+  if (!container) return;
+
+  container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+  const collection = currentMasterConfig.collection;
+  const wordsField = currentMasterConfig.wordsField || 'words';
+  const orderField = currentMasterConfig.orderField || 'order';
+  const icon = currentMasterConfig.icon || 'bi-list';
+  const placeholder = currentMasterConfig.placeholder || '新しい項目を入力';
+  const label = currentMasterConfig.label || 'ワード';
+
+  try {
+    // Firestoreからデータ取得（order順）
+    const snapshot = await window.db.collection(collection).orderBy(orderField, 'asc').get();
+
+    const categories = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      categories.push({
+        id: doc.id,
+        name: doc.id,
+        words: data[wordsField] || [],
+        order: data[orderField] || 0
+      });
+    });
+
+    // 現在のデータを保持
+    window._currentCWDropdownCategories = categories;
+
+    if (categories.length === 0) {
+      container.innerHTML = `
+        <div class="master-options-container">
+          <div class="master-options-empty" style="padding: 40px; text-align: center;">
+            <p>カテゴリがありません</p>
+            <div class="master-options-add" style="border-top: none; margin-top: 16px;">
+              <input type="text" class="form-control form-control-sm" id="newCWDropdownCategoryName" placeholder="新しいカテゴリ名">
+              <button class="btn btn-sm btn-outline-primary" onclick="addCWDropdownCategory()">
+                <i class="bi bi-folder-plus"></i> カテゴリ追加
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // インデックスが範囲外の場合は0に戻す
+    if (currentCWDropdownCategoryIndex >= categories.length) {
+      currentCWDropdownCategoryIndex = 0;
+    }
+
+    // 選択中のカテゴリのデータを取得
+    const selectedCategory = categories[currentCWDropdownCategoryIndex];
+    const items = selectedCategory.words;
+
+    // UIを生成
+    container.innerHTML = `
+      <div class="master-options-container">
+        <!-- カテゴリ選択ドロップダウン -->
+        <div class="master-options-dropdown-selector">
+          <label for="cwDropdownCategorySelect">カテゴリ選択</label>
+          <select id="cwDropdownCategorySelect" class="form-select" onchange="changeCWDropdownCategory(this.value)">
+            ${categories.map((cat, index) => `
+              <option value="${index}" ${index === currentCWDropdownCategoryIndex ? 'selected' : ''}>
+                ${escapeHtml(cat.name)} (${cat.words.length}件)
+              </option>
+            `).join('')}
+          </select>
+        </div>
+
+        <!-- 検索フィルター -->
+        <div class="master-filter-container">
+          <input type="text" class="master-filter-input" id="cwDropdownFilter"
+                 placeholder="${escapeHtml(selectedCategory.name)}を検索..." oninput="filterCWDropdownItems(this.value)">
+          <div class="master-filter-count" id="cwDropdownFilterCount">${items.length}件</div>
+        </div>
+
+        <!-- 選択されたカテゴリの内容 -->
+        <div class="master-options-section" data-category-id="${selectedCategory.id}">
+          <div class="master-options-header">
+            <h6><i class="bi ${icon}"></i> ${escapeHtml(selectedCategory.name)}</h6>
+            <span class="badge bg-secondary" id="cwDropdownItemCount">${items.length}件</span>
+          </div>
+          <div class="master-options-list" id="cwDropdownList">
+            ${items.length === 0 ? `
+              <div class="master-options-empty">
+                <p>このカテゴリにはまだ項目がありません</p>
+              </div>
+            ` : items.map((item, itemIndex) => `
+              <div class="master-options-item" data-item-index="${itemIndex}" data-text="${escapeHtml(item.toLowerCase())}">
+                <span class="item-text">${escapeHtml(item)}</span>
+                <div class="item-actions">
+                  <button class="btn-icon btn-edit" onclick="editCWDropdownItem(${itemIndex})" title="編集">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn-icon btn-delete" onclick="deleteCWDropdownItem(${itemIndex})" title="削除">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="master-options-add">
+            <input type="text" class="form-control form-control-sm" id="newCWDropdownItem" placeholder="${placeholder}">
+            <button class="btn btn-sm btn-primary" onclick="addCWDropdownItem()">
+              <i class="bi bi-plus"></i> 追加
+            </button>
+          </div>
+        </div>
+
+        <!-- 新規カテゴリ追加 -->
+        <div class="master-options-section" style="background: #f8f9fa;">
+          <div class="master-options-add" style="border-top: none;">
+            <input type="text" class="form-control form-control-sm" id="newCWDropdownCategoryName" placeholder="新しいカテゴリ名">
+            <button class="btn btn-sm btn-outline-primary" onclick="addCWDropdownCategory()">
+              <i class="bi bi-folder-plus"></i> カテゴリ追加
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 現在のカテゴリデータを保持
+    window._currentCWDropdownCategory = selectedCategory;
+    window._currentCWDropdownItems = items;
+
+    console.log(`categoryWordsDropdown読み込み完了: ${categories.length}カテゴリ, 選択中: ${selectedCategory.name}(${items.length}件)`);
+  } catch (error) {
+    console.error('categoryWordsDropdown読み込みエラー:', error);
+    container.innerHTML = `<div class="text-center text-danger py-4">読み込みエラー: ${error.message}</div>`;
+  }
+}
+
+/**
+ * categoryWordsDropdownのフィルター処理
+ */
+window.filterCWDropdownItems = function(query) {
+  const normalizedQuery = query.toLowerCase().trim();
+  const items = document.querySelectorAll('#cwDropdownList .master-options-item');
+  let visible = 0;
+
+  items.forEach(item => {
+    const text = item.dataset.text || '';
+    if (!normalizedQuery || text.includes(normalizedQuery)) {
+      item.classList.remove('hidden');
+      visible++;
+    } else {
+      item.classList.add('hidden');
+    }
+  });
+
+  // カウント更新
+  document.getElementById('cwDropdownItemCount').textContent = `${visible}件`;
+  document.getElementById('cwDropdownFilterCount').textContent = normalizedQuery ? `${visible}件 (検索結果)` : `${visible}件`;
+}
+
+/**
+ * カテゴリ変更（categoryWordsDropdown用）
+ */
+window.changeCWDropdownCategory = async function(index) {
+  currentCWDropdownCategoryIndex = parseInt(index);
+  await renderCategoryWordsDropdownUI();
+};
+
+/**
+ * 項目追加（categoryWordsDropdown用）
+ */
+window.addCWDropdownItem = async function() {
+  const input = document.getElementById('newCWDropdownItem');
+  const value = input?.value?.trim();
+
+  if (!value) {
+    alert('値を入力してください');
+    return;
+  }
+
+  const category = window._currentCWDropdownCategory;
+  if (!category) return;
+
+  // 重複チェック
+  if (category.words.includes(value)) {
+    alert('この値は既に登録されています');
+    return;
+  }
+
+  try {
+    const wordsField = currentMasterConfig.wordsField || 'words';
+    const newWords = [...category.words, value];
+
+    await window.db.collection(currentMasterConfig.collection).doc(category.id).update({
+      [wordsField]: newWords,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    input.value = '';
+    await renderCategoryWordsDropdownUI();
+  } catch (error) {
+    console.error('追加エラー:', error);
+    alert('追加に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 項目編集（categoryWordsDropdown用）
+ */
+window.editCWDropdownItem = async function(itemIndex) {
+  const category = window._currentCWDropdownCategory;
+  if (!category) return;
+
+  const oldValue = category.words[itemIndex];
+  const newValue = prompt('新しい値を入力:', oldValue);
+  if (!newValue || newValue.trim() === oldValue) return;
+
+  // 重複チェック
+  if (category.words.some((w, i) => i !== itemIndex && w === newValue.trim())) {
+    alert('この値は既に登録されています');
+    return;
+  }
+
+  try {
+    const wordsField = currentMasterConfig.wordsField || 'words';
+    const newWords = [...category.words];
+    newWords[itemIndex] = newValue.trim();
+
+    await window.db.collection(currentMasterConfig.collection).doc(category.id).update({
+      [wordsField]: newWords,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await renderCategoryWordsDropdownUI();
+  } catch (error) {
+    console.error('編集エラー:', error);
+    alert('編集に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 項目削除（categoryWordsDropdown用）
+ */
+window.deleteCWDropdownItem = async function(itemIndex) {
+  const category = window._currentCWDropdownCategory;
+  if (!category) return;
+
+  const value = category.words[itemIndex];
+  if (!confirm(`「${value}」を削除しますか？`)) return;
+
+  try {
+    const wordsField = currentMasterConfig.wordsField || 'words';
+    const newWords = category.words.filter((_, i) => i !== itemIndex);
+
+    await window.db.collection(currentMasterConfig.collection).doc(category.id).update({
+      [wordsField]: newWords,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await renderCategoryWordsDropdownUI();
+  } catch (error) {
+    console.error('削除エラー:', error);
+    alert('削除に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 新規カテゴリを追加（categoryWordsDropdown用）
+ */
+window.addCWDropdownCategory = async function() {
+  const input = document.getElementById('newCWDropdownCategoryName');
+  const categoryName = input?.value?.trim();
+
+  if (!categoryName) {
+    alert('カテゴリ名を入力してください');
+    return;
+  }
+
+  const categories = window._currentCWDropdownCategories || [];
+
+  // 重複チェック
+  if (categories.some(cat => cat.id === categoryName)) {
+    alert('このカテゴリ名は既に存在します');
+    return;
+  }
+
+  try {
+    const wordsField = currentMasterConfig.wordsField || 'words';
+    const orderField = currentMasterConfig.orderField || 'order';
+    const maxOrder = categories.reduce((max, cat) => Math.max(max, cat.order || 0), 0);
+
+    await window.db.collection(currentMasterConfig.collection).doc(categoryName).set({
+      [wordsField]: [],
+      [orderField]: maxOrder + 1,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    input.value = '';
+    // 新しく追加したカテゴリを選択
+    currentCWDropdownCategoryIndex = categories.length;
+    await renderCategoryWordsDropdownUI();
   } catch (error) {
     console.error('カテゴリ追加エラー:', error);
     alert('カテゴリの追加に失敗しました: ' + error.message);

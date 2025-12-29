@@ -246,7 +246,7 @@ const masterCategories = {
       salesword: {
         label: 'セールスワード',
         collection: 'saleswords',
-        type: 'categoryWords',
+        type: 'categoryWordsDropdown',
         description: '商品説明で使用するセールスワードを管理',
         wordsField: 'words',
         orderField: 'order',
@@ -255,7 +255,7 @@ const masterCategories = {
         emptyState: {
           icon: '📢',
           message: 'セールスワードを管理',
-          hint: 'カテゴリごとにキーワードを追加・編集'
+          hint: 'カテゴリを選択してキーワードを追加・編集'
         }
       },
       
