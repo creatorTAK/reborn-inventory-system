@@ -375,6 +375,20 @@ async function loadMaster(category, type) {
   // ヘッダーにマスタ種別を表示
   updateMasterTypeDisplay();
 
+  // masterOptionsタイプの場合は専用UIを表示
+  if (currentMasterConfig.type === 'masterOptions') {
+    console.log('📋 [Master Manager] masterOptionsタイプ - 専用UI表示');
+    hidePlatformTabs();
+    hideSearchUI();
+    hideActionBar();
+    await renderMasterOptionsUI();
+    return;
+  }
+
+  // 通常タイプの場合はUI要素を復元
+  showSearchUI();
+  showActionBar();
+
   // プラットフォームタブの表示/非表示
   if (currentMasterConfig.platformSupport) {
     // デフォルトプラットフォームを先に設定（showPlatformTabsで使用するため）
@@ -577,6 +591,252 @@ function hidePlatformTabs() {
   }
 }
 
+/**
+ * 検索UIを非表示
+ */
+function hideSearchUI() {
+  const searchContainer = document.getElementById('searchContainer');
+  if (searchContainer) {
+    searchContainer.style.display = 'none';
+  }
+}
+
+/**
+ * 検索UIを表示
+ */
+function showSearchUI() {
+  const searchContainer = document.getElementById('searchContainer');
+  if (searchContainer) {
+    searchContainer.style.display = 'block';
+  }
+}
+
+/**
+ * アクションバーを非表示
+ */
+function hideActionBar() {
+  const actionBar = document.querySelector('.action-bar');
+  if (actionBar) {
+    actionBar.style.display = 'none';
+  }
+}
+
+/**
+ * アクションバーを表示
+ */
+function showActionBar() {
+  const actionBar = document.querySelector('.action-bar');
+  if (actionBar) {
+    actionBar.style.display = 'flex';
+  }
+}
+
+// ============================================
+// masterOptions 専用UI
+// ============================================
+
+/**
+ * masterOptionsフィールドのデータを取得
+ */
+async function getMasterOptionsFieldData(fieldKey) {
+  try {
+    // フィールド名をURLセーフに変換
+    const safeFieldName = fieldKey
+      .replace(/\//g, '_')
+      .replace(/\(/g, '_')
+      .replace(/\)/g, '_')
+      .replace(/\s/g, '_');
+
+    const doc = await db.collection('masterOptions').doc(safeFieldName).get();
+    if (doc.exists) {
+      return doc.data().items || [];
+    }
+    return [];
+  } catch (error) {
+    console.error(`❌ [Master Options] データ取得エラー: ${fieldKey}`, error);
+    return [];
+  }
+}
+
+/**
+ * masterOptionsフィールドのデータを保存
+ */
+async function saveMasterOptionsFieldData(fieldKey, items) {
+  try {
+    // フィールド名をURLセーフに変換
+    const safeFieldName = fieldKey
+      .replace(/\//g, '_')
+      .replace(/\(/g, '_')
+      .replace(/\)/g, '_')
+      .replace(/\s/g, '_');
+
+    await db.collection('masterOptions').doc(safeFieldName).set({
+      items: items,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`✅ [Master Options] 保存完了: ${fieldKey} (${items.length}件)`);
+    return true;
+  } catch (error) {
+    console.error(`❌ [Master Options] 保存エラー: ${fieldKey}`, error);
+    return false;
+  }
+}
+
+/**
+ * masterOptions専用UIをレンダリング
+ */
+async function renderMasterOptionsUI() {
+  const container = document.getElementById('masterListContainer');
+  const emptyState = document.getElementById('emptyState');
+
+  if (!container) return;
+
+  // 空状態を非表示
+  if (emptyState) emptyState.classList.add('hidden');
+
+  // フィールド設定を取得
+  const fields = currentMasterConfig.masterOptionsFields || [];
+
+  if (fields.length === 0) {
+    container.innerHTML = '<p class="text-center text-muted py-4">フィールドが設定されていません</p>';
+    return;
+  }
+
+  // 各フィールドのデータを取得
+  const fieldsData = await Promise.all(
+    fields.map(async (field) => ({
+      ...field,
+      items: await getMasterOptionsFieldData(field.key)
+    }))
+  );
+
+  // UIを生成
+  container.innerHTML = `
+    <div class="master-options-container">
+      ${fieldsData.map((field, fieldIndex) => `
+        <div class="master-options-section" data-field-index="${fieldIndex}" data-field-key="${field.key}">
+          <div class="master-options-header">
+            <h6><i class="bi ${field.icon || 'bi-list'}"></i> ${field.label}</h6>
+            <span class="badge bg-secondary">${field.items.length}件</span>
+          </div>
+          <div class="master-options-list" id="masterOptionsList_${fieldIndex}">
+            ${field.items.map((item, itemIndex) => `
+              <div class="master-options-item" data-item-index="${itemIndex}">
+                <span class="item-text">${escapeHtml(item)}</span>
+                <div class="item-actions">
+                  <button class="btn-icon btn-edit" onclick="editMasterOptionItem(${fieldIndex}, ${itemIndex})" title="編集">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn-icon btn-delete" onclick="deleteMasterOptionItem(${fieldIndex}, ${itemIndex})" title="削除">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="master-options-add">
+            <input type="text" class="form-control form-control-sm" id="newItem_${fieldIndex}" placeholder="${field.placeholder || '新しい項目を入力'}">
+            <button class="btn btn-sm btn-primary" onclick="addMasterOptionItem(${fieldIndex})">
+              <i class="bi bi-plus"></i> 追加
+            </button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // 現在のフィールドデータをグローバルに保持（編集・削除用）
+  window._masterOptionsFieldsData = fieldsData;
+}
+
+/**
+ * masterOptionsに項目を追加
+ */
+window.addMasterOptionItem = async function(fieldIndex) {
+  const input = document.getElementById(`newItem_${fieldIndex}`);
+  const value = input?.value?.trim();
+
+  if (!value) {
+    alert('値を入力してください');
+    return;
+  }
+
+  const fieldData = window._masterOptionsFieldsData[fieldIndex];
+  if (!fieldData) return;
+
+  // 重複チェック
+  if (fieldData.items.includes(value)) {
+    alert('この値は既に登録されています');
+    return;
+  }
+
+  // 配列に追加
+  fieldData.items.push(value);
+
+  // Firestoreに保存
+  const success = await saveMasterOptionsFieldData(fieldData.key, fieldData.items);
+  if (success) {
+    input.value = '';
+    await renderMasterOptionsUI();
+  } else {
+    // 失敗時はロールバック
+    fieldData.items.pop();
+    alert('保存に失敗しました');
+  }
+};
+
+/**
+ * masterOptionsの項目を編集
+ */
+window.editMasterOptionItem = async function(fieldIndex, itemIndex) {
+  const fieldData = window._masterOptionsFieldsData[fieldIndex];
+  if (!fieldData) return;
+
+  const currentValue = fieldData.items[itemIndex];
+  const newValue = prompt('新しい値を入力:', currentValue);
+
+  if (newValue === null || newValue.trim() === '') return;
+  if (newValue.trim() === currentValue) return;
+
+  // 重複チェック
+  if (fieldData.items.includes(newValue.trim()) && newValue.trim() !== currentValue) {
+    alert('この値は既に登録されています');
+    return;
+  }
+
+  const oldValue = fieldData.items[itemIndex];
+  fieldData.items[itemIndex] = newValue.trim();
+
+  const success = await saveMasterOptionsFieldData(fieldData.key, fieldData.items);
+  if (success) {
+    await renderMasterOptionsUI();
+  } else {
+    fieldData.items[itemIndex] = oldValue;
+    alert('保存に失敗しました');
+  }
+};
+
+/**
+ * masterOptionsの項目を削除
+ */
+window.deleteMasterOptionItem = async function(fieldIndex, itemIndex) {
+  const fieldData = window._masterOptionsFieldsData[fieldIndex];
+  if (!fieldData) return;
+
+  const value = fieldData.items[itemIndex];
+  if (!confirm(`「${value}」を削除しますか？`)) return;
+
+  const removedItem = fieldData.items.splice(itemIndex, 1)[0];
+
+  const success = await saveMasterOptionsFieldData(fieldData.key, fieldData.items);
+  if (success) {
+    await renderMasterOptionsUI();
+  } else {
+    fieldData.items.splice(itemIndex, 0, removedItem);
+    alert('削除に失敗しました');
+  }
+};
 
 /**
  * プラットフォーム間でカテゴリデータをコピー

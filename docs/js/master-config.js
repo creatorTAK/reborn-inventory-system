@@ -149,7 +149,22 @@ const masterCategories = {
         searchPlaceholder: 'カテゴリ名を入力'
       },
       
-      // 削除済み: material, fabric, keyword（データなし・masterOptionsに移行）
+      // 素材マスタ（masterOptions対応）
+      material: {
+        label: '素材',
+        description: '商品の素材情報を管理（箇所・種類）',
+        // masterOptionsベースの特殊タイプ
+        type: 'masterOptions',
+        masterOptionsFields: [
+          { key: '素材(箇所)', label: '素材（箇所）', placeholder: '例: 表地', icon: 'bi-geo-alt' },
+          { key: '素材(種類)', label: '素材（種類）', placeholder: '例: コットン', icon: 'bi-layers' }
+        ],
+        emptyState: {
+          icon: '🧵',
+          message: '素材マスタを管理',
+          hint: '箇所と種類を追加・編集できます'
+        }
+      },
 
       salesword: {
         label: 'セールスワード',
