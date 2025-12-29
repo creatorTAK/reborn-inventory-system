@@ -20,6 +20,7 @@ const MAX_DISPLAY_RESULTS = 100; // 表示件数上限（パフォーマンス�
 let currentCategory = null;
 let currentMasterType = null;
 let currentMasterConfig = null;
+let currentProductSubGroup = 'listing'; // 商品マスタのサブグループ（listing/description）
 let allMasterData = [];
 let filteredMasterData = [];
 let searchDebounceTimer = null;
@@ -257,6 +258,57 @@ window.initMasterManager = function() {
 };
 
 /**
+ * 商品マスタのサブグループを切り替え
+ * @param {string} subGroupId - 'listing' または 'description'
+ */
+function switchProductSubGroup(subGroupId) {
+  if (currentProductSubGroup === subGroupId) return;
+  
+  currentProductSubGroup = subGroupId;
+  
+  // ボタンのアクティブ状態を更新
+  const buttons = document.querySelectorAll('#productSubGroupButtons .sub-group-btn');
+  buttons.forEach(btn => {
+    const isActive = btn.dataset.subgroup === subGroupId;
+    btn.classList.toggle('active', isActive);
+  });
+  
+  // タブの表示/非表示を切り替え
+  const listingTabs = document.getElementById('productMasterTabs-listing');
+  const descriptionTabs = document.getElementById('productMasterTabs-description');
+  
+  if (subGroupId === 'listing') {
+    listingTabs.style.display = 'flex';
+    descriptionTabs.style.display = 'none';
+    
+    // 出品設定グループの最初のタブをアクティブに
+    const firstTab = listingTabs.querySelector('.nav-link');
+    if (firstTab) {
+      // 他のタブのアクティブを解除
+      listingTabs.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
+      descriptionTabs.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
+      firstTab.classList.add('active');
+      loadMaster('product', 'brand');
+    }
+  } else {
+    listingTabs.style.display = 'none';
+    descriptionTabs.style.display = 'flex';
+    
+    // 説明文生成グループの最初のタブをアクティブに
+    const firstTab = descriptionTabs.querySelector('.nav-link');
+    if (firstTab) {
+      // 他のタブのアクティブを解除
+      listingTabs.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
+      descriptionTabs.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
+      firstTab.classList.add('active');
+      loadMaster('product', 'material');
+    }
+  }
+  
+  console.log(`🔄 [Master Manager] サブグループ切り替え: ${subGroupId}`);
+}
+
+/**
  * イベントリスナー設定
  */
 function setupEventListeners() {
@@ -305,8 +357,8 @@ async function loadMaster(category, type) {
     } else if (category === 'business') {
       productTabs.style.display = 'none';
       businessTabs.style.display = 'block';
-      // 商品タブのアクティブ状態をクリア
-      document.querySelectorAll('#productMasterTabs .nav-link').forEach(tab => {
+      // 商品タブのアクティブ状態をクリア（両サブグループ）
+      document.querySelectorAll('#productMasterTabs-listing .nav-link, #productMasterTabs-description .nav-link').forEach(tab => {
         tab.classList.remove('active');
       });
     }
@@ -316,10 +368,16 @@ async function loadMaster(category, type) {
     const currentTab = document.getElementById(currentTabId);
     if (currentTab) {
       // 同じグループ内の他のタブのアクティブを解除
-      const tabContainer = category === 'product' ? '#productMasterTabs' : '#businessMasterTabs';
-      document.querySelectorAll(`${tabContainer} .nav-link`).forEach(tab => {
-        tab.classList.remove('active');
-      });
+      if (category === 'product') {
+        // 商品関連は両サブグループのタブをクリア
+        document.querySelectorAll('#productMasterTabs-listing .nav-link, #productMasterTabs-description .nav-link').forEach(tab => {
+          tab.classList.remove('active');
+        });
+      } else {
+        document.querySelectorAll('#businessMasterTabs .nav-link').forEach(tab => {
+          tab.classList.remove('active');
+        });
+      }
       currentTab.classList.add('active');
     }
 

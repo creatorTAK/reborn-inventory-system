@@ -10,6 +10,24 @@ const masterCategories = {
     label: '商品関連マスタ',
     icon: '📦',
     description: '商品に関連するマスタデータを管理',
+    // サブグループ定義（タブをグループ化）
+    subGroups: {
+      listing: {
+        id: 'listing',
+        label: '出品設定',
+        icon: 'bi-tag',
+        description: 'プラットフォームへの出品時に選択する項目',
+        masters: ['brand', 'category', 'size', 'condition']
+      },
+      description: {
+        id: 'description',
+        label: '説明文生成',
+        icon: 'bi-file-text',
+        description: '商品名・説明文に挿入するワード',
+        masters: ['material', 'accessory', 'sizeLabel', 'salesword', 'attribute']
+      }
+    },
+    defaultSubGroup: 'listing',
     masters: {
       brand: {
         label: 'ブランド',
