@@ -202,11 +202,14 @@ const masterCategories = {
         }
       },
 
-      // 商品の状態マスタ
+      // 商品の状態マスタ - プラットフォーム別対応
       condition: {
         label: '商品の状態',
         description: '商品の状態を管理（新品/中古等）',
         type: 'masterOptions',
+        // プラットフォーム別管理（カテゴリ・サイズと同様）
+        platformSupport: true,
+        defaultPlatform: 'mercari',
         masterOptionsFields: [
           { key: '商品の状態', label: '商品の状態', placeholder: '例: 未使用に近い', icon: 'bi-star' }
         ],
