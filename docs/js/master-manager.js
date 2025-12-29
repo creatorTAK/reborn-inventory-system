@@ -261,7 +261,7 @@ window.initMasterManager = function() {
  * 商品マスタのサブグループを切り替え
  * @param {string} subGroupId - 'listing' または 'description'
  */
-function switchProductSubGroup(subGroupId) {
+window.switchProductSubGroup = function(subGroupId) {
   if (currentProductSubGroup === subGroupId) return;
   
   currentProductSubGroup = subGroupId;
@@ -306,7 +306,7 @@ function switchProductSubGroup(subGroupId) {
   }
   
   console.log(`🔄 [Master Manager] サブグループ切り替え: ${subGroupId}`);
-}
+};
 
 /**
  * イベントリスナー設定
