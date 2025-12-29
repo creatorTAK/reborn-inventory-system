@@ -4810,6 +4810,9 @@ async function syncCategoriesMaster() {
       if (doc.id === 'master') return; // masterドキュメント自体はスキップ
       const d = doc.data();
       
+      // createdAtをソート用に取得（ミリ秒）
+      const createdAtMs = d.createdAt?.toMillis ? d.createdAt.toMillis() : 0;
+      
       if (d.superCategory) {
         // 新形式: superCategoryを特大分類として使用
         rows.push({
@@ -4819,7 +4822,8 @@ async function syncCategoriesMaster() {
           小分類: d.level3 || '',
           細分類: d.level4 || '',
           細分類2: d.level5 || '',
-          アイテム名: d.itemName || ''
+          アイテム名: d.itemName || '',
+          _sortKey: createdAtMs
         });
       } else if (d.level1) {
         // 旧形式: ファッションに属する
@@ -4830,10 +4834,17 @@ async function syncCategoriesMaster() {
           小分類: d.level3 || '',
           細分類: d.level4 || '',
           細分類2: d.level5 || '',
-          アイテム名: d.itemName || ''
+          アイテム名: d.itemName || '',
+          _sortKey: createdAtMs
         });
       }
     });
+    
+    // createdAt順（追加順）でソート
+    rows.sort((a, b) => a._sortKey - b._sortKey);
+    
+    // ソートキーを削除（不要なデータを保存しない）
+    rows.forEach(r => delete r._sortKey);
     
     // categories/masterを更新
     await firebase.firestore().collection('categories').doc('master').set({
