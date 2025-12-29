@@ -405,6 +405,16 @@ async function loadMaster(category, type) {
     return;
   }
 
+  // categoryWordsタイプの場合（セールスワード等：カテゴリ→値配列構造）
+  if (currentMasterConfig.type === 'categoryWords') {
+    console.log('📋 [Master Manager] categoryWordsタイプ - カテゴリ別ワードUI表示');
+    hidePlatformTabs();
+    hideSearchUI();
+    hideActionBar();
+    await renderCategoryWordsUI();
+    return;
+  }
+
   // 通常タイプの場合はUI要素を復元
   showSearchUI();
   showActionBar();
@@ -1067,18 +1077,31 @@ async function renderSimpleListUI() {
   const placeholder = currentMasterConfig.placeholder || '新しい項目を入力';
 
   try {
-    // Firestoreからデータ取得
-    let query = window.db.collection(collection);
-    if (orderField) {
-      query = query.orderBy(orderField, 'asc');
-    } else {
-      query = query.orderBy(displayField, 'asc');
+    // Firestoreからデータ取得（orderByはオプショナル）
+    let snapshot;
+    try {
+      let query = window.db.collection(collection);
+      if (orderField) {
+        query = query.orderBy(orderField, 'asc');
+      }
+      snapshot = await query.get();
+    } catch (orderError) {
+      console.warn('orderByエラー、ソートなしで取得:', orderError.message);
+      snapshot = await window.db.collection(collection).get();
     }
-
-    const snapshot = await query.get();
     const items = [];
     snapshot.forEach(doc => {
       items.push({ id: doc.id, ...doc.data() });
+    });
+
+    // クライアント側でソート
+    items.sort((a, b) => {
+      const aVal = a[orderField] || a[displayField] || '';
+      const bVal = b[orderField] || b[displayField] || '';
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return aVal - bVal;
+      }
+      return String(aVal).localeCompare(String(bVal), 'ja');
     });
 
     // 現在のデータを保持
@@ -1223,6 +1246,249 @@ window.deleteSimpleListItem = async function(docId, index) {
   } catch (error) {
     console.error('削除エラー:', error);
     alert('削除に失敗しました: ' + error.message);
+  }
+};
+
+// ============================================
+// categoryWords タイプ（セールスワード用）
+// カテゴリ → 値配列 の構造を持つコレクション
+// ============================================
+
+/**
+ * カテゴリ別ワードUIをレンダリング
+ * 素材タブと同じレイアウトで、各カテゴリをセクションとして表示
+ */
+async function renderCategoryWordsUI() {
+  const container = document.getElementById('masterListContainer');
+  if (!container) return;
+
+  container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+  const collection = currentMasterConfig.collection;
+  const wordsField = currentMasterConfig.wordsField || 'words';
+  const orderField = currentMasterConfig.orderField || 'order';
+  const icon = currentMasterConfig.icon || 'bi-list';
+  const placeholder = currentMasterConfig.placeholder || '新しい項目を入力';
+
+  try {
+    // Firestoreからデータ取得（order順）
+    const snapshot = await window.db.collection(collection).orderBy(orderField, 'asc').get();
+
+    const categories = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      categories.push({
+        id: doc.id,
+        name: doc.id,
+        words: data[wordsField] || [],
+        order: data[orderField] || 0
+      });
+    });
+
+    // 現在のデータを保持
+    window._currentCategoryWordsData = categories;
+
+    // 総ワード数を計算
+    const totalWords = categories.reduce((sum, cat) => sum + cat.words.length, 0);
+
+    // UIを生成（素材タブと同じレイアウト）
+    container.innerHTML = `
+      <div class="master-options-container">
+        ${categories.length === 0 ? `
+          <div class="master-options-empty" style="padding: 40px; text-align: center;">
+            <p>カテゴリがありません</p>
+          </div>
+        ` : categories.map((cat, catIndex) => `
+          <div class="master-options-section" data-category-id="${cat.id}">
+            <div class="master-options-header">
+              <h6><i class="bi ${icon}"></i> ${escapeHtml(cat.name)}</h6>
+              <span class="badge bg-secondary">${cat.words.length}件</span>
+            </div>
+            <div class="master-options-list" id="categoryWordsList_${catIndex}">
+              ${cat.words.length === 0 ? `
+                <div class="master-options-empty">
+                  <p>このカテゴリにはまだ項目がありません</p>
+                </div>
+              ` : cat.words.map((word, wordIndex) => `
+                <div class="master-options-item" data-category-index="${catIndex}" data-word-index="${wordIndex}">
+                  <span class="item-text">${escapeHtml(word)}</span>
+                  <div class="item-actions">
+                    <button class="btn-icon btn-edit" onclick="editCategoryWord(${catIndex}, ${wordIndex})" title="編集">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn-icon btn-delete" onclick="deleteCategoryWord(${catIndex}, ${wordIndex})" title="削除">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+            <div class="master-options-add">
+              <input type="text" class="form-control form-control-sm" id="newCategoryWord_${catIndex}" placeholder="${placeholder}">
+              <button class="btn btn-sm btn-primary" onclick="addCategoryWord(${catIndex})">
+                <i class="bi bi-plus"></i> 追加
+              </button>
+            </div>
+          </div>
+        `).join('')}
+
+        <!-- 新規カテゴリ追加 -->
+        <div class="master-options-section" style="background: #f8f9fa;">
+          <div class="master-options-add" style="border-top: none;">
+            <input type="text" class="form-control form-control-sm" id="newCategoryName" placeholder="新しいカテゴリ名">
+            <button class="btn btn-sm btn-outline-primary" onclick="addNewCategory()">
+              <i class="bi bi-folder-plus"></i> カテゴリ追加
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    console.log(`categoryWords読み込み完了: ${categories.length}カテゴリ, ${totalWords}ワード`);
+  } catch (error) {
+    console.error('categoryWords読み込みエラー:', error);
+    container.innerHTML = `<div class="text-center text-danger py-4">読み込みエラー: ${error.message}</div>`;
+  }
+}
+
+/**
+ * カテゴリにワードを追加
+ */
+window.addCategoryWord = async function(catIndex) {
+  const input = document.getElementById(`newCategoryWord_${catIndex}`);
+  const value = input?.value?.trim();
+
+  if (!value) {
+    alert('値を入力してください');
+    return;
+  }
+
+  const categories = window._currentCategoryWordsData || [];
+  const category = categories[catIndex];
+  if (!category) return;
+
+  // 重複チェック
+  if (category.words.includes(value)) {
+    alert('この値は既に登録されています');
+    return;
+  }
+
+  try {
+    const wordsField = currentMasterConfig.wordsField || 'words';
+    const newWords = [...category.words, value];
+
+    await window.db.collection(currentMasterConfig.collection).doc(category.id).update({
+      [wordsField]: newWords,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    input.value = '';
+    await renderCategoryWordsUI();
+  } catch (error) {
+    console.error('追加エラー:', error);
+    alert('追加に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * カテゴリ内のワードを編集
+ */
+window.editCategoryWord = async function(catIndex, wordIndex) {
+  const categories = window._currentCategoryWordsData || [];
+  const category = categories[catIndex];
+  if (!category) return;
+
+  const oldValue = category.words[wordIndex];
+  const newValue = prompt('新しい値を入力:', oldValue);
+  if (!newValue || newValue.trim() === oldValue) return;
+
+  // 重複チェック
+  if (category.words.some((w, i) => i !== wordIndex && w === newValue.trim())) {
+    alert('この値は既に登録されています');
+    return;
+  }
+
+  try {
+    const wordsField = currentMasterConfig.wordsField || 'words';
+    const newWords = [...category.words];
+    newWords[wordIndex] = newValue.trim();
+
+    await window.db.collection(currentMasterConfig.collection).doc(category.id).update({
+      [wordsField]: newWords,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await renderCategoryWordsUI();
+  } catch (error) {
+    console.error('編集エラー:', error);
+    alert('編集に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * カテゴリ内のワードを削除
+ */
+window.deleteCategoryWord = async function(catIndex, wordIndex) {
+  const categories = window._currentCategoryWordsData || [];
+  const category = categories[catIndex];
+  if (!category) return;
+
+  const value = category.words[wordIndex];
+  if (!confirm(`「${value}」を削除しますか？`)) return;
+
+  try {
+    const wordsField = currentMasterConfig.wordsField || 'words';
+    const newWords = category.words.filter((_, i) => i !== wordIndex);
+
+    await window.db.collection(currentMasterConfig.collection).doc(category.id).update({
+      [wordsField]: newWords,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await renderCategoryWordsUI();
+  } catch (error) {
+    console.error('削除エラー:', error);
+    alert('削除に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 新規カテゴリを追加
+ */
+window.addNewCategory = async function() {
+  const input = document.getElementById('newCategoryName');
+  const categoryName = input?.value?.trim();
+
+  if (!categoryName) {
+    alert('カテゴリ名を入力してください');
+    return;
+  }
+
+  const categories = window._currentCategoryWordsData || [];
+
+  // 重複チェック
+  if (categories.some(cat => cat.id === categoryName)) {
+    alert('このカテゴリ名は既に存在します');
+    return;
+  }
+
+  try {
+    const wordsField = currentMasterConfig.wordsField || 'words';
+    const orderField = currentMasterConfig.orderField || 'order';
+    const maxOrder = categories.reduce((max, cat) => Math.max(max, cat.order || 0), 0);
+
+    await window.db.collection(currentMasterConfig.collection).doc(categoryName).set({
+      [wordsField]: [],
+      [orderField]: maxOrder + 1,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    input.value = '';
+    await renderCategoryWordsUI();
+  } catch (error) {
+    console.error('カテゴリ追加エラー:', error);
+    alert('カテゴリの追加に失敗しました: ' + error.message);
   }
 };
 

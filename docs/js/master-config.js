@@ -246,15 +246,16 @@ const masterCategories = {
       salesword: {
         label: 'セールスワード',
         collection: 'saleswords',
-        type: 'simpleList',
+        type: 'categoryWords',
         description: '商品説明で使用するセールスワードを管理',
-        displayField: 'word',
+        wordsField: 'words',
+        orderField: 'order',
         icon: 'bi-megaphone',
         placeholder: '例: 大人気',
         emptyState: {
           icon: '📢',
           message: 'セールスワードを管理',
-          hint: '商品説明で使用するキーワードを追加'
+          hint: 'カテゴリごとにキーワードを追加・編集'
         }
       },
       
