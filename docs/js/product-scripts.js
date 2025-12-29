@@ -8890,6 +8890,7 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         const rows = data.rows || [];
 
         CAT_ROWS = rows.map(r=>({
+          特大分類:String(r.特大分類||'').trim(),
           大分類:String(r.大分類||'').trim(),
           中分類:String(r.中分類||'').trim(),
           小分類:String(r.小分類||'').trim(),
