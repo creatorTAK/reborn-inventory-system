@@ -383,7 +383,15 @@ async function loadMaster(category, type) {
   // masterOptionsタイプの場合は専用UIを表示
   if (currentMasterConfig.type === 'masterOptions') {
     console.log('📋 [Master Manager] masterOptionsタイプ - 専用UI表示');
-    hidePlatformTabs();
+    
+    // プラットフォーム別管理の場合はタブを表示
+    if (currentMasterConfig.platformSupport) {
+      currentPlatform = currentMasterConfig.defaultPlatform || 'mercari';
+      showPlatformTabs();
+    } else {
+      hidePlatformTabs();
+    }
+    
     hideActionBar();
     await renderMasterOptionsUI();
     return;
@@ -761,19 +769,40 @@ function updateSearchResultCount(count, query) {
 /**
  * masterOptionsフィールドのデータを取得
  */
-async function getMasterOptionsFieldData(fieldKey) {
+async function getMasterOptionsFieldData(fieldKey, platformId = null) {
   try {
     // フィールド名をURLセーフに変換
-    const safeFieldName = fieldKey
+    let safeFieldName = fieldKey
       .replace(/\//g, '_')
       .replace(/\(/g, '_')
       .replace(/\)/g, '_')
       .replace(/\s/g, '_');
 
+    // プラットフォーム指定がある場合はドキュメント名に追加
+    if (platformId) {
+      safeFieldName = `${safeFieldName}_${platformId}`;
+    }
+
     const doc = await db.collection('masterOptions').doc(safeFieldName).get();
     if (doc.exists) {
       return doc.data().items || [];
     }
+    
+    // プラットフォーム指定でデータがない場合、フォールバックとしてプラットフォームなしのデータを返す
+    // （既存データの互換性のため）
+    if (platformId) {
+      const fallbackFieldName = fieldKey
+        .replace(/\//g, '_')
+        .replace(/\(/g, '_')
+        .replace(/\)/g, '_')
+        .replace(/\s/g, '_');
+      const fallbackDoc = await db.collection('masterOptions').doc(fallbackFieldName).get();
+      if (fallbackDoc.exists) {
+        console.log(`ℹ️ [Master Options] プラットフォーム「${platformId}」のデータがないため、共通データを使用`);
+        return fallbackDoc.data().items || [];
+      }
+    }
+    
     return [];
   } catch (error) {
     console.error(`❌ [Master Options] データ取得エラー: ${fieldKey}`, error);
@@ -784,21 +813,28 @@ async function getMasterOptionsFieldData(fieldKey) {
 /**
  * masterOptionsフィールドのデータを保存
  */
-async function saveMasterOptionsFieldData(fieldKey, items) {
+async function saveMasterOptionsFieldData(fieldKey, items, platformId = null) {
   try {
     // フィールド名をURLセーフに変換
-    const safeFieldName = fieldKey
+    let safeFieldName = fieldKey
       .replace(/\//g, '_')
       .replace(/\(/g, '_')
       .replace(/\)/g, '_')
       .replace(/\s/g, '_');
 
+    // プラットフォーム指定がある場合はドキュメント名に追加
+    if (platformId) {
+      safeFieldName = `${safeFieldName}_${platformId}`;
+    }
+
     await db.collection('masterOptions').doc(safeFieldName).set({
       items: items,
+      platformId: platformId || null,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log(`✅ [Master Options] 保存完了: ${fieldKey} (${items.length}件)`);
+    const platformLabel = platformId ? `(${platformId})` : '';
+    console.log(`✅ [Master Options] 保存完了: ${fieldKey}${platformLabel} (${items.length}件)`);
     return true;
   } catch (error) {
     console.error(`❌ [Master Options] 保存エラー: ${fieldKey}`, error);
@@ -826,11 +862,14 @@ async function renderMasterOptionsUI() {
     return;
   }
 
-  // 各フィールドのデータを取得
+  // プラットフォーム対応の場合は現在のプラットフォームを使用
+  const platformId = currentMasterConfig.platformSupport ? currentPlatform : null;
+
+  // 各フィールドのデータを取得（プラットフォーム対応）
   const fieldsData = await Promise.all(
     fields.map(async (field) => ({
       ...field,
-      items: await getMasterOptionsFieldData(field.key)
+      items: await getMasterOptionsFieldData(field.key, platformId)
     }))
   );
 
@@ -936,8 +975,11 @@ window.addMasterOptionItem = async function(fieldIndex) {
   // 配列に追加
   fieldData.items.push(value);
 
+  // プラットフォーム対応の場合は現在のプラットフォームを使用
+  const platformId = currentMasterConfig?.platformSupport ? currentPlatform : null;
+
   // Firestoreに保存
-  const success = await saveMasterOptionsFieldData(fieldData.key, fieldData.items);
+  const success = await saveMasterOptionsFieldData(fieldData.key, fieldData.items, platformId);
   if (success) {
     input.value = '';
     await renderMasterOptionsUI();
@@ -970,7 +1012,10 @@ window.editMasterOptionItem = async function(fieldIndex, itemIndex) {
   const oldValue = fieldData.items[itemIndex];
   fieldData.items[itemIndex] = newValue.trim();
 
-  const success = await saveMasterOptionsFieldData(fieldData.key, fieldData.items);
+  // プラットフォーム対応の場合は現在のプラットフォームを使用
+  const platformId = currentMasterConfig?.platformSupport ? currentPlatform : null;
+
+  const success = await saveMasterOptionsFieldData(fieldData.key, fieldData.items, platformId);
   if (success) {
     await renderMasterOptionsUI();
   } else {
@@ -991,7 +1036,10 @@ window.deleteMasterOptionItem = async function(fieldIndex, itemIndex) {
 
   const removedItem = fieldData.items.splice(itemIndex, 1)[0];
 
-  const success = await saveMasterOptionsFieldData(fieldData.key, fieldData.items);
+  // プラットフォーム対応の場合は現在のプラットフォームを使用
+  const platformId = currentMasterConfig?.platformSupport ? currentPlatform : null;
+
+  const success = await saveMasterOptionsFieldData(fieldData.key, fieldData.items, platformId);
   if (success) {
     await renderMasterOptionsUI();
   } else {
@@ -2249,6 +2297,12 @@ window.selectPlatformTab = async function selectPlatformTab(platformId) {
   }
 
   console.log(`🔄 [Master Manager] プラットフォーム切り替え: ${platformId}`);
+
+  // masterOptionsタイプの場合は専用UIを再描画
+  if (currentMasterConfig.type === 'masterOptions') {
+    await renderMasterOptionsUI();
+    return;
+  }
 
   // キャッシュクリア（プラットフォーム別データを再取得するため）
   delete masterCache[currentMasterConfig.collection];

@@ -166,11 +166,14 @@ const masterCategories = {
         }
       },
 
-      // サイズマスタ（S/M/L等）
+      // サイズマスタ（S/M/L等）- プラットフォーム別対応
       size: {
         label: 'サイズ',
         description: '商品サイズを管理（S/M/L/XL等）',
         type: 'masterOptions',
+        // プラットフォーム別管理（カテゴリと同様）
+        platformSupport: true,
+        defaultPlatform: 'mercari',
         masterOptionsFields: [
           { key: 'サイズ', label: 'サイズ', placeholder: '例: M', icon: 'bi-rulers' }
         ],
