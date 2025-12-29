@@ -166,6 +166,51 @@ const masterCategories = {
         }
       },
 
+      // サイズマスタ（S/M/L等）
+      size: {
+        label: 'サイズ',
+        description: '商品サイズを管理（S/M/L/XL等）',
+        type: 'masterOptions',
+        masterOptionsFields: [
+          { key: 'サイズ', label: 'サイズ', placeholder: '例: M', icon: 'bi-rulers' }
+        ],
+        emptyState: {
+          icon: '📏',
+          message: 'サイズマスタを管理',
+          hint: 'S/M/L/XL等のサイズを追加・編集'
+        }
+      },
+
+      // 商品の状態マスタ
+      condition: {
+        label: '商品の状態',
+        description: '商品の状態を管理（新品/中古等）',
+        type: 'masterOptions',
+        masterOptionsFields: [
+          { key: '商品の状態', label: '商品の状態', placeholder: '例: 未使用に近い', icon: 'bi-star' }
+        ],
+        emptyState: {
+          icon: '✨',
+          message: '商品の状態マスタを管理',
+          hint: '新品/中古等の状態を追加・編集'
+        }
+      },
+
+      // サイズ(表記)マスタ
+      sizeLabel: {
+        label: 'サイズ(表記)',
+        description: 'サイズの表記方法を管理',
+        type: 'masterOptions',
+        masterOptionsFields: [
+          { key: 'サイズ(表記)', label: 'サイズ(表記)', placeholder: '例: Mサイズ相当', icon: 'bi-tag' }
+        ],
+        emptyState: {
+          icon: '🏷️',
+          message: 'サイズ(表記)マスタを管理',
+          hint: 'サイズ表記を追加・編集'
+        }
+      },
+
       // 商品属性マスタ（18カテゴリ統合・ドロップダウン切替）
       attribute: {
         label: '商品属性',
