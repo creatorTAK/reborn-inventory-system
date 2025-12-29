@@ -13,6 +13,8 @@
 | `rooms` | チャットルーム | チャット機能のルーム管理 |
 | `users` | ユーザー管理 | システムユーザーの情報 |
 | `products` | 商品在庫 | 商品登録・在庫管理（※GAS側） |
+| `platforms` | プラットフォームマスタ | 出品先ECプラットフォームの定義 |
+| `configs` | ユーザー設定 | ユーザー固有の設定情報 |
 
 ---
 
@@ -139,6 +141,62 @@
 | `createdByEmail` | 登録者メール | string | 登録者のメールアドレス |
 | `createdAt` | 登録日時 | timestamp | 商品登録日時 |
 | `updatedAt` | 更新日時 | timestamp | 最終更新日時 |
+
+---
+
+## 🌐 platforms（プラットフォームマスタ）
+
+**用途**: 出品先ECプラットフォーム（メルカリ、BASE、Shopify等）の定義をグローバルに管理します。
+
+**パス**: `platforms/{platformId}`
+
+### フィールド一覧
+
+| フィールド名 | 日本語名 | 型 | 説明 | 必須 |
+|------------|---------|-----|------|------|
+| `id` | プラットフォームID | string | 一意の識別子（例: mercari, shopify） | ✅ |
+| `name` | 表示名 | string | UI表示用の名前（例: メルカリ） | ✅ |
+| `description` | 説明 | string | プラットフォームの簡潔な説明 | ✅ |
+| `icon` | アイコンパス | string | アイコン画像のパス | ✅ |
+| `status` | 実装状態 | string | 「実装済」または「準備中」 | ✅ |
+| `order` | 表示順 | number | デフォルトの表示順序 | ✅ |
+| `isSystem` | システム標準 | boolean | システム標準プラットフォームか | ✅ |
+| `category` | カテゴリ | string | 分類（flea-market, ec-platform, mall, global） | - |
+| `createdAt` | 作成日時 | timestamp | レコード作成日時 | ✅ |
+| `updatedAt` | 更新日時 | timestamp | 最終更新日時 | ✅ |
+
+### 登録プラットフォーム一覧
+
+| ID | 表示名 | カテゴリ |
+|----|--------|---------|
+| `mercari` | メルカリ | flea-market |
+| `mercari-shops` | メルカリShops | flea-market |
+| `yahoo-fleamarket` | Yahoo!フリマ | flea-market |
+| `yahoo-auction` | Yahoo!オークション | auction |
+| `rakuma` | ラクマ | flea-market |
+| `base` | BASE | ec-platform |
+| `shopify` | Shopify | ec-platform |
+| `stores` | STORES | ec-platform |
+| `ebay` | eBay | global |
+| `amazon` | Amazon | ec-platform |
+| `rakuten-ichiba` | 楽天市場 | mall |
+| `yahoo-shopping` | Yahoo!ショッピング | mall |
+
+---
+
+## ⚙️ configs（ユーザー設定）
+
+**用途**: ユーザー固有の設定情報を管理します。
+
+**パス**: `configs/{userId}`
+
+### フィールド一覧（プラットフォーム設定）
+
+| フィールド名 | 日本語名 | 型 | 説明 | 必須 |
+|------------|---------|-----|------|------|
+| `プラットフォーム設定.registrationMode` | 登録モード | string | 「individual」または「batch」 | - |
+| `プラットフォーム設定.platforms` | プラットフォーム配列 | array | 各プラットフォームのチェック状態 | - |
+| `プラットフォーム設定.platformOrder` | 並び順 | array | プラットフォームIDの配列（ユーザーカスタム順） | - |
 
 ---
 
