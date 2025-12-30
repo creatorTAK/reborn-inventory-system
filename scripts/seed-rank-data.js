@@ -1,5 +1,5 @@
 /**
- * 管理番号ランク マスタデータ投入スクリプト
+ * 商品状態ランク（conditionRanks）マスタデータ投入スクリプト
  *
  * 使用方法:
  * 1. Firebaseコンソールにログイン
@@ -57,7 +57,7 @@ async function seedRankData() {
   console.log('🚀 ランクマスタデータ投入開始...');
 
   for (const rank of DEFAULT_RANKS) {
-    const docRef = db.collection('managementRanks').doc(rank.code);
+    const docRef = db.collection('conditionRanks').doc(rank.code);
     batch.set(docRef, {
       ...rank,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),

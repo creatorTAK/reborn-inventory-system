@@ -24,7 +24,7 @@ const masterCategories = {
         label: '説明文生成',
         icon: 'bi-file-text',
         description: '商品名・説明文に挿入するワード',
-        masters: ['material', 'accessory', 'sizeLabel', 'salesword', 'attribute']
+        masters: ['material', 'accessory', 'sizeLabel', 'salesword', 'attribute', 'conditionRank']
       }
     },
     defaultSubGroup: 'listing',
@@ -298,6 +298,28 @@ const masterCategories = {
           icon: '📦',
           message: '付属品を管理',
           hint: '商品の付属品（箱、保存袋など）を追加'
+        }
+      },
+
+      // 商品状態ランクマスタ（説明文生成用）
+      conditionRank: {
+        label: 'ランク',
+        collection: 'conditionRanks',
+        type: 'simpleList',
+        description: '商品状態ランク（S/A/B/C/D）を管理 - 説明文生成に使用',
+        displayField: 'name',
+        orderField: 'sortOrder',
+        icon: 'bi-star-half',
+        placeholder: '例: 新品同様',
+        fields: [
+          { name: 'code', label: 'コード', type: 'text', required: true, placeholder: '例: S' },
+          { name: 'name', label: '名前', type: 'text', required: true, placeholder: '例: 新品同様' },
+          { name: 'description', label: '説明', type: 'text', required: false, placeholder: '例: タグ付き未使用...' }
+        ],
+        emptyState: {
+          icon: '⭐',
+          message: 'ランクマスタを管理',
+          hint: '商品状態ランク（S/A/B/C/D）を追加・編集'
         }
       },
 

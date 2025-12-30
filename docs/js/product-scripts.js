@@ -2733,8 +2733,8 @@ window.continueProductRegistration = function() {
         return;
       }
       
-      const snapshot = await window.db.collection('managementRanks')
-        .orderBy('code', 'asc')
+      const snapshot = await window.db.collection('conditionRanks')
+        .orderBy('sortOrder', 'asc')
         .get();
       
       if (snapshot.empty) {
