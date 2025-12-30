@@ -790,7 +790,7 @@
               <option value="priceRange">価格帯別</option>
             </select>
           </div>
-          <!-- 並び順 + CSV -->
+          <!-- 並び順 -->
           <div class="d-flex align-items-center gap-2 mb-2">
             <label class="form-label mb-0 small fw-bold" style="white-space:nowrap">並び順:</label>
             <select class="form-select form-select-sm" id="performanceSortKey" onchange="sortPerformanceData()" style="flex:1;max-width:200px">
@@ -803,19 +803,21 @@
               <option value="days-asc">在庫日数（短い順）</option>
               <option value="days-desc">在庫日数（長い順）</option>
             </select>
+          </div>
+          <!-- 期間プリセット + CSV -->
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <label class="form-label mb-1 small fw-bold"><i class="bi bi-calendar3"></i> 期間:</label>
+              <div class="d-flex flex-wrap gap-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm perf-period-preset active" data-period="all">全期間</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm perf-period-preset" data-period="year">今年</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm perf-period-preset" data-period="quarter">今四半期</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm perf-period-preset" data-period="month">今月</button>
+              </div>
+            </div>
             <button class="btn btn-sm btn-outline-secondary" onclick="exportPerformanceCSV()" style="white-space:nowrap">
               <i class="bi bi-download"></i> CSV
             </button>
-          </div>
-          <!-- 期間プリセット -->
-          <div>
-            <label class="form-label mb-1 small fw-bold"><i class="bi bi-calendar3"></i> 期間:</label>
-            <div class="d-flex flex-wrap gap-1">
-              <button type="button" class="btn btn-outline-secondary btn-sm perf-period-preset active" data-period="all">全期間</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm perf-period-preset" data-period="year">今年</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm perf-period-preset" data-period="quarter">今四半期</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm perf-period-preset" data-period="month">今月</button>
-            </div>
           </div>
         </div>
 
@@ -1169,6 +1171,11 @@
       getSalesData,
       updatePaymentStatus
     };
+
+    // Firestore関数をグローバルに公開（軸分析用）
+    window.firestoreDb = db;
+    window.firestoreCollection = collection;
+    window.firestoreGetDocs = getDocs;
 
     console.log('✅ [売上] Firebase初期化完了');
 
@@ -2615,6 +2622,15 @@
      */
     async function calculatePerformanceByAxis(startDate, endDate, axis) {
       console.log('📊 [軸分析] 開始:', axis, startDate, '〜', endDate);
+
+      // グローバルに公開されたFirestore関数を使用
+      const db = window.firestoreDb;
+      const collection = window.firestoreCollection;
+      const getDocs = window.firestoreGetDocs;
+
+      if (!db || !collection || !getDocs) {
+        throw new Error('Firestore初期化待ち。ページを再読み込みしてください。');
+      }
 
       const productsRef = collection(db, 'products');
       const snapshot = await getDocs(productsRef);
