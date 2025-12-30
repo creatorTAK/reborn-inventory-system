@@ -353,11 +353,43 @@ const masterCategories = {
     label: '業務関連マスタ',
     icon: '🏢',
     description: '業務運営に関連するマスタデータを管理',
+    // サブグループ定義（タブをグループ化）
+    subGroups: {
+      delivery: {
+        id: 'delivery',
+        label: '配送設定',
+        icon: 'bi-truck',
+        description: '配送・発送に関する設定',
+        masters: ['shipping', 'assignee']
+      },
+      material: {
+        id: 'material',
+        label: '資材・在庫',
+        icon: 'bi-box-seam',
+        description: '梱包資材と在庫管理',
+        masters: ['packaging']
+      },
+      partner: {
+        id: 'partner',
+        label: '取引先',
+        icon: 'bi-building',
+        description: '仕入先・出品先の管理',
+        masters: ['supplier', 'marketplace']
+      },
+      system: {
+        id: 'system',
+        label: 'システム設定',
+        icon: 'bi-gear',
+        description: '管理番号・コード設定',
+        masters: ['rank', 'categoryCode']
+      }
+    },
+    defaultSubGroup: 'delivery',
     masters: {
       shipping: {
         label: '発送方法',
         collection: 'shippingMethods',
-        description: '発送方法と送料を管理',
+        description: '発送方法・送料・配送設定を管理',
         fields: [
           {
             name: 'category',
@@ -391,9 +423,88 @@ const masterCategories = {
               min: 0,
               max: 100000
             }
+          },
+          {
+            name: 'shippingPayer',
+            label: '配送料の負担',
+            required: true,
+            type: 'select',
+            options: [
+              { value: 'seller', label: '送料込み（出品者負担）' },
+              { value: 'buyer', label: '着払い（購入者負担）' }
+            ],
+            defaultValue: 'seller'
+          },
+          {
+            name: 'shippingRegion',
+            label: '発送元の地域',
+            required: false,
+            type: 'select',
+            options: [
+              { value: '', label: '未設定' },
+              { value: '北海道', label: '北海道' },
+              { value: '青森県', label: '青森県' },
+              { value: '岩手県', label: '岩手県' },
+              { value: '宮城県', label: '宮城県' },
+              { value: '秋田県', label: '秋田県' },
+              { value: '山形県', label: '山形県' },
+              { value: '福島県', label: '福島県' },
+              { value: '茨城県', label: '茨城県' },
+              { value: '栃木県', label: '栃木県' },
+              { value: '群馬県', label: '群馬県' },
+              { value: '埼玉県', label: '埼玉県' },
+              { value: '千葉県', label: '千葉県' },
+              { value: '東京都', label: '東京都' },
+              { value: '神奈川県', label: '神奈川県' },
+              { value: '新潟県', label: '新潟県' },
+              { value: '富山県', label: '富山県' },
+              { value: '石川県', label: '石川県' },
+              { value: '福井県', label: '福井県' },
+              { value: '山梨県', label: '山梨県' },
+              { value: '長野県', label: '長野県' },
+              { value: '岐阜県', label: '岐阜県' },
+              { value: '静岡県', label: '静岡県' },
+              { value: '愛知県', label: '愛知県' },
+              { value: '三重県', label: '三重県' },
+              { value: '滋賀県', label: '滋賀県' },
+              { value: '京都府', label: '京都府' },
+              { value: '大阪府', label: '大阪府' },
+              { value: '兵庫県', label: '兵庫県' },
+              { value: '奈良県', label: '奈良県' },
+              { value: '和歌山県', label: '和歌山県' },
+              { value: '鳥取県', label: '鳥取県' },
+              { value: '島根県', label: '島根県' },
+              { value: '岡山県', label: '岡山県' },
+              { value: '広島県', label: '広島県' },
+              { value: '山口県', label: '山口県' },
+              { value: '徳島県', label: '徳島県' },
+              { value: '香川県', label: '香川県' },
+              { value: '愛媛県', label: '愛媛県' },
+              { value: '高知県', label: '高知県' },
+              { value: '福岡県', label: '福岡県' },
+              { value: '佐賀県', label: '佐賀県' },
+              { value: '長崎県', label: '長崎県' },
+              { value: '熊本県', label: '熊本県' },
+              { value: '大分県', label: '大分県' },
+              { value: '宮崎県', label: '宮崎県' },
+              { value: '鹿児島県', label: '鹿児島県' },
+              { value: '沖縄県', label: '沖縄県' }
+            ]
+          },
+          {
+            name: 'shippingDays',
+            label: '発送までの日数',
+            required: false,
+            type: 'select',
+            options: [
+              { value: '', label: '未設定' },
+              { value: '1-2', label: '1〜2日で発送' },
+              { value: '2-3', label: '2〜3日で発送' },
+              { value: '4-7', label: '4〜7日で発送' }
+            ]
           }
         ],
-        displayFields: ['category', 'detail', 'price'],
+        displayFields: ['category', 'detail', 'price', 'shippingPayer'],
         searchFields: ['category', 'detail', 'name'],
         sortBy: 'category',
         sortOrder: 'asc',
@@ -402,9 +513,9 @@ const masterCategories = {
         bulkDelete: true,
         maxDisplayResults: 100,
         // アコーディオン表示設定
-        groupBy: 'category',  // カテゴリ別にグループ化
-        groupLabel: '発送方法（カテゴリ）',  // グループヘッダーのラベル
-        itemDisplayMode: 'labeled'  // ラベル付き表示モード
+        groupBy: 'category',
+        groupLabel: '発送方法（カテゴリ）',
+        itemDisplayMode: 'labeled'
       },
       
       packaging: {
@@ -687,6 +798,77 @@ const masterCategories = {
         displayFields: ['name', 'commission'],
         searchFields: ['name'],
         sortBy: 'name',
+        sortOrder: 'asc',
+        searchable: true,
+        usageCount: false,
+        bulkDelete: true,
+        maxDisplayResults: 50
+      },
+
+      rank: {
+        label: '管理番号ランク',
+        collection: 'managementRanks',
+        description: '管理番号のランク（価格帯区分）を管理',
+        fields: [
+          {
+            name: 'code',
+            label: 'ランクコード',
+            required: true,
+            type: 'text',
+            placeholder: '例: A',
+            validation: {
+              minLength: 1,
+              maxLength: 2,
+              pattern: '^[A-Za-z0-9]+$'
+            }
+          },
+          {
+            name: 'name',
+            label: 'ランク名',
+            required: true,
+            type: 'text',
+            placeholder: '例: 高額品',
+            validation: {
+              minLength: 1,
+              maxLength: 30
+            }
+          },
+          {
+            name: 'minPrice',
+            label: '下限金額（円）',
+            required: false,
+            type: 'number',
+            placeholder: '例: 10000',
+            validation: {
+              min: 0,
+              max: 10000000
+            }
+          },
+          {
+            name: 'maxPrice',
+            label: '上限金額（円）',
+            required: false,
+            type: 'number',
+            placeholder: '例: 50000',
+            validation: {
+              min: 0,
+              max: 10000000
+            }
+          },
+          {
+            name: 'description',
+            label: '説明',
+            required: false,
+            type: 'text',
+            placeholder: '例: 仕入価格10,000円以上の商品',
+            validation: {
+              maxLength: 100
+            }
+          }
+        ],
+        displayFields: ['code', 'name', 'minPrice', 'maxPrice'],
+        searchFields: ['code', 'name', 'description'],
+        sortBy: 'code',
         sortOrder: 'asc',
         searchable: true,
         usageCount: false,

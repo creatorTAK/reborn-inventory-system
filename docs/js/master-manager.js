@@ -21,6 +21,7 @@ let currentCategory = null;
 let currentMasterType = null;
 let currentMasterConfig = null;
 let currentProductSubGroup = 'listing'; // 商品マスタのサブグループ（listing/description）
+let currentBusinessSubGroup = 'delivery'; // 業務マスタのサブグループ（delivery/material/partner/system）
 let allMasterData = [];
 let filteredMasterData = [];
 let searchDebounceTimer = null;
@@ -309,6 +310,56 @@ window.switchProductSubGroup = function(subGroupId) {
 };
 
 /**
+ * 業務マスタのサブグループを切り替え
+ * @param {string} subGroupId - 'delivery', 'material', 'partner', 'system'
+ */
+window.switchBusinessSubGroup = function(subGroupId) {
+  if (currentBusinessSubGroup === subGroupId) return;
+  
+  currentBusinessSubGroup = subGroupId;
+  
+  // ボタンのアクティブ状態を更新
+  const buttons = document.querySelectorAll('#businessSubGroupButtons .sub-group-btn');
+  buttons.forEach(btn => {
+    const isActive = btn.dataset.subgroup === subGroupId;
+    btn.classList.toggle('active', isActive);
+  });
+  
+  // 全てのタブを非表示
+  const tabGroups = ['delivery', 'material', 'partner', 'system'];
+  tabGroups.forEach(group => {
+    const tabs = document.getElementById(`businessMasterTabs-${group}`);
+    if (tabs) {
+      tabs.style.display = 'none';
+      tabs.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
+    }
+  });
+  
+  // 選択されたタブグループを表示
+  const activeTabs = document.getElementById(`businessMasterTabs-${subGroupId}`);
+  if (activeTabs) {
+    activeTabs.style.display = 'flex';
+    
+    // 最初のタブをアクティブに
+    const firstTab = activeTabs.querySelector('.nav-link');
+    if (firstTab) {
+      firstTab.classList.add('active');
+      
+      // サブグループに応じてデフォルトマスタをロード
+      const defaultMasters = {
+        delivery: 'shipping',
+        material: 'packaging',
+        partner: 'supplier',
+        system: 'rank'
+      };
+      loadMaster('business', defaultMasters[subGroupId] || 'shipping');
+    }
+  }
+  
+  console.log(`🔄 [Master Manager] 業務サブグループ切り替え: ${subGroupId}`);
+};
+
+/**
  * イベントリスナー設定
  */
 function setupEventListeners() {
@@ -374,8 +425,11 @@ async function loadMaster(category, type) {
           tab.classList.remove('active');
         });
       } else {
-        document.querySelectorAll('#businessMasterTabs .nav-link').forEach(tab => {
-          tab.classList.remove('active');
+        // 業務関連は全サブグループのタブをクリア
+        ['delivery', 'material', 'partner', 'system'].forEach(group => {
+          document.querySelectorAll(`#businessMasterTabs-${group} .nav-link`).forEach(tab => {
+            tab.classList.remove('active');
+          });
         });
       }
       currentTab.classList.add('active');
