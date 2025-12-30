@@ -84,26 +84,37 @@ function onConditionChange() {
   const condition = conditionSelect.value;
   window.currentConditionRank = getConditionRank(condition);
 
-  // ランク表示フィールドを更新
-  const rankDisplay = document.getElementById('ランク表示');
+  // 隠しフィールドを更新
   const rankHidden = document.getElementById('ランク');
+
+  // ランク表示バッジを更新（商品状態詳細セクション内）
+  const rankBadge = document.getElementById('conditionRankBadge');
+  const rankDisplay = document.getElementById('conditionRankDisplay');
 
   if (window.currentConditionRank) {
     const rankText = `${window.currentConditionRank.code}: ${window.currentConditionRank.name}`;
-    if (rankDisplay) rankDisplay.value = rankText;
     if (rankHidden) rankHidden.value = window.currentConditionRank.code;
+
+    // バッジを表示
+    if (rankBadge) rankBadge.style.display = 'block';
+    if (rankDisplay) rankDisplay.textContent = rankText;
+
     console.log(`✅ [ランク連動] ${condition} → ${rankText}`);
   } else {
-    if (rankDisplay) rankDisplay.value = '';
     if (rankHidden) rankHidden.value = '';
+
+    // バッジを非表示
+    if (rankBadge) rankBadge.style.display = 'none';
+    if (rankDisplay) rankDisplay.textContent = '';
+
     if (condition) {
       console.log(`ℹ️ [ランク連動] 商品の状態「${condition}」に対応するランクが見つかりません`);
     }
   }
 
-  // 説明文プレビューを更新（updateDescriptionPreview が存在する場合）
-  if (typeof updateDescriptionPreview === 'function') {
-    updateDescriptionPreview();
+  // 説明文プレビューを更新
+  if (typeof updateDescriptionFromDetail === 'function') {
+    updateDescriptionFromDetail();
   }
 
   // 商品の状態に応じたボタン表示更新（既存機能）
