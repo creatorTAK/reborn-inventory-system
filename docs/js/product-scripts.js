@@ -6393,20 +6393,20 @@ window.continueProductRegistration = function() {
           const conditionValue = conditionSelect ? (conditionSelect.value || '').trim() : '';
           let conditionSection = '';
           if (conditionValue) {
-            // ランク情報を取得
-            const rank = window.currentConditionRank;
-            if (rank) {
-              conditionSection = `商品の状態：${conditionValue}【ランク${rank.code}】\n\n`;
-            } else {
-              conditionSection = `商品の状態：${conditionValue}\n\n`;
-            }
+            // 商品の状態のみ（ランクは商品状態詳細セクションに移動）
+            conditionSection = `商品の状態：${conditionValue}\n\n`;
           }
 
-          // 商品状態詳細を取得
+          // 商品状態詳細を取得（ランクを含む）
           const detailText = (detailInput.value || '').trim();
           let detailSection = '';
           if (detailText) {
-            detailSection = `商品状態(詳細)：\n${detailText}\n\n`;
+            const rank = window.currentConditionRank;
+            if (rank) {
+              detailSection = `商品状態(詳細)：\n状態ランク：${rank.code}\n${detailText}\n\n`;
+            } else {
+              detailSection = `商品状態(詳細)：\n${detailText}\n\n`;
+            }
           }
 
           // AI生成文を取得
@@ -6489,16 +6489,9 @@ window.continueProductRegistration = function() {
           // 付属品テキスト
           const accessoriesText = getAccessoriesInfo();
 
-          // ランク情報を取得
+          // ランク情報は商品状態(詳細)セクションに統合済み
+          // 別途のrankSectionは不要
           let rankSection = '';
-          const rankInfo = typeof getSelectedRankInfo === 'function' ? getSelectedRankInfo() : null;
-          if (rankInfo && rankInfo.code) {
-            rankSection = `ランク：${rankInfo.code}\n`;
-            if (rankInfo.description) {
-              rankSection += `${rankInfo.description}\n`;
-            }
-            rankSection += '\n';
-          }
 
           // 配置順序を取得して説明文を組み立て（配置順序は「配置順序」タブで設定）
           buildDescriptionByOrder({
