@@ -622,6 +622,15 @@ async function loadMaster(category, type) {
     return;
   }
 
+  // shippingDropdownタイプの場合（発送方法管理）
+  if (currentMasterConfig.type === 'shippingDropdown') {
+    console.log('📋 [Master Manager] shippingDropdownタイプ - 発送方法UI表示');
+    hidePlatformTabs();
+    hideActionBar();
+    await renderShippingDropdownUI();
+    return;
+  }
+
   // 通常タイプの場合はアクションバーを表示
   showActionBar();
 
@@ -2385,6 +2394,335 @@ window.addCWDropdownCategory = async function() {
     // 新しく追加したカテゴリを選択
     currentCWDropdownCategoryIndex = categories.length;
     await renderCategoryWordsDropdownUI();
+  } catch (error) {
+    console.error('カテゴリ追加エラー:', error);
+    alert('カテゴリの追加に失敗しました: ' + error.message);
+  }
+};
+
+// ==============================================================================
+// shippingDropdownタイプ（発送方法管理）
+// ==============================================================================
+
+// 現在選択中のカテゴリインデックス
+let currentShippingCategoryIndex = 0;
+
+/**
+ * 発送方法ドロップダウンUIをレンダリング
+ */
+async function renderShippingDropdownUI() {
+  const container = document.getElementById('masterListContainer');
+  if (!container) return;
+
+  container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+  const collection = currentMasterConfig.collection;
+  const icon = currentMasterConfig.icon || 'bi-truck';
+
+  try {
+    // Firestoreからデータ取得
+    const snapshot = await window.db.collection(collection).orderBy('order', 'asc').get();
+
+    const categories = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      categories.push({
+        id: doc.id,
+        name: doc.id,
+        items: data.items || [],
+        order: data.order || 0
+      });
+    });
+
+    // 現在のデータを保持
+    window._currentShippingCategories = categories;
+
+    if (categories.length === 0) {
+      container.innerHTML = `
+        <div class="master-options-container">
+          <div class="master-options-empty" style="padding: 40px; text-align: center;">
+            <p>発送カテゴリがありません</p>
+            <div class="master-options-add" style="border-top: none; margin-top: 16px;">
+              <input type="text" class="form-control form-control-sm" id="newShippingCategoryName" placeholder="新しいカテゴリ名（例: らくらくメルカリ便）">
+              <button class="btn btn-sm btn-outline-primary" onclick="addShippingCategory()">
+                <i class="bi bi-folder-plus"></i> カテゴリ追加
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // インデックスが範囲外の場合は0に戻す
+    if (currentShippingCategoryIndex >= categories.length) {
+      currentShippingCategoryIndex = 0;
+    }
+
+    // 選択中のカテゴリのデータを取得
+    const selectedCategory = categories[currentShippingCategoryIndex];
+    const items = selectedCategory.items;
+
+    // UIを生成
+    container.innerHTML = `
+      <div class="master-options-container">
+        <!-- カテゴリ選択ドロップダウン -->
+        <div class="master-options-dropdown-selector">
+          <label for="shippingCategorySelect">発送カテゴリ選択</label>
+          <select id="shippingCategorySelect" class="form-select" onchange="changeShippingCategory(this.value)">
+            ${categories.map((cat, index) => `
+              <option value="${index}" ${index === currentShippingCategoryIndex ? 'selected' : ''}>
+                ${escapeHtml(cat.name)} (${cat.items.length}件)
+              </option>
+            `).join('')}
+          </select>
+        </div>
+
+        <!-- 選択されたカテゴリの内容 -->
+        <div class="master-options-section" data-category-id="${selectedCategory.id}">
+          <div class="master-options-header">
+            <h6><i class="bi ${icon}"></i> ${escapeHtml(selectedCategory.name)}</h6>
+            <span class="badge bg-secondary" id="shippingItemCount">${items.length}件</span>
+          </div>
+          <div class="master-options-list" id="shippingItemList">
+            ${items.length === 0 ? `
+              <div class="master-options-empty">
+                <p>このカテゴリにはまだ発送方法がありません</p>
+              </div>
+            ` : items.map((item, itemIndex) => `
+              <div class="master-options-item shipping-item" data-item-index="${itemIndex}">
+                <div class="shipping-item-row1">
+                  <span class="item-text">${escapeHtml(item.detail || '')}</span>
+                  <div class="item-actions">
+                    <button class="btn-icon btn-edit" onclick="editShippingItem(${itemIndex})" title="編集">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn-icon btn-delete" onclick="deleteShippingItem(${itemIndex})" title="削除">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="shipping-item-row2">
+                  <span class="shipping-price">¥${Number(item.price || 0).toLocaleString()}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="master-options-add shipping-add-form">
+            <div class="shipping-add-inputs">
+              <input type="text" class="form-control form-control-sm" id="newShippingDetail" placeholder="${currentMasterConfig.placeholder || '例: ネコポス'}">
+              <input type="number" class="form-control form-control-sm" id="newShippingPrice" placeholder="${currentMasterConfig.pricePlaceholder || '例: 210'}" style="width: 120px;">
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="addShippingItem()">
+              <i class="bi bi-plus"></i> 追加
+            </button>
+          </div>
+        </div>
+
+        <!-- 新規カテゴリ追加 -->
+        <div class="master-options-section" style="background: #f8f9fa;">
+          <div class="master-options-add" style="border-top: none;">
+            <input type="text" class="form-control form-control-sm" id="newShippingCategoryName" placeholder="新しいカテゴリ名（例: ゆうパケット）">
+            <button class="btn btn-sm btn-outline-primary" onclick="addShippingCategory()">
+              <i class="bi bi-folder-plus"></i> カテゴリ追加
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <style>
+        .shipping-item {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          padding: 12px 16px;
+        }
+        .shipping-item-row1 {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .shipping-item-row1 .item-text {
+          font-weight: 500;
+        }
+        .shipping-item-row2 {
+          padding-left: 0;
+        }
+        .shipping-price {
+          color: #666;
+          font-size: 0.9em;
+        }
+        .shipping-add-form {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .shipping-add-inputs {
+          display: flex;
+          gap: 8px;
+          flex: 1;
+        }
+        .shipping-add-inputs input:first-child {
+          flex: 1;
+        }
+      </style>
+    `;
+
+    // 現在のカテゴリデータを保持
+    window._currentShippingCategory = selectedCategory;
+    window._currentShippingItems = items;
+
+    console.log(`shippingDropdown読み込み完了: ${categories.length}カテゴリ, 選択中: ${selectedCategory.name}(${items.length}件)`);
+  } catch (error) {
+    console.error('shippingDropdown読み込みエラー:', error);
+    container.innerHTML = `<div class="text-center text-danger py-4">読み込みエラー: ${error.message}</div>`;
+  }
+}
+
+/**
+ * 発送カテゴリを切り替え
+ */
+window.changeShippingCategory = function(index) {
+  currentShippingCategoryIndex = parseInt(index, 10);
+  renderShippingDropdownUI();
+};
+
+/**
+ * 発送方法を追加
+ */
+window.addShippingItem = async function() {
+  const detailInput = document.getElementById('newShippingDetail');
+  const priceInput = document.getElementById('newShippingPrice');
+  const detail = detailInput?.value?.trim();
+  const price = parseInt(priceInput?.value, 10) || 0;
+
+  if (!detail) {
+    alert('発送方法名を入力してください');
+    return;
+  }
+
+  const category = window._currentShippingCategory;
+  if (!category) return;
+
+  // 重複チェック
+  if (category.items.some(item => item.detail === detail)) {
+    alert('この発送方法は既に登録されています');
+    return;
+  }
+
+  try {
+    const newItems = [...category.items, { detail, price }];
+
+    await window.db.collection(currentMasterConfig.collection).doc(category.id).update({
+      items: newItems,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    detailInput.value = '';
+    priceInput.value = '';
+    await renderShippingDropdownUI();
+  } catch (error) {
+    console.error('追加エラー:', error);
+    alert('追加に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 発送方法を編集
+ */
+window.editShippingItem = async function(itemIndex) {
+  const category = window._currentShippingCategory;
+  if (!category) return;
+
+  const item = category.items[itemIndex];
+  const newDetail = prompt('発送方法名:', item.detail);
+  if (newDetail === null) return;
+  if (!newDetail.trim()) {
+    alert('発送方法名を入力してください');
+    return;
+  }
+
+  const newPrice = prompt('送料（円）:', item.price);
+  if (newPrice === null) return;
+
+  try {
+    const newItems = [...category.items];
+    newItems[itemIndex] = {
+      detail: newDetail.trim(),
+      price: parseInt(newPrice, 10) || 0
+    };
+
+    await window.db.collection(currentMasterConfig.collection).doc(category.id).update({
+      items: newItems,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await renderShippingDropdownUI();
+  } catch (error) {
+    console.error('編集エラー:', error);
+    alert('編集に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 発送方法を削除
+ */
+window.deleteShippingItem = async function(itemIndex) {
+  const category = window._currentShippingCategory;
+  if (!category) return;
+
+  const item = category.items[itemIndex];
+  if (!confirm(`「${item.detail}」を削除しますか？`)) return;
+
+  try {
+    const newItems = category.items.filter((_, i) => i !== itemIndex);
+
+    await window.db.collection(currentMasterConfig.collection).doc(category.id).update({
+      items: newItems,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await renderShippingDropdownUI();
+  } catch (error) {
+    console.error('削除エラー:', error);
+    alert('削除に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 新規発送カテゴリを追加
+ */
+window.addShippingCategory = async function() {
+  const input = document.getElementById('newShippingCategoryName');
+  const categoryName = input?.value?.trim();
+
+  if (!categoryName) {
+    alert('カテゴリ名を入力してください');
+    return;
+  }
+
+  const categories = window._currentShippingCategories || [];
+
+  // 重複チェック
+  if (categories.some(cat => cat.id === categoryName)) {
+    alert('このカテゴリ名は既に存在します');
+    return;
+  }
+
+  try {
+    const maxOrder = categories.reduce((max, cat) => Math.max(max, cat.order || 0), 0);
+
+    await window.db.collection(currentMasterConfig.collection).doc(categoryName).set({
+      items: [],
+      order: maxOrder + 1,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    input.value = '';
+    // 新しく追加したカテゴリを選択
+    currentShippingCategoryIndex = categories.length;
+    await renderShippingDropdownUI();
   } catch (error) {
     console.error('カテゴリ追加エラー:', error);
     alert('カテゴリの追加に失敗しました: ' + error.message);
