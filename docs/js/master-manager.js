@@ -2814,13 +2814,16 @@ function renderMasterList() {
     }
 
     // 空状態での新規追加ボタン表示制御
-    const actionBarAddBtnEmpty = document.querySelector('.action-bar .btn-add');
+    const actionBarAddBtnEmpty = document.querySelector('.action-bar .btn-add:not(#categoryAddBtn)');
+    const categoryAddBtnEmpty = document.getElementById('categoryAddBtn');
     if (currentMasterConfig?.viewMode === 'tree') {
-      // ツリービューでは上部の新規追加ボタンを非表示（ツリー内に追加機能あり）
+      // ツリービューでは汎用追加ボタンを非表示、カテゴリ追加ボタンを表示
       if (actionBarAddBtnEmpty) actionBarAddBtnEmpty.style.display = 'none';
+      if (categoryAddBtnEmpty) categoryAddBtnEmpty.style.display = 'flex';
     } else {
-      // 非ツリービューでは新規追加ボタンを表示
+      // 非ツリービューでは汎用追加ボタンを表示、カテゴリ追加ボタンを非表示
       if (actionBarAddBtnEmpty) actionBarAddBtnEmpty.style.display = 'flex';
+      if (categoryAddBtnEmpty) categoryAddBtnEmpty.style.display = 'none';
     }
 
     return;
@@ -2831,23 +2834,27 @@ function renderMasterList() {
   emptyState.classList.add('hidden');
 
   // viewModeに応じた表示方式を選択
-  const actionBarAddBtn = document.querySelector('.action-bar .btn-add');
+  const actionBarAddBtn = document.querySelector('.action-bar .btn-add:not(#categoryAddBtn)');
+  const categoryAddBtn = document.getElementById('categoryAddBtn');
 
   if (currentMasterConfig.viewMode === 'tree') {
     // ツリービュー表示（カテゴリ用）
     renderCategoryTreeView(container);
-    // ツリービューでは上部の「新規追加」ボタンを非表示（ツリー内に追加機能あり）
+    // 汎用追加ボタンを非表示、カテゴリ追加ボタンを表示
     if (actionBarAddBtn) actionBarAddBtn.style.display = 'none';
+    if (categoryAddBtn) categoryAddBtn.style.display = 'flex';
   } else if (currentMasterConfig.groupBy) {
     // アコーディオン表示
     renderAccordionList(container);
-    // 上部の「新規追加」ボタンを表示
+    // 汎用追加ボタンを表示、カテゴリ追加ボタンを非表示
     if (actionBarAddBtn) actionBarAddBtn.style.display = 'flex';
+    if (categoryAddBtn) categoryAddBtn.style.display = 'none';
   } else {
     // 従来のフラットリスト表示
     renderFlatList(container);
-    // 上部の「新規追加」ボタンを表示
+    // 汎用追加ボタンを表示、カテゴリ追加ボタンを非表示
     if (actionBarAddBtn) actionBarAddBtn.style.display = 'flex';
+    if (categoryAddBtn) categoryAddBtn.style.display = 'none';
   }
 }
 
@@ -3058,14 +3065,7 @@ function renderCategoryTreeView(container) {
   const treeWrapper = document.createElement('div');
   treeWrapper.className = 'category-tree-wrapper';
 
-  // ルートカテゴリ追加ボタン（ツリー最上部）
-  const rootAddBtn = document.createElement('div');
-  rootAddBtn.className = 'tree-root-add-btn';
-  rootAddBtn.innerHTML = '<i class="bi bi-plus-circle"></i><span>新規カテゴリを追加</span>';
-  rootAddBtn.addEventListener('click', () => {
-    showRootCategoryAddForm(treeWrapper);
-  });
-  treeWrapper.appendChild(rootAddBtn);
+  // ルートカテゴリ追加ボタンはアクションバーに移動済み
 
   renderTreeLevel(tree, treeWrapper, 1, []); // 明示的に空配列を渡す
 
@@ -3467,9 +3467,16 @@ function showTreeInlineAddForm(nodePath, level, pathArray, nodeContainer) {
 
 /**
  * ルートカテゴリ追加フォームを表示（ツリー最上部用）
- * @param {HTMLElement} treeWrapper - ツリーラッパー要素
+ * アクションバーから呼び出されるため、グローバル関数として公開
  */
-function showRootCategoryAddForm(treeWrapper) {
+window.showRootCategoryAddForm = function() {
+  // treeWrapperを自動検出
+  const treeWrapper = document.querySelector('.category-tree-wrapper');
+  if (!treeWrapper) {
+    console.warn('カテゴリツリーが見つかりません');
+    return;
+  }
+
   // 既存のインラインフォームがあれば削除
   const existingForm = document.querySelector('.tree-inline-add-form');
   if (existingForm) {
@@ -3495,13 +3502,8 @@ function showRootCategoryAddForm(treeWrapper) {
     </div>
   `;
 
-  // ルート追加ボタンの後に挿入
-  const rootAddBtn = treeWrapper.querySelector('.tree-root-add-btn');
-  if (rootAddBtn) {
-    rootAddBtn.after(formContainer);
-  } else {
-    treeWrapper.prepend(formContainer);
-  }
+  // ツリーの先頭に挿入
+  treeWrapper.prepend(formContainer);
 
   // フォーカス
   const textarea = formContainer.querySelector('.inline-form-input');
