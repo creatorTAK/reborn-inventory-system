@@ -155,6 +155,22 @@ console.log('[product.html] ✅ Script loaded - Version @315-SlotAutoFill');
       }
     }
 
+    // ランク（仕入時に選択されたランクを反映）
+    if (slotData.rank) {
+      const rankSelect = document.getElementById('ランク');
+      if (rankSelect) {
+        // ランクマスタがロードされるまで少し待ってから設定
+        setTimeout(() => {
+          rankSelect.value = slotData.rank;
+          console.log('📦 [v315] ランク設定:', slotData.rank);
+          // 商品説明プレビュー更新
+          if (typeof window.onRankChange === 'function') {
+            window.onRankChange();
+          }
+        }, 300);
+      }
+    }
+
     // カテゴリ（7階層）
     if (slotData.category) {
       applyCategoryFromSlot(slotData.category);
@@ -10198,6 +10214,25 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
     description: formData['商品の説明'] || '',
     condition: formData['商品の状態'] || '',
     conditionDetail: formData['商品状態詳細'] || formData['商品状態(詳細)'] || '',
+    rank: formData['ランク'] ? {
+      code: formData['ランク'],
+      name: (() => {
+        const rankSelect = document.getElementById('ランク');
+        if (rankSelect && rankSelect.selectedIndex > 0) {
+          const option = rankSelect.options[rankSelect.selectedIndex];
+          return option.textContent.replace(formData['ランク'] + ' - ', '');
+        }
+        return '';
+      })(),
+      description: (() => {
+        const rankSelect = document.getElementById('ランク');
+        if (rankSelect && rankSelect.selectedIndex > 0) {
+          const option = rankSelect.options[rankSelect.selectedIndex];
+          return option.dataset.description || '';
+        }
+        return '';
+      })()
+    } : null,
     itemName: formData['アイテム名'] || '',
     size: {
       display: formData['サイズ'] || '',
