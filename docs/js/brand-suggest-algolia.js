@@ -156,6 +156,15 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
       titleBrandKanaField.value = brandNameKana;
     }
 
+    // 仕入登録ページでのみ使用カウントをインクリメント
+    const isPurchasePage = window.location.pathname.includes('purchase');
+    if (isPurchasePage && brand.id && typeof window.incrementBrandUsageCount === 'function') {
+      window.incrementBrandUsageCount(brand.id).catch(err => {
+        console.warn('[Algolia] ブランド使用カウント更新失敗:', err);
+      });
+      console.log(`📊 [Algolia] ブランド使用カウント更新: ${brand.name} (${brand.id})`);
+    }
+
     // updateBrandDisplay() を呼び出し（商品名プレビュー更新）
     if (typeof window.updateBrandDisplay === 'function') {
       window.updateBrandDisplay();
