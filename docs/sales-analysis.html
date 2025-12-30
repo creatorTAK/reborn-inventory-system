@@ -136,6 +136,112 @@
         font-size: 1.25rem;
       }
     }
+
+    /* タブスタイル */
+    .nav-tabs-custom {
+      background: white;
+      border-radius: 12px;
+      padding: 8px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .nav-tabs-custom .nav-link {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      color: #6b7280;
+      font-weight: 500;
+      background: #f3f4f6;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .nav-tabs-custom .nav-link:hover {
+      background: #e5e7eb;
+    }
+    .nav-tabs-custom .nav-link.active {
+      background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%);
+      color: white;
+    }
+
+    /* パフォーマンステーブル */
+    .performance-table {
+      width: 100%;
+      font-size: 0.875rem;
+      border-collapse: collapse;
+    }
+    .performance-table th {
+      background: #f9fafb;
+      padding: 12px 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #6b7280;
+      border-bottom: 2px solid #e5e7eb;
+      white-space: nowrap;
+    }
+    .performance-table td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: middle;
+    }
+    .performance-table tbody tr:hover {
+      background: #f0f9ff;
+    }
+    .performance-table tfoot td {
+      background: #f0fdf4;
+      font-weight: 600;
+      border-top: 2px solid #e5e7eb;
+    }
+
+    /* 消化率バー */
+    .consumption-bar {
+      width: 50px;
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+    .consumption-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #059669);
+      border-radius: 3px;
+    }
+
+    /* 利益率カラーリング */
+    .profit-rate.high { color: #10b981; font-weight: 600; }
+    .profit-rate.medium { color: #f59e0b; }
+    .profit-rate.low { color: #ef4444; }
+
+    /* フィルターセクション */
+    .filter-section {
+      background: white;
+      padding: 12px 16px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    /* レスポンシブ - パフォーマンステーブル */
+    @media (max-width: 768px) {
+      .performance-table {
+        font-size: 0.75rem;
+      }
+      .performance-table th,
+      .performance-table td {
+        padding: 8px 4px;
+      }
+      .consumption-bar {
+        width: 30px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -253,8 +359,26 @@
       </div>
     </div>
 
-    <!-- 主要KPI -->
-    <div class="kpi-grid">
+    <!-- タブナビゲーション -->
+    <ul class="nav nav-tabs-custom" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview-pane" type="button" role="tab" aria-controls="overview-pane" aria-selected="true">
+          <i class="bi bi-graph-up"></i> 概要
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="performance-tab" data-bs-toggle="tab" data-bs-target="#performance-pane" type="button" role="tab" aria-controls="performance-pane" aria-selected="false">
+          <i class="bi bi-bar-chart-line"></i> パフォーマンス
+        </button>
+      </li>
+    </ul>
+
+    <!-- タブコンテンツ -->
+    <div class="tab-content">
+      <!-- 概要タブ -->
+      <div class="tab-pane fade show active" id="overview-pane" role="tabpanel" aria-labelledby="overview-tab">
+        <!-- 主要KPI -->
+        <div class="kpi-grid">
       <div class="kpi-card">
         <div class="kpi-label">売上高</div>
         <div class="kpi-value" id="kpi-sales">-</div>
@@ -396,6 +520,83 @@
       </div>
     </div>
 
+      </div><!-- /概要タブ -->
+
+      <!-- パフォーマンス分析タブ -->
+      <div class="tab-pane fade" id="performance-pane" role="tabpanel" aria-labelledby="performance-tab">
+        <!-- フィルター -->
+        <div class="filter-section">
+          <div class="row align-items-center g-2">
+            <div class="col-auto">
+              <label class="form-label mb-0 small fw-bold">分析軸:</label>
+            </div>
+            <div class="col-auto">
+              <select class="form-select form-select-sm" id="analysisAxis" onchange="loadPerformanceData()">
+                <option value="brand">ブランド別</option>
+                <option value="categoryMajor">大カテゴリ別</option>
+                <option value="categoryMiddle">中カテゴリ別</option>
+                <option value="itemName">アイテム名別</option>
+                <option value="condition">状態別</option>
+                <option value="size">サイズ別</option>
+                <option value="salePlatform">販売先別</option>
+                <option value="priceRange">価格帯別</option>
+              </select>
+            </div>
+            <div class="col-auto">
+              <label class="form-label mb-0 small fw-bold">並び順:</label>
+            </div>
+            <div class="col-auto">
+              <select class="form-select form-select-sm" id="sortKey" onchange="sortPerformanceTable()">
+                <option value="profit-desc">総利益（高い順）</option>
+                <option value="profit-asc">総利益（低い順）</option>
+                <option value="profitRate-desc">平均利益率（高い順）</option>
+                <option value="profitRate-asc">平均利益率（低い順）</option>
+                <option value="consumption-desc">消化率（高い順）</option>
+                <option value="consumption-asc">消化率（低い順）</option>
+                <option value="days-asc">在庫日数（短い順）</option>
+                <option value="days-desc">在庫日数（長い順）</option>
+              </select>
+            </div>
+            <div class="col-auto ms-auto">
+              <button class="btn btn-sm btn-outline-secondary" onclick="exportPerformanceCSV()">
+                <i class="bi bi-download"></i> CSV
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- パフォーマンステーブル -->
+        <div class="section-card">
+          <div class="table-responsive">
+            <table class="performance-table" id="performanceTable">
+              <thead>
+                <tr>
+                  <th style="text-align:left">項目名</th>
+                  <th>仕入数</th>
+                  <th>販売数</th>
+                  <th>消化率</th>
+                  <th>総売上</th>
+                  <th>総利益</th>
+                  <th>利益率</th>
+                  <th>在庫日</th>
+                </tr>
+              </thead>
+              <tbody id="performanceBody">
+                <tr>
+                  <td colspan="8" class="text-center text-muted py-4">
+                    <i class="bi bi-hourglass-split"></i> データ読み込み中...
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot id="performanceFoot">
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div><!-- /パフォーマンス分析タブ -->
+
+    </div><!-- /tab-content -->
+
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -497,9 +698,115 @@
       return metrics;
     }
 
+    /**
+     * 軸別パフォーマンス分析
+     * @param {string} startDate - 開始日（YYYY-MM-DD）
+     * @param {string} endDate - 終了日（YYYY-MM-DD）
+     * @param {string} axis - 分析軸
+     * @returns {Object} 軸別集計データ
+     */
+    async function calculatePerformanceByAxis(startDate, endDate, axis) {
+      console.log('📊 [パフォーマンス分析] 開始:', axis, startDate, '〜', endDate);
+
+      const productsRef = collection(db, 'products');
+      const snapshot = await getDocs(productsRef);
+
+      // 軸別の集計データ
+      const axisData = {};
+
+      /**
+       * 軸の値を取得
+       */
+      function getAxisValue(data, axis) {
+        switch (axis) {
+          case 'brand':
+            return data.brand?.nameEn || data.brand?.nameKana || '(未設定)';
+          case 'categoryMajor':
+            return data.category?.major || '(未設定)';
+          case 'categoryMiddle':
+            return data.category?.middle || '(未設定)';
+          case 'itemName':
+            return data.itemName || '(未設定)';
+          case 'condition':
+            return data.condition?.display || data.condition || '(未設定)';
+          case 'size':
+            return data.size?.display || data.size || '(未設定)';
+          case 'salePlatform':
+            return data.salePlatform || '(未販売)';
+          case 'priceRange':
+            const price = parseFloat(data.saleAmount || data.listing?.amount || 0);
+            if (price === 0) return '(未設定)';
+            if (price < 3000) return '〜3,000円';
+            if (price < 5000) return '3,000〜5,000円';
+            if (price < 10000) return '5,000〜10,000円';
+            if (price < 20000) return '10,000〜20,000円';
+            if (price < 50000) return '20,000〜50,000円';
+            return '50,000円〜';
+          default:
+            return '(不明)';
+        }
+      }
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const key = getAxisValue(data, axis);
+
+        // 初期化
+        if (!axisData[key]) {
+          axisData[key] = {
+            name: key,
+            purchaseCount: 0,
+            purchaseAmount: 0,
+            salesCount: 0,
+            salesAmount: 0,
+            finalProfit: 0,
+            totalDays: 0
+          };
+        }
+
+        // 仕入日でフィルタ
+        const purchaseDate = data.purchase?.date || data.purchaseDate || '';
+        if (purchaseDate >= startDate && purchaseDate <= endDate) {
+          axisData[key].purchaseCount++;
+          axisData[key].purchaseAmount += parseFloat(data.purchase?.amount || data.purchaseAmount || 0);
+        }
+
+        // 販売日でフィルタ
+        const saleDate = data.saleDate || '';
+        if (saleDate >= startDate && saleDate <= endDate) {
+          axisData[key].salesCount++;
+          axisData[key].salesAmount += parseFloat(data.saleAmount || 0);
+          axisData[key].finalProfit += parseFloat(data.finalProfit || 0);
+
+          // 在庫日数（出品日→販売日）
+          const listingDate = data.listing?.date || data.listingDate || '';
+          if (listingDate && saleDate) {
+            const days = Math.floor((new Date(saleDate) - new Date(listingDate)) / (1000 * 60 * 60 * 24));
+            if (days >= 0) axisData[key].totalDays += days;
+          }
+        }
+      });
+
+      // 派生指標を計算
+      const result = Object.values(axisData).map(item => ({
+        name: item.name,
+        purchaseCount: item.purchaseCount,
+        salesCount: item.salesCount,
+        consumptionRate: item.purchaseCount > 0 ? (item.salesCount / item.purchaseCount) * 100 : 0,
+        salesAmount: item.salesAmount,
+        finalProfit: item.finalProfit,
+        profitRate: item.salesAmount > 0 ? (item.finalProfit / item.salesAmount) * 100 : 0,
+        avgDays: item.salesCount > 0 ? Math.round(item.totalDays / item.salesCount) : 0
+      }));
+
+      console.log('📊 [パフォーマンス分析] 結果:', result.length, '件');
+      return result;
+    }
+
     // グローバルに公開
     window.SalesApi = {
-      calculateSalesMetrics
+      calculateSalesMetrics,
+      calculatePerformanceByAxis
     };
 
     console.log('✅ [売上分析] Firebase初期化完了');
@@ -697,6 +1004,248 @@
         window.location.href = '/menu_home.html';
       }
     }
+
+    // ============================================
+    // パフォーマンス分析機能
+    // ============================================
+
+    // 現在のパフォーマンスデータを保持
+    let currentPerformanceData = [];
+    let performanceDataLoaded = false;
+
+    /**
+     * パフォーマンスデータを読み込み
+     */
+    async function loadPerformanceData() {
+      showLoading();
+
+      try {
+        const { startDate, endDate } = getSelectedPeriod();
+        const axis = document.getElementById('analysisAxis').value;
+
+        if (!startDate || !endDate) {
+          hideLoading();
+          return;
+        }
+
+        currentPerformanceData = await SalesApi.calculatePerformanceByAxis(startDate, endDate, axis);
+        performanceDataLoaded = true;
+
+        // 初期ソート（総利益順）
+        sortPerformanceTable();
+
+      } catch (error) {
+        console.error('パフォーマンスデータ読み込みエラー:', error);
+        document.getElementById('performanceBody').innerHTML = `
+          <tr>
+            <td colspan="8" class="text-center text-danger py-4">
+              <i class="bi bi-exclamation-triangle"></i> データの読み込みに失敗しました
+            </td>
+          </tr>
+        `;
+      } finally {
+        hideLoading();
+      }
+    }
+
+    /**
+     * パフォーマンステーブルを描画
+     */
+    function renderPerformanceTable(data) {
+      const tbody = document.getElementById('performanceBody');
+      const tfoot = document.getElementById('performanceFoot');
+
+      if (!data || data.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" class="text-center text-muted py-4">
+              <i class="bi bi-inbox"></i> データがありません
+            </td>
+          </tr>
+        `;
+        tfoot.innerHTML = '';
+        return;
+      }
+
+      // 集計（合計行用）
+      const totals = {
+        purchaseCount: 0,
+        salesCount: 0,
+        salesAmount: 0,
+        finalProfit: 0,
+        totalDays: 0
+      };
+
+      let html = '';
+
+      data.forEach(item => {
+        totals.purchaseCount += item.purchaseCount;
+        totals.salesCount += item.salesCount;
+        totals.salesAmount += item.salesAmount;
+        totals.finalProfit += item.finalProfit;
+        totals.totalDays += item.avgDays * item.salesCount;
+
+        // 利益率クラス
+        let profitRateClass = 'low';
+        if (item.profitRate >= 30) profitRateClass = 'high';
+        else if (item.profitRate >= 15) profitRateClass = 'medium';
+
+        // 消化率バー幅
+        const barWidth = Math.min(100, item.consumptionRate);
+
+        html += `
+          <tr>
+            <td style="text-align:left; font-weight:500">${escapeHtml(item.name)}</td>
+            <td>${item.purchaseCount}件</td>
+            <td>${item.salesCount}件</td>
+            <td>
+              <div class="consumption-bar">
+                <div class="consumption-bar-fill" style="width:${barWidth}%"></div>
+              </div>
+              ${item.consumptionRate.toFixed(0)}%
+            </td>
+            <td>${formatCurrency(item.salesAmount)}</td>
+            <td>${formatCurrency(item.finalProfit)}</td>
+            <td class="profit-rate ${profitRateClass}">${item.profitRate.toFixed(1)}%</td>
+            <td>${item.avgDays}日</td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+
+      // 合計行
+      const totalConsumptionRate = totals.purchaseCount > 0 ? (totals.salesCount / totals.purchaseCount) * 100 : 0;
+      const totalProfitRate = totals.salesAmount > 0 ? (totals.finalProfit / totals.salesAmount) * 100 : 0;
+      const avgDays = totals.salesCount > 0 ? Math.round(totals.totalDays / totals.salesCount) : 0;
+
+      tfoot.innerHTML = `
+        <tr>
+          <td style="text-align:left; font-weight:600">合計</td>
+          <td>${totals.purchaseCount}件</td>
+          <td>${totals.salesCount}件</td>
+          <td>${totalConsumptionRate.toFixed(0)}%</td>
+          <td>${formatCurrency(totals.salesAmount)}</td>
+          <td>${formatCurrency(totals.finalProfit)}</td>
+          <td>${totalProfitRate.toFixed(1)}%</td>
+          <td>${avgDays}日</td>
+        </tr>
+      `;
+    }
+
+    /**
+     * パフォーマンステーブルをソート
+     */
+    function sortPerformanceTable() {
+      if (!currentPerformanceData || currentPerformanceData.length === 0) {
+        renderPerformanceTable([]);
+        return;
+      }
+
+      const sortKey = document.getElementById('sortKey').value;
+      const [key, order] = sortKey.split('-');
+
+      const sorted = [...currentPerformanceData].sort((a, b) => {
+        let valA, valB;
+
+        switch (key) {
+          case 'profit':
+            valA = a.finalProfit;
+            valB = b.finalProfit;
+            break;
+          case 'profitRate':
+            valA = a.profitRate;
+            valB = b.profitRate;
+            break;
+          case 'consumption':
+            valA = a.consumptionRate;
+            valB = b.consumptionRate;
+            break;
+          case 'days':
+            valA = a.avgDays;
+            valB = b.avgDays;
+            break;
+          default:
+            valA = a.finalProfit;
+            valB = b.finalProfit;
+        }
+
+        return order === 'desc' ? valB - valA : valA - valB;
+      });
+
+      renderPerformanceTable(sorted);
+    }
+
+    /**
+     * パフォーマンスデータをCSVエクスポート
+     */
+    function exportPerformanceCSV() {
+      if (!currentPerformanceData || currentPerformanceData.length === 0) {
+        alert('エクスポートするデータがありません');
+        return;
+      }
+
+      const axis = document.getElementById('analysisAxis');
+      const axisLabel = axis.options[axis.selectedIndex].text;
+      const { startDate, endDate } = getSelectedPeriod();
+
+      // BOMを追加（Excel用）
+      let csv = '\uFEFF';
+      csv += '項目名,仕入数,販売数,消化率(%),総売上,総利益,利益率(%),平均在庫日数\n';
+
+      currentPerformanceData.forEach(item => {
+        csv += `"${item.name}",${item.purchaseCount},${item.salesCount},${item.consumptionRate.toFixed(1)},${item.salesAmount},${item.finalProfit},${item.profitRate.toFixed(1)},${item.avgDays}\n`;
+      });
+
+      // ダウンロード
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `パフォーマンス分析_${axisLabel}_${startDate}_${endDate}.csv`;
+      link.click();
+    }
+
+    /**
+     * HTMLエスケープ
+     */
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // タブ切り替え時にパフォーマンスデータを読み込み
+    document.addEventListener('DOMContentLoaded', () => {
+      const performanceTab = document.getElementById('performance-tab');
+      if (performanceTab) {
+        performanceTab.addEventListener('shown.bs.tab', () => {
+          if (!performanceDataLoaded) {
+            loadPerformanceData();
+          }
+        });
+      }
+    });
+
+    // パフォーマンスタブがアクティブかチェック
+    function isPerformanceTabActive() {
+      const pane = document.getElementById('performance-pane');
+      return pane && pane.classList.contains('active');
+    }
+
+    // 期間変更時にパフォーマンスデータをリセット
+    const originalLoadSalesData = loadSalesData;
+    loadSalesData = async function() {
+      performanceDataLoaded = false; // リセット
+      await originalLoadSalesData();
+
+      // パフォーマンスタブがアクティブなら再読み込み
+      if (isPerformanceTabActive()) {
+        loadPerformanceData();
+      }
+    };
   </script>
 </body>
 </html>
