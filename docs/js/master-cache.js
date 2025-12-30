@@ -473,5 +473,4 @@ window.brandCacheManager = {
 };
 
 console.log('[MasterCache] MasterCacheManager初期化完了');
-console.log('[MasterCache] バックグラウンドプリロードは無効化（シンプル設計）');
-console.log('[MasterCache] マスタ管理画面を開いた時にのみキャッシュします');
+console.log('[MasterCache] バックグラウンドプリロード対応（ダッシュボード/商品登録から自動実行）');

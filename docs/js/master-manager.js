@@ -4392,6 +4392,13 @@ window.addMaster = async function() {
       // キャッシュクリア（再読み込み強制）
       delete masterCache[currentMasterConfig.collection];
 
+      // IndexedDBキャッシュも無効化
+      if (window.masterCacheManager && window.masterCacheManager.invalidateCache) {
+        window.masterCacheManager.invalidateCache(currentMasterConfig.collection)
+          .then(() => console.log(`[Master Manager] IndexedDBキャッシュ無効化: ${currentMasterConfig.collection}`))
+          .catch(e => console.error('[Master Manager] キャッシュ無効化エラー:', e));
+      }
+
       // 新しいアイテムをローカルデータに追加（即座に反映）
       const newItem = {
         id: result.id,
