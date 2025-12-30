@@ -2796,8 +2796,8 @@ async function performSearch(query) {
     const katakanaQuery = hiraganaToKatakana(query);
 
     if (masterCache[collection] && masterCache[collection].length > 0) {
-      // ✅ キャッシュから検索（高速）
-      console.log('⚡ [Master Manager] キャッシュから検索');
+      // ✅ メモリキャッシュから検索（最速）
+      console.log('⚡ [Master Manager] メモリキャッシュから検索');
       const lowerQuery = katakanaQuery.toLowerCase();
       const hiraganaQuery = katakanaToHiragana(lowerQuery);
 
@@ -2815,7 +2815,39 @@ async function performSearch(query) {
 
       allMasterData = results;
       filteredMasterData = results;
-      console.log(`✅ [Master Manager] キャッシュ検索結果: ${results.length}件`);
+      console.log(`✅ [Master Manager] メモリキャッシュ検索結果: ${results.length}件`);
+    } else if (collection === 'brands' && window.masterCacheManager && window.masterCacheManager.searchBrandsFromCache) {
+      // ✅ ブランド: IndexedDBキャッシュから検索（高速）
+      console.log('⚡ [Master Manager] IndexedDBキャッシュからブランド検索');
+      showLoading(true);
+      try {
+        const results = await window.masterCacheManager.searchBrandsFromCache(
+          katakanaQuery,
+          currentMasterConfig.maxDisplayResults || 100
+        );
+        allMasterData = results || [];
+        filteredMasterData = results || [];
+        console.log(`✅ [Master Manager] IndexedDB検索結果: ${allMasterData.length}件`);
+      } catch (error) {
+        console.error('❌ [Master Manager] IndexedDB検索エラー:', error);
+        // フォールバック: Firestore検索
+        console.log('📡 [Master Manager] フォールバック: Firestore検索');
+        try {
+          const results = await window.searchMaster(
+            collection,
+            query,
+            currentMasterConfig.searchFields || [],
+            currentMasterConfig.maxDisplayResults || 100
+          );
+          allMasterData = results || [];
+          filteredMasterData = results || [];
+        } catch (e) {
+          allMasterData = [];
+          filteredMasterData = [];
+        }
+      } finally {
+        showLoading(false);
+      }
     } else {
       // ❌ キャッシュなし → Firestore検索
       console.log('📡 [Master Manager] Firestore検索');

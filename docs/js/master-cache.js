@@ -450,6 +450,108 @@ class MasterCacheManager {
   }
 
   // ========================================
+  // キャッシュ検索機能
+  // ========================================
+
+  /**
+   * キャッシュからブランドを検索（高速）
+   * @param {string} query - 検索クエリ
+   * @param {number} limit - 最大件数（デフォルト50）
+   * @returns {Array} マッチしたブランドの配列
+   */
+  async searchBrandsFromCache(query, limit = 50) {
+    const startTime = performance.now();
+
+    try {
+      // キャッシュが有効か確認
+      const cacheValid = await this.isCacheValid('brands');
+
+      if (!cacheValid) {
+        console.log('[MasterCache] ブランドキャッシュ無効、プリロード開始...');
+        await this.preloadInBackground('brands');
+      }
+
+      // キャッシュからデータ取得
+      const allBrands = await this.getFromCache('brands');
+
+      if (!allBrands || allBrands.length === 0) {
+        console.warn('[MasterCache] ブランドキャッシュが空です');
+        return [];
+      }
+
+      // 検索実行（大文字小文字を区別しない）
+      const queryLower = query.toLowerCase();
+      const results = [];
+
+      for (const brand of allBrands) {
+        if (results.length >= limit) break;
+
+        // name, nameEn, nameJa で検索
+        const nameMatch = brand.name && brand.name.toLowerCase().includes(queryLower);
+        const nameEnMatch = brand.nameEn && brand.nameEn.toLowerCase().includes(queryLower);
+        const nameJaMatch = brand.nameJa && brand.nameJa.toLowerCase().includes(queryLower);
+
+        if (nameMatch || nameEnMatch || nameJaMatch) {
+          results.push(brand);
+        }
+      }
+
+      const elapsed = (performance.now() - startTime).toFixed(1);
+      console.log(`[MasterCache] ブランド検索完了: "${query}" → ${results.length}件 (${elapsed}ms)`);
+
+      return results;
+
+    } catch (error) {
+      console.error('[MasterCache] ブランド検索エラー:', error);
+      return [];
+    }
+  }
+
+  /**
+   * キャッシュからカテゴリを検索（高速）
+   */
+  async searchCategoriesFromCache(query, limit = 50) {
+    const startTime = performance.now();
+
+    try {
+      const cacheValid = await this.isCacheValid('categories');
+
+      if (!cacheValid) {
+        await this.preloadInBackground('categories');
+      }
+
+      const allCategories = await this.getFromCache('categories');
+
+      if (!allCategories || allCategories.length === 0) {
+        return [];
+      }
+
+      const queryLower = query.toLowerCase();
+      const results = [];
+
+      for (const cat of allCategories) {
+        if (results.length >= limit) break;
+
+        const fullPathMatch = cat.fullPath && cat.fullPath.toLowerCase().includes(queryLower);
+        const itemNameMatch = cat.itemName && cat.itemName.toLowerCase().includes(queryLower);
+
+        if (fullPathMatch || itemNameMatch) {
+          results.push(cat);
+        }
+      }
+
+      const elapsed = (performance.now() - startTime).toFixed(1);
+      console.log(`[MasterCache] カテゴリ検索完了: "${query}" → ${results.length}件 (${elapsed}ms)`);
+
+      return results;
+
+    } catch (error) {
+      console.error('[MasterCache] カテゴリ検索エラー:', error);
+      return [];
+    }
+  }
+
+  // ========================================
   // 便利メソッド（後方互換性のため）
   // ========================================
 
