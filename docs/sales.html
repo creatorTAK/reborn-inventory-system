@@ -420,7 +420,7 @@
           </button>
           <button class="settings-dropdown-item" onclick="openExportModal(); closeSettingsDropdown();">
             <i class="bi bi-download"></i>
-            <span>売上帳出力</span>
+            <span>データエクスポート</span>
           </button>
         </div>
       </div>
@@ -890,13 +890,6 @@
           </div>
         </div>
 
-        <!-- CSVボタン（テーブル上部右寄せ） -->
-        <div class="d-flex justify-content-end mb-2">
-          <button class="btn btn-sm btn-outline-secondary" onclick="exportPerformanceCSV()">
-            <i class="bi bi-download"></i> CSVエクスポート
-          </button>
-        </div>
-
         <!-- パフォーマンステーブル -->
         <div class="sales-table-container">
           <div class="table-responsive">
@@ -975,7 +968,7 @@
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">📊 売上帳出力（確定申告用）</h5>
+          <h5 class="modal-title"><i class="bi bi-download"></i> データエクスポート</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
@@ -991,9 +984,9 @@
           <div class="mb-3">
             <label class="form-label fw-bold">出力期間</label>
             <select class="form-select" id="exportPeriod" onchange="updateExportDates()">
-              <option value="month">月別</option>
-              <option value="quarter">四半期</option>
-              <option value="year">年度（確定申告用）</option>
+              <option value="month">今月</option>
+              <option value="quarter">今四半期</option>
+              <option value="year">今年度</option>
               <option value="custom">カスタム</option>
             </select>
           </div>
@@ -1007,23 +1000,61 @@
               <input type="date" class="form-control" id="exportEndDate">
             </div>
           </div>
+
+          <!-- 売上・入金データ -->
           <div class="mb-3">
-            <label class="form-label fw-bold">出力内容</label>
+            <label class="form-label fw-bold text-primary"><i class="bi bi-currency-yen"></i> 売上・入金データ</label>
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="exportSalesDetail" checked>
-              <label class="form-check-label" for="exportSalesDetail">売上明細</label>
+              <label class="form-check-label" for="exportSalesDetail">
+                売上明細 <small class="text-muted">（販売日、商品名、金額、利益など）</small>
+              </label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="exportReceivable" checked>
-              <label class="form-check-label" for="exportReceivable">売掛金一覧</label>
+              <input class="form-check-input" type="checkbox" id="exportReceivable">
+              <label class="form-check-label" for="exportReceivable">
+                売掛金一覧 <small class="text-muted">（未入金の売上）</small>
+              </label>
             </div>
             <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="exportSummary" checked>
-              <label class="form-check-label" for="exportSummary">月別サマリー（集計表）</label>
+              <input class="form-check-input" type="checkbox" id="exportPaymentHistory">
+              <label class="form-check-label" for="exportPaymentHistory">
+                入金履歴 <small class="text-muted">（入金済みの記録）</small>
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="exportSummary">
+              <label class="form-check-label" for="exportSummary">
+                月別サマリー <small class="text-muted">（月ごとの集計表）</small>
+              </label>
             </div>
           </div>
-          <div class="alert alert-info small mb-0">
-            <i class="bi bi-info-circle"></i> 確定申告用には「年度」を選択し、全ての出力内容をチェックしてください。
+
+          <!-- 分析データ -->
+          <div class="mb-3">
+            <label class="form-label fw-bold text-success"><i class="bi bi-bar-chart-line"></i> 分析データ</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="exportAxisAnalysis" onchange="toggleAxisSelect()">
+              <label class="form-check-label" for="exportAxisAnalysis">
+                軸分析データ <small class="text-muted">（パフォーマンス分析結果）</small>
+              </label>
+            </div>
+            <div id="axisSelectContainer" class="ms-4 mt-2" style="display: none;">
+              <select class="form-select form-select-sm" id="exportAxisType" style="max-width: 200px;">
+                <option value="brand">ブランド別</option>
+                <option value="categoryMajor">大カテゴリ別</option>
+                <option value="categoryMiddle">中カテゴリ別</option>
+                <option value="itemName">アイテム名別</option>
+                <option value="condition">状態別</option>
+                <option value="size">サイズ別</option>
+                <option value="salePlatform">販売先別</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="alert alert-light small mb-0 border">
+            <i class="bi bi-lightbulb text-warning"></i>
+            <strong>確定申告用：</strong>期間を「今年度」、売上明細と月別サマリーを選択
           </div>
         </div>
         <div class="modal-footer">
@@ -1767,16 +1798,31 @@
       document.getElementById('exportEndDate').value = formatDateLocal(endDate);
     }
 
+    function toggleAxisSelect() {
+      const checkbox = document.getElementById('exportAxisAnalysis');
+      const container = document.getElementById('axisSelectContainer');
+      container.style.display = checkbox.checked ? 'block' : 'none';
+    }
+
     async function exportData() {
       const format = document.querySelector('input[name="exportFormat"]:checked').value;
       const startDate = document.getElementById('exportStartDate').value;
       const endDate = document.getElementById('exportEndDate').value;
       const includeSalesDetail = document.getElementById('exportSalesDetail').checked;
       const includeReceivable = document.getElementById('exportReceivable').checked;
+      const includePaymentHistory = document.getElementById('exportPaymentHistory').checked;
       const includeSummary = document.getElementById('exportSummary').checked;
+      const includeAxisAnalysis = document.getElementById('exportAxisAnalysis').checked;
+      const axisType = document.getElementById('exportAxisType').value;
 
       if (!startDate || !endDate) {
         alert('出力期間を設定してください');
+        return;
+      }
+
+      // 何も選択されていない場合
+      if (!includeSalesDetail && !includeReceivable && !includePaymentHistory && !includeSummary && !includeAxisAnalysis) {
+        alert('出力内容を1つ以上選択してください');
         return;
       }
 
@@ -1890,8 +1936,94 @@
           ].join(',') + '\n';
         }
 
+        // 4. 入金履歴
+        if (includePaymentHistory) {
+          const paidItems = filteredData.filter(item => item.paymentStatus === 'paid' || item.paymentAmount > 0);
+          csvContent += '【入金履歴】\n';
+          csvContent += '入金日,管理番号,商品名,販売先,売上金額,入金額,入金ステータス\n';
+          paidItems.forEach(item => {
+            csvContent += [
+              item.paymentDate || item.saleDate || '',
+              item.managementNumber || '',
+              `"${(item.productName || '').replace(/"/g, '""')}"`,
+              item.salePlatform || '',
+              item.saleAmount || 0,
+              item.paymentAmount || item.saleAmount || 0,
+              getPaymentStatusText(item.paymentStatus)
+            ].join(',') + '\n';
+          });
+          csvContent += '\n';
+        }
+
+        // 5. 軸分析データ
+        if (includeAxisAnalysis) {
+          const axisLabels = {
+            brand: 'ブランド別',
+            categoryMajor: '大カテゴリ別',
+            categoryMiddle: '中カテゴリ別',
+            itemName: 'アイテム名別',
+            condition: '状態別',
+            size: 'サイズ別',
+            salePlatform: '販売先別'
+          };
+
+          csvContent += `【軸分析データ - ${axisLabels[axisType] || axisType}】\n`;
+          csvContent += '項目名,仕入数,販売数,消化率,総売上,総利益,平均利益率,平均在庫日数\n';
+
+          // 軸分析データを集計
+          const axisData = {};
+          filteredData.forEach(item => {
+            let key = '';
+            switch (axisType) {
+              case 'brand': key = item.brand || '不明'; break;
+              case 'categoryMajor': key = item.categoryMajor || '不明'; break;
+              case 'categoryMiddle': key = item.categoryMiddle || '不明'; break;
+              case 'itemName': key = item.itemName || '不明'; break;
+              case 'condition': key = item.condition || '不明'; break;
+              case 'size': key = item.size || '不明'; break;
+              case 'salePlatform': key = item.salePlatform || '不明'; break;
+              default: key = '不明';
+            }
+
+            if (!axisData[key]) {
+              axisData[key] = { purchaseCount: 0, salesCount: 0, totalSales: 0, totalProfit: 0, totalDays: 0 };
+            }
+            axisData[key].purchaseCount++;
+            if (item.saleDate) {
+              axisData[key].salesCount++;
+              axisData[key].totalSales += item.saleAmount || 0;
+              axisData[key].totalProfit += item.finalProfit || 0;
+              // 在庫日数（出品日から販売日まで）
+              if (item.listingDate && item.saleDate) {
+                const days = Math.floor((new Date(item.saleDate) - new Date(item.listingDate)) / (1000 * 60 * 60 * 24));
+                axisData[key].totalDays += days;
+              }
+            }
+          });
+
+          // CSVに出力
+          Object.keys(axisData).sort((a, b) => axisData[b].totalProfit - axisData[a].totalProfit).forEach(key => {
+            const d = axisData[key];
+            const sellThrough = d.purchaseCount > 0 ? (d.salesCount / d.purchaseCount * 100).toFixed(1) : '0.0';
+            const avgProfitRate = d.totalSales > 0 ? (d.totalProfit / d.totalSales * 100).toFixed(1) : '0.0';
+            const avgDays = d.salesCount > 0 ? Math.round(d.totalDays / d.salesCount) : '-';
+
+            csvContent += [
+              `"${key.replace(/"/g, '""')}"`,
+              d.purchaseCount,
+              d.salesCount,
+              sellThrough + '%',
+              d.totalSales,
+              d.totalProfit,
+              avgProfitRate + '%',
+              avgDays
+            ].join(',') + '\n';
+          });
+          csvContent += '\n';
+        }
+
         // ファイル名
-        const fileName = `売上帳_${startDate}_${endDate}.csv`;
+        const fileName = `REBORN_データエクスポート_${startDate}_${endDate}.csv`;
 
         // BOM付きUTF-8でダウンロード
         const bom = '\uFEFF';
@@ -3117,34 +3249,6 @@
           <td>${avgDays}日</td>
         </tr>
       `;
-    }
-
-    /**
-     * CSVエクスポート
-     */
-    function exportPerformanceCSV() {
-      if (!currentPerformanceData || currentPerformanceData.length === 0) {
-        alert('エクスポートするデータがありません');
-        return;
-      }
-
-      const axis = document.getElementById('performanceAxis');
-      const axisLabel = axis.options[axis.selectedIndex].text;
-      const startDate = document.getElementById('perfStartDate').value || '2020-01-01';
-      const endDate = document.getElementById('perfEndDate').value || '2099-12-31';
-
-      let csv = '\uFEFF';
-      csv += '項目名,仕入数,販売数,消化率(%),総売上,売上シェア(%),総利益,利益率(%),ROI(%),平均在庫日数\n';
-
-      currentPerformanceData.forEach(item => {
-        csv += `"${item.name}",${item.purchaseCount},${item.salesCount},${item.consumptionRate.toFixed(1)},${item.salesAmount},${(item.salesShare || 0).toFixed(1)},${item.finalProfit},${item.profitRate.toFixed(1)},${(item.roi || 0).toFixed(1)},${item.avgDays}\n`;
-      });
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `軸分析_${axisLabel}_${startDate}_${endDate}.csv`;
-      link.click();
     }
 
     /**
