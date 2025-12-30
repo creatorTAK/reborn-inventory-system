@@ -238,19 +238,16 @@ window.CONDITION_TO_RANK_MAP = CONDITION_TO_RANK_MAP;
       }
     }
 
-    // ランク（仕入時に選択されたランクを反映）
+    // ランク（レガシーデータ互換：現在は商品の状態から自動連動）
     if (slotData.rank) {
-      const rankSelect = document.getElementById('ランク');
-      if (rankSelect) {
-        // ランクマスタがロードされるまで少し待ってから設定
-        setTimeout(() => {
-          rankSelect.value = slotData.rank;
-          console.log('📦 [v315] ランク設定:', slotData.rank);
-          // 商品説明プレビュー更新
-          if (typeof window.onRankChange === 'function') {
-            window.onRankChange();
-          }
-        }, 300);
+      const rankHidden = document.getElementById('ランク');
+      if (rankHidden) {
+        rankHidden.value = slotData.rank;
+        console.log('📦 [v315] ランク設定（レガシー）:', slotData.rank);
+        // 商品説明プレビュー更新
+        if (typeof updateDescriptionFromDetail === 'function') {
+          updateDescriptionFromDetail();
+        }
       }
     }
 
@@ -2860,18 +2857,16 @@ window.continueProductRegistration = function() {
   }
   
   /**
-   * ランク変更時のハンドラ
+   * ランク変更時のハンドラ（レガシー互換）
+   * ※ 現在はonConditionChangeで商品の状態からランクが自動連動
    */
   window.onRankChange = function() {
-    const rankSelect = document.getElementById('ランク');
-    if (!rankSelect) return;
-    
-    const selectedOption = rankSelect.options[rankSelect.selectedIndex];
-    const rankCode = rankSelect.value;
-    const rankDescription = selectedOption ? selectedOption.dataset.description : '';
-    
-    console.log(`[Rank] ランク変更: ${rankCode}`, rankDescription);
-    
+    // hidden input からランク値を取得
+    const rankHidden = document.getElementById('ランク');
+    const rankCode = rankHidden ? rankHidden.value : '';
+
+    console.log(`[Rank] ランク変更（レガシー）: ${rankCode}`);
+
     // 商品説明プレビューを更新
     if (typeof updateDescriptionFromDetail === 'function') {
       updateDescriptionFromDetail();
@@ -2882,17 +2877,31 @@ window.continueProductRegistration = function() {
    * 現在選択されているランク情報を取得
    */
   function getSelectedRankInfo() {
-    const rankSelect = document.getElementById('ランク');
-    if (!rankSelect || !rankSelect.value) {
-      return null;
+    // ランクは商品の状態から自動連動（onConditionChangeで設定）
+    if (window.currentConditionRank) {
+      return {
+        code: window.currentConditionRank.code,
+        name: window.currentConditionRank.name,
+        description: window.currentConditionRank.description || ''
+      };
     }
     
-    const selectedOption = rankSelect.options[rankSelect.selectedIndex];
-    return {
-      code: rankSelect.value,
-      name: selectedOption ? selectedOption.textContent : '',
-      description: selectedOption ? selectedOption.dataset.description : ''
-    };
+    // フォールバック: hidden inputから直接取得
+    const rankHidden = document.getElementById('ランク');
+    if (rankHidden && rankHidden.value) {
+      const rankInfo = CONDITION_TO_RANK_MAP[Object.keys(CONDITION_TO_RANK_MAP).find(
+        key => CONDITION_TO_RANK_MAP[key].code === rankHidden.value
+      )];
+      if (rankInfo) {
+        return {
+          code: rankInfo.code,
+          name: rankInfo.name,
+          description: ''
+        };
+      }
+    }
+    
+    return null;
   }
   
   // グローバルに公開
@@ -10303,25 +10312,29 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
     description: formData['商品の説明'] || '',
     condition: formData['商品の状態'] || '',
     conditionDetail: formData['商品状態詳細'] || formData['商品状態(詳細)'] || '',
-    rank: formData['ランク'] ? {
-      code: formData['ランク'],
-      name: (() => {
-        const rankSelect = document.getElementById('ランク');
-        if (rankSelect && rankSelect.selectedIndex > 0) {
-          const option = rankSelect.options[rankSelect.selectedIndex];
-          return option.textContent.replace(formData['ランク'] + ' - ', '');
+    rank: (() => {
+      // ランクは商品の状態から自動連動
+      if (window.currentConditionRank) {
+        return {
+          code: window.currentConditionRank.code,
+          name: window.currentConditionRank.name,
+          description: window.currentConditionRank.description || ''
+        };
+      }
+      // フォールバック: hidden inputから取得
+      const rankValue = formData['ランク'];
+      if (rankValue) {
+        const rankInfo = Object.values(CONDITION_TO_RANK_MAP).find(r => r.code === rankValue);
+        if (rankInfo) {
+          return {
+            code: rankInfo.code,
+            name: rankInfo.name,
+            description: ''
+          };
         }
-        return '';
-      })(),
-      description: (() => {
-        const rankSelect = document.getElementById('ランク');
-        if (rankSelect && rankSelect.selectedIndex > 0) {
-          const option = rankSelect.options[rankSelect.selectedIndex];
-          return option.dataset.description || '';
-        }
-        return '';
-      })()
-    } : null,
+      }
+      return null;
+    })(),
     itemName: formData['アイテム名'] || '',
     size: {
       display: formData['サイズ'] || '',
