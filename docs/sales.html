@@ -463,41 +463,22 @@
       <div class="tab-pane fade show active" id="sales-content" role="tabpanel">
         <!-- フィルタ -->
         <div class="filter-section">
-          <!-- 期間プリセット -->
-          <div class="mb-2">
-            <label class="form-label mb-1 small fw-bold"><i class="bi bi-calendar3"></i> 期間:</label>
-            <div class="d-flex flex-wrap gap-1">
-              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="today">今日</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="week">今週</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm period-preset active" data-period="month">今月</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="lastMonth">先月</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="quarter">今四半期</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="year">今年</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="all">全期間</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm period-preset" data-period="custom">カスタム</button>
+          <!-- 期間選択（プルダウン + カレンダー） -->
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label mb-1 small fw-bold"><i class="bi bi-calendar3"></i> 期間</label>
+              <select class="form-select form-select-sm" id="salesPeriodSelect" onchange="onSalesPeriodChange()">
+                <option value="today">今日</option>
+                <option value="week">今週</option>
+                <option value="month" selected>今月</option>
+                <option value="lastMonth">先月</option>
+                <option value="quarter">今四半期</option>
+                <option value="year">今年</option>
+                <option value="all">全期間</option>
+              </select>
             </div>
-          </div>
-          <!-- カスタム日付範囲（初期非表示） -->
-          <div class="row g-2 align-items-center mb-2" id="customDateRange" style="display: none;">
-            <div class="col-auto">
-              <label class="form-label mb-0 small">開始:</label>
-            </div>
-            <div class="col">
-              <input type="date" class="form-control form-control-sm" id="salesStartDate" onchange="loadSalesData()">
-            </div>
-            <div class="col-auto">
-              <label class="form-label mb-0 small">終了:</label>
-            </div>
-            <div class="col">
-              <input type="date" class="form-control form-control-sm" id="salesEndDate" onchange="loadSalesData()">
-            </div>
-          </div>
-          <!-- 販売先フィルタ -->
-          <div class="row g-2 align-items-center">
-            <div class="col-auto">
-              <label class="form-label mb-0 small fw-bold">販売先:</label>
-            </div>
-            <div class="col">
+            <div class="col-6">
+              <label class="form-label mb-1 small fw-bold">販売先</label>
               <select class="form-select form-select-sm" id="salesPlatformFilter" onchange="loadSalesData()">
                 <option value="">すべて</option>
                 <option value="メルカリ">メルカリ</option>
@@ -506,8 +487,16 @@
                 <option value="Yahoo!フリマ">Yahoo!フリマ</option>
               </select>
             </div>
-            <div class="col-auto">
-              <span class="text-muted small" id="periodDisplay"></span>
+          </div>
+          <!-- 日付範囲（常に表示） -->
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label mb-1 small">開始日</label>
+              <input type="date" class="form-control form-control-sm" id="salesStartDate" onchange="loadSalesData()">
+            </div>
+            <div class="col-6">
+              <label class="form-label mb-1 small">終了日</label>
+              <input type="date" class="form-control form-control-sm" id="salesEndDate" onchange="loadSalesData()">
             </div>
           </div>
         </div>
@@ -1418,47 +1407,40 @@
       }
     }
 
+    /**
+     * 売上一覧: 期間プルダウン変更時の処理
+     */
+    function onSalesPeriodChange() {
+      const period = document.getElementById('salesPeriodSelect').value;
+      currentPeriodPreset = period;
+      const { startDate, endDate } = calculateDateRange(period);
+
+      // 日付入力フィールドに反映
+      document.getElementById('salesStartDate').value = startDate;
+      document.getElementById('salesEndDate').value = endDate;
+
+      loadSalesData();
+    }
+
     function initializePage() {
       // 入金日のデフォルト（日本時間）
       document.getElementById('paymentDate').value = getJSTToday();
 
-      // カスタム日付のデフォルト値（日本時間）
-      const monthStart = getJSTMonth() + '-01';
-      document.getElementById('salesStartDate').value = monthStart;
-      document.getElementById('salesEndDate').value = getJSTToday();
-
-      // 期間プリセットボタンのイベント設定（売上一覧用）
-      document.querySelectorAll('.period-preset').forEach(btn => {
-        btn.addEventListener('click', function() {
-          const preset = this.dataset.period;
-          currentPeriodPreset = preset;
-
-          // アクティブ状態の切り替え
-          document.querySelectorAll('.period-preset').forEach(b => b.classList.remove('active'));
-          this.classList.add('active');
-
-          // カスタム日付範囲の表示/非表示
-          document.getElementById('customDateRange').style.display = preset === 'custom' ? 'flex' : 'none';
-
-          loadSalesData();
-        });
-      });
+      // 売上一覧の期間初期化（プルダウンの選択値に基づいて日付設定）
+      onSalesPeriodChange();
 
       // 分析タブの期間プリセットボタン設定
       initAnalysisPeriodPresets();
-
-      loadSalesData();
     }
 
     async function loadSalesData() {
       showLoading();
 
       try {
-        const { startDate, endDate } = calculateDateRange(currentPeriodPreset);
+        // 日付入力フィールドから直接取得
+        const startDate = document.getElementById('salesStartDate').value || '';
+        const endDate = document.getElementById('salesEndDate').value || '';
         const platform = document.getElementById('salesPlatformFilter').value;
-
-        // 期間表示を更新
-        document.getElementById('periodDisplay').textContent = getPeriodDisplayText(currentPeriodPreset, startDate, endDate);
 
         currentSalesData = await SalesApi.getSalesData(startDate, endDate, platform);
 
