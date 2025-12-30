@@ -113,8 +113,8 @@ function onConditionChange() {
   }
 
   // 説明文プレビューを更新
-  if (typeof updateDescriptionFromDetail === 'function') {
-    updateDescriptionFromDetail();
+  if (typeof window.updateDescriptionFromDetail === 'function') {
+    window.updateDescriptionFromDetail();
   }
 
   // 商品の状態に応じたボタン表示更新（既存機能）
