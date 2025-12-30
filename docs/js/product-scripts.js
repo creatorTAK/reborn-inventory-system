@@ -6403,7 +6403,7 @@ window.continueProductRegistration = function() {
           if (detailText) {
             const rank = window.currentConditionRank;
             if (rank) {
-              detailSection = `商品状態(詳細)：${rank.code}\n${detailText}\n\n`;
+              detailSection = `商品状態(詳細)：\n状態ランク${rank.code}\n${detailText}\n\n`;
             } else {
               detailSection = `商品状態(詳細)：\n${detailText}\n\n`;
             }
