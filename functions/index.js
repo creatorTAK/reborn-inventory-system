@@ -2147,6 +2147,9 @@ exports.dailyInventoryAgingCheck = onSchedule({
     let warningTasksCreated = 0;
     let actionTasksCreated = 0;
 
+    // 通知対象ユーザーを収集（ユーザーごとのアラート数を集計）
+    const userAlerts = {}; // { email: { actionCount: 0, warningCount: 0, userName: '' } }
+
     for (const productDoc of productsSnapshot.docs) {
       const product = productDoc.data();
       const productId = productDoc.id;
@@ -2222,6 +2225,15 @@ exports.dailyInventoryAgingCheck = onSchedule({
         actionTasksCreated++;
         console.log(`🔴 [${product.managementNumber}] 対策タスク作成 (${agingDays}日)`);
 
+        // 通知対象に追加
+        if (!userAlerts[assigneeEmail]) {
+          // ユーザー名を取得
+          const userDoc = await db.collection('users').doc(assigneeEmail).get();
+          const userName = userDoc.exists ? (userDoc.data().displayName || userDoc.data().name || assigneeEmail.split('@')[0]) : assigneeEmail.split('@')[0];
+          userAlerts[assigneeEmail] = { actionCount: 0, warningCount: 0, userName };
+        }
+        userAlerts[assigneeEmail].actionCount++;
+
         // 警告タスクがあれば完了にする
         if (existingWarning) {
           await db.collection('userTasks')
@@ -2256,16 +2268,83 @@ exports.dailyInventoryAgingCheck = onSchedule({
 
         warningTasksCreated++;
         console.log(`🟡 [${product.managementNumber}] 警告タスク作成 (${agingDays}日)`);
+
+        // 通知対象に追加
+        if (!userAlerts[assigneeEmail]) {
+          const userDoc = await db.collection('users').doc(assigneeEmail).get();
+          const userName = userDoc.exists ? (userDoc.data().displayName || userDoc.data().name || assigneeEmail.split('@')[0]) : assigneeEmail.split('@')[0];
+          userAlerts[assigneeEmail] = { actionCount: 0, warningCount: 0, userName };
+        }
+        userAlerts[assigneeEmail].warningCount++;
+      }
+    }
+
+    // 📢 プッシュ通知を送信（アラートがあるユーザーのみ）
+    const usersToNotify = Object.entries(userAlerts).filter(([_, data]) => data.actionCount > 0 || data.warningCount > 0);
+
+    if (usersToNotify.length > 0) {
+      console.log(`🔔 [dailyInventoryAgingCheck] 通知送信開始: ${usersToNotify.length}人`);
+
+      for (const [userEmail, alertData] of usersToNotify) {
+        try {
+          // ユーザーのデバイストークンを取得
+          const devicesSnapshot = await db.collection('users').doc(userEmail).collection('devices')
+            .where('active', '==', true)
+            .get();
+
+          if (devicesSnapshot.empty) {
+            console.log(`⏭️ [${userEmail}] アクティブデバイスなし - スキップ`);
+            continue;
+          }
+
+          // 通知内容を作成
+          let title = '📦 滞留在庫アラート';
+          let body = '';
+
+          if (alertData.actionCount > 0 && alertData.warningCount > 0) {
+            body = `要対策: ${alertData.actionCount}件、要確認: ${alertData.warningCount}件の滞留商品があります`;
+          } else if (alertData.actionCount > 0) {
+            body = `${alertData.actionCount}件の商品が30日以上滞留しています。値下げ等の対策をご検討ください`;
+          } else {
+            body = `${alertData.warningCount}件の商品が14日以上滞留しています`;
+          }
+
+          // FCM送信
+          const tokens = [];
+          devicesSnapshot.forEach(doc => {
+            const token = doc.data().fcmToken;
+            if (token) tokens.push(token);
+          });
+
+          if (tokens.length > 0) {
+            const message = {
+              notification: { title, body },
+              data: {
+                type: 'inventory_aging',
+                actionCount: String(alertData.actionCount),
+                warningCount: String(alertData.warningCount),
+                url: '/todo_list.html'
+              },
+              tokens: tokens
+            };
+
+            const response = await messaging.sendEachForMulticast(message);
+            console.log(`✅ [${userEmail}] 通知送信: 成功${response.successCount}件, 失敗${response.failureCount}件`);
+          }
+        } catch (notifyError) {
+          console.error(`❌ [${userEmail}] 通知送信エラー:`, notifyError.message);
+        }
       }
     }
 
     const duration = Date.now() - startTime;
-    console.log(`✅ [dailyInventoryAgingCheck] 完了: 警告${warningTasksCreated}件, 対策${actionTasksCreated}件 (${duration}ms)`);
+    console.log(`✅ [dailyInventoryAgingCheck] 完了: 警告${warningTasksCreated}件, 対策${actionTasksCreated}件, 通知${usersToNotify.length}件 (${duration}ms)`);
 
     return {
       success: true,
       warningTasksCreated,
-      actionTasksCreated
+      actionTasksCreated,
+      notificationsSent: usersToNotify.length
     };
 
   } catch (error) {
