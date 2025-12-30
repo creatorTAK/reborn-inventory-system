@@ -346,18 +346,90 @@ window.switchBusinessSubGroup = function(subGroupId) {
       firstTab.classList.add('active');
       
       // サブグループに応じてデフォルトマスタをロード
-      const defaultMasters = {
-        delivery: 'shipping',
-        material: 'packaging',
-        partner: 'supplier',
-        system: 'rank'
-      };
-      loadMaster('business', defaultMasters[subGroupId] || 'shipping');
+      if (subGroupId === 'system') {
+        loadManagementNumberMaster();
+      } else {
+        const defaultMasters = {
+          delivery: 'shipping',
+          material: 'packaging',
+          partner: 'supplier'
+        };
+        loadMaster('business', defaultMasters[subGroupId] || 'shipping');
+      }
     }
   }
   
   console.log(`🔄 [Master Manager] 業務サブグループ切り替え: ${subGroupId}`);
 };
+
+// 管理番号マスタの現在のタイプ（rank または categoryCode）
+let currentManagementNumberType = 'rank';
+
+/**
+ * 管理番号マスタをロード（ドロップダウンセレクター付き）
+ */
+window.loadManagementNumberMaster = function() {
+  console.log(`📋 [Master Manager] 管理番号マスタロード: ${currentManagementNumberType}`);
+  
+  // ドロップダウンセレクターを表示
+  showManagementNumberSelector();
+  
+  // 現在のタイプに応じてマスタをロード
+  loadMaster('business', currentManagementNumberType);
+};
+
+/**
+ * 管理番号タイプを切り替え
+ */
+window.switchManagementNumberType = function(type) {
+  if (currentManagementNumberType === type) return;
+  
+  currentManagementNumberType = type;
+  console.log(`🔄 [Master Manager] 管理番号タイプ切り替え: ${type}`);
+  
+  // マスタをロード
+  loadMaster('business', type);
+};
+
+/**
+ * 管理番号セレクターを表示
+ */
+function showManagementNumberSelector() {
+  const searchContainer = document.getElementById('searchContainer');
+  if (!searchContainer) return;
+  
+  // 既存のセレクターを削除
+  const existingSelector = document.getElementById('managementNumberSelector');
+  if (existingSelector) {
+    existingSelector.remove();
+  }
+  
+  // セレクターHTMLを作成
+  const selectorHtml = `
+    <div id="managementNumberSelector" class="master-options-dropdown-selector" style="max-width: 800px; margin: 0 auto 16px; padding: 0 16px;">
+      <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+        <label>管理番号設定</label>
+        <select class="form-select" onchange="switchManagementNumberType(this.value)">
+          <option value="rank" ${currentManagementNumberType === 'rank' ? 'selected' : ''}>ランク（価格帯区分）</option>
+          <option value="categoryCode" ${currentManagementNumberType === 'categoryCode' ? 'selected' : ''}>カテゴリコード</option>
+        </select>
+      </div>
+    </div>
+  `;
+  
+  // 検索バーの前に挿入
+  searchContainer.insertAdjacentHTML('beforebegin', selectorHtml);
+}
+
+/**
+ * 管理番号セレクターを非表示
+ */
+function hideManagementNumberSelector() {
+  const selector = document.getElementById('managementNumberSelector');
+  if (selector) {
+    selector.remove();
+  }
+}
 
 /**
  * イベントリスナー設定
@@ -392,6 +464,11 @@ async function loadMaster(category, type) {
 
   // 全マスタを汎用Firestoreエンジンで表示（GAS版UI廃止）
   hideGasMasterUI();
+  
+  // 管理番号以外のマスタではセレクターを非表示
+  if (type !== 'rank' && type !== 'categoryCode') {
+    hideManagementNumberSelector();
+  }
 
   // タブグループの表示切り替え
   const productTabs = document.getElementById('product-master-tabs');
