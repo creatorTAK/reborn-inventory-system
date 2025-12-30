@@ -43,7 +43,79 @@ async function goBack() {
     }
   });
 
-console.log('[product.html] ✅ Script loaded - Version @315-SlotAutoFill');
+console.log('[product.html] ✅ Script loaded - Version @316-ConditionRank');
+
+// ====================================
+// 商品の状態 → ランク マッピング
+// ====================================
+const CONDITION_TO_RANK_MAP = {
+  // メルカリ・共通
+  '新品、未使用': { code: 'S', name: '新品同様' },
+  '未使用に近い': { code: 'A', name: '非常に良い' },
+  '目立った傷や汚れなし': { code: 'B', name: '良い' },
+  'やや傷や汚れあり': { code: 'C', name: 'やや難あり' },
+  '傷や汚れあり': { code: 'D', name: '難あり' },
+  // 追加パターン
+  '新品・未使用': { code: 'S', name: '新品同様' },
+  '未使用': { code: 'S', name: '新品同様' },
+  '新品': { code: 'S', name: '新品同様' }
+};
+
+// 現在のランク（商品の状態から自動設定）
+window.currentConditionRank = null;
+
+/**
+ * 商品の状態からランクを取得
+ * @param {string} condition - 商品の状態
+ * @returns {object|null} - { code: 'S', name: '新品同様' } または null
+ */
+function getConditionRank(condition) {
+  if (!condition) return null;
+  return CONDITION_TO_RANK_MAP[condition] || null;
+}
+
+/**
+ * 商品の状態変更時にランクを更新
+ */
+function onConditionChange() {
+  const conditionSelect = document.getElementById('商品の状態');
+  if (!conditionSelect) return;
+
+  const condition = conditionSelect.value;
+  window.currentConditionRank = getConditionRank(condition);
+
+  // ランク表示フィールドを更新
+  const rankDisplay = document.getElementById('ランク表示');
+  const rankHidden = document.getElementById('ランク');
+
+  if (window.currentConditionRank) {
+    const rankText = `${window.currentConditionRank.code}: ${window.currentConditionRank.name}`;
+    if (rankDisplay) rankDisplay.value = rankText;
+    if (rankHidden) rankHidden.value = window.currentConditionRank.code;
+    console.log(`✅ [ランク連動] ${condition} → ${rankText}`);
+  } else {
+    if (rankDisplay) rankDisplay.value = '';
+    if (rankHidden) rankHidden.value = '';
+    if (condition) {
+      console.log(`ℹ️ [ランク連動] 商品の状態「${condition}」に対応するランクが見つかりません`);
+    }
+  }
+
+  // 説明文プレビューを更新（updateDescriptionPreview が存在する場合）
+  if (typeof updateDescriptionPreview === 'function') {
+    updateDescriptionPreview();
+  }
+
+  // 商品の状態に応じたボタン表示更新（既存機能）
+  if (typeof toggleConditionButtons === 'function') {
+    toggleConditionButtons();
+  }
+}
+
+// グローバルに公開
+window.getConditionRank = getConditionRank;
+window.onConditionChange = onConditionChange;
+window.CONDITION_TO_RANK_MAP = CONDITION_TO_RANK_MAP;
 
   // ブランドキャッシュをグローバルに初期化
   window.brandsCache = null;
@@ -6301,7 +6373,13 @@ window.continueProductRegistration = function() {
           const conditionValue = conditionSelect ? (conditionSelect.value || '').trim() : '';
           let conditionSection = '';
           if (conditionValue) {
-            conditionSection = `商品の状態：${conditionValue}\n\n`;
+            // ランク情報を取得
+            const rank = window.currentConditionRank;
+            if (rank) {
+              conditionSection = `商品の状態：${conditionValue}【ランク${rank.code}】\n\n`;
+            } else {
+              conditionSection = `商品の状態：${conditionValue}\n\n`;
+            }
           }
 
           // 商品状態詳細を取得

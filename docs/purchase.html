@@ -2801,7 +2801,6 @@
             brand: itemData?.brand || '',
             brandKana: itemData?.brandKana || '',
             condition: itemData?.condition || '',
-            rank: itemData?.rank || '',
             accessories: itemData?.accessories || [],
             note: itemData?.note || '',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -3977,7 +3976,6 @@
     let entryItems = []; // 個別入力の商品リスト
     let entryCategoryRows = []; // 7階層カテゴリマスタデータ
     let entryMasterOptions = {}; // マスターオプション（サイズ等）
-    let entryRankOptions = []; // ランクマスタ（conditionRanksから読み込み）
     let entryGeneratedQRData = [];
     let currentEntryPrintMode = 'label';
 
@@ -4407,9 +4405,6 @@
         window.PurchaseApi.getCategoryMaster(),
         window.PurchaseApi.getMasterOptions()
       ]);
-
-      // ランクマスタ読み込み（await で待機）
-      await loadEntryRankOptions();
 
       // 仕入先マスタ
       if (suppliersResult.status === 'fulfilled') {
@@ -5811,36 +5806,6 @@
       return sizeOptions.map(s => `<option value="${s}">${s}</option>`).join('');
     }
 
-    // ランク選択肢を生成（conditionRanksから取得）
-    function getEntryRankOptions() {
-      if (!entryRankOptions || entryRankOptions.length === 0) {
-        return '';
-      }
-      return entryRankOptions.map(r => `<option value="${r.code}" data-description="${r.description || ''}">${r.code} - ${r.name || ''}</option>`).join('');
-    }
-
-    // ランクマスタを読み込み
-    async function loadEntryRankOptions() {
-      try {
-        const snapshot = await db.collection('conditionRanks').orderBy('sortOrder', 'asc').get();
-        entryRankOptions = [];
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          entryRankOptions.push({
-            id: doc.id,
-            code: data.code || '',
-            name: data.name || '',
-            description: data.description || '',
-            minPrice: data.minPrice || 0,
-            maxPrice: data.maxPrice || 0
-          });
-        });
-        console.log(`✅ [仕入登録] ランクマスタ読み込み完了: ${entryRankOptions.length}件`);
-      } catch (error) {
-        console.error('[仕入登録] ランクマスタ読み込みエラー:', error);
-      }
-    }
-
     function addEntryItem(skipScroll = false) {
       const itemId = Date.now();
       const itemNumber = entryItems.length + 1;
@@ -5875,7 +5840,6 @@
         },
         size: '',             // サイズ
         condition: '',        // 商品の状態
-        rank: '',             // ランク
         brand: '',            // ブランド
         brandKana: '',        // ブランド(カナ)
         accessories: [],      // 付属品
@@ -6011,15 +5975,6 @@
               <select class="form-select" id="entry-condition-${itemId}" onchange="updateEntryItem(${itemId})">
                 <option value="">--選択--</option>
                 ${INSPECTION_CONDITIONS.map(c => `<option value="${c}">${c}</option>`).join('')}
-              </select>
-            </div>
-
-            <!-- 3.5. ランク -->
-            <div class="mt-2">
-              <label class="form-label">ランク</label>
-              <select class="form-select" id="entry-rank-${itemId}" onchange="updateEntryItem(${itemId})">
-                <option value="">--選択--</option>
-                ${getEntryRankOptions()}
               </select>
             </div>
 
@@ -6387,7 +6342,6 @@
         item.brand = document.getElementById(`entry-brand-${itemId}`)?.value || '';
         item.brandKana = document.getElementById(`entry-brand-kana-${itemId}`)?.value || '';
         item.condition = document.getElementById(`entry-condition-${itemId}`)?.value || '';
-        item.rank = document.getElementById(`entry-rank-${itemId}`)?.value || '';
         item.note = document.getElementById(`entry-note-${itemId}`)?.value || '';
         // 付属品（チェックされたもの）
         const accessoriesContainer = document.getElementById(`entry-accessories-${itemId}`);
