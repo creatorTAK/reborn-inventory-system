@@ -1585,10 +1585,19 @@ async function renderSimpleListUI() {
 
   const collection = currentMasterConfig.collection;
   const displayField = currentMasterConfig.displayField || 'name';
+  const displayFormat = currentMasterConfig.displayFormat; // カスタム表示形式（例: '{code}: {name}'）
   const orderField = currentMasterConfig.orderField;
   const label = currentMasterConfig.label;
   const icon = currentMasterConfig.icon || 'bi-list';
   const placeholder = currentMasterConfig.placeholder || '新しい項目を入力';
+
+  // displayFormat適用のヘルパー関数
+  const formatDisplay = (item) => {
+    if (displayFormat) {
+      return displayFormat.replace(/\{(\w+)\}/g, (match, field) => item[field] || '');
+    }
+    return item[displayField] || '';
+  };
 
   try {
     // Firestoreからデータ取得（orderByはオプショナル）
@@ -1635,8 +1644,8 @@ async function renderSimpleListUI() {
                 <p>まだ項目がありません</p>
               </div>
             ` : items.map((item, index) => `
-              <div class="master-options-item" data-id="${item.id}" data-index="${index}" data-text="${escapeHtml((item[displayField] || '').toLowerCase())}">
-                <span class="item-text">${escapeHtml(item[displayField] || '')}</span>
+              <div class="master-options-item" data-id="${item.id}" data-index="${index}" data-text="${escapeHtml((formatDisplay(item) || '').toLowerCase())}">
+                <span class="item-text">${escapeHtml(formatDisplay(item))}</span>
                 <div class="item-actions">
                   <button class="btn-icon btn-edit" onclick="editSimpleListItem('${item.id}', ${index})" title="編集">
                     <i class="bi bi-pencil"></i>

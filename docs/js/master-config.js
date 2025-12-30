@@ -308,6 +308,7 @@ const masterCategories = {
         type: 'simpleList',
         description: '商品状態ランク（S/A/B/C/D）を管理 - 説明文生成に使用',
         displayField: 'name',
+        displayFormat: '{code}: {name}',  // カスタム表示形式
         orderField: 'sortOrder',
         icon: 'bi-star-half',
         placeholder: '例: 新品同様',
