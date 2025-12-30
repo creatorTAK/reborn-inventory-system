@@ -2828,6 +2828,12 @@ async function performSearch(query) {
         allMasterData = results || [];
         filteredMasterData = results || [];
         console.log(`✅ [Master Manager] IndexedDB検索結果: ${allMasterData.length}件`);
+
+        // 統計情報を即時更新（検索結果件数を表示）
+        const statsText = document.getElementById('statsText');
+        if (statsText && results && results.length > 0) {
+          statsText.textContent = `検索結果: ${results.length.toLocaleString()}件`;
+        }
       } catch (error) {
         console.error('❌ [Master Manager] IndexedDB検索エラー:', error);
         // フォールバック: Firestore検索
@@ -4118,11 +4124,16 @@ function updateStats() {
   const hasSearchQuery = searchInput && searchInput.value.trim().length > 0;
 
   if (statsText) {
+    // 検索結果件数（filteredMasterDataから取得）
     const resultCount = filteredMasterData.length;
 
     if (hasSearchQuery && resultCount > 0) {
-      // 検索結果がある場合のみ「検索結果:」を表示
+      // 検索結果がある場合
       statsText.textContent = `検索結果: ${resultCount.toLocaleString()}件`;
+      if (totalCountEl) totalCountEl.classList.add('hidden');
+    } else if (hasSearchQuery && resultCount === 0) {
+      // 検索したが結果がない場合
+      statsText.textContent = `検索結果: 0件`;
       if (totalCountEl) totalCountEl.classList.add('hidden');
     } else if (resultCount > 0) {
       // 検索なしでデータがある場合は件数のみ表示
