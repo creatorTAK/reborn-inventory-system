@@ -2694,6 +2694,112 @@ window.continueProductRegistration = function() {
     });
   }
 
+  // ========================================
+  // ランクマスタ関連
+  // ========================================
+  
+  // ランクデータをキャッシュ
+  let RANK_OPTIONS = [];
+  
+  /**
+   * ランクマスタをFirestoreから読み込み、セレクトボックスに設定
+   */
+  async function loadRankOptions() {
+    const rankSelect = document.getElementById('ランク');
+    if (!rankSelect) {
+      console.log('[Rank] ランクセレクトが見つかりません');
+      return;
+    }
+    
+    try {
+      if (!window.db) {
+        console.warn('[Rank] Firestoreが初期化されていません');
+        return;
+      }
+      
+      const snapshot = await window.db.collection('managementRanks')
+        .orderBy('code', 'asc')
+        .get();
+      
+      if (snapshot.empty) {
+        console.log('[Rank] ランクマスタが空です');
+        return;
+      }
+      
+      // オプションをクリアして再構築
+      rankSelect.innerHTML = '<option value="">--選択してください--</option>';
+      
+      RANK_OPTIONS = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        RANK_OPTIONS.push({
+          id: doc.id,
+          code: data.code || '',
+          name: data.name || '',
+          description: data.description || '',
+          minPrice: data.minPrice || 0,
+          maxPrice: data.maxPrice || 0
+        });
+        
+        // オプションを追加（コード + 名前を表示）
+        const option = document.createElement('option');
+        option.value = data.code || '';
+        option.textContent = `${data.code || ''} - ${data.name || ''}`;
+        option.dataset.rankId = doc.id;
+        option.dataset.description = data.description || '';
+        rankSelect.appendChild(option);
+      });
+      
+      console.log(`✅ [Rank] ランクマスタ読み込み完了: ${RANK_OPTIONS.length}件`);
+      
+      // グローバルに公開（仕入登録等で使用）
+      window.RANK_OPTIONS = RANK_OPTIONS;
+      
+    } catch (error) {
+      console.error('[Rank] ランクマスタ読み込みエラー:', error);
+    }
+  }
+  
+  /**
+   * ランク変更時のハンドラ
+   */
+  window.onRankChange = function() {
+    const rankSelect = document.getElementById('ランク');
+    if (!rankSelect) return;
+    
+    const selectedOption = rankSelect.options[rankSelect.selectedIndex];
+    const rankCode = rankSelect.value;
+    const rankDescription = selectedOption ? selectedOption.dataset.description : '';
+    
+    console.log(`[Rank] ランク変更: ${rankCode}`, rankDescription);
+    
+    // 商品説明プレビューを更新
+    if (typeof updateDescriptionFromDetail === 'function') {
+      updateDescriptionFromDetail();
+    }
+  };
+  
+  /**
+   * 現在選択されているランク情報を取得
+   */
+  function getSelectedRankInfo() {
+    const rankSelect = document.getElementById('ランク');
+    if (!rankSelect || !rankSelect.value) {
+      return null;
+    }
+    
+    const selectedOption = rankSelect.options[rankSelect.selectedIndex];
+    return {
+      code: rankSelect.value,
+      name: selectedOption ? selectedOption.textContent : '',
+      description: selectedOption ? selectedOption.dataset.description : ''
+    };
+  }
+  
+  // グローバルに公開
+  window.loadRankOptions = loadRankOptions;
+  window.getSelectedRankInfo = getSelectedRankInfo;
+
   // 割引情報設定（設定マスタから読み込む）
   // デフォルトは空（Firestoreから読み込む）
   let DISCOUNT_CONFIG = {};  // 空の場合はプレビューに表示されない
@@ -5301,7 +5407,7 @@ window.continueProductRegistration = function() {
 
     // 2. 配置順序が取得できない場合は、デフォルト順序を使用
     if (order.length === 0) {
-      // デフォルト順序（管理番号を含む）
+      // デフォルト順序（管理番号・ランクを含む）
       order = [
         { id: 'brand', enabled: true },
         { id: 'color', enabled: true },
@@ -5309,6 +5415,7 @@ window.continueProductRegistration = function() {
         { id: 'material', enabled: true },
         { id: 'accessories', enabled: true },
         { id: 'condition', enabled: true },
+        { id: 'rank', enabled: true },
         { id: 'aiGeneration', enabled: true },
         { id: 'management', enabled: true },
         { id: 'discount', enabled: true },
@@ -6268,6 +6375,17 @@ window.continueProductRegistration = function() {
           // 付属品テキスト
           const accessoriesText = getAccessoriesInfo();
 
+          // ランク情報を取得
+          let rankSection = '';
+          const rankInfo = typeof getSelectedRankInfo === 'function' ? getSelectedRankInfo() : null;
+          if (rankInfo && rankInfo.code) {
+            rankSection = `ランク：${rankInfo.code}\n`;
+            if (rankInfo.description) {
+              rankSection += `${rankInfo.description}\n`;
+            }
+            rankSection += '\n';
+          }
+
           // 配置順序を取得して説明文を組み立て（配置順序は「配置順序」タブで設定）
           buildDescriptionByOrder({
             brand: brandText,
@@ -6276,6 +6394,7 @@ window.continueProductRegistration = function() {
             condition: detailSection,
             material: materialText,
             accessories: accessoriesText,
+            rank: rankSection,
             management: managementNumberSection,
             aiGeneration: aiGenerationSection,
             discount: discountInfo,
@@ -9061,6 +9180,9 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
         fillSel('配送の方法', opts['配送の方法']||[]);
         fillSel('発送元の地域', opts['発送元の地域']||[]);
         fillSel('発送までの日数', opts['発送までの日数']||[]);
+
+        // ランクマスタを読み込み
+        loadRankOptions();
 
         applyShippingDefaults();
         applyProcureListingDefaults();
