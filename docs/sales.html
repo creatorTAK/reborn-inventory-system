@@ -703,6 +703,61 @@
           </div>
         </div>
 
+        <!-- パフォーマンス指標 -->
+        <div class="sales-table-container mb-3">
+          <h6 class="mb-2 text-info"><i class="bi bi-speedometer2"></i> パフォーマンス指標</h6>
+          <div class="summary-grid">
+            <div class="summary-card">
+              <div class="summary-label">GMROI</div>
+              <div class="summary-value" id="analysis-gmroi">-</div>
+              <div class="small text-muted">目安: 2.5以上</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">セルスルーレート</div>
+              <div class="summary-value" id="analysis-sell-through">-</div>
+              <div class="small text-muted">目安: 60-80%</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">平均ROI</div>
+              <div class="summary-value" id="analysis-avg-roi">-</div>
+              <div class="small text-muted">目安: 30-50%</div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-label">在庫回転率</div>
+              <div class="summary-value" id="analysis-turnover">-</div>
+              <div class="small text-muted">目安: 年4-6回</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 滞留在庫アラート -->
+        <div class="sales-table-container mb-3">
+          <h6 class="mb-2 text-warning"><i class="bi bi-exclamation-triangle"></i> 滞留在庫アラート</h6>
+          <div class="row g-2">
+            <div class="col-4">
+              <div class="alert alert-success mb-0 py-2 text-center">
+                <div class="small">2週間以内</div>
+                <div class="fw-bold" id="aging-2w-count">-件</div>
+                <div class="small" id="aging-2w-value">¥-</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="alert alert-warning mb-0 py-2 text-center">
+                <div class="small">2-4週間</div>
+                <div class="fw-bold" id="aging-4w-count">-件</div>
+                <div class="small" id="aging-4w-value">¥-</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="alert alert-danger mb-0 py-2 text-center">
+                <div class="small">4週間超過</div>
+                <div class="fw-bold" id="aging-6w-count">-件</div>
+                <div class="small" id="aging-6w-value">¥-</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- 売上推移グラフ -->
         <div class="sales-table-container mb-3">
           <h6 class="mb-3"><i class="bi bi-graph-up"></i> <span id="chartTitle">月別売上推移</span></h6>
@@ -832,14 +887,16 @@
                   <th>販売数</th>
                   <th>消化率</th>
                   <th>総売上</th>
+                  <th>売上シェア</th>
                   <th>総利益</th>
                   <th>利益率</th>
+                  <th>ROI</th>
                   <th>在庫日</th>
                 </tr>
               </thead>
               <tbody id="performanceBody">
                 <tr>
-                  <td colspan="8" class="text-center text-muted py-4">
+                  <td colspan="10" class="text-center text-muted py-4">
                     <i class="bi bi-hourglass-split"></i> タブを選択するとデータを読み込みます
                   </td>
                 </tr>
@@ -2343,6 +2400,12 @@
       // 在庫KPIサマリー（商品データから算出 - 現在の状態）
       renderInventoryKPI();
 
+      // パフォーマンス指標（GMROI、セルスルー、ROI、回転率）
+      renderPerformanceMetrics(data);
+
+      // 滞留在庫アラート
+      renderAgingAlert();
+
       // 売上推移グラフ
       renderSalesChart(data);
 
@@ -2384,6 +2447,130 @@
       document.getElementById('analysis-stock-count').textContent = totalStock + '点';
       document.getElementById('analysis-stock-value').textContent = formatCurrency(totalStockValue);
       document.getElementById('analysis-avg-price').textContent = formatCurrency(avgPrice);
+    }
+
+    /**
+     * パフォーマンス指標を計算・描画
+     * GMROI, セルスルーレート, 平均ROI, 在庫回転率
+     */
+    function renderPerformanceMetrics(salesData) {
+      const products = allProductsForAnalysis;
+      const { startDate, endDate } = calculateAnalysisDateRange(analysisPeriodPreset);
+
+      // === GMROI（在庫投資利益率） ===
+      // 計算: 粗利益 / 平均在庫原価
+      const totalProfit = salesData.reduce((sum, item) => sum + (item.finalProfit || 0), 0);
+      const avgInventoryCost = products.reduce((sum, p) => {
+        const qty = parseInt(p.quantity) || 0;
+        const cost = parseFloat(p.purchasePrice) || parseFloat(p.costPrice) || 0;
+        return sum + (qty * cost);
+      }, 0);
+      const gmroi = avgInventoryCost > 0 ? (totalProfit / avgInventoryCost) : 0;
+
+      // === セルスルーレート ===
+      // 計算: 販売数 / (期首在庫 + 仕入数) × 100
+      const soldCount = salesData.length;
+      const purchasedInPeriod = products.filter(p => {
+        const purchaseDate = p.purchase?.date || p.purchaseDate || '';
+        return purchaseDate >= startDate && purchaseDate <= endDate;
+      }).length;
+      // 期首在庫は正確には取得困難なので、現在の総在庫 + 販売数 - 仕入数で近似
+      const currentStock = products.filter(p => p.status !== 'sold' && p.status !== '販売済').length;
+      const estimatedStartingStock = currentStock + soldCount - purchasedInPeriod;
+      const sellThroughDenominator = Math.max(1, estimatedStartingStock + purchasedInPeriod);
+      const sellThroughRate = (soldCount / sellThroughDenominator) * 100;
+
+      // === 平均ROI（投資利益率） ===
+      // 計算: (総利益 / 総仕入原価) × 100
+      const totalCost = salesData.reduce((sum, item) => {
+        return sum + (parseFloat(item.purchasePrice) || parseFloat(item.costPrice) || 0);
+      }, 0);
+      const avgRoi = totalCost > 0 ? (totalProfit / totalCost * 100) : 0;
+
+      // === 在庫回転率 ===
+      // 計算: 売上原価（COGS）/ 平均在庫原価 × 期間係数
+      // ここでは年間換算で計算
+      const cogs = totalCost; // 売上原価 = 販売商品の仕入原価合計
+      // 期間の日数を計算
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const periodDays = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+      const annualFactor = 365 / periodDays;
+      const turnoverRate = avgInventoryCost > 0 ? ((cogs / avgInventoryCost) * annualFactor) : 0;
+
+      // 表示更新
+      const gmroiEl = document.getElementById('analysis-gmroi');
+      gmroiEl.textContent = gmroi.toFixed(2);
+      gmroiEl.className = 'summary-value ' + (gmroi >= 2.5 ? 'positive' : gmroi >= 1.5 ? '' : 'negative');
+
+      const sellThroughEl = document.getElementById('analysis-sell-through');
+      sellThroughEl.textContent = sellThroughRate.toFixed(1) + '%';
+      sellThroughEl.className = 'summary-value ' + (sellThroughRate >= 60 ? 'positive' : sellThroughRate >= 40 ? '' : 'negative');
+
+      const roiEl = document.getElementById('analysis-avg-roi');
+      roiEl.textContent = avgRoi.toFixed(1) + '%';
+      roiEl.className = 'summary-value ' + (avgRoi >= 50 ? 'positive' : avgRoi >= 30 ? '' : 'negative');
+
+      const turnoverEl = document.getElementById('analysis-turnover');
+      turnoverEl.textContent = turnoverRate.toFixed(1) + '回/年';
+      turnoverEl.className = 'summary-value ' + (turnoverRate >= 4 ? 'positive' : turnoverRate >= 2 ? '' : 'negative');
+    }
+
+    /**
+     * 滞留在庫アラートを計算・描画
+     * 出品日からの経過日数で分類
+     */
+    function renderAgingAlert() {
+      const products = allProductsForAnalysis;
+      const today = new Date();
+
+      // 出品中の商品のみ対象
+      const activeProducts = products.filter(p =>
+        (p.status === 'active' || p.status === '出品中') ||
+        (p.quantity > 0 && p.status !== 'sold' && p.status !== '販売済')
+      );
+
+      // 滞留日数で分類
+      const aging = {
+        under2w: { count: 0, value: 0 },
+        w2to4: { count: 0, value: 0 },
+        over4w: { count: 0, value: 0 }
+      };
+
+      activeProducts.forEach(p => {
+        const listingDate = p.listing?.date || p.listingDate || p.purchase?.date || p.purchaseDate || '';
+        if (!listingDate) {
+          // 日付不明は4週超過扱い
+          aging.over4w.count++;
+          aging.over4w.value += parseFloat(p.purchasePrice) || parseFloat(p.costPrice) || 0;
+          return;
+        }
+
+        const listedDate = new Date(listingDate);
+        const daysSinceListing = Math.floor((today - listedDate) / (1000 * 60 * 60 * 24));
+        const cost = parseFloat(p.purchasePrice) || parseFloat(p.costPrice) || 0;
+
+        if (daysSinceListing <= 14) {
+          aging.under2w.count++;
+          aging.under2w.value += cost;
+        } else if (daysSinceListing <= 28) {
+          aging.w2to4.count++;
+          aging.w2to4.value += cost;
+        } else {
+          aging.over4w.count++;
+          aging.over4w.value += cost;
+        }
+      });
+
+      // 表示更新
+      document.getElementById('aging-2w-count').textContent = aging.under2w.count + '件';
+      document.getElementById('aging-2w-value').textContent = formatCurrency(aging.under2w.value);
+
+      document.getElementById('aging-4w-count').textContent = aging.w2to4.count + '件';
+      document.getElementById('aging-4w-value').textContent = formatCurrency(aging.w2to4.value);
+
+      document.getElementById('aging-6w-count').textContent = aging.over4w.count + '件';
+      document.getElementById('aging-6w-value').textContent = formatCurrency(aging.over4w.value);
     }
 
     /**
@@ -2716,14 +2903,19 @@
         }
       });
 
+      // 総売上を計算（売上シェア計算用）
+      const totalSalesAmount = Object.values(axisData).reduce((sum, item) => sum + item.salesAmount, 0);
+
       const result = Object.values(axisData).map(item => ({
         name: item.name,
         purchaseCount: item.purchaseCount,
         salesCount: item.salesCount,
         consumptionRate: item.purchaseCount > 0 ? (item.salesCount / item.purchaseCount) * 100 : 0,
         salesAmount: item.salesAmount,
+        salesShare: totalSalesAmount > 0 ? (item.salesAmount / totalSalesAmount) * 100 : 0,
         finalProfit: item.finalProfit,
         profitRate: item.salesAmount > 0 ? (item.finalProfit / item.salesAmount) * 100 : 0,
+        roi: item.purchaseAmount > 0 ? (item.finalProfit / item.purchaseAmount) * 100 : 0,
         avgDays: item.salesCount > 0 ? Math.round(item.totalDays / item.salesCount) : 0
       }));
 
@@ -2834,7 +3026,7 @@
       if (!data || data.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="8" class="text-center text-muted py-4">
+            <td colspan="10" class="text-center text-muted py-4">
               <i class="bi bi-inbox"></i> データがありません
             </td>
           </tr>
@@ -2843,7 +3035,7 @@
         return;
       }
 
-      const totals = { purchaseCount: 0, salesCount: 0, salesAmount: 0, finalProfit: 0, totalDays: 0 };
+      const totals = { purchaseCount: 0, salesCount: 0, salesAmount: 0, finalProfit: 0, totalDays: 0, totalPurchaseAmount: 0 };
 
       let html = '';
       data.forEach(item => {
@@ -2856,6 +3048,10 @@
         let profitRateClass = 'low';
         if (item.profitRate >= 30) profitRateClass = 'high';
         else if (item.profitRate >= 15) profitRateClass = 'medium';
+
+        let roiClass = 'low';
+        if (item.roi >= 50) roiClass = 'high';
+        else if (item.roi >= 30) roiClass = 'medium';
 
         const barWidth = Math.min(100, item.consumptionRate);
 
@@ -2871,8 +3067,10 @@
               ${item.consumptionRate.toFixed(0)}%
             </td>
             <td>${formatCurrency(item.salesAmount)}</td>
+            <td>${(item.salesShare || 0).toFixed(1)}%</td>
             <td>${formatCurrency(item.finalProfit)}</td>
             <td class="profit-rate ${profitRateClass}">${item.profitRate.toFixed(1)}%</td>
+            <td class="profit-rate ${roiClass}">${(item.roi || 0).toFixed(1)}%</td>
             <td>${item.avgDays}日</td>
           </tr>
         `;
@@ -2891,8 +3089,10 @@
           <td>${totals.salesCount}件</td>
           <td>${totalConsumptionRate.toFixed(0)}%</td>
           <td>${formatCurrency(totals.salesAmount)}</td>
+          <td>100%</td>
           <td>${formatCurrency(totals.finalProfit)}</td>
           <td>${totalProfitRate.toFixed(1)}%</td>
+          <td>-</td>
           <td>${avgDays}日</td>
         </tr>
       `;
@@ -2913,10 +3113,10 @@
       const endDate = document.getElementById('perfEndDate').value || '2099-12-31';
 
       let csv = '\uFEFF';
-      csv += '項目名,仕入数,販売数,消化率(%),総売上,総利益,利益率(%),平均在庫日数\n';
+      csv += '項目名,仕入数,販売数,消化率(%),総売上,売上シェア(%),総利益,利益率(%),ROI(%),平均在庫日数\n';
 
       currentPerformanceData.forEach(item => {
-        csv += `"${item.name}",${item.purchaseCount},${item.salesCount},${item.consumptionRate.toFixed(1)},${item.salesAmount},${item.finalProfit},${item.profitRate.toFixed(1)},${item.avgDays}\n`;
+        csv += `"${item.name}",${item.purchaseCount},${item.salesCount},${item.consumptionRate.toFixed(1)},${item.salesAmount},${(item.salesShare || 0).toFixed(1)},${item.finalProfit},${item.profitRate.toFixed(1)},${(item.roi || 0).toFixed(1)},${item.avgDays}\n`;
       });
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
