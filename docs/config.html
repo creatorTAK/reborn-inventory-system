@@ -3503,8 +3503,7 @@
               </label>
               <select id="配送料の負担" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px; background: white; cursor: pointer;">
                 <option value="">-- 選択してください --</option>
-                <option value="送料込み(出品者負担)">送料込み(出品者負担)</option>
-                <option value="着払い(購入者負担)">着払い(購入者負担)</option>
+                <!-- Firestoreのマスタ管理（配送料の負担）から動的に読み込まれます -->
               </select>
             </div>
 
@@ -3537,9 +3536,7 @@
               </label>
               <select id="発送までの日数" style="width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 16px; background: white; cursor: pointer;">
                 <option value="">-- 選択してください --</option>
-                <option value="1~2日で発送">1~2日で発送</option>
-                <option value="2~3日で発送">2~3日で発送</option>
-                <option value="4~7日で発送">4~7日で発送</option>
+                <!-- Firestoreのマスタ管理（発送までの日数）から動的に読み込まれます -->
               </select>
             </div>
 
@@ -9738,11 +9735,11 @@ ${prompt || '（未設定）'}
         window.storage = storage; // Storage公開
         window.firestoreReady = true;
 
-        // 発送方法カテゴリ一覧を読み込んでプルダウンに設定
-        loadShippingMethodCategories();
-
-        // 発送元の地域一覧を読み込んでプルダウンに設定
-        loadShippingRegions();
+        // 配送設定関連のプルダウンをFirestoreから読み込み
+        loadShippingBurden();           // 配送料の負担
+        loadShippingMethodCategories(); // 発送方法
+        loadShippingRegions();          // 発送元の地域
+        loadShippingDays();             // 発送までの日数
 
         // 仕入・出品プルダウンを初期化（Firebase初期化後に実行）
         initProcureListingDropdowns();
@@ -9848,6 +9845,100 @@ ${prompt || '（未設定）'}
         console.log(`✅ 発送元の地域 ${snapshot.size}件 を読み込みました`);
       } catch (error) {
         console.error('❌ 発送元の地域読み込みエラー:', error);
+        // フォールバック: エラー時はHTMLに残っている静的オプションを使用
+      }
+    }
+
+    /**
+     * Firestoreから配送料の負担一覧を取得してプルダウンに設定
+     * マスタ管理の配送料の負担と連動
+     */
+    async function loadShippingBurden() {
+      if (!window.db) {
+        console.warn('⚠️ Firestoreが初期化されていません（配送料の負担読み込みスキップ）');
+        return;
+      }
+
+      try {
+        console.log('💰 Firestoreから配送料の負担一覧を取得中...');
+        const snapshot = await window.db.collection('shippingBurden')
+          .orderBy('displayOrder', 'asc')
+          .get();
+
+        const select = document.getElementById('配送料の負担');
+        if (!select) {
+          console.warn('⚠️ 配送料の負担selectが見つかりません');
+          return;
+        }
+
+        // 既存のオプションをクリア（最初の「選択してください」は残す）
+        while (select.options.length > 1) {
+          select.remove(1);
+        }
+
+        // 項目を追加
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const burdenName = data.name || data.value || doc.id;
+          const option = document.createElement('option');
+          option.value = burdenName;
+          option.textContent = burdenName;
+          select.appendChild(option);
+        });
+
+        console.log(`✅ 配送料の負担 ${snapshot.size}件 を読み込みました`);
+      } catch (error) {
+        console.error('❌ 配送料の負担読み込みエラー:', error);
+        // フォールバック: エラー時はHTMLに残っている静的オプションを使用
+      }
+    }
+
+    /**
+     * Firestoreから発送までの日数一覧を取得してプルダウンに設定
+     * マスタ管理の発送までの日数と連動（メルカリ用のみ）
+     */
+    async function loadShippingDays() {
+      if (!window.db) {
+        console.warn('⚠️ Firestoreが初期化されていません（発送までの日数読み込みスキップ）');
+        return;
+      }
+
+      try {
+        console.log('📅 Firestoreから発送までの日数一覧を取得中（メルカリ用）...');
+        // メルカリ/メルカリShops用の発送日数を取得
+        const snapshot = await window.db.collection('shippingDays')
+          .where('platform', 'in', ['mercari', 'mercari-shops'])
+          .orderBy('displayOrder', 'asc')
+          .get();
+
+        const select = document.getElementById('発送までの日数');
+        if (!select) {
+          console.warn('⚠️ 発送までの日数selectが見つかりません');
+          return;
+        }
+
+        // 既存のオプションをクリア（最初の「選択してください」は残す）
+        while (select.options.length > 1) {
+          select.remove(1);
+        }
+
+        // 項目を追加（重複排除）
+        const addedDays = new Set();
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          const daysName = data.name || data.value || doc.id;
+          if (!addedDays.has(daysName)) {
+            addedDays.add(daysName);
+            const option = document.createElement('option');
+            option.value = daysName;
+            option.textContent = daysName;
+            select.appendChild(option);
+          }
+        });
+
+        console.log(`✅ 発送までの日数 ${addedDays.size}件 を読み込みました`);
+      } catch (error) {
+        console.error('❌ 発送までの日数読み込みエラー:', error);
         // フォールバック: エラー時はHTMLに残っている静的オプションを使用
       }
     }
