@@ -2533,29 +2533,56 @@ async function renderShippingDropdownUI() {
       </div>
 
       <style>
-        .shipping-item {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          padding: 12px 16px;
+        .shipping-item.master-options-item {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 4px !important;
+          padding: 12px 16px !important;
           border-bottom: 1px solid #eee;
         }
-        .shipping-item:last-child {
+        .shipping-item.master-options-item:last-child {
           border-bottom: none;
         }
-        .shipping-item-row1 {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
+        .shipping-item .shipping-item-row1 {
+          display: flex !important;
+          justify-content: space-between !important;
+          align-items: center !important;
+          width: 100%;
         }
-        .shipping-item-row1 .item-text {
+        .shipping-item .shipping-item-row1 .item-text {
           font-weight: 500;
           font-size: 15px;
+          flex: 1;
         }
-        .shipping-item-row2 {
+        .shipping-item .shipping-item-row1 .item-actions {
+          display: flex !important;
+          gap: 8px !important;
+          flex-shrink: 0;
+        }
+        .shipping-item .shipping-item-row1 .item-actions .btn-icon {
+          display: inline-flex !important;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          border-radius: 6px;
+          border: none;
+          background: transparent;
+          color: #666;
+          cursor: pointer;
+        }
+        .shipping-item .shipping-item-row1 .item-actions .btn-edit:hover {
+          background: #e3f2fd;
+          color: #1976d2;
+        }
+        .shipping-item .shipping-item-row1 .item-actions .btn-delete:hover {
+          background: #ffebee;
+          color: #d32f2f;
+        }
+        .shipping-item .shipping-item-row2 {
           padding-left: 0;
         }
-        .shipping-price {
+        .shipping-item .shipping-price {
           color: #666;
           font-size: 14px;
         }
