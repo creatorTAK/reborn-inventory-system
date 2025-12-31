@@ -2499,7 +2499,7 @@ async function renderShippingDropdownUI() {
       const data = doc.data();
       categories.push({
         id: doc.id,
-        name: doc.id,
+        name: data.category || doc.id,  // categoryフィールドを優先表示
         items: data.items || [],
         order: data.order || 0,
         platform: data.platform || null
