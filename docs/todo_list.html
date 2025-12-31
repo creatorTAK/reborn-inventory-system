@@ -1757,7 +1757,36 @@
         alert('延長申請を送信しました。管理者の承認をお待ちください。');
         loadTasks();
 
-        // TODO: 管理者への通知を送信
+        // 管理者全員にプッシュ通知を送信
+        try {
+          const adminsSnapshot = await db.collection('users')
+            .where('status', '==', 'active')
+            .get();
+          
+          const adminTokens = [];
+          adminsSnapshot.forEach(doc => {
+            const userData = doc.data();
+            if ((userData.permissionId === 'owner' || userData.permissionId === 'admin') && userData.fcmToken) {
+              adminTokens.push(userData.fcmToken);
+            }
+          });
+
+          if (adminTokens.length > 0) {
+            await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tokens: adminTokens,
+                title: '📋 期限延長申請',
+                body: `${userName}さんから延長申請が届きました（${extensionDays}日間）`,
+                data: { type: 'extension_request', requestId: requestId }
+              })
+            });
+            console.log('📤 [Extension] 管理者への通知送信完了');
+          }
+        } catch (notifyError) {
+          console.error('管理者への通知送信エラー:', notifyError);
+        }
 
       } catch (error) {
         console.error('延長申請エラー:', error);
@@ -1869,7 +1898,25 @@
         alert('延長申請を承認しました');
         loadExtensionRequests();
 
-        // TODO: 申請者への通知を送信
+        // 申請者にプッシュ通知を送信
+        try {
+          const requesterDoc = await db.collection('users').doc(req.taskOwnerEmail).get();
+          if (requesterDoc.exists && requesterDoc.data().fcmToken) {
+            await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tokens: [requesterDoc.data().fcmToken],
+                title: '✅ 延長申請が承認されました',
+                body: `期限が${req.requestedDays}日間延長されました`,
+                data: { type: 'extension_approved', taskId: req.taskId }
+              })
+            });
+            console.log('📤 [Extension] 申請者への承認通知送信完了');
+          }
+        } catch (notifyError) {
+          console.error('申請者への通知送信エラー:', notifyError);
+        }
 
       } catch (error) {
         console.error('承認エラー:', error);
@@ -1908,7 +1955,25 @@
         alert('延長申請を却下しました');
         loadExtensionRequests();
 
-        // TODO: 申請者への通知を送信
+        // 申請者にプッシュ通知を送信
+        try {
+          const requesterDoc = await db.collection('users').doc(req.taskOwnerEmail).get();
+          if (requesterDoc.exists && requesterDoc.data().fcmToken) {
+            await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tokens: [requesterDoc.data().fcmToken],
+                title: '⚠️ 延長申請が却下されました',
+                body: '延長申請は承認されませんでした。詳細は管理者にお問い合わせください。',
+                data: { type: 'extension_rejected', taskId: req.taskId }
+              })
+            });
+            console.log('📤 [Extension] 申請者への却下通知送信完了');
+          }
+        } catch (notifyError) {
+          console.error('申請者への通知送信エラー:', notifyError);
+        }
 
       } catch (error) {
         console.error('却下エラー:', error);
