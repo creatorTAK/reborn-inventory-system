@@ -383,7 +383,7 @@ const masterCategories = {
         label: '配送設定',
         icon: 'bi-truck',
         description: '配送・発送に関する設定',
-        masters: ['shipping', 'shippingBurden', 'shippingRegion', 'shippingDays', 'assignee']
+        masters: ['shipping', 'shippingBurden', 'shippingRegion', 'shippingDays']
       },
       material: {
         id: 'material',
@@ -645,61 +645,6 @@ const masterCategories = {
         ],
         displayFields: ['name', 'contact', 'email'],
         searchFields: ['name', 'contact'],
-        sortBy: 'name',
-        sortOrder: 'asc',
-        searchable: true,
-        usageCount: false,
-        bulkDelete: true,
-        maxDisplayResults: 50
-      },
-
-      assignee: {
-        label: '発送先',
-        collection: 'assignees',
-        description: '発送先担当者を管理',
-        fields: [
-          {
-            name: 'name',
-            label: '発送先名',
-            required: true,
-            type: 'text',
-            placeholder: '例: Aさん',
-            validation: {
-              minLength: 1,
-              maxLength: 50
-            }
-          },
-          {
-            name: 'note',
-            label: '備考（担当範囲など）',
-            required: false,
-            type: 'text',
-            placeholder: '例: AA-AZ担当',
-            validation: {
-              maxLength: 100
-            }
-          },
-          {
-            name: 'email',
-            label: 'メールアドレス',
-            required: false,
-            type: 'email',
-            placeholder: '例: assignee@example.com',
-            validation: {
-              pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
-            }
-          },
-          {
-            name: 'userId',
-            label: 'スタッフ連携（タスク通知用）',
-            required: false,
-            type: 'user-select',
-            placeholder: 'スタッフを選択',
-            description: 'スタッフと連携すると、発送時にタスク通知が自動送信されます'
-          }
-        ],
-        displayFields: ['name', 'note'],
-        searchFields: ['name', 'note'],
         sortBy: 'name',
         sortOrder: 'asc',
         searchable: true,

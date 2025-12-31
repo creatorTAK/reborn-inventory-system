@@ -953,11 +953,20 @@
       newOption.textContent = '+ 新規追加...';
       supplierSelect.appendChild(newOption);
 
-      // 発送先マスタを読み込み（assigneesコレクション）
-      const assigneesSnap = await db.collection('assignees').get();
+      // 発送先を読み込み（usersコレクションからアクティブなユーザーを取得）
+      const usersSnap = await db.collection('users')
+        .where('status', '==', 'active')
+        .get();
       assigneesData = [];
-      assigneesSnap.forEach(doc => {
-        assigneesData.push({ id: doc.id, ...doc.data() });
+      usersSnap.forEach(doc => {
+        const data = doc.data();
+        assigneesData.push({
+          id: doc.id,
+          name: data.userName || doc.id.split('@')[0],
+          email: doc.id,
+          userId: doc.id,
+          note: data.permissionDisplay || ''
+        });
       });
       // 名前順でソート
       assigneesData.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));

@@ -2649,13 +2649,23 @@
     }
 
     /**
-     * 仕入登録用: 発送先一覧を取得
+     * 仕入登録用: 発送先一覧を取得（登録ユーザーから自動取得）
      */
     async function getEntryAssigneesData() {
-      const snapshot = await db.collection('assignees').get();
+      // usersコレクションからアクティブなユーザーを取得
+      const snapshot = await db.collection('users')
+        .where('status', '==', 'active')
+        .get();
       const assignees = [];
       snapshot.forEach(docSnap => {
-        assignees.push({ id: docSnap.id, ...docSnap.data() });
+        const data = docSnap.data();
+        assignees.push({
+          id: docSnap.id,
+          name: data.userName || docSnap.id.split('@')[0],
+          email: docSnap.id,
+          userId: docSnap.id,
+          note: data.permissionDisplay || ''
+        });
       });
       return assignees.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
     }
