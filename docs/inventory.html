@@ -11,7 +11,7 @@
   <!-- Algolia Search SDK -->
   <script src="https://cdn.jsdelivr.net/npm/algoliasearch@4/dist/algoliasearch-lite.umd.js"></script>
   <!-- REBORN Theme -->
-  <link rel="stylesheet" href="/css/reborn-theme.css?v=296">
+  <link rel="stylesheet" href="/css/reborn-theme.css?v=297">
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -1260,13 +1260,25 @@
       }
     }
 
-    // FirestoreApiの読み込みを待つ
+    // FirestoreApiの読み込みを待つ（タイミング計測付き）
+    const _apiWaitStart = performance.now();
+    let _apiWaitCount = 0;
     function waitForFirestoreApi(callback) {
+      _apiWaitCount++;
       if (typeof window.FirestoreApi !== 'undefined' && window.FirestoreApi.getProductList) {
-        console.log('✅ [DEBUG] FirestoreApi読み込み完了');
+        const waitTime = (performance.now() - _apiWaitStart).toFixed(0);
+        console.log('✅ [TIMING] FirestoreApi読み込み完了: ' + waitTime + 'ms (ポーリング' + _apiWaitCount + '回)');
         callback();
       } else {
-        console.log('⏳ [DEBUG] FirestoreApi読み込み待機中...');
+        if (_apiWaitCount % 10 === 0) {
+          console.log('⏳ [TIMING] FirestoreApi待機中... ' + ((performance.now() - _apiWaitStart) / 1000).toFixed(1) + '秒経過');
+        }
+        // 30秒でタイムアウト警告
+        if (_apiWaitCount > 300) {
+          console.error('❌ [TIMING] FirestoreApi読み込みタイムアウト（30秒超過）');
+          alert('Firebase初期化に時間がかかっています。ページを再読み込みしてください。');
+          return;
+        }
         setTimeout(() => waitForFirestoreApi(callback), 100);
       }
     }
@@ -3730,10 +3742,19 @@
     }
   </script>
 
+  <!-- モジュール開始時刻を記録 -->
+  <script>
+    window._moduleStartTime = performance.now();
+    console.log('🔥 [TIMING] DOMパース完了、Firebase module待機開始');
+  </script>
+
   <!-- Firebase SDK (ARCH-001 Phase 3) -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getFirestore, collection, getDocs, getDoc, doc, updateDoc, addDoc, serverTimestamp, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    const importTime = (performance.now() - window._moduleStartTime).toFixed(0);
+    console.log('🔥 [TIMING] Firebase SDK import完了: ' + importTime + 'ms');
 
     // Firebase設定
     const firebaseConfig = {
@@ -3748,6 +3769,7 @@
     // Firebase初期化
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    console.log('🔥 [TIMING] Firebase初期化完了: ' + (performance.now() - window._moduleStartTime).toFixed(0) + 'ms');
 
     // グローバルにdbと関数を公開（フィルタドロップダウン等で使用）
     window.db = db;
@@ -3758,9 +3780,11 @@
 
     // 商品一覧取得関数
     async function getProductList() {
-      console.log('🔥 [FIRESTORE] 商品一覧取得開始');
+      const queryStart = performance.now();
+      console.log('🔥 [TIMING] Firestoreクエリ開始');
       const productsRef = collection(db, 'products');
       const snapshot = await getDocs(productsRef);
+      console.log('🔥 [TIMING] Firestoreクエリ完了: ' + (performance.now() - queryStart).toFixed(0) + 'ms, ' + snapshot.size + '件');
 
       const products = [];
       snapshot.forEach((doc) => {
@@ -4165,7 +4189,7 @@
       saveSalesRecord: saveSalesRecordToFirestore
     };
 
-    console.log('✅ [DEBUG] FirestoreApi初期化完了');
+    console.log('✅ [TIMING] FirestoreApi定義完了: ' + (performance.now() - window._moduleStartTime).toFixed(0) + 'ms (module全体)');
   </script>
 
   <!-- 戻るボタン処理 -->
