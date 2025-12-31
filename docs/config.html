@@ -977,7 +977,7 @@
         <!-- システム設定内の横タブナビゲーション -->
         <ul class="nav nav-tabs" id="systemConfigTabs" role="tablist" style="margin-bottom: 16px; overflow-x: auto; flex-wrap: nowrap; white-space: nowrap;">
           <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="system-management-tab" data-bs-toggle="tab" data-bs-target="#system-management" type="button" role="tab" style="font-size: 13px; padding: 8px 12px;"><i class="bi bi-hash"></i> 管理番号設定</button>
+            <button class="nav-link active" id="system-management-tab" data-bs-toggle="tab" data-bs-target="#system-management" type="button" role="tab" style="font-size: 13px; padding: 8px 12px;"><i class="bi bi-123"></i> 管理番号設定</button>
           </li>
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="system-shipping-tab" data-bs-toggle="tab" data-bs-target="#system-shipping" type="button" role="tab" style="font-size: 13px; padding: 8px 12px;"><i class="bi bi-box-seam"></i> 配送設定</button>
@@ -3659,7 +3659,7 @@
         <!-- 出品情報セクション -->
         <div style="margin-bottom: 16px; padding: 16px; background: white; border-radius: 8px; border: 2px solid #e5e7eb;">
           <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px;">
-            📤 出品情報
+            <i class="bi bi-box-arrow-up"></i> 出品情報
           </div>
 
           <!-- デフォルト出品日 -->
@@ -4133,43 +4133,6 @@
                     <input type="checkbox" id="recordAsExpense" checked style="width: 16px; height: 16px; accent-color: #40B4E5;">
                     <span style="font-size: 13px; color: #4b5563;">報酬を「外注工賃」として経費に自動計上する</span>
                   </label>
-                </div>
-              </div>
-
-              <!-- マイページ表示設定 -->
-              <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                <h4 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 12px 0;">👤 マイページ表示設定</h4>
-                <div style="font-size: 11px; color: #6b7280; margin-bottom: 12px;">
-                  ユーザーアイコンをタップした際に表示されるマイページ（報酬確認・ランキング・目標設定）の表示対象を設定します。
-                </div>
-
-                <!-- マイページ有効/無効 -->
-                <div style="margin-bottom: 16px;">
-                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
-                    <input type="checkbox" id="mypageEnabled" checked style="width: 16px; height: 16px; accent-color: #40B4E5;">
-                    <span style="font-size: 13px; color: #4b5563; font-weight: 500;">マイページ機能を有効にする</span>
-                  </label>
-                </div>
-
-                <!-- 表示対象ユーザー選択 -->
-                <div id="mypageUserSettings" style="padding-left: 24px; border-left: 2px solid #e5e7eb;">
-                  <div style="font-weight: 500; font-size: 13px; color: #374151; margin-bottom: 10px;">表示対象ユーザー</div>
-
-                  <div style="display: flex; flex-direction: column; gap: 8px;" id="mypageUserList">
-                    <!-- ユーザー一覧が動的に追加される -->
-                    <div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">
-                      ユーザー一覧を読み込んでいます...
-                    </div>
-                  </div>
-
-                  <div style="margin-top: 12px; display: flex; gap: 8px;">
-                    <button type="button" onclick="selectAllMypageUsers()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #374151; cursor: pointer;">
-                      全員選択
-                    </button>
-                    <button type="button" onclick="deselectAllMypageUsers()" style="padding: 6px 12px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; color: #374151; cursor: pointer;">
-                      全員解除
-                    </button>
-                  </div>
                 </div>
               </div>
 
@@ -8610,8 +8573,7 @@ ${prompt || '（未設定）'}
           cutoffDay: document.getElementById('compensationCutoffDay')?.value || '末日',
           paymentDay: document.getElementById('compensationPaymentDay')?.value || '翌月5日',
           recordAsExpense: document.getElementById('recordAsExpense')?.checked ?? true
-        },
-        mypage: collectMypageSettings()
+        }
       };
 
       console.log('報酬設定を収集:', result);
@@ -8733,112 +8695,11 @@ ${prompt || '（未設定）'}
         const recordAsExpense = document.getElementById('recordAsExpense');
         if (recordAsExpense) recordAsExpense.checked = settings.options.recordAsExpense ?? true;
       }
-
-      // マイページ設定を読み込み
-      if (settings.mypage) {
-        const mypageEnabled = document.getElementById('mypageEnabled');
-        if (mypageEnabled) mypageEnabled.checked = settings.mypage.enabled ?? true;
-
-        // マイページ対象ユーザーを設定（ユーザー一覧読み込み後に適用）
-        window.mypageAllowedUsers = settings.mypage.allowedUsers || [];
-      }
     }
 
     // ============================================
-    // マイページ表示設定関連の関数
+    // ユーティリティ関数
     // ============================================
-
-    // マイページユーザー一覧読み込みのリトライカウンター
-    let mypageUserListRetryCount = 0;
-    const MYPAGE_USER_LIST_MAX_RETRIES = 5;
-
-    /**
-     * マイページ対象ユーザー一覧を読み込み
-     */
-    async function loadMypageUserList() {
-      const container = document.getElementById('mypageUserList');
-      if (!container) {
-        console.log('[MYPAGE] コンテナが見つかりません');
-        return;
-      }
-
-      console.log('[MYPAGE] ユーザー一覧読み込み開始, db:', !!window.db, 'firestoreReady:', window.firestoreReady);
-
-      try {
-        // Firestoreの準備を待つ
-        if (!window.db) {
-          mypageUserListRetryCount++;
-          if (mypageUserListRetryCount <= MYPAGE_USER_LIST_MAX_RETRIES) {
-            console.log('[MYPAGE] Firestore未初期化、1秒後に再試行 (' + mypageUserListRetryCount + '/' + MYPAGE_USER_LIST_MAX_RETRIES + ')');
-            container.innerHTML = '<div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">Firestoreを初期化中...</div>';
-            setTimeout(() => loadMypageUserList(), 1000);
-            return;
-          } else {
-            console.error('[MYPAGE] Firestore初期化タイムアウト');
-            container.innerHTML = '<div style="font-size: 12px; color: #ef4444; padding: 12px; text-align: center;">Firestoreの初期化に失敗しました</div>';
-            return;
-          }
-        }
-
-        // リトライカウンターをリセット
-        mypageUserListRetryCount = 0;
-
-        console.log('[MYPAGE] Firestoreからユーザー一覧を取得中...');
-
-        // ユーザー一覧を取得（Firestore v8 compat SDK）
-        const snapshot = await window.db.collection('users').get();
-        console.log('[MYPAGE] 取得完了, ドキュメント数:', snapshot.size);
-
-        const users = [];
-        snapshot.forEach(docSnap => {
-          const data = docSnap.data();
-          users.push({
-            email: docSnap.id,
-            name: data.userName || data.name || data.displayName || docSnap.id,
-            permissionId: data.permissionId || 'staff',
-            permissionDisplay: data.permissionDisplay || 'スタッフ',
-            photoURL: data.userIconUrl || data.photoURL || ''
-          });
-        });
-
-        // 権限でソート（オーナー → 管理者 → スタッフ）
-        const permissionOrder = { owner: 1, admin: 2, staff: 3, outsourcing: 4 };
-        users.sort((a, b) => (permissionOrder[a.permissionId] || 99) - (permissionOrder[b.permissionId] || 99));
-
-        if (users.length === 0) {
-          container.innerHTML = '<div style="font-size: 12px; color: #9ca3af; padding: 12px; text-align: center;">ユーザーが登録されていません</div>';
-          return;
-        }
-
-        // ユーザーリストを描画
-        const allowedUsers = window.mypageAllowedUsers || [];
-        console.log('[MYPAGE] allowedUsers:', allowedUsers);
-
-        container.innerHTML = users.map(user => {
-          const isChecked = allowedUsers.length === 0 || allowedUsers.includes(user.email);
-          const permissionBadge = getPermissionBadgeStyle(user.permissionId);
-          const avatarHtml = user.photoURL
-            ? `<img src="${escapeHtml(user.photoURL)}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">`
-            : `<div style="width: 32px; height: 32px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 14px;">👤</div>`;
-
-          return `
-            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 8px 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
-              <input type="checkbox" class="mypage-user-checkbox" data-email="${escapeHtml(user.email)}" ${isChecked ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #40B4E5; flex-shrink: 0;">
-              ${avatarHtml}
-              <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 13px; color: #374151; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(user.name)}</div>
-              </div>
-              <span style="${permissionBadge} flex-shrink: 0;">${escapeHtml(user.permissionDisplay)}</span>
-            </label>
-          `;
-        }).join('');
-
-        console.log('[MYPAGE] ✅ ユーザー一覧描画完了:', users.length, '人');
-      } catch (error) {
-        console.error('[MYPAGE] ❌ ユーザー一覧の読み込みエラー:', error);
-        container.innerHTML = '<div style="font-size: 12px; color: #ef4444; padding: 12px; text-align: center;">ユーザー一覧の読み込みに失敗しました<br><small>' + escapeHtml(error.message) + '</small></div>';
-      }
-    }
 
     /**
      * HTMLエスケープ
@@ -8852,51 +8713,6 @@ ${prompt || '（未設定）'}
         '"': '&quot;',
         "'": '&#39;'
       }[char]));
-    }
-
-    /**
-     * 権限バッジのスタイルを取得
-     */
-    function getPermissionBadgeStyle(permissionId) {
-      const styles = {
-        owner: 'background: #fef3c7; color: #b45309; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;',
-        admin: 'background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;',
-        staff: 'background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;',
-        outsourcing: 'background: #f3e8ff; color: #7c3aed; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;'
-      };
-      return styles[permissionId] || styles.staff;
-    }
-
-    /**
-     * マイページ対象ユーザーを全選択
-     */
-    function selectAllMypageUsers() {
-      document.querySelectorAll('.mypage-user-checkbox').forEach(cb => cb.checked = true);
-    }
-
-    /**
-     * マイページ対象ユーザーを全解除
-     */
-    function deselectAllMypageUsers() {
-      document.querySelectorAll('.mypage-user-checkbox').forEach(cb => cb.checked = false);
-    }
-
-    /**
-     * マイページ設定を収集
-     */
-    function collectMypageSettings() {
-      const enabled = document.getElementById('mypageEnabled')?.checked ?? true;
-
-      // チェックされたユーザーのメールアドレスを収集
-      const allowedUsers = [];
-      document.querySelectorAll('.mypage-user-checkbox:checked').forEach(cb => {
-        allowedUsers.push(cb.dataset.email);
-      });
-
-      return {
-        enabled: enabled,
-        allowedUsers: allowedUsers
-      };
     }
 
     // ============================================
@@ -10956,8 +10772,6 @@ ${prompt || '（未設定）'}
       compensationTab.addEventListener('shown.bs.tab', async function() {
         // Firestoreから報酬設定を読み込み
         await loadCompensationSettingsFromFirestore();
-        // マイページ対象ユーザー一覧を読み込み
-        await loadMypageUserList();
         // ユーザー別タスク担当設定を読み込み
         await loadUserTaskAssignmentList();
       });
@@ -10967,9 +10781,8 @@ ${prompt || '（未設定）'}
     setTimeout(async function() {
       // Firestoreから報酬設定を読み込み
       await loadCompensationSettingsFromFirestore();
-      // マイページ対象ユーザー一覧を読み込み（報酬設定タブが表示されている場合）
+      // ユーザー別タスク担当設定を読み込み（報酬設定タブが表示されている場合）
       if (document.getElementById('system-compensation')?.classList.contains('active')) {
-        await loadMypageUserList();
         await loadUserTaskAssignmentList();
       }
     }, 250);
