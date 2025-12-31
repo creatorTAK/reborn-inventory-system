@@ -424,14 +424,19 @@ const masterCategories = {
         platformSupport: true,
         defaultPlatform: 'mercari',
         platforms: [
-          { id: 'mercari', name: 'メルカリ', icon: '/images/platform/mercari.png' },
-          { id: 'mercari-shops', name: 'メルカリShops', icon: '/images/platform/mercari-shops.png' },
-          { id: 'yahoo-fleamarket', name: 'Yahoo!フリマ', icon: '/images/platform/yahoo-fleamarket.png' },
-          { id: 'yahoo-auction', name: 'Yahoo!オークション', icon: '/images/platform/yahoo-auction.png' },
+          { id: 'mercari', name: 'メルカリ', icon: '/images/platform/mercari.png', group: 'mercari-group' },
+          { id: 'mercari-shops', name: 'メルカリShops', icon: '/images/platform/mercari-shops.png', group: 'mercari-group' },
+          { id: 'yahoo-fleamarket', name: 'Yahoo!フリマ', icon: '/images/platform/yahoo-fleamarket.png', group: 'yahoo-group' },
+          { id: 'yahoo-auction', name: 'Yahoo!オークション', icon: '/images/platform/yahoo-auction.png', group: 'yahoo-group' },
           { id: 'rakuma', name: 'ラクマ', icon: '/images/platform/rakuma.png' },
           { id: 'base', name: 'BASE', icon: '/images/platform/base.png' },
           { id: 'shopify', name: 'Shopify', icon: '/images/platform/shopify.png' }
         ],
+        // プラットフォームグループ（同じグループ内でデータを共有）
+        platformGroups: {
+          'mercari-group': ['mercari', 'mercari-shops'],
+          'yahoo-group': ['yahoo-fleamarket', 'yahoo-auction']
+        },
         emptyState: {
           icon: '📦',
           message: '発送方法を管理',
@@ -478,14 +483,19 @@ const masterCategories = {
         platformSupport: true,
         defaultPlatform: 'mercari',
         platforms: [
-          { id: 'mercari', name: 'メルカリ', icon: '/images/platform/mercari.png' },
-          { id: 'mercari-shops', name: 'メルカリShops', icon: '/images/platform/mercari-shops.png' },
-          { id: 'yahoo-fleamarket', name: 'Yahoo!フリマ', icon: '/images/platform/yahoo-fleamarket.png' },
-          { id: 'yahoo-auction', name: 'Yahoo!オークション', icon: '/images/platform/yahoo-auction.png' },
+          { id: 'mercari', name: 'メルカリ', icon: '/images/platform/mercari.png', group: 'mercari-group' },
+          { id: 'mercari-shops', name: 'メルカリShops', icon: '/images/platform/mercari-shops.png', group: 'mercari-group' },
+          { id: 'yahoo-fleamarket', name: 'Yahoo!フリマ', icon: '/images/platform/yahoo-fleamarket.png', group: 'yahoo-group' },
+          { id: 'yahoo-auction', name: 'Yahoo!オークション', icon: '/images/platform/yahoo-auction.png', group: 'yahoo-group' },
           { id: 'rakuma', name: 'ラクマ', icon: '/images/platform/rakuma.png' },
           { id: 'base', name: 'BASE', icon: '/images/platform/base.png' },
           { id: 'shopify', name: 'Shopify', icon: '/images/platform/shopify.png' }
         ],
+        // プラットフォームグループ（同じグループ内でデータを共有）
+        platformGroups: {
+          'mercari-group': ['mercari', 'mercari-shops'],
+          'yahoo-group': ['yahoo-fleamarket', 'yahoo-auction']
+        },
         emptyState: {
           icon: '📅',
           message: '発送までの日数を管理',

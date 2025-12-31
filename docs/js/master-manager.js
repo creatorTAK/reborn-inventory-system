@@ -199,6 +199,31 @@ function hideGasMasterUI() {
 }
 
 // ============================================
+// ヘルパー関数
+// ============================================
+
+/**
+ * プラットフォームが属するグループのメンバーを取得
+ * 同じグループ内のプラットフォームはデータを共有する
+ * @param {string} platformId - プラットフォームID
+ * @returns {string[]} グループメンバーの配列（グループがなければ元のIDのみ）
+ */
+function getPlatformGroupMembers(platformId) {
+  if (!currentMasterConfig?.platformGroups) {
+    return [platformId];
+  }
+
+  // プラットフォームが属するグループを探す
+  for (const [groupName, members] of Object.entries(currentMasterConfig.platformGroups)) {
+    if (members.includes(platformId)) {
+      return members;
+    }
+  }
+
+  return [platformId];
+}
+
+// ============================================
 // 初期化
 // ============================================
 
@@ -1627,7 +1652,13 @@ async function renderSimpleListUI() {
       let query = window.db.collection(collection);
       // プラットフォームサポートがある場合はフィルタリング
       if (currentMasterConfig.platformSupport && currentPlatform) {
-        query = query.where('platform', '==', currentPlatform);
+        // プラットフォームグループを取得（同じグループ内でデータを共有）
+        const platformsToQuery = getPlatformGroupMembers(currentPlatform);
+        if (platformsToQuery.length > 1) {
+          query = query.where('platform', 'in', platformsToQuery);
+        } else {
+          query = query.where('platform', '==', currentPlatform);
+        }
       }
       if (orderField) {
         query = query.orderBy(orderField, 'asc');
@@ -1637,7 +1668,12 @@ async function renderSimpleListUI() {
       console.warn('orderByエラー、ソートなしで取得:', orderError.message);
       let fallbackQuery = window.db.collection(collection);
       if (currentMasterConfig.platformSupport && currentPlatform) {
-        fallbackQuery = fallbackQuery.where('platform', '==', currentPlatform);
+        const platformsToQuery = getPlatformGroupMembers(currentPlatform);
+        if (platformsToQuery.length > 1) {
+          fallbackQuery = fallbackQuery.where('platform', 'in', platformsToQuery);
+        } else {
+          fallbackQuery = fallbackQuery.where('platform', '==', currentPlatform);
+        }
       }
       snapshot = await fallbackQuery.get();
     }
@@ -2448,7 +2484,13 @@ async function renderShippingDropdownUI() {
     // Firestoreからデータ取得（プラットフォームサポートがある場合はフィルタリング）
     let query = window.db.collection(collection);
     if (currentMasterConfig.platformSupport && currentPlatform) {
-      query = query.where('platform', '==', currentPlatform);
+      // プラットフォームグループを取得（同じグループ内でデータを共有）
+      const platformsToQuery = getPlatformGroupMembers(currentPlatform);
+      if (platformsToQuery.length > 1) {
+        query = query.where('platform', 'in', platformsToQuery);
+      } else {
+        query = query.where('platform', '==', currentPlatform);
+      }
     }
     const snapshot = await query.orderBy('order', 'asc').get();
 
