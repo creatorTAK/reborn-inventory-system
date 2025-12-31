@@ -463,8 +463,10 @@ const masterCategories = {
         collection: 'shippingRegion',
         type: 'simpleList',
         description: '発送元の都道府県',
+        displayField: 'name',
+        orderField: 'displayOrder',
         icon: 'bi-geo-alt',
-        placeholder: '例: 岡山県',
+        placeholder: '例: 東京都',
         emptyState: {
           icon: '📍',
           message: '発送元の地域を管理',
