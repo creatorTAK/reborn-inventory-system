@@ -752,6 +752,20 @@
       font-weight: 700;
       color: #1f2937;
     }
+    .admin-contribution-note {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: #f0f9ff;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #6b7280;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .admin-contribution-note i {
+      color: #40B4E5;
+    }
 
     /* 報酬単価アコーディオン（内訳セクション内） */
     .rate-accordion-btn {
@@ -4249,6 +4263,56 @@
       return html;
     }
 
+    // 管理者用内訳アイテムを動的に生成（報酬なし、件数のみ）
+    function generateAdminBreakdownItems(assignedTasks, taskStats) {
+      if (!assignedTasks || assignedTasks.length === 0) {
+        return `<div style="text-align: center; color: #9ca3af; padding: 16px; font-size: 14px;">
+          担当タスクが設定されていません
+        </div>`;
+      }
+
+      let html = '';
+      let totalCount = 0;
+      
+      assignedTasks.forEach(taskId => {
+        const taskDef = TASK_DEFINITIONS[taskId];
+        if (!taskDef) return;
+
+        const stats = (taskStats && taskStats[taskId]) ? taskStats[taskId] : { count: 0, amount: 0 };
+        totalCount += stats.count;
+
+        html += `
+          <div class="breakdown-item">
+            <div class="breakdown-label" style="width: 100%;">
+              <div class="breakdown-icon ${taskDef.cssClass}">${taskDef.icon}</div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div class="breakdown-name">${taskDef.name}</div>
+                  <div class="breakdown-count" style="font-size: 15px; font-weight: 600; color: #1f2937;">${stats.count}件</div>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      });
+
+      // 合計行を追加
+      if (totalCount > 0) {
+        html += `
+          <div class="breakdown-item" style="background: #f0f9ff; border-radius: 8px; margin-top: 8px; padding: 10px 12px;">
+            <div class="breakdown-label" style="width: 100%;">
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div class="breakdown-name" style="font-weight: 700;">合計</div>
+                  <div style="font-size: 16px; font-weight: 700; color: #40B4E5;">${totalCount}件</div>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      return html;
+    }
+
     // 履歴用内訳アイテムを動的に生成
     function generateHistoryBreakdownItems(assignedTasks, taskStats) {
       if (!assignedTasks || assignedTasks.length === 0) {
@@ -4315,6 +4379,10 @@
       const teamGoal = teamGoalAmount || 0;
       const teamProgress = teamGoal > 0 ? Math.min(100, Math.round((totalAmount / teamGoal) * 100)) : 0;
 
+      // 管理者自身の作業データを集計（報酬はカウントしないが、作業件数はカウント）
+      const myRecords = compensationRecords.filter(r => r.staffEmail === currentUser.email);
+      const myStats = calculateStats(myRecords);
+
       // 背景スタイル
       const bgStyle = getProfileBgStyle();
 
@@ -4350,6 +4418,16 @@
               <span>${teamProgress}%</span>
             </div>
             ${teamGoal > 0 ? getMilestoneMessage(teamProgress) : ''}
+          </div>
+        </div>
+
+        <!-- 管理者自身の作業内訳（報酬はカウントしないが貢献度として表示） -->
+        <div class="breakdown-card">
+          <div class="breakdown-title">あなたの作業貢献</div>
+          ${generateAdminBreakdownItems(assignedTasks, myStats.taskStats)}
+          <div class="admin-contribution-note">
+            <i class="bi bi-info-circle"></i>
+            作業件数はチーム実績にカウントされます（報酬対象外）
           </div>
         </div>
 
