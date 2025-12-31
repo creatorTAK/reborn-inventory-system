@@ -9792,6 +9792,11 @@ ${prompt || '（未設定）'}
     /**
      * Firestoreから発送方法カテゴリ一覧を取得してプルダウンに設定
      * マスタ管理の発送方法と連動
+     *
+     * データ構造（shippingMethodsコレクション）:
+     * - ドキュメントID = カテゴリ名（例: "らくらくメルカリ便"）
+     * - order: ソート順
+     * - items: [{detail: "ネコポス", price: 210}, ...]
      */
     async function loadShippingMethodCategories() {
       if (!window.db) {
@@ -9802,7 +9807,7 @@ ${prompt || '（未設定）'}
       try {
         console.log('📮 Firestoreから発送方法カテゴリ一覧を取得中...');
         const snapshot = await window.db.collection('shippingMethods')
-          .orderBy('category', 'asc')
+          .orderBy('order', 'asc')
           .get();
 
         const select = document.getElementById('配送の方法');
@@ -9811,25 +9816,20 @@ ${prompt || '（未設定）'}
           return;
         }
 
-        // ユニークなカテゴリを抽出
-        const categories = new Set();
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          if (data.category) {
-            categories.add(data.category);
-          }
-        });
+        // 既存のオプションをクリア（最初の「選択してください」は残す）
+        while (select.options.length > 1) {
+          select.remove(1);
+        }
 
-        // カテゴリをソートして追加
-        const sortedCategories = Array.from(categories).sort((a, b) => a.localeCompare(b, 'ja'));
-        sortedCategories.forEach(category => {
+        // ドキュメントID（カテゴリ名）を追加
+        snapshot.forEach(doc => {
           const option = document.createElement('option');
-          option.value = category;
-          option.textContent = category;
+          option.value = doc.id;
+          option.textContent = doc.id;
           select.appendChild(option);
         });
 
-        console.log(`✅ 発送方法カテゴリ ${sortedCategories.length}件 を読み込みました`);
+        console.log(`✅ 発送方法カテゴリ ${snapshot.size}件 を読み込みました`);
       } catch (error) {
         console.error('❌ 発送方法カテゴリ読み込みエラー:', error);
       }

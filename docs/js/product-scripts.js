@@ -952,6 +952,15 @@ window.continueProductRegistration = function() {
   };
 
   // Firestoreから配送方法カテゴリをセレクトボックスに読み込む
+  /**
+   * Firestoreから発送方法カテゴリ一覧を取得してプルダウンに設定
+   * マスタ管理の発送方法と連動
+   *
+   * データ構造（shippingMethodsコレクション）:
+   * - ドキュメントID = カテゴリ名（例: "らくらくメルカリ便"）
+   * - order: ソート順
+   * - items: [{detail: "ネコポス", price: 210}, ...]
+   */
   async function loadShippingMethodOptions() {
     const select = document.getElementById('配送の方法');
     if (!select) {
@@ -963,31 +972,21 @@ window.continueProductRegistration = function() {
       // PWA版: Firestoreから直接取得
       if (window.db) {
         const snapshot = await window.db.collection('shippingMethods')
-          .orderBy('category', 'asc')
+          .orderBy('order', 'asc')
           .get();
-
-        // ユニークなカテゴリを取得
-        const categories = new Set();
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          if (data.category) {
-            categories.add(data.category);
-          }
-        });
-
-        // 日本語順でソート
-        const sortedCategories = Array.from(categories).sort((a, b) => a.localeCompare(b, 'ja'));
 
         // セレクトボックスをクリアして再構築
         select.innerHTML = '';
-        sortedCategories.forEach(category => {
+
+        // ドキュメントID（カテゴリ名）を追加
+        snapshot.forEach(doc => {
           const option = document.createElement('option');
-          option.value = category;
-          option.textContent = category;
+          option.value = doc.id;
+          option.textContent = doc.id;
           select.appendChild(option);
         });
 
-        console.log('✅ 配送方法オプションを読み込みました:', sortedCategories);
+        console.log(`✅ 配送方法オプションを読み込みました: ${snapshot.size}件`);
       }
     } catch (error) {
       console.error('配送方法オプション読み込みエラー:', error);
