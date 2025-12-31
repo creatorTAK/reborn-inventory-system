@@ -3021,7 +3021,7 @@ function updateEmptyStateCount() {
     // エラーまたは取得不可 - 非表示
     countEl.classList.add('hidden');
   } else if (masterTotalCount > 0) {
-    countEl.textContent = `${masterTotalCount.toLocaleString()}件`;
+    countEl.innerHTML = `<i class="bi bi-database"></i> ${masterTotalCount.toLocaleString()}件`;
     countEl.classList.remove('hidden');
   } else {
     countEl.classList.add('hidden');
