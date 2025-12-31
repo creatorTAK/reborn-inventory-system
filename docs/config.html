@@ -9905,10 +9905,9 @@ ${prompt || '（未設定）'}
 
       try {
         console.log('📅 Firestoreから発送までの日数一覧を取得中（メルカリ用）...');
-        // メルカリ/メルカリShops用の発送日数を取得
+        // メルカリ/メルカリShops用の発送日数を取得（複合インデックス不要なシンプルクエリ）
         const snapshot = await window.db.collection('shippingDays')
-          .where('platform', 'in', ['mercari', 'mercari-shops'])
-          .orderBy('displayOrder', 'asc')
+          .where('platform', '==', 'mercari')
           .get();
 
         const select = document.getElementById('発送までの日数');
@@ -9922,16 +9921,25 @@ ${prompt || '（未設定）'}
           select.remove(1);
         }
 
-        // 項目を追加（重複排除）
-        const addedDays = new Set();
+        // データを取得してソート（displayOrder または order フィールドを使用）
+        const items = [];
         snapshot.forEach(doc => {
           const data = doc.data();
-          const daysName = data.name || data.value || doc.id;
-          if (!addedDays.has(daysName)) {
-            addedDays.add(daysName);
+          items.push({
+            name: data.name || data.value || doc.id,
+            order: data.displayOrder || data.order || 999
+          });
+        });
+        items.sort((a, b) => a.order - b.order);
+
+        // 重複排除して追加
+        const addedDays = new Set();
+        items.forEach(item => {
+          if (!addedDays.has(item.name)) {
+            addedDays.add(item.name);
             const option = document.createElement('option');
-            option.value = daysName;
-            option.textContent = daysName;
+            option.value = item.name;
+            option.textContent = item.name;
             select.appendChild(option);
           }
         });
