@@ -2442,9 +2442,9 @@ async function renderShippingDropdownUI() {
         <div class="master-options-container">
           <div class="master-options-empty" style="padding: 40px; text-align: center;">
             <p>発送カテゴリがありません</p>
-            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px; max-width: 300px; margin-left: auto; margin-right: auto;">
-              <input type="text" class="form-control" id="newShippingCategoryName" placeholder="カテゴリ名を入力">
-              <button class="btn btn-outline-primary" onclick="addShippingCategory()">
+            <div class="master-options-add" style="border-top: none; margin-top: 16px;">
+              <input type="text" class="form-control form-control-sm" id="newShippingCategoryName" placeholder="新しいカテゴリ名">
+              <button class="btn btn-sm btn-outline-primary" onclick="addShippingCategory()">
                 <i class="bi bi-folder-plus"></i> カテゴリ追加
               </button>
             </div>
@@ -2490,129 +2490,38 @@ async function renderShippingDropdownUI() {
                 <p>このカテゴリにはまだ発送方法がありません</p>
               </div>
             ` : items.map((item, itemIndex) => `
-              <div class="master-options-item shipping-item" data-item-index="${itemIndex}">
-                <div class="shipping-item-row1">
-                  <span class="item-text">${escapeHtml(item.detail || '')}</span>
-                  <div class="item-actions">
-                    <button class="btn-icon btn-edit" onclick="editShippingItem(${itemIndex})" title="編集">
-                      <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn-icon btn-delete" onclick="deleteShippingItem(${itemIndex})" title="削除">
-                      <i class="bi bi-trash"></i>
-                    </button>
-                  </div>
-                </div>
-                <div class="shipping-item-row2">
-                  <span class="shipping-price">¥${Number(item.price || 0).toLocaleString()}</span>
+              <div class="master-options-item" data-item-index="${itemIndex}">
+                <span class="item-text">${escapeHtml(item.detail || '')} <span style="color:#666;font-weight:normal;">¥${Number(item.price || 0).toLocaleString()}</span></span>
+                <div class="item-actions">
+                  <button class="btn-icon btn-edit" onclick="editShippingItem(${itemIndex})" title="編集">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn-icon btn-delete" onclick="deleteShippingItem(${itemIndex})" title="削除">
+                    <i class="bi bi-trash"></i>
+                  </button>
                 </div>
               </div>
             `).join('')}
           </div>
-          <div class="shipping-add-form">
-            <div class="shipping-add-row">
-              <input type="text" class="form-control" id="newShippingDetail" placeholder="${currentMasterConfig.placeholder || '例: ネコポス'}">
-            </div>
-            <div class="shipping-add-row">
-              <input type="number" class="form-control" id="newShippingPrice" placeholder="送料（円）">
-              <button class="btn btn-primary" onclick="addShippingItem()">
-                <i class="bi bi-plus"></i> 追加
-              </button>
-            </div>
+          <div class="master-options-add">
+            <input type="text" class="form-control form-control-sm" id="newShippingDetail" placeholder="${currentMasterConfig.placeholder || '例: ネコポス'}">
+            <input type="number" class="form-control form-control-sm" id="newShippingPrice" placeholder="送料" style="width:80px;">
+            <button class="btn btn-sm btn-primary" onclick="addShippingItem()">
+              <i class="bi bi-plus"></i> 追加
+            </button>
           </div>
         </div>
 
         <!-- 新規カテゴリ追加 -->
         <div class="master-options-section" style="background: #f8f9fa;">
-          <div class="shipping-category-add">
-            <input type="text" class="form-control" id="newShippingCategoryName" placeholder="新しいカテゴリ名">
-            <button class="btn btn-outline-primary" onclick="addShippingCategory()">
+          <div class="master-options-add" style="border-top: none;">
+            <input type="text" class="form-control form-control-sm" id="newShippingCategoryName" placeholder="新しいカテゴリ名">
+            <button class="btn btn-sm btn-outline-primary" onclick="addShippingCategory()">
               <i class="bi bi-folder-plus"></i> カテゴリ追加
             </button>
           </div>
         </div>
       </div>
-
-      <style>
-        .shipping-item.master-options-item {
-          display: flex !important;
-          flex-direction: column !important;
-          gap: 4px !important;
-          padding: 12px 16px !important;
-          border-bottom: 1px solid #eee;
-        }
-        .shipping-item.master-options-item:last-child {
-          border-bottom: none;
-        }
-        .shipping-item .shipping-item-row1 {
-          display: flex !important;
-          justify-content: space-between !important;
-          align-items: center !important;
-          width: 100%;
-        }
-        .shipping-item .shipping-item-row1 .item-text {
-          font-weight: 500;
-          font-size: 15px;
-          flex: 1;
-        }
-        .shipping-item .shipping-item-row1 .item-actions {
-          display: flex !important;
-          gap: 8px !important;
-          flex-shrink: 0;
-        }
-        .shipping-item .shipping-item-row1 .item-actions .btn-icon {
-          display: inline-flex !important;
-          align-items: center;
-          justify-content: center;
-          width: 32px;
-          height: 32px;
-          border-radius: 6px;
-          border: none;
-          background: transparent;
-          color: #666;
-          cursor: pointer;
-        }
-        .shipping-item .shipping-item-row1 .item-actions .btn-edit:hover {
-          background: #e3f2fd;
-          color: #1976d2;
-        }
-        .shipping-item .shipping-item-row1 .item-actions .btn-delete:hover {
-          background: #ffebee;
-          color: #d32f2f;
-        }
-        .shipping-item .shipping-item-row2 {
-          padding-left: 0;
-        }
-        .shipping-item .shipping-price {
-          color: #666;
-          font-size: 14px;
-        }
-        .shipping-add-form {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          padding: 16px;
-          border-top: 1px solid #eee;
-        }
-        .shipping-add-row {
-          display: flex;
-          gap: 8px;
-        }
-        .shipping-add-row input {
-          flex: 1;
-        }
-        .shipping-category-add {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          padding: 16px;
-        }
-        .shipping-category-add input {
-          width: 100%;
-        }
-        .shipping-category-add button {
-          width: 100%;
-        }
-      </style>
     `;
 
     // 現在のカテゴリデータを保持
