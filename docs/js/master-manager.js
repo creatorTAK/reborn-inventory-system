@@ -2463,9 +2463,56 @@ async function renderShippingDropdownUI() {
     const selectedCategory = categories[currentShippingCategoryIndex];
     const items = selectedCategory.items;
 
+    // デフォルト設定を取得
+    let defaults = { 配送料の負担: '', 発送元の地域: '', 発送までの日数: '' };
+    try {
+      const defaultsDoc = await window.db.collection('shippingMethods').doc('_defaults').get();
+      if (defaultsDoc.exists) {
+        defaults = { ...defaults, ...defaultsDoc.data() };
+      }
+    } catch (e) {
+      console.warn('デフォルト設定取得エラー:', e);
+    }
+
+    // 都道府県リスト
+    const prefectures = ['北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県','静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県','鳥取県','島根県','岡山県','広島県','山口県','徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県'];
+
     // UIを生成
     container.innerHTML = `
       <div class="master-options-container">
+        <!-- 配送デフォルト設定 -->
+        <div class="master-options-section" style="background:#f8fafc;margin-bottom:12px;">
+          <div class="master-options-header">
+            <h6><i class="bi bi-gear"></i> 配送デフォルト設定</h6>
+          </div>
+          <div style="padding:12px 16px;display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <label style="font-size:13px;color:#374151;margin-bottom:4px;display:block;">配送料の負担</label>
+              <select id="shippingDefaultBurden" class="form-select form-select-sm" onchange="saveShippingDefaults()">
+                <option value="">-- 選択してください --</option>
+                <option value="送料込み(出品者負担)" ${defaults.配送料の負担 === '送料込み(出品者負担)' ? 'selected' : ''}>送料込み(出品者負担)</option>
+                <option value="着払い(購入者負担)" ${defaults.配送料の負担 === '着払い(購入者負担)' ? 'selected' : ''}>着払い(購入者負担)</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:13px;color:#374151;margin-bottom:4px;display:block;">発送元の地域</label>
+              <select id="shippingDefaultRegion" class="form-select form-select-sm" onchange="saveShippingDefaults()">
+                <option value="">-- 選択してください --</option>
+                ${prefectures.map(p => `<option value="${p}" ${defaults.発送元の地域 === p ? 'selected' : ''}>${p}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="font-size:13px;color:#374151;margin-bottom:4px;display:block;">発送までの日数</label>
+              <select id="shippingDefaultDays" class="form-select form-select-sm" onchange="saveShippingDefaults()">
+                <option value="">-- 選択してください --</option>
+                <option value="1~2日で発送" ${defaults.発送までの日数 === '1~2日で発送' ? 'selected' : ''}>1~2日で発送</option>
+                <option value="2~3日で発送" ${defaults.発送までの日数 === '2~3日で発送' ? 'selected' : ''}>2~3日で発送</option>
+                <option value="4~7日で発送" ${defaults.発送までの日数 === '4~7日で発送' ? 'selected' : ''}>4~7日で発送</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <!-- カテゴリ選択ドロップダウン -->
         <div class="master-options-dropdown-selector">
           <label for="shippingCategorySelect">発送カテゴリ選択</label>
@@ -2685,6 +2732,28 @@ window.addShippingCategory = async function() {
   } catch (error) {
     console.error('カテゴリ追加エラー:', error);
     alert('カテゴリの追加に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 配送デフォルト設定を保存
+ */
+window.saveShippingDefaults = async function() {
+  const burden = document.getElementById('shippingDefaultBurden')?.value || '';
+  const region = document.getElementById('shippingDefaultRegion')?.value || '';
+  const days = document.getElementById('shippingDefaultDays')?.value || '';
+
+  try {
+    await window.db.collection('shippingMethods').doc('_defaults').set({
+      配送料の負担: burden,
+      発送元の地域: region,
+      発送までの日数: days,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    console.log('✅ 配送デフォルト設定を保存しました');
+  } catch (error) {
+    console.error('配送デフォルト設定保存エラー:', error);
+    alert('保存に失敗しました: ' + error.message);
   }
 };
 
