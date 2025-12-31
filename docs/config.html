@@ -11506,27 +11506,32 @@ ${prompt || '（未設定）'}
     // メインメニューのIDリストを収集
     const mainMenuIds = mainMenus.map(m => m.id);
 
-    // メインメニューブロック
+    // メインメニューブロック（アコーディオン形式）
     const mainMenuHtml = mainMenus.length > 0 ? `
       <div style="margin-bottom: 20px;">
-        <div style="padding: 8px 4px; border-bottom: 2px solid #374151; margin-bottom: 10px;">
-          <span style="font-size: 14px; font-weight: 700; color: #374151;">メインメニュー</span>
-        </div>
-        ${renderBulkControlBar('main', mainMenuIds)}
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          ${mainMenus.map(menu => {
-            const perm = menuPermissions[menu.id] || {
-              visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', ...activePermissions]
-            };
-            return `
-              <div style="padding: 10px 12px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb;">
-                <div style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">${menu.label}</div>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                  ${generateToggles(menu.id, perm.visibleTo)}
-                </div>
-              </div>
-            `;
-          }).join('')}
+        <div style="border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden;">
+          <div onclick="toggleMenuAccordion('main')" style="padding: 12px 16px; background: #f3f4f6; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
+            <span style="font-size: 14px; font-weight: 700; color: #374151;">メインメニュー</span>
+            <span id="accordion-icon-menu-main" style="font-size: 12px; color: #6b7280; transition: transform 0.2s;">▶</span>
+          </div>
+          <div id="accordion-content-menu-main" class="accordion-content" style="display: none; padding: 12px; background: #fafafa; flex-direction: column; gap: 8px;">
+            ${renderBulkControlBar('main', mainMenuIds)}
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              ${mainMenus.map(menu => {
+                const perm = menuPermissions[menu.id] || {
+                  visibleTo: menu.defaultOwnerOnly ? ['owner'] : ['owner', ...activePermissions]
+                };
+                return `
+                  <div style="padding: 10px 12px; background: white; border-radius: 6px; border: 1px solid #e5e7eb;">
+                    <div style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">${menu.label}</div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                      ${generateToggles(menu.id, perm.visibleTo)}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
         </div>
       </div>
     ` : '';
@@ -11554,14 +11559,22 @@ ${prompt || '（未設定）'}
         return renderLeafItem(child);
       }).join('');
 
+      const accordionId = `accordion-content-menu-top-${topIndex}`;
+      const iconId = `accordion-icon-menu-top-${topIndex}`;
+
       return `
         <div style="margin-bottom: 20px;">
-          <div style="padding: 8px 4px; border-bottom: 2px solid #374151; margin-bottom: 10px;">
-            <span style="font-size: 14px; font-weight: 700; color: #374151;">${menu.label}</span>
-          </div>
-          ${renderBulkControlBar(menu.id, groupMenuIds)}
-          <div style="display: flex; flex-direction: column; gap: 6px;">
-            ${childrenHtml}
+          <div style="border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden;">
+            <div onclick="toggleMenuAccordion('top-${topIndex}')" style="padding: 12px 16px; background: #f3f4f6; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
+              <span style="font-size: 14px; font-weight: 700; color: #374151;">${menu.label}</span>
+              <span id="${iconId}" style="font-size: 12px; color: #6b7280;">▶</span>
+            </div>
+            <div id="${accordionId}" class="accordion-content" style="display: none; padding: 12px; background: #fafafa; flex-direction: column; gap: 8px;">
+              ${renderBulkControlBar(menu.id, groupMenuIds)}
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                ${childrenHtml}
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -11598,10 +11611,10 @@ ${prompt || '（未設定）'}
 
     if (content.style.display === 'none') {
       content.style.display = 'flex';
-      icon.style.transform = 'rotate(180deg)';
+      icon.textContent = '▼';
     } else {
       content.style.display = 'none';
-      icon.style.transform = 'rotate(0deg)';
+      icon.textContent = '▶';
     }
   }
 
