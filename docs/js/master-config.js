@@ -383,7 +383,7 @@ const masterCategories = {
         label: '配送設定',
         icon: 'bi-truck',
         description: '配送・発送に関する設定',
-        masters: ['shipping', 'assignee']
+        masters: ['shipping', 'shippingBurden', 'shippingRegion', 'shippingDays', 'assignee']
       },
       material: {
         id: 'material',
@@ -424,6 +424,48 @@ const masterCategories = {
           icon: '📦',
           message: '発送方法を管理',
           hint: 'カテゴリを選択して発送方法を追加・編集'
+        }
+      },
+      
+      shippingBurden: {
+        label: '配送料の負担',
+        collection: 'shippingBurden',
+        type: 'simpleList',
+        description: '配送料の負担者（出品者/購入者）',
+        icon: 'bi-cash-coin',
+        placeholder: '例: 送料込み(出品者負担)',
+        emptyState: {
+          icon: '💰',
+          message: '配送料の負担を管理',
+          hint: '出品者負担・購入者負担などを追加'
+        }
+      },
+      
+      shippingRegion: {
+        label: '発送元の地域',
+        collection: 'shippingRegion',
+        type: 'simpleList',
+        description: '発送元の都道府県',
+        icon: 'bi-geo-alt',
+        placeholder: '例: 岡山県',
+        emptyState: {
+          icon: '📍',
+          message: '発送元の地域を管理',
+          hint: '都道府県を追加'
+        }
+      },
+      
+      shippingDays: {
+        label: '発送までの日数',
+        collection: 'shippingDays',
+        type: 'simpleList',
+        description: '発送にかかる日数',
+        icon: 'bi-calendar-check',
+        placeholder: '例: 1~2日で発送',
+        emptyState: {
+          icon: '📅',
+          message: '発送までの日数を管理',
+          hint: '発送期間を追加'
         }
       },
       
