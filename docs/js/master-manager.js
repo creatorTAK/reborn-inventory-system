@@ -2490,16 +2490,19 @@ async function renderShippingDropdownUI() {
                 <p>このカテゴリにはまだ発送方法がありません</p>
               </div>
             ` : items.map((item, itemIndex) => `
-              <div class="master-options-item" data-item-index="${itemIndex}">
-                <span class="item-text">${escapeHtml(item.detail || '')} <span style="color:#666;font-weight:normal;">¥${Number(item.price || 0).toLocaleString()}</span></span>
-                <div class="item-actions">
-                  <button class="btn-icon btn-edit" onclick="editShippingItem(${itemIndex})" title="編集">
-                    <i class="bi bi-pencil"></i>
-                  </button>
-                  <button class="btn-icon btn-delete" onclick="deleteShippingItem(${itemIndex})" title="削除">
-                    <i class="bi bi-trash"></i>
-                  </button>
+              <div class="master-options-item" data-item-index="${itemIndex}" style="flex-direction:column;align-items:stretch;gap:4px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span class="item-text">${escapeHtml(item.detail || '')}</span>
+                  <div class="item-actions">
+                    <button class="btn-icon btn-edit" onclick="editShippingItem(${itemIndex})" title="編集">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn-icon btn-delete" onclick="deleteShippingItem(${itemIndex})" title="削除">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
                 </div>
+                <div style="color:#666;font-size:14px;">¥${Number(item.price || 0).toLocaleString()}</div>
               </div>
             `).join('')}
           </div>
