@@ -2225,7 +2225,7 @@ async function renderCategoryWordsDropdownUI() {
           <select id="cwDropdownCategorySelect" class="form-select" onchange="changeCWDropdownCategory(this.value)">
             ${categories.map((cat, index) => `
               <option value="${index}" ${index === currentCWDropdownCategoryIndex ? 'selected' : ''}>
-                ${escapeHtml(cat.name)} (${cat.words.length}件)
+                ${escapeHtml(cat.name)}
               </option>
             `).join('')}
           </select>
@@ -2544,7 +2544,7 @@ async function renderShippingDropdownUI() {
           <select id="shippingCategorySelect" class="form-select" onchange="changeShippingCategory(this.value)">
             ${categories.map((cat, index) => `
               <option value="${index}" ${index === currentShippingCategoryIndex ? 'selected' : ''}>
-                ${escapeHtml(cat.name)} (${cat.items.length}件)
+                ${escapeHtml(cat.name)}
               </option>
             `).join('')}
           </select>
