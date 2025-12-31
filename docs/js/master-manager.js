@@ -2442,9 +2442,9 @@ async function renderShippingDropdownUI() {
         <div class="master-options-container">
           <div class="master-options-empty" style="padding: 40px; text-align: center;">
             <p>発送カテゴリがありません</p>
-            <div class="master-options-add" style="border-top: none; margin-top: 16px;">
-              <input type="text" class="form-control form-control-sm" id="newShippingCategoryName" placeholder="新しいカテゴリ名（例: らくらくメルカリ便）">
-              <button class="btn btn-sm btn-outline-primary" onclick="addShippingCategory()">
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px; max-width: 300px; margin-left: auto; margin-right: auto;">
+              <input type="text" class="form-control" id="newShippingCategoryName" placeholder="カテゴリ名を入力">
+              <button class="btn btn-outline-primary" onclick="addShippingCategory()">
                 <i class="bi bi-folder-plus"></i> カテゴリ追加
               </button>
             </div>
@@ -2508,22 +2508,24 @@ async function renderShippingDropdownUI() {
               </div>
             `).join('')}
           </div>
-          <div class="master-options-add shipping-add-form">
-            <div class="shipping-add-inputs">
-              <input type="text" class="form-control form-control-sm" id="newShippingDetail" placeholder="${currentMasterConfig.placeholder || '例: ネコポス'}">
-              <input type="number" class="form-control form-control-sm" id="newShippingPrice" placeholder="${currentMasterConfig.pricePlaceholder || '例: 210'}" style="width: 120px;">
+          <div class="shipping-add-form">
+            <div class="shipping-add-row">
+              <input type="text" class="form-control" id="newShippingDetail" placeholder="${currentMasterConfig.placeholder || '例: ネコポス'}">
             </div>
-            <button class="btn btn-sm btn-primary" onclick="addShippingItem()">
-              <i class="bi bi-plus"></i> 追加
-            </button>
+            <div class="shipping-add-row">
+              <input type="number" class="form-control" id="newShippingPrice" placeholder="送料（円）">
+              <button class="btn btn-primary" onclick="addShippingItem()">
+                <i class="bi bi-plus"></i> 追加
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- 新規カテゴリ追加 -->
         <div class="master-options-section" style="background: #f8f9fa;">
-          <div class="master-options-add" style="border-top: none;">
-            <input type="text" class="form-control form-control-sm" id="newShippingCategoryName" placeholder="新しいカテゴリ名（例: ゆうパケット）">
-            <button class="btn btn-sm btn-outline-primary" onclick="addShippingCategory()">
+          <div class="shipping-category-add">
+            <input type="text" class="form-control" id="newShippingCategoryName" placeholder="新しいカテゴリ名">
+            <button class="btn btn-outline-primary" onclick="addShippingCategory()">
               <i class="bi bi-folder-plus"></i> カテゴリ追加
             </button>
           </div>
@@ -2536,6 +2538,10 @@ async function renderShippingDropdownUI() {
           flex-direction: column;
           gap: 4px;
           padding: 12px 16px;
+          border-bottom: 1px solid #eee;
+        }
+        .shipping-item:last-child {
+          border-bottom: none;
         }
         .shipping-item-row1 {
           display: flex;
@@ -2544,26 +2550,40 @@ async function renderShippingDropdownUI() {
         }
         .shipping-item-row1 .item-text {
           font-weight: 500;
+          font-size: 15px;
         }
         .shipping-item-row2 {
           padding-left: 0;
         }
         .shipping-price {
           color: #666;
-          font-size: 0.9em;
+          font-size: 14px;
         }
         .shipping-add-form {
           display: flex;
-          gap: 8px;
-          align-items: center;
+          flex-direction: column;
+          gap: 10px;
+          padding: 16px;
+          border-top: 1px solid #eee;
         }
-        .shipping-add-inputs {
+        .shipping-add-row {
           display: flex;
           gap: 8px;
+        }
+        .shipping-add-row input {
           flex: 1;
         }
-        .shipping-add-inputs input:first-child {
-          flex: 1;
+        .shipping-category-add {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          padding: 16px;
+        }
+        .shipping-category-add input {
+          width: 100%;
+        }
+        .shipping-category-add button {
+          width: 100%;
         }
       </style>
     `;
