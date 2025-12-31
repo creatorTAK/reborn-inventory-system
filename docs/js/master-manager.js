@@ -1302,33 +1302,9 @@ async function renderMasterOptionsDropdownUI() {
   // 空状態を非表示
   if (emptyState) emptyState.classList.add('hidden');
 
-  // カテゴリ設定を取得（設定 + カスタムカテゴリをマージ）
+  // カテゴリ設定を取得（設定のみ - _indexからの追加読み込みは無効化）
+  // masterOptionsCategories が定義済みの場合はそれのみを使用
   let categories = [...(currentMasterConfig.masterOptionsCategories || [])];
-
-  // _indexからカスタムカテゴリを読み込み
-  try {
-    const indexDoc = await window.db.collection('masterOptions').doc('_index').get();
-    if (indexDoc.exists) {
-      const fieldNames = indexDoc.data().fieldNames || [];
-      const existingKeys = new Set(categories.map(c => c.key));
-
-      // 設定に含まれていないカテゴリを追加
-      for (const fieldName of fieldNames) {
-        if (!existingKeys.has(fieldName)) {
-          categories.push({
-            key: fieldName,
-            label: fieldName,
-            icon: 'bi-tag'
-          });
-        }
-      }
-    }
-  } catch (error) {
-    console.warn('_index読み込みエラー:', error);
-  }
-
-  // 設定も更新（次回以降のため）
-  currentMasterConfig.masterOptionsCategories = categories;
 
   if (categories.length === 0) {
     container.innerHTML = `
