@@ -24,7 +24,7 @@ const masterCategories = {
         label: '説明文生成',
         icon: 'bi-file-text',
         description: '商品名・説明文に挿入するワード',
-        masters: ['material', 'accessory', 'sizeLabel', 'salesword', 'attribute', 'conditionRank']
+        masters: ['material', 'colorDetail', 'accessory', 'sizeLabel', 'salesword', 'attribute', 'conditionRank']
       }
     },
     defaultSubGroup: 'listing',
