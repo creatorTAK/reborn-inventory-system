@@ -228,15 +228,15 @@ const masterCategories = {
       // カラー(詳細)マスタ - 説明文生成用
       colorDetail: {
         label: 'カラー(詳細)',
-        description: '説明文生成で使用するカラー選択肢を管理',
+        description: '説明文生成で使用するカラー選択肢を管理（商品属性と連動）',
         type: 'masterOptions',
         masterOptionsFields: [
-          { key: 'カラー(詳細)', label: 'カラー(詳細)', placeholder: '例: ブラック', icon: 'bi-palette' }
+          { key: 'カラー/配色/トーン', label: 'カラー(詳細)', placeholder: '例: ブラック', icon: 'bi-droplet-fill' }
         ],
         emptyState: {
           icon: '🎨',
           message: 'カラー(詳細)マスタを管理',
-          hint: '説明文生成で使用するカラーを追加・編集'
+          hint: '商品属性のカラー/配色/トーンと連動'
         }
       },
 
