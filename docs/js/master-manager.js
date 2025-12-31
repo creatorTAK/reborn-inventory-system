@@ -3176,6 +3176,14 @@ async function loadMasterData() {
  * 検索実行
  */
 async function performSearch(query) {
+  // simpleList、categoryWords等の特殊タイプは専用フィルターを使用
+  const specialTypes = ['simpleList', 'categoryWords', 'categoryWordsDropdown', 'shippingDropdown', 'masterOptions', 'masterOptionsDropdown'];
+  if (currentMasterConfig && specialTypes.includes(currentMasterConfig.type)) {
+    console.log(`🔍 [Master Manager] 特殊タイプ検索: ${currentMasterConfig.type}, クエリ: "${query}"`);
+    handleGlobalFilter(query);
+    return;
+  }
+
   const collection = currentMasterConfig.collection;
 
   if (query.length > 0) {
