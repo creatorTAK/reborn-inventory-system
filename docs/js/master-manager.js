@@ -598,7 +598,13 @@ async function loadMaster(category, type) {
   // simpleListタイプの場合はシンプルリストUIを表示
   if (currentMasterConfig.type === 'simpleList') {
     console.log('📋 [Master Manager] simpleListタイプ - シンプルリストUI表示');
-    hidePlatformTabs();
+    // プラットフォームサポートがある場合はタブを表示
+    if (currentMasterConfig.platformSupport) {
+      currentPlatform = currentMasterConfig.defaultPlatform || 'mercari';
+      showPlatformTabs();
+    } else {
+      hidePlatformTabs();
+    }
     hideActionBar();
     await renderSimpleListUI();
     return;
@@ -625,7 +631,13 @@ async function loadMaster(category, type) {
   // shippingDropdownタイプの場合（発送方法管理）
   if (currentMasterConfig.type === 'shippingDropdown') {
     console.log('📋 [Master Manager] shippingDropdownタイプ - 発送方法UI表示');
-    hidePlatformTabs();
+    // プラットフォームサポートがある場合はタブを表示
+    if (currentMasterConfig.platformSupport) {
+      currentPlatform = currentMasterConfig.defaultPlatform || 'mercari';
+      showPlatformTabs();
+    } else {
+      hidePlatformTabs();
+    }
     hideActionBar();
     await renderShippingDropdownUI();
     return;
@@ -1613,13 +1625,21 @@ async function renderSimpleListUI() {
     let snapshot;
     try {
       let query = window.db.collection(collection);
+      // プラットフォームサポートがある場合はフィルタリング
+      if (currentMasterConfig.platformSupport && currentPlatform) {
+        query = query.where('platform', '==', currentPlatform);
+      }
       if (orderField) {
         query = query.orderBy(orderField, 'asc');
       }
       snapshot = await query.get();
     } catch (orderError) {
       console.warn('orderByエラー、ソートなしで取得:', orderError.message);
-      snapshot = await window.db.collection(collection).get();
+      let fallbackQuery = window.db.collection(collection);
+      if (currentMasterConfig.platformSupport && currentPlatform) {
+        fallbackQuery = fallbackQuery.where('platform', '==', currentPlatform);
+      }
+      snapshot = await fallbackQuery.get();
     }
     const items = [];
     snapshot.forEach(doc => {
@@ -1737,6 +1757,11 @@ window.addSimpleListItem = async function() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
+
+    // プラットフォームサポートがある場合はplatformフィールドを追加
+    if (currentMasterConfig.platformSupport && currentPlatform) {
+      newData.platform = currentPlatform;
+    }
 
     // 表示順がある場合は最大値+1を設定
     if (orderField) {
@@ -2420,8 +2445,12 @@ async function renderShippingDropdownUI() {
   const icon = currentMasterConfig.icon || 'bi-truck';
 
   try {
-    // Firestoreからデータ取得
-    const snapshot = await window.db.collection(collection).orderBy('order', 'asc').get();
+    // Firestoreからデータ取得（プラットフォームサポートがある場合はフィルタリング）
+    let query = window.db.collection(collection);
+    if (currentMasterConfig.platformSupport && currentPlatform) {
+      query = query.where('platform', '==', currentPlatform);
+    }
+    const snapshot = await query.orderBy('order', 'asc').get();
 
     const categories = [];
     snapshot.forEach(doc => {
@@ -2430,7 +2459,8 @@ async function renderShippingDropdownUI() {
         id: doc.id,
         name: doc.id,
         items: data.items || [],
-        order: data.order || 0
+        order: data.order || 0,
+        platform: data.platform || null
       });
     });
 
@@ -2671,12 +2701,19 @@ window.addShippingCategory = async function() {
   try {
     const maxOrder = categories.reduce((max, cat) => Math.max(max, cat.order || 0), 0);
 
-    await window.db.collection(currentMasterConfig.collection).doc(categoryName).set({
+    const newData = {
       items: [],
       order: maxOrder + 1,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    };
+
+    // プラットフォームサポートがある場合はplatformフィールドを追加
+    if (currentMasterConfig.platformSupport && currentPlatform) {
+      newData.platform = currentPlatform;
+    }
+
+    await window.db.collection(currentMasterConfig.collection).doc(categoryName).set(newData);
 
     input.value = '';
     // 新しく追加したカテゴリを選択
@@ -2796,6 +2833,19 @@ window.selectPlatformTab = async function selectPlatformTab(platformId) {
   // masterOptionsタイプの場合は専用UIを再描画
   if (currentMasterConfig.type === 'masterOptions') {
     await renderMasterOptionsUI();
+    return;
+  }
+
+  // simpleListタイプの場合は専用UIを再描画
+  if (currentMasterConfig.type === 'simpleList') {
+    await renderSimpleListUI();
+    return;
+  }
+
+  // shippingDropdownタイプの場合は専用UIを再描画
+  if (currentMasterConfig.type === 'shippingDropdown') {
+    currentShippingCategoryIndex = 0; // カテゴリ選択をリセット
+    await renderShippingDropdownUI();
     return;
   }
 

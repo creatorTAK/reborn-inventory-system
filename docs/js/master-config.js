@@ -420,10 +420,22 @@ const masterCategories = {
         icon: 'bi-truck',
         placeholder: '例: ネコポス',
         pricePlaceholder: '例: 210',
+        // プラットフォーム別管理
+        platformSupport: true,
+        defaultPlatform: 'mercari',
+        platforms: [
+          { id: 'mercari', name: 'メルカリ', icon: '/images/platform/mercari.png' },
+          { id: 'mercari-shops', name: 'メルカリShops', icon: '/images/platform/mercari-shops.png' },
+          { id: 'yahoo-fleamarket', name: 'Yahoo!フリマ', icon: '/images/platform/yahoo-fleamarket.png' },
+          { id: 'yahoo-auction', name: 'Yahoo!オークション', icon: '/images/platform/yahoo-auction.png' },
+          { id: 'rakuma', name: 'ラクマ', icon: '/images/platform/rakuma.png' },
+          { id: 'base', name: 'BASE', icon: '/images/platform/base.png' },
+          { id: 'shopify', name: 'Shopify', icon: '/images/platform/shopify.png' }
+        ],
         emptyState: {
           icon: '📦',
           message: '発送方法を管理',
-          hint: 'カテゴリを選択して発送方法を追加・編集'
+          hint: 'プラットフォームを選択して発送方法を追加・編集'
         }
       },
       
@@ -462,10 +474,22 @@ const masterCategories = {
         description: '発送にかかる日数',
         icon: 'bi-calendar-check',
         placeholder: '例: 1~2日で発送',
+        // プラットフォーム別管理
+        platformSupport: true,
+        defaultPlatform: 'mercari',
+        platforms: [
+          { id: 'mercari', name: 'メルカリ', icon: '/images/platform/mercari.png' },
+          { id: 'mercari-shops', name: 'メルカリShops', icon: '/images/platform/mercari-shops.png' },
+          { id: 'yahoo-fleamarket', name: 'Yahoo!フリマ', icon: '/images/platform/yahoo-fleamarket.png' },
+          { id: 'yahoo-auction', name: 'Yahoo!オークション', icon: '/images/platform/yahoo-auction.png' },
+          { id: 'rakuma', name: 'ラクマ', icon: '/images/platform/rakuma.png' },
+          { id: 'base', name: 'BASE', icon: '/images/platform/base.png' },
+          { id: 'shopify', name: 'Shopify', icon: '/images/platform/shopify.png' }
+        ],
         emptyState: {
           icon: '📅',
           message: '発送までの日数を管理',
-          hint: '発送期間を追加'
+          hint: 'プラットフォームを選択して発送期間を追加'
         }
       },
       
