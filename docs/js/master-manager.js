@@ -1063,6 +1063,7 @@ async function saveMasterOptionsFieldData(fieldKey, items, platformId = null) {
     }
 
     await db.collection('masterOptions').doc(safeFieldName).set({
+      fieldName: fieldKey,
       items: items,
       platformId: platformId || null,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
