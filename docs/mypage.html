@@ -943,6 +943,13 @@
       color: #374151;
       font-weight: 500;
     }
+    .action-btn-badge {
+      display: block;
+      font-size: 11px;
+      color: #40B4E5;
+      font-weight: 600;
+      margin-top: 4px;
+    }
 
     /* 目標設定モーダル */
     .goal-modal-backdrop {
@@ -3882,6 +3889,18 @@
         renderMyPage();
         checkAdminAccess();
 
+        // 担当タスクをバックグラウンドで最新化（設定変更の即時反映）
+        loadAssignedTasks().then(() => {
+          // キャッシュと異なる場合は再描画
+          const cachedTasks = JSON.stringify(cached.assignedTasks || []);
+          const currentTasks = JSON.stringify(assignedTasks);
+          if (cachedTasks !== currentTasks) {
+            console.log('🔄 担当タスク変更を検出、再描画');
+            renderMyPage();
+            saveToCache();
+          }
+        }).catch(e => console.warn('担当タスク読み込みエラー:', e));
+
         // お知らせはバックグラウンドで読み込み
         initAnnouncements().catch(e => console.warn('お知らせ読み込みエラー:', e));
 
@@ -4421,14 +4440,10 @@
           </div>
         </div>
 
-        <!-- 管理者自身の作業内訳（報酬はカウントしないが貢献度として表示） -->
+        <!-- 管理者自身の作業内訳 -->
         <div class="breakdown-card">
-          <div class="breakdown-title">あなたの作業貢献</div>
+          <div class="breakdown-title">内訳</div>
           ${generateAdminBreakdownItems(assignedTasks, myStats.taskStats)}
-          <div class="admin-contribution-note">
-            <i class="bi bi-info-circle"></i>
-            作業件数はチーム実績にカウントされます（報酬対象外）
-          </div>
         </div>
 
         <!-- 全体売上サマリー -->
@@ -4480,38 +4495,6 @@
           ${renderRankingList(calculateRanking(), currentUser.email)}
         </div>
 
-        <!-- システム状態ダッシュボード -->
-        <div class="admin-section">
-          <div class="admin-section-title">システム状態</div>
-          <div class="system-status-grid">
-            <div class="system-status-item">
-              <div class="system-status-icon">👥</div>
-              <div class="system-status-label">アクティブユーザー</div>
-              <div class="system-status-value">${systemStatus.activeUsers}人</div>
-            </div>
-            <div class="system-status-item">
-              <div class="system-status-icon">💾</div>
-              <div class="system-status-label">Firestore使用量</div>
-              <div class="system-status-value" style="font-size: 12px; color: #9ca3af;">コンソール確認</div>
-            </div>
-            <div class="system-status-item">
-              <div class="system-status-icon">📦</div>
-              <div class="system-status-label">ストレージ残量</div>
-              <div class="system-status-value" style="font-size: 12px; color: #9ca3af;">コンソール確認</div>
-            </div>
-            <div class="system-status-item">
-              <div class="system-status-icon">✅</div>
-              <div class="system-status-label">システム状態</div>
-              <div class="system-status-value" style="color: #10b981;">正常</div>
-            </div>
-          </div>
-          <div class="system-status-note">
-            <a href="https://console.firebase.google.com/" target="_blank" style="color: #6366f1; text-decoration: none;">
-              <i class="bi bi-box-arrow-up-right"></i> Firebase Console で詳細を確認
-            </a>
-          </div>
-        </div>
-
         <!-- アクションボタン -->
         <div class="action-buttons">
           <div class="action-btn" onclick="openTeamGoalModal()">
@@ -4526,6 +4509,11 @@
             <i class="bi bi-file-earmark-text"></i>
             <span>報酬履歴</span>
           </div>
+          <a class="action-btn" href="https://console.firebase.google.com/" target="_blank" style="text-decoration: none;">
+            <i class="bi bi-gear"></i>
+            <span>システム状態</span>
+            <span class="action-btn-badge">${systemStatus.activeUsers}人</span>
+          </a>
         </div>
       `;
 
