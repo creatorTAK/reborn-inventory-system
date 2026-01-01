@@ -1303,6 +1303,25 @@
     .admin-current-btn:active {
       background: #bae6fd;
     }
+    .admin-export-btn {
+      font-size: 12px;
+      color: #059669;
+      background: #d1fae5;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 16px;
+      cursor: pointer;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .admin-export-btn:active {
+      background: #a7f3d0;
+    }
+    .admin-export-btn i {
+      font-size: 14px;
+    }
 
     .admin-section {
       background: white;
@@ -5140,6 +5159,9 @@
             <i class="bi bi-chevron-right"></i>
           </button>
           ${isHistoryMode ? '<button class="admin-current-btn" onclick="goToCurrentMonth()">今月に戻る</button>' : ''}
+          <button class="admin-export-btn" onclick="exportMonthlyData()" title="CSVエクスポート">
+            <i class="bi bi-download"></i> CSV
+          </button>
         </div>
 
         <!-- ビジネス目標（売上・利益） -->
@@ -5388,6 +5410,143 @@
 
       showLoading(false);
     }
+
+    // CSVエクスポート機能
+    window.exportMonthlyData = function() {
+      const now = new Date();
+      let viewYear, viewMonth, monthName;
+
+      if (adminViewMonth) {
+        const [y, m] = adminViewMonth.split('-').map(Number);
+        viewYear = y;
+        viewMonth = m;
+      } else {
+        viewYear = now.getFullYear();
+        viewMonth = now.getMonth() + 1;
+      }
+      monthName = `${viewYear}年${viewMonth}月`;
+
+      // CSV用のデータを作成
+      const csvData = [];
+
+      // 1. サマリー情報
+      csvData.push(['=== ' + monthName + ' 月次レポート ===']);
+      csvData.push([]);
+
+      // 2. 売上・利益目標
+      csvData.push(['【売上・利益】']);
+      csvData.push(['項目', '目標', '実績', '達成率']);
+      const salesTarget = businessGoals.salesTarget || 0;
+      const profitTarget = businessGoals.profitTarget || 0;
+      const actualSales = monthlySalesData.totalSales || 0;
+      const actualProfit = monthlySalesData.totalProfit || 0;
+      const salesProgress = salesTarget > 0 ? Math.round((actualSales / salesTarget) * 100) : 0;
+      const profitProgress = profitTarget > 0 ? Math.round((actualProfit / profitTarget) * 100) : 0;
+      csvData.push(['売上', salesTarget, actualSales, salesProgress + '%']);
+      csvData.push(['利益', profitTarget, actualProfit, profitProgress + '%']);
+      csvData.push(['販売件数', '-', monthlySalesData.count || 0, '-']);
+      csvData.push([]);
+
+      // 3. 全体作業サマリー
+      csvData.push(['【作業サマリー】']);
+      csvData.push(['タスク', '件数']);
+
+      const taskLabels = {
+        listing: '商品出品',
+        shipping: '梱包・発送',
+        photography: '商品撮影',
+        inspection: '検品作業',
+        stocktaking: '棚卸',
+        editing: '追加編集'
+      };
+
+      const taskStats = {};
+      compensationRecords.forEach(r => {
+        const taskType = r.taskType || 'listing';
+        if (!taskStats[taskType]) taskStats[taskType] = 0;
+        taskStats[taskType]++;
+      });
+
+      Object.entries(taskLabels).forEach(([key, label]) => {
+        csvData.push([label, taskStats[key] || 0]);
+      });
+      csvData.push(['合計', compensationRecords.length]);
+      csvData.push([]);
+
+      // 4. スタッフ別報酬
+      csvData.push(['【スタッフ別報酬】']);
+      csvData.push(['スタッフ名', '報酬目標', '報酬実績', '達成率', '作業件数']);
+
+      const staffStats = {};
+      compensationRecords.forEach(r => {
+        const email = r.staffEmail || '';
+        if (!email) return;
+        if (!staffStats[email]) {
+          staffStats[email] = {
+            name: r.staffName || email.split('@')[0],
+            amount: 0,
+            count: 0,
+            goalAmount: 0
+          };
+        }
+        staffStats[email].amount += r.unitPrice || 0;
+        staffStats[email].count++;
+      });
+
+      // 目標データをマージ
+      memberGoalsData.forEach(member => {
+        if (staffStats[member.email]) {
+          staffStats[member.email].goalAmount = member.goalAmount || 0;
+        } else {
+          staffStats[member.email] = {
+            name: member.name,
+            amount: 0,
+            count: 0,
+            goalAmount: member.goalAmount || 0
+          };
+        }
+      });
+
+      const sortedStaff = Object.values(staffStats).sort((a, b) => b.amount - a.amount);
+      sortedStaff.forEach(staff => {
+        const progress = staff.goalAmount > 0 ? Math.round((staff.amount / staff.goalAmount) * 100) : 0;
+        csvData.push([staff.name, staff.goalAmount, staff.amount, progress + '%', staff.count]);
+      });
+      csvData.push([]);
+
+      // 5. ランキング
+      csvData.push(['【ランキング】']);
+      csvData.push(['順位', 'スタッフ名', '報酬額']);
+      sortedStaff.forEach((staff, index) => {
+        csvData.push([index + 1, staff.name, staff.amount]);
+      });
+
+      // CSVに変換
+      const csvContent = csvData.map(row => {
+        return row.map(cell => {
+          const str = String(cell);
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return '"' + str.replace(/"/g, '""') + '"';
+          }
+          return str;
+        }).join(',');
+      }).join('\n');
+
+      // BOM付きUTF-8でダウンロード
+      const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+      const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `FURIRA_月次レポート_${viewYear}${String(viewMonth).padStart(2, '0')}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      console.log('📊 CSVエクスポート完了:', monthName);
+    };
 
     // 管理者データを読み込み（当月用）
     async function loadAdminData() {
