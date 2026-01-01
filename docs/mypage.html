@@ -373,6 +373,46 @@
       outline: none;
       border-color: #40B4E5;
     }
+    /* 金融機関コード入力用スタイル */
+    .bank-code-input-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .bank-code-input {
+      width: 100px !important;
+      flex-shrink: 0;
+      text-align: center;
+      font-family: monospace;
+      font-size: 16px;
+      letter-spacing: 2px;
+    }
+    .bank-name-display {
+      flex: 1;
+      font-size: 15px;
+      color: #059669;
+      font-weight: 500;
+    }
+    .bank-name-display.error {
+      color: #dc2626;
+    }
+    .bank-name-display.loading {
+      color: #6b7280;
+    }
+    .bank-code-error {
+      font-size: 12px;
+      color: #dc2626;
+      margin-top: 4px;
+      min-height: 16px;
+    }
+    .bank-code-hint {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
     .settings-textarea {
       width: 100%;
       padding: 12px 14px;
@@ -4367,12 +4407,20 @@
         <div class="settings-section">
           <div class="settings-section-title"><i class="bi bi-bank"></i> 口座情報</div>
           <div class="settings-input-group">
-            <label class="settings-input-label">銀行名</label>
-            <input type="text" class="settings-input" id="bankName" placeholder="○○銀行">
+            <label class="settings-input-label">金融機関コード（4桁）</label>
+            <div class="bank-code-input-row">
+              <input type="text" class="settings-input bank-code-input" id="bankCode" placeholder="0001" maxlength="4" inputmode="numeric" pattern="[0-9]*">
+              <span class="bank-name-display" id="bankNameDisplay">-</span>
+            </div>
+            <div class="bank-code-error" id="bankCodeError"></div>
           </div>
           <div class="settings-input-group">
-            <label class="settings-input-label">支店名</label>
-            <input type="text" class="settings-input" id="bankBranch" placeholder="○○支店">
+            <label class="settings-input-label">支店コード（3桁）</label>
+            <div class="bank-code-input-row">
+              <input type="text" class="settings-input bank-code-input" id="branchCode" placeholder="001" maxlength="3" inputmode="numeric" pattern="[0-9]*">
+              <span class="bank-name-display" id="branchNameDisplay">-</span>
+            </div>
+            <div class="bank-code-error" id="branchCodeError"></div>
           </div>
           <div class="settings-input-group">
             <label class="settings-input-label">口座種別</label>
@@ -4382,12 +4430,15 @@
             </select>
           </div>
           <div class="settings-input-group">
-            <label class="settings-input-label">口座番号</label>
-            <input type="text" class="settings-input" id="bankAccountNumber" placeholder="0000000">
+            <label class="settings-input-label">口座番号（7桁）</label>
+            <input type="text" class="settings-input" id="bankAccountNumber" placeholder="0000000" maxlength="7" inputmode="numeric" pattern="[0-9]*">
           </div>
           <div class="settings-input-group">
             <label class="settings-input-label">口座名義（カタカナ）</label>
             <input type="text" class="settings-input" id="bankAccountHolder" placeholder="ヤマダ タロウ">
+          </div>
+          <div class="bank-code-hint">
+            <i class="bi bi-info-circle"></i> 金融機関コード・支店コードは通帳やキャッシュカードに記載されています
           </div>
         </div>
       </div>
@@ -8066,8 +8117,140 @@
     // 個人情報（発送先・口座）を保持
     let personalInfo = {
       shipping: { name: '', postalCode: '', address: '', phone: '' },
-      bank: { bankName: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '' }
+      bank: { bankCode: '', bankName: '', branchCode: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '' }
     };
+
+    // 銀行データキャッシュ
+    let bankDataCache = null;
+
+    // 銀行データを取得（zengin-codeから）
+    async function fetchBankData() {
+      if (bankDataCache) return bankDataCache;
+
+      try {
+        console.log('[BankCode] 銀行データを取得中...');
+        const response = await fetch('https://raw.githubusercontent.com/zengin-code/zengin-code/master/data/banks.json');
+        if (!response.ok) throw new Error('Failed to fetch bank data');
+        bankDataCache = await response.json();
+        console.log('[BankCode] 銀行データ取得完了:', Object.keys(bankDataCache).length, '件');
+        return bankDataCache;
+      } catch (error) {
+        console.error('[BankCode] 銀行データ取得エラー:', error);
+        return null;
+      }
+    }
+
+    // 金融機関コードから銀行名を取得
+    async function lookupBankName(bankCode) {
+      const bankData = await fetchBankData();
+      if (!bankData) return null;
+
+      const bank = bankData[bankCode];
+      if (bank) {
+        return bank.name;
+      }
+      return null;
+    }
+
+    // 支店コードから支店名を取得
+    async function lookupBranchName(bankCode, branchCode) {
+      const bankData = await fetchBankData();
+      if (!bankData) return null;
+
+      const bank = bankData[bankCode];
+      if (bank && bank.branches && bank.branches[branchCode]) {
+        return bank.branches[branchCode].name;
+      }
+      return null;
+    }
+
+    // 金融機関コード入力時の処理
+    async function onBankCodeInput(event) {
+      const input = event.target;
+      const code = input.value.replace(/[^0-9]/g, '');
+      input.value = code;
+
+      const displayEl = document.getElementById('bankNameDisplay');
+      const errorEl = document.getElementById('bankCodeError');
+
+      if (code.length === 0) {
+        displayEl.textContent = '-';
+        displayEl.className = 'bank-name-display';
+        errorEl.textContent = '';
+        return;
+      }
+
+      if (code.length < 4) {
+        displayEl.textContent = '...';
+        displayEl.className = 'bank-name-display loading';
+        errorEl.textContent = '';
+        return;
+      }
+
+      displayEl.textContent = '検索中...';
+      displayEl.className = 'bank-name-display loading';
+
+      const bankName = await lookupBankName(code);
+      if (bankName) {
+        displayEl.textContent = bankName;
+        displayEl.className = 'bank-name-display';
+        errorEl.textContent = '';
+        // 支店コードもクリア
+        document.getElementById('branchCode').value = '';
+        document.getElementById('branchNameDisplay').textContent = '-';
+        document.getElementById('branchCodeError').textContent = '';
+      } else {
+        displayEl.textContent = '該当なし';
+        displayEl.className = 'bank-name-display error';
+        errorEl.textContent = '有効な金融機関コードを入力してください';
+      }
+    }
+
+    // 支店コード入力時の処理
+    async function onBranchCodeInput(event) {
+      const input = event.target;
+      const code = input.value.replace(/[^0-9]/g, '');
+      input.value = code;
+
+      const displayEl = document.getElementById('branchNameDisplay');
+      const errorEl = document.getElementById('branchCodeError');
+      const bankCode = document.getElementById('bankCode').value;
+
+      if (code.length === 0) {
+        displayEl.textContent = '-';
+        displayEl.className = 'bank-name-display';
+        errorEl.textContent = '';
+        return;
+      }
+
+      if (!bankCode || bankCode.length < 4) {
+        displayEl.textContent = '-';
+        displayEl.className = 'bank-name-display error';
+        errorEl.textContent = '先に金融機関コードを入力してください';
+        return;
+      }
+
+      if (code.length < 3) {
+        displayEl.textContent = '...';
+        displayEl.className = 'bank-name-display loading';
+        errorEl.textContent = '';
+        return;
+      }
+
+      displayEl.textContent = '検索中...';
+      displayEl.className = 'bank-name-display loading';
+
+      const branchName = await lookupBranchName(bankCode, code);
+      if (branchName) {
+        displayEl.textContent = branchName;
+        displayEl.className = 'bank-name-display';
+        errorEl.textContent = '';
+      } else {
+        displayEl.textContent = '該当なし';
+        displayEl.className = 'bank-name-display error';
+        errorEl.textContent = '有効な支店コードを入力してください';
+      }
+    }
 
     // 通知設定を保持
     let notificationSettings = {
@@ -8085,7 +8268,7 @@
           if (data.personalInfo) {
             personalInfo = {
               shipping: data.personalInfo.shipping || { name: '', postalCode: '', address: '', phone: '' },
-              bank: data.personalInfo.bank || { bankName: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '' }
+              bank: data.personalInfo.bank || { bankCode: '', bankName: '', branchCode: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '' }
             };
           }
         }
@@ -8121,16 +8304,28 @@
       // 個人情報を読み込み
       await loadPersonalInfo();
 
-      // フォームに値をセット
+      // フォームに値をセット（発送先）
       document.getElementById('shippingName').value = personalInfo.shipping.name || '';
       document.getElementById('shippingPostalCode').value = personalInfo.shipping.postalCode || '';
       document.getElementById('shippingAddress').value = personalInfo.shipping.address || '';
       document.getElementById('shippingPhone').value = personalInfo.shipping.phone || '';
-      document.getElementById('bankName').value = personalInfo.bank.bankName || '';
-      document.getElementById('bankBranch').value = personalInfo.bank.branchName || '';
+
+      // フォームに値をセット（口座情報）
+      document.getElementById('bankCode').value = personalInfo.bank.bankCode || '';
+      document.getElementById('bankNameDisplay').textContent = personalInfo.bank.bankName || '-';
+      document.getElementById('branchCode').value = personalInfo.bank.branchCode || '';
+      document.getElementById('branchNameDisplay').textContent = personalInfo.bank.branchName || '-';
       document.getElementById('bankAccountType').value = personalInfo.bank.accountType || 'ordinary';
       document.getElementById('bankAccountNumber').value = personalInfo.bank.accountNumber || '';
       document.getElementById('bankAccountHolder').value = personalInfo.bank.accountHolder || '';
+
+      // イベントリスナーを設定
+      const bankCodeInput = document.getElementById('bankCode');
+      const branchCodeInput = document.getElementById('branchCode');
+      bankCodeInput.removeEventListener('input', onBankCodeInput);
+      branchCodeInput.removeEventListener('input', onBranchCodeInput);
+      bankCodeInput.addEventListener('input', onBankCodeInput);
+      branchCodeInput.addEventListener('input', onBranchCodeInput);
 
       document.getElementById('personalInfoModal').classList.add('active');
     };
@@ -8147,6 +8342,40 @@
       saveBtn.textContent = '保存中...';
 
       try {
+        // 銀行コード・支店コードの検証
+        const bankCode = document.getElementById('bankCode').value.trim();
+        const branchCode = document.getElementById('branchCode').value.trim();
+        const bankNameDisplay = document.getElementById('bankNameDisplay');
+        const branchNameDisplay = document.getElementById('branchNameDisplay');
+
+        // 銀行情報が入力されている場合は検証
+        if (bankCode || branchCode) {
+          if (!bankCode || bankCode.length !== 4) {
+            alert('金融機関コードは4桁で入力してください');
+            saveBtn.disabled = false;
+            saveBtn.textContent = '保存';
+            return;
+          }
+          if (bankNameDisplay.classList.contains('error') || bankNameDisplay.textContent === '-') {
+            alert('有効な金融機関コードを入力してください');
+            saveBtn.disabled = false;
+            saveBtn.textContent = '保存';
+            return;
+          }
+          if (!branchCode || branchCode.length !== 3) {
+            alert('支店コードは3桁で入力してください');
+            saveBtn.disabled = false;
+            saveBtn.textContent = '保存';
+            return;
+          }
+          if (branchNameDisplay.classList.contains('error') || branchNameDisplay.textContent === '-') {
+            alert('有効な支店コードを入力してください');
+            saveBtn.disabled = false;
+            saveBtn.textContent = '保存';
+            return;
+          }
+        }
+
         const newPersonalInfo = {
           shipping: {
             name: document.getElementById('shippingName').value.trim(),
@@ -8155,8 +8384,10 @@
             phone: document.getElementById('shippingPhone').value.trim()
           },
           bank: {
-            bankName: document.getElementById('bankName').value.trim(),
-            branchName: document.getElementById('bankBranch').value.trim(),
+            bankCode: bankCode,
+            bankName: bankNameDisplay.textContent !== '-' ? bankNameDisplay.textContent : '',
+            branchCode: branchCode,
+            branchName: branchNameDisplay.textContent !== '-' ? branchNameDisplay.textContent : '',
             accountType: document.getElementById('bankAccountType').value,
             accountNumber: document.getElementById('bankAccountNumber').value.trim(),
             accountHolder: document.getElementById('bankAccountHolder').value.trim()
