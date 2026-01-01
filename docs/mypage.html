@@ -1303,6 +1303,9 @@
     .admin-current-btn:active {
       background: #bae6fd;
     }
+    .admin-export-wrapper {
+      position: relative;
+    }
     .admin-export-btn {
       font-size: 12px;
       color: #059669;
@@ -1321,6 +1324,60 @@
     }
     .admin-export-btn i {
       font-size: 14px;
+    }
+    .admin-export-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      min-width: 180px;
+      z-index: 100;
+      overflow: hidden;
+      display: none;
+    }
+    .admin-export-menu.active {
+      display: block;
+    }
+    .admin-export-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #374151;
+      cursor: pointer;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+    .admin-export-menu-item:hover {
+      background: #f3f4f6;
+    }
+    .admin-export-menu-item:active {
+      background: #e5e7eb;
+    }
+    .admin-export-menu-item i {
+      font-size: 16px;
+      color: #6b7280;
+      width: 20px;
+      text-align: center;
+    }
+    .admin-export-menu-item.csv i { color: #059669; }
+    .admin-export-menu-item.pdf i { color: #dc2626; }
+    .admin-export-menu-divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 4px 0;
+    }
+    .admin-export-menu-label {
+      font-size: 11px;
+      color: #9ca3af;
+      padding: 8px 16px 4px;
+      font-weight: 500;
     }
 
     .admin-section {
@@ -5159,9 +5216,28 @@
             <i class="bi bi-chevron-right"></i>
           </button>
           ${isHistoryMode ? '<button class="admin-current-btn" onclick="goToCurrentMonth()">今月に戻る</button>' : ''}
-          <button class="admin-export-btn" onclick="exportMonthlyData()" title="CSVエクスポート">
-            <i class="bi bi-download"></i> CSV
-          </button>
+          <div class="admin-export-wrapper">
+            <button class="admin-export-btn" onclick="toggleExportMenu(event)" title="エクスポート">
+              <i class="bi bi-download"></i> 出力
+            </button>
+            <div class="admin-export-menu" id="adminExportMenu">
+              <div class="admin-export-menu-label">今月のデータ</div>
+              <button class="admin-export-menu-item csv" onclick="exportMonthlyData(); closeExportMenu();">
+                <i class="bi bi-file-earmark-spreadsheet"></i>
+                <span>月別CSV</span>
+              </button>
+              <button class="admin-export-menu-item pdf" onclick="exportMonthlyPDF(); closeExportMenu();">
+                <i class="bi bi-file-earmark-pdf"></i>
+                <span>月別PDF</span>
+              </button>
+              <div class="admin-export-menu-divider"></div>
+              <div class="admin-export-menu-label">年間データ</div>
+              <button class="admin-export-menu-item csv" onclick="exportYearlyData(); closeExportMenu();">
+                <i class="bi bi-file-earmark-spreadsheet"></i>
+                <span>年間CSV（12ヶ月）</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- ビジネス目標（売上・利益） -->
@@ -5411,7 +5487,36 @@
       showLoading(false);
     }
 
-    // CSVエクスポート機能
+    // エクスポートメニュー開閉
+    window.toggleExportMenu = function(event) {
+      event.stopPropagation();
+      const menu = document.getElementById('adminExportMenu');
+      menu.classList.toggle('active');
+
+      // メニュー外クリックで閉じる
+      if (menu.classList.contains('active')) {
+        setTimeout(() => {
+          document.addEventListener('click', closeExportMenuHandler);
+        }, 10);
+      }
+    };
+
+    function closeExportMenuHandler(event) {
+      const menu = document.getElementById('adminExportMenu');
+      if (!menu.contains(event.target)) {
+        closeExportMenu();
+      }
+    }
+
+    window.closeExportMenu = function() {
+      const menu = document.getElementById('adminExportMenu');
+      if (menu) {
+        menu.classList.remove('active');
+      }
+      document.removeEventListener('click', closeExportMenuHandler);
+    };
+
+    // CSVエクスポート機能（月別）
     window.exportMonthlyData = function() {
       const now = new Date();
       let viewYear, viewMonth, monthName;
@@ -5546,6 +5651,286 @@
       URL.revokeObjectURL(url);
 
       console.log('📊 CSVエクスポート完了:', monthName);
+    };
+
+    // 年間CSVエクスポート機能（12ヶ月分）
+    window.exportYearlyData = async function() {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+
+      showLoading(true);
+
+      try {
+        const csvData = [];
+        csvData.push(['=== FURIRA 年間レポート ===']);
+        csvData.push([`対象期間: ${currentYear - 1}年${now.getMonth() + 2}月 〜 ${currentYear}年${now.getMonth() + 1}月`]);
+        csvData.push([]);
+
+        // 月別サマリーヘッダー
+        csvData.push(['【月別サマリー】']);
+        csvData.push(['年月', '売上目標', '売上実績', '売上達成率', '利益目標', '利益実績', '利益達成率', '販売件数', '作業件数']);
+
+        let totalSalesTarget = 0, totalSalesActual = 0;
+        let totalProfitTarget = 0, totalProfitActual = 0;
+        let totalSalesCount = 0, totalWorkCount = 0;
+
+        // 過去12ヶ月分のデータを取得
+        for (let i = 1; i <= 12; i++) {
+          const targetDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+          const year = targetDate.getFullYear();
+          const month = targetDate.getMonth() + 1;
+          const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+
+          // ビジネス目標
+          const goalRef = doc(db, 'businessGoals', yearMonth);
+          const goalSnap = await getDoc(goalRef);
+          const goals = goalSnap.exists() ? goalSnap.data() : { salesTarget: 0, profitTarget: 0 };
+
+          // 売上データ
+          const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+          const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+
+          const productsRef = collection(db, 'products');
+          const productsSnap = await getDocs(productsRef);
+
+          let monthSales = 0, monthProfit = 0, monthSalesCount = 0;
+          productsSnap.forEach(docSnapshot => {
+            const data = docSnapshot.data();
+            if (data.status !== '販売済') return;
+            const saleDate = data.saleDate || '';
+            if (saleDate >= startDate && saleDate <= endDate) {
+              monthSales += parseFloat(data.saleAmount || 0);
+              monthProfit += parseFloat(data.finalProfit || 0);
+              monthSalesCount++;
+            }
+          });
+
+          // 作業データ
+          const compRef = collection(db, 'compensationRecords');
+          const compSnap = await getDocs(compRef);
+
+          let monthWorkCount = 0;
+          compSnap.forEach(docSnapshot => {
+            const data = docSnapshot.data();
+            const dateStr = data.completedAt || data.recordedAt;
+            if (!dateStr) return;
+            const date = typeof dateStr === 'string' ? new Date(dateStr) : (dateStr.toDate ? dateStr.toDate() : new Date(dateStr));
+            if (date.getFullYear() === year && (date.getMonth() + 1) === month) {
+              monthWorkCount++;
+            }
+          });
+
+          const salesProgress = goals.salesTarget > 0 ? Math.round((monthSales / goals.salesTarget) * 100) : 0;
+          const profitProgress = goals.profitTarget > 0 ? Math.round((monthProfit / goals.profitTarget) * 100) : 0;
+
+          csvData.push([
+            `${year}年${month}月`,
+            goals.salesTarget,
+            Math.round(monthSales),
+            salesProgress + '%',
+            goals.profitTarget,
+            Math.round(monthProfit),
+            profitProgress + '%',
+            monthSalesCount,
+            monthWorkCount
+          ]);
+
+          totalSalesTarget += goals.salesTarget || 0;
+          totalSalesActual += monthSales;
+          totalProfitTarget += goals.profitTarget || 0;
+          totalProfitActual += monthProfit;
+          totalSalesCount += monthSalesCount;
+          totalWorkCount += monthWorkCount;
+        }
+
+        // 年間合計
+        csvData.push([]);
+        csvData.push([
+          '【年間合計】',
+          totalSalesTarget,
+          Math.round(totalSalesActual),
+          totalSalesTarget > 0 ? Math.round((totalSalesActual / totalSalesTarget) * 100) + '%' : '-',
+          totalProfitTarget,
+          Math.round(totalProfitActual),
+          totalProfitTarget > 0 ? Math.round((totalProfitActual / totalProfitTarget) * 100) + '%' : '-',
+          totalSalesCount,
+          totalWorkCount
+        ]);
+
+        // CSVに変換
+        const csvContent = csvData.map(row => {
+          return row.map(cell => {
+            const str = String(cell);
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+              return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+          }).join(',');
+        }).join('\n');
+
+        // BOM付きUTF-8でダウンロード
+        const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+        const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `FURIRA_年間レポート_${currentYear}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        console.log('📊 年間CSVエクスポート完了');
+      } catch (error) {
+        console.error('年間CSVエクスポートエラー:', error);
+        alert('エクスポートに失敗しました');
+      }
+
+      showLoading(false);
+    };
+
+    // PDFエクスポート機能（月別）
+    window.exportMonthlyPDF = function() {
+      const now = new Date();
+      let viewYear, viewMonth, monthName;
+
+      if (adminViewMonth) {
+        const [y, m] = adminViewMonth.split('-').map(Number);
+        viewYear = y;
+        viewMonth = m;
+      } else {
+        viewYear = now.getFullYear();
+        viewMonth = now.getMonth() + 1;
+      }
+      monthName = `${viewYear}年${viewMonth}月`;
+
+      // 売上・利益データ
+      const salesTarget = businessGoals.salesTarget || 0;
+      const profitTarget = businessGoals.profitTarget || 0;
+      const actualSales = monthlySalesData.totalSales || 0;
+      const actualProfit = monthlySalesData.totalProfit || 0;
+      const salesProgress = salesTarget > 0 ? Math.round((actualSales / salesTarget) * 100) : 0;
+      const profitProgress = profitTarget > 0 ? Math.round((actualProfit / profitTarget) * 100) : 0;
+      const profitRate = actualSales > 0 ? Math.round((actualProfit / actualSales) * 100) : 0;
+
+      // タスク統計
+      const taskLabels = {
+        listing: '商品出品', shipping: '梱包・発送', photography: '商品撮影',
+        inspection: '検品作業', stocktaking: '棚卸', editing: '追加編集'
+      };
+      const taskStats = {};
+      compensationRecords.forEach(r => {
+        const taskType = r.taskType || 'listing';
+        if (!taskStats[taskType]) taskStats[taskType] = 0;
+        taskStats[taskType]++;
+      });
+
+      // スタッフ統計
+      const staffStats = {};
+      compensationRecords.forEach(r => {
+        const email = r.staffEmail || '';
+        if (!email) return;
+        if (!staffStats[email]) {
+          staffStats[email] = { name: r.staffName || email.split('@')[0], amount: 0, count: 0 };
+        }
+        staffStats[email].amount += r.unitPrice || 0;
+        staffStats[email].count++;
+      });
+      const sortedStaff = Object.values(staffStats).sort((a, b) => b.amount - a.amount);
+
+      // HTML生成
+      const pdfContent = `
+        <!DOCTYPE html>
+        <html lang="ja">
+        <head>
+          <meta charset="UTF-8">
+          <title>FURIRA 月次レポート - ${monthName}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif; font-size: 12px; color: #333; padding: 20px; }
+            .header { text-align: center; margin-bottom: 24px; border-bottom: 2px solid #40B4E5; padding-bottom: 16px; }
+            .header h1 { font-size: 20px; color: #40B4E5; margin-bottom: 4px; }
+            .header .date { color: #666; font-size: 14px; }
+            .section { margin-bottom: 20px; }
+            .section-title { font-size: 14px; font-weight: bold; color: #1f2937; margin-bottom: 12px; padding: 8px; background: #f3f4f6; border-radius: 4px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+            th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+            th { background: #f9fafb; font-weight: 600; }
+            .number { text-align: right; }
+            .highlight { background: #e0f2fe; }
+            .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+            .summary-item { background: #f9fafb; padding: 12px; border-radius: 8px; text-align: center; }
+            .summary-item .value { font-size: 18px; font-weight: bold; color: #40B4E5; }
+            .summary-item .label { font-size: 11px; color: #6b7280; margin-top: 4px; }
+            .footer { margin-top: 24px; text-align: center; color: #9ca3af; font-size: 10px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+            @media print { body { padding: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>FURIRA 月次レポート</h1>
+            <div class="date">${monthName}</div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">売上・利益サマリー</div>
+            <div class="summary-grid">
+              <div class="summary-item">
+                <div class="value">¥${actualSales.toLocaleString()}</div>
+                <div class="label">売上（目標: ¥${salesTarget.toLocaleString()}）</div>
+              </div>
+              <div class="summary-item">
+                <div class="value">¥${actualProfit.toLocaleString()}</div>
+                <div class="label">利益（目標: ¥${profitTarget.toLocaleString()}）</div>
+              </div>
+              <div class="summary-item">
+                <div class="value">${monthlySalesData.count || 0}件</div>
+                <div class="label">販売件数</div>
+              </div>
+            </div>
+            <table>
+              <tr><th>項目</th><th class="number">目標</th><th class="number">実績</th><th class="number">達成率</th></tr>
+              <tr><td>売上</td><td class="number">¥${salesTarget.toLocaleString()}</td><td class="number">¥${actualSales.toLocaleString()}</td><td class="number">${salesProgress}%</td></tr>
+              <tr><td>利益</td><td class="number">¥${profitTarget.toLocaleString()}</td><td class="number">¥${actualProfit.toLocaleString()}</td><td class="number">${profitProgress}%</td></tr>
+              <tr><td>利益率</td><td class="number">-</td><td class="number">${profitRate}%</td><td class="number">-</td></tr>
+            </table>
+          </div>
+
+          <div class="section">
+            <div class="section-title">作業サマリー（合計: ${compensationRecords.length}件）</div>
+            <table>
+              <tr><th>タスク</th><th class="number">件数</th></tr>
+              ${Object.entries(taskLabels).map(([key, label]) => `<tr><td>${label}</td><td class="number">${taskStats[key] || 0}件</td></tr>`).join('')}
+            </table>
+          </div>
+
+          <div class="section">
+            <div class="section-title">スタッフ別報酬</div>
+            <table>
+              <tr><th>順位</th><th>スタッフ名</th><th class="number">報酬額</th><th class="number">作業件数</th></tr>
+              ${sortedStaff.map((staff, i) => `<tr${i === 0 ? ' class="highlight"' : ''}><td>${i + 1}</td><td>${staff.name}</td><td class="number">¥${staff.amount.toLocaleString()}</td><td class="number">${staff.count}件</td></tr>`).join('')}
+            </table>
+          </div>
+
+          <div class="footer">
+            FURIRA - 生成日時: ${new Date().toLocaleString('ja-JP')}
+          </div>
+        </body>
+        </html>
+      `;
+
+      // 新しいウィンドウで開いて印刷
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(pdfContent);
+      printWindow.document.close();
+
+      // 印刷ダイアログを開く（PDF保存可能）
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+
+      console.log('📄 PDFエクスポート完了:', monthName);
     };
 
     // 管理者データを読み込み（当月用）
