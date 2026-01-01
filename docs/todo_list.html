@@ -569,6 +569,56 @@
       font-weight: 500;
       margin-top: 8px;
     }
+    /* スタッフ用: 自分の延長申請状況 */
+    .my-extension-requests-section {
+      margin-bottom: 16px;
+    }
+    .my-extension-card {
+      background: white;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .my-extension-info {
+      flex: 1;
+    }
+    .my-extension-task {
+      font-size: 13px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+    .my-extension-date {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+    .my-extension-status {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .my-extension-status.pending {
+      background: #fef3c7;
+      color: #b45309;
+    }
+    .my-extension-status.approved {
+      background: #d1fae5;
+      color: #059669;
+    }
+    .my-extension-status.rejected {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+    .my-extension-result {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
     .tasks-container {
       padding: 8px 16px 16px 16px;
       max-width: 600px;
@@ -834,6 +884,18 @@
       <span id="extensionRequestsCount" style="background: #f59e0b; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;">0</span>
     </div>
     <div id="extensionRequestsList">
+      <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">読み込み中...</div>
+    </div>
+  </div>
+
+  <!-- スタッフ用: 自分の延長申請状況 -->
+  <div id="myExtensionRequestsSection" class="tasks-container my-extension-requests-section" style="display: none;">
+    <div class="section-title" style="display: flex; align-items: center; gap: 8px;">
+      <i class="bi bi-hourglass-split" style="color: #6366f1;"></i>
+      あなたの延長申請
+      <span id="myExtensionRequestsCount" style="background: #6366f1; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;">0</span>
+    </div>
+    <div id="myExtensionRequestsList">
       <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">読み込み中...</div>
     </div>
   </div>
@@ -1858,6 +1920,74 @@
       }
     }
 
+    // 自分の延長申請を読み込み（スタッフ用）
+    async function loadMyExtensionRequests() {
+      try {
+        // 自分の申請のみ取得（直近30日間）
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const snapshot = await db.collection('extensionRequests')
+          .where('taskOwnerEmail', '==', userEmail)
+          .orderBy('createdAt', 'desc')
+          .limit(10)
+          .get();
+
+        const section = document.getElementById('myExtensionRequestsSection');
+        const container = document.getElementById('myExtensionRequestsList');
+        const countEl = document.getElementById('myExtensionRequestsCount');
+        if (!section || !container || !countEl) return;
+
+        if (snapshot.empty) {
+          section.style.display = 'none';
+          return;
+        }
+
+        let html = '';
+        let pendingCount = 0;
+        snapshot.forEach(doc => {
+          const req = doc.data();
+          const createdAt = req.createdAt?.toDate ? req.createdAt.toDate() : new Date();
+
+          // ステータスに応じた表示
+          let statusClass = 'pending';
+          let statusText = '⏳ 承認待ち';
+          let resultHtml = '';
+
+          if (req.status === 'approved') {
+            statusClass = 'approved';
+            statusText = '✅ 承認済み';
+            resultHtml = `<div class="my-extension-result">→ 期限が${req.requestedDays}日間延長されました</div>`;
+          } else if (req.status === 'rejected') {
+            statusClass = 'rejected';
+            statusText = '❌ 却下';
+            resultHtml = `<div class="my-extension-result">→ 延長申請は承認されませんでした</div>`;
+          } else {
+            pendingCount++;
+          }
+
+          html += `
+            <div class="my-extension-card">
+              <div class="my-extension-info">
+                <div class="my-extension-task">${escapeHtml(req.taskTitle)}</div>
+                <div class="my-extension-date">${createdAt.getMonth() + 1}/${createdAt.getDate()} 申請 | +${req.requestedDays}日</div>
+                ${resultHtml}
+              </div>
+              <div class="my-extension-status ${statusClass}">${statusText}</div>
+            </div>
+          `;
+        });
+
+        container.innerHTML = html;
+        countEl.textContent = pendingCount > 0 ? pendingCount : snapshot.size;
+        section.style.display = 'block';
+
+      } catch (error) {
+        console.error('自分の延長申請読み込みエラー:', error);
+        document.getElementById('myExtensionRequestsSection').style.display = 'none';
+      }
+    }
+
     // 延長申請を承認
     async function approveExtensionRequest(requestId) {
       if (!confirm('この延長申請を承認しますか？')) return;
@@ -2268,6 +2398,7 @@
 
     // 初期化
     loadTasks();
+    loadMyExtensionRequests(); // 自分の延長申請を読み込み（全ユーザー）
     // 管理者チェック完了後に延長申請を読み込む
     checkAdminStatus().then(() => {
       loadExtensionRequests();
