@@ -2672,3 +2672,130 @@ exports.paymentDayNotification = onSchedule({
     return { success: false, error: error.message };
   }
 });
+
+/**
+ * 📅 月初目標設定リマインダー
+ * 毎月1日の朝9時（JST）に実行
+ * 目標未設定のスタッフに通知とタスクを追加
+ */
+exports.monthlyGoalReminder = onSchedule({
+  schedule: '0 0 1 * *', // UTC 0:00 on 1st of each month = JST 9:00
+  timeZone: 'Asia/Tokyo',
+  region: 'asia-northeast1'
+}, async (event) => {
+  console.log('🎯 [monthlyGoalReminder] 月初目標設定リマインダー開始');
+  const startTime = Date.now();
+
+  try {
+    // 今月の年月を取得
+    const now = new Date();
+    const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    console.log(`📅 [monthlyGoalReminder] 対象期間: ${yearMonth}`);
+
+    // 全ユーザーを取得
+    const usersSnapshot = await db.collection('users').get();
+    console.log(`👥 [monthlyGoalReminder] ユーザー数: ${usersSnapshot.size}`);
+
+    // 今月の目標を既に設定しているユーザーを取得
+    const goalsSnapshot = await db.collection('userGoals')
+      .where('yearMonth', '==', yearMonth)
+      .get();
+
+    const usersWithGoals = new Set();
+    goalsSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.email && data.goalAmount > 0) {
+        usersWithGoals.add(data.email);
+      }
+    });
+    console.log(`✅ [monthlyGoalReminder] 目標設定済みユーザー: ${usersWithGoals.size}名`);
+
+    let tasksCreated = 0;
+    let notificationsSent = 0;
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userEmail = userDoc.id;
+      const userData = userDoc.data();
+
+      // 管理者は除外（オーナーと管理者はスキップ）
+      if (userData.role === 'オーナー' || userData.role === '管理者') {
+        continue;
+      }
+
+      // 既に目標設定済みの場合はスキップ
+      if (usersWithGoals.has(userEmail)) {
+        continue;
+      }
+
+      try {
+        // タスクを作成
+        const taskRef = db.collection('userTasks')
+          .doc(userEmail)
+          .collection('tasks')
+          .doc(`goal_setting_${yearMonth}`);
+
+        await taskRef.set({
+          title: `${now.getMonth() + 1}月の目標を設定`,
+          description: '今月の目標金額を設定してください。クイック設定（¥10,000 / ¥30,000 / ¥50,000）または自分でカスタム設定できます。',
+          type: 'goal_setting',
+          category: 'goal',
+          yearMonth: yearMonth,
+          completed: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          link: '/mypage.html'
+        });
+        tasksCreated++;
+
+        // プッシュ通知を送信
+        const devicesSnapshot = await db.collection('users')
+          .doc(userEmail)
+          .collection('devices')
+          .where('fcmToken', '!=', '')
+          .get();
+
+        if (!devicesSnapshot.empty) {
+          const tokens = devicesSnapshot.docs
+            .map(d => d.data().fcmToken)
+            .filter(t => t);
+
+          if (tokens.length > 0) {
+            const message = {
+              notification: {
+                title: '🎯 今月の目標を設定しましょう',
+                body: `${now.getMonth() + 1}月の目標を設定してください。マイページから簡単に設定できます。`
+              },
+              data: {
+                type: 'goal_reminder',
+                yearMonth: yearMonth,
+                url: '/mypage.html'
+              },
+              tokens: tokens
+            };
+
+            const response = await messaging.sendEachForMulticast(message);
+            console.log(`📤 [monthlyGoalReminder] FCM送信: ${userEmail} - 成功${response.successCount} 失敗${response.failureCount}`);
+            notificationsSent++;
+          }
+        }
+
+      } catch (error) {
+        console.error(`❌ [monthlyGoalReminder] ユーザー処理エラー (${userEmail}):`, error);
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [monthlyGoalReminder] 完了: タスク${tasksCreated}件作成, 通知${notificationsSent}件送信 (${duration}ms)`);
+
+    return {
+      success: true,
+      yearMonth,
+      tasksCreated,
+      notificationsSent
+    };
+
+  } catch (error) {
+    console.error('❌ [monthlyGoalReminder] エラー:', error);
+    return { success: false, error: error.message };
+  }
+});
