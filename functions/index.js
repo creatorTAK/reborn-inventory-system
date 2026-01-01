@@ -2219,7 +2219,8 @@ exports.dailyInventoryAgingCheck = onSchedule({
             dueDate: dueDate,
             compensation: compensationAmount,
             compensationType: 'editing',
-            priority: 'high'
+            priority: 'high',
+            link: `/product.html?edit=${productId}`
           });
 
         actionTasksCreated++;
@@ -2263,7 +2264,8 @@ exports.dailyInventoryAgingCheck = onSchedule({
             createdAt: FieldValue.serverTimestamp(),
             dueDate: null, // 警告は期限なし
             compensation: 0,
-            priority: 'medium'
+            priority: 'medium',
+            link: `/product.html?edit=${productId}`
           });
 
         warningTasksCreated++;
@@ -2743,7 +2745,7 @@ exports.monthlyGoalReminder = onSchedule({
           completed: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          link: '/mypage.html'
+          link: 'mypage-goal-modal'
         });
         tasksCreated++;
 
