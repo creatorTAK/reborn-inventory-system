@@ -3191,6 +3191,85 @@
       font-size: 18px;
       color: #6b7280;
     }
+    .comp-history-month-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 12px 20px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .comp-history-month-btn {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #6b7280;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .comp-history-month-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .comp-history-month-label {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1f2937;
+      min-width: 100px;
+      text-align: center;
+    }
+    .comp-history-content {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .comp-history-summary {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .comp-history-summary-label {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .comp-history-summary-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #40B4E5;
+    }
+    .comp-history-summary-count {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .comp-history-detail-btn {
+      width: 100%;
+      padding: 14px 16px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+    }
+    .comp-history-detail-btn:active {
+      background: #f9fafb;
+    }
+    .comp-history-detail-btn i {
+      color: #9ca3af;
+    }
     .comp-history-body {
       flex: 1;
       overflow-y: auto;
@@ -3722,13 +3801,22 @@
   <div class="comp-history-modal-backdrop" id="compHistoryModal">
     <div class="comp-history-modal">
       <div class="comp-history-header">
-        <span class="comp-history-title">📋 報酬履歴</span>
+        <span class="comp-history-title">報酬履歴</span>
         <button class="comp-history-close" onclick="closeCompensationHistoryModal()">
           <i class="bi bi-x"></i>
         </button>
       </div>
+      <div class="comp-history-month-nav">
+        <button class="comp-history-month-btn" onclick="changeCompHistoryMonth(-1)">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <span class="comp-history-month-label" id="compHistoryMonthLabel">2025年12月</span>
+        <button class="comp-history-month-btn" onclick="changeCompHistoryMonth(1)">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+      </div>
       <div class="comp-history-body">
-        <div class="comp-history-list" id="compHistoryList">
+        <div class="comp-history-content" id="compHistoryContent">
           <!-- 動的に生成 -->
         </div>
       </div>
@@ -5896,22 +5984,24 @@
     // ========================================
 
     let compHistoryData = []; // 月別報酬データ
-    let currentCompMonth = null; // 現在表示中の月
+    let currentCompHistoryIndex = 0; // 現在表示中の月インデックス
+    let currentCompMonth = null; // 現在表示中の月（詳細用）
 
     // 報酬履歴モーダルを開く
     window.openCompensationHistoryModal = async function() {
       const backdrop = document.getElementById('compHistoryModal');
-      const listEl = document.getElementById('compHistoryList');
+      const contentEl = document.getElementById('compHistoryContent');
 
       backdrop.classList.add('active');
-      listEl.innerHTML = '<div class="comp-history-empty"><div class="spinner-border text-primary" role="status"></div><p style="margin-top: 12px;">読み込み中...</p></div>';
+      contentEl.innerHTML = '<div class="comp-history-empty"><div class="spinner-border text-primary" role="status"></div><p style="margin-top: 12px;">読み込み中...</p></div>';
 
       try {
         compHistoryData = await loadCompensationHistory();
-        renderCompensationHistoryList();
+        currentCompHistoryIndex = 0;
+        updateCompHistoryDisplay();
       } catch (error) {
         console.error('報酬履歴読み込みエラー:', error);
-        listEl.innerHTML = '<div class="comp-history-empty"><i class="bi bi-exclamation-circle"></i><p>履歴の読み込みに失敗しました</p></div>';
+        contentEl.innerHTML = '<div class="comp-history-empty"><i class="bi bi-exclamation-circle"></i><p>履歴の読み込みに失敗しました</p></div>';
       }
     };
 
@@ -5919,6 +6009,42 @@
     window.closeCompensationHistoryModal = function() {
       document.getElementById('compHistoryModal').classList.remove('active');
     };
+
+    // 報酬履歴の月を変更
+    window.changeCompHistoryMonth = function(delta) {
+      const newIndex = currentCompHistoryIndex + delta;
+      if (newIndex >= 0 && newIndex < compHistoryData.length) {
+        currentCompHistoryIndex = newIndex;
+        updateCompHistoryDisplay();
+      }
+    };
+
+    // 報酬履歴表示を更新
+    function updateCompHistoryDisplay() {
+      const contentEl = document.getElementById('compHistoryContent');
+      const labelEl = document.getElementById('compHistoryMonthLabel');
+
+      if (compHistoryData.length === 0) {
+        labelEl.textContent = '---';
+        contentEl.innerHTML = '<div class="comp-history-empty"><i class="bi bi-file-earmark-text"></i><p>報酬履歴がありません</p></div>';
+        return;
+      }
+
+      const item = compHistoryData[currentCompHistoryIndex];
+      labelEl.textContent = item.displayMonth;
+
+      contentEl.innerHTML = `
+        <div class="comp-history-summary">
+          <div class="comp-history-summary-label">報酬合計</div>
+          <div class="comp-history-summary-value">¥${item.totalAmount.toLocaleString()}</div>
+          <div class="comp-history-summary-count">${item.count}件のタスク</div>
+        </div>
+        <button class="comp-history-detail-btn" onclick="openCompensationDetail('${item.yearMonth}')">
+          <span>明細を見る</span>
+          <i class="bi bi-chevron-right"></i>
+        </button>
+      `;
+    }
 
     // 報酬履歴を読み込む（過去12ヶ月）
     async function loadCompensationHistory() {
