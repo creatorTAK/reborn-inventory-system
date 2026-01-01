@@ -8122,20 +8122,39 @@
 
     // 銀行データキャッシュ
     let bankDataCache = null;
+    let branchDataCache = {}; // 銀行コード別にキャッシュ
 
-    // 銀行データを取得（zengin-codeから）
+    // 銀行データを取得（zengin-code.github.ioから）
     async function fetchBankData() {
       if (bankDataCache) return bankDataCache;
 
       try {
         console.log('[BankCode] 銀行データを取得中...');
-        const response = await fetch('https://raw.githubusercontent.com/zengin-code/zengin-code/master/data/banks.json');
+        const response = await fetch('https://zengin-code.github.io/api/banks.json');
         if (!response.ok) throw new Error('Failed to fetch bank data');
         bankDataCache = await response.json();
         console.log('[BankCode] 銀行データ取得完了:', Object.keys(bankDataCache).length, '件');
         return bankDataCache;
       } catch (error) {
         console.error('[BankCode] 銀行データ取得エラー:', error);
+        return null;
+      }
+    }
+
+    // 支店データを取得（morix1500 APIから）
+    async function fetchBranchData(bankCode) {
+      if (branchDataCache[bankCode]) return branchDataCache[bankCode];
+
+      try {
+        console.log('[BankCode] 支店データを取得中... 銀行コード:', bankCode);
+        const response = await fetch(`https://morix1500.github.io/zengin/data/branches/${bankCode}.json`);
+        if (!response.ok) throw new Error('Failed to fetch branch data');
+        const branches = await response.json();
+        branchDataCache[bankCode] = branches;
+        console.log('[BankCode] 支店データ取得完了:', branches.length, '件');
+        return branches;
+      } catch (error) {
+        console.error('[BankCode] 支店データ取得エラー:', error);
         return null;
       }
     }
@@ -8154,12 +8173,13 @@
 
     // 支店コードから支店名を取得
     async function lookupBranchName(bankCode, branchCode) {
-      const bankData = await fetchBankData();
-      if (!bankData) return null;
+      const branches = await fetchBranchData(bankCode);
+      if (!branches) return null;
 
-      const bank = bankData[bankCode];
-      if (bank && bank.branches && bank.branches[branchCode]) {
-        return bank.branches[branchCode].name;
+      // 配列から支店コードで検索
+      const branch = branches.find(b => b.code === branchCode);
+      if (branch) {
+        return branch.name;
       }
       return null;
     }
