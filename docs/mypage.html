@@ -1246,6 +1246,64 @@
     }
 
     /* ========== 管理者マイページ ========== */
+
+    /* 管理者用年月ナビゲーション */
+    .admin-month-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 12px 20px;
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .admin-month-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      background: #f3f4f6;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #6b7280;
+      transition: all 0.2s;
+    }
+    .admin-month-btn:active {
+      background: #e5e7eb;
+      transform: scale(0.95);
+    }
+    .admin-month-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .admin-month-label {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1f2937;
+      min-width: 120px;
+      text-align: center;
+    }
+    .admin-month-label.history-mode {
+      color: #40B4E5;
+    }
+    .admin-current-btn {
+      font-size: 12px;
+      color: #40B4E5;
+      background: #e0f2fe;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 16px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .admin-current-btn:active {
+      background: #bae6fd;
+    }
+
     .admin-section {
       background: white;
       border-radius: 16px;
@@ -4212,6 +4270,10 @@
     // ビジネス目標（管理者用）
     let businessGoals = { salesTarget: 0, profitTarget: 0 }; // 売上目標・利益目標
     let monthlySalesData = { totalSales: 0, totalProfit: 0, count: 0 }; // 今月の売上実績
+
+    // 管理者履歴表示用
+    let adminViewMonth = null; // null = 当月、"2025-12" = 履歴月
+    let adminHistoryCache = {}; // 履歴データキャッシュ
     let rankingParticipation = true; // ランキング参加フラグ
     let allUsersRankingPrefs = {}; // 全ユーザーのランキング参加設定
     let assignedTasks = ['listing', 'shipping', 'photography', 'stocktaking', 'editing']; // ユーザーの担当タスク（デフォルト: 検品作業以外の5つ）
@@ -4981,7 +5043,21 @@
     // 管理者用マイページを描画
     function renderAdminMyPage() {
       const now = new Date();
-      const monthName = `${now.getFullYear()}年${now.getMonth() + 1}月`;
+
+      // 表示する年月を決定
+      let viewYear, viewMonth, monthName, isHistoryMode;
+      if (adminViewMonth) {
+        const [y, m] = adminViewMonth.split('-').map(Number);
+        viewYear = y;
+        viewMonth = m;
+        monthName = `${viewYear}年${viewMonth}月`;
+        isHistoryMode = true;
+      } else {
+        viewYear = now.getFullYear();
+        viewMonth = now.getMonth() + 1;
+        monthName = `${viewYear}年${viewMonth}月`;
+        isHistoryMode = false;
+      }
 
       // 全体の売上を集計
       let totalAmount = 0;
@@ -5054,13 +5130,25 @@
           <div class="profile-role">${escapeHtml(stripEmoji(currentUser.permissionDisplay))}</div>
         </div>
 
+        <!-- 年月ナビゲーション -->
+        <div class="admin-month-nav">
+          <button class="admin-month-btn" onclick="changeAdminViewMonth(-1)" title="前月">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <span class="admin-month-label ${isHistoryMode ? 'history-mode' : ''}">${monthName}</span>
+          <button class="admin-month-btn" onclick="changeAdminViewMonth(1)" ${isHistoryMode ? '' : 'disabled'} title="翌月">
+            <i class="bi bi-chevron-right"></i>
+          </button>
+          ${isHistoryMode ? '<button class="admin-current-btn" onclick="goToCurrentMonth()">今月に戻る</button>' : ''}
+        </div>
+
         <!-- ビジネス目標（売上・利益） -->
         <div class="business-goal-section">
           <div class="business-goal-header">
-            <div class="business-goal-title">${monthName} 売上・利益目標</div>
-            <button onclick="openBusinessGoalModal()" style="background: none; border: none; color: #40B4E5; font-size: 13px; cursor: pointer;">
+            <div class="business-goal-title">売上・利益目標</div>
+            ${!isHistoryMode ? `<button onclick="openBusinessGoalModal()" style="background: none; border: none; color: #40B4E5; font-size: 13px; cursor: pointer;">
               <i class="bi bi-pencil"></i> 設定
-            </button>
+            </button>` : ''}
           </div>
           
           <!-- 売上目標 -->
@@ -5136,24 +5224,186 @@
 
         <!-- ランキング -->
         <div class="ranking-card">
-          <div class="ranking-title">今月のランキング</div>
+          <div class="ranking-title">${isHistoryMode ? `${viewMonth}月のランキング` : '今月のランキング'}</div>
           ${renderRankingList(calculateRanking(), currentUser.email)}
         </div>
 
-        <!-- アクションボタン -->
-        <div class="action-buttons">
-          <div class="action-btn" onclick="openHistoryModal()">
-            <i class="bi bi-clock-history"></i>
-            <span>目標履歴</span>
-          </div>
-          <div class="action-btn" onclick="openCompensationHistoryModal()">
-            <i class="bi bi-file-earmark-text"></i>
-            <span>報酬履歴</span>
-          </div>
-        </div>
       `;
 
       document.getElementById('mainContent').innerHTML = html;
+    }
+
+    // 管理者年月ナビゲーション: 月を変更
+    window.changeAdminViewMonth = async function(delta) {
+      const now = new Date();
+      const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+      let targetYear, targetMonth;
+
+      if (adminViewMonth) {
+        const [y, m] = adminViewMonth.split('-').map(Number);
+        targetYear = y;
+        targetMonth = m + delta;
+      } else {
+        // 当月から移動
+        targetYear = now.getFullYear();
+        targetMonth = now.getMonth() + 1 + delta;
+      }
+
+      // 月の調整
+      if (targetMonth > 12) {
+        targetMonth = 1;
+        targetYear++;
+      } else if (targetMonth < 1) {
+        targetMonth = 12;
+        targetYear--;
+      }
+
+      const newYearMonth = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+
+      // 未来（当月より後）には進めない
+      if (newYearMonth > currentYearMonth) {
+        adminViewMonth = null; // 当月に戻る
+      }
+      // 2025年12月より前には戻れない
+      else if (newYearMonth < '2025-12') {
+        return;
+      }
+      // 当月なら履歴モード解除
+      else if (newYearMonth === currentYearMonth) {
+        adminViewMonth = null;
+      }
+      else {
+        adminViewMonth = newYearMonth;
+      }
+
+      // データを再読み込みして再描画
+      await loadAdminHistoryData();
+      renderAdminMyPage();
+    };
+
+    // 今月に戻る
+    window.goToCurrentMonth = async function() {
+      adminViewMonth = null;
+      await loadAdminData();
+      renderAdminMyPage();
+    };
+
+    // 管理者履歴データを読み込み
+    async function loadAdminHistoryData() {
+      if (!adminViewMonth) return;
+
+      const [year, month] = adminViewMonth.split('-').map(Number);
+      const yearMonth = adminViewMonth;
+
+      showLoading(true);
+
+      try {
+        // ビジネス目標を読み込み
+        const businessGoalRef = doc(db, 'businessGoals', yearMonth);
+        const businessGoalSnap = await getDoc(businessGoalRef);
+        if (businessGoalSnap.exists()) {
+          const data = businessGoalSnap.data();
+          businessGoals = {
+            salesTarget: data.salesTarget || 0,
+            profitTarget: data.profitTarget || 0
+          };
+        } else {
+          businessGoals = { salesTarget: 0, profitTarget: 0 };
+        }
+
+        // 売上データを読み込み
+        const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+        const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+
+        const productsRef = collection(db, 'products');
+        const snapshot = await getDocs(productsRef);
+
+        let totalSales = 0;
+        let totalProfit = 0;
+        let salesCount = 0;
+
+        snapshot.forEach(docSnapshot => {
+          const data = docSnapshot.data();
+          if (data.status !== '販売済') return;
+
+          const saleDate = data.saleDate || '';
+          if (saleDate < startDate || saleDate > endDate) return;
+
+          totalSales += parseFloat(data.saleAmount || 0);
+          totalProfit += parseFloat(data.finalProfit || 0);
+          salesCount++;
+        });
+
+        monthlySalesData = { totalSales, totalProfit, count: salesCount };
+
+        // 報酬レコードを読み込み（その月のもの）
+        const compRef = collection(db, 'compensationRecords');
+        const compSnap = await getDocs(compRef);
+
+        compensationRecords = [];
+        compSnap.forEach(docSnapshot => {
+          const data = docSnapshot.data();
+          const dateStr = data.completedAt || data.recordedAt;
+          if (!dateStr) return;
+
+          const date = typeof dateStr === 'string' ? new Date(dateStr) : (dateStr.toDate ? dateStr.toDate() : new Date(dateStr));
+          if (date.getFullYear() === year && (date.getMonth() + 1) === month) {
+            compensationRecords.push({ id: docSnapshot.id, ...data });
+          }
+        });
+
+        // メンバー目標を読み込み
+        const usersSnap = await getDocs(query(collection(db, 'users'), where('status', '==', 'active')));
+        const activeUsers = [];
+        usersSnap.forEach(doc => {
+          const data = doc.data();
+          if (data.permissionId !== 'owner') {
+            activeUsers.push({
+              email: doc.id,
+              name: data.userName || data.name || doc.id.split('@')[0],
+              photoURL: data.iconUrl || data.photoURL || ''
+            });
+          }
+        });
+
+        memberGoalsData = [];
+        for (const user of activeUsers) {
+          const goalRef = doc(db, 'userGoals', `${user.email}_${yearMonth}`);
+          const goalSnap = await getDoc(goalRef);
+
+          let goalAmount = 0;
+          if (goalSnap.exists()) {
+            const goalData = goalSnap.data();
+            goalAmount = goalData.goalAmount || 0;
+          }
+
+          memberGoalsData.push({ ...user, goalAmount });
+        }
+        memberGoalsData.sort((a, b) => b.goalAmount - a.goalAmount);
+
+      } catch (error) {
+        console.error('履歴データ読み込みエラー:', error);
+      }
+
+      showLoading(false);
+    }
+
+    // 管理者データを読み込み（当月用）
+    async function loadAdminData() {
+      showLoading(true);
+      try {
+        await Promise.all([
+          loadMonthlySales(),
+          loadBusinessGoals(),
+          loadTeamGoal(),
+          loadMemberGoals()
+        ]);
+        // compensationRecordsは既存のloadData()で読み込み済み
+      } catch (error) {
+        console.error('管理者データ読み込みエラー:', error);
+      }
+      showLoading(false);
     }
 
     // 今月の売上データを取得（productsコレクションから）
