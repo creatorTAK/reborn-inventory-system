@@ -1355,6 +1355,115 @@
       background: linear-gradient(90deg, #40B4E5, #1E8FBF);
       border-radius: 2px;
     }
+
+    /* スタッフ目標進捗 */
+    .staff-goal-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .staff-goal-item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: #f9fafb;
+      gap: 12px;
+    }
+    .staff-goal-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .staff-goal-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .staff-goal-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .staff-goal-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 4px;
+    }
+    .staff-goal-bar-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .staff-goal-bar {
+      flex: 1;
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .staff-goal-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .staff-goal-percent {
+      font-size: 12px;
+      font-weight: 600;
+      min-width: 36px;
+      text-align: right;
+    }
+    .staff-goal-amounts {
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .staff-goal-actual {
+      font-size: 14px;
+      font-weight: 700;
+      color: #40B4E5;
+    }
+    .staff-goal-target {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    /* 全体作業サマリー */
+    .work-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .work-summary-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px 8px;
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border-radius: 10px;
+      text-align: center;
+    }
+    .work-summary-icon {
+      font-size: 24px;
+      margin-bottom: 6px;
+    }
+    .work-summary-label {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .work-summary-count {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0369a1;
+    }
+
         .team-goal-section {
       background: white;
       border-radius: 12px;
@@ -4527,6 +4636,130 @@
       return html;
     }
 
+    // スタッフ目標進捗を生成（管理者用）
+    function generateStaffGoalProgress(staffStats, memberGoalsData) {
+      // staffStatsとmemberGoalsDataをマージ
+      const staffProgress = [];
+
+      // memberGoalsDataからスタッフ情報を取得
+      if (memberGoalsData && memberGoalsData.length > 0) {
+        memberGoalsData.forEach(member => {
+          const stats = staffStats[member.email] || { totalAmount: 0, totalCount: 0 };
+          const progress = member.goalAmount > 0
+            ? Math.min(100, Math.round((stats.totalAmount / member.goalAmount) * 100))
+            : 0;
+
+          staffProgress.push({
+            name: member.name || member.email.split('@')[0],
+            photoURL: member.photoURL || '',
+            goalAmount: member.goalAmount || 0,
+            actualAmount: stats.totalAmount || 0,
+            totalCount: stats.totalCount || 0,
+            progress: progress
+          });
+        });
+      }
+
+      // staffStatsにあるがmemberGoalsDataにないスタッフを追加
+      Object.values(staffStats).forEach(staff => {
+        const exists = staffProgress.some(s => s.name === staff.name);
+        if (!exists) {
+          staffProgress.push({
+            name: staff.name || '不明',
+            photoURL: staff.photoURL || '',
+            goalAmount: 0,
+            actualAmount: staff.totalAmount || 0,
+            totalCount: staff.totalCount || 0,
+            progress: 0
+          });
+        }
+      });
+
+      // 進捗率でソート（高い順）
+      staffProgress.sort((a, b) => b.progress - a.progress || b.actualAmount - a.actualAmount);
+
+      if (staffProgress.length === 0) {
+        return '<div style="text-align: center; color: #9ca3af; padding: 20px; font-size: 13px;">スタッフデータがありません</div>';
+      }
+
+      return staffProgress.map(staff => {
+        const progressColor = staff.progress >= 100 ? '#10b981' : staff.progress >= 50 ? '#f59e0b' : '#6b7280';
+        const statusIcon = staff.progress >= 100 ? '🎉' : staff.progress >= 80 ? '🔥' : staff.progress >= 50 ? '📈' : '';
+
+        return `
+          <div class="staff-goal-item">
+            <div class="staff-goal-avatar">${staff.photoURL ? `<img src="${staff.photoURL}" alt="">` : '👤'}</div>
+            <div class="staff-goal-info">
+              <div class="staff-goal-name">${escapeHtml(staff.name)} ${statusIcon}</div>
+              <div class="staff-goal-bar-container">
+                <div class="staff-goal-bar">
+                  <div class="staff-goal-fill" style="width: ${staff.progress}%; background: ${progressColor};"></div>
+                </div>
+                <span class="staff-goal-percent" style="color: ${progressColor};">${staff.progress}%</span>
+              </div>
+            </div>
+            <div class="staff-goal-amounts">
+              <div class="staff-goal-actual">¥${staff.actualAmount.toLocaleString()}</div>
+              <div class="staff-goal-target">${staff.goalAmount > 0 ? '/ ¥' + staff.goalAmount.toLocaleString() : '目標未設定'}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 全体作業サマリーを生成（管理者用）
+    function generateWorkSummary(records) {
+      // タスク種別ごとに集計
+      const taskCounts = {
+        listing: { count: 0, label: '商品登録', icon: '📝' },
+        shipping: { count: 0, label: '発送', icon: '📦' },
+        receiving: { count: 0, label: '受取', icon: '📥' },
+        inspection: { count: 0, label: '検品', icon: '🔍' },
+        cleaning: { count: 0, label: 'クリーニング', icon: '🧹' },
+        procurement: { count: 0, label: '仕入', icon: '🛒' }
+      };
+
+      records.forEach(record => {
+        const type = record.taskType || record.type || '';
+        // タイプを正規化
+        let normalizedType = type.toLowerCase();
+        if (normalizedType.includes('listing') || normalizedType.includes('出品') || normalizedType.includes('商品登録')) {
+          normalizedType = 'listing';
+        } else if (normalizedType.includes('shipping') || normalizedType.includes('発送')) {
+          normalizedType = 'shipping';
+        } else if (normalizedType.includes('receiving') || normalizedType.includes('受取')) {
+          normalizedType = 'receiving';
+        } else if (normalizedType.includes('inspection') || normalizedType.includes('検品')) {
+          normalizedType = 'inspection';
+        } else if (normalizedType.includes('cleaning') || normalizedType.includes('クリーニング')) {
+          normalizedType = 'cleaning';
+        } else if (normalizedType.includes('procurement') || normalizedType.includes('仕入')) {
+          normalizedType = 'procurement';
+        }
+
+        if (taskCounts[normalizedType]) {
+          taskCounts[normalizedType].count++;
+        }
+      });
+
+      // カウントがあるものだけフィルタ
+      const activeItems = Object.entries(taskCounts)
+        .filter(([_, data]) => data.count > 0)
+        .sort((a, b) => b[1].count - a[1].count);
+
+      if (activeItems.length === 0) {
+        return '<div style="text-align: center; color: #9ca3af; padding: 20px; font-size: 13px;">作業データがありません</div>';
+      }
+
+      return activeItems.map(([key, data]) => `
+        <div class="work-summary-item">
+          <div class="work-summary-icon">${data.icon}</div>
+          <div class="work-summary-label">${data.label}</div>
+          <div class="work-summary-count">${data.count}件</div>
+        </div>
+      `).join('');
+    }
+
     // マイページを描画
     // 管理者用マイページを描画
     function renderAdminMyPage() {
@@ -4662,73 +4895,25 @@
           </div>
         </div>
 
-        <!-- チーム報酬目標 -->
-        <div class="team-goal-section">
-          <div class="team-goal-header">
-            <div class="team-goal-title">${monthName} チーム報酬目標</div>
-            <button onclick="openTeamGoalModal()" style="background: none; border: none; color: #40B4E5; font-size: 13px; cursor: pointer;">
-              <i class="bi bi-pencil"></i> 設定
-            </button>
-          </div>
-          <div class="team-goal-amount">¥${teamGoal.toLocaleString()}</div>
-          <div class="team-goal-progress">
-            <div class="team-goal-bar">
-              <div class="team-goal-fill" style="width: ${teamProgress}%"></div>
-            </div>
-            <div class="team-goal-text">
-              <span>達成 ¥${totalAmount.toLocaleString()}</span>
-              <span>${teamProgress}%</span>
-            </div>
-            ${teamGoal > 0 ? getMilestoneMessage(teamProgress) : ''}
-          </div>
-        </div>
-
-        <!-- 管理者自身の作業内訳 -->
-        <div class="breakdown-card">
-          <div class="breakdown-title">内訳</div>
-          ${generateAdminBreakdownItems(assignedTasks, myStats.taskStats)}
-        </div>
-
-        <!-- 全体売上サマリー -->
+        <!-- スタッフ目標進捗 -->
         <div class="admin-section">
-          <div class="admin-section-title">${monthName}の全体サマリー</div>
-          <div class="admin-summary-grid">
-            <div class="admin-summary-card highlight">
-              <div class="admin-summary-label">総売上</div>
-              <div class="admin-summary-value">¥${totalAmount.toLocaleString()}</div>
-            </div>
-            <div class="admin-summary-card">
-              <div class="admin-summary-label">総作業件数</div>
-              <div class="admin-summary-value">${totalCount}件</div>
-            </div>
-            <div class="admin-summary-card">
-              <div class="admin-summary-label">アクティブスタッフ</div>
-              <div class="admin-summary-value">${staffList.length}人</div>
-            </div>
-            <div class="admin-summary-card">
-              <div class="admin-summary-label">平均単価</div>
-              <div class="admin-summary-value">¥${totalCount > 0 ? Math.round(totalAmount / totalCount).toLocaleString() : 0}</div>
-            </div>
+          <div class="admin-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="bi bi-people"></i> スタッフ目標進捗</span>
+            <span style="font-size: 12px; color: #6b7280; font-weight: normal;">${staffList.length}人</span>
+          </div>
+          <div class="staff-goal-list">
+            ${generateStaffGoalProgress(staffStats, memberGoalsData)}
           </div>
         </div>
 
-        <!-- スタッフ別パフォーマンス -->
+        <!-- 全体作業サマリー -->
         <div class="admin-section">
-          <div class="admin-section-title">スタッフ別パフォーマンス</div>
-          <div class="staff-performance-list">
-            ${staffList.map((staff, index) => `
-              <div class="staff-performance-item">
-                <div class="staff-performance-avatar">
-                  ${staff.photoURL ? `<img src="${staff.photoURL}" alt="">` : '👤'}
-                </div>
-                <div class="staff-performance-info">
-                  <div class="staff-performance-name">${escapeHtml(staff.name)}</div>
-                  <div class="staff-performance-stats">${staff.totalCount}件完了</div>
-                </div>
-                <div class="staff-performance-amount">¥${staff.totalAmount.toLocaleString()}</div>
-              </div>
-            `).join('')}
-            ${staffList.length === 0 ? '<div style="text-align: center; color: #9ca3af; padding: 20px;">データがありません</div>' : ''}
+          <div class="admin-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="bi bi-bar-chart"></i> 全体作業サマリー</span>
+            <span style="font-size: 12px; color: #6b7280; font-weight: normal;">${totalCount}件</span>
+          </div>
+          <div class="work-summary-grid">
+            ${generateWorkSummary(compensationRecords)}
           </div>
         </div>
 
