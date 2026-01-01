@@ -3036,13 +3036,14 @@
         const staffEmail = product.createdByEmail || localStorage.getItem('reborn_user_email') || '';
 
         // タスクデータ
+        const productId = product.id || product.productId;
         const taskData = {
           type: 'listing_approval',
           title: '出品確認',
           description: `${staffName}さんが商品を出品しました。\n管理番号: ${product.managementNumber}\n確認してOKなら完了にしてください。`,
-          link: 'inventory',
+          link: `/product.html?edit=${productId}`,
           relatedData: {
-            productId: product.id || product.productId,
+            productId: productId,
             managementNumber: product.managementNumber,
             staffName: staffName,
             staffEmail: staffEmail,
@@ -4188,7 +4189,7 @@
           type: 'shipping_task',
           title: '梱包・発送',
           description: `商品が売れました！梱包して発送してください。\n管理番号: ${salesData.managementNumber}\n売上: ¥${Number(salesData.salesAmount).toLocaleString()}`,
-          link: 'inventory',
+          link: `/product.html?edit=${productDocId}`,
           relatedData: {
             productId: productDocId,
             managementNumber: salesData.managementNumber,
@@ -4210,6 +4211,52 @@
         });
 
         console.log('✅ [ShippingTask] 発送タスク追加完了:', staffEmail);
+
+        // スタッフにプッシュ通知を送信
+        try {
+          console.log('📤 [ShippingTask] プッシュ通知送信開始:', staffEmail);
+
+          // スタッフのアクティブデバイスを取得
+          const { query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+          const devicesRef = collection(db, 'users', staffEmail, 'devices');
+          const activeDevicesQuery = query(devicesRef, where('active', '==', true));
+          const devicesSnapshot = await getDocs(activeDevicesQuery);
+
+          const tokens = [];
+          devicesSnapshot.forEach((deviceDoc) => {
+            const deviceData = deviceDoc.data();
+            if (deviceData.fcmToken) {
+              tokens.push(deviceData.fcmToken);
+            }
+          });
+
+          console.log(`📤 [ShippingTask] FCMトークン: ${tokens.length}件`);
+
+          if (tokens.length > 0) {
+            const response = await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tokens: tokens,
+                title: '📦 発送依頼',
+                body: `商品が売れました！${salesData.managementNumber} を梱包・発送してください`,
+                data: {
+                  type: 'shipping_task',
+                  productId: productDocId,
+                  managementNumber: salesData.managementNumber,
+                  badgeCount: '1'
+                }
+              })
+            });
+
+            console.log(`📤 [ShippingTask] プッシュ通知送信結果: ${response.status}`);
+          } else {
+            console.log('📤 [ShippingTask] FCMトークンなし、プッシュ通知スキップ');
+          }
+        } catch (pushError) {
+          console.error('❌ [ShippingTask] プッシュ通知エラー:', pushError);
+          // プッシュ通知エラーでもタスク追加は成功扱い
+        }
       } catch (error) {
         console.error('❌ [ShippingTask] 発送タスク追加エラー:', error);
         // エラーでも販売記録自体は成功させる
