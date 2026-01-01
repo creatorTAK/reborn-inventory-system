@@ -668,6 +668,15 @@ async function loadMaster(category, type) {
     return;
   }
 
+  // packagingDropdownタイプの場合（梱包資材管理）
+  if (currentMasterConfig.type === 'packagingDropdown') {
+    console.log('📋 [Master Manager] packagingDropdownタイプ - 梱包資材UI表示');
+    hidePlatformTabs();
+    hideActionBar();
+    await renderPackagingDropdownUI();
+    return;
+  }
+
   // 通常タイプの場合はアクションバーを表示
   showActionBar();
 
@@ -2741,6 +2750,304 @@ window.addShippingCategory = async function() {
   } catch (error) {
     console.error('カテゴリ追加エラー:', error);
     alert('カテゴリの追加に失敗しました: ' + error.message);
+  }
+};
+
+// ============================================
+// 梱包資材ドロップダウンUI（packagingDropdown）
+// ============================================
+
+// 現在選択中の梱包資材カテゴリインデックス
+let currentPackagingCategoryIndex = 0;
+
+/**
+ * 梱包資材ドロップダウンUIを描画
+ * データ構造: 各ドキュメントが独立したアイテム、categoryフィールドでグループ化
+ */
+async function renderPackagingDropdownUI() {
+  const container = document.getElementById('masterListContainer');
+  if (!container) return;
+
+  container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+  const collection = currentMasterConfig.collection;
+  const icon = currentMasterConfig.icon || 'bi-box-seam';
+  const definedCategories = currentMasterConfig.categories || [];
+
+  try {
+    // Firestoreから全データ取得
+    const snapshot = await window.db.collection(collection).get();
+
+    const allItems = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      allItems.push({
+        id: doc.id,
+        name: data.name || '',
+        category: data.category || 'その他',
+        price: data.price || 0,
+        quantity: data.quantity || 1,
+        abbreviation: data.abbreviation || '',
+        supplier: data.supplier || ''
+      });
+    });
+
+    // カテゴリごとにグループ化
+    const categoryGroups = {};
+    definedCategories.forEach(cat => {
+      categoryGroups[cat.name] = {
+        id: cat.id,
+        name: cat.name,
+        icon: cat.icon,
+        items: []
+      };
+    });
+
+    // その他カテゴリを追加（定義されていない場合）
+    if (!categoryGroups['その他']) {
+      categoryGroups['その他'] = {
+        id: 'other',
+        name: 'その他',
+        icon: 'bi-three-dots',
+        items: []
+      };
+    }
+
+    // アイテムをカテゴリに振り分け
+    allItems.forEach(item => {
+      const catName = item.category;
+      if (categoryGroups[catName]) {
+        categoryGroups[catName].items.push(item);
+      } else {
+        // 未知のカテゴリはその他に振り分け
+        categoryGroups['その他'].items.push(item);
+      }
+    });
+
+    // 配列に変換（定義順を維持）
+    const categories = definedCategories.map(cat => categoryGroups[cat.name]).filter(g => g);
+
+    // 現在のデータを保持
+    window._currentPackagingCategories = categories;
+    window._currentPackagingAllItems = allItems;
+
+    if (categories.length === 0) {
+      container.innerHTML = `
+        <div class="master-options-container">
+          <div class="master-options-empty" style="padding: 40px; text-align: center;">
+            <p>カテゴリ設定がありません</p>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // インデックスが範囲外の場合は0に戻す
+    if (currentPackagingCategoryIndex >= categories.length) {
+      currentPackagingCategoryIndex = 0;
+    }
+
+    // 選択中のカテゴリのデータを取得
+    const selectedCategory = categories[currentPackagingCategoryIndex];
+    const items = selectedCategory.items;
+
+    // 単価を計算するヘルパー関数
+    const calcUnitPrice = (price, quantity) => {
+      if (!quantity || quantity === 0) return 0;
+      return Math.round(price / quantity * 100) / 100;
+    };
+
+    // UIを生成
+    container.innerHTML = `
+      <div class="master-options-container">
+        <!-- カテゴリ選択ドロップダウン -->
+        <div class="master-options-dropdown-selector">
+          <label for="packagingCategorySelect">カテゴリ選択</label>
+          <select id="packagingCategorySelect" class="form-select" onchange="changePackagingCategory(this.value)">
+            ${categories.map((cat, index) => `
+              <option value="${index}" ${index === currentPackagingCategoryIndex ? 'selected' : ''}>
+                ${escapeHtml(cat.name)} (${cat.items.length}件)
+              </option>
+            `).join('')}
+          </select>
+        </div>
+
+        <!-- 選択されたカテゴリの内容 -->
+        <div class="master-options-section" data-category-name="${escapeHtml(selectedCategory.name)}">
+          <div class="master-options-header">
+            <h6><i class="bi ${selectedCategory.icon || icon}"></i> ${escapeHtml(selectedCategory.name)}</h6>
+            <span class="badge bg-secondary" id="packagingItemCount">${items.length}件</span>
+          </div>
+          <div class="master-options-list" id="packagingItemList">
+            ${items.length === 0 ? `
+              <div class="master-options-empty">
+                <p>このカテゴリにはまだ資材がありません</p>
+              </div>
+            ` : items.map((item, itemIndex) => `
+              <div class="master-options-item" data-item-id="${item.id}" style="flex-direction:column;align-items:stretch;gap:4px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <span class="item-text">${escapeHtml(item.name)}</span>
+                  <div class="item-actions">
+                    <button class="btn-icon btn-edit" onclick="editPackagingItem('${item.id}')" title="編集">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn-icon btn-delete" onclick="deletePackagingItem('${item.id}')" title="削除">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+                <div style="color:#666;font-size:13px;display:flex;gap:12px;">
+                  <span>¥${Number(item.price || 0).toLocaleString()} / ${item.quantity}個</span>
+                  <span style="color:#888;">≒ ¥${calcUnitPrice(item.price, item.quantity).toFixed(1)}/個</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="master-options-add">
+            <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}">
+            <input type="number" class="form-control form-control-sm" id="newPackagingQuantity" placeholder="入数" style="width:70px;">
+            <input type="number" class="form-control form-control-sm" id="newPackagingPrice" placeholder="価格" style="width:80px;">
+            <button class="btn btn-sm btn-primary" onclick="addPackagingItem()">
+              <i class="bi bi-plus"></i> 追加
+            </button>
+          </div>
+        </div>
+
+        <!-- 総数表示 -->
+        <div class="master-options-section" style="background: #f8f9fa; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #666;">総資材数</span>
+            <span class="badge bg-primary">${allItems.length}件</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 現在のカテゴリデータを保持
+    window._currentPackagingCategory = selectedCategory;
+    window._currentPackagingItems = items;
+
+    console.log(`packagingDropdown読み込み完了: ${categories.length}カテゴリ, 選択中: ${selectedCategory.name}(${items.length}件)`);
+  } catch (error) {
+    console.error('packagingDropdown読み込みエラー:', error);
+    container.innerHTML = `<div class="text-center text-danger py-4">読み込みエラー: ${error.message}</div>`;
+  }
+}
+
+/**
+ * 梱包資材カテゴリを切り替え
+ */
+window.changePackagingCategory = function(index) {
+  currentPackagingCategoryIndex = parseInt(index, 10);
+  renderPackagingDropdownUI();
+};
+
+/**
+ * 梱包資材を追加
+ */
+window.addPackagingItem = async function() {
+  const nameInput = document.getElementById('newPackagingName');
+  const quantityInput = document.getElementById('newPackagingQuantity');
+  const priceInput = document.getElementById('newPackagingPrice');
+  
+  const name = nameInput?.value?.trim();
+  const quantity = parseInt(quantityInput?.value, 10) || 1;
+  const price = parseInt(priceInput?.value, 10) || 0;
+
+  if (!name) {
+    alert('資材名を入力してください');
+    return;
+  }
+
+  const category = window._currentPackagingCategory;
+  if (!category) return;
+
+  // 重複チェック
+  if (category.items.some(item => item.name === name)) {
+    alert('この資材名は既に登録されています');
+    return;
+  }
+
+  try {
+    const newData = {
+      name,
+      category: category.name,
+      quantity,
+      price,
+      abbreviation: '',
+      supplier: '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    await window.db.collection(currentMasterConfig.collection).add(newData);
+
+    nameInput.value = '';
+    quantityInput.value = '';
+    priceInput.value = '';
+    await renderPackagingDropdownUI();
+    showToast('追加しました');
+  } catch (error) {
+    console.error('追加エラー:', error);
+    alert('追加に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 梱包資材を編集
+ */
+window.editPackagingItem = async function(itemId) {
+  const allItems = window._currentPackagingAllItems || [];
+  const item = allItems.find(i => i.id === itemId);
+  if (!item) return;
+
+  const newName = prompt('資材名:', item.name);
+  if (newName === null) return;
+  if (!newName.trim()) {
+    alert('資材名を入力してください');
+    return;
+  }
+
+  const newQuantity = prompt('入数:', item.quantity);
+  if (newQuantity === null) return;
+
+  const newPrice = prompt('購入価格（円）:', item.price);
+  if (newPrice === null) return;
+
+  try {
+    await window.db.collection(currentMasterConfig.collection).doc(itemId).update({
+      name: newName.trim(),
+      quantity: parseInt(newQuantity, 10) || 1,
+      price: parseInt(newPrice, 10) || 0,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await renderPackagingDropdownUI();
+    showToast('更新しました');
+  } catch (error) {
+    console.error('編集エラー:', error);
+    alert('編集に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 梱包資材を削除
+ */
+window.deletePackagingItem = async function(itemId) {
+  const allItems = window._currentPackagingAllItems || [];
+  const item = allItems.find(i => i.id === itemId);
+  if (!item) return;
+
+  if (!confirm(`「${item.name}」を削除しますか？`)) return;
+
+  try {
+    await window.db.collection(currentMasterConfig.collection).doc(itemId).delete();
+
+    await renderPackagingDropdownUI();
+    showToast('削除しました');
+  } catch (error) {
+    console.error('削除エラー:', error);
+    alert('削除に失敗しました: ' + error.message);
   }
 };
 

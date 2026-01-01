@@ -513,81 +513,27 @@ const masterCategories = {
       packaging: {
         label: '梱包資材',
         collection: 'packagingMaterials',
-        description: '梱包資材と単価を管理',
-        fields: [
-          {
-            name: 'name',
-            label: '資材名',
-            required: true,
-            type: 'text',
-            placeholder: '例: A4 ジッパー式ポリ袋',
-            validation: {
-              minLength: 1,
-              maxLength: 100
-            }
-          },
-          {
-            name: 'category',
-            label: 'カテゴリ',
-            required: true,
-            type: 'text',
-            placeholder: '例: 封筒・袋類',
-            validation: {
-              minLength: 1,
-              maxLength: 50
-            }
-          },
-          {
-            name: 'abbreviation',
-            label: '略称',
-            required: false,
-            type: 'text',
-            placeholder: '例: A4ジッパ',
-            validation: {
-              maxLength: 20
-            }
-          },
-          {
-            name: 'supplier',
-            label: '発注先',
-            required: false,
-            type: 'text',
-            placeholder: '例: Amazon',
-            validation: {
-              maxLength: 50
-            }
-          },
-          {
-            name: 'quantity',
-            label: '入数',
-            required: true,
-            type: 'number',
-            placeholder: '例: 100',
-            validation: {
-              min: 1,
-              max: 100000
-            }
-          },
-          {
-            name: 'price',
-            label: '購入価格（円）',
-            required: true,
-            type: 'number',
-            placeholder: '例: 939',
-            validation: {
-              min: 0,
-              max: 1000000
-            }
-          }
+        type: 'packagingDropdown',
+        description: '梱包資材をカテゴリ別に管理',
+        categoryField: 'category',
+        nameField: 'name',
+        priceField: 'price',
+        quantityField: 'quantity',
+        icon: 'bi-box-seam',
+        placeholder: '例: A4 ジッパー式ポリ袋',
+        // 定義されたカテゴリ（順序も保持）
+        categories: [
+          { id: 'envelope', name: '封筒・袋類', icon: 'bi-envelope' },
+          { id: 'box', name: '段ボール・箱', icon: 'bi-box' },
+          { id: 'cushion', name: '緩衝材', icon: 'bi-shield' },
+          { id: 'tape', name: 'テープ・資材', icon: 'bi-bandaid' },
+          { id: 'other', name: 'その他', icon: 'bi-three-dots' }
         ],
-        displayFields: ['name', 'category', 'quantity', 'price'],
-        searchFields: ['name', 'category', 'abbreviation', 'supplier'],
-        sortBy: 'category',
-        sortOrder: 'asc',
-        searchable: true,
-        usageCount: false,
-        bulkDelete: true,
-        maxDisplayResults: 100
+        emptyState: {
+          icon: '📦',
+          message: '梱包資材を管理',
+          hint: 'カテゴリを選択して資材を追加・編集'
+        }
       },
       
       staff: {
