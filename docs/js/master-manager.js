@@ -2645,28 +2645,62 @@ window.addShippingItem = async function() {
 };
 
 /**
- * 発送方法を編集
+ * 発送方法を編集（インライン編集）
  */
-window.editShippingItem = async function(itemIndex) {
+window.editShippingItem = function(itemIndex) {
   const category = window._currentShippingCategory;
   if (!category) return;
 
   const item = category.items[itemIndex];
-  const newDetail = prompt('発送方法名:', item.detail);
-  if (newDetail === null) return;
-  if (!newDetail.trim()) {
+
+  // 対象の要素を取得
+  const itemElement = document.querySelector(`.master-options-item[data-item-index="${itemIndex}"]`);
+  if (!itemElement) return;
+
+  // インライン編集フォームに置き換え
+  itemElement.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
+      <input type="text" class="form-control form-control-sm" id="edit-shipping-detail-${itemIndex}" value="${escapeHtml(item.detail || '')}" style="width:100%;font-size:16px;" placeholder="発送方法名">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="color:#666;font-size:13px;">送料:</span>
+        <input type="number" class="form-control form-control-sm" id="edit-shipping-price-${itemIndex}" value="${item.price || 0}" style="width:100px;font-size:16px;" placeholder="送料">
+        <span style="color:#666;font-size:13px;">円</span>
+        <button class="btn btn-sm btn-success" onclick="saveShippingEdit(${itemIndex})" style="margin-left:auto;">
+          <i class="bi bi-check"></i>
+        </button>
+        <button class="btn btn-sm btn-secondary" onclick="cancelShippingEdit()">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+    </div>
+  `;
+
+  // 発送方法名フィールドにフォーカス
+  document.getElementById(`edit-shipping-detail-${itemIndex}`).focus();
+};
+
+/**
+ * 発送方法の編集を保存
+ */
+window.saveShippingEdit = async function(itemIndex) {
+  const category = window._currentShippingCategory;
+  if (!category) return;
+
+  const detailInput = document.getElementById(`edit-shipping-detail-${itemIndex}`);
+  const priceInput = document.getElementById(`edit-shipping-price-${itemIndex}`);
+
+  const newDetail = detailInput.value.trim();
+  if (!newDetail) {
     alert('発送方法名を入力してください');
+    detailInput.focus();
     return;
   }
-
-  const newPrice = prompt('送料（円）:', item.price);
-  if (newPrice === null) return;
 
   try {
     const newItems = [...category.items];
     newItems[itemIndex] = {
-      detail: newDetail.trim(),
-      price: parseInt(newPrice, 10) || 0
+      detail: newDetail,
+      price: parseInt(priceInput.value, 10) || 0
     };
 
     await window.db.collection(currentMasterConfig.collection).doc(category.id).update({
@@ -2675,10 +2709,18 @@ window.editShippingItem = async function(itemIndex) {
     });
 
     await renderShippingDropdownUI();
+    showToast('更新しました');
   } catch (error) {
     console.error('編集エラー:', error);
     alert('編集に失敗しました: ' + error.message);
   }
+};
+
+/**
+ * 発送方法の編集をキャンセル
+ */
+window.cancelShippingEdit = function() {
+  renderShippingDropdownUI();
 };
 
 /**
