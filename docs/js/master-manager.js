@@ -3027,19 +3027,19 @@ window.editPackagingItem = function(itemId) {
 
   // モーダル内容を設定
   document.getElementById('editItemModalTitle').textContent = '梱包資材を編集';
-  document.getElementById('editItemModalBody').innerHTML = \`
+  document.getElementById('editItemModalBody').innerHTML = `
     <div class="form-group" style="margin-bottom:16px;">
       <label style="display:block;margin-bottom:4px;font-weight:500;">資材名</label>
-      <input type="text" class="form-control" id="editItemName" value="\${escapeHtml(item.name)}" style="font-size:16px;">
+      <input type="text" class="form-control" id="editItemName" value="${escapeHtml(item.name)}" style="font-size:16px;">
     </div>
     <div class="form-group" style="margin-bottom:16px;">
       <label style="display:block;margin-bottom:4px;font-weight:500;">経費区分</label>
       <select class="form-select" id="editItemExpenseCategory" style="font-size:16px;">
-        <option value="individual" \${item.expenseCategory !== 'monthly' ? 'selected' : ''}>個別原価</option>
-        <option value="monthly" \${item.expenseCategory === 'monthly' ? 'selected' : ''}>月次経費</option>
+        <option value="individual" ${item.expenseCategory !== 'monthly' ? 'selected' : ''}>個別原価</option>
+        <option value="monthly" ${item.expenseCategory === 'monthly' ? 'selected' : ''}>月次経費</option>
       </select>
     </div>
-  \`;
+  `;
 
   // 編集対象情報を保存
   window._editItemContext = { type: 'packaging', itemId };
@@ -3543,7 +3543,7 @@ window.processStockOut = async function(materialId, quantity, reason = 'sale', r
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log(\`✅ [Stock Out FIFO] \${materialId}: -\${quantity}, 原価: ¥\${totalCost}\`);
+    console.log(`✅ [Stock Out FIFO] ${materialId}: -${quantity}, 原価: ¥${totalCost}`);
     return true;
 
   } catch (error) {
@@ -3576,15 +3576,15 @@ window.showStockAdjustmentModal = function() {
 
   // 資材選択プルダウンを生成
   const itemOptions = allItems.map(item =>
-    \`<option value="\${item.id}">\${escapeHtml(item.name)} (現在庫: \${item.currentStock})</option>\`
+    `<option value="${item.id}">${escapeHtml(item.name)} (現在庫: ${item.currentStock})</option>`
   ).join('');
 
-  body.innerHTML = \`
+  body.innerHTML = `
     <div class="mb-3">
       <label class="form-label">梱包資材</label>
       <select class="form-select" id="adjustMaterialId" style="font-size:16px;">
         <option value="">-- 選択してください --</option>
-        \${itemOptions}
+        ${itemOptions}
       </select>
     </div>
     <div class="mb-3">
@@ -3605,7 +3605,7 @@ window.showStockAdjustmentModal = function() {
       <label class="form-label">備考（任意）</label>
       <input type="text" class="form-control" id="adjustNotes" placeholder="詳細メモ" style="font-size:16px;">
     </div>
-  \`;
+  `;
 
   submitBtn.textContent = '在庫調整';
   submitBtn.onclick = processStockAdjustment;
@@ -3641,7 +3641,7 @@ async function processStockAdjustment() {
 
   // 確認ダイアログ
   const materialName = materialIdSelect.options[materialIdSelect.selectedIndex]?.text || '';
-  if (!confirm(\`「\${materialName}」の在庫を\${quantity}個減少させます。\\nよろしいですか？\`)) {
+  if (!confirm(`「${materialName}」の在庫を${quantity}個減少させます。\nよろしいですか？`)) {
     return;
   }
 
@@ -3673,9 +3673,9 @@ async function processStockAdjustment() {
     // 4. モーダルを閉じてUI更新
     hideEditItemModal();
     await renderPackagingDropdownUI();
-    showToast(\`在庫を調整しました（-\${quantity}）\`);
+    showToast(`在庫を調整しました（-${quantity}）`);
 
-    console.log(\`✅ [Stock Adjustment LIFO] \${materialId}: -\${quantity}\`);
+    console.log(`✅ [Stock Adjustment LIFO] ${materialId}: -${quantity}`);
 
   } catch (error) {
     console.error('在庫調整エラー:', error);
