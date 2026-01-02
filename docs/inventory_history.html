@@ -471,9 +471,14 @@
               <option value="">全カテゴリ</option>
             </select>
           </div>
-          <div class="col-4">
+          <div class="col-2">
             <button class="btn btn-success btn-sm w-100" onclick="showStockInModalMaterial()">
               <i class="bi bi-plus"></i> 入庫
+            </button>
+          </div>
+          <div class="col-2">
+            <button class="btn btn-warning btn-sm w-100" onclick="showStockAdjustmentModal()">
+              <i class="bi bi-pencil"></i> 調整
             </button>
           </div>
         </div>
@@ -632,8 +637,13 @@
             <input type="number" class="form-control" id="stockInQuantity" min="1" style="font-size:16px;">
           </div>
           <div class="mb-3">
-            <label class="form-label">購入価格（税込）</label>
+            <label class="form-label">購入価格（合計・税込）</label>
             <input type="number" class="form-control" id="stockInPrice" min="0" style="font-size:16px;">
+            <small class="text-muted">※入庫数で割って単価を計算します</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">発注先（任意）</label>
+            <input type="text" class="form-control" id="stockInSupplier" placeholder="例: Amazon, 楽天" style="font-size:16px;">
           </div>
           <div class="mb-3">
             <label class="form-label">備考</label>
@@ -643,6 +653,48 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
           <button type="button" class="btn btn-success" onclick="processStockInMaterial()">入庫登録</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 在庫調整モーダル -->
+  <div class="modal fade" id="stockAdjustmentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil-square"></i> 在庫調整（減少）</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">資材選択</label>
+            <select class="form-select" id="adjustMaterial" style="font-size:16px;">
+              <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">減少数量</label>
+            <input type="number" class="form-control" id="adjustQuantity" min="1" style="font-size:16px;">
+            <small class="text-muted">※新しいロットから自動的に減少します（LIFO）</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">理由</label>
+            <select class="form-select" id="adjustReason" style="font-size:16px;">
+              <option value="damaged">破損</option>
+              <option value="lost">紛失</option>
+              <option value="discarded">廃棄</option>
+              <option value="other">その他</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">備考</label>
+            <input type="text" class="form-control" id="adjustNote" placeholder="詳細メモ" style="font-size:16px;">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-warning" onclick="processStockAdjustmentMaterial()">在庫調整</button>
         </div>
       </div>
     </div>
@@ -1306,6 +1358,7 @@
       // フォームリセット
       document.getElementById('stockInQuantity').value = '';
       document.getElementById('stockInPrice').value = '';
+      document.getElementById('stockInSupplier').value = '';
       document.getElementById('stockInNote').value = '';
 
       // モーダル表示
@@ -1317,6 +1370,7 @@
       const materialId = document.getElementById('stockInMaterial').value;
       const quantity = parseInt(document.getElementById('stockInQuantity').value) || 0;
       const price = parseFloat(document.getElementById('stockInPrice').value) || 0;
+      const supplier = document.getElementById('stockInSupplier').value.trim();
       const note = document.getElementById('stockInNote').value;
 
       if (!materialId) {
@@ -1330,6 +1384,7 @@
 
       const material = allMaterials.find(m => m.id === materialId);
       const materialName = material ? (material.productName || material.name) : '';
+      const unitPrice = price > 0 && quantity > 0 ? Math.round(price / quantity) : 0;
 
       showLoading();
       bootstrap.Modal.getInstance(document.getElementById('stockInModal'))?.hide();
@@ -1337,35 +1392,179 @@
       try {
         const db = getDb();
 
-        // 1. 入庫履歴を登録
+        // 1. ロットを作成
+        const lotRef = await db.collection('packagingLots').add({
+          materialId: materialId,
+          quantity: quantity,
+          remainingQty: quantity,
+          unitPrice: unitPrice,
+          purchaseDate: getFirebaseTimestamp(),
+          supplier: supplier,
+          notes: note,
+          status: 'active',
+          createdBy: window.parent?.currentUser?.name || 'unknown',
+          createdAt: getFirebaseTimestamp(),
+          updatedAt: getFirebaseTimestamp()
+        });
+
+        // 2. 入庫履歴を登録
         await db.collection('packagingTransactions').add({
           materialId: materialId,
           materialName: materialName,
           type: '入庫',
           quantity: quantity,
           purchasePrice: price,
-          unitCost: price > 0 && quantity > 0 ? price / quantity : 0,
+          unitPrice: unitPrice,
+          lotId: lotRef.id,
+          supplier: supplier,
           reason: '手動入庫',
           note: note,
           createdBy: window.parent?.currentUser?.name || 'unknown',
           createdAt: getFirebaseTimestamp()
         });
 
-        // 2. 資材の在庫数を更新
-        const materialRef = db.collection('packagingMaterials').doc(materialId);
-        const currentStock = material.currentStock || 0;
-        await materialRef.update({
-          currentStock: currentStock + quantity,
+        // 3. 合計在庫を計算してmaterialに反映
+        const lotsSnapshot = await db.collection('packagingLots')
+          .where('materialId', '==', materialId)
+          .where('status', '==', 'active')
+          .get();
+        const totalStock = lotsSnapshot.docs.reduce((sum, doc) => sum + (doc.data().remainingQty || 0), 0);
+
+        await db.collection('packagingMaterials').doc(materialId).update({
+          currentStock: totalStock,
           updatedAt: getFirebaseTimestamp()
         });
 
         hideLoading();
-        alert('入庫を登録しました');
+        alert(`入庫を登録しました（単価: ¥${unitPrice}）`);
         loadStockList();
       } catch (error) {
         hideLoading();
         console.error('入庫登録エラー:', error);
         alert('入庫登録に失敗しました: ' + error.message);
+      }
+    }
+
+    // ========================================
+    // 在庫調整モーダル機能
+    // ========================================
+    function showStockAdjustmentModal(materialId) {
+      // 資材プルダウンを更新
+      const select = document.getElementById('adjustMaterial');
+      select.innerHTML = '<option value="">選択してください</option>' +
+        allMaterials.map(m => `<option value="${m.id}" ${m.id === materialId ? 'selected' : ''}>${escapeHtml(m.productName || m.name)} (現在庫: ${m.currentStock || 0})</option>`).join('');
+
+      // フォームリセット
+      document.getElementById('adjustQuantity').value = '';
+      document.getElementById('adjustReason').value = 'damaged';
+      document.getElementById('adjustNote').value = '';
+
+      // モーダル表示
+      const modal = new bootstrap.Modal(document.getElementById('stockAdjustmentModal'));
+      modal.show();
+    }
+
+    async function processStockAdjustmentMaterial() {
+      const materialId = document.getElementById('adjustMaterial').value;
+      const quantity = parseInt(document.getElementById('adjustQuantity').value) || 0;
+      const reason = document.getElementById('adjustReason').value;
+      const note = document.getElementById('adjustNote').value;
+
+      if (!materialId) {
+        alert('資材を選択してください');
+        return;
+      }
+      if (quantity <= 0) {
+        alert('減少数量を入力してください');
+        return;
+      }
+
+      const material = allMaterials.find(m => m.id === materialId);
+      const materialName = material ? (material.productName || material.name) : '';
+
+      // 確認ダイアログ
+      if (!confirm(`「${materialName}」の在庫を${quantity}個減少させます。\nよろしいですか？`)) {
+        return;
+      }
+
+      showLoading();
+      bootstrap.Modal.getInstance(document.getElementById('stockAdjustmentModal'))?.hide();
+
+      try {
+        const db = getDb();
+
+        // 1. LIFO方式でロットから在庫を調整（新しい順）
+        const lotsSnapshot = await db.collection('packagingLots')
+          .where('materialId', '==', materialId)
+          .where('status', '==', 'active')
+          .orderBy('purchaseDate', 'desc')
+          .get();
+
+        let remaining = quantity;
+        const adjusted = [];
+
+        for (const doc of lotsSnapshot.docs) {
+          if (remaining <= 0) break;
+
+          const lot = doc.data();
+          const toAdjust = Math.min(remaining, lot.remainingQty);
+          const newRemainingQty = lot.remainingQty - toAdjust;
+          const newStatus = newRemainingQty <= 0 ? 'depleted' : 'active';
+
+          await db.collection('packagingLots').doc(doc.id).update({
+            remainingQty: newRemainingQty,
+            status: newStatus,
+            updatedAt: getFirebaseTimestamp()
+          });
+
+          adjusted.push({
+            lotId: doc.id,
+            quantity: toAdjust,
+            unitPrice: lot.unitPrice
+          });
+
+          remaining -= toAdjust;
+        }
+
+        // 2. 調整履歴を登録
+        const reasonLabels = {
+          damaged: '破損',
+          lost: '紛失',
+          discarded: '廃棄',
+          other: 'その他'
+        };
+
+        await db.collection('packagingTransactions').add({
+          materialId: materialId,
+          materialName: materialName,
+          type: '調整',
+          quantity: -quantity,
+          reason: reasonLabels[reason] || reason,
+          adjustedLots: adjusted,
+          note: note,
+          createdBy: window.parent?.currentUser?.name || 'unknown',
+          createdAt: getFirebaseTimestamp()
+        });
+
+        // 3. 合計在庫を計算してmaterialに反映
+        const updatedLotsSnapshot = await db.collection('packagingLots')
+          .where('materialId', '==', materialId)
+          .where('status', '==', 'active')
+          .get();
+        const totalStock = updatedLotsSnapshot.docs.reduce((sum, doc) => sum + (doc.data().remainingQty || 0), 0);
+
+        await db.collection('packagingMaterials').doc(materialId).update({
+          currentStock: totalStock,
+          updatedAt: getFirebaseTimestamp()
+        });
+
+        hideLoading();
+        alert(`在庫を調整しました（-${quantity}）`);
+        loadStockList();
+      } catch (error) {
+        hideLoading();
+        console.error('在庫調整エラー:', error);
+        alert('在庫調整に失敗しました: ' + error.message);
       }
     }
 
