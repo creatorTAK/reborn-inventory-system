@@ -2645,7 +2645,7 @@ window.addShippingItem = async function() {
 };
 
 /**
- * 発送方法を編集（インライン編集）
+ * 発送方法を編集（モーダル表示）
  */
 window.editShippingItem = function(itemIndex) {
   const category = window._currentShippingCategory;
@@ -2653,41 +2653,36 @@ window.editShippingItem = function(itemIndex) {
 
   const item = category.items[itemIndex];
 
-  // 対象の要素を取得
-  const itemElement = document.querySelector(`.master-options-item[data-item-index="${itemIndex}"]`);
-  if (!itemElement) return;
-
-  // インライン編集フォームに置き換え
-  itemElement.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
-      <input type="text" class="form-control form-control-sm" id="edit-shipping-detail-${itemIndex}" value="${escapeHtml(item.detail || '')}" style="width:100%;font-size:16px;" placeholder="発送方法名">
-      <div style="display:flex;gap:8px;align-items:center;">
-        <span style="color:#666;font-size:13px;">送料:</span>
-        <input type="number" class="form-control form-control-sm" id="edit-shipping-price-${itemIndex}" value="${item.price || 0}" style="width:100px;font-size:16px;" placeholder="送料">
-        <span style="color:#666;font-size:13px;">円</span>
-        <button class="btn btn-sm btn-success" onclick="saveShippingEdit(${itemIndex})" style="margin-left:auto;">
-          <i class="bi bi-check"></i>
-        </button>
-        <button class="btn btn-sm btn-secondary" onclick="cancelShippingEdit()">
-          <i class="bi bi-x"></i>
-        </button>
-      </div>
+  // モーダル内容を設定
+  document.getElementById('editItemModalTitle').textContent = '発送方法を編集';
+  document.getElementById('editItemModalBody').innerHTML = `
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">発送方法名</label>
+      <input type="text" class="form-control" id="editItemName" value="${escapeHtml(item.detail || '')}" style="font-size:16px;">
+    </div>
+    <div class="form-group">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">送料（円）</label>
+      <input type="number" class="form-control" id="editItemPrice" value="${item.price || 0}" style="font-size:16px;">
     </div>
   `;
 
-  // 発送方法名フィールドにフォーカス
-  document.getElementById(`edit-shipping-detail-${itemIndex}`).focus();
+  // 編集対象情報を保存
+  window._editItemContext = { type: 'shipping', itemIndex };
+
+  // モーダル表示
+  document.getElementById('editItemModal').classList.remove('hidden');
+  document.getElementById('editItemName').focus();
 };
 
 /**
- * 発送方法の編集を保存
+ * 発送方法の編集を保存（モーダルから）
  */
-window.saveShippingEdit = async function(itemIndex) {
+async function saveShippingFromModal(itemIndex) {
   const category = window._currentShippingCategory;
   if (!category) return;
 
-  const detailInput = document.getElementById(`edit-shipping-detail-${itemIndex}`);
-  const priceInput = document.getElementById(`edit-shipping-price-${itemIndex}`);
+  const detailInput = document.getElementById('editItemName');
+  const priceInput = document.getElementById('editItemPrice');
 
   const newDetail = detailInput.value.trim();
   if (!newDetail) {
@@ -2708,20 +2703,14 @@ window.saveShippingEdit = async function(itemIndex) {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
+    hideEditItemModal();
     await renderShippingDropdownUI();
     showToast('更新しました');
   } catch (error) {
     console.error('編集エラー:', error);
     alert('編集に失敗しました: ' + error.message);
   }
-};
-
-/**
- * 発送方法の編集をキャンセル
- */
-window.cancelShippingEdit = function() {
-  renderShippingDropdownUI();
-};
+}
 
 /**
  * 発送方法を削除
@@ -3030,45 +3019,69 @@ window.addPackagingItem = async function() {
 };
 
 /**
- * 梱包資材を編集（インライン編集）
+ * 梱包資材を編集（モーダル表示）
  */
 window.editPackagingItem = function(itemId) {
   const allItems = window._currentPackagingAllItems || [];
   const item = allItems.find(i => i.id === itemId);
   if (!item) return;
 
-  // 対象の要素を取得
-  const itemElement = document.querySelector(`.master-options-item[data-item-id="${itemId}"]`);
-  if (!itemElement) return;
-
-  // インライン編集フォームに置き換え
-  itemElement.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
-      <input type="text" class="form-control form-control-sm" id="edit-name-${itemId}" value="${escapeHtml(item.name)}" style="width:100%;font-size:16px;" placeholder="資材名">
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input type="number" class="form-control form-control-sm" id="edit-qty-${itemId}" value="${item.quantity || 1}" style="width:80px;font-size:16px;" placeholder="入数">
-        <input type="number" class="form-control form-control-sm" id="edit-price-${itemId}" value="${item.price || 0}" style="width:100px;font-size:16px;" placeholder="価格">
-        <button class="btn btn-sm btn-success" onclick="savePackagingEdit('${itemId}')" style="margin-left:auto;">
-          <i class="bi bi-check"></i>
-        </button>
-        <button class="btn btn-sm btn-secondary" onclick="cancelPackagingEdit()">
-          <i class="bi bi-x"></i>
-        </button>
+  // モーダル内容を設定
+  document.getElementById('editItemModalTitle').textContent = '梱包資材を編集';
+  document.getElementById('editItemModalBody').innerHTML = `
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">資材名</label>
+      <input type="text" class="form-control" id="editItemName" value="${escapeHtml(item.name)}" style="font-size:16px;">
+    </div>
+    <div style="display:flex;gap:16px;">
+      <div class="form-group" style="flex:1;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">入数</label>
+        <input type="number" class="form-control" id="editItemQty" value="${item.quantity || 1}" style="font-size:16px;">
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">価格（円）</label>
+        <input type="number" class="form-control" id="editItemPrice" value="${item.price || 0}" style="font-size:16px;">
       </div>
     </div>
   `;
 
-  // 名前フィールドにフォーカス
-  document.getElementById(`edit-name-${itemId}`).focus();
+  // 編集対象情報を保存
+  window._editItemContext = { type: 'packaging', itemId };
+
+  // モーダル表示
+  document.getElementById('editItemModal').classList.remove('hidden');
+  document.getElementById('editItemName').focus();
 };
 
 /**
- * 梱包資材の編集を保存
+ * 編集モーダルを非表示
  */
-window.savePackagingEdit = async function(itemId) {
-  const nameInput = document.getElementById(`edit-name-${itemId}`);
-  const qtyInput = document.getElementById(`edit-qty-${itemId}`);
-  const priceInput = document.getElementById(`edit-price-${itemId}`);
+window.hideEditItemModal = function() {
+  document.getElementById('editItemModal').classList.add('hidden');
+  window._editItemContext = null;
+};
+
+/**
+ * 編集モーダルの保存処理
+ */
+window.submitEditItem = async function() {
+  const context = window._editItemContext;
+  if (!context) return;
+
+  if (context.type === 'packaging') {
+    await savePackagingFromModal(context.itemId);
+  } else if (context.type === 'shipping') {
+    await saveShippingFromModal(context.itemIndex);
+  }
+};
+
+/**
+ * 梱包資材の編集を保存（モーダルから）
+ */
+async function savePackagingFromModal(itemId) {
+  const nameInput = document.getElementById('editItemName');
+  const qtyInput = document.getElementById('editItemQty');
+  const priceInput = document.getElementById('editItemPrice');
 
   const newName = nameInput.value.trim();
   if (!newName) {
@@ -3085,20 +3098,14 @@ window.savePackagingEdit = async function(itemId) {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
+    hideEditItemModal();
     await renderPackagingDropdownUI();
     showToast('更新しました');
   } catch (error) {
     console.error('編集エラー:', error);
     alert('編集に失敗しました: ' + error.message);
   }
-};
-
-/**
- * 梱包資材の編集をキャンセル
- */
-window.cancelPackagingEdit = function() {
-  renderPackagingDropdownUI();
-};
+}
 
 /**
  * 梱包資材を削除
