@@ -3105,6 +3105,149 @@ async function savePackagingFromModal(itemId) {
 
 
 // ============================================
+// 場所管理機能（ハイブリッド在庫管理）
+// ============================================
+
+/**
+ * 現在のユーザーの場所を取得（なければ自動作成）
+ * @returns {Promise<Object>} - 場所オブジェクト { id, name, type, ... }
+ */
+async function getCurrentUserLocation() {
+  const userEmail = window.currentUser?.email || localStorage.getItem('reborn_user_email');
+  const userName = window.currentUser?.name || localStorage.getItem('reborn_user_name') || 'unknown';
+
+  if (!userEmail) {
+    console.warn('[Location] ユーザーメール未取得');
+    return null;
+  }
+
+  // 既存の場所を検索
+  const snapshot = await window.db.collection('packagingLocations')
+    .where('assignedUserEmail', '==', userEmail)
+    .where('type', '==', 'user_home')
+    .limit(1)
+    .get();
+
+  if (!snapshot.empty) {
+    const doc = snapshot.docs[0];
+    return { id: doc.id, ...doc.data() };
+  }
+
+  // 場所がなければ自動作成
+  const newLocation = {
+    name: `${userName}さん`,
+    type: 'user_home',
+    assignedUserEmail: userEmail,
+    assignedUserName: userName,
+    isActive: true,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  const docRef = await window.db.collection('packagingLocations').add(newLocation);
+  console.log(`✅ [Location] 新規作成: ${userName}さん (${docRef.id})`);
+  return { id: docRef.id, ...newLocation };
+}
+
+/**
+ * 全場所を取得（管理者用）
+ * @returns {Promise<Array>} - 場所配列
+ */
+async function getAllLocations() {
+  const snapshot = await window.db.collection('packagingLocations')
+    .where('isActive', '==', true)
+    .orderBy('type')
+    .orderBy('name')
+    .get();
+
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+}
+
+/**
+ * 場所を作成（倉庫/事務所用）
+ * @param {string} name - 場所名
+ * @param {string} type - 'warehouse' | 'office'
+ * @returns {Promise<string>} - 作成されたID
+ */
+async function createLocation(name, type) {
+  const newLocation = {
+    name,
+    type,
+    assignedUserEmail: null,
+    assignedUserName: null,
+    isActive: true,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  const docRef = await window.db.collection('packagingLocations').add(newLocation);
+  console.log(`✅ [Location] 新規作成: ${name} (${type})`);
+  return docRef.id;
+}
+
+/**
+ * 場所ごとの在庫サマリーを取得
+ * @param {string} locationId - 場所ID（nullの場合は全場所）
+ * @returns {Promise<Array>} - [{ materialId, materialName, totalStock, alertThreshold }]
+ */
+async function getStockSummaryByLocation(locationId = null) {
+  let query = window.db.collection('packagingLots')
+    .where('status', '==', 'active');
+
+  if (locationId) {
+    query = query.where('locationId', '==', locationId);
+  }
+
+  const lotsSnapshot = await query.get();
+
+  // materialIdごとに集計
+  const stockMap = {};
+  lotsSnapshot.docs.forEach(doc => {
+    const lot = doc.data();
+    if (!stockMap[lot.materialId]) {
+      stockMap[lot.materialId] = {
+        materialId: lot.materialId,
+        totalStock: 0,
+        lots: []
+      };
+    }
+    stockMap[lot.materialId].totalStock += lot.remainingQty || 0;
+    stockMap[lot.materialId].lots.push({
+      id: doc.id,
+      remainingQty: lot.remainingQty,
+      unitPrice: lot.unitPrice,
+      locationId: lot.locationId
+    });
+  });
+
+  return Object.values(stockMap);
+}
+
+/**
+ * 管理者かどうかを判定
+ * @returns {boolean}
+ */
+function isAdmin() {
+  const permission = localStorage.getItem('reborn_user_permission');
+  return permission === 'owner' || permission === 'admin';
+}
+
+// 現在の場所をキャッシュ
+let _currentLocation = null;
+
+/**
+ * 現在の場所を取得（キャッシュ付き）
+ */
+async function getOrCreateCurrentLocation() {
+  if (_currentLocation) return _currentLocation;
+  _currentLocation = await getCurrentUserLocation();
+  return _currentLocation;
+}
+
+// ============================================
 // ロット管理機能（FIFO/LIFO対応）
 // ============================================
 
@@ -3113,13 +3256,20 @@ async function savePackagingFromModal(itemId) {
  * @param {string} materialId - 梱包資材ID
  * @param {number} quantity - 数量
  * @param {number} unitPrice - 単価
+ * @param {string} locationId - 場所ID（必須）
  * @param {string} supplier - 発注先（任意）
  * @param {string} notes - 備考（任意）
  * @returns {Promise<string>} - 作成されたロットのID
  */
-async function createLot(materialId, quantity, unitPrice, supplier = '', notes = '') {
+async function createLot(materialId, quantity, unitPrice, locationId, supplier = '', notes = '') {
+  if (!locationId) {
+    console.error('[Lot] locationId は必須です');
+    throw new Error('locationId is required');
+  }
+
   const lotData = {
     materialId,
+    locationId,
     quantity,
     remainingQty: quantity,
     unitPrice,
@@ -3133,18 +3283,25 @@ async function createLot(materialId, quantity, unitPrice, supplier = '', notes =
   };
 
   const docRef = await window.db.collection('packagingLots').add(lotData);
-  console.log(`✅ [Lot] 新規ロット作成: ${docRef.id}, 数量: ${quantity}, 単価: ${unitPrice}`);
+  console.log(`✅ [Lot] 新規ロット作成: ${docRef.id}, 場所: ${locationId}, 数量: ${quantity}, 単価: ${unitPrice}`);
   return docRef.id;
 }
 
 /**
  * 資材の有効なロットを取得（FIFO順：古い順）
  * @param {string} materialId - 梱包資材ID
+ * @param {string} locationId - 場所ID（必須）
  * @returns {Promise<Array>} - ロット配列（purchaseDate昇順）
  */
-async function getActiveLots(materialId) {
+async function getActiveLots(materialId, locationId) {
+  if (!locationId) {
+    console.error('[Lot] getActiveLots: locationId は必須です');
+    return [];
+  }
+
   const snapshot = await window.db.collection('packagingLots')
     .where('materialId', '==', materialId)
+    .where('locationId', '==', locationId)
     .where('status', '==', 'active')
     .orderBy('purchaseDate', 'asc')
     .get();
@@ -3158,10 +3315,11 @@ async function getActiveLots(materialId) {
 /**
  * 資材の合計在庫数を計算（全ロットのremainingQtyの合計）
  * @param {string} materialId - 梱包資材ID
+ * @param {string} locationId - 場所ID（必須）
  * @returns {Promise<number>} - 合計在庫数
  */
-async function getTotalStock(materialId) {
-  const lots = await getActiveLots(materialId);
+async function getTotalStock(materialId, locationId) {
+  const lots = await getActiveLots(materialId, locationId);
   return lots.reduce((sum, lot) => sum + (lot.remainingQty || 0), 0);
 }
 
@@ -3169,11 +3327,17 @@ async function getTotalStock(materialId) {
  * FIFO方式で在庫を消費（出庫用）
  * 古いロットから順に消費
  * @param {string} materialId - 梱包資材ID
+ * @param {string} locationId - 場所ID（必須）
  * @param {number} quantity - 消費数量
  * @returns {Promise<Array>} - 消費したロット情報（原価計算用）
  */
-async function consumeStockFIFO(materialId, quantity) {
-  const lots = await getActiveLots(materialId);
+async function consumeStockFIFO(materialId, locationId, quantity) {
+  if (!locationId) {
+    console.error('[FIFO] locationId は必須です');
+    return [];
+  }
+
+  const lots = await getActiveLots(materialId, locationId);
   let remaining = quantity;
   const consumed = [];
 
@@ -3212,14 +3376,21 @@ async function consumeStockFIFO(materialId, quantity) {
  * LIFO方式で在庫を調整（調整用）
  * 新しいロットから順に減らす
  * @param {string} materialId - 梱包資材ID
+ * @param {string} locationId - 場所ID（必須）
  * @param {number} quantity - 減少数量
  * @param {string} reason - 理由
  * @returns {Promise<Array>} - 調整したロット情報
  */
-async function adjustStockLIFO(materialId, quantity, reason = '') {
+async function adjustStockLIFO(materialId, locationId, quantity, reason = '') {
+  if (!locationId) {
+    console.error('[LIFO] locationId は必須です');
+    return [];
+  }
+
   // LIFO: 新しい順に取得
   const snapshot = await window.db.collection('packagingLots')
     .where('materialId', '==', materialId)
+    .where('locationId', '==', locationId)
     .where('status', '==', 'active')
     .orderBy('purchaseDate', 'desc')
     .get();
@@ -3265,10 +3436,11 @@ async function adjustStockLIFO(materialId, quantity, reason = '') {
 /**
  * ロット詳細を取得してフォーマット（UI表示用）
  * @param {string} materialId - 梱包資材ID
+ * @param {string} locationId - 場所ID（必須）
  * @returns {Promise<Object>} - { totalStock, lots: [...] }
  */
-async function getLotsWithDetails(materialId) {
-  const lots = await getActiveLots(materialId);
+async function getLotsWithDetails(materialId, locationId) {
+  const lots = await getActiveLots(materialId, locationId);
   const totalStock = lots.reduce((sum, lot) => sum + (lot.remainingQty || 0), 0);
 
   return {
