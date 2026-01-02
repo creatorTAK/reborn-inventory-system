@@ -508,10 +508,11 @@ const NAME_LIMIT = 40;
   const DESC_LIMIT_MODE = 'warn';
 
   // 画像ストレージプロバイダー設定
-  // 'firebase': Firebase Storage（推奨: API連携対応、公開URL取得可能）
-  // 'gdrive': Googleドライブ（旧方式: チーム利用）
-  // 'r2': Cloudflare R2（将来: SaaS化時）
-  const IMAGE_STORAGE_PROVIDER = 'firebase';
+  // 'firebase': Firebase Storage（安定: API連携対応、公開URL取得可能）
+  // 'r2': Cloudflare R2（転送料無料: リトライ機能付き）
+  // 'gdrive': Googleドライブ（旧方式: 非推奨）
+  // ※ 問題発生時は 'firebase' に戻す
+  const IMAGE_STORAGE_PROVIDER = 'r2';
 
 // AI生成文を保存するグローバル変数
 window.AI_GENERATED_TEXT = '';
@@ -6025,6 +6026,154 @@ window.continueProductRegistration = function() {
   // グローバルに公開（PWA版で使用）
   window.uploadImagesToFirebaseStorage = uploadImagesToFirebaseStorage;
 
+  // ============================================
+  // Cloudflare R2 画像アップロード（リトライ機能付き）
+  // ============================================
+
+  const R2_WORKER_URL = 'https://reborn-r2-uploader.mercari-yasuhirotakuji.workers.dev';
+  const R2_MAX_RETRIES = 3;
+  const R2_RETRY_DELAY_MS = 1000;
+
+  /**
+   * 単一ファイルをR2にアップロード（リトライ付き）
+   * @param {Blob} blob - アップロードするファイル
+   * @param {string} fileName - ファイル名
+   * @param {number} retries - リトライ回数
+   * @returns {Promise<{success: boolean, url?: string, error?: string}>}
+   */
+  async function uploadSingleFileToR2(blob, fileName, retries = R2_MAX_RETRIES) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        console.log(`[R2] アップロード試行 ${attempt}/${retries}: ${fileName}`);
+
+        const formData = new FormData();
+        formData.append('file', blob, fileName);
+
+        const response = await fetch(`${R2_WORKER_URL}/upload`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error(result.error || 'アップロード失敗');
+        }
+
+        console.log(`[R2] ✅ アップロード成功: ${result.url}`);
+        return { success: true, url: result.url, fileName: result.fileName };
+
+      } catch (error) {
+        console.warn(`[R2] ⚠️ 試行 ${attempt} 失敗:`, error.message);
+
+        if (attempt < retries) {
+          // リトライ前に待機（コールドスタート対策）
+          console.log(`[R2] ${R2_RETRY_DELAY_MS}ms 待機後にリトライ...`);
+          await new Promise(resolve => setTimeout(resolve, R2_RETRY_DELAY_MS));
+        } else {
+          console.error(`[R2] ❌ 最大リトライ回数到達: ${fileName}`);
+          return { success: false, error: error.message };
+        }
+      }
+    }
+    return { success: false, error: '予期しないエラー' };
+  }
+
+  /**
+   * Cloudflare R2に商品画像をアップロード（リトライ機能付き）
+   * Firebase Storage版と同じインターフェース
+   * @param {string} managementNumber - 管理番号（フォルダ名として使用）
+   * @param {Array} images - アップロードする画像の配列 [{data: base64, name: filename}]
+   * @param {Function} onProgress - 進捗コールバック
+   * @returns {Promise<{success: boolean, urls: string[], error?: string}>}
+   */
+  async function uploadImagesToR2(managementNumber, images, onProgress) {
+    console.log('[R2] 並列アップロード開始:', managementNumber, images.length + '枚');
+    console.log('[R2] ⚡ リトライ機能有効: 最大', R2_MAX_RETRIES, '回');
+
+    const totalImages = images.length;
+    let completedCount = 0;
+    const errors = [];
+    const timestamp = Date.now();
+
+    // 初期進捗表示
+    if (onProgress) {
+      onProgress(20, `R2画像アップロード開始... (0/${totalImages}枚)`);
+    }
+
+    // 各画像のアップロードPromiseを作成（並列実行）
+    const uploadPromises = images.map(async (image, index) => {
+      try {
+        console.log(`[R2] 画像 ${index + 1}/${totalImages} 準備: ${image.name}`);
+
+        // Base64データからBlobを作成
+        const base64Data = image.data.split(',')[1];
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let j = 0; j < byteCharacters.length; j++) {
+          byteNumbers[j] = byteCharacters.charCodeAt(j);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: image.mimeType || 'image/jpeg' });
+
+        // ファイル名を生成
+        const fileName = `${managementNumber}_${String(index + 1).padStart(3, '0')}_${timestamp}.jpg`;
+
+        // リトライ付きでアップロード
+        const result = await uploadSingleFileToR2(blob, fileName);
+
+        // 完了カウント更新＆進捗バー更新
+        completedCount++;
+        if (onProgress) {
+          const progressPercent = 20 + Math.round((completedCount / totalImages) * 50);
+          onProgress(progressPercent, `R2画像アップロード中... (${completedCount}/${totalImages}枚)`);
+        }
+
+        if (result.success) {
+          return { index, url: result.url, success: true };
+        } else {
+          errors.push(`${image.name}: ${result.error}`);
+          return { index, url: null, success: false };
+        }
+
+      } catch (error) {
+        console.error(`[R2] 画像 ${index + 1} エラー:`, error);
+        errors.push(`${image.name}: ${error.message}`);
+        completedCount++;
+        if (onProgress) {
+          const progressPercent = 20 + Math.round((completedCount / totalImages) * 50);
+          onProgress(progressPercent, `R2画像アップロード中... (${completedCount}/${totalImages}枚)`);
+        }
+        return { index, url: null, success: false };
+      }
+    });
+
+    // 全画像の並列アップロードを待機
+    const results = await Promise.all(uploadPromises);
+
+    // 結果を元の順序でソートしてURLを抽出
+    const sortedResults = results.sort((a, b) => a.index - b.index);
+    const uploadedUrls = sortedResults.filter(r => r.success).map(r => r.url);
+
+    const result = {
+      success: uploadedUrls.length > 0,
+      urls: uploadedUrls,
+      successCount: uploadedUrls.length,
+      totalCount: images.length,
+      error: errors.length > 0 ? errors.join(', ') : null
+    };
+
+    console.log('[R2] 並列アップロード結果:', result);
+    return result;
+  }
+
+  // グローバルに公開（PWA版で使用）
+  window.uploadImagesToR2 = uploadImagesToR2;
+
   // ページ読み込み時に設定を確認
   document.addEventListener('DOMContentLoaded', function() {
     checkProductImageBlockVisibility();
@@ -7504,26 +7653,37 @@ window.continueProductRegistration = function() {
       // PWA版：Firestore直接保存（PROD-002 Phase 1）
       console.log('[PWA] Firestoreに保存');
       try {
-        // 商品画像がある場合は先にFirebase Storageにアップロード
-        if (productImages && productImages.length > 0 && IMAGE_STORAGE_PROVIDER === 'firebase') {
+        // 商品画像がある場合は先にストレージにアップロード
+        if (productImages && productImages.length > 0 && (IMAGE_STORAGE_PROVIDER === 'firebase' || IMAGE_STORAGE_PROVIDER === 'r2')) {
           const managementNumber = d['管理番号'] || 'unknown_' + Date.now();
-          console.log('[PWA] Firebase Storage画像アップロード開始:', managementNumber);
+          console.log(`[PWA] ${IMAGE_STORAGE_PROVIDER} 画像アップロード開始:`, managementNumber);
 
-          // 画像アップロード進捗表示（進捗コールバック付き）
-          const uploadResult = await window.uploadImagesToFirebaseStorage(
-            managementNumber,
-            productImages,
-            (percent, message) => updateLoadingProgress(percent, message)
-          );
+          let uploadResult;
+
+          if (IMAGE_STORAGE_PROVIDER === 'r2') {
+            // Cloudflare R2（リトライ機能付き）
+            uploadResult = await window.uploadImagesToR2(
+              managementNumber,
+              productImages,
+              (percent, message) => updateLoadingProgress(percent, message)
+            );
+          } else {
+            // Firebase Storage
+            uploadResult = await window.uploadImagesToFirebaseStorage(
+              managementNumber,
+              productImages,
+              (percent, message) => updateLoadingProgress(percent, message)
+            );
+          }
 
           if (uploadResult.success) {
-            debug.log(`✅ Firebase Storage アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
+            debug.log(`✅ ${IMAGE_STORAGE_PROVIDER} アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
             // 画像URLをJSON形式で保存
             d['JSON_データ'] = JSON.stringify({ imageUrls: uploadResult.urls });
             d['画像URL'] = uploadResult.urls.join('\n'); // 改行区切りでも保存（互換性）
             updateLoadingProgress(70, '画像アップロード完了');
           } else {
-            console.warn('[PWA] 画像アップロード一部失敗:', uploadResult.error);
+            console.warn(`[PWA] ${IMAGE_STORAGE_PROVIDER} 画像アップロード一部失敗:`, uploadResult.error);
             if (uploadResult.urls.length > 0) {
               // 一部成功した場合は続行
               d['JSON_データ'] = JSON.stringify({ imageUrls: uploadResult.urls });
