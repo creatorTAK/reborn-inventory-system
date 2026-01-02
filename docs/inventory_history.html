@@ -444,12 +444,86 @@
       font-size: 16px;
       font-weight: 600;
     }
+    /* アラートバッジ */
+    .tab-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: #ef4444;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+    .tab-badge:empty {
+      display: none;
+    }
+    /* 在庫警告カードのパルスアニメーション */
+    .stock-card.stock-danger {
+      animation: alertPulse 2s ease-in-out infinite;
+    }
+    @keyframes alertPulse {
+      0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      50% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+    }
+    /* 在庫警告アイコン */
+    .stock-alert-icon {
+      color: #ef4444;
+      font-size: 14px;
+      margin-left: 4px;
+      animation: alertBlink 1.5s ease-in-out infinite;
+    }
+    @keyframes alertBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    /* 全場所アラートサマリー（管理者用） */
+    .alert-summary {
+      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .alert-summary-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #dc2626;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .alert-summary-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid #fecaca;
+      font-size: 13px;
+    }
+    .alert-summary-item:last-child {
+      border-bottom: none;
+    }
+    .alert-summary-location {
+      color: #374151;
+      font-weight: 500;
+    }
+    .alert-summary-count {
+      color: #dc2626;
+      font-weight: 600;
+    }
   </style>
 
   <div class="material-tabs">
     <button class="material-tab active" data-tab="stock" onclick="switchTab('stock')">
       <i class="bi bi-box-seam"></i>
-      在庫
+      在庫<span class="tab-badge" id="stockAlertBadge"></span>
     </button>
     <button class="material-tab" data-tab="history" onclick="switchTab('history')">
       <i class="bi bi-arrow-left-right"></i>
@@ -465,6 +539,15 @@
   <div class="tab-content active" id="tab-stock">
     <div class="container-fluid">
       <div class="filter-section" style="margin-top: 12px;">
+        <!-- Row 0: 場所選択（管理者のみ表示） -->
+        <div class="row g-2 mb-2" id="adminLocationRow" style="display: none;">
+          <div class="col-12">
+            <label class="form-label small mb-1"><i class="bi bi-geo-alt"></i> 場所選択（管理者）</label>
+            <select class="form-select form-select-sm" id="adminLocationFilter">
+              <option value="">読み込み中...</option>
+            </select>
+          </div>
+        </div>
         <!-- Row 1: カテゴリフィルター -->
         <div class="row g-2 mb-2">
           <div class="col-12">
@@ -486,6 +569,14 @@
             </button>
           </div>
         </div>
+        <!-- Row 3: 配布ボタン（管理者のみ表示） -->
+        <div class="row g-2 mb-2" id="adminTransferRow" style="display: none;">
+          <div class="col-12">
+            <button class="btn w-100" style="background: linear-gradient(135deg, #28a745 0%, #218838 100%); color: white; border: none;" onclick="showTransferModal()">
+              <i class="bi bi-box-arrow-right me-1"></i> 資材を配布
+            </button>
+          </div>
+        </div>
         <div class="row g-2">
           <div class="col-12">
             <div class="form-check form-switch">
@@ -495,6 +586,12 @@
           </div>
         </div>
       </div>
+      <!-- 現在の場所表示 -->
+      <div id="currentLocationBadge" class="mb-2 px-2">
+        <small class="text-muted"><i class="bi bi-geo-alt"></i> <span id="currentLocationName">読み込み中...</span></small>
+      </div>
+      <!-- 全場所アラートサマリー（管理者のみ表示） -->
+      <div id="adminAlertSummary" class="px-2" style="display: none;"></div>
       <div id="stockList"></div>
     </div>
   </div>
@@ -776,10 +873,56 @@
     </div>
   </div>
 
+  <!-- 配布モーダル（管理者用） -->
+  <div class="modal fade" id="transferModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-box-arrow-right"></i> 資材配布</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">配布元（自分の場所）</label>
+            <input type="text" class="form-control" id="transferFromLocation" readonly style="font-size:16px; background-color: #f8f9fa;">
+            <input type="hidden" id="transferFromLocationId">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">配布先</label>
+            <select class="form-select" id="transferToLocation" style="font-size:16px;">
+              <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">資材選択</label>
+            <select class="form-select" id="transferMaterial" style="font-size:16px;">
+              <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">配布数量</label>
+            <input type="number" class="form-control" id="transferQuantity" min="1" style="font-size:16px;">
+            <small class="text-muted" id="transferAvailableStock">現在庫: -</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">備考</label>
+            <input type="text" class="form-control" id="transferNote" placeholder="配布理由など" style="font-size:16px;">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-success" onclick="processTransfer()">配布実行</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     let currentHistoryData = [];
     let allMaterials = []; // 全資材データを保持
+    let allLocations = []; // 全場所データ（管理者用）
+    let selectedLocationId = null; // 現在選択中の場所ID
     let currentPage = 1;
     const itemsPerPage = 10;
 
@@ -794,14 +937,16 @@
     }
 
     // ページ読み込み時の初期化
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('🚀 inventory_history_viewer.html バージョン: @451-PAGINATION-10');
-      console.log('🔧 API関数名: getInventoryHistoryAPI (Wrapperなし - 直接呼び出し)');
-      console.log('🔧 API関数名2: getPackagingMaterialsAPI (Wrapperなし - 直接呼び出し)');
+    document.addEventListener('DOMContentLoaded', async function() {
+      console.log('🚀 inventory_history.html バージョン: v486-LOCATION-BASED');
+      console.log('🔧 場所ベース在庫管理対応');
 
       initializePeriodFilters();
       loadMaterialsList();
       showInitialMessage(); // 初期メッセージ表示
+
+      // 管理者UIの初期化
+      await initializeAdminUI();
 
       // イベントリスナー設定
       document.getElementById('filterCategory').addEventListener('change', function() {
@@ -814,7 +959,172 @@
       document.getElementById('filterMonth').addEventListener('change', updatePeriodFromYearMonth);
       document.getElementById('btnSearch').addEventListener('click', loadHistoryData);
       document.getElementById('btnReset').addEventListener('click', resetFilters);
+
+      // 管理者用: 場所フィルター変更時
+      document.getElementById('adminLocationFilter')?.addEventListener('change', function() {
+        selectedLocationId = this.value || null;
+        loadStockList();
+      });
     });
+
+    // ========================================
+    // 管理者UI初期化
+    // ========================================
+    async function initializeAdminUI() {
+      if (!isAdmin()) {
+        console.log('👤 一般ユーザーモード');
+        return;
+      }
+
+      console.log('👑 管理者モード: 場所選択UI表示');
+
+      // 管理者UI要素を表示
+      document.getElementById('adminLocationRow').style.display = 'block';
+      document.getElementById('adminTransferRow').style.display = 'block';
+      document.getElementById('adminAlertSummary').style.display = 'block';
+
+      // 全場所を読み込み
+      await loadAllLocations();
+
+      // 全場所のアラートサマリーを読み込み
+      await loadAllLocationsAlertSummary();
+    }
+
+    /**
+     * 全場所のアラートサマリーを読み込み（管理者用）
+     */
+    async function loadAllLocationsAlertSummary() {
+      const container = document.getElementById('adminAlertSummary');
+      if (!container) return;
+
+      try {
+        const db = getDb();
+        if (!db) return;
+
+        // 全資材を取得
+        const materialsSnapshot = await db.collection('packagingMaterials').get();
+        const materials = materialsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // 全場所の在庫ロットを取得
+        const lotsSnapshot = await db.collection('packagingLots')
+          .where('status', '==', 'active')
+          .get();
+
+        // 場所ごと・資材ごとに在庫を集計
+        const stockByLocation = {};
+        lotsSnapshot.docs.forEach(doc => {
+          const lot = doc.data();
+          const locId = lot.locationId || 'unknown';
+          if (!stockByLocation[locId]) {
+            stockByLocation[locId] = {};
+          }
+          if (!stockByLocation[locId][lot.materialId]) {
+            stockByLocation[locId][lot.materialId] = 0;
+          }
+          stockByLocation[locId][lot.materialId] += lot.remainingQty || 0;
+        });
+
+        // 各場所のアラート数を計算
+        const locationAlerts = [];
+        for (const loc of allLocations) {
+          const locStock = stockByLocation[loc.id] || {};
+          let alertCount = 0;
+          materials.forEach(m => {
+            const stock = locStock[m.id] || 0;
+            const threshold = m.stockAlertThreshold || 0;
+            if (stock <= 0 || (threshold > 0 && stock <= threshold)) {
+              alertCount++;
+            }
+          });
+          if (alertCount > 0) {
+            locationAlerts.push({
+              id: loc.id,
+              name: loc.name,
+              type: loc.type,
+              alertCount
+            });
+          }
+        }
+
+        // アラートがある場所のみ表示
+        if (locationAlerts.length === 0) {
+          container.innerHTML = '';
+          container.style.display = 'none';
+          return;
+        }
+
+        container.style.display = 'block';
+        const typeIcon = (type) => type === 'user_home' ? '👤' : type === 'warehouse' ? '🏭' : '🏢';
+
+        container.innerHTML = `
+          <div class="alert-summary">
+            <div class="alert-summary-title">
+              <i class="bi bi-exclamation-triangle-fill"></i>
+              全場所の在庫アラート
+            </div>
+            ${locationAlerts.map(loc => `
+              <div class="alert-summary-item" onclick="selectLocation('${loc.id}')" style="cursor: pointer;">
+                <span class="alert-summary-location">${typeIcon(loc.type)} ${escapeHtml(loc.name)}</span>
+                <span class="alert-summary-count">${loc.alertCount}件</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+
+        console.log(`⚠️ [Admin Alert] ${locationAlerts.length}場所にアラートあり`);
+      } catch (error) {
+        console.error('全場所アラートサマリー取得エラー:', error);
+        container.innerHTML = '';
+      }
+    }
+
+    /**
+     * 場所を選択（アラートサマリーからクリック時）
+     */
+    function selectLocation(locationId) {
+      const select = document.getElementById('adminLocationFilter');
+      if (select) {
+        select.value = locationId;
+        selectedLocationId = locationId;
+        loadStockList();
+      }
+    }
+
+    /**
+     * 全場所を読み込み（管理者用）
+     */
+    async function loadAllLocations() {
+      try {
+        const db = getDb();
+        if (!db) return;
+
+        const snapshot = await db.collection('packagingLocations')
+          .where('isActive', '==', true)
+          .orderBy('type')
+          .orderBy('name')
+          .get();
+
+        allLocations = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // セレクトボックスを更新
+        const select = document.getElementById('adminLocationFilter');
+        select.innerHTML = '<option value="">自分の場所</option>' +
+          allLocations.map(loc => {
+            const typeLabel = loc.type === 'user_home' ? '👤' : loc.type === 'warehouse' ? '🏭' : '🏢';
+            return `<option value="${loc.id}">${typeLabel} ${escapeHtml(loc.name)}</option>`;
+          }).join('');
+
+        console.log(`✅ [Admin] ${allLocations.length}件の場所を読み込み`);
+      } catch (error) {
+        console.error('場所一覧取得エラー:', error);
+      }
+    }
 
     // ローディング表示/非表示
     function showLoading() {
@@ -1331,14 +1641,32 @@
           return;
         }
 
-        // 場所を取得（なければ自動作成）
-        const location = await getCurrentUserLocation();
-        if (!location) {
-          container.innerHTML = '<div class="text-center text-danger py-4">場所の取得に失敗しました</div>';
-          return;
+        // 場所を決定（管理者が選択した場所 or 自分の場所）
+        let locationId, locationName;
+
+        if (selectedLocationId && isAdmin()) {
+          // 管理者が特定の場所を選択した場合
+          const selectedLoc = allLocations.find(l => l.id === selectedLocationId);
+          locationId = selectedLocationId;
+          locationName = selectedLoc ? selectedLoc.name : '不明な場所';
+          console.log(`📍 [Stock] 管理者選択場所: ${locationName} (${locationId})`);
+        } else {
+          // 自分の場所を使用（なければ自動作成）
+          const location = await getCurrentUserLocation();
+          if (!location) {
+            container.innerHTML = '<div class="text-center text-danger py-4">場所の取得に失敗しました</div>';
+            return;
+          }
+          locationId = location.id;
+          locationName = location.name;
+          console.log(`📍 [Stock] 自分の場所: ${locationName} (${locationId})`);
         }
-        const locationId = location.id;
-        console.log(`📍 [Stock] 場所: ${location.name} (${locationId})`);
+
+        // 現在の場所名を表示
+        const locationNameEl = document.getElementById('currentLocationName');
+        if (locationNameEl) {
+          locationNameEl.textContent = locationName;
+        }
 
         // 資材マスタを取得
         const materialsSnapshot = await db.collection('packagingMaterials').get();
@@ -1397,6 +1725,9 @@
         filtered = filtered.filter(m => (m.currentStock || 0) <= (m.stockAlertThreshold || 0));
       }
 
+      // アラートバッジを更新（フィルタ前の全資材で計算）
+      updateAlertBadge(materials);
+
       if (filtered.length === 0) {
         container.innerHTML = '<div class="text-center text-muted py-4">該当する資材がありません</div>';
         return;
@@ -1407,18 +1738,21 @@
         const threshold = item.stockAlertThreshold || 0;
         let stockClass = 'stock-ok';
         let countClass = 'text-success';
+        let alertIcon = '';
         if (stock <= 0) {
           stockClass = 'stock-danger';
           countClass = 'text-danger';
-        } else if (stock <= threshold) {
+          alertIcon = '<i class="bi bi-exclamation-triangle-fill stock-alert-icon"></i>';
+        } else if (threshold > 0 && stock <= threshold) {
           stockClass = 'stock-warning';
           countClass = 'text-warning';
+          alertIcon = '<i class="bi bi-exclamation-circle stock-alert-icon" style="color: #f59e0b;"></i>';
         }
 
         return `
         <div class="stock-card ${stockClass}">
           <div class="stock-card-header">
-            <span class="stock-card-name">${escapeHtml(item.productName || item.name)}</span>
+            <span class="stock-card-name">${escapeHtml(item.productName || item.name)}${alertIcon}</span>
             <span class="stock-card-category">${escapeHtml(item.category || '')}</span>
           </div>
           <div class="stock-card-body">
@@ -1439,6 +1773,23 @@
         </div>
         `;
       }).join('');
+    }
+
+    /**
+     * タブのアラートバッジを更新
+     */
+    function updateAlertBadge(materials) {
+      const badge = document.getElementById('stockAlertBadge');
+      if (!badge) return;
+
+      // 在庫が発注点以下 または 0の資材をカウント
+      const alertCount = materials.filter(m => {
+        const stock = m.currentStock || 0;
+        const threshold = m.stockAlertThreshold || 0;
+        return stock <= 0 || (threshold > 0 && stock <= threshold);
+      }).length;
+
+      badge.textContent = alertCount > 0 ? alertCount : '';
     }
 
     // カテゴリフィルタ変更時
@@ -1692,6 +2043,211 @@
         hideLoading();
         console.error('在庫調整エラー:', error);
         alert('在庫調整に失敗しました: ' + error.message);
+      }
+    }
+
+    // ========================================
+    // 配布機能（管理者用）
+    // ========================================
+
+    /**
+     * 配布モーダルを表示
+     */
+    async function showTransferModal() {
+      if (!isAdmin()) {
+        alert('管理者権限が必要です');
+        return;
+      }
+
+      // 自分の場所を取得
+      const myLocation = await getCurrentUserLocation();
+      if (!myLocation) {
+        alert('場所の取得に失敗しました');
+        return;
+      }
+
+      // 配布元を設定
+      document.getElementById('transferFromLocation').value = myLocation.name;
+      document.getElementById('transferFromLocationId').value = myLocation.id;
+
+      // 配布先リストを更新（自分以外）
+      const toSelect = document.getElementById('transferToLocation');
+      toSelect.innerHTML = '<option value="">選択してください</option>' +
+        allLocations
+          .filter(loc => loc.id !== myLocation.id)
+          .map(loc => {
+            const typeLabel = loc.type === 'user_home' ? '👤' : loc.type === 'warehouse' ? '🏭' : '🏢';
+            return `<option value="${loc.id}">${typeLabel} ${escapeHtml(loc.name)}</option>`;
+          }).join('');
+
+      // 資材リストを更新（在庫がある資材のみ）
+      const materialSelect = document.getElementById('transferMaterial');
+      const materialsWithStock = allMaterials.filter(m => m.currentStock > 0);
+      materialSelect.innerHTML = '<option value="">選択してください</option>' +
+        materialsWithStock.map(m =>
+          `<option value="${m.id}" data-stock="${m.currentStock}">${escapeHtml(m.productName || m.name)} (在庫: ${m.currentStock})</option>`
+        ).join('');
+
+      // フォームリセット
+      document.getElementById('transferQuantity').value = '';
+      document.getElementById('transferNote').value = '';
+      document.getElementById('transferAvailableStock').textContent = '現在庫: -';
+
+      // 資材選択時に在庫数を表示
+      materialSelect.onchange = function() {
+        const option = this.options[this.selectedIndex];
+        const stock = option.dataset.stock || '-';
+        document.getElementById('transferAvailableStock').textContent = `現在庫: ${stock}`;
+      };
+
+      // モーダル表示
+      const modal = new bootstrap.Modal(document.getElementById('transferModal'));
+      modal.show();
+    }
+
+    /**
+     * 配布処理を実行
+     */
+    async function processTransfer() {
+      const fromLocationId = document.getElementById('transferFromLocationId').value;
+      const toLocationId = document.getElementById('transferToLocation').value;
+      const materialId = document.getElementById('transferMaterial').value;
+      const quantity = parseInt(document.getElementById('transferQuantity').value) || 0;
+      const note = document.getElementById('transferNote').value;
+
+      // バリデーション
+      if (!toLocationId) {
+        alert('配布先を選択してください');
+        return;
+      }
+      if (!materialId) {
+        alert('資材を選択してください');
+        return;
+      }
+      if (quantity <= 0) {
+        alert('配布数量を入力してください');
+        return;
+      }
+
+      const material = allMaterials.find(m => m.id === materialId);
+      const materialName = material ? (material.productName || material.name) : '';
+
+      // 在庫チェック
+      if (material && quantity > material.currentStock) {
+        alert(`在庫が不足しています（現在庫: ${material.currentStock}）`);
+        return;
+      }
+
+      // 確認
+      const toLocation = allLocations.find(l => l.id === toLocationId);
+      const toLocationName = toLocation ? toLocation.name : '不明';
+      if (!confirm(`「${materialName}」を ${toLocationName} に ${quantity}個 配布します。\nよろしいですか？`)) {
+        return;
+      }
+
+      showLoading();
+      bootstrap.Modal.getInstance(document.getElementById('transferModal'))?.hide();
+
+      try {
+        const db = getDb();
+
+        // 1. 配布元からFIFO方式で在庫を減らす
+        const lotsSnapshot = await db.collection('packagingLots')
+          .where('materialId', '==', materialId)
+          .where('locationId', '==', fromLocationId)
+          .where('status', '==', 'active')
+          .orderBy('purchaseDate', 'asc')
+          .get();
+
+        let remaining = quantity;
+        const consumedLots = [];
+        let totalCost = 0;
+        let avgUnitPrice = 0;
+
+        for (const doc of lotsSnapshot.docs) {
+          if (remaining <= 0) break;
+
+          const lot = doc.data();
+          const toConsume = Math.min(remaining, lot.remainingQty);
+          const newRemainingQty = lot.remainingQty - toConsume;
+          const newStatus = newRemainingQty <= 0 ? 'depleted' : 'active';
+
+          await db.collection('packagingLots').doc(doc.id).update({
+            remainingQty: newRemainingQty,
+            status: newStatus,
+            updatedAt: getFirebaseTimestamp()
+          });
+
+          consumedLots.push({
+            lotId: doc.id,
+            quantity: toConsume,
+            unitPrice: lot.unitPrice
+          });
+
+          totalCost += toConsume * (lot.unitPrice || 0);
+          remaining -= toConsume;
+        }
+
+        if (remaining > 0) {
+          throw new Error(`在庫不足: ${remaining}個配布できませんでした`);
+        }
+
+        // 平均単価を計算
+        avgUnitPrice = quantity > 0 ? Math.round(totalCost / quantity) : 0;
+
+        // 2. 配布先に新規ロットを作成
+        const newLotRef = await db.collection('packagingLots').add({
+          materialId: materialId,
+          locationId: toLocationId,
+          quantity: quantity,
+          remainingQty: quantity,
+          unitPrice: avgUnitPrice,
+          purchaseDate: getFirebaseTimestamp(),
+          supplier: `配布元: ${document.getElementById('transferFromLocation').value}`,
+          notes: note || '配布による入庫',
+          status: 'active',
+          createdBy: window.parent?.currentUser?.name || 'unknown',
+          createdAt: getFirebaseTimestamp(),
+          updatedAt: getFirebaseTimestamp()
+        });
+
+        // 3. 配布履歴を登録（出庫側）
+        await db.collection('packagingTransactions').add({
+          materialId: materialId,
+          materialName: materialName,
+          locationId: fromLocationId,
+          type: '配布出',
+          quantity: -quantity,
+          toLocationId: toLocationId,
+          toLocationName: toLocationName,
+          consumedLots: consumedLots,
+          note: note,
+          createdBy: window.parent?.currentUser?.name || 'unknown',
+          createdAt: getFirebaseTimestamp()
+        });
+
+        // 4. 配布履歴を登録（入庫側）
+        await db.collection('packagingTransactions').add({
+          materialId: materialId,
+          materialName: materialName,
+          locationId: toLocationId,
+          type: '配布入',
+          quantity: quantity,
+          fromLocationId: fromLocationId,
+          fromLocationName: document.getElementById('transferFromLocation').value,
+          lotId: newLotRef.id,
+          note: note,
+          createdBy: window.parent?.currentUser?.name || 'unknown',
+          createdAt: getFirebaseTimestamp()
+        });
+
+        hideLoading();
+        alert(`配布完了: ${materialName} ${quantity}個 → ${toLocationName}`);
+        loadStockList();
+      } catch (error) {
+        hideLoading();
+        console.error('配布エラー:', error);
+        alert('配布に失敗しました: ' + error.message);
       }
     }
 
