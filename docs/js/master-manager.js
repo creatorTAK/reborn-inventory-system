@@ -2939,15 +2939,17 @@ async function renderPackagingDropdownUI() {
               </div>
             `;}).join('')}
           </div>
-          <div class="master-options-add" style="display:flex;gap:8px;align-items:center;">
-            <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="flex:1;font-size:16px;">
-            <select class="form-select form-select-sm" id="newPackagingExpenseCategory" style="width:100px;font-size:16px;">
-              <option value="individual">個別</option>
-              <option value="monthly">月次</option>
-            </select>
-            <button class="btn btn-sm btn-primary" onclick="addPackagingItem()">
-              <i class="bi bi-plus"></i> 追加
-            </button>
+          <div class="master-options-add" style="display:flex;flex-direction:column;gap:8px;">
+            <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="width:100%;font-size:16px;">
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+              <select class="form-select form-select-sm" id="newPackagingExpenseCategory" style="width:100px;font-size:16px;">
+                <option value="individual">個別</option>
+                <option value="monthly">月次</option>
+              </select>
+              <button class="btn btn-sm btn-primary" onclick="addPackagingItem()">
+                <i class="bi bi-plus"></i> 追加
+              </button>
+            </div>
           </div>
         </div>
       </div>
