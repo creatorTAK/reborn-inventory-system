@@ -2886,6 +2886,12 @@ async function renderPackagingDropdownUI() {
     const selectedCategory = categories[currentPackagingCategoryIndex];
     const items = selectedCategory.items;
 
+    // 低在庫アラートカウント（全カテゴリ対象）
+    const lowStockItems = allItems.filter(item =>
+      item.currentStock <= item.stockAlertThreshold
+    );
+    const alertCount = lowStockItems.length;
+
     // 単価を計算するヘルパー関数
     const calcUnitPrice = (price, quantity) => {
       if (!quantity || quantity === 0) return 0;
@@ -2912,6 +2918,11 @@ async function renderPackagingDropdownUI() {
           <div class="master-options-header">
             <h6><i class="bi ${selectedCategory.icon || icon}"></i> ${escapeHtml(selectedCategory.name)}</h6>
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              ${alertCount > 0 ? `
+              <button class="btn btn-sm btn-danger" onclick="showLowStockAlert()">
+                <i class="bi bi-exclamation-triangle"></i> 要発注 ${alertCount}
+              </button>
+              ` : ''}
               <button class="btn btn-sm btn-outline-success" onclick="showStockInModal()">
                 <i class="bi bi-box-arrow-in-down"></i> 入庫
               </button>
@@ -3733,6 +3744,103 @@ window.cancelOrder = async function(orderId) {
   } catch (error) {
     console.error('キャンセルエラー:', error);
     alert('キャンセルに失敗しました: ' + error.message);
+  }
+};
+
+
+// ============================================
+// Phase 4: アラート機能
+// ============================================
+
+/**
+ * 低在庫アラート一覧を表示
+ */
+window.showLowStockAlert = function() {
+  const allItems = window._currentPackagingAllItems || [];
+
+  // 低在庫アイテムを抽出（在庫0を最優先、次に閾値以下）
+  const lowStockItems = allItems
+    .filter(item => item.currentStock <= item.stockAlertThreshold)
+    .sort((a, b) => a.currentStock - b.currentStock);
+
+  const modal = document.getElementById('editItemModal');
+  const title = document.getElementById('editItemModalTitle');
+  const body = document.getElementById('editItemModalBody');
+  const submitBtn = document.getElementById('editItemSubmitBtn');
+
+  title.textContent = `要発注アラート（${lowStockItems.length}件）`;
+
+  if (lowStockItems.length === 0) {
+    body.innerHTML = '<div class="text-center py-3 text-success"><i class="bi bi-check-circle"></i> 在庫は十分です</div>';
+  } else {
+    const rows = lowStockItems.map(item => {
+      const isZero = item.currentStock <= 0;
+      const statusClass = isZero ? 'danger' : 'warning';
+      const statusIcon = isZero ? 'bi-exclamation-triangle-fill' : 'bi-exclamation-circle-fill';
+      const statusText = isZero ? '在庫切れ' : '在庫少';
+
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee;">
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <i class="bi ${statusIcon} text-${statusClass}"></i>
+              <span style="font-weight:500;">${escapeHtml(item.name)}</span>
+              <span class="badge bg-${statusClass}">${statusText}</span>
+            </div>
+            <div style="font-size:12px;color:#888;margin-top:4px;">
+              現在庫: ${item.currentStock} / 閾値: ${item.stockAlertThreshold}
+              ${item.supplier ? ` | 発注先: ${escapeHtml(item.supplier)}` : ''}
+            </div>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="quickOrder('${item.id}', '${escapeHtml(item.name)}', '${escapeHtml(item.supplier || '')}')">
+            <i class="bi bi-cart-plus"></i> 発注
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    body.innerHTML = `<div style="max-height:400px;overflow-y:auto;">${rows}</div>`;
+  }
+
+  submitBtn.textContent = '閉じる';
+  submitBtn.onclick = hideEditItemModal;
+
+  modal.classList.remove('hidden');
+};
+
+/**
+ * クイック発注（アラート一覧から直接発注）
+ */
+window.quickOrder = async function(materialId, materialName, supplier) {
+  const quantity = prompt(`「${materialName}」の発注数を入力してください:`, '10');
+  if (!quantity) return;
+
+  const qty = parseInt(quantity, 10);
+  if (isNaN(qty) || qty <= 0) {
+    alert('有効な数量を入力してください');
+    return;
+  }
+
+  try {
+    const orderData = {
+      materialId: materialId,
+      quantity: qty,
+      supplier: supplier,
+      status: 'ordered',
+      orderedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      receivedAt: null,
+      notes: 'アラートから発注',
+      createdBy: window.currentUser?.name || 'unknown'
+    };
+
+    await window.db.collection('packagingOrders').add(orderData);
+
+    hideEditItemModal();
+    showToast(`「${materialName}」を${qty}個発注しました`);
+
+  } catch (error) {
+    console.error('クイック発注エラー:', error);
+    alert('発注に失敗しました: ' + error.message);
   }
 };
 
