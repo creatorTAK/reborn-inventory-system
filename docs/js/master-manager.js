@@ -2819,7 +2819,11 @@ async function renderPackagingDropdownUI() {
         price: data.price || 0,
         quantity: data.quantity || 1,
         abbreviation: data.abbreviation || '',
-        supplier: data.supplier || ''
+        // Phase 1: 新規フィールド
+        expenseCategory: data.expenseCategory || 'individual',  // デフォルト: 個別原価
+        supplier: data.supplier || '',
+        currentStock: data.currentStock ?? 0,  // 現在庫
+        stockAlertThreshold: data.stockAlertThreshold ?? 10  // デフォルト閾値: 10
       });
     });
 
@@ -2914,10 +2918,24 @@ async function renderPackagingDropdownUI() {
               <div class="master-options-empty">
                 <p>このカテゴリにはまだ資材がありません</p>
               </div>
-            ` : items.map((item, itemIndex) => `
-              <div class="master-options-item" data-item-id="${item.id}" style="flex-direction:column;align-items:stretch;gap:4px;">
+            ` : items.map((item, itemIndex) => {
+              // 在庫ステータス判定
+              const stockStatus = item.currentStock <= 0 ? 'danger'
+                : item.currentStock <= item.stockAlertThreshold ? 'warning'
+                : 'success';
+              const stockIcon = stockStatus === 'danger' ? 'bi-exclamation-triangle-fill'
+                : stockStatus === 'warning' ? 'bi-exclamation-circle-fill'
+                : 'bi-check-circle-fill';
+              const expenseCategoryLabel = item.expenseCategory === 'monthly' ? '月次' : '個別';
+              const expenseCategoryColor = item.expenseCategory === 'monthly' ? '#6c757d' : '#0d6efd';
+
+              return `
+              <div class="master-options-item" data-item-id="${item.id}" style="flex-direction:column;align-items:stretch;gap:6px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                  <span class="item-text">${escapeHtml(item.name)}</span>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span class="item-text" style="font-weight:500;">${escapeHtml(item.name)}</span>
+                    <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${expenseCategoryColor};color:#fff;">${expenseCategoryLabel}</span>
+                  </div>
                   <div class="item-actions">
                     <button class="btn-icon btn-edit" onclick="editPackagingItem('${item.id}')" title="編集">
                       <i class="bi bi-pencil"></i>
@@ -2927,19 +2945,34 @@ async function renderPackagingDropdownUI() {
                     </button>
                   </div>
                 </div>
-                <div style="color:#666;font-size:13px;display:flex;gap:12px;">
-                  <span>¥${Number(item.price || 0).toLocaleString()} / ${item.quantity}個</span>
-                  <span style="color:#888;">≒ ¥${calcUnitPrice(item.price, item.quantity).toFixed(1)}/個</span>
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;">
+                  <div style="color:#666;display:flex;gap:12px;">
+                    <span>¥${Number(item.price || 0).toLocaleString()} / ${item.quantity}個</span>
+                    <span style="color:#888;">≒ ¥${calcUnitPrice(item.price, item.quantity).toFixed(1)}/個</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <i class="bi ${stockIcon}" style="color:var(--bs-${stockStatus});"></i>
+                    <span style="font-weight:500;color:var(--bs-${stockStatus});">在庫: ${item.currentStock}</span>
+                  </div>
                 </div>
+                ${item.supplier ? `<div style="font-size:12px;color:#888;"><i class="bi bi-shop"></i> ${escapeHtml(item.supplier)}</div>` : ''}
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
           <div class="master-options-add" style="flex-direction:column;gap:8px;">
             <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="width:100%;font-size:16px;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="number" class="form-control form-control-sm" id="newPackagingQuantity" placeholder="入数" style="width:70px;font-size:16px;">
+              <input type="number" class="form-control form-control-sm" id="newPackagingPrice" placeholder="価格" style="width:90px;font-size:16px;">
+              <select class="form-select form-select-sm" id="newPackagingExpenseCategory" style="width:90px;font-size:16px;">
+                <option value="individual">個別</option>
+                <option value="monthly">月次</option>
+              </select>
+              <input type="number" class="form-control form-control-sm" id="newPackagingStock" placeholder="初期在庫" style="width:80px;font-size:16px;">
+            </div>
             <div style="display:flex;gap:8px;align-items:center;">
-              <input type="number" class="form-control form-control-sm" id="newPackagingQuantity" placeholder="入数" style="width:80px;font-size:16px;">
-              <input type="number" class="form-control form-control-sm" id="newPackagingPrice" placeholder="価格" style="width:100px;font-size:16px;">
-              <button class="btn btn-sm btn-primary" onclick="addPackagingItem()" style="margin-left:auto;">
+              <input type="text" class="form-control form-control-sm" id="newPackagingSupplier" placeholder="発注先（任意）" style="flex:1;font-size:16px;">
+              <button class="btn btn-sm btn-primary" onclick="addPackagingItem()">
                 <i class="bi bi-plus"></i> 追加
               </button>
             </div>
@@ -2974,10 +3007,16 @@ window.addPackagingItem = async function() {
   const nameInput = document.getElementById('newPackagingName');
   const quantityInput = document.getElementById('newPackagingQuantity');
   const priceInput = document.getElementById('newPackagingPrice');
-  
+  const expenseCategorySelect = document.getElementById('newPackagingExpenseCategory');
+  const stockInput = document.getElementById('newPackagingStock');
+  const supplierInput = document.getElementById('newPackagingSupplier');
+
   const name = nameInput?.value?.trim();
   const quantity = parseInt(quantityInput?.value, 10) || 1;
   const price = parseInt(priceInput?.value, 10) || 0;
+  const expenseCategory = expenseCategorySelect?.value || 'individual';
+  const currentStock = parseInt(stockInput?.value, 10) || 0;
+  const supplier = supplierInput?.value?.trim() || '';
 
   if (!name) {
     alert('資材名を入力してください');
@@ -3000,7 +3039,11 @@ window.addPackagingItem = async function() {
       quantity,
       price,
       abbreviation: '',
-      supplier: '',
+      // Phase 1: 新規フィールド
+      expenseCategory,
+      supplier,
+      currentStock,
+      stockAlertThreshold: 10,  // デフォルト閾値
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -3010,6 +3053,9 @@ window.addPackagingItem = async function() {
     nameInput.value = '';
     quantityInput.value = '';
     priceInput.value = '';
+    if (expenseCategorySelect) expenseCategorySelect.value = 'individual';
+    if (stockInput) stockInput.value = '';
+    if (supplierInput) supplierInput.value = '';
     await renderPackagingDropdownUI();
     showToast('追加しました');
   } catch (error) {
@@ -3033,7 +3079,7 @@ window.editPackagingItem = function(itemId) {
       <label style="display:block;margin-bottom:4px;font-weight:500;">資材名</label>
       <input type="text" class="form-control" id="editItemName" value="${escapeHtml(item.name)}" style="font-size:16px;">
     </div>
-    <div style="display:flex;gap:16px;">
+    <div style="display:flex;gap:16px;margin-bottom:16px;">
       <div class="form-group" style="flex:1;">
         <label style="display:block;margin-bottom:4px;font-weight:500;">入数</label>
         <input type="number" class="form-control" id="editItemQty" value="${item.quantity || 1}" style="font-size:16px;">
@@ -3041,6 +3087,29 @@ window.editPackagingItem = function(itemId) {
       <div class="form-group" style="flex:1;">
         <label style="display:block;margin-bottom:4px;font-weight:500;">価格（円）</label>
         <input type="number" class="form-control" id="editItemPrice" value="${item.price || 0}" style="font-size:16px;">
+      </div>
+    </div>
+    <div style="display:flex;gap:16px;margin-bottom:16px;">
+      <div class="form-group" style="flex:1;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">経費区分</label>
+        <select class="form-select" id="editItemExpenseCategory" style="font-size:16px;">
+          <option value="individual" ${item.expenseCategory !== 'monthly' ? 'selected' : ''}>個別原価</option>
+          <option value="monthly" ${item.expenseCategory === 'monthly' ? 'selected' : ''}>月次経費</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">現在庫</label>
+        <input type="number" class="form-control" id="editItemStock" value="${item.currentStock ?? 0}" style="font-size:16px;">
+      </div>
+    </div>
+    <div style="display:flex;gap:16px;margin-bottom:16px;">
+      <div class="form-group" style="flex:1;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">アラート閾値</label>
+        <input type="number" class="form-control" id="editItemThreshold" value="${item.stockAlertThreshold ?? 10}" style="font-size:16px;">
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">発注先</label>
+        <input type="text" class="form-control" id="editItemSupplier" value="${escapeHtml(item.supplier || '')}" style="font-size:16px;">
       </div>
     </div>
   `;
@@ -3082,6 +3151,11 @@ async function savePackagingFromModal(itemId) {
   const nameInput = document.getElementById('editItemName');
   const qtyInput = document.getElementById('editItemQty');
   const priceInput = document.getElementById('editItemPrice');
+  // Phase 1: 新規フィールド
+  const expenseCategorySelect = document.getElementById('editItemExpenseCategory');
+  const stockInput = document.getElementById('editItemStock');
+  const thresholdInput = document.getElementById('editItemThreshold');
+  const supplierInput = document.getElementById('editItemSupplier');
 
   const newName = nameInput.value.trim();
   if (!newName) {
@@ -3095,6 +3169,11 @@ async function savePackagingFromModal(itemId) {
       name: newName,
       quantity: parseInt(qtyInput.value, 10) || 1,
       price: parseInt(priceInput.value, 10) || 0,
+      // Phase 1: 新規フィールド
+      expenseCategory: expenseCategorySelect?.value || 'individual',
+      currentStock: parseInt(stockInput?.value, 10) || 0,
+      stockAlertThreshold: parseInt(thresholdInput?.value, 10) || 10,
+      supplier: supplierInput?.value?.trim() || '',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 

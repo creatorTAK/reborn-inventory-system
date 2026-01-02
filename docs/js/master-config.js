@@ -514,13 +514,23 @@ const masterCategories = {
         label: '梱包資材',
         collection: 'packagingMaterials',
         type: 'packagingDropdown',
-        description: '梱包資材をカテゴリ別に管理',
+        description: '梱包資材をカテゴリ別に管理（在庫管理対応）',
         categoryField: 'category',
         nameField: 'name',
         priceField: 'price',
         quantityField: 'quantity',
+        // Phase 1: 新規フィールド
+        expenseCategoryField: 'expenseCategory',  // 経費区分: individual(個別原価) / monthly(月次経費)
+        supplierField: 'supplier',                 // 発注先
+        currentStockField: 'currentStock',         // 現在庫
+        stockAlertThresholdField: 'stockAlertThreshold',  // アラート閾値
         icon: 'bi-box-seam',
         placeholder: '例: A4 ジッパー式ポリ袋',
+        // 経費区分オプション
+        expenseCategories: [
+          { id: 'individual', name: '個別原価', description: '販売時に利益計算' },
+          { id: 'monthly', name: '月次経費', description: '購入時に経費計上' }
+        ],
         // 定義されたカテゴリ（順序も保持）
         categories: [
           { id: 'envelope', name: '封筒・袋類', icon: 'bi-envelope' },
