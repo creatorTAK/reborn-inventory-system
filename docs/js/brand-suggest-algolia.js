@@ -61,7 +61,7 @@ function hiraganaToKatakana(str) {
 async function attachBrandSuggestAlgolia(inputId, options = {}) {
   // オプションのデフォルト値
   const limit = options.limit || 15;
-  const minChars = options.minChars || 1;
+  const minChars = options.minChars || 2;  // 🔧 v2: 2文字以上で検索開始（コスト削減）
   const debounceMs = options.debounceMs || 300;
 
   const input = document.getElementById(inputId);
