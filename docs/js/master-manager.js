@@ -2932,6 +2932,9 @@ async function renderPackagingDropdownUI() {
               <button class="btn btn-sm btn-outline-secondary" onclick="showOrderHistoryModal()">
                 <i class="bi bi-list-check"></i> 発注履歴
               </button>
+              <button class="btn btn-sm btn-outline-info" onclick="showPresetModal()">
+                <i class="bi bi-collection"></i> プリセット
+              </button>
               <span class="badge bg-secondary" id="packagingItemCount">${items.length}件</span>
             </div>
           </div>
@@ -3841,6 +3844,335 @@ window.quickOrder = async function(materialId, materialName, supplier) {
   } catch (error) {
     console.error('クイック発注エラー:', error);
     alert('発注に失敗しました: ' + error.message);
+  }
+};
+
+
+// ============================================
+// Phase 5: プリセット機能
+// ============================================
+
+/**
+ * プリセット管理モーダルを表示
+ */
+window.showPresetModal = async function() {
+  const modal = document.getElementById('editItemModal');
+  const title = document.getElementById('editItemModalTitle');
+  const body = document.getElementById('editItemModalBody');
+  const submitBtn = document.getElementById('editItemSubmitBtn');
+
+  title.textContent = 'プリセット管理';
+
+  body.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> 読み込み中...</div>';
+
+  submitBtn.textContent = '新規作成';
+  submitBtn.onclick = showPresetCreateForm;
+
+  modal.classList.remove('hidden');
+
+  try {
+    // プリセット一覧を取得
+    const snapshot = await window.db.collection('packagingPresets')
+      .orderBy('name')
+      .get();
+
+    // 資材ID→名前のマップを作成
+    const allItems = window._currentPackagingAllItems || [];
+    const itemNameMap = {};
+    allItems.forEach(item => {
+      itemNameMap[item.id] = item.name;
+    });
+
+    if (snapshot.empty) {
+      body.innerHTML = `
+        <div class="text-center py-3 text-muted">
+          <i class="bi bi-collection" style="font-size:2rem;"></i>
+          <p class="mt-2">プリセットがありません</p>
+          <p class="small">よく使う梱包資材の組み合わせを登録しておくと便利です</p>
+        </div>
+      `;
+      return;
+    }
+
+    const rows = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const materialsList = (data.materials || []).map(m => {
+        const name = itemNameMap[m.materialId] || '(削除済み)';
+        return `${name}×${m.quantity}`;
+      }).join(', ');
+
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #eee;">
+          <div style="flex:1;">
+            <div style="font-weight:500;"><i class="bi bi-collection"></i> ${escapeHtml(data.name)}</div>
+            <div style="font-size:12px;color:#888;margin-top:4px;">${materialsList || '資材なし'}</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm btn-outline-primary" onclick="editPreset('${doc.id}')">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deletePreset('${doc.id}', '${escapeHtml(data.name)}')">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    body.innerHTML = `<div style="max-height:400px;overflow-y:auto;">${rows}</div>`;
+
+  } catch (error) {
+    console.error('プリセット取得エラー:', error);
+    body.innerHTML = `<div class="text-danger">読み込みエラー: ${error.message}</div>`;
+  }
+};
+
+/**
+ * プリセット作成フォームを表示
+ */
+window.showPresetCreateForm = function() {
+  const allItems = window._currentPackagingAllItems || [];
+
+  const modal = document.getElementById('editItemModal');
+  const title = document.getElementById('editItemModalTitle');
+  const body = document.getElementById('editItemModalBody');
+  const submitBtn = document.getElementById('editItemSubmitBtn');
+
+  title.textContent = 'プリセット作成';
+
+  // 資材選択チェックボックスを生成
+  const checkboxes = allItems.map(item => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+      <input type="checkbox" id="preset_${item.id}" class="form-check-input" data-material-id="${item.id}">
+      <label for="preset_${item.id}" style="flex:1;margin:0;">${escapeHtml(item.name)}</label>
+      <input type="number" id="preset_qty_${item.id}" class="form-control form-control-sm" 
+             style="width:60px;font-size:16px;" value="1" min="1" placeholder="数量">
+    </div>
+  `).join('');
+
+  body.innerHTML = `
+    <div class="mb-3">
+      <label class="form-label">プリセット名</label>
+      <input type="text" class="form-control" id="presetName" placeholder="例: 衣類梱包セット" style="font-size:16px;">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">含める資材（チェックして数量を指定）</label>
+      <div style="max-height:250px;overflow-y:auto;border:1px solid #ddd;border-radius:4px;padding:8px;">
+        ${checkboxes}
+      </div>
+    </div>
+  `;
+
+  submitBtn.textContent = '作成';
+  submitBtn.onclick = saveNewPreset;
+};
+
+/**
+ * 新規プリセットを保存
+ */
+async function saveNewPreset() {
+  const nameInput = document.getElementById('presetName');
+  const name = nameInput?.value?.trim();
+
+  if (!name) {
+    alert('プリセット名を入力してください');
+    nameInput.focus();
+    return;
+  }
+
+  // チェックされた資材を収集
+  const materials = [];
+  const checkboxes = document.querySelectorAll('input[type="checkbox"][data-material-id]:checked');
+
+  checkboxes.forEach(cb => {
+    const materialId = cb.dataset.materialId;
+    const qtyInput = document.getElementById(`preset_qty_${materialId}`);
+    const quantity = parseInt(qtyInput?.value, 10) || 1;
+
+    materials.push({ materialId, quantity });
+  });
+
+  if (materials.length === 0) {
+    alert('少なくとも1つの資材を選択してください');
+    return;
+  }
+
+  try {
+    const presetData = {
+      name: name,
+      materials: materials,
+      createdBy: window.currentUser?.name || 'unknown',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    await window.db.collection('packagingPresets').add(presetData);
+
+    showToast('プリセットを作成しました');
+    await showPresetModal();  // 一覧を再表示
+
+  } catch (error) {
+    console.error('プリセット作成エラー:', error);
+    alert('プリセット作成に失敗しました: ' + error.message);
+  }
+}
+
+/**
+ * プリセットを編集
+ */
+window.editPreset = async function(presetId) {
+  try {
+    const doc = await window.db.collection('packagingPresets').doc(presetId).get();
+    if (!doc.exists) {
+      alert('プリセットが見つかりません');
+      return;
+    }
+
+    const preset = doc.data();
+    const allItems = window._currentPackagingAllItems || [];
+
+    const modal = document.getElementById('editItemModal');
+    const title = document.getElementById('editItemModalTitle');
+    const body = document.getElementById('editItemModalBody');
+    const submitBtn = document.getElementById('editItemSubmitBtn');
+
+    title.textContent = 'プリセット編集';
+
+    // 既存の資材選択状態を反映
+    const existingMaterials = {};
+    (preset.materials || []).forEach(m => {
+      existingMaterials[m.materialId] = m.quantity;
+    });
+
+    const checkboxes = allItems.map(item => {
+      const isChecked = existingMaterials[item.id] !== undefined;
+      const qty = existingMaterials[item.id] || 1;
+
+      return `
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+          <input type="checkbox" id="preset_${item.id}" class="form-check-input" 
+                 data-material-id="${item.id}" ${isChecked ? 'checked' : ''}>
+          <label for="preset_${item.id}" style="flex:1;margin:0;">${escapeHtml(item.name)}</label>
+          <input type="number" id="preset_qty_${item.id}" class="form-control form-control-sm" 
+                 style="width:60px;font-size:16px;" value="${qty}" min="1" placeholder="数量">
+        </div>
+      `;
+    }).join('');
+
+    body.innerHTML = `
+      <div class="mb-3">
+        <label class="form-label">プリセット名</label>
+        <input type="text" class="form-control" id="presetName" value="${escapeHtml(preset.name)}" style="font-size:16px;">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">含める資材</label>
+        <div style="max-height:250px;overflow-y:auto;border:1px solid #ddd;border-radius:4px;padding:8px;">
+          ${checkboxes}
+        </div>
+      </div>
+    `;
+
+    submitBtn.textContent = '更新';
+    submitBtn.onclick = () => updatePreset(presetId);
+
+  } catch (error) {
+    console.error('プリセット編集エラー:', error);
+    alert('プリセット読み込みに失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * プリセットを更新
+ */
+async function updatePreset(presetId) {
+  const nameInput = document.getElementById('presetName');
+  const name = nameInput?.value?.trim();
+
+  if (!name) {
+    alert('プリセット名を入力してください');
+    nameInput.focus();
+    return;
+  }
+
+  const materials = [];
+  const checkboxes = document.querySelectorAll('input[type="checkbox"][data-material-id]:checked');
+
+  checkboxes.forEach(cb => {
+    const materialId = cb.dataset.materialId;
+    const qtyInput = document.getElementById(`preset_qty_${materialId}`);
+    const quantity = parseInt(qtyInput?.value, 10) || 1;
+
+    materials.push({ materialId, quantity });
+  });
+
+  if (materials.length === 0) {
+    alert('少なくとも1つの資材を選択してください');
+    return;
+  }
+
+  try {
+    await window.db.collection('packagingPresets').doc(presetId).update({
+      name: name,
+      materials: materials,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    showToast('プリセットを更新しました');
+    await showPresetModal();
+
+  } catch (error) {
+    console.error('プリセット更新エラー:', error);
+    alert('プリセット更新に失敗しました: ' + error.message);
+  }
+}
+
+/**
+ * プリセットを削除
+ */
+window.deletePreset = async function(presetId, presetName) {
+  if (!confirm(`プリセット「${presetName}」を削除しますか？`)) return;
+
+  try {
+    await window.db.collection('packagingPresets').doc(presetId).delete();
+
+    showToast('プリセットを削除しました');
+    await showPresetModal();
+
+  } catch (error) {
+    console.error('プリセット削除エラー:', error);
+    alert('プリセット削除に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * プリセット適用（販売記録用 - 外部から呼び出し）
+ * @param {string} presetId - プリセットID
+ * @returns {Array} 資材リスト [{materialId, quantity, name}]
+ */
+window.getPresetMaterials = async function(presetId) {
+  try {
+    const doc = await window.db.collection('packagingPresets').doc(presetId).get();
+    if (!doc.exists) return [];
+
+    const preset = doc.data();
+    const materials = preset.materials || [];
+
+    // 資材名を付与
+    const allItems = window._currentPackagingAllItems || [];
+    const itemNameMap = {};
+    allItems.forEach(item => {
+      itemNameMap[item.id] = { name: item.name, unitCost: item.price / (item.quantity || 1) };
+    });
+
+    return materials.map(m => ({
+      materialId: m.materialId,
+      quantity: m.quantity,
+      name: itemNameMap[m.materialId]?.name || '不明',
+      unitCost: itemNameMap[m.materialId]?.unitCost || 0
+    }));
+
+  } catch (error) {
+    console.error('プリセット取得エラー:', error);
+    return [];
   }
 };
 

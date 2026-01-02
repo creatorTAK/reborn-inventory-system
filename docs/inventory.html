@@ -3536,11 +3536,60 @@
     }
 
     /**
-     * プリセット選択モーダルを表示
-     * NOTE: プリセット機能はFirestore未対応のため一時的に無効化
+     * プリセット選択モーダルを表示（Firestore対応）
      */
-    function showPresetSelector() {
-      alert('プリセット機能は現在準備中です。\n梱包資材は手動で選択してください。');
+    async function showPresetSelector() {
+      const container = document.getElementById('presetSelectorList');
+      container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> 読み込み中...</div>';
+
+      // モーダルを表示
+      const modal = new bootstrap.Modal(document.getElementById('presetSelectorModal'));
+      modal.show();
+
+      try {
+        // Firestoreからプリセット一覧を取得
+        const snapshot = await getDocs(collection(db, 'packagingPresets'));
+
+        if (snapshot.empty) {
+          container.innerHTML = `
+            <div class="text-center py-3 text-muted">
+              <p>プリセットがまだ登録されていません</p>
+              <p class="small">マスタ管理画面でプリセットを作成してください</p>
+            </div>
+          `;
+          return;
+        }
+
+        // プリセット一覧を生成
+        let html = '<div class="list-group">';
+        snapshot.forEach(docSnapshot => {
+          const preset = docSnapshot.data();
+          const materialsText = (preset.materials || []).map(m => {
+            // 資材名を取得
+            for (const cat in packagingMaterialsByCategory) {
+              const found = packagingMaterialsByCategory[cat].find(item => item.id === m.materialId);
+              if (found) return `${found.productName}×${m.quantity}`;
+            }
+            return `(不明)×${m.quantity}`;
+          }).join(', ');
+
+          html += `
+            <button type="button" class="list-group-item list-group-item-action" onclick="applyPreset('${docSnapshot.id}')">
+              <div class="d-flex w-100 justify-content-between">
+                <h6 class="mb-1"><i class="bi bi-collection"></i> ${preset.name}</h6>
+              </div>
+              <p class="mb-1 small text-muted">${materialsText || '資材なし'}</p>
+            </button>
+          `;
+        });
+        html += '</div>';
+
+        container.innerHTML = html;
+
+      } catch (error) {
+        console.error('プリセット取得エラー:', error);
+        container.innerHTML = `<div class="text-danger">読み込みエラー: ${error.message}</div>`;
+      }
     }
 
     /**
@@ -3573,79 +3622,79 @@
     }
 
     /**
-     * プリセットを適用
+     * プリセットを適用（Firestore対応）
      */
-    function applyPreset(presetId) {
-      // プリセット一覧を取得（再度API呼び出し）
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.success) {
-            const preset = result.data.find(p => p.presetId === presetId);
-            if (preset) {
-              // 既存の梱包資材をクリア
-              packagingMaterialCount = 0;
+    async function applyPreset(presetId) {
+      try {
+        // Firestoreからプリセットを取得
+        const presetDoc = await getDoc(doc(db, 'packagingPresets', presetId));
+        if (!presetDoc.exists()) {
+          alert('プリセットが見つかりません');
+          return;
+        }
 
-              // プリセットの資材を追加
-              preset.materialsList.forEach(material => {
-                packagingMaterialCount++;
-              });
+        const preset = presetDoc.data();
+        const materials = preset.materials || [];
 
-              // レンダリング
-              renderPackagingMaterials();
+        // 既存の梱包資材をクリア
+        packagingMaterialCount = materials.length;
 
-              // 各資材を設定（2段式プルダウン: カテゴリ→資材）
-              preset.materialsList.forEach((material, index) => {
-                const productName = material.productName;
+        // レンダリング
+        renderPackagingMaterials();
 
-                // 資材マスタから該当資材のカテゴリを検索
-                let category = null;
-                for (const cat in packagingMaterialsByCategory) {
-                  const found = packagingMaterialsByCategory[cat].find(m => m.productName === productName);
-                  if (found) {
-                    category = cat;
-                    break;
-                  }
-                }
+        // 各資材を設定（2段式プルダウン: カテゴリ→資材）
+        materials.forEach((material, index) => {
+          const materialId = material.materialId;
 
-                if (category) {
-                  // カテゴリを設定
-                  const categorySelect = document.getElementById(`packagingCategory${index + 1}`);
-                  if (categorySelect) {
-                    categorySelect.value = category;
-                    // カテゴリ変更イベントを発火（資材プルダウンが有効化される）
-                    onPackagingCategoryChange(index + 1);
-
-                    // 資材を設定（カテゴリ変更後に少し待つ）
-                    setTimeout(() => {
-                      const materialSelect = document.getElementById(`packagingMaterial${index + 1}`);
-                      if (materialSelect) {
-                        materialSelect.value = productName;
-                        // 資材変更イベントを発火（単価が設定される）
-                        onPackagingMaterialChange(index + 1);
-                      }
-                    }, 100);
-                  }
-                }
-              });
-
-              // 合計を更新（少し遅延させる）
-              setTimeout(() => {
-                updatePackagingCostTotal();
-                updateProfitCalculation();
-              }, 200);
-
-              // モーダルを閉じる
-              const modal = bootstrap.Modal.getInstance(document.getElementById('presetSelectorModal'));
-              modal.hide();
-
-              alert('✅ プリセット「' + preset.presetName + '」を適用しました');
+          // 資材マスタから該当資材を検索
+          let foundItem = null;
+          let category = null;
+          for (const cat in packagingMaterialsByCategory) {
+            const found = packagingMaterialsByCategory[cat].find(m => m.id === materialId);
+            if (found) {
+              foundItem = found;
+              category = cat;
+              break;
             }
           }
-        })
-        .withFailureHandler(function(error) {
-          alert('プリセット適用エラー: ' + error.message);
-        })
-        .getPackagingPresetsAPI();
+
+          if (category && foundItem) {
+            // カテゴリを設定
+            const categorySelect = document.getElementById(`packagingCategory${index + 1}`);
+            if (categorySelect) {
+              categorySelect.value = category;
+              // カテゴリ変更イベントを発火（資材プルダウンが有効化される）
+              onPackagingCategoryChange(index + 1);
+
+              // 資材を設定（カテゴリ変更後に少し待つ）
+              setTimeout(() => {
+                const materialSelect = document.getElementById(`packagingMaterial${index + 1}`);
+                if (materialSelect) {
+                  materialSelect.value = foundItem.productName;
+                  // 資材変更イベントを発火（単価が設定される）
+                  onPackagingMaterialChange(index + 1);
+                }
+              }, 100);
+            }
+          }
+        });
+
+        // 合計を更新（少し遅延させる）
+        setTimeout(() => {
+          updatePackagingCostTotal();
+          updateProfitCalculation();
+        }, 200);
+
+        // モーダルを閉じる
+        const modal = bootstrap.Modal.getInstance(document.getElementById('presetSelectorModal'));
+        if (modal) modal.hide();
+
+        alert('✅ プリセット「' + preset.name + '」を適用しました');
+
+      } catch (error) {
+        console.error('プリセット適用エラー:', error);
+        alert('プリセット適用エラー: ' + error.message);
+      }
     }
 
     /**
