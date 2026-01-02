@@ -2903,13 +2903,15 @@ async function renderPackagingDropdownUI() {
               </div>
             `).join('')}
           </div>
-          <div class="master-options-add">
-            <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="flex:1;min-width:0;font-size:16px;">
-            <input type="number" class="form-control form-control-sm" id="newPackagingQuantity" placeholder="入数" style="flex:none;width:70px;font-size:16px;">
-            <input type="number" class="form-control form-control-sm" id="newPackagingPrice" placeholder="価格" style="flex:none;width:80px;font-size:16px;">
-            <button class="btn btn-sm btn-primary" onclick="addPackagingItem()">
-              <i class="bi bi-plus"></i> 追加
-            </button>
+          <div class="master-options-add" style="flex-direction:column;gap:8px;">
+            <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="width:100%;font-size:16px;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="number" class="form-control form-control-sm" id="newPackagingQuantity" placeholder="入数" style="width:80px;font-size:16px;">
+              <input type="number" class="form-control form-control-sm" id="newPackagingPrice" placeholder="価格" style="width:100px;font-size:16px;">
+              <button class="btn btn-sm btn-primary" onclick="addPackagingItem()" style="margin-left:auto;">
+                <i class="bi bi-plus"></i> 追加
+              </button>
+            </div>
           </div>
         </div>
 
