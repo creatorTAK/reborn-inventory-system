@@ -2940,7 +2940,7 @@ async function renderPackagingDropdownUI() {
             `;}).join('')}
           </div>
           <div class="master-options-add" style="display:flex;gap:8px;align-items:center;">
-            <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="\${currentMasterConfig.placeholder || '例: A4封筒'}" style="flex:1;font-size:16px;">
+            <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="flex:1;font-size:16px;">
             <select class="form-select form-select-sm" id="newPackagingExpenseCategory" style="width:100px;font-size:16px;">
               <option value="individual">個別</option>
               <option value="monthly">月次</option>
