@@ -2996,31 +2996,58 @@ window.addPackagingItem = async function() {
 };
 
 /**
- * 梱包資材を編集
+ * 梱包資材を編集（インライン編集）
  */
-window.editPackagingItem = async function(itemId) {
+window.editPackagingItem = function(itemId) {
   const allItems = window._currentPackagingAllItems || [];
   const item = allItems.find(i => i.id === itemId);
   if (!item) return;
 
-  const newName = prompt('資材名:', item.name);
-  if (newName === null) return;
-  if (!newName.trim()) {
+  // 対象の要素を取得
+  const itemElement = document.querySelector(`.master-options-item[data-item-id="${itemId}"]`);
+  if (!itemElement) return;
+
+  // インライン編集フォームに置き換え
+  itemElement.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
+      <input type="text" class="form-control form-control-sm" id="edit-name-${itemId}" value="${escapeHtml(item.name)}" style="width:100%;font-size:16px;" placeholder="資材名">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="number" class="form-control form-control-sm" id="edit-qty-${itemId}" value="${item.quantity || 1}" style="width:80px;font-size:16px;" placeholder="入数">
+        <input type="number" class="form-control form-control-sm" id="edit-price-${itemId}" value="${item.price || 0}" style="width:100px;font-size:16px;" placeholder="価格">
+        <button class="btn btn-sm btn-success" onclick="savePackagingEdit('${itemId}')" style="margin-left:auto;">
+          <i class="bi bi-check"></i>
+        </button>
+        <button class="btn btn-sm btn-secondary" onclick="cancelPackagingEdit()">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+    </div>
+  `;
+
+  // 名前フィールドにフォーカス
+  document.getElementById(`edit-name-${itemId}`).focus();
+};
+
+/**
+ * 梱包資材の編集を保存
+ */
+window.savePackagingEdit = async function(itemId) {
+  const nameInput = document.getElementById(`edit-name-${itemId}`);
+  const qtyInput = document.getElementById(`edit-qty-${itemId}`);
+  const priceInput = document.getElementById(`edit-price-${itemId}`);
+
+  const newName = nameInput.value.trim();
+  if (!newName) {
     alert('資材名を入力してください');
+    nameInput.focus();
     return;
   }
 
-  const newQuantity = prompt('入数:', item.quantity);
-  if (newQuantity === null) return;
-
-  const newPrice = prompt('購入価格（円）:', item.price);
-  if (newPrice === null) return;
-
   try {
     await window.db.collection(currentMasterConfig.collection).doc(itemId).update({
-      name: newName.trim(),
-      quantity: parseInt(newQuantity, 10) || 1,
-      price: parseInt(newPrice, 10) || 0,
+      name: newName,
+      quantity: parseInt(qtyInput.value, 10) || 1,
+      price: parseInt(priceInput.value, 10) || 0,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
@@ -3030,6 +3057,13 @@ window.editPackagingItem = async function(itemId) {
     console.error('編集エラー:', error);
     alert('編集に失敗しました: ' + error.message);
   }
+};
+
+/**
+ * 梱包資材の編集をキャンセル
+ */
+window.cancelPackagingEdit = function() {
+  renderPackagingDropdownUI();
 };
 
 /**
