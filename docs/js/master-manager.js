@@ -2904,9 +2904,9 @@ async function renderPackagingDropdownUI() {
             `).join('')}
           </div>
           <div class="master-options-add">
-            <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="font-size:16px;">
-            <input type="number" class="form-control form-control-sm" id="newPackagingQuantity" placeholder="入数" style="width:70px;font-size:16px;">
-            <input type="number" class="form-control form-control-sm" id="newPackagingPrice" placeholder="価格" style="width:80px;font-size:16px;">
+            <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="flex:1;min-width:0;font-size:16px;">
+            <input type="number" class="form-control form-control-sm" id="newPackagingQuantity" placeholder="入数" style="flex:none;width:70px;font-size:16px;">
+            <input type="number" class="form-control form-control-sm" id="newPackagingPrice" placeholder="価格" style="flex:none;width:80px;font-size:16px;">
             <button class="btn btn-sm btn-primary" onclick="addPackagingItem()">
               <i class="bi bi-plus"></i> 追加
             </button>
