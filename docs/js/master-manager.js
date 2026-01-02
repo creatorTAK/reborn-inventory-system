@@ -2915,27 +2915,29 @@ async function renderPackagingDropdownUI() {
 
         <!-- 選択されたカテゴリの内容 -->
         <div class="master-options-section" data-category-name="${escapeHtml(selectedCategory.name)}">
-          <div class="master-options-header">
-            <h6><i class="bi ${selectedCategory.icon || icon}"></i> ${escapeHtml(selectedCategory.name)}</h6>
-            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <div class="master-options-header" style="flex-direction:column;align-items:stretch;gap:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h6 style="margin:0;"><i class="bi ${selectedCategory.icon || icon}"></i> ${escapeHtml(selectedCategory.name)}</h6>
+              <span class="badge bg-secondary" id="packagingItemCount">${items.length}件</span>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;">
               ${alertCount > 0 ? `
-              <button class="btn btn-sm btn-danger" onclick="showLowStockAlert()">
-                <i class="bi bi-exclamation-triangle"></i> 要発注 ${alertCount}
+              <button class="btn btn-sm btn-danger" onclick="showLowStockAlert()" title="要発注アラート">
+                <i class="bi bi-exclamation-triangle"></i> ${alertCount}
               </button>
               ` : ''}
-              <button class="btn btn-sm btn-outline-success" onclick="showStockInModal()">
-                <i class="bi bi-box-arrow-in-down"></i> 入庫
+              <button class="btn btn-sm btn-outline-success" onclick="showStockInModal()" title="入庫登録">
+                <i class="bi bi-box-arrow-in-down"></i>
               </button>
-              <button class="btn btn-sm btn-outline-primary" onclick="showOrderModal()">
-                <i class="bi bi-cart-plus"></i> 発注
+              <button class="btn btn-sm btn-outline-primary" onclick="showOrderModal()" title="発注登録">
+                <i class="bi bi-cart-plus"></i>
               </button>
-              <button class="btn btn-sm btn-outline-secondary" onclick="showOrderHistoryModal()">
-                <i class="bi bi-list-check"></i> 発注履歴
+              <button class="btn btn-sm btn-outline-secondary" onclick="showOrderHistoryModal()" title="発注履歴">
+                <i class="bi bi-list-check"></i>
               </button>
-              <button class="btn btn-sm btn-outline-info" onclick="showPresetModal()">
-                <i class="bi bi-collection"></i> プリセット
+              <button class="btn btn-sm btn-outline-info" onclick="showPresetModal()" title="プリセット管理">
+                <i class="bi bi-collection"></i>
               </button>
-              <span class="badge bg-secondary" id="packagingItemCount">${items.length}件</span>
             </div>
           </div>
           <div class="master-options-list" id="packagingItemList">
