@@ -3405,6 +3405,7 @@
         const option = document.createElement('option');
         option.value = item.productName;
         option.dataset.cost = item.unitCost;
+        option.dataset.materialId = item.id;  // 在庫管理用ID
         option.textContent = item.productName;
         materialSelect.appendChild(option);
       });
@@ -3689,6 +3690,7 @@
         if (select.value) {
           const selectedOption = select.options[select.selectedIndex];
           packagingMaterials.push({
+            materialId: selectedOption.dataset.materialId || '',  // 在庫管理用ID
             productName: select.value,
             unitCost: parseFloat(selectedOption.dataset.cost)
           });
@@ -4055,10 +4057,17 @@
           if (!byCategory[category]) {
             byCategory[category] = [];
           }
+          // 単価を計算（価格÷入数）
+          const quantity = data.quantity || 1;
+          const price = data.price || 0;
+          const unitCost = quantity > 0 ? Math.round((price / quantity) * 100) / 100 : 0;
+
           byCategory[category].push({
             id: docSnapshot.id,
+            productName: data.name,  // 既存コードとの互換性のため
             name: data.name,
-            price: data.price || 0,
+            price: price,
+            unitCost: unitCost,  // 単価（円/個）
             category: category
           });
         });
@@ -4116,6 +4125,46 @@
         });
 
         console.log('✅ [FIRESTORE] 販売記録保存完了');
+
+        // 梱包資材の出庫処理（在庫管理連動）
+        if (salesData.packagingMaterials && salesData.packagingMaterials.length > 0) {
+          console.log('📦 [Stock Out] 梱包資材出庫処理開始');
+          for (const material of salesData.packagingMaterials) {
+            if (material.materialId) {
+              try {
+                // 出庫トランザクション作成
+                const transactionData = {
+                  materialId: material.materialId,
+                  type: 'out',
+                  quantity: 1,  // 販売時は1個ずつ使用
+                  reason: 'sale',
+                  relatedSaleId: productDocId,
+                  notes: `販売: ${salesData.managementNumber}`,
+                  createdBy: window.currentUser?.name || 'unknown',
+                  createdAt: serverTimestamp()
+                };
+                await addDoc(collection(db, 'packagingTransactions'), transactionData);
+
+                // 在庫数を更新
+                const materialRef = doc(db, 'packagingMaterials', material.materialId);
+                const materialDoc = await getDoc(materialRef);
+                if (materialDoc.exists()) {
+                  const currentStock = materialDoc.data()?.currentStock || 0;
+                  const newStock = Math.max(0, currentStock - 1);
+                  await updateDoc(materialRef, {
+                    currentStock: newStock,
+                    updatedAt: serverTimestamp()
+                  });
+                  console.log(`📦 [Stock Out] ${material.productName}: ${currentStock} → ${newStock}`);
+                }
+              } catch (stockError) {
+                console.warn('📦 [Stock Out] 出庫処理エラー:', material.productName, stockError);
+                // 出庫エラーでも販売処理は継続
+              }
+            }
+          }
+          console.log('📦 [Stock Out] 梱包資材出庫処理完了');
+        }
 
         // 担当者に発送タスクを追加
         if (productData) {

@@ -2911,7 +2911,15 @@ async function renderPackagingDropdownUI() {
         <div class="master-options-section" data-category-name="${escapeHtml(selectedCategory.name)}">
           <div class="master-options-header">
             <h6><i class="bi ${selectedCategory.icon || icon}"></i> ${escapeHtml(selectedCategory.name)}</h6>
-            <span class="badge bg-secondary" id="packagingItemCount">${items.length}件</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button class="btn btn-sm btn-outline-success" onclick="showStockInModal()">
+                <i class="bi bi-box-arrow-in-down"></i> 入庫
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="showStockHistoryModal()">
+                <i class="bi bi-clock-history"></i> 履歴
+              </button>
+              <span class="badge bg-secondary" id="packagingItemCount">${items.length}件</span>
+            </div>
           </div>
           <div class="master-options-list" id="packagingItemList">
             ${items.length === 0 ? `
@@ -3185,6 +3193,266 @@ async function savePackagingFromModal(itemId) {
     alert('編集に失敗しました: ' + error.message);
   }
 }
+
+
+// ============================================
+// Phase 2: 入出庫管理機能
+// ============================================
+
+/**
+ * 入庫登録モーダルを表示
+ */
+window.showStockInModal = function() {
+  const allItems = window._currentPackagingAllItems || [];
+  if (allItems.length === 0) {
+    alert('先に梱包資材を登録してください');
+    return;
+  }
+
+  const modal = document.getElementById('editItemModal');
+  const title = document.getElementById('editItemModalTitle');
+  const body = document.getElementById('editItemModalBody');
+  const submitBtn = document.getElementById('editItemSubmitBtn');
+
+  title.textContent = '入庫登録';
+
+  // 資材選択プルダウンを生成
+  const itemOptions = allItems.map(item =>
+    `<option value="${item.id}">${escapeHtml(item.name)} (現在庫: ${item.currentStock})</option>`
+  ).join('');
+
+  body.innerHTML = `
+    <div class="mb-3">
+      <label class="form-label">梱包資材</label>
+      <select class="form-select" id="stockInMaterialId" style="font-size:16px;">
+        <option value="">-- 選択してください --</option>
+        ${itemOptions}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">入庫数</label>
+      <input type="number" class="form-control" id="stockInQuantity" min="1" value="1" style="font-size:16px;">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">理由</label>
+      <select class="form-select" id="stockInReason" style="font-size:16px;">
+        <option value="purchase">購入</option>
+        <option value="return">返品</option>
+        <option value="adjustment">在庫調整</option>
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">購入価格（任意）</label>
+      <input type="number" class="form-control" id="stockInPrice" placeholder="¥" style="font-size:16px;">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">備考（任意）</label>
+      <input type="text" class="form-control" id="stockInNotes" placeholder="メモ" style="font-size:16px;">
+    </div>
+  `;
+
+  submitBtn.textContent = '入庫登録';
+  submitBtn.onclick = processStockIn;
+
+  modal.classList.remove('hidden');
+};
+
+/**
+ * 入庫処理を実行
+ */
+async function processStockIn() {
+  const materialIdSelect = document.getElementById('stockInMaterialId');
+  const quantityInput = document.getElementById('stockInQuantity');
+  const reasonSelect = document.getElementById('stockInReason');
+  const priceInput = document.getElementById('stockInPrice');
+  const notesInput = document.getElementById('stockInNotes');
+
+  const materialId = materialIdSelect?.value;
+  const quantity = parseInt(quantityInput?.value, 10) || 0;
+  const reason = reasonSelect?.value || 'purchase';
+  const purchasePrice = parseInt(priceInput?.value, 10) || 0;
+  const notes = notesInput?.value?.trim() || '';
+
+  if (!materialId) {
+    alert('梱包資材を選択してください');
+    materialIdSelect.focus();
+    return;
+  }
+
+  if (quantity <= 0) {
+    alert('入庫数は1以上を入力してください');
+    quantityInput.focus();
+    return;
+  }
+
+  try {
+    // 1. トランザクション記録を作成
+    const transactionData = {
+      materialId: materialId,
+      type: 'in',
+      quantity: quantity,
+      reason: reason,
+      purchasePrice: purchasePrice,
+      notes: notes,
+      createdBy: window.currentUser?.name || 'unknown',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    await window.db.collection('packagingTransactions').add(transactionData);
+
+    // 2. 資材の在庫数を更新
+    const materialRef = window.db.collection('packagingMaterials').doc(materialId);
+    const materialDoc = await materialRef.get();
+    const currentStock = materialDoc.data()?.currentStock || 0;
+    const newStock = currentStock + quantity;
+
+    await materialRef.update({
+      currentStock: newStock,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // 3. モーダルを閉じてUI更新
+    hideEditItemModal();
+    await renderPackagingDropdownUI();
+    showToast(`入庫しました（+${quantity}）`);
+
+    console.log(`✅ [Stock In] ${materialId}: ${currentStock} → ${newStock}`);
+
+  } catch (error) {
+    console.error('入庫処理エラー:', error);
+    alert('入庫処理に失敗しました: ' + error.message);
+  }
+}
+
+/**
+ * 入出庫履歴モーダルを表示
+ */
+window.showStockHistoryModal = async function() {
+  const modal = document.getElementById('editItemModal');
+  const title = document.getElementById('editItemModalTitle');
+  const body = document.getElementById('editItemModalBody');
+  const submitBtn = document.getElementById('editItemSubmitBtn');
+
+  title.textContent = '入出庫履歴';
+
+  body.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> 読み込み中...</div>';
+
+  submitBtn.textContent = '閉じる';
+  submitBtn.onclick = hideEditItemModal;
+
+  modal.classList.remove('hidden');
+
+  try {
+    // 最新50件の履歴を取得
+    const snapshot = await window.db.collection('packagingTransactions')
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get();
+
+    if (snapshot.empty) {
+      body.innerHTML = '<div class="text-center py-3 text-muted">履歴がありません</div>';
+      return;
+    }
+
+    // 資材ID→名前のマップを作成
+    const allItems = window._currentPackagingAllItems || [];
+    const itemNameMap = {};
+    allItems.forEach(item => {
+      itemNameMap[item.id] = item.name;
+    });
+
+    const reasonLabels = {
+      purchase: '購入',
+      sale: '販売出庫',
+      return: '返品',
+      adjustment: '在庫調整'
+    };
+
+    const rows = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const isIn = data.type === 'in';
+      const typeClass = isIn ? 'text-success' : 'text-danger';
+      const typeIcon = isIn ? 'bi-arrow-down-circle' : 'bi-arrow-up-circle';
+      const qtyDisplay = isIn ? `+${data.quantity}` : `-${data.quantity}`;
+      const materialName = itemNameMap[data.materialId] || '(削除済み)';
+      const reasonLabel = reasonLabels[data.reason] || data.reason;
+      const dateStr = data.createdAt?.toDate?.()?.toLocaleDateString('ja-JP') || '';
+
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
+          <div>
+            <span class="${typeClass}"><i class="bi ${typeIcon}"></i> ${qtyDisplay}</span>
+            <span style="margin-left:8px;">${escapeHtml(materialName)}</span>
+          </div>
+          <div style="font-size:12px;color:#888;">
+            <span>${reasonLabel}</span>
+            <span style="margin-left:8px;">${dateStr}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    body.innerHTML = `<div style="max-height:400px;overflow-y:auto;">${rows}</div>`;
+
+  } catch (error) {
+    console.error('履歴取得エラー:', error);
+    body.innerHTML = `<div class="text-danger">読み込みエラー: ${error.message}</div>`;
+  }
+};
+
+/**
+ * 出庫処理（外部から呼び出し用）
+ * @param {string} materialId - 資材ID
+ * @param {number} quantity - 出庫数
+ * @param {string} reason - 理由（'sale' | 'adjustment'）
+ * @param {string} relatedSaleId - 関連販売記録ID（任意）
+ * @param {string} notes - 備考（任意）
+ */
+window.processStockOut = async function(materialId, quantity, reason = 'sale', relatedSaleId = '', notes = '') {
+  if (!materialId || quantity <= 0) {
+    console.warn('[Stock Out] Invalid parameters:', { materialId, quantity });
+    return false;
+  }
+
+  try {
+    // 1. トランザクション記録を作成
+    const transactionData = {
+      materialId: materialId,
+      type: 'out',
+      quantity: quantity,
+      reason: reason,
+      relatedSaleId: relatedSaleId,
+      notes: notes,
+      createdBy: window.currentUser?.name || 'unknown',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    await window.db.collection('packagingTransactions').add(transactionData);
+
+    // 2. 資材の在庫数を更新
+    const materialRef = window.db.collection('packagingMaterials').doc(materialId);
+    const materialDoc = await materialRef.get();
+    if (!materialDoc.exists) {
+      console.warn('[Stock Out] Material not found:', materialId);
+      return false;
+    }
+
+    const currentStock = materialDoc.data()?.currentStock || 0;
+    const newStock = Math.max(0, currentStock - quantity);  // 負数にならないようにする
+
+    await materialRef.update({
+      currentStock: newStock,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`✅ [Stock Out] ${materialId}: ${currentStock} → ${newStock}`);
+    return true;
+
+  } catch (error) {
+    console.error('出庫処理エラー:', error);
+    return false;
+  }
+};
 
 /**
  * 梱包資材を削除
