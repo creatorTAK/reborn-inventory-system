@@ -2956,14 +2956,6 @@ async function renderPackagingDropdownUI() {
             </div>
           </div>
         </div>
-
-        <!-- 総数表示 -->
-        <div class="master-options-section" style="background: #f8f9fa; padding: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #666;">総資材数</span>
-            <span class="badge bg-primary">${allItems.length}件</span>
-          </div>
-        </div>
       </div>
     `;
 
