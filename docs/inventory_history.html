@@ -2036,6 +2036,11 @@
           updatedAt: getFirebaseTimestamp()
         });
 
+        // 4. 在庫アラートチェック
+        if (window.parent?.checkMaterialStockAlert) {
+          await window.parent.checkMaterialStockAlert(materialId, totalStock);
+        }
+
         hideLoading();
         alert(`在庫を調整しました（-${quantity}、場所: ${location.name}）`);
         loadStockList();
@@ -2240,6 +2245,18 @@
           createdBy: window.parent?.currentUser?.name || 'unknown',
           createdAt: getFirebaseTimestamp()
         });
+
+        // 5. 配布元の在庫アラートチェック
+        const fromLotsSnapshot = await db.collection('packagingLots')
+          .where('materialId', '==', materialId)
+          .where('locationId', '==', fromLocationId)
+          .where('status', '==', 'active')
+          .get();
+        const fromTotalStock = fromLotsSnapshot.docs.reduce((sum, doc) => sum + (doc.data().remainingQty || 0), 0);
+
+        if (window.parent?.checkMaterialStockAlert) {
+          await window.parent.checkMaterialStockAlert(materialId, fromTotalStock);
+        }
 
         hideLoading();
         alert(`配布完了: ${materialName} ${quantity}個 → ${toLocationName}`);
@@ -2495,6 +2512,12 @@
           updatedAt: getFirebaseTimestamp()
         });
 
+        // 4. 関連する在庫補充タスクを完了
+        await completeStockReplenishmentTasks(materialId, materialName, actualQuantity);
+
+        // 5. ユーザーに入荷通知を送信
+        await sendMaterialArrivalNotification(materialName, actualQuantity);
+
         hideLoading();
         alert('入荷処理が完了しました');
         loadOrdersList();
@@ -2505,6 +2528,121 @@
         hideLoading();
         console.error('入荷処理エラー:', error);
         alert('入荷処理に失敗しました: ' + error.message);
+      }
+    }
+
+    /**
+     * 関連する在庫補充タスクを完了にする
+     */
+    async function completeStockReplenishmentTasks(materialId, materialName, quantity) {
+      try {
+        const db = getDb();
+
+        // 全管理者のタスクを検索
+        const usersSnapshot = await db.collection('users')
+          .where('status', '==', 'active')
+          .get();
+
+        for (const userDoc of usersSnapshot.docs) {
+          const user = userDoc.data();
+          if (user.permission !== 'owner' && user.permission !== 'admin') continue;
+
+          // このユーザーの在庫補充タスクを検索
+          const tasksSnapshot = await db.collection('userTasks')
+            .doc(user.email)
+            .collection('tasks')
+            .where('type', '==', 'stock_replenishment')
+            .where('completed', '==', false)
+            .get();
+
+          for (const taskDoc of tasksSnapshot.docs) {
+            const task = taskDoc.data();
+            // このマテリアルに関連するタスクか確認
+            if (task.relatedData?.materialId === materialId) {
+              await db.collection('userTasks')
+                .doc(user.email)
+                .collection('tasks')
+                .doc(taskDoc.id)
+                .update({
+                  completed: true,
+                  completedAt: new Date().toISOString(),
+                  completedReason: `入荷完了: ${quantity}個`
+                });
+              console.log(`✅ [Task Complete] ${user.email}: ${task.title}`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('タスク完了処理エラー:', error);
+      }
+    }
+
+    /**
+     * ユーザーに資材入荷通知を送信
+     */
+    async function sendMaterialArrivalNotification(materialName, quantity) {
+      try {
+        const db = getDb();
+
+        // 在庫アラートチャットにメッセージを送信
+        const roomId = 'room_inventory_alert';
+        const messageText = `✅ 入荷完了
+📦 ${materialName}
+入荷数量: ${quantity}個
+補充完了しました！`;
+
+        await db.collection('messages').add({
+          roomId: roomId,
+          text: messageText,
+          userName: 'システム',
+          userEmail: 'system@reborn-inventory.com',
+          createdAt: getFirebaseTimestamp(),
+          isSystemMessage: true
+        });
+
+        await db.collection('rooms').doc(roomId).update({
+          lastMessage: messageText.split('\n')[0],
+          lastMessageAt: getFirebaseTimestamp(),
+          lastMessageBy: 'システム'
+        });
+
+        // 全アクティブユーザーにプッシュ通知を送信
+        const usersSnapshot = await db.collection('users')
+          .where('status', '==', 'active')
+          .get();
+
+        const allTokens = [];
+        usersSnapshot.docs.forEach(doc => {
+          const user = doc.data();
+          if (user.activeDevices && Array.isArray(user.activeDevices)) {
+            user.activeDevices.forEach(device => {
+              if (device.fcmToken) allTokens.push(device.fcmToken);
+            });
+          }
+          if (user.fcmToken) allTokens.push(user.fcmToken);
+        });
+
+        if (allTokens.length > 0) {
+          const FCM_WORKER_URL = 'https://reborn-fcm-worker.antigravity-llc.workers.dev';
+          await fetch(`${FCM_WORKER_URL}/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tokens: allTokens,
+              title: `✅ 資材入荷: ${materialName}`,
+              body: `${quantity}個入荷しました`,
+              data: {
+                type: 'material_arrival',
+                roomId: 'room_inventory_alert'
+              }
+            })
+          });
+          console.log(`🔔 [Arrival] プッシュ通知送信: ${allTokens.length}トークン`);
+        }
+
+        console.log(`📢 [Arrival] 入荷通知完了: ${materialName}`);
+      } catch (error) {
+        console.error('入荷通知エラー:', error);
       }
     }
 

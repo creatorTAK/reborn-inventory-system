@@ -8943,4 +8943,297 @@ async function syncCategoriesMaster() {
   }
 }
 
+// ============================================
+// 梱包資材 在庫アラート機能
+// - 閾値を下回ったらチャット・通知・タスクに連携
+// ============================================
+
+// FCM Worker エンドポイント
+const FCM_WORKER_URL = 'https://reborn-fcm-worker.antigravity-llc.workers.dev';
+
+// アラート送信の最小間隔（同じ資材への重複アラート防止）
+const ALERT_MIN_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4時間
+
+/**
+ * 在庫アラートチェック＆発火
+ * 在庫が閾値を下回った場合にチャット・通知・タスクを作成
+ *
+ * @param {string} materialId - 梱包資材ID
+ * @param {string} materialName - 資材名
+ * @param {number} currentStock - 現在の在庫数
+ * @param {number} threshold - アラート閾値
+ * @param {string} locationId - 場所ID（任意）
+ * @param {string} locationName - 場所名（任意）
+ * @param {string} purchaseUrl - 購入先URL（任意）
+ * @param {string} supplier - 発注先（任意）
+ */
+async function checkAndTriggerStockAlert(materialId, materialName, currentStock, threshold, locationId = null, locationName = '', purchaseUrl = '', supplier = '') {
+  // 閾値が設定されていない、または在庫が閾値より多い場合はスキップ
+  if (!threshold || threshold <= 0 || currentStock > threshold) {
+    return;
+  }
+
+  console.log(`⚠️ [Stock Alert] 閾値チェック: ${materialName} 在庫=${currentStock} / 閾値=${threshold}`);
+
+  try {
+    // 重複アラート防止: 最近のアラートをチェック
+    const recentAlertCheck = await window.db.collection('stockAlerts')
+      .where('materialId', '==', materialId)
+      .where('locationId', '==', locationId || '')
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (!recentAlertCheck.empty) {
+      const lastAlert = recentAlertCheck.docs[0].data();
+      const lastAlertTime = lastAlert.createdAt?.toMillis?.() || 0;
+      const now = Date.now();
+      if (now - lastAlertTime < ALERT_MIN_INTERVAL_MS) {
+        console.log(`🔕 [Stock Alert] 最近アラート済み（${Math.round((now - lastAlertTime) / 60000)}分前）、スキップ`);
+        return;
+      }
+    }
+
+    // アラート記録を作成
+    const alertRecord = {
+      materialId,
+      materialName,
+      currentStock,
+      threshold,
+      locationId: locationId || '',
+      locationName: locationName || '',
+      purchaseUrl: purchaseUrl || '',
+      supplier: supplier || '',
+      status: 'triggered',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    const alertDocRef = await window.db.collection('stockAlerts').add(alertRecord);
+    console.log(`📝 [Stock Alert] アラート記録作成: ${alertDocRef.id}`);
+
+    // 並列実行: チャットメッセージ、プッシュ通知、タスク作成
+    await Promise.all([
+      sendStockAlertChatMessage(materialName, currentStock, threshold, locationName, purchaseUrl, supplier),
+      sendStockAlertPushNotification(materialName, currentStock, threshold, locationName),
+      createStockAlertTask(materialId, materialName, currentStock, threshold, locationName, purchaseUrl, supplier)
+    ]);
+
+    console.log(`✅ [Stock Alert] アラート完了: ${materialName}`);
+
+  } catch (error) {
+    console.error('❌ [Stock Alert] アラート処理エラー:', error);
+  }
+}
+
+/**
+ * 在庫アラートチャットにメッセージを送信
+ */
+async function sendStockAlertChatMessage(materialName, currentStock, threshold, locationName = '', purchaseUrl = '', supplier = '') {
+  try {
+    const roomId = 'room_inventory_alert';
+    const locationInfo = locationName ? ` (${locationName})` : '';
+    const urgency = currentStock <= 0 ? '🚨 在庫切れ' : '⚠️ 在庫不足';
+    const supplierInfo = supplier ? `\n発注先: ${supplier}` : '';
+    const purchaseInfo = purchaseUrl ? `\n📎 購入リンク: ${purchaseUrl}` : '';
+
+    const messageText = `${urgency}${locationInfo}
+📦 ${materialName}
+現在庫: ${currentStock}個 / 発注点: ${threshold}個${supplierInfo}${purchaseInfo}
+補充をお願いします。`;
+
+    // メッセージをFirestoreに追加
+    await window.db.collection('messages').add({
+      roomId: roomId,
+      text: messageText,
+      userName: 'システム',
+      userEmail: 'system@reborn-inventory.com',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      isSystemMessage: true
+    });
+
+    // roomsコレクションのlastMessageを更新
+    await window.db.collection('rooms').doc(roomId).update({
+      lastMessage: messageText.split('\n')[0], // 最初の行のみ
+      lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastMessageBy: 'システム'
+    });
+
+    console.log(`💬 [Stock Alert] チャットメッセージ送信完了: ${roomId}`);
+
+  } catch (error) {
+    console.error('❌ [Stock Alert] チャットメッセージ送信エラー:', error);
+  }
+}
+
+/**
+ * 管理者にプッシュ通知を送信
+ */
+async function sendStockAlertPushNotification(materialName, currentStock, threshold, locationName = '') {
+  try {
+    // 管理者（owner/admin）のFCMトークンを取得
+    const adminsSnapshot = await window.db.collection('users')
+      .where('status', '==', 'active')
+      .get();
+
+    const adminTokens = [];
+    adminsSnapshot.docs.forEach(doc => {
+      const user = doc.data();
+      if (user.permission === 'owner' || user.permission === 'admin') {
+        // activeDevicesからトークンを取得
+        if (user.activeDevices && Array.isArray(user.activeDevices)) {
+          user.activeDevices.forEach(device => {
+            if (device.fcmToken) {
+              adminTokens.push(device.fcmToken);
+            }
+          });
+        }
+        // 旧形式のfcmTokenフィールドもチェック
+        if (user.fcmToken) {
+          adminTokens.push(user.fcmToken);
+        }
+      }
+    });
+
+    if (adminTokens.length === 0) {
+      console.log('📭 [Stock Alert] 管理者のFCMトークンがありません');
+      return;
+    }
+
+    const locationInfo = locationName ? ` (${locationName})` : '';
+    const urgency = currentStock <= 0 ? '🚨 在庫切れ' : '⚠️ 在庫不足';
+
+    // FCM Workerに送信
+    const response = await fetch(`${FCM_WORKER_URL}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tokens: adminTokens,
+        title: `${urgency} ${materialName}${locationInfo}`,
+        body: `現在庫: ${currentStock}個 / 発注点: ${threshold}個`,
+        data: {
+          type: 'stock_alert',
+          roomId: 'room_inventory_alert',
+          url: '/inventory_history.html'
+        }
+      })
+    });
+
+    const result = await response.json();
+    console.log(`🔔 [Stock Alert] プッシュ通知送信:`, result);
+
+  } catch (error) {
+    console.error('❌ [Stock Alert] プッシュ通知送信エラー:', error);
+  }
+}
+
+/**
+ * 管理者のやることリストにタスクを追加
+ * タスクをタップすると資材管理画面に遷移、購入リンクがあれば表示
+ */
+async function createStockAlertTask(materialId, materialName, currentStock, threshold, locationName = '', purchaseUrl = '', supplier = '') {
+  try {
+    // 管理者（owner/admin）を取得
+    const adminsSnapshot = await window.db.collection('users')
+      .where('status', '==', 'active')
+      .get();
+
+    const admins = [];
+    adminsSnapshot.docs.forEach(doc => {
+      const user = doc.data();
+      if (user.permission === 'owner' || user.permission === 'admin') {
+        admins.push({
+          email: user.email,
+          name: user.userName || user.name || user.email
+        });
+      }
+    });
+
+    if (admins.length === 0) {
+      console.log('📭 [Stock Alert] 管理者がいません');
+      return;
+    }
+
+    const locationInfo = locationName ? ` (${locationName})` : '';
+    const urgency = currentStock <= 0 ? '在庫切れ' : '在庫不足';
+    const supplierInfo = supplier ? `\n発注先: ${supplier}` : '';
+
+    // 購入リンク情報
+    let purchaseLinkInfo = '';
+    if (purchaseUrl) {
+      purchaseLinkInfo = `\n\n📎 購入リンク:\n${purchaseUrl}`;
+    } else {
+      // 購入リンクがない場合はAmazon/楽天検索リンクを生成
+      const searchQuery = encodeURIComponent(materialName);
+      purchaseLinkInfo = `\n\n🔍 検索リンク:
+・Amazon: https://www.amazon.co.jp/s?k=${searchQuery}
+・楽天: https://search.rakuten.co.jp/search/mall/${searchQuery}
+・モノタロウ: https://www.monotaro.com/s/?q=${searchQuery}`;
+    }
+
+    // 各管理者にタスクを作成
+    for (const admin of admins) {
+      const taskData = {
+        type: 'stock_replenishment',
+        title: `📦 ${urgency}: ${materialName}${locationInfo}`,
+        description: `現在庫: ${currentStock}個 / 発注点: ${threshold}個${supplierInfo}
+補充・発注が必要です。${purchaseLinkInfo}`,
+        createdAt: new Date().toISOString(),
+        completed: false,
+        priority: currentStock <= 0 ? 'high' : 'medium',
+        link: '/inventory_history.html',
+        relatedData: {
+          materialId,
+          materialName,
+          currentStock,
+          threshold,
+          locationName,
+          purchaseUrl,
+          supplier
+        }
+      };
+
+      await window.db.collection('userTasks')
+        .doc(admin.email)
+        .collection('tasks')
+        .add(taskData);
+
+      console.log(`📋 [Stock Alert] タスク作成: ${admin.email}`);
+    }
+
+  } catch (error) {
+    console.error('❌ [Stock Alert] タスク作成エラー:', error);
+  }
+}
+
+/**
+ * 資材情報を取得してアラートチェック（外部から呼び出し用）
+ */
+async function checkMaterialStockAlert(materialId, newStock) {
+  try {
+    const materialDoc = await window.db.collection('packagingMaterials').doc(materialId).get();
+    if (!materialDoc.exists) return;
+
+    const material = materialDoc.data();
+    const threshold = material.stockAlertThreshold || 0;
+
+    if (threshold > 0 && newStock <= threshold) {
+      await checkAndTriggerStockAlert(
+        materialId,
+        material.productName || material.name || '不明な資材',
+        newStock,
+        threshold,
+        null,
+        '',
+        material.purchaseUrl || '',
+        material.supplier || ''
+      );
+    }
+  } catch (error) {
+    console.error('❌ [Stock Alert] チェックエラー:', error);
+  }
+}
+
+// グローバルに公開
+window.checkAndTriggerStockAlert = checkAndTriggerStockAlert;
+window.checkMaterialStockAlert = checkMaterialStockAlert;
+
 console.log('✅ [Master Manager] モジュール読み込み完了');
