@@ -2411,131 +2411,10 @@
       // マスタ管理画面を開いた時に初めてキャッシュするシンプルな設計に変更
     });
 
-    // Firestoreナビゲーション監視（チャット戻るボタン用）
-    document.addEventListener('DOMContentLoaded', async () => {
-      console.log('[Navigation] Firestoreリスナー初期化開始');
-
-      try {
-        // Firebase設定
-        const firebaseConfig = {
-          apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
-          authDomain: "furira.jp",
-          projectId: "reborn-chat",
-          storageBucket: "reborn-chat.firebasestorage.app",
-          messagingSenderId: "345706548795",
-          appId: "1:345706548795:web:058a553da6b4b74db5161e"
-        };
-
-        // Firebase動的インポート
-        const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
-        const { getFirestore, doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-
-        // Firebase初期化（既に初期化済みならそれを使用）
-        const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig, 'navigation-listener');
-        const db = getFirestore(app);
-
-        console.log('[Navigation] Firestoreリスナー設定完了');
-
-        // navigationコレクションをリアルタイム監視
-        let isFirstSnapshot = true;
-        onSnapshot(doc(db, 'navigation', 'chatControl'), (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            console.log('[Navigation] Chat Firestore更新検知:', data);
-
-            // 初回読み込みは無視（古いデータによる誤作動を防ぐ）
-            if (isFirstSnapshot) {
-              console.log('[Navigation] Chat初回読み込みのため無視');
-              isFirstSnapshot = false;
-              return;
-            }
-
-            // 自分のsessionIdと一致するかチェック
-            const mySessionId = sessionStorage.getItem('device_session_id');
-            console.log('[Navigation] Chat mySessionId:', mySessionId);
-            console.log('[Navigation] Chat data.sessionId:', data.sessionId);
-
-            if (data.sessionId !== mySessionId) {
-              console.log('[Navigation] ⏭️ 他の端末のチャット操作のためスキップ');
-              return;
-            }
-
-            if (data.action === 'goBackToList') {
-              console.log('[Navigation] ✅ goBackToList要求を受信 → openChatRooms()呼び出し');
-              if (typeof openChatRooms === 'function') {
-                openChatRooms();
-              } else {
-                console.error('[Navigation] openChatRooms()が未定義');
-              }
-            }
-          }
-        }, (error) => {
-          console.error('[Navigation] Firestoreリスナーエラー:', error);
-        });
-
-        // menuControlドキュメントをリアルタイム監視（メニュー画面からの遷移用）
-        let isFirstMenuSnapshot = true;
-        console.log('[Navigation] ✅ menuControlリスナー登録開始');
-        onSnapshot(doc(db, 'navigation', 'menuControl'), (snapshot) => {
-          console.log('[Navigation] 🔔 Menu onSnapshot コールバック実行');
-          console.log('[Navigation] snapshot.exists():', snapshot.exists());
-
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            console.log('[Navigation] Menu更新検知 - 全データ:', JSON.stringify(data));
-            console.log('[Navigation] isFirstMenuSnapshot:', isFirstMenuSnapshot);
-
-            // 初回読み込みは無視（古いデータによる誤作動を防ぐ）
-            if (isFirstMenuSnapshot) {
-              console.log('[Navigation] ⏭️ Menu初回読み込みのため無視');
-              isFirstMenuSnapshot = false;
-              return;
-            }
-
-            console.log('[Navigation] data.action:', data.action);
-            console.log('[Navigation] data.page:', data.page);
-            console.log('[Navigation] data.sessionId:', data.sessionId);
-
-            // 自分のsessionIdと一致するかチェック
-            const mySessionId = sessionStorage.getItem('device_session_id');
-            console.log('[Navigation] mySessionId:', mySessionId);
-
-            if (data.sessionId !== mySessionId) {
-              console.log('[Navigation] ⏭️ 他の端末の操作のためスキップ');
-              return;
-            }
-
-            if (data.action === 'goBack') {
-              // 戻るボタンの場合はgoBackInHistory()を呼び出す（履歴スタックを正しく管理）
-              console.log('[Navigation] ✅ goBack要求を受信 → goBackInHistory()呼び出し');
-              if (typeof goBackInHistory === 'function') {
-                goBackInHistory();
-                console.log('[Navigation] ✅ goBackInHistory()呼び出し完了');
-              } else {
-                console.error('[Navigation] ❌ goBackInHistory()が未定義');
-              }
-            } else if (data.action === 'navigate' && data.page) {
-              console.log('[Navigation] ✅ navigate要求を受信 → navigateToPage()呼び出し:', data.page);
-              if (typeof navigateToPage === 'function') {
-                navigateToPage(data.page);
-                console.log('[Navigation] ✅ navigateToPage()呼び出し完了（200ms遅延モード）');
-              } else {
-                console.error('[Navigation] ❌ navigateToPage()が未定義');
-              }
-            } else {
-              console.log('[Navigation] ⚠️ action or page が不正:', { action: data.action, page: data.page });
-            }
-          } else {
-            console.log('[Navigation] ⚠️ menuControlドキュメントが存在しません');
-          }
-        }, (error) => {
-          console.error('[Navigation] ❌ Menuリスナーエラー:', error);
-        });
-
-      } catch (error) {
-        console.error('[Navigation] Firestore初期化エラー:', error);
-      }
-    });
+    // 🔧 v508: Firestoreナビゲーション監視を削除（コスト削減）
+    // 複数端末連携用のリスナーだったが、Firestore読み取りコストが高いため廃止
+    // navigation/chatControl, navigation/menuControl のonSnapshotを削除
+    console.log('[Navigation] Firestoreリスナーは廃止されました（コスト削減）');
 
     /**
      * Firestore settings/permissions コレクション初期化
@@ -6339,7 +6218,8 @@
       }
     }
 
-    // やることリストのリアルタイム監視を開始
+    // 🔧 v508: やることリストをget()に変更（コスト削減）
+    // リアルタイム監視 → 1回取得に変更
     async function startTodoListener() {
       const userEmail = localStorage.getItem('reborn_user_email');
       if (!userEmail) {
@@ -6349,27 +6229,25 @@
 
       try {
         const db = await getFirebaseDb();
-        const { collection, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-        // 未完了タスクをリアルタイム監視
+        // 未完了タスクを1回取得（onSnapshot → getDocs）
         const tasksRef = collection(db, 'userTasks', userEmail, 'tasks');
         const q = query(tasksRef, where('completed', '==', false));
+        
+        const snapshot = await getDocs(q);
+        const count = snapshot.size;
+        console.log('[Todo] 未完了タスク数:', count);
+        updateTodoBadge(count);
 
-        onSnapshot(q, (snapshot) => {
-          const count = snapshot.size;
-          console.log('[Todo] 未完了タスク数:', count);
-          updateTodoBadge(count);
-        }, (error) => {
-          console.error('[Todo] リスナーエラー:', error);
-        });
-
-        console.log('[Todo] リスナー登録完了');
+        console.log('[Todo] 取得完了（1回のみ）');
       } catch (error) {
-        console.error('[Todo] リスナー開始エラー:', error);
+        console.error('[Todo] 取得エラー:', error);
       }
     }
 
-    // お知らせのリアルタイム監視を開始（起動時にバッジを更新）
+    // 🔧 v508: お知らせをget()に変更（コスト削減）
+    // 4つのonSnapshot → 1回の取得に統合
     async function startAnnounceListener() {
       const userEmail = localStorage.getItem('reborn_user_email');
       if (!userEmail) {
@@ -6379,74 +6257,57 @@
 
       try {
         const db = await getFirebaseDb();
-        const { collection, getDocs, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { collection, getDocs, query, where } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-        // 状態を保持
-        let globalAnnouncements = [];
-        let personalAnnouncements = [];
-        let readGlobalIds = new Set();
-        let readPersonalIds = new Set();
+        // 1. 全体お知らせを取得
+        const globalRef = collection(db, 'announcements');
+        const globalSnapshot = await getDocs(globalRef);
+        const globalAnnouncements = [];
+        globalSnapshot.forEach(doc => {
+          globalAnnouncements.push({ id: doc.id, ...doc.data() });
+        });
+        console.log('[Announce] 全体お知らせ:', globalAnnouncements.length, '件');
+
+        // 2. 全体お知らせ既読を取得（自分の分のみ）
+        const readGlobalRef = collection(db, 'readAnnouncements');
+        const readGlobalQuery = query(readGlobalRef, where('userEmail', '==', userEmail));
+        const readGlobalSnapshot = await getDocs(readGlobalQuery);
+        const readGlobalIds = new Set();
+        readGlobalSnapshot.forEach(doc => {
+          const data = doc.data();
+          readGlobalIds.add(data.announcementId);
+        });
+        console.log('[Announce] 全体既読:', readGlobalIds.size, '件');
+
+        // 3. 個人お知らせを取得
+        const personalRef = collection(db, 'users', userEmail, 'personalAnnouncements');
+        const personalSnapshot = await getDocs(personalRef);
+        const personalAnnouncements = [];
+        personalSnapshot.forEach(doc => {
+          personalAnnouncements.push({ id: doc.id, ...doc.data() });
+        });
+        console.log('[Announce] 個人お知らせ:', personalAnnouncements.length, '件');
+
+        // 4. 個人お知らせ既読を取得
+        const readPersonalRef = collection(db, 'users', userEmail, 'readPersonalAnnouncements');
+        const readPersonalSnapshot = await getDocs(readPersonalRef);
+        const readPersonalIds = new Set();
+        readPersonalSnapshot.forEach(doc => {
+          const data = doc.data();
+          readPersonalIds.add(data.announcementId);
+        });
+        console.log('[Announce] 個人既読:', readPersonalIds.size, '件');
 
         // 未読数を計算して更新
-        function calculateAndUpdateBadge() {
-          const globalUnread = globalAnnouncements.filter(a => !readGlobalIds.has(a.id)).length;
-          const personalUnread = personalAnnouncements.filter(a => !readPersonalIds.has(a.id)).length;
-          const totalUnread = globalUnread + personalUnread;
-          console.log('[Announce] 未読数計算: 全体=' + globalUnread + ', 個人=' + personalUnread + ', 合計=' + totalUnread);
-          updateAnnounceUnreadCount(totalUnread);
-        }
+        const globalUnread = globalAnnouncements.filter(a => !readGlobalIds.has(a.id)).length;
+        const personalUnread = personalAnnouncements.filter(a => !readPersonalIds.has(a.id)).length;
+        const totalUnread = globalUnread + personalUnread;
+        console.log('[Announce] 未読数計算: 全体=' + globalUnread + ', 個人=' + personalUnread + ', 合計=' + totalUnread);
+        updateAnnounceUnreadCount(totalUnread);
 
-        // 1. 全体お知らせを監視
-        const globalRef = collection(db, 'announcements');
-        onSnapshot(globalRef, (snapshot) => {
-          globalAnnouncements = [];
-          snapshot.forEach(doc => {
-            globalAnnouncements.push({ id: doc.id, ...doc.data() });
-          });
-          console.log('[Announce] 全体お知らせ:', globalAnnouncements.length, '件');
-          calculateAndUpdateBadge();
-        });
-
-        // 2. 全体お知らせ既読を監視
-        const readGlobalRef = collection(db, 'readAnnouncements');
-        onSnapshot(readGlobalRef, (snapshot) => {
-          readGlobalIds = new Set();
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.userEmail === userEmail) {
-              readGlobalIds.add(data.announcementId);
-            }
-          });
-          console.log('[Announce] 全体既読:', readGlobalIds.size, '件');
-          calculateAndUpdateBadge();
-        });
-
-        // 3. 個人お知らせを監視
-        const personalRef = collection(db, 'users', userEmail, 'personalAnnouncements');
-        onSnapshot(personalRef, (snapshot) => {
-          personalAnnouncements = [];
-          snapshot.forEach(doc => {
-            personalAnnouncements.push({ id: doc.id, ...doc.data() });
-          });
-          console.log('[Announce] 個人お知らせ:', personalAnnouncements.length, '件');
-          calculateAndUpdateBadge();
-        });
-
-        // 4. 個人お知らせ既読を監視
-        const readPersonalRef = collection(db, 'users', userEmail, 'readPersonalAnnouncements');
-        onSnapshot(readPersonalRef, (snapshot) => {
-          readPersonalIds = new Set();
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            readPersonalIds.add(data.announcementId);
-          });
-          console.log('[Announce] 個人既読:', readPersonalIds.size, '件');
-          calculateAndUpdateBadge();
-        });
-
-        console.log('[Announce] リスナー登録完了');
+        console.log('[Announce] 取得完了（1回のみ）');
       } catch (error) {
-        console.error('[Announce] リスナー開始エラー:', error);
+        console.error('[Announce] 取得エラー:', error);
       }
     }
 

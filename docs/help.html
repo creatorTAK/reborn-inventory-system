@@ -972,7 +972,7 @@
     let currentUserId = null;
     let currentConversationId = null;
     let conversationHistory = [];
-    let unsubscribeConversations = null;
+    // 🔧 v509: unsubscribeConversations削除（onSnapshot → get()に変更）
 
     // Cloudflare Worker エンドポイント
     const CHATBOT_API_ENDPOINT = 'https://reborn-help-chatbot.mercari-yasuhirotakuji.workers.dev/chat';
@@ -1014,8 +1014,8 @@
       loadConversations();
     }
 
-    // 会話一覧を読み込み
-    function loadConversations() {
+    // 🔧 v509: 会話一覧を読み込み（onSnapshot → get()でコスト削減）
+    async function loadConversations() {
       const conversationListEl = document.getElementById('conversationList');
       conversationListEl.innerHTML = '<div class="loading-conversations">読み込み中...</div>';
 
@@ -1026,18 +1026,19 @@
         limit(50)
       );
 
-      // リアルタイム更新
-      unsubscribeConversations = onSnapshot(q, (snapshot) => {
+      try {
+        // 1回取得に変更（リアルタイム更新は不要）
+        const snapshot = await getDocs(q);
         const conversations = [];
         snapshot.forEach((doc) => {
           conversations.push({ id: doc.id, ...doc.data() });
         });
-
         renderConversationList(conversations);
-      }, (error) => {
+        console.log('[Help] 会話一覧取得完了:', conversations.length + '件');
+      } catch (error) {
         console.error('[Help] 会話一覧読み込みエラー:', error);
         conversationListEl.innerHTML = '<div class="no-conversations">会話履歴を読み込めませんでした</div>';
-      });
+      }
     }
 
     // 会話一覧を描画
@@ -1192,6 +1193,8 @@
         if (currentConversationId === conversationId) {
           startNewConversation();
         }
+        // 🔧 v509: 会話一覧を再取得
+        loadConversations();
       } catch (error) {
         console.error('[Help] 会話削除エラー:', error);
         alert('削除に失敗しました');
@@ -1236,6 +1239,8 @@
           });
           currentConversationId = docRef.id;
           console.log('[Help] 新しい会話作成:', currentConversationId);
+          // 🔧 v509: 会話一覧を再取得
+          loadConversations();
         } catch (error) {
           console.error('[Help] 会話作成エラー:', error);
         }
@@ -1404,12 +1409,7 @@
       }
     });
 
-    // クリーンアップ
-    window.addEventListener('beforeunload', () => {
-      if (unsubscribeConversations) {
-        unsubscribeConversations();
-      }
-    });
+    // 🔧 v509: onSnapshot削除に伴いクリーンアップ不要
   </script>
 
   <script>

@@ -869,93 +869,71 @@
       }
     }
 
-    // バッジリスナー開始
+    // 🔧 v508: バッジ取得をget()に変更（コスト削減）
+    // onSnapshot → 1回取得に変更
     async function startBadgeListeners() {
       if (!db) {
-        console.warn('[menu_home] ⚠️ バッジリスナー: Firestoreが初期化されていません');
+        console.warn('[menu_home] ⚠️ バッジ取得: Firestoreが初期化されていません');
         return;
       }
 
       const userEmail = localStorage.getItem('reborn_user_email');
       if (!userEmail) {
-        console.warn('[menu_home] ⚠️ バッジリスナー: ユーザーメールが見つかりません');
+        console.warn('[menu_home] ⚠️ バッジ取得: ユーザーメールが見つかりません');
         return;
       }
 
-      console.log('[menu_home] 🔔 バッジリスナー開始:', userEmail);
+      console.log('[menu_home] 🔔 バッジ取得開始:', userEmail);
 
       try {
-        // 1. やることリスト未完了カウント（userTasks/{email}/tasks コレクションを使用）
+        // 1. やることリスト未完了カウント（1回取得）
         const tasksRef = db.collection('userTasks').doc(userEmail).collection('tasks');
-        const todoQuery = tasksRef.where('completed', '==', false);
+        const todoSnapshot = await tasksRef.where('completed', '==', false).get();
+        const todoCount = todoSnapshot.size;
+        console.log('[menu_home] Todo 未完了数:', todoCount);
+        updateTodoBadge(todoCount);
 
-        todoQuery.onSnapshot((snapshot) => {
-          const count = snapshot.size;
-          console.log('[menu_home] Todo 未完了数:', count);
-          updateTodoBadge(count);
-        }, (error) => {
-          console.error('[menu_home] Todo リスナーエラー:', error);
-        });
-
-        // 2. チャット未読カウント（全ルーム合計）
-        window.chatUnreadByRoom = {};
-        // リスナー管理用Map（重複リスナー防止）
-        const roomUnreadListeners = new Map();
-
-        function updateTotalChatUnread() {
-          const totalUnread = Object.values(window.chatUnreadByRoom).reduce((sum, count) => sum + count, 0);
-          console.log('[menu_home] Chat 未読合計:', totalUnread, window.chatUnreadByRoom);
-          updateChatBadge(totalUnread);
-        }
-
-        // ルーム未読リスナーを登録（重複チェック付き）
-        function subscribeRoomUnread(roomId, userEmail) {
-          // 既にリスナーが登録されている場合はスキップ
-          if (roomUnreadListeners.has(roomId)) {
-            console.log('[menu_home] ルーム', roomId, 'のリスナーは既に登録済み');
-            return;
-          }
-
-          const unreadDocRef = db.collection('rooms').doc(roomId).collection('unreadCounts').doc(userEmail);
-          const unsubscribe = unreadDocRef.onSnapshot((unreadDoc) => {
-            const unreadData = unreadDoc.data();
-            const unreadCount = unreadData?.unreadCount || 0;
-            window.chatUnreadByRoom[roomId] = unreadCount;
-            updateTotalChatUnread();
-          }, (error) => {
-            console.log('[menu_home] ルーム', roomId, '未読取得エラー:', error.message);
-          });
-
-          // リスナーを登録
-          roomUnreadListeners.set(roomId, unsubscribe);
-          console.log('[menu_home] ルーム', roomId, 'の未読リスナーを登録');
-        }
+        // 2. チャット未読カウント（1回取得）
+        let totalUnread = 0;
 
         // ユーザーが参加しているルームを取得
-        const roomsQuery = db.collection('rooms').where('members', 'array-contains', userEmail);
+        const roomsSnapshot = await db.collection('rooms').where('members', 'array-contains', userEmail).get();
+        console.log('[menu_home] ルーム数:', roomsSnapshot.size);
 
-        roomsQuery.onSnapshot((roomsSnapshot) => {
-          console.log('[menu_home] ルーム数:', roomsSnapshot.size);
-
-          roomsSnapshot.forEach((roomDoc) => {
-            const roomId = roomDoc.id;
-            subscribeRoomUnread(roomId, userEmail);
-          });
-        }, (error) => {
-          console.error('[menu_home] ルームリスナーエラー:', error);
+        // 各ルームの未読を取得
+        const roomIds = [];
+        roomsSnapshot.forEach((roomDoc) => {
+          roomIds.push(roomDoc.id);
         });
 
-        // デフォルトルーム（全体チャット、システム通知、アラート）
-        // 共通のsubscribeRoomUnread関数を使用（重複リスナー防止）
+        // デフォルトルームを追加
         const defaultRoomIds = ['room_default_all', 'system', 'system-notifications', 'room_inventory_alert'];
-        defaultRoomIds.forEach((roomId) => {
-          subscribeRoomUnread(roomId, userEmail);
+        defaultRoomIds.forEach((id) => {
+          if (!roomIds.includes(id)) {
+            roomIds.push(id);
+          }
         });
 
-        console.log('[menu_home] ✅ バッジリスナー設定完了');
+        // 各ルームの未読カウントを取得
+        for (const roomId of roomIds) {
+          try {
+            const unreadDoc = await db.collection('rooms').doc(roomId).collection('unreadCounts').doc(userEmail).get();
+            if (unreadDoc.exists) {
+              const unreadData = unreadDoc.data();
+              totalUnread += (unreadData?.unreadCount || 0);
+            }
+          } catch (e) {
+            // エラーは無視（ルームが存在しない場合など）
+          }
+        }
+
+        console.log('[menu_home] Chat 未読合計:', totalUnread);
+        updateChatBadge(totalUnread);
+
+        console.log('[menu_home] ✅ バッジ取得完了（1回のみ）');
 
       } catch (error) {
-        console.error('[menu_home] ❌ バッジリスナー設定エラー:', error);
+        console.error('[menu_home] ❌ バッジ取得エラー:', error);
       }
     }
 
