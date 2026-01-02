@@ -295,7 +295,7 @@
     <button class="sub-header-back" onclick="window.parent.postMessage({type:'navigateToPage', page:'home'}, '*')" title="戻る">
       <i class="bi bi-chevron-left"></i>
     </button>
-    <span class="sub-header-title">入出庫履歴</span>
+    <span class="sub-header-title">資材管理</span>
     <div class="sub-header-icons">
       <button class="sub-header-icon" onclick="window.parent.postMessage({type:'openChatRooms'}, '*')" title="お知らせ">
         <i class="bi bi-bell"></i>
@@ -327,7 +327,172 @@
   });
   </script>
 
-  <div class="container-fluid">
+  <!-- タブナビゲーション -->
+  <style>
+    .material-tabs {
+      display: flex;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      position: sticky;
+      top: 56px;
+      z-index: 999;
+    }
+    .material-tab {
+      flex: 1;
+      padding: 12px 8px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 500;
+      color: #6b7280;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .material-tab:hover {
+      color: #374151;
+      background: #f9fafb;
+    }
+    .material-tab.active {
+      color: #2563eb;
+      border-bottom-color: #2563eb;
+    }
+    .material-tab i {
+      display: block;
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    /* 在庫タブ専用スタイル */
+    .stock-card {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-left: 4px solid #e5e7eb;
+    }
+    .stock-card.stock-ok { border-left-color: #10b981; }
+    .stock-card.stock-warning { border-left-color: #f59e0b; }
+    .stock-card.stock-danger { border-left-color: #ef4444; }
+    .stock-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .stock-card-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .stock-card-category {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .stock-card-body {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .stock-count {
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .stock-count.text-success { color: #10b981; }
+    .stock-count.text-warning { color: #f59e0b; }
+    .stock-count.text-danger { color: #ef4444; }
+    .stock-actions {
+      display: flex;
+      gap: 8px;
+    }
+    /* 発注タブ専用スタイル */
+    .order-card {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-left: 4px solid #3b82f6;
+    }
+    .order-card.order-pending { border-left-color: #f59e0b; }
+    .order-card.order-received { border-left-color: #10b981; }
+    .order-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .order-card-date {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .order-card-body {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .order-material {
+      font-weight: 600;
+    }
+    .order-quantity {
+      font-size: 16px;
+      font-weight: 600;
+    }
+  </style>
+
+  <div class="material-tabs">
+    <button class="material-tab active" data-tab="stock" onclick="switchTab('stock')">
+      <i class="bi bi-box-seam"></i>
+      在庫
+    </button>
+    <button class="material-tab" data-tab="history" onclick="switchTab('history')">
+      <i class="bi bi-arrow-left-right"></i>
+      入出庫履歴
+    </button>
+    <button class="material-tab" data-tab="orders" onclick="switchTab('orders')">
+      <i class="bi bi-cart-plus"></i>
+      発注
+    </button>
+  </div>
+
+  <!-- 在庫タブ -->
+  <div class="tab-content active" id="tab-stock">
+    <div class="container-fluid">
+      <div class="filter-section" style="margin-top: 12px;">
+        <div class="row g-2 mb-2">
+          <div class="col-8">
+            <select class="form-select form-select-sm" id="stockCategoryFilter">
+              <option value="">全カテゴリ</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <button class="btn btn-success btn-sm w-100" onclick="showStockInModalMaterial()">
+              <i class="bi bi-plus"></i> 入庫
+            </button>
+          </div>
+        </div>
+        <div class="row g-2">
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="showLowStockOnly">
+              <label class="form-check-label small" for="showLowStockOnly">要発注のみ表示</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="stockList"></div>
+    </div>
+  </div>
+
+  <!-- 入出庫履歴タブ -->
+  <div class="tab-content" id="tab-history">
+    <div class="container-fluid">
 
     <!-- フィルタリングセクション -->
     <div class="filter-section">
@@ -420,6 +585,139 @@
     <!-- ページネーション -->
     <div id="pagination" class="d-flex justify-content-center align-items-center gap-2 my-3" style="display: none !important;"></div>
 
+    </div>
+  </div>
+
+  <!-- 発注タブ -->
+  <div class="tab-content" id="tab-orders">
+    <div class="container-fluid">
+      <div class="filter-section" style="margin-top: 12px;">
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <select class="form-select form-select-sm" id="orderStatusFilter">
+              <option value="">全ステータス</option>
+              <option value="ordered" selected>発注中</option>
+              <option value="received">入荷済み</option>
+              <option value="cancelled">キャンセル</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <button class="btn btn-primary btn-sm w-100" onclick="showOrderModalMaterial()">
+              <i class="bi bi-cart-plus"></i> 新規発注
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="ordersList"></div>
+    </div>
+  </div>
+
+  <!-- 入庫モーダル -->
+  <div class="modal fade" id="stockInModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-box-arrow-in-down"></i> 入庫登録</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">資材選択</label>
+            <select class="form-select" id="stockInMaterial" style="font-size:16px;">
+              <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">入庫数量</label>
+            <input type="number" class="form-control" id="stockInQuantity" min="1" style="font-size:16px;">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">購入価格（税込）</label>
+            <input type="number" class="form-control" id="stockInPrice" min="0" style="font-size:16px;">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">備考</label>
+            <input type="text" class="form-control" id="stockInNote" style="font-size:16px;">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-success" onclick="processStockInMaterial()">入庫登録</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 発注モーダル -->
+  <div class="modal fade" id="orderModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-cart-plus"></i> 発注登録</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">資材選択</label>
+            <select class="form-select" id="orderMaterial" style="font-size:16px;">
+              <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">発注数量</label>
+            <input type="number" class="form-control" id="orderQuantity" min="1" style="font-size:16px;">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">発注先</label>
+            <input type="text" class="form-control" id="orderSupplier" style="font-size:16px;">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">備考</label>
+            <input type="text" class="form-control" id="orderNote" style="font-size:16px;">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-primary" onclick="processOrderMaterial()">発注登録</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 入荷処理モーダル -->
+  <div class="modal fade" id="receiveModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-check-circle"></i> 入荷処理</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">資材名</label>
+            <input type="text" class="form-control" id="receiveMaterialName" readonly style="font-size:16px;">
+            <input type="hidden" id="receiveOrderId">
+            <input type="hidden" id="receiveMaterialId">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">発注数量</label>
+            <input type="number" class="form-control" id="receiveOrderedQuantity" readonly style="font-size:16px;">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">実際の入荷数量</label>
+            <input type="number" class="form-control" id="receiveActualQuantity" min="1" style="font-size:16px;">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">購入価格（税込）</label>
+            <input type="number" class="form-control" id="receivePrice" min="0" style="font-size:16px;">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-success" onclick="processReceiveOrderMaterial()">入荷完了</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -851,6 +1149,513 @@
       const container = document.getElementById('historyCards');
       container.innerHTML = `<div class="text-center text-danger py-4">❌ ${escapeHtml(message)}</div>`;
     }
+
+    // ========================================
+    // タブ切り替え機能
+    // ========================================
+    let currentTab = 'stock';
+    let allOrders = [];
+
+    function switchTab(tabName) {
+      currentTab = tabName;
+
+      // タブボタンの状態更新
+      document.querySelectorAll('.material-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+      });
+
+      // タブコンテンツの表示切替
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.toggle('active', content.id === `tab-${tabName}`);
+      });
+
+      // タブ固有の初期化
+      if (tabName === 'stock') {
+        loadStockList();
+      } else if (tabName === 'orders') {
+        loadOrdersList();
+      }
+    }
+
+    // ========================================
+    // Firebase/Firestoreアクセス
+    // ========================================
+    function getDb() {
+      // iframe内から親のdbを参照
+      return window.parent?.db || window.db;
+    }
+
+    function getFirebaseTimestamp() {
+      if (window.parent?.firebase?.firestore?.FieldValue) {
+        return window.parent.firebase.firestore.FieldValue.serverTimestamp();
+      }
+      return new Date();
+    }
+
+    // ========================================
+    // 在庫タブ機能
+    // ========================================
+    async function loadStockList() {
+      const container = document.getElementById('stockList');
+      container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
+
+      try {
+        const db = getDb();
+        if (!db) {
+          container.innerHTML = '<div class="text-center text-danger py-4">Firestoreに接続できません</div>';
+          return;
+        }
+
+        const snapshot = await db.collection('packagingMaterials').get();
+        allMaterials = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        populateStockCategoryFilter(allMaterials);
+        renderStockList(allMaterials);
+      } catch (error) {
+        console.error('資材リスト取得エラー:', error);
+        container.innerHTML = `<div class="text-center text-danger py-4">エラー: ${error.message}</div>`;
+      }
+    }
+
+    function populateStockCategoryFilter(materials) {
+      const categories = [...new Set(materials.map(m => m.category).filter(c => c))];
+      const select = document.getElementById('stockCategoryFilter');
+      select.innerHTML = '<option value="">全カテゴリ</option>' +
+        categories.map(cat => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join('');
+    }
+
+    function renderStockList(materials) {
+      const container = document.getElementById('stockList');
+      const categoryFilter = document.getElementById('stockCategoryFilter').value;
+      const showLowOnly = document.getElementById('showLowStockOnly').checked;
+
+      let filtered = materials;
+      if (categoryFilter) {
+        filtered = filtered.filter(m => m.category === categoryFilter);
+      }
+      if (showLowOnly) {
+        filtered = filtered.filter(m => (m.currentStock || 0) <= (m.stockAlertThreshold || 0));
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4">該当する資材がありません</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(item => {
+        const stock = item.currentStock || 0;
+        const threshold = item.stockAlertThreshold || 0;
+        let stockClass = 'stock-ok';
+        let countClass = 'text-success';
+        if (stock <= 0) {
+          stockClass = 'stock-danger';
+          countClass = 'text-danger';
+        } else if (stock <= threshold) {
+          stockClass = 'stock-warning';
+          countClass = 'text-warning';
+        }
+
+        return `
+        <div class="stock-card ${stockClass}">
+          <div class="stock-card-header">
+            <span class="stock-card-name">${escapeHtml(item.productName || item.name)}</span>
+            <span class="stock-card-category">${escapeHtml(item.category || '')}</span>
+          </div>
+          <div class="stock-card-body">
+            <div>
+              <span class="stock-count ${countClass}">${stock}</span>
+              <span class="text-muted small">個</span>
+              ${threshold > 0 ? `<span class="text-muted small ms-2">(発注点: ${threshold})</span>` : ''}
+            </div>
+            <div class="stock-actions">
+              <button class="btn btn-sm btn-outline-success" onclick="showStockInModalMaterial('${item.id}')">
+                <i class="bi bi-plus"></i>
+              </button>
+              <button class="btn btn-sm btn-outline-primary" onclick="showOrderModalMaterial('${item.id}')">
+                <i class="bi bi-cart-plus"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        `;
+      }).join('');
+    }
+
+    // カテゴリフィルタ変更時
+    document.getElementById('stockCategoryFilter')?.addEventListener('change', function() {
+      renderStockList(allMaterials);
+    });
+
+    // 要発注のみフィルタ変更時
+    document.getElementById('showLowStockOnly')?.addEventListener('change', function() {
+      renderStockList(allMaterials);
+    });
+
+    // ========================================
+    // 入庫モーダル機能
+    // ========================================
+    function showStockInModalMaterial(materialId) {
+      // 資材プルダウンを更新
+      const select = document.getElementById('stockInMaterial');
+      select.innerHTML = '<option value="">選択してください</option>' +
+        allMaterials.map(m => `<option value="${m.id}" ${m.id === materialId ? 'selected' : ''}>${escapeHtml(m.productName || m.name)}</option>`).join('');
+
+      // フォームリセット
+      document.getElementById('stockInQuantity').value = '';
+      document.getElementById('stockInPrice').value = '';
+      document.getElementById('stockInNote').value = '';
+
+      // モーダル表示
+      const modal = new bootstrap.Modal(document.getElementById('stockInModal'));
+      modal.show();
+    }
+
+    async function processStockInMaterial() {
+      const materialId = document.getElementById('stockInMaterial').value;
+      const quantity = parseInt(document.getElementById('stockInQuantity').value) || 0;
+      const price = parseFloat(document.getElementById('stockInPrice').value) || 0;
+      const note = document.getElementById('stockInNote').value;
+
+      if (!materialId) {
+        alert('資材を選択してください');
+        return;
+      }
+      if (quantity <= 0) {
+        alert('数量を入力してください');
+        return;
+      }
+
+      const material = allMaterials.find(m => m.id === materialId);
+      const materialName = material ? (material.productName || material.name) : '';
+
+      showLoading();
+      bootstrap.Modal.getInstance(document.getElementById('stockInModal'))?.hide();
+
+      try {
+        const db = getDb();
+
+        // 1. 入庫履歴を登録
+        await db.collection('packagingTransactions').add({
+          materialId: materialId,
+          materialName: materialName,
+          type: '入庫',
+          quantity: quantity,
+          purchasePrice: price,
+          unitCost: price > 0 && quantity > 0 ? price / quantity : 0,
+          reason: '手動入庫',
+          note: note,
+          createdBy: window.parent?.currentUser?.name || 'unknown',
+          createdAt: getFirebaseTimestamp()
+        });
+
+        // 2. 資材の在庫数を更新
+        const materialRef = db.collection('packagingMaterials').doc(materialId);
+        const currentStock = material.currentStock || 0;
+        await materialRef.update({
+          currentStock: currentStock + quantity,
+          updatedAt: getFirebaseTimestamp()
+        });
+
+        hideLoading();
+        alert('入庫を登録しました');
+        loadStockList();
+      } catch (error) {
+        hideLoading();
+        console.error('入庫登録エラー:', error);
+        alert('入庫登録に失敗しました: ' + error.message);
+      }
+    }
+
+    // ========================================
+    // 発注タブ機能
+    // ========================================
+    async function loadOrdersList() {
+      const container = document.getElementById('ordersList');
+      container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
+
+      try {
+        const db = getDb();
+        if (!db) {
+          container.innerHTML = '<div class="text-center text-danger py-4">Firestoreに接続できません</div>';
+          return;
+        }
+
+        const snapshot = await db.collection('packagingOrders')
+          .orderBy('orderedAt', 'desc')
+          .limit(50)
+          .get();
+
+        allOrders = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          orderedAt: doc.data().orderedAt?.toDate?.() || doc.data().orderedAt
+        }));
+
+        renderOrdersList();
+      } catch (error) {
+        console.error('発注一覧取得エラー:', error);
+        container.innerHTML = `<div class="text-center text-danger py-4">エラー: ${error.message}</div>`;
+      }
+    }
+
+    function renderOrdersList() {
+      const container = document.getElementById('ordersList');
+      const statusFilter = document.getElementById('orderStatusFilter').value;
+
+      let filtered = allOrders;
+      if (statusFilter) {
+        filtered = filtered.filter(o => o.status === statusFilter);
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4">該当する発注がありません</div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(order => {
+        const statusBadge = order.status === 'ordered' ? '<span class="badge bg-warning">発注中</span>'
+          : order.status === 'received' ? '<span class="badge bg-success">入荷済み</span>'
+          : order.status === 'cancelled' ? '<span class="badge bg-secondary">キャンセル</span>'
+          : '<span class="badge bg-light text-dark">' + escapeHtml(order.status) + '</span>';
+
+        const cardClass = order.status === 'ordered' ? 'order-pending'
+          : order.status === 'received' ? 'order-received'
+          : '';
+
+        return `
+        <div class="order-card ${cardClass}">
+          <div class="order-card-header">
+            <span class="order-card-date">${formatDateTime(order.orderedAt || order.createdAt)}</span>
+            ${statusBadge}
+          </div>
+          <div class="order-card-body">
+            <div>
+              <div class="order-material">${escapeHtml(order.materialName)}</div>
+              ${order.supplier ? `<div class="text-muted small">${escapeHtml(order.supplier)}</div>` : ''}
+            </div>
+            <div class="order-quantity">${order.quantity}個</div>
+          </div>
+          ${order.status === 'ordered' ? `
+          <div class="mt-2 d-flex gap-2 justify-content-end">
+            <button class="btn btn-sm btn-success" onclick="showReceiveModal('${order.id}')">
+              <i class="bi bi-check"></i> 入荷
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="cancelOrderMaterial('${order.id}')">
+              キャンセル
+            </button>
+          </div>
+          ` : ''}
+        </div>
+        `;
+      }).join('');
+    }
+
+    // ステータスフィルタ変更時
+    document.getElementById('orderStatusFilter')?.addEventListener('change', function() {
+      renderOrdersList();
+    });
+
+    // ========================================
+    // 発注モーダル機能
+    // ========================================
+    async function showOrderModalMaterial(materialId) {
+      // 資材データがない場合は先に読み込む
+      if (allMaterials.length === 0) {
+        try {
+          const db = getDb();
+          const snapshot = await db.collection('packagingMaterials').get();
+          allMaterials = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+        } catch (error) {
+          console.error('資材データ取得エラー:', error);
+        }
+      }
+      populateOrderMaterialSelect(materialId);
+    }
+
+    function populateOrderMaterialSelect(materialId) {
+      const select = document.getElementById('orderMaterial');
+      select.innerHTML = '<option value="">選択してください</option>' +
+        allMaterials.map(m => `<option value="${m.id}" ${m.id === materialId ? 'selected' : ''}>${escapeHtml(m.productName || m.name)}</option>`).join('');
+
+      // 選択された資材の発注先を自動入力
+      if (materialId) {
+        const material = allMaterials.find(m => m.id === materialId);
+        if (material && material.supplier) {
+          document.getElementById('orderSupplier').value = material.supplier;
+        }
+      }
+
+      // フォームリセット
+      document.getElementById('orderQuantity').value = '';
+      document.getElementById('orderNote').value = '';
+
+      // モーダル表示
+      const modal = new bootstrap.Modal(document.getElementById('orderModal'));
+      modal.show();
+    }
+
+    async function processOrderMaterial() {
+      const materialId = document.getElementById('orderMaterial').value;
+      const quantity = parseInt(document.getElementById('orderQuantity').value) || 0;
+      const supplier = document.getElementById('orderSupplier').value;
+      const note = document.getElementById('orderNote').value;
+
+      if (!materialId) {
+        alert('資材を選択してください');
+        return;
+      }
+      if (quantity <= 0) {
+        alert('数量を入力してください');
+        return;
+      }
+
+      const material = allMaterials.find(m => m.id === materialId);
+      const materialName = material ? (material.productName || material.name) : '';
+
+      showLoading();
+      bootstrap.Modal.getInstance(document.getElementById('orderModal'))?.hide();
+
+      try {
+        const db = getDb();
+
+        await db.collection('packagingOrders').add({
+          materialId: materialId,
+          materialName: materialName,
+          quantity: quantity,
+          supplier: supplier,
+          note: note,
+          status: 'ordered',
+          orderedAt: getFirebaseTimestamp(),
+          createdBy: window.parent?.currentUser?.name || 'unknown'
+        });
+
+        hideLoading();
+        alert('発注を登録しました');
+        loadOrdersList();
+      } catch (error) {
+        hideLoading();
+        console.error('発注登録エラー:', error);
+        alert('発注登録に失敗しました: ' + error.message);
+      }
+    }
+
+    // ========================================
+    // 入荷処理モーダル機能
+    // ========================================
+    function showReceiveModal(orderId) {
+      const order = allOrders.find(o => o.id === orderId);
+      if (!order) {
+        alert('発注が見つかりません');
+        return;
+      }
+
+      document.getElementById('receiveOrderId').value = orderId;
+      document.getElementById('receiveMaterialId').value = order.materialId;
+      document.getElementById('receiveMaterialName').value = order.materialName;
+      document.getElementById('receiveOrderedQuantity').value = order.quantity;
+      document.getElementById('receiveActualQuantity').value = order.quantity;
+      document.getElementById('receivePrice').value = '';
+
+      const modal = new bootstrap.Modal(document.getElementById('receiveModal'));
+      modal.show();
+    }
+
+    async function processReceiveOrderMaterial() {
+      const orderId = document.getElementById('receiveOrderId').value;
+      const materialId = document.getElementById('receiveMaterialId').value;
+      const materialName = document.getElementById('receiveMaterialName').value;
+      const actualQuantity = parseInt(document.getElementById('receiveActualQuantity').value) || 0;
+      const price = parseFloat(document.getElementById('receivePrice').value) || 0;
+
+      if (actualQuantity <= 0) {
+        alert('入荷数量を入力してください');
+        return;
+      }
+
+      showLoading();
+      bootstrap.Modal.getInstance(document.getElementById('receiveModal'))?.hide();
+
+      try {
+        const db = getDb();
+
+        // 1. 発注ステータスを更新
+        await db.collection('packagingOrders').doc(orderId).update({
+          status: 'received',
+          receivedAt: getFirebaseTimestamp()
+        });
+
+        // 2. 入庫履歴を登録
+        await db.collection('packagingTransactions').add({
+          materialId: materialId,
+          materialName: materialName,
+          type: '入庫',
+          quantity: actualQuantity,
+          purchasePrice: price,
+          unitCost: price > 0 && actualQuantity > 0 ? price / actualQuantity : 0,
+          reason: '発注入荷',
+          orderId: orderId,
+          createdBy: window.parent?.currentUser?.name || 'unknown',
+          createdAt: getFirebaseTimestamp()
+        });
+
+        // 3. 在庫数を更新
+        const materialRef = db.collection('packagingMaterials').doc(materialId);
+        const materialDoc = await materialRef.get();
+        const currentStock = materialDoc.exists ? (materialDoc.data().currentStock || 0) : 0;
+        await materialRef.update({
+          currentStock: currentStock + actualQuantity,
+          updatedAt: getFirebaseTimestamp()
+        });
+
+        hideLoading();
+        alert('入荷処理が完了しました');
+        loadOrdersList();
+        if (currentTab === 'stock') {
+          loadStockList();
+        }
+      } catch (error) {
+        hideLoading();
+        console.error('入荷処理エラー:', error);
+        alert('入荷処理に失敗しました: ' + error.message);
+      }
+    }
+
+    async function cancelOrderMaterial(orderId) {
+      if (!confirm('この発注をキャンセルしますか？')) {
+        return;
+      }
+
+      showLoading();
+
+      try {
+        const db = getDb();
+        await db.collection('packagingOrders').doc(orderId).update({
+          status: 'cancelled'
+        });
+
+        hideLoading();
+        alert('発注をキャンセルしました');
+        loadOrdersList();
+      } catch (error) {
+        hideLoading();
+        console.error('発注キャンセルエラー:', error);
+        alert('キャンセルに失敗しました: ' + error.message);
+      }
+    }
+
+    // ========================================
+    // 初期化時にデフォルトタブを読み込む
+    // ========================================
+    document.addEventListener('DOMContentLoaded', function() {
+      // 在庫タブをデフォルトで読み込む
+      loadStockList();
+    });
   </script>
 
   <!-- 戻るボタン処理 -->

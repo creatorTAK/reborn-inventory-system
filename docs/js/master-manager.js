@@ -2886,12 +2886,6 @@ async function renderPackagingDropdownUI() {
     const selectedCategory = categories[currentPackagingCategoryIndex];
     const items = selectedCategory.items;
 
-    // 低在庫アラートカウント（全カテゴリ対象）
-    const lowStockItems = allItems.filter(item =>
-      item.currentStock <= item.stockAlertThreshold
-    );
-    const alertCount = lowStockItems.length;
-
     // 単価を計算するヘルパー関数
     const calcUnitPrice = (price, quantity) => {
       if (!quantity || quantity === 0) return 0;
@@ -2915,30 +2909,9 @@ async function renderPackagingDropdownUI() {
 
         <!-- 選択されたカテゴリの内容 -->
         <div class="master-options-section" data-category-name="${escapeHtml(selectedCategory.name)}">
-          <div class="master-options-header" style="flex-direction:column;align-items:stretch;gap:8px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <h6 style="margin:0;"><i class="bi ${selectedCategory.icon || icon}"></i> ${escapeHtml(selectedCategory.name)}</h6>
-              <span class="badge bg-secondary" id="packagingItemCount">${items.length}件</span>
-            </div>
-            <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;">
-              ${alertCount > 0 ? `
-              <button class="btn btn-sm btn-danger" onclick="showLowStockAlert()" title="要発注アラート">
-                <i class="bi bi-exclamation-triangle"></i> ${alertCount}
-              </button>
-              ` : ''}
-              <button class="btn btn-sm btn-outline-success" onclick="showStockInModal()" title="入庫登録">
-                <i class="bi bi-box-arrow-in-down"></i>
-              </button>
-              <button class="btn btn-sm btn-outline-primary" onclick="showOrderModal()" title="発注登録">
-                <i class="bi bi-cart-plus"></i>
-              </button>
-              <button class="btn btn-sm btn-outline-secondary" onclick="showOrderHistoryModal()" title="発注履歴">
-                <i class="bi bi-list-check"></i>
-              </button>
-              <button class="btn btn-sm btn-outline-info" onclick="showPresetModal()" title="プリセット管理">
-                <i class="bi bi-collection"></i>
-              </button>
-            </div>
+          <div class="master-options-header">
+            <h6><i class="bi ${selectedCategory.icon || icon}"></i> ${escapeHtml(selectedCategory.name)}</h6>
+            <span class="badge bg-secondary" id="packagingItemCount">${items.length}件</span>
           </div>
           <div class="master-options-list" id="packagingItemList">
             ${items.length === 0 ? `
@@ -2946,13 +2919,6 @@ async function renderPackagingDropdownUI() {
                 <p>このカテゴリにはまだ資材がありません</p>
               </div>
             ` : items.map((item, itemIndex) => {
-              // 在庫ステータス判定
-              const stockStatus = item.currentStock <= 0 ? 'danger'
-                : item.currentStock <= item.stockAlertThreshold ? 'warning'
-                : 'success';
-              const stockIcon = stockStatus === 'danger' ? 'bi-exclamation-triangle-fill'
-                : stockStatus === 'warning' ? 'bi-exclamation-circle-fill'
-                : 'bi-check-circle-fill';
               const expenseCategoryLabel = item.expenseCategory === 'monthly' ? '月次' : '個別';
               const expenseCategoryColor = item.expenseCategory === 'monthly' ? '#6c757d' : '#0d6efd';
 
@@ -2977,10 +2943,7 @@ async function renderPackagingDropdownUI() {
                     <span>¥${Number(item.price || 0).toLocaleString()} / ${item.quantity}個</span>
                     <span style="color:#888;">≒ ¥${calcUnitPrice(item.price, item.quantity).toFixed(1)}/個</span>
                   </div>
-                  <div style="display:flex;align-items:center;gap:6px;">
-                    <i class="bi ${stockIcon}" style="color:var(--bs-${stockStatus});"></i>
-                    <span style="font-weight:500;color:var(--bs-${stockStatus});">在庫: ${item.currentStock}</span>
-                  </div>
+                  <span style="color:#666;">在庫: ${item.currentStock || 0}</span>
                 </div>
                 ${item.supplier ? `<div style="font-size:12px;color:#888;"><i class="bi bi-shop"></i> ${escapeHtml(item.supplier)}</div>` : ''}
               </div>
