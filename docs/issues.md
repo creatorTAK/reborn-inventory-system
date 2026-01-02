@@ -1741,50 +1741,112 @@ LINEのような「友だち追加」方式を実装し、ユーザーが意図�
 
 ---
 
-## PKG-001 | 機能追加: 梱包資材マスタFirestore移行・データ整備
+## PKG-001 | 機能追加: 梱包資材マスタ完全版（在庫管理・発注・プリセット）
 
 ### 📌 基本情報
 - [ ] カテゴリ: 機能追加 / マスタ管理
 - [ ] 優先度: 高
-- [ ] 影響範囲: マスタ管理画面、販売記録、梱包資材選択
+- [ ] 影響範囲: マスタ管理画面、販売記録、入出庫履歴、通知システム
 - [ ] 要望日: 2025-12-22
+- [ ] 更新日: 2026-01-02（スコープ拡大）
 
 ### 💡 背景・目的
 
 **背景:**
-- 梱包資材マスタ管理のコードはFirestore対応済み（master-config.js, master-manager.js）
-- しかし、Firestore `packagingMaterials` コレクションにデータがない可能性
-- GAS版スプレッドシートとの二重管理状態が解消されていない
+- 梱包資材は常にスタッフが所持し、発送のたびに消費される
+- 在庫数の自動把握と在庫アラートが業務上必須
+- 経費区分（個別原価/月次経費）は会計上必要（袋・箱 vs テープ・紐）
+- プリセット機能は服梱包時の業務効率化に必要
 
 **目的:**
-- Firestoreに梱包資材データを投入
-- マスタ管理画面で正常に表示・編集できることを確認
-- 販売記録での梱包資材選択が正常動作することを確認
+- 梱包資材の在庫管理を完全自動化
+- 入出庫履歴の記録・追跡
+- 発注管理機能の実装
+- プリセット機能による業務効率化
 
-### ✅ 期待動作
+### 📊 データ構造
 
-1. マスタ管理画面「📦 梱包資材」タブで一覧表示
-2. 新規追加・編集・削除が可能
-3. 販売記録モーダルの2段式プルダウンで正常に選択可能
+**1. 梱包資材マスタ（拡張）** - `packagingMaterials/{id}`
+```
+├── name: 資材名
+├── categoryId: カテゴリID
+├── quantity: 入数（1パッケージ）
+├── price: 価格（1パッケージ）
+├── expenseCategory: "individual" | "monthly"  ← NEW
+├── supplier: 発注先  ← NEW
+├── currentStock: 現在庫  ← NEW
+└── stockAlertThreshold: アラート閾値  ← NEW
+```
 
-### 📍 関連ファイル
+**2. 入出庫履歴（新規）** - `packagingTransactions/{id}`
+```
+├── materialId: 資材ID
+├── type: "in" | "out"
+├── quantity: 数量
+├── reason: "purchase" | "sale" | "adjustment"
+├── relatedSaleId: 関連販売記録（任意）
+├── notes: 備考
+├── createdBy: 担当者
+└── createdAt: 日時
+```
 
-- `docs/js/master-config.js` - 梱包資材設定（packaging）✅ 対応済み
-- `docs/js/master-manager.js` - 汎用エンジン ✅ 対応済み
-- `docs/inventory.html` - 販売記録モーダル（packagingMaterials使用）
-- Firestore: `packagingMaterials` コレクション
+**3. 発注履歴（新規）** - `packagingOrders/{id}`
+```
+├── materialId: 資材ID
+├── quantity: 発注数
+├── supplier: 発注先
+├── status: "ordered" | "received" | "cancelled"
+├── orderedAt: 発注日
+├── receivedAt: 入荷日
+└── notes: 備考
+```
+
+**4. プリセット（新規）** - `packagingPresets/{id}`
+```
+├── name: プリセット名（例: 小型軽量セット）
+└── materials: [{ materialId, quantity }, ...]
+```
 
 ### 🏗️ 実装フェーズ
 
-- [ ] Phase 1: 現状確認（Firestoreにデータがあるか）
-- [ ] Phase 2: 初期データ投入（GASから移行 or 新規作成）
-- [ ] Phase 3: マスタ管理画面動作確認
-- [ ] Phase 4: 販売記録での選択動作確認
+**Phase 1: マスタ拡張**
+- [ ] 1.1: Firestoreスキーマ更新（新フィールド追加）
+- [ ] 1.2: マスタ管理UI更新（経費区分、発注先、在庫数表示）
+- [ ] 1.3: 追加・編集モーダル更新
+
+**Phase 2: 入出庫管理**
+- [ ] 2.1: 入庫登録機能（購入時）
+- [ ] 2.2: 出庫自動記録（販売記録作成時に連動）
+- [ ] 2.3: 入出庫履歴表示UI
+- [ ] 2.4: 在庫数の自動更新ロジック
+
+**Phase 3: 発注管理**
+- [ ] 3.1: 発注登録機能
+- [ ] 3.2: 発注履歴表示
+- [ ] 3.3: 入荷処理（発注→入庫連携）
+
+**Phase 4: アラート機能**
+- [ ] 4.1: 在庫アラート閾値設定
+- [ ] 4.2: 閾値以下で通知・バッジ表示
+- [ ] 4.3: アラート一覧画面
+
+**Phase 5: プリセット機能**
+- [ ] 5.1: プリセット管理UI
+- [ ] 5.2: 販売記録でのプリセット選択
+- [ ] 5.3: プリセット選択時の自動出庫処理
+
+### 📍 関連ファイル
+
+- `docs/js/master-config.js` - 梱包資材設定
+- `docs/js/master-manager.js` - 汎用エンジン
+- `docs/master-management.html` - マスタ管理画面
+- `docs/inventory.html` - 販売記録（出庫連動）
+- Firestore: `packagingMaterials`, `packagingTransactions`, `packagingOrders`, `packagingPresets`
 
 ### 📝 関連Issue
 
 - INV-004-COL: 梱包資材列不足 + 2段式プルダウン（保持Issue）
-- INV-004-LOT: 梱包資材ロット管理（保持Issue）
+- INV-004-LOT: 梱包資材ロット管理（保持Issue → 本Issueに統合）
 
 ### 状態
 - [ ] ✅ DONE (完了日: )
