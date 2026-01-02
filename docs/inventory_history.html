@@ -1249,6 +1249,75 @@
     }
 
     // ========================================
+    // 場所管理機能（ハイブリッド在庫管理）
+    // ========================================
+    let _currentLocation = null;
+
+    /**
+     * 管理者かどうかを判定
+     */
+    function isAdmin() {
+      const permission = localStorage.getItem('reborn_user_permission');
+      return permission === 'owner' || permission === 'admin';
+    }
+
+    /**
+     * 現在のユーザーの場所を取得（なければ自動作成）
+     */
+    async function getCurrentUserLocation() {
+      if (_currentLocation) return _currentLocation;
+
+      const userEmail = window.parent?.currentUser?.email || localStorage.getItem('reborn_user_email');
+      const userName = window.parent?.currentUser?.name || localStorage.getItem('reborn_user_name') || 'unknown';
+
+      if (!userEmail) {
+        console.warn('[Location] ユーザーメール未取得');
+        return null;
+      }
+
+      const db = getDb();
+      if (!db) {
+        console.error('[Location] Firestore未接続');
+        return null;
+      }
+
+      try {
+        // 既存の場所を検索
+        const snapshot = await db.collection('packagingLocations')
+          .where('assignedUserEmail', '==', userEmail)
+          .where('type', '==', 'user_home')
+          .limit(1)
+          .get();
+
+        if (!snapshot.empty) {
+          const doc = snapshot.docs[0];
+          _currentLocation = { id: doc.id, ...doc.data() };
+          console.log(`✅ [Location] 既存場所取得: ${_currentLocation.name} (${_currentLocation.id})`);
+          return _currentLocation;
+        }
+
+        // 場所がなければ自動作成
+        const newLocation = {
+          name: `${userName}さん`,
+          type: 'user_home',
+          assignedUserEmail: userEmail,
+          assignedUserName: userName,
+          isActive: true,
+          createdAt: getFirebaseTimestamp(),
+          updatedAt: getFirebaseTimestamp()
+        };
+
+        const docRef = await db.collection('packagingLocations').add(newLocation);
+        _currentLocation = { id: docRef.id, ...newLocation };
+        console.log(`✅ [Location] 新規作成: ${userName}さん (${docRef.id})`);
+        return _currentLocation;
+      } catch (error) {
+        console.error('[Location] 場所取得/作成エラー:', error);
+        return null;
+      }
+    }
+
+    // ========================================
     // 在庫タブ機能
     // ========================================
     async function loadStockList() {
@@ -1262,10 +1331,42 @@
           return;
         }
 
-        const snapshot = await db.collection('packagingMaterials').get();
-        allMaterials = snapshot.docs.map(doc => ({
+        // 場所を取得（なければ自動作成）
+        const location = await getCurrentUserLocation();
+        if (!location) {
+          container.innerHTML = '<div class="text-center text-danger py-4">場所の取得に失敗しました</div>';
+          return;
+        }
+        const locationId = location.id;
+        console.log(`📍 [Stock] 場所: ${location.name} (${locationId})`);
+
+        // 資材マスタを取得
+        const materialsSnapshot = await db.collection('packagingMaterials').get();
+        const materials = materialsSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
+        }));
+
+        // 場所ごとの在庫を計算（packagingLotsから）
+        const lotsSnapshot = await db.collection('packagingLots')
+          .where('locationId', '==', locationId)
+          .where('status', '==', 'active')
+          .get();
+
+        // materialIdごとに在庫を集計
+        const stockByMaterial = {};
+        lotsSnapshot.docs.forEach(doc => {
+          const lot = doc.data();
+          if (!stockByMaterial[lot.materialId]) {
+            stockByMaterial[lot.materialId] = 0;
+          }
+          stockByMaterial[lot.materialId] += lot.remainingQty || 0;
+        });
+
+        // 資材に在庫数をマージ（場所ベースの在庫）
+        allMaterials = materials.map(m => ({
+          ...m,
+          currentStock: stockByMaterial[m.id] || 0  // 場所ベースの在庫で上書き
         }));
 
         populateStockCategoryFilter(allMaterials);
@@ -1396,9 +1497,17 @@
       try {
         const db = getDb();
 
-        // 1. ロットを作成
+        // 場所を取得（なければ自動作成）
+        const location = await getCurrentUserLocation();
+        if (!location) {
+          throw new Error('場所の取得に失敗しました');
+        }
+        const locationId = location.id;
+
+        // 1. ロットを作成（場所ID付き）
         const lotRef = await db.collection('packagingLots').add({
           materialId: materialId,
+          locationId: locationId,
           quantity: quantity,
           remainingQty: quantity,
           unitPrice: unitPrice,
@@ -1411,10 +1520,11 @@
           updatedAt: getFirebaseTimestamp()
         });
 
-        // 2. 入庫履歴を登録
+        // 2. 入庫履歴を登録（場所ID付き）
         await db.collection('packagingTransactions').add({
           materialId: materialId,
           materialName: materialName,
+          locationId: locationId,
           type: '入庫',
           quantity: quantity,
           purchasePrice: price,
@@ -1427,20 +1537,23 @@
           createdAt: getFirebaseTimestamp()
         });
 
-        // 3. 合計在庫を計算してmaterialに反映
+        // 3. 場所ごとの合計在庫を計算してmaterialに反映
+        // 注意: currentStockは全場所合計ではなく、場所別管理に移行予定
         const lotsSnapshot = await db.collection('packagingLots')
           .where('materialId', '==', materialId)
+          .where('locationId', '==', locationId)
           .where('status', '==', 'active')
           .get();
         const totalStock = lotsSnapshot.docs.reduce((sum, doc) => sum + (doc.data().remainingQty || 0), 0);
 
+        // packagingMaterialsのcurrentStockは暫定的に更新（将来的には場所別に管理）
         await db.collection('packagingMaterials').doc(materialId).update({
           currentStock: totalStock,
           updatedAt: getFirebaseTimestamp()
         });
 
         hideLoading();
-        alert(`入庫を登録しました（単価: ¥${unitPrice}）`);
+        alert(`入庫を登録しました（単価: ¥${unitPrice}、場所: ${location.name}）`);
         loadStockList();
       } catch (error) {
         hideLoading();
@@ -1497,9 +1610,17 @@
       try {
         const db = getDb();
 
-        // 1. LIFO方式でロットから在庫を調整（新しい順）
+        // 場所を取得（なければ自動作成）
+        const location = await getCurrentUserLocation();
+        if (!location) {
+          throw new Error('場所の取得に失敗しました');
+        }
+        const locationId = location.id;
+
+        // 1. LIFO方式でロットから在庫を調整（新しい順、場所フィルター付き）
         const lotsSnapshot = await db.collection('packagingLots')
           .where('materialId', '==', materialId)
+          .where('locationId', '==', locationId)
           .where('status', '==', 'active')
           .orderBy('purchaseDate', 'desc')
           .get();
@@ -1530,7 +1651,7 @@
           remaining -= toAdjust;
         }
 
-        // 2. 調整履歴を登録
+        // 2. 調整履歴を登録（場所ID付き）
         const reasonLabels = {
           damaged: '破損',
           lost: '紛失',
@@ -1541,6 +1662,7 @@
         await db.collection('packagingTransactions').add({
           materialId: materialId,
           materialName: materialName,
+          locationId: locationId,
           type: '調整',
           quantity: -quantity,
           reason: reasonLabels[reason] || reason,
@@ -1550,9 +1672,10 @@
           createdAt: getFirebaseTimestamp()
         });
 
-        // 3. 合計在庫を計算してmaterialに反映
+        // 3. 場所ごとの合計在庫を計算してmaterialに反映
         const updatedLotsSnapshot = await db.collection('packagingLots')
           .where('materialId', '==', materialId)
+          .where('locationId', '==', locationId)
           .where('status', '==', 'active')
           .get();
         const totalStock = updatedLotsSnapshot.docs.reduce((sum, doc) => sum + (doc.data().remainingQty || 0), 0);
@@ -1563,7 +1686,7 @@
         });
 
         hideLoading();
-        alert(`在庫を調整しました（-${quantity}）`);
+        alert(`在庫を調整しました（-${quantity}、場所: ${location.name}）`);
         loadStockList();
       } catch (error) {
         hideLoading();
