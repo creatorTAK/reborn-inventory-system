@@ -2911,12 +2911,15 @@ async function renderPackagingDropdownUI() {
         <div class="master-options-section" data-category-name="${escapeHtml(selectedCategory.name)}">
           <div class="master-options-header">
             <h6><i class="bi ${selectedCategory.icon || icon}"></i> ${escapeHtml(selectedCategory.name)}</h6>
-            <div style="display:flex;gap:8px;align-items:center;">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
               <button class="btn btn-sm btn-outline-success" onclick="showStockInModal()">
                 <i class="bi bi-box-arrow-in-down"></i> 入庫
               </button>
-              <button class="btn btn-sm btn-outline-secondary" onclick="showStockHistoryModal()">
-                <i class="bi bi-clock-history"></i> 履歴
+              <button class="btn btn-sm btn-outline-primary" onclick="showOrderModal()">
+                <i class="bi bi-cart-plus"></i> 発注
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="showOrderHistoryModal()">
+                <i class="bi bi-list-check"></i> 発注履歴
               </button>
               <span class="badge bg-secondary" id="packagingItemCount">${items.length}件</span>
             </div>
@@ -3451,6 +3454,285 @@ window.processStockOut = async function(materialId, quantity, reason = 'sale', r
   } catch (error) {
     console.error('出庫処理エラー:', error);
     return false;
+  }
+};
+
+
+// ============================================
+// Phase 3: 発注管理機能
+// ============================================
+
+/**
+ * 発注登録モーダルを表示
+ */
+window.showOrderModal = function() {
+  const allItems = window._currentPackagingAllItems || [];
+  if (allItems.length === 0) {
+    alert('先に梱包資材を登録してください');
+    return;
+  }
+
+  const modal = document.getElementById('editItemModal');
+  const title = document.getElementById('editItemModalTitle');
+  const body = document.getElementById('editItemModalBody');
+  const submitBtn = document.getElementById('editItemSubmitBtn');
+
+  title.textContent = '発注登録';
+
+  // 資材選択プルダウンを生成（在庫が少ないものを優先表示）
+  const sortedItems = [...allItems].sort((a, b) => {
+    // 在庫が閾値以下のものを優先
+    const aLow = a.currentStock <= a.stockAlertThreshold;
+    const bLow = b.currentStock <= b.stockAlertThreshold;
+    if (aLow && !bLow) return -1;
+    if (!aLow && bLow) return 1;
+    return a.currentStock - b.currentStock;
+  });
+
+  const itemOptions = sortedItems.map(item => {
+    const stockStatus = item.currentStock <= item.stockAlertThreshold ? '⚠️ ' : '';
+    return `<option value="${item.id}" data-supplier="${escapeHtml(item.supplier || '')}">${stockStatus}${escapeHtml(item.name)} (在庫: ${item.currentStock})</option>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div class="mb-3">
+      <label class="form-label">梱包資材</label>
+      <select class="form-select" id="orderMaterialId" style="font-size:16px;" onchange="onOrderMaterialChange()">
+        <option value="">-- 選択してください --</option>
+        ${itemOptions}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">発注数</label>
+      <input type="number" class="form-control" id="orderQuantity" min="1" value="10" style="font-size:16px;">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">発注先</label>
+      <input type="text" class="form-control" id="orderSupplier" placeholder="例: Amazon, モノタロウ" style="font-size:16px;">
+    </div>
+    <div class="mb-3">
+      <label class="form-label">備考（任意）</label>
+      <input type="text" class="form-control" id="orderNotes" placeholder="メモ" style="font-size:16px;">
+    </div>
+  `;
+
+  submitBtn.textContent = '発注登録';
+  submitBtn.onclick = processOrder;
+
+  modal.classList.remove('hidden');
+};
+
+/**
+ * 発注資材変更時の処理（発注先を自動入力）
+ */
+window.onOrderMaterialChange = function() {
+  const select = document.getElementById('orderMaterialId');
+  const supplierInput = document.getElementById('orderSupplier');
+  const selectedOption = select.options[select.selectedIndex];
+
+  if (selectedOption && selectedOption.dataset.supplier) {
+    supplierInput.value = selectedOption.dataset.supplier;
+  }
+};
+
+/**
+ * 発注処理を実行
+ */
+async function processOrder() {
+  const materialIdSelect = document.getElementById('orderMaterialId');
+  const quantityInput = document.getElementById('orderQuantity');
+  const supplierInput = document.getElementById('orderSupplier');
+  const notesInput = document.getElementById('orderNotes');
+
+  const materialId = materialIdSelect?.value;
+  const quantity = parseInt(quantityInput?.value, 10) || 0;
+  const supplier = supplierInput?.value?.trim() || '';
+  const notes = notesInput?.value?.trim() || '';
+
+  if (!materialId) {
+    alert('梱包資材を選択してください');
+    materialIdSelect.focus();
+    return;
+  }
+
+  if (quantity <= 0) {
+    alert('発注数は1以上を入力してください');
+    quantityInput.focus();
+    return;
+  }
+
+  try {
+    // 発注記録を作成
+    const orderData = {
+      materialId: materialId,
+      quantity: quantity,
+      supplier: supplier,
+      status: 'ordered',  // ordered | received | cancelled
+      orderedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      receivedAt: null,
+      notes: notes,
+      createdBy: window.currentUser?.name || 'unknown'
+    };
+
+    await window.db.collection('packagingOrders').add(orderData);
+
+    hideEditItemModal();
+    showToast(`発注しました（${quantity}個）`);
+
+    console.log(`✅ [Order] 発注登録: ${materialId}, 数量: ${quantity}`);
+
+  } catch (error) {
+    console.error('発注処理エラー:', error);
+    alert('発注処理に失敗しました: ' + error.message);
+  }
+}
+
+/**
+ * 発注履歴モーダルを表示
+ */
+window.showOrderHistoryModal = async function() {
+  const modal = document.getElementById('editItemModal');
+  const title = document.getElementById('editItemModalTitle');
+  const body = document.getElementById('editItemModalBody');
+  const submitBtn = document.getElementById('editItemSubmitBtn');
+
+  title.textContent = '発注履歴';
+
+  body.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> 読み込み中...</div>';
+
+  submitBtn.textContent = '閉じる';
+  submitBtn.onclick = hideEditItemModal;
+
+  modal.classList.remove('hidden');
+
+  try {
+    // 最新30件の発注履歴を取得
+    const snapshot = await window.db.collection('packagingOrders')
+      .orderBy('orderedAt', 'desc')
+      .limit(30)
+      .get();
+
+    if (snapshot.empty) {
+      body.innerHTML = '<div class="text-center py-3 text-muted">発注履歴がありません</div>';
+      return;
+    }
+
+    // 資材ID→名前のマップを作成
+    const allItems = window._currentPackagingAllItems || [];
+    const itemNameMap = {};
+    allItems.forEach(item => {
+      itemNameMap[item.id] = item.name;
+    });
+
+    const statusLabels = {
+      ordered: { text: '発注中', color: 'warning' },
+      received: { text: '入荷済', color: 'success' },
+      cancelled: { text: 'キャンセル', color: 'secondary' }
+    };
+
+    const rows = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const materialName = itemNameMap[data.materialId] || '(削除済み)';
+      const status = statusLabels[data.status] || { text: data.status, color: 'secondary' };
+      const dateStr = data.orderedAt?.toDate?.()?.toLocaleDateString('ja-JP') || '';
+      const isOrdered = data.status === 'ordered';
+
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee;">
+          <div style="flex:1;">
+            <div style="font-weight:500;">${escapeHtml(materialName)}</div>
+            <div style="font-size:12px;color:#888;">
+              ${data.quantity}個 | ${escapeHtml(data.supplier || '発注先なし')} | ${dateStr}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span class="badge bg-${status.color}">${status.text}</span>
+            ${isOrdered ? `
+              <button class="btn btn-sm btn-success" onclick="processReceiveOrder('${doc.id}', '${data.materialId}', ${data.quantity})">
+                <i class="bi bi-check"></i> 入荷
+              </button>
+              <button class="btn btn-sm btn-outline-danger" onclick="cancelOrder('${doc.id}')">
+                <i class="bi bi-x"></i>
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    body.innerHTML = `<div style="max-height:400px;overflow-y:auto;">${rows}</div>`;
+
+  } catch (error) {
+    console.error('発注履歴取得エラー:', error);
+    body.innerHTML = `<div class="text-danger">読み込みエラー: ${error.message}</div>`;
+  }
+};
+
+/**
+ * 発注を入荷処理（発注→入庫連携）
+ */
+window.processReceiveOrder = async function(orderId, materialId, quantity) {
+  if (!confirm(`${quantity}個を入荷処理しますか？`)) return;
+
+  try {
+    // 1. 発注ステータスを更新
+    await window.db.collection('packagingOrders').doc(orderId).update({
+      status: 'received',
+      receivedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // 2. 入庫トランザクション作成
+    const transactionData = {
+      materialId: materialId,
+      type: 'in',
+      quantity: quantity,
+      reason: 'purchase',
+      notes: '発注入荷',
+      createdBy: window.currentUser?.name || 'unknown',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    await window.db.collection('packagingTransactions').add(transactionData);
+
+    // 3. 在庫数を更新
+    const materialRef = window.db.collection('packagingMaterials').doc(materialId);
+    const materialDoc = await materialRef.get();
+    const currentStock = materialDoc.data()?.currentStock || 0;
+    const newStock = currentStock + quantity;
+
+    await materialRef.update({
+      currentStock: newStock,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // 4. UI更新
+    await showOrderHistoryModal();  // 履歴を再読み込み
+    showToast(`入荷しました（+${quantity}）`);
+
+    console.log(`✅ [Receive] 入荷処理: ${materialId}, ${currentStock} → ${newStock}`);
+
+  } catch (error) {
+    console.error('入荷処理エラー:', error);
+    alert('入荷処理に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 発注をキャンセル
+ */
+window.cancelOrder = async function(orderId) {
+  if (!confirm('この発注をキャンセルしますか？')) return;
+
+  try {
+    await window.db.collection('packagingOrders').doc(orderId).update({
+      status: 'cancelled'
+    });
+
+    await showOrderHistoryModal();  // 履歴を再読み込み
+    showToast('発注をキャンセルしました');
+
+  } catch (error) {
+    console.error('キャンセルエラー:', error);
+    alert('キャンセルに失敗しました: ' + error.message);
   }
 };
 
