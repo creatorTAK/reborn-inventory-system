@@ -779,11 +779,11 @@ const masterCategories = {
             label: 'コード',
             required: true,
             type: 'text',
-            placeholder: '例: T',
+            placeholder: '例: TS（2文字推奨）',
             validation: {
-              minLength: 1,
+              minLength: 2,
               maxLength: 3,
-              pattern: '^[A-Za-z0-9]+$'
+              pattern: '^[A-Z0-9]+$'
             }
           },
           {
@@ -791,7 +791,7 @@ const masterCategories = {
             label: 'カテゴリ名',
             required: true,
             type: 'text',
-            placeholder: '例: トップス',
+            placeholder: '例: Tシャツ',
             validation: {
               minLength: 1,
               maxLength: 50
