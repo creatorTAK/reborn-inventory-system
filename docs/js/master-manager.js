@@ -2669,9 +2669,8 @@ window.editShippingItem = function(itemIndex) {
   // 編集対象情報を保存
   window._editItemContext = { type: 'shipping', itemIndex };
 
-  // モーダル表示
+  // モーダル表示（フォーカスなしで開く）
   document.getElementById('editItemModal').classList.remove('hidden');
-  document.getElementById('editItemName').focus();
 };
 
 /**
@@ -3179,9 +3178,8 @@ window.editPackagingItem = function(itemId) {
   // 編集対象情報を保存
   window._editItemContext = { type: 'packaging', itemId };
 
-  // モーダル表示
+  // モーダル表示（フォーカスなしで開く）
   document.getElementById('editItemModal').classList.remove('hidden');
-  document.getElementById('editItemName').focus();
 };
 
 /**
