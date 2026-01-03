@@ -2977,26 +2977,21 @@ async function renderPackagingDropdownUI() {
               </div>
             `;}).join('')}
           </div>
-          <div class="master-options-add" style="display:flex;flex-direction:column;gap:10px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <div id="newPackagingImagePreview" style="width:44px;height:44px;background:#f5f5f5;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;border:1px dashed #ccc;">
-                <i class="bi bi-image" style="font-size:20px;color:#aaa;"></i>
+          <div class="master-options-add" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <label style="margin:0;cursor:pointer;flex-shrink:0;" title="画像を選択">
+              <div id="newPackagingImagePreview" style="width:36px;height:36px;background:#f5f5f5;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px dashed #ccc;">
+                <i class="bi bi-image" style="font-size:16px;color:#aaa;"></i>
               </div>
-              <label class="btn btn-sm btn-outline-secondary" style="margin:0;cursor:pointer;padding:6px 10px;" title="画像を選択">
-                <i class="bi bi-camera"></i>
-                <input type="file" id="newPackagingImageFile" accept="image/*" style="display:none;" onchange="previewNewPackagingImage(this)">
-              </label>
-              <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="flex:1;font-size:16px;">
-            </div>
-            <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;">
-              <select class="form-select form-select-sm" id="newPackagingExpenseCategory" style="width:auto;font-size:16px;">
-                <option value="individual">個別原価</option>
-                <option value="monthly">月次経費</option>
-              </select>
-              <button class="btn btn-sm btn-primary" onclick="addPackagingItem()" style="padding:6px 16px;">
-                <i class="bi bi-plus"></i> 追加
-              </button>
-            </div>
+              <input type="file" id="newPackagingImageFile" accept="image/*" style="display:none;" onchange="previewNewPackagingImage(this)">
+            </label>
+            <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="flex:1;min-width:120px;font-size:16px;">
+            <select class="form-select form-select-sm" id="newPackagingExpenseCategory" style="width:70px;font-size:14px;padding-right:24px;">
+              <option value="individual">個別</option>
+              <option value="monthly">月次</option>
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="addPackagingItem()" style="flex-shrink:0;">
+              <i class="bi bi-plus"></i> 追加
+            </button>
           </div>
         </div>
 
@@ -3130,7 +3125,7 @@ window.addPackagingItem = async function() {
     if (imageInput) imageInput.value = '';
     const preview = document.getElementById('newPackagingImagePreview');
     if (preview) {
-      preview.innerHTML = `<i class="bi bi-image" style="font-size:20px;color:#aaa;"></i>`;
+      preview.innerHTML = `<i class="bi bi-image" style="font-size:16px;color:#aaa;"></i>`;
     }
 
     await renderPackagingDropdownUI();
@@ -3221,7 +3216,7 @@ window.previewNewPackagingImage = function(input) {
   if (input.files && input.files[0] && preview) {
     const reader = new FileReader();
     reader.onload = function(e) {
-      preview.innerHTML = `<img src="${e.target.result}" alt="プレビュー" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">`;
+      preview.innerHTML = `<img src="${e.target.result}" alt="プレビュー" style="width:36px;height:36px;object-fit:cover;border-radius:6px;">`;
     };
     reader.readAsDataURL(input.files[0]);
   }
