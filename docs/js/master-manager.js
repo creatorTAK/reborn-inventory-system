@@ -435,7 +435,7 @@ function showManagementNumberSelector() {
       <div style="background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
         <label>管理番号設定</label>
         <select class="form-select" onchange="switchManagementNumberType(this.value)">
-          <option value="rank" ${currentManagementNumberType === 'rank' ? 'selected' : ''}>ランク（価格帯区分）</option>
+          <option value="rank" ${currentManagementNumberType === 'rank' ? 'selected' : ''}>ランク（商品状態）</option>
           <option value="categoryCode" ${currentManagementNumberType === 'categoryCode' ? 'selected' : ''}>カテゴリコード</option>
         </select>
       </div>
