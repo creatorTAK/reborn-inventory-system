@@ -677,6 +677,15 @@ async function loadMaster(category, type) {
     return;
   }
 
+  // salesChannelDropdownタイプの場合（出品先管理）
+  if (currentMasterConfig.type === 'salesChannelDropdown') {
+    console.log('📋 [Master Manager] salesChannelDropdownタイプ - 出品先UI表示');
+    hidePlatformTabs();
+    hideActionBar();
+    await renderSalesChannelDropdownUI();
+    return;
+  }
+
   // 通常タイプの場合はアクションバーを表示
   showActionBar();
 
@@ -3259,6 +3268,8 @@ window.submitEditItem = async function() {
     await savePackagingFromModal(context.itemId);
   } else if (context.type === 'shipping') {
     await saveShippingFromModal(context.itemIndex);
+  } else if (context.type === 'salesChannel') {
+    await saveSalesChannelFromModal(context.itemId);
   }
 };
 
@@ -3312,6 +3323,369 @@ async function savePackagingFromModal(itemId) {
     alert('編集に失敗しました: ' + error.message);
   }
 }
+
+
+// ============================================
+// 出品先ドロップダウンUI（salesChannelDropdown）
+// ============================================
+
+/**
+ * 出品先ドロップダウンUIを描画
+ * サムネイル画像表示・アップロード対応
+ */
+async function renderSalesChannelDropdownUI() {
+  const container = document.getElementById('masterListContainer');
+  if (!container) return;
+
+  container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+  const collection = currentMasterConfig.collection;
+
+  try {
+    // Firestoreから全データ取得
+    const snapshot = await window.db.collection(collection).orderBy('order', 'asc').get();
+
+    const items = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      items.push({
+        id: doc.id,
+        platformId: data.platformId || doc.id,
+        name: data.name || '',
+        iconUrl: data.iconUrl || '',
+        commission: data.commission || 0,
+        url: data.url || '',
+        order: data.order || 0,
+        active: data.active !== false
+      });
+    });
+
+    // 現在のデータを保持
+    window._currentSalesChannels = items;
+
+    // UIを生成
+    container.innerHTML = `
+      <div class="master-options-container">
+        <div class="master-options-section">
+          <div class="master-options-header">
+            <h6><i class="bi bi-shop"></i> 出品先プラットフォーム</h6>
+            <span class="badge bg-secondary">${items.length}件</span>
+          </div>
+          <div class="master-options-list" id="salesChannelList">
+            ${items.length === 0 ? `
+              <div class="master-options-empty">
+                <p>出品先がまだ登録されていません</p>
+              </div>
+            ` : items.map(item => {
+              const thumbnail = item.iconUrl
+                ? `<img src="${escapeHtml(item.iconUrl)}" alt="" style="width:32px;height:32px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid #e9ecef;flex-shrink:0;">`
+                : `<div style="width:32px;height:32px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="bi bi-shop" style="font-size:16px;color:#aaa;"></i></div>`;
+              const statusBadge = item.active
+                ? ''
+                : `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#6c757d;color:#fff;margin-left:8px;">無効</span>`;
+              const commissionText = item.commission ? `${item.commission}%` : '';
+
+              return `
+              <div class="master-options-item" data-item-id="${item.id}" style="${!item.active ? 'opacity:0.5;' : ''}">
+                <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;margin-right:12px;">
+                  ${thumbnail}
+                  <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      <span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.name)}</span>
+                      ${statusBadge}
+                    </div>
+                    <div style="font-size:11px;color:#888;">${escapeHtml(item.platformId)}${commissionText ? ` • 手数料 ${commissionText}` : ''}</div>
+                  </div>
+                </div>
+                <div class="item-actions" style="flex-shrink:0;">
+                  <button class="btn-icon btn-edit" onclick="editSalesChannel('${item.id}')" title="編集">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn-icon btn-delete" onclick="deleteSalesChannel('${item.id}')" title="削除">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </div>
+            `;}).join('')}
+          </div>
+          <div class="master-options-add" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <label style="margin:0;cursor:pointer;flex-shrink:0;" title="アイコン画像を選択">
+              <div id="newSalesChannelImagePreview" style="width:36px;height:36px;background:#f5f5f5;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px dashed #ccc;">
+                <i class="bi bi-image" style="font-size:16px;color:#aaa;"></i>
+              </div>
+              <input type="file" id="newSalesChannelImageFile" accept="image/*" style="display:none;" onchange="previewNewSalesChannelImage(this)">
+            </label>
+            <input type="text" class="form-control form-control-sm" id="newSalesChannelId" placeholder="ID（例: mercari）" style="width:100px;font-size:16px;">
+            <input type="text" class="form-control form-control-sm" id="newSalesChannelName" placeholder="名前（例: メルカリ）" style="flex:1;min-width:100px;font-size:16px;">
+            <button class="btn btn-sm btn-primary" onclick="addSalesChannel()" style="flex-shrink:0;">
+              <i class="bi bi-plus"></i> 追加
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    console.log(`salesChannelDropdown読み込み完了: ${items.length}件`);
+  } catch (error) {
+    console.error('salesChannelDropdown読み込みエラー:', error);
+    container.innerHTML = `<div class="text-center text-danger py-4">読み込みエラー: ${error.message}</div>`;
+  }
+}
+
+/**
+ * 新規追加用の出品先画像プレビュー
+ */
+window.previewNewSalesChannelImage = function(input) {
+  const preview = document.getElementById('newSalesChannelImagePreview');
+  if (input.files && input.files[0] && preview) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      preview.innerHTML = `<img src="${e.target.result}" alt="プレビュー" style="width:36px;height:36px;object-fit:contain;border-radius:6px;">`;
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+};
+
+/**
+ * 出品先画像をFirebase Storageにアップロード
+ */
+async function uploadSalesChannelImage(file, platformId) {
+  const storage = window.parent?.firebaseStorage || window.firebaseStorage;
+  const storageRef = window.parent?.storageRef || window.storageRef;
+  const uploadBytes = window.parent?.storageUploadBytes || window.storageUploadBytes;
+  const getDownloadURL = window.parent?.storageGetDownloadURL || window.storageGetDownloadURL;
+
+  if (!storage || !storageRef || !uploadBytes || !getDownloadURL) {
+    throw new Error('Firebase Storageが利用できません');
+  }
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  const timestamp = Date.now();
+  const path = `sales-channels/${platformId}/${timestamp}.${ext}`;
+
+  const fileRef = storageRef(storage, path);
+  await uploadBytes(fileRef, file);
+  const url = await getDownloadURL(fileRef);
+
+  console.log(`✅ [SalesChannel] 画像アップロード完了: ${path}`);
+  return url;
+}
+
+/**
+ * 出品先を追加
+ */
+window.addSalesChannel = async function() {
+  const idInput = document.getElementById('newSalesChannelId');
+  const nameInput = document.getElementById('newSalesChannelName');
+  const imageInput = document.getElementById('newSalesChannelImageFile');
+
+  const platformId = idInput?.value?.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  const name = nameInput?.value?.trim();
+
+  if (!platformId) {
+    alert('プラットフォームIDを入力してください');
+    return;
+  }
+  if (!name) {
+    alert('出品先名を入力してください');
+    return;
+  }
+
+  // 重複チェック
+  const items = window._currentSalesChannels || [];
+  if (items.some(item => item.platformId === platformId)) {
+    alert('このプラットフォームIDは既に登録されています');
+    return;
+  }
+
+  try {
+    const maxOrder = items.reduce((max, item) => Math.max(max, item.order || 0), 0);
+
+    const newData = {
+      platformId,
+      name,
+      commission: 0,
+      url: '',
+      order: maxOrder + 1,
+      active: true,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    // ドキュメントIDをplatformIdにする
+    const docRef = window.db.collection(currentMasterConfig.collection).doc(platformId);
+    await docRef.set(newData);
+
+    // 画像が選択されていればアップロード
+    if (imageInput?.files?.length > 0) {
+      try {
+        const iconUrl = await uploadSalesChannelImage(imageInput.files[0], platformId);
+        await docRef.update({ iconUrl });
+      } catch (imgError) {
+        console.error('画像アップロードエラー:', imgError);
+      }
+    }
+
+    // フォームリセット
+    idInput.value = '';
+    nameInput.value = '';
+    if (imageInput) imageInput.value = '';
+    const preview = document.getElementById('newSalesChannelImagePreview');
+    if (preview) {
+      preview.innerHTML = `<i class="bi bi-image" style="font-size:16px;color:#aaa;"></i>`;
+    }
+
+    await renderSalesChannelDropdownUI();
+    showToast('追加しました');
+  } catch (error) {
+    console.error('追加エラー:', error);
+    alert('追加に失敗しました: ' + error.message);
+  }
+};
+
+/**
+ * 出品先を編集（モーダル表示）
+ */
+window.editSalesChannel = function(itemId) {
+  const items = window._currentSalesChannels || [];
+  const item = items.find(i => i.id === itemId);
+  if (!item) return;
+
+  const currentImageHtml = item.iconUrl
+    ? `<img src="${escapeHtml(item.iconUrl)}" alt="現在の画像" style="width:60px;height:60px;object-fit:contain;border-radius:6px;border:1px solid #ddd;background:#fff;">`
+    : `<div style="width:60px;height:60px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="bi bi-shop" style="font-size:24px;color:#aaa;"></i></div>`;
+
+  document.getElementById('editItemModalTitle').textContent = '出品先を編集';
+  document.getElementById('editItemModalBody').innerHTML = `
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">プラットフォームID</label>
+      <input type="text" class="form-control" id="editSalesChannelId" value="${escapeHtml(item.platformId)}" style="font-size:16px;" disabled>
+      <small class="text-muted">IDは変更できません</small>
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">出品先名</label>
+      <input type="text" class="form-control" id="editSalesChannelName" value="${escapeHtml(item.name)}" style="font-size:16px;">
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:8px;font-weight:500;">アイコン画像</label>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div id="editSalesChannelImagePreview">${currentImageHtml}</div>
+        <div style="flex:1;">
+          <input type="file" class="form-control" id="editSalesChannelImageFile" accept="image/*" style="font-size:14px;" onchange="previewEditSalesChannelImage(this)">
+          <small class="text-muted">推奨: 正方形PNG、200x200px</small>
+        </div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">手数料率（%）</label>
+      <input type="number" class="form-control" id="editSalesChannelCommission" value="${item.commission || 0}" min="0" max="100" style="font-size:16px;">
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">URL</label>
+      <input type="url" class="form-control" id="editSalesChannelUrl" value="${escapeHtml(item.url || '')}" placeholder="https://..." style="font-size:16px;">
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">表示順</label>
+      <input type="number" class="form-control" id="editSalesChannelOrder" value="${item.order || 0}" min="0" style="font-size:16px;">
+    </div>
+    <div class="form-group">
+      <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="editSalesChannelActive" ${item.active ? 'checked' : ''}>
+        <label class="form-check-label" for="editSalesChannelActive">有効</label>
+      </div>
+    </div>
+  `;
+
+  window._editItemContext = { type: 'salesChannel', itemId };
+
+  document.getElementById('editItemSubmitBtn').textContent = '保存';
+  document.getElementById('editItemSubmitBtn').onclick = window.submitEditItem;
+
+  document.getElementById('editItemModal').classList.remove('hidden');
+};
+
+/**
+ * 編集用の出品先画像プレビュー
+ */
+window.previewEditSalesChannelImage = function(input) {
+  const preview = document.getElementById('editSalesChannelImagePreview');
+  if (input.files && input.files[0] && preview) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      preview.innerHTML = `<img src="${e.target.result}" alt="プレビュー" style="width:60px;height:60px;object-fit:contain;border-radius:6px;border:1px solid #ddd;background:#fff;">`;
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+};
+
+/**
+ * 出品先の編集を保存
+ */
+async function saveSalesChannelFromModal(itemId) {
+  const nameInput = document.getElementById('editSalesChannelName');
+  const commissionInput = document.getElementById('editSalesChannelCommission');
+  const urlInput = document.getElementById('editSalesChannelUrl');
+  const orderInput = document.getElementById('editSalesChannelOrder');
+  const activeInput = document.getElementById('editSalesChannelActive');
+  const imageInput = document.getElementById('editSalesChannelImageFile');
+
+  const newName = nameInput.value.trim();
+  if (!newName) {
+    alert('出品先名を入力してください');
+    nameInput.focus();
+    return;
+  }
+
+  try {
+    const updateData = {
+      name: newName,
+      commission: parseFloat(commissionInput.value) || 0,
+      url: urlInput.value.trim(),
+      order: parseInt(orderInput.value, 10) || 0,
+      active: activeInput.checked,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    // 画像が選択されていればアップロード
+    if (imageInput?.files?.length > 0) {
+      const items = window._currentSalesChannels || [];
+      const item = items.find(i => i.id === itemId);
+      if (item) {
+        const iconUrl = await uploadSalesChannelImage(imageInput.files[0], item.platformId);
+        updateData.iconUrl = iconUrl;
+      }
+    }
+
+    await window.db.collection(currentMasterConfig.collection).doc(itemId).update(updateData);
+
+    hideEditItemModal();
+    await renderSalesChannelDropdownUI();
+    showToast('更新しました');
+  } catch (error) {
+    console.error('編集エラー:', error);
+    alert('編集に失敗しました: ' + error.message);
+  }
+}
+
+/**
+ * 出品先を削除
+ */
+window.deleteSalesChannel = async function(itemId) {
+  const items = window._currentSalesChannels || [];
+  const item = items.find(i => i.id === itemId);
+  if (!item) return;
+
+  if (!confirm(`「${item.name}」を削除しますか？\n\n※ この出品先を参照している他のマスタには影響があります。`)) return;
+
+  try {
+    await window.db.collection(currentMasterConfig.collection).doc(itemId).delete();
+    await renderSalesChannelDropdownUI();
+    showToast('削除しました');
+  } catch (error) {
+    console.error('削除エラー:', error);
+    alert('削除に失敗しました: ' + error.message);
+  }
+};
 
 
 // ============================================

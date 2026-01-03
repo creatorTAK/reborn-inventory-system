@@ -654,7 +654,21 @@ const masterCategories = {
         label: '出品先',
         collection: 'salesChannels',
         description: '出品先プラットフォームを管理',
+        // カスタムUI（サムネイル表示対応）
+        type: 'salesChannelDropdown',
         fields: [
+          {
+            name: 'platformId',
+            label: 'プラットフォームID',
+            required: true,
+            type: 'text',
+            placeholder: '例: mercari',
+            validation: {
+              minLength: 1,
+              maxLength: 30,
+              pattern: '^[a-z0-9-]+$'
+            }
+          },
           {
             name: 'name',
             label: '出品先名',
@@ -665,6 +679,13 @@ const masterCategories = {
               minLength: 1,
               maxLength: 50
             }
+          },
+          {
+            name: 'iconUrl',
+            label: 'アイコン画像',
+            required: false,
+            type: 'image',
+            placeholder: '画像をアップロード'
           },
           {
             name: 'commission',
@@ -686,11 +707,28 @@ const masterCategories = {
             validation: {
               pattern: '^https?://.+'
             }
+          },
+          {
+            name: 'order',
+            label: '表示順',
+            required: false,
+            type: 'number',
+            placeholder: '例: 1',
+            validation: {
+              min: 0
+            }
+          },
+          {
+            name: 'active',
+            label: '有効',
+            required: false,
+            type: 'boolean',
+            default: true
           }
         ],
         displayFields: ['name', 'commission'],
-        searchFields: ['name'],
-        sortBy: 'name',
+        searchFields: ['name', 'platformId'],
+        sortBy: 'order',
         sortOrder: 'asc',
         searchable: true,
         usageCount: false,
