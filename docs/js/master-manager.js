@@ -2979,7 +2979,14 @@ async function renderPackagingDropdownUI() {
           </div>
           <div class="master-options-add" style="display:flex;flex-direction:column;gap:8px;">
             <input type="text" class="form-control form-control-sm" id="newPackagingName" placeholder="${currentMasterConfig.placeholder || '例: A4封筒'}" style="width:100%;font-size:16px;">
-            <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div id="newPackagingImagePreview" style="width:40px;height:40px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
+                <i class="bi bi-image" style="font-size:18px;color:#aaa;"></i>
+              </div>
+              <label class="btn btn-sm btn-outline-secondary" style="margin:0;cursor:pointer;">
+                <i class="bi bi-camera"></i>
+                <input type="file" id="newPackagingImageFile" accept="image/*" style="display:none;" onchange="previewNewPackagingImage(this)">
+              </label>
               <select class="form-select form-select-sm" id="newPackagingExpenseCategory" style="width:100px;font-size:16px;">
                 <option value="individual">個別</option>
                 <option value="monthly">月次</option>
@@ -3072,6 +3079,7 @@ window.addPackagingCategory = async function() {
 window.addPackagingItem = async function() {
   const nameInput = document.getElementById('newPackagingName');
   const expenseCategorySelect = document.getElementById('newPackagingExpenseCategory');
+  const imageInput = document.getElementById('newPackagingImageFile');
 
   const name = nameInput?.value?.trim();
   const expenseCategory = expenseCategorySelect?.value || 'individual';
@@ -3099,10 +3107,30 @@ window.addPackagingItem = async function() {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    await window.db.collection(currentMasterConfig.collection).add(newData);
+    // まずFirestoreにドキュメントを追加
+    const docRef = await window.db.collection(currentMasterConfig.collection).add(newData);
 
+    // 画像が選択されていればアップロード
+    if (imageInput?.files?.length > 0) {
+      try {
+        const imageUrl = await uploadPackagingImage(imageInput.files[0], docRef.id);
+        await docRef.update({ imageUrl });
+        console.log(`✅ [Packaging] 新規追加: 画像アップロード完了`);
+      } catch (imgError) {
+        console.error('画像アップロードエラー:', imgError);
+        // 画像アップロード失敗しても資材自体は追加済み
+      }
+    }
+
+    // フォームをリセット
     nameInput.value = '';
     if (expenseCategorySelect) expenseCategorySelect.value = 'individual';
+    if (imageInput) imageInput.value = '';
+    const preview = document.getElementById('newPackagingImagePreview');
+    if (preview) {
+      preview.innerHTML = `<i class="bi bi-image" style="font-size:18px;color:#aaa;"></i>`;
+    }
+
     await renderPackagingDropdownUI();
     showToast('追加しました');
   } catch (error) {
@@ -3178,6 +3206,20 @@ window.previewPackagingImage = function(input) {
     const reader = new FileReader();
     reader.onload = function(e) {
       preview.innerHTML = `<img src="${e.target.result}" alt="プレビュー" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">`;
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+};
+
+/**
+ * 新規追加用の梱包資材画像プレビュー
+ */
+window.previewNewPackagingImage = function(input) {
+  const preview = document.getElementById('newPackagingImagePreview');
+  if (input.files && input.files[0] && preview) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      preview.innerHTML = `<img src="${e.target.result}" alt="プレビュー" style="width:40px;height:40px;object-fit:cover;">`;
     };
     reader.readAsDataURL(input.files[0]);
   }
