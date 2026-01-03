@@ -2806,11 +2806,14 @@ async function renderPackagingDropdownUI() {
   const definedCategories = currentMasterConfig.categories || [];
 
   try {
-    // Firestoreから全データ取得
-    const snapshot = await window.db.collection(collection).get();
+    // Firestoreから全データ取得（並列実行）
+    const [itemsSnapshot, categoriesSnapshot] = await Promise.all([
+      window.db.collection(collection).get(),
+      window.db.collection('packagingCategories').orderBy('order', 'asc').get()
+    ]);
 
     const allItems = [];
-    snapshot.forEach(doc => {
+    itemsSnapshot.forEach(doc => {
       const data = doc.data();
       allItems.push({
         id: doc.id,
@@ -2823,27 +2826,57 @@ async function renderPackagingDropdownUI() {
         expenseCategory: data.expenseCategory || 'individual',  // デフォルト: 個別原価
         supplier: data.supplier || '',
         currentStock: data.currentStock ?? 0,  // 現在庫
-        stockAlertThreshold: data.stockAlertThreshold ?? 10  // デフォルト閾値: 10
+        stockAlertThreshold: data.stockAlertThreshold ?? 10,  // デフォルト閾値: 10
+        imageUrl: data.imageUrl || ''  // 商品画像URL
       });
     });
 
-    // カテゴリごとにグループ化
+    // Firestoreからカテゴリを取得
+    const firestoreCategories = [];
+    categoriesSnapshot.forEach(doc => {
+      const data = doc.data();
+      firestoreCategories.push({
+        id: doc.id,
+        name: data.name || doc.id,
+        icon: data.icon || 'bi-box-seam',
+        order: data.order || 0
+      });
+    });
+
+    // カテゴリごとにグループ化（Firestoreカテゴリ + 設定カテゴリをマージ）
     const categoryGroups = {};
+
+    // 1. 設定ファイルのカテゴリを追加
     definedCategories.forEach(cat => {
       categoryGroups[cat.name] = {
         id: cat.id,
         name: cat.name,
         icon: cat.icon,
+        order: cat.order || 0,
         items: []
       };
     });
 
-    // その他カテゴリを追加（定義されていない場合）
+    // 2. Firestoreのカテゴリを追加（設定にないもの）
+    firestoreCategories.forEach(cat => {
+      if (!categoryGroups[cat.name]) {
+        categoryGroups[cat.name] = {
+          id: cat.id,
+          name: cat.name,
+          icon: cat.icon,
+          order: cat.order || 100, // Firestoreカテゴリは後ろに
+          items: []
+        };
+      }
+    });
+
+    // 3. その他カテゴリを追加（定義されていない場合）
     if (!categoryGroups['その他']) {
       categoryGroups['その他'] = {
         id: 'other',
         name: 'その他',
         icon: 'bi-three-dots',
+        order: 999,
         items: []
       };
     }
@@ -2859,8 +2892,8 @@ async function renderPackagingDropdownUI() {
       }
     });
 
-    // 配列に変換（定義順を維持）
-    const categories = definedCategories.map(cat => categoryGroups[cat.name]).filter(g => g);
+    // 配列に変換（order順でソート）
+    const categories = Object.values(categoryGroups).sort((a, b) => (a.order || 0) - (b.order || 0));
 
     // 現在のデータを保持
     window._currentPackagingCategories = categories;
@@ -2921,10 +2954,15 @@ async function renderPackagingDropdownUI() {
             ` : items.map((item, itemIndex) => {
               const expenseCategoryLabel = item.expenseCategory === 'monthly' ? '月次' : '個別';
               const expenseCategoryColor = item.expenseCategory === 'monthly' ? '#6c757d' : '#0d6efd';
+              // 画像サムネイル（28x28px、角丸、画像がない場合はアイコン表示）
+              const thumbnail = item.imageUrl
+                ? `<img src="${escapeHtml(item.imageUrl)}" alt="" style="width:28px;height:28px;object-fit:cover;border-radius:4px;border:1px solid #e9ecef;flex-shrink:0;">`
+                : `<div style="width:28px;height:28px;background:#f0f0f0;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="bi bi-box-seam" style="font-size:14px;color:#aaa;"></i></div>`;
 
               return `
               <div class="master-options-item" data-item-id="${item.id}">
                 <div style="display:flex;align-items:center;gap:8px;">
+                  ${thumbnail}
                   <span class="item-text" style="font-weight:500;">${escapeHtml(item.name)}</span>
                   <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${expenseCategoryColor};color:#fff;">${expenseCategoryLabel}</span>
                 </div>
@@ -2952,6 +2990,16 @@ async function renderPackagingDropdownUI() {
             </div>
           </div>
         </div>
+
+        <!-- 新規カテゴリ追加 -->
+        <div class="master-options-section" style="background: #f8f9fa;">
+          <div class="master-options-add" style="border-top: none;">
+            <input type="text" class="form-control form-control-sm" id="newPackagingCategoryName" placeholder="新しいカテゴリ名" style="font-size:16px;">
+            <button class="btn btn-sm btn-outline-primary" onclick="addPackagingCategory()">
+              <i class="bi bi-folder-plus"></i> カテゴリ追加
+            </button>
+          </div>
+        </div>
       </div>
     `;
 
@@ -2972,6 +3020,50 @@ async function renderPackagingDropdownUI() {
 window.changePackagingCategory = function(index) {
   currentPackagingCategoryIndex = parseInt(index, 10);
   renderPackagingDropdownUI();
+};
+
+/**
+ * 新規カテゴリを追加（梱包資材用）
+ */
+window.addPackagingCategory = async function() {
+  const input = document.getElementById('newPackagingCategoryName');
+  const categoryName = input?.value?.trim();
+
+  if (!categoryName) {
+    alert('カテゴリ名を入力してください');
+    return;
+  }
+
+  const categories = window._currentPackagingCategories || [];
+
+  // 重複チェック
+  if (categories.some(cat => cat.name === categoryName)) {
+    alert('このカテゴリ名は既に存在します');
+    return;
+  }
+
+  try {
+    // packagingCategoriesコレクションに新しいカテゴリを追加
+    const maxOrder = categories.reduce((max, cat) => Math.max(max, cat.order || 0), 0);
+
+    await window.db.collection('packagingCategories').doc(categoryName).set({
+      name: categoryName,
+      icon: 'bi-box-seam',
+      order: maxOrder + 1,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    input.value = '';
+    // 新しく追加したカテゴリを選択
+    currentPackagingCategoryIndex = categories.length;
+    await renderPackagingDropdownUI();
+
+    console.log(`✅ [Packaging] 新規カテゴリ追加: ${categoryName}`);
+  } catch (error) {
+    console.error('カテゴリ追加エラー:', error);
+    alert('カテゴリの追加に失敗しました: ' + error.message);
+  }
 };
 
 /**
@@ -3027,6 +3119,11 @@ window.editPackagingItem = function(itemId) {
   const item = allItems.find(i => i.id === itemId);
   if (!item) return;
 
+  // 現在の画像プレビュー
+  const currentImageHtml = item.imageUrl
+    ? `<img src="${escapeHtml(item.imageUrl)}" alt="現在の画像" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">`
+    : `<div style="width:60px;height:60px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="bi bi-image" style="font-size:24px;color:#aaa;"></i></div>`;
+
   // モーダル内容を設定
   document.getElementById('editItemModalTitle').textContent = '梱包資材を編集';
   document.getElementById('editItemModalBody').innerHTML = `
@@ -3040,6 +3137,17 @@ window.editPackagingItem = function(itemId) {
         <option value="individual" ${item.expenseCategory !== 'monthly' ? 'selected' : ''}>個別原価</option>
         <option value="monthly" ${item.expenseCategory === 'monthly' ? 'selected' : ''}>月次経費</option>
       </select>
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:8px;font-weight:500;">商品画像</label>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div id="editItemImagePreview">${currentImageHtml}</div>
+        <div style="flex:1;">
+          <input type="file" class="form-control" id="editItemImageFile" accept="image/*" style="font-size:14px;" onchange="previewPackagingImage(this)">
+          <small class="text-muted">推奨: 正方形、200x200px以上</small>
+        </div>
+      </div>
+      <input type="hidden" id="editItemCurrentImageUrl" value="${escapeHtml(item.imageUrl || '')}">
     </div>
   `;
 
@@ -3058,6 +3166,50 @@ window.hideEditItemModal = function() {
   document.getElementById('editItemModal').classList.add('hidden');
   window._editItemContext = null;
 };
+
+/**
+ * 梱包資材画像のプレビュー表示
+ */
+window.previewPackagingImage = function(input) {
+  const preview = document.getElementById('editItemImagePreview');
+  if (!preview) return;
+
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      preview.innerHTML = `<img src="${e.target.result}" alt="プレビュー" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">`;
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+};
+
+/**
+ * 梱包資材画像をFirebase Storageにアップロード
+ * @returns {Promise<string>} - アップロードされた画像のURL
+ */
+async function uploadPackagingImage(file, itemId) {
+  // 親ウィンドウのStorage関数を使用
+  const storage = window.parent?.firebaseStorage || window.firebaseStorage;
+  const storageRef = window.parent?.storageRef || window.storageRef;
+  const uploadBytes = window.parent?.storageUploadBytes || window.storageUploadBytes;
+  const getDownloadURL = window.parent?.storageGetDownloadURL || window.storageGetDownloadURL;
+
+  if (!storage || !storageRef || !uploadBytes || !getDownloadURL) {
+    throw new Error('Firebase Storageが利用できません');
+  }
+
+  // ファイルパス: packaging-materials/{itemId}/{timestamp}.{ext}
+  const ext = file.name.split('.').pop().toLowerCase();
+  const timestamp = Date.now();
+  const path = `packaging-materials/${itemId}/${timestamp}.${ext}`;
+
+  const fileRef = storageRef(storage, path);
+  await uploadBytes(fileRef, file);
+  const url = await getDownloadURL(fileRef);
+
+  console.log(`✅ [Packaging] 画像アップロード完了: ${path}`);
+  return url;
+}
 
 /**
  * 編集モーダルの保存処理
@@ -3079,6 +3231,8 @@ window.submitEditItem = async function() {
 async function savePackagingFromModal(itemId) {
   const nameInput = document.getElementById('editItemName');
   const expenseCategorySelect = document.getElementById('editItemExpenseCategory');
+  const imageFileInput = document.getElementById('editItemImageFile');
+  const currentImageUrl = document.getElementById('editItemCurrentImageUrl')?.value || '';
 
   const newName = nameInput.value.trim();
   if (!newName) {
@@ -3088,11 +3242,30 @@ async function savePackagingFromModal(itemId) {
   }
 
   try {
-    await window.db.collection(currentMasterConfig.collection).doc(itemId).update({
+    // 更新データを準備
+    const updateData = {
       name: newName,
       expenseCategory: expenseCategorySelect?.value || 'individual',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    };
+
+    // 画像が選択されている場合はアップロード
+    if (imageFileInput?.files?.[0]) {
+      const file = imageFileInput.files[0];
+
+      // ファイルサイズチェック（5MB以下）
+      if (file.size > 5 * 1024 * 1024) {
+        alert('画像サイズは5MB以下にしてください');
+        return;
+      }
+
+      // 画像をアップロード
+      showToast('画像をアップロード中...');
+      const imageUrl = await uploadPackagingImage(file, itemId);
+      updateData.imageUrl = imageUrl;
+    }
+
+    await window.db.collection(currentMasterConfig.collection).doc(itemId).update(updateData);
 
     hideEditItemModal();
     await renderPackagingDropdownUI();
@@ -9206,23 +9379,56 @@ async function createStockAlertTask(materialId, materialName, currentStock, thre
 
 /**
  * 資材情報を取得してアラートチェック（外部から呼び出し用）
+ * ユーザー/場所ごとの閾値をサポート
+ *
+ * @param {string} materialId - 梱包資材ID
+ * @param {number} newStock - 現在の在庫数
+ * @param {string} locationId - 場所ID（必須: ユーザーごとの閾値チェック用）
+ * @param {string} locationName - 場所名（任意）
  */
-async function checkMaterialStockAlert(materialId, newStock) {
+async function checkMaterialStockAlert(materialId, newStock, locationId = null, locationName = '') {
   try {
     const materialDoc = await window.db.collection('packagingMaterials').doc(materialId).get();
     if (!materialDoc.exists) return;
 
     const material = materialDoc.data();
-    const threshold = material.stockAlertThreshold || 0;
+    const materialName = material.productName || material.name || '不明な資材';
+
+    let threshold = 0;
+    let resolvedLocationName = locationName;
+
+    // 場所IDがある場合、場所ごとの閾値を取得
+    if (locationId) {
+      const locationDoc = await window.db.collection('packagingLocations').doc(locationId).get();
+      if (locationDoc.exists) {
+        const location = locationDoc.data();
+        resolvedLocationName = resolvedLocationName || location.name || '';
+
+        // 場所ごとの資材閾値を取得
+        const materialThresholds = location.materialThresholds || {};
+        if (materialThresholds[materialId] !== undefined && materialThresholds[materialId] > 0) {
+          threshold = materialThresholds[materialId];
+          console.log(`📍 [Stock Alert] 場所別閾値を使用: ${resolvedLocationName} → ${threshold}個`);
+        }
+      }
+    }
+
+    // 場所ごとの閾値がない場合、資材のグローバル閾値を使用
+    if (!threshold || threshold <= 0) {
+      threshold = material.stockAlertThreshold || 0;
+      if (threshold > 0) {
+        console.log(`🌐 [Stock Alert] グローバル閾値を使用: ${threshold}個`);
+      }
+    }
 
     if (threshold > 0 && newStock <= threshold) {
       await checkAndTriggerStockAlert(
         materialId,
-        material.productName || material.name || '不明な資材',
+        materialName,
         newStock,
         threshold,
-        null,
-        '',
+        locationId,
+        resolvedLocationName,
         material.purchaseUrl || '',
         material.supplier || ''
       );
