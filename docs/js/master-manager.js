@@ -9693,7 +9693,7 @@ async function copyTreeNodeToPlatform(nodePath, nodeName, targetPlatformId, node
 
   try {
     // ====== platform検証（undefined/空文字対策） ======
-    const validPlatformIds = ['mercari', 'mercari-shops', 'yahoo-fleamarket', 'rakuma', 'ebay'];
+    const validPlatformIds = ['mercari', 'mercari-shops', 'yahoo-fleamarket', 'yahoo-auction', 'rakuma', 'base', 'shopify', 'stores'];
     
     if (!targetPlatformId || typeof targetPlatformId !== 'string' || targetPlatformId.trim() === '') {
       showLoading(false);
