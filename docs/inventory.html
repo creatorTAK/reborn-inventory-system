@@ -11,7 +11,7 @@
   <!-- Algolia Search SDK -->
   <script src="https://cdn.jsdelivr.net/npm/algoliasearch@4/dist/algoliasearch-lite.umd.js"></script>
   <!-- REBORN Theme -->
-  <link rel="stylesheet" href="/css/reborn-theme.css?v=298">
+  <link rel="stylesheet" href="/css/reborn-theme.css?v=512">
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -776,13 +776,10 @@
               <div class="col-md-6">
                 <label class="form-label">販売先 <span class="text-danger">*</span></label>
                 <select class="form-select" id="salesPlatform" required>
-                  <option value="メルカリ" selected>メルカリ</option>
-                  <option value="メルカリShops">メルカリShops</option>
-                  <option value="ラクマ">ラクマ</option>
-                  <option value="Yahoo!フリマ">Yahoo!フリマ</option>
-                  <option value="BASE">BASE</option>
-                  <option value="その他">その他</option>
+                  <option value="">読み込み中...</option>
                 </select>
+                <!-- 手数料タイプ別の追加入力UI（動的に表示） -->
+                <div id="feeTypeInputContainer" class="mt-2" style="display:none;"></div>
               </div>
               <div class="col-12">
                 <label class="form-label">販売金額 <span class="text-danger">*</span></label>
@@ -3164,8 +3161,10 @@
     let packagingMaterialsMaster = []; // 備品在庫リストデータ（全データ）
     let packagingMaterialsByCategory = {}; // カテゴリ別の梱包資材データ { "カテゴリ1": [...], "カテゴリ2": [...] }
     let packagingMaterialCategories = []; // カテゴリ一覧
+    let salesChannelsMaster = []; // 出品先マスタデータ
     let currentSalesProduct = null; // 販売記録対象の商品データ
     let packagingMaterialCount = 3; // 梱包資材選択欄の数（初期値3）
+    let currentSelectedFeeRate = null; // 現在選択されている手数料率（変動制・手動用）
 
     /**
      * 販売記録モーダルを開く
@@ -3209,6 +3208,9 @@
       // 備品在庫リストを読み込み（読み込み完了後にrenderPackagingMaterialsが実行される）
       loadPackagingMaterialsMaster();
 
+      // 出品先マスタを読み込み
+      loadSalesChannelsMaster();
+
       // イベントリスナー設定
       setupSalesRecordEventListeners();
 
@@ -3250,6 +3252,218 @@
         console.error('備品在庫リストの読み込みエラー:', error);
         showError('備品在庫リストの読み込みに失敗しました: ' + (error.message || error));
       }
+    }
+
+    /**
+     * 出品先マスタ読み込み（Firestore版）
+     */
+    async function loadSalesChannelsMaster() {
+      try {
+        console.log('🏪 [DEBUG] 出品先マスタ読み込み開始');
+        const snapshot = await getDocs(
+          query(collection(db, 'salesChannels'), orderBy('order', 'asc'))
+        );
+        
+        salesChannelsMaster = [];
+        snapshot.forEach(doc => {
+          salesChannelsMaster.push({ id: doc.id, ...doc.data() });
+        });
+        
+        console.log('🏪 [DEBUG] 出品先マスタ:', salesChannelsMaster);
+        
+        // ドロップダウンを生成
+        populateSalesChannels();
+      } catch (error) {
+        console.error('出品先マスタの読み込みエラー:', error);
+        // フォールバック：ハードコードされたオプション
+        const select = document.getElementById('salesPlatform');
+        select.innerHTML = `
+          <option value="">選択してください</option>
+          <option value="メルカリ">メルカリ</option>
+          <option value="ラクマ">ラクマ</option>
+          <option value="Yahoo!フリマ">Yahoo!フリマ</option>
+          <option value="その他">その他</option>
+        `;
+      }
+    }
+
+    /**
+     * 出品先ドロップダウンを生成
+     */
+    function populateSalesChannels() {
+      const select = document.getElementById('salesPlatform');
+      select.innerHTML = '<option value="">選択してください</option>';
+      
+      salesChannelsMaster.forEach(channel => {
+        if (channel.active !== false) {
+          const option = document.createElement('option');
+          option.value = channel.name;
+          option.dataset.platformId = channel.platformId;
+          option.dataset.feeType = channel.feeType || 'simple';
+          option.textContent = channel.name;
+          select.appendChild(option);
+        }
+      });
+    }
+
+    /**
+     * 出品先変更時の処理（手数料タイプ別UI表示）
+     */
+    function onSalesPlatformChange() {
+      const select = document.getElementById('salesPlatform');
+      const selectedOption = select.options[select.selectedIndex];
+      const container = document.getElementById('feeTypeInputContainer');
+      
+      // 選択された出品先のマスタデータを取得
+      const platformName = select.value;
+      const channelData = salesChannelsMaster.find(c => c.name === platformName);
+      
+      if (!channelData || !platformName) {
+        container.style.display = 'none';
+        currentSelectedFeeRate = null;
+        updateProfitCalculation();
+        return;
+      }
+      
+      const feeType = channelData.feeType || 'simple';
+      
+      // 手数料タイプ別のUI生成
+      switch (feeType) {
+        case 'simple':
+          // 固定%：追加入力不要
+          container.style.display = 'none';
+          currentSelectedFeeRate = channelData.commission || 0;
+          break;
+          
+        case 'variable':
+          // 変動制：レンジスライダーで選択
+          container.style.display = 'block';
+          container.innerHTML = `
+            <div class="card border-warning bg-warning bg-opacity-10">
+              <div class="card-body py-2">
+                <div class="d-flex align-items-center mb-2">
+                  <i class="bi bi-graph-up text-warning me-2"></i>
+                  <small class="text-muted">変動制手数料（あなたのランクに応じて選択）</small>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="text-muted small">${channelData.commissionMin || 4.5}%</span>
+                  <input type="range" class="form-range flex-grow-1" 
+                         id="variableFeeSlider"
+                         min="${channelData.commissionMin || 4.5}" 
+                         max="${channelData.commissionMax || 10}" 
+                         step="0.5"
+                         value="${channelData.commissionDefault || channelData.commissionMax || 10}">
+                  <span class="text-muted small">${channelData.commissionMax || 10}%</span>
+                  <span class="badge bg-warning text-dark" id="variableFeeValue">${channelData.commissionDefault || channelData.commissionMax || 10}%</span>
+                </div>
+              </div>
+            </div>
+          `;
+          currentSelectedFeeRate = channelData.commissionDefault || channelData.commissionMax || 10;
+          
+          // スライダーイベント
+          document.getElementById('variableFeeSlider').addEventListener('input', function() {
+            currentSelectedFeeRate = parseFloat(this.value);
+            document.getElementById('variableFeeValue').textContent = this.value + '%';
+            updateProfitCalculation();
+          });
+          break;
+          
+        case 'complex':
+          // 複合計算：計算式を表示、推定値で計算
+          container.style.display = 'block';
+          container.innerHTML = `
+            <div class="card border-info bg-info bg-opacity-10">
+              <div class="card-body py-2">
+                <div class="d-flex align-items-center">
+                  <i class="bi bi-calculator text-info me-2"></i>
+                  <div>
+                    <small class="text-muted">複合計算式：</small>
+                    <span class="fw-bold">${channelData.commissionFormula || '要確認'}</span>
+                  </div>
+                </div>
+                ${channelData.formulaDescription ? `<small class="text-muted d-block mt-1">${channelData.formulaDescription}</small>` : ''}
+              </div>
+            </div>
+          `;
+          // 複合計算の推定値を計算（販売金額入力後に再計算される）
+          currentSelectedFeeRate = parseComplexFormula(channelData.commissionFormula, 0);
+          break;
+          
+        case 'manual':
+          // 手動入力：ユーザーが手数料%を入力
+          container.style.display = 'block';
+          container.innerHTML = `
+            <div class="card border-secondary">
+              <div class="card-body py-2">
+                <div class="d-flex align-items-center mb-2">
+                  <i class="bi bi-pencil text-secondary me-2"></i>
+                  <small class="text-muted">手動入力が必要なプラットフォームです</small>
+                </div>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">手数料率</span>
+                  <input type="number" class="form-control" id="manualFeeInput" 
+                         min="0" max="100" step="0.1" 
+                         value="${channelData.feeEstimate || 10}"
+                         placeholder="例: 10">
+                  <span class="input-group-text">%</span>
+                </div>
+                ${channelData.feeNote ? `<small class="text-muted d-block mt-2"><i class="bi bi-info-circle me-1"></i>${channelData.feeNote}</small>` : ''}
+              </div>
+            </div>
+          `;
+          currentSelectedFeeRate = channelData.feeEstimate || 10;
+          
+          // 手動入力イベント
+          document.getElementById('manualFeeInput').addEventListener('input', function() {
+            currentSelectedFeeRate = parseFloat(this.value) || 0;
+            updateProfitCalculation();
+          });
+          break;
+          
+        default:
+          container.style.display = 'none';
+          currentSelectedFeeRate = 0;
+      }
+      
+      updateProfitCalculation();
+    }
+
+    /**
+     * 複合計算式をパース（例："3.6% + 40円 + 3%"）
+     */
+    function parseComplexFormula(formula, salesAmount) {
+      if (!formula) return 0;
+      
+      let totalFee = 0;
+      
+      // 正規表現でパース
+      const percentPattern = /([\d.]+)%/g;
+      const fixedPattern = /([\d,]+)円/g;
+      
+      let match;
+      
+      // %部分を合計
+      let totalPercent = 0;
+      while ((match = percentPattern.exec(formula)) !== null) {
+        totalPercent += parseFloat(match[1]);
+      }
+      
+      // 固定円を合計
+      let totalFixed = 0;
+      while ((match = fixedPattern.exec(formula)) !== null) {
+        totalFixed += parseInt(match[1].replace(/,/g, ''));
+      }
+      
+      // 計算
+      if (salesAmount > 0) {
+        totalFee = (salesAmount * totalPercent / 100) + totalFixed;
+        // 手数料率として返す（販売金額に対する%）
+        return (totalFee / salesAmount) * 100;
+      }
+      
+      // 販売金額が0の場合は%だけ返す
+      return totalPercent;
     }
 
     /**
@@ -3470,8 +3684,8 @@
       const purchaseCost = parseFloat(purchaseAmountValue) || 0;
       document.getElementById('profitPurchaseCost').textContent = `- ¥${purchaseCost.toLocaleString()}`;
 
-      // プラットフォーム手数料（メルカリ = 10%）
-      const platformFeeRate = getPlatformFeeRate(document.getElementById('salesPlatform').value);
+      // プラットフォーム手数料（マスタデータ連動）
+      const platformFeeRate = getPlatformFeeRate(document.getElementById('salesPlatform').value, salesAmount);
       document.getElementById('platformFeeRate').textContent = platformFeeRate;
       const platformFee = Math.floor(salesAmount * (platformFeeRate / 100));
       document.getElementById('profitPlatformFee').textContent = `- ¥${platformFee.toLocaleString()}`;
@@ -3496,19 +3710,57 @@
     }
 
     /**
-     * プラットフォーム手数料率を取得
+     * プラットフォーム手数料率を取得（動的マスタ対応版）
      */
-    function getPlatformFeeRate(platform) {
-      const feeRates = {
+    function getPlatformFeeRate(platform, salesAmount) {
+      // 現在選択された手数料率がある場合はそれを使用（変動制・手動入力用）
+      if (currentSelectedFeeRate !== null) {
+        const channelData = salesChannelsMaster.find(c => c.name === platform);
+        
+        // 複合計算の場合、販売金額に応じて再計算
+        if (channelData && channelData.feeType === 'complex' && salesAmount > 0) {
+          return parseComplexFormula(channelData.commissionFormula, salesAmount);
+        }
+        
+        return currentSelectedFeeRate;
+      }
+      
+      // マスタデータから取得
+      const channelData = salesChannelsMaster.find(c => c.name === platform);
+      if (channelData) {
+        switch (channelData.feeType) {
+          case 'simple':
+            return channelData.commission || 0;
+          case 'variable':
+            return channelData.commissionDefault || channelData.commissionMax || 10;
+          case 'complex':
+            return salesAmount > 0 
+              ? parseComplexFormula(channelData.commissionFormula, salesAmount)
+              : parseComplexFormula(channelData.commissionFormula, 0);
+          case 'manual':
+            return channelData.feeEstimate || 10;
+          default:
+            return 0;
+        }
+      }
+      
+      // フォールバック（マスタ未読み込み時）
+      const fallbackRates = {
         'メルカリ': 10,
-        'メルカリShops': 5,
-        'ラクマ': 6,
+        'メルカリShops': 10,
+        'ラクマ': 10,
         'Yahoo!フリマ': 5,
-        'BASE': 3,
-        'Shopify': 0,
+        'ヤフオク!': 10,
+        'BASE': 6.6,
+        'STORES': 3.6,
+        'Shopify': 3.55,
+        'Amazon': 15,
+        'eBay': 20,
+        '楽天市場': 10,
+        'Yahoo!ショッピング': 6,
         'その他': 0
       };
-      return feeRates[platform] || 0;
+      return fallbackRates[platform] || 0;
     }
 
     /**
@@ -3518,8 +3770,8 @@
       // 販売金額変更
       document.getElementById('salesAmount').addEventListener('input', updateProfitCalculation);
 
-      // 販売先変更
-      document.getElementById('salesPlatform').addEventListener('change', updateProfitCalculation);
+      // 販売先変更（手数料タイプ別UI表示＋利益計算更新）
+      document.getElementById('salesPlatform').addEventListener('change', onSalesPlatformChange);
 
       // 発送方法変更
       document.getElementById('shippingMethod1').addEventListener('change', onShippingMethod1Change);
@@ -3747,7 +3999,7 @@
       }
 
       const packagingCostTotal = updatePackagingCostTotal();
-      const platformFeeRate = getPlatformFeeRate(salesPlatform);
+      const platformFeeRate = getPlatformFeeRate(salesPlatform, salesAmount);
       const platformFee = Math.floor(salesAmount * (platformFeeRate / 100));
       const paymentFee = 0;
       const purchaseCost = parseFloat(currentSalesProduct.purchaseAmount) || 0;
