@@ -2801,3 +2801,231 @@ exports.monthlyGoalReminder = onSchedule({
     return { success: false, error: error.message };
   }
 });
+
+/**
+ * ラクマ手数料率自動計算（毎月26日 9:00 JST実行）
+ *
+ * 前月26日〜当月25日の販売実績を集計し、翌月の手数料率を計算
+ * 計算結果はsalesChannelsコレクションのrakumaドキュメントに保存
+ */
+exports.calculateRakumaFeeRate = onSchedule({
+  schedule: '0 9 26 * *',
+  timeZone: 'Asia/Tokyo',
+  region: 'asia-northeast1',
+  memory: '256MiB'
+}, async (event) => {
+  const startTime = Date.now();
+  console.log('🧮 [calculateRakumaFeeRate] 開始');
+
+  try {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth(); // 0-indexed
+
+    // 集計期間: 前月26日〜当月25日
+    const periodStart = new Date(year, month - 1, 26);
+    const periodEnd = new Date(year, month, 25, 23, 59, 59, 999);
+
+    console.log(`📅 集計期間: ${periodStart.toISOString()} 〜 ${periodEnd.toISOString()}`);
+
+    // ラクマの販売記録を取得（300円以上のみカウント）
+    const productsSnapshot = await db.collection('products')
+      .where('salePlatform', '==', 'ラクマ')
+      .where('status', '==', '販売済')
+      .get();
+
+    let salesCount = 0;
+    let salesAmount = 0;
+
+    productsSnapshot.forEach(doc => {
+      const data = doc.data();
+      const saleDate = data.saleDate ? new Date(data.saleDate) : null;
+      const amount = parseFloat(data.saleAmount) || 0;
+
+      // 期間内かつ300円以上の販売のみカウント
+      if (saleDate && saleDate >= periodStart && saleDate <= periodEnd && amount >= 300) {
+        salesCount++;
+        salesAmount += amount;
+      }
+    });
+
+    console.log(`📊 集計結果: 販売回数=${salesCount}回, 販売金額=¥${salesAmount.toLocaleString()}`);
+
+    // 手数料率を判定（ラクマの条件テーブル）
+    let newFeeRate = 10; // デフォルト
+    if (salesCount >= 10 && salesAmount >= 100000) {
+      newFeeRate = 4.5;
+    } else if (salesCount >= 10 && salesAmount >= 50000) {
+      newFeeRate = 6;
+    } else if (salesCount >= 8 && salesAmount >= 30000) {
+      newFeeRate = 7;
+    } else if (salesCount >= 6 && salesAmount >= 10000) {
+      newFeeRate = 8;
+    } else if (salesCount >= 4 && salesAmount >= 5000) {
+      newFeeRate = 9;
+    }
+
+    console.log(`🎯 判定結果: 翌月手数料率=${newFeeRate}%`);
+
+    // 翌月1日を計算
+    const nextMonth = new Date(year, month + 1, 1);
+    const effectiveFrom = nextMonth.toISOString().split('T')[0]; // YYYY-MM-DD
+
+    // salesChannelsのrakumaドキュメントを更新
+    const rakumaRef = db.collection('salesChannels').doc('rakuma');
+    const rakumaDoc = await rakumaRef.get();
+    const currentRate = rakumaDoc.exists ? (rakumaDoc.data().commissionDefault || 10) : 10;
+
+    await rakumaRef.update({
+      nextMonthRate: newFeeRate,
+      nextMonthEffectiveFrom: effectiveFrom,
+      lastCalculation: {
+        calculatedAt: FieldValue.serverTimestamp(),
+        periodStart: periodStart.toISOString(),
+        periodEnd: periodEnd.toISOString(),
+        salesCount: salesCount,
+        salesAmount: salesAmount,
+        previousRate: currentRate,
+        newRate: newFeeRate
+      }
+    });
+
+    // 管理者に通知（変動がある場合のみ強調）
+    const rateChanged = currentRate !== newFeeRate;
+    const notificationTitle = rateChanged
+      ? `📢 ラクマ手数料率が変更されます: ${currentRate}% → ${newFeeRate}%`
+      : `📊 ラクマ手数料率: ${newFeeRate}%（変更なし）`;
+
+    const notificationBody = `集計期間: ${month}月26日〜${month + 1}月25日\n販売回数: ${salesCount}回, 販売金額: ¥${salesAmount.toLocaleString()}\n適用開始: ${effectiveFrom}`;
+
+    // システム通知ルームに投稿
+    const systemRoomRef = db.collection('rooms').doc('system-notifications');
+    await systemRoomRef.collection('messages').add({
+      content: `${notificationTitle}\n\n${notificationBody}`,
+      sender: 'システム',
+      senderEmail: 'system@reborn.local',
+      createdAt: FieldValue.serverTimestamp(),
+      type: 'system'
+    });
+
+    // 管理者にプッシュ通知
+    const adminsSnapshot = await db.collection('users')
+      .where('role', 'in', ['オーナー', '管理者'])
+      .get();
+
+    for (const adminDoc of adminsSnapshot.docs) {
+      const devicesSnapshot = await db.collection('users')
+        .doc(adminDoc.id)
+        .collection('devices')
+        .where('fcmToken', '!=', '')
+        .get();
+
+      const tokens = devicesSnapshot.docs.map(d => d.data().fcmToken).filter(t => t);
+      if (tokens.length > 0) {
+        await messaging.sendEachForMulticast({
+          notification: {
+            title: notificationTitle,
+            body: `${month + 1}月1日から適用`
+          },
+          data: {
+            type: 'rakuma_fee_calculation',
+            newRate: String(newFeeRate),
+            effectiveFrom: effectiveFrom
+          },
+          tokens: tokens
+        });
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [calculateRakumaFeeRate] 完了 (${duration}ms)`);
+
+    return {
+      success: true,
+      salesCount,
+      salesAmount,
+      currentRate,
+      newRate: newFeeRate,
+      effectiveFrom,
+      rateChanged
+    };
+
+  } catch (error) {
+    console.error('❌ [calculateRakumaFeeRate] エラー:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+/**
+ * ラクマ手数料率自動適用（毎月1日 0:05 JST実行）
+ *
+ * 26日に計算された翌月手数料率を実際に適用
+ */
+exports.applyRakumaFeeRate = onSchedule({
+  schedule: '5 0 1 * *',
+  timeZone: 'Asia/Tokyo',
+  region: 'asia-northeast1',
+  memory: '256MiB'
+}, async (event) => {
+  const startTime = Date.now();
+  console.log('🔄 [applyRakumaFeeRate] 開始');
+
+  try {
+    const rakumaRef = db.collection('salesChannels').doc('rakuma');
+    const rakumaDoc = await rakumaRef.get();
+
+    if (!rakumaDoc.exists) {
+      console.log('⚠️ [applyRakumaFeeRate] rakumaドキュメントが存在しません');
+      return { success: false, error: 'rakuma document not found' };
+    }
+
+    const data = rakumaDoc.data();
+    const nextMonthRate = data.nextMonthRate;
+    const currentRate = data.commissionDefault || 10;
+
+    if (nextMonthRate === undefined || nextMonthRate === null) {
+      console.log('⚠️ [applyRakumaFeeRate] nextMonthRateが設定されていません');
+      return { success: false, error: 'nextMonthRate not set' };
+    }
+
+    // 手数料率を適用
+    await rakumaRef.update({
+      commissionDefault: nextMonthRate,
+      nextMonthRate: FieldValue.delete(),
+      nextMonthEffectiveFrom: FieldValue.delete(),
+      lastApplied: {
+        appliedAt: FieldValue.serverTimestamp(),
+        previousRate: currentRate,
+        appliedRate: nextMonthRate
+      },
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    console.log(`✅ [applyRakumaFeeRate] 手数料率適用: ${currentRate}% → ${nextMonthRate}%`);
+
+    // 変更があった場合のみ通知
+    if (currentRate !== nextMonthRate) {
+      const systemRoomRef = db.collection('rooms').doc('system-notifications');
+      await systemRoomRef.collection('messages').add({
+        content: `✅ ラクマ手数料率が本日から ${nextMonthRate}% に変更されました（前月: ${currentRate}%）`,
+        sender: 'システム',
+        senderEmail: 'system@reborn.local',
+        createdAt: FieldValue.serverTimestamp(),
+        type: 'system'
+      });
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [applyRakumaFeeRate] 完了 (${duration}ms)`);
+
+    return {
+      success: true,
+      previousRate: currentRate,
+      appliedRate: nextMonthRate
+    };
+
+  } catch (error) {
+    console.error('❌ [applyRakumaFeeRate] エラー:', error);
+    return { success: false, error: error.message };
+  }
+});

@@ -3331,27 +3331,49 @@
           // 変動制：レンジスライダーで選択
           const defaultRate = channelData.commissionDefault || channelData.commissionMax || 10;
           container.style.display = 'block';
+
+          // 翌月適用予定の表示
+          let nextMonthHtml = '';
+          if (channelData.nextMonthRate && channelData.nextMonthEffectiveFrom) {
+            const effectiveDate = channelData.nextMonthEffectiveFrom.toDate ?
+              channelData.nextMonthEffectiveFrom.toDate() : new Date(channelData.nextMonthEffectiveFrom);
+            const monthDay = `${effectiveDate.getMonth() + 1}月${effectiveDate.getDate()}日`;
+            const rateChange = channelData.nextMonthRate < defaultRate ? '↓' :
+                              channelData.nextMonthRate > defaultRate ? '↑' : '→';
+            const rateColor = channelData.nextMonthRate < defaultRate ? 'text-success' :
+                             channelData.nextMonthRate > defaultRate ? 'text-danger' : 'text-muted';
+            nextMonthHtml = `
+              <div class="alert alert-info py-1 px-2 mb-2 small">
+                <i class="bi bi-calendar-event me-1"></i>
+                <span class="fw-bold">${monthDay}〜</span> 手数料変更予定:
+                <span class="${rateColor} fw-bold">${channelData.nextMonthRate}% ${rateChange}</span>
+                <span class="text-muted">（売上実績に基づく自動計算）</span>
+              </div>
+            `;
+          }
+
           container.innerHTML = `
             <div class="card border-warning bg-warning bg-opacity-10">
               <div class="card-body py-2">
+                ${nextMonthHtml}
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <div class="d-flex align-items-center">
                     <i class="bi bi-graph-up text-warning me-2"></i>
-                    <small class="fw-bold">あなたの設定: <span class="text-warning">${defaultRate}%</span></small>
+                    <small class="fw-bold">現在の設定: <span class="text-warning">${defaultRate}%</span></small>
                   </div>
                   <span class="badge bg-warning text-dark fs-6" id="variableFeeValue">${defaultRate}%</span>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                   <span class="text-muted small">${channelData.commissionMin || 4.5}%</span>
-                  <input type="range" class="form-range flex-grow-1" 
+                  <input type="range" class="form-range flex-grow-1"
                          id="variableFeeSlider"
-                         min="${channelData.commissionMin || 4.5}" 
-                         max="${channelData.commissionMax || 10}" 
+                         min="${channelData.commissionMin || 4.5}"
+                         max="${channelData.commissionMax || 10}"
                          step="0.5"
                          value="${defaultRate}">
                   <span class="text-muted small">${channelData.commissionMax || 10}%</span>
                 </div>
-                <small class="text-muted d-block mt-1"><i class="bi bi-info-circle me-1"></i>基準値はマスタ管理で変更可能</small>
+                <small class="text-muted d-block mt-1"><i class="bi bi-info-circle me-1"></i>スライダーで今回の手数料を調整可能（マスタ管理で基準値変更）</small>
               </div>
             </div>
           `;
