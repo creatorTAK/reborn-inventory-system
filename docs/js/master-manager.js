@@ -3416,9 +3416,14 @@ async function renderSalesChannelDropdownUI() {
                 <p>出品先がまだ登録されていません</p>
               </div>
             ` : items.map(item => {
-              const thumbnail = item.iconUrl
-                ? `<img src="${escapeHtml(item.iconUrl)}" alt="" style="width:32px;height:32px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid #e9ecef;flex-shrink:0;">`
-                : `<div style="width:32px;height:32px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="bi bi-shop" style="font-size:16px;color:#aaa;"></i></div>`;
+              // 画像URLを正規化（相対パスの場合は/を付与）
+              const normalizedIconUrl = item.iconUrl
+                ? (item.iconUrl.startsWith('http') || item.iconUrl.startsWith('/') ? item.iconUrl : '/' + item.iconUrl)
+                : '';
+              const fallbackIcon = `<div style="width:32px;height:32px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="bi bi-shop" style="font-size:16px;color:#aaa;"></i></div>`;
+              const thumbnail = normalizedIconUrl
+                ? `<img src="${escapeHtml(normalizedIconUrl)}" alt="" style="width:32px;height:32px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid #e9ecef;flex-shrink:0;" onerror="this.outerHTML='${fallbackIcon.replace(/'/g, "\\'")}';">`
+                : fallbackIcon;
               const statusBadge = item.active
                 ? ''
                 : `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#6c757d;color:#fff;margin-left:8px;">無効</span>`;
@@ -3452,18 +3457,23 @@ async function renderSalesChannelDropdownUI() {
               </div>
             `;}).join('')}
           </div>
-          <div class="master-options-add" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <label style="margin:0;cursor:pointer;flex-shrink:0;" title="アイコン画像を選択">
-              <div id="newSalesChannelImagePreview" style="width:36px;height:36px;background:#f5f5f5;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px dashed #ccc;">
-                <i class="bi bi-image" style="font-size:16px;color:#aaa;"></i>
+          <div class="master-options-add" style="padding:12px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <label style="margin:0;cursor:pointer;flex-shrink:0;" title="アイコン画像を選択">
+                <div id="newSalesChannelImagePreview" style="width:40px;height:40px;background:#f5f5f5;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px dashed #ccc;">
+                  <i class="bi bi-image" style="font-size:18px;color:#aaa;"></i>
+                </div>
+                <input type="file" id="newSalesChannelImageFile" accept="image/*" style="display:none;" onchange="previewNewSalesChannelImage(this)">
+              </label>
+              <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
+                <input type="text" class="form-control form-control-sm" id="newSalesChannelId" placeholder="ID（例: mercari, yahoo-auction）" style="font-size:14px;width:100%;">
+                <input type="text" class="form-control form-control-sm" id="newSalesChannelName" placeholder="表示名（例: メルカリ, ヤフオク!）" style="font-size:14px;width:100%;">
               </div>
-              <input type="file" id="newSalesChannelImageFile" accept="image/*" style="display:none;" onchange="previewNewSalesChannelImage(this)">
-            </label>
-            <input type="text" class="form-control form-control-sm" id="newSalesChannelId" placeholder="ID（例: mercari）" style="width:100px;font-size:16px;">
-            <input type="text" class="form-control form-control-sm" id="newSalesChannelName" placeholder="名前（例: メルカリ）" style="flex:1;min-width:100px;font-size:16px;">
-            <button class="btn btn-sm btn-primary" onclick="addSalesChannel()" style="flex-shrink:0;">
-              <i class="bi bi-plus"></i> 追加
-            </button>
+              <button class="btn btn-sm btn-primary" onclick="addSalesChannel()" style="flex-shrink:0;height:40px;padding:0 16px;">
+                <i class="bi bi-plus"></i> 追加
+              </button>
+            </div>
+            <div style="font-size:11px;color:#888;margin-left:48px;">※ 追加後、編集画面で手数料などの詳細を設定できます</div>
           </div>
         </div>
       </div>
@@ -3595,8 +3605,12 @@ window.editSalesChannel = function(itemId) {
   const item = items.find(i => i.id === itemId);
   if (!item) return;
 
-  const currentImageHtml = item.iconUrl
-    ? `<img src="${escapeHtml(item.iconUrl)}" alt="現在の画像" style="width:60px;height:60px;object-fit:contain;border-radius:6px;border:1px solid #ddd;background:#fff;">`
+  // 画像URLを正規化
+  const normalizedIconUrl = item.iconUrl
+    ? (item.iconUrl.startsWith('http') || item.iconUrl.startsWith('/') ? item.iconUrl : '/' + item.iconUrl)
+    : '';
+  const currentImageHtml = normalizedIconUrl
+    ? `<img src="${escapeHtml(normalizedIconUrl)}" alt="現在の画像" style="width:60px;height:60px;object-fit:contain;border-radius:6px;border:1px solid #ddd;background:#fff;" onerror="this.style.display='none';">`
     : `<div style="width:60px;height:60px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="bi bi-shop" style="font-size:24px;color:#aaa;"></i></div>`;
 
   const feeType = item.feeType || 'simple';
