@@ -3393,7 +3393,7 @@ async function renderSalesChannelDropdownUI() {
     // 手数料タイプのバッジを生成
     const getFeeTypeBadge = (feeType) => {
       const types = {
-        simple: { label: '固定%', color: '#28a745' },
+        simple: { label: '固定', color: '#28a745' },
         variable: { label: '変動', color: '#e67e22' },
         complex: { label: '複合', color: '#3498db' },
         manual: { label: '手動', color: '#95a5a6' }
@@ -3460,17 +3460,10 @@ async function renderSalesChannelDropdownUI() {
               </div>
             `;}).join('')}
           </div>
-          <div class="master-options-add" style="padding:12px;border-top:1px solid #e9ecef;">
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <div style="display:flex;gap:8px;">
-                <input type="text" class="form-control form-control-sm" id="newSalesChannelId" placeholder="ID（例: mercari）" style="font-size:16px;flex:1;">
-                <input type="text" class="form-control form-control-sm" id="newSalesChannelName" placeholder="名前（例: メルカリ）" style="font-size:16px;flex:1;">
-                <button class="btn btn-sm btn-primary" onclick="addSalesChannel()" style="white-space:nowrap;padding:0 12px;">
-                  <i class="bi bi-plus"></i> 追加
-                </button>
-              </div>
-              <div style="font-size:11px;color:#888;">※ 追加後、編集で手数料・アイコン画像を設定できます</div>
-            </div>
+          <div class="master-options-add" style="padding:12px;border-top:1px solid #e9ecef;text-align:center;">
+            <button class="btn btn-primary" onclick="openAddSalesChannelModal()" style="padding:8px 24px;">
+              <i class="bi bi-plus-circle"></i> 新しい出品先を追加
+            </button>
           </div>
         </div>
       </div>
@@ -3595,6 +3588,225 @@ window.addSalesChannel = async function() {
 };
 
 /**
+ * 出品先追加モーダルを開く
+ */
+window.openAddSalesChannelModal = function() {
+  document.getElementById('editItemModalTitle').textContent = '新しい出品先を追加';
+  document.getElementById('editItemModalBody').innerHTML = `
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">プラットフォームID <span style="color:red;">*</span></label>
+      <input type="text" class="form-control" id="addSalesChannelId" placeholder="例: mercari, yahoo-auction" style="font-size:16px;">
+      <small class="text-muted">半角英数字とハイフンのみ（後から変更不可）</small>
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">出品先名 <span style="color:red;">*</span></label>
+      <input type="text" class="form-control" id="addSalesChannelName" placeholder="例: メルカリ, ヤフオク!" style="font-size:16px;">
+    </div>
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:8px;font-weight:500;">アイコン画像</label>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div id="addSalesChannelImagePreview" style="width:60px;height:60px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;">
+          <i class="bi bi-shop" style="font-size:24px;color:#aaa;"></i>
+        </div>
+        <div style="flex:1;">
+          <input type="file" class="form-control" id="addSalesChannelImageFile" accept="image/*" style="font-size:14px;" onchange="previewAddSalesChannelImage(this)">
+          <small class="text-muted">推奨: 正方形PNG、200x200px</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- 手数料タイプ選択 -->
+    <div class="form-group" style="margin-bottom:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">手数料タイプ</label>
+      <select class="form-select" id="addSalesChannelFeeType" style="font-size:16px;" onchange="toggleAddFeeTypeFields()">
+        <option value="simple" selected>固定%（メルカリ、Yahoo!フリマ等）</option>
+        <option value="variable">変動制（ラクマ等）</option>
+        <option value="complex">複合計算（BASE等）</option>
+        <option value="manual">手動入力（楽天、Amazon等）</option>
+      </select>
+    </div>
+
+    <!-- simple: 固定% -->
+    <div id="addFeeFields_simple" class="add-fee-type-fields" style="display:block;">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">手数料率（%）</label>
+        <input type="number" class="form-control" id="addSalesChannelCommission" value="10" min="0" max="100" step="0.1" style="font-size:16px;">
+      </div>
+    </div>
+
+    <!-- variable: 変動制 -->
+    <div id="addFeeFields_variable" class="add-fee-type-fields" style="display:none;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div class="form-group">
+          <label style="display:block;margin-bottom:4px;font-weight:500;">最小（%）</label>
+          <input type="number" class="form-control" id="addSalesChannelCommissionMin" value="0" min="0" max="100" step="0.1" style="font-size:16px;">
+        </div>
+        <div class="form-group">
+          <label style="display:block;margin-bottom:4px;font-weight:500;">最大（%）</label>
+          <input type="number" class="form-control" id="addSalesChannelCommissionMax" value="10" min="0" max="100" step="0.1" style="font-size:16px;">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">デフォルト（%）</label>
+        <input type="number" class="form-control" id="addSalesChannelCommissionDefault" value="10" min="0" max="100" step="0.1" style="font-size:16px;">
+      </div>
+    </div>
+
+    <!-- complex: 複合計算 -->
+    <div id="addFeeFields_complex" class="add-fee-type-fields" style="display:none;">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">計算式</label>
+        <input type="text" class="form-control" id="addSalesChannelFormula" placeholder="例: 3.6% + 40円 + 3%" style="font-size:16px;">
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">計算式の説明</label>
+        <input type="text" class="form-control" id="addSalesChannelFormulaDesc" placeholder="例: 決済手数料3.6%+40円、サービス利用料3%" style="font-size:16px;">
+      </div>
+    </div>
+
+    <!-- manual: 手動入力 -->
+    <div id="addFeeFields_manual" class="add-fee-type-fields" style="display:none;">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">手数料の説明</label>
+        <textarea class="form-control" id="addSalesChannelFeeNote" rows="2" placeholder="例: カテゴリ別8〜15%" style="font-size:16px;"></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">目安手数料率（%）</label>
+        <input type="number" class="form-control" id="addSalesChannelFeeEstimate" value="10" min="0" max="100" step="0.1" style="font-size:16px;">
+      </div>
+    </div>
+
+    <!-- 月額費用 -->
+    <div class="form-group" style="margin-bottom:16px;padding:12px;background:#f8f9fa;border-radius:8px;">
+      <label style="display:block;margin-bottom:8px;font-weight:600;color:#495057;">💰 月額費用（有料プラン用）</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label style="display:block;margin-bottom:4px;font-weight:500;font-size:13px;">月払い（円）</label>
+          <input type="number" class="form-control" id="addSalesChannelMonthlyFee" value="0" min="0" style="font-size:16px;">
+        </div>
+        <div class="form-group">
+          <label style="display:block;margin-bottom:4px;font-weight:500;font-size:13px;">年払い（円/月換算）</label>
+          <input type="number" class="form-control" id="addSalesChannelMonthlyFeeAnnual" value="0" min="0" style="font-size:16px;">
+        </div>
+      </div>
+    </div>
+  `;
+
+  window._editItemContext = { type: 'addSalesChannel', itemId: null };
+
+  document.getElementById('editItemSubmitBtn').textContent = '追加';
+  document.getElementById('editItemSubmitBtn').onclick = saveNewSalesChannel;
+
+  const modal = new bootstrap.Modal(document.getElementById('editItemModal'));
+  modal.show();
+};
+
+// 追加モーダル用: 手数料タイプ切り替え
+window.toggleAddFeeTypeFields = function() {
+  const feeType = document.getElementById('addSalesChannelFeeType')?.value || 'simple';
+  document.querySelectorAll('.add-fee-type-fields').forEach(el => el.style.display = 'none');
+  const targetEl = document.getElementById('addFeeFields_' + feeType);
+  if (targetEl) targetEl.style.display = 'block';
+};
+
+// 追加モーダル用: 画像プレビュー
+window.previewAddSalesChannelImage = function(input) {
+  const preview = document.getElementById('addSalesChannelImagePreview');
+  if (input.files && input.files[0] && preview) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      preview.innerHTML = `<img src="${e.target.result}" alt="プレビュー" style="width:60px;height:60px;object-fit:contain;border-radius:6px;">`;
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+};
+
+// 新規出品先を保存
+async function saveNewSalesChannel() {
+  const idInput = document.getElementById('addSalesChannelId');
+  const nameInput = document.getElementById('addSalesChannelName');
+  const feeTypeSelect = document.getElementById('addSalesChannelFeeType');
+  const imageInput = document.getElementById('addSalesChannelImageFile');
+
+  const platformId = idInput?.value?.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  const name = nameInput?.value?.trim();
+  const feeType = feeTypeSelect?.value || 'simple';
+
+  if (!platformId) {
+    alert('プラットフォームIDを入力してください');
+    return;
+  }
+  if (!name) {
+    alert('出品先名を入力してください');
+    return;
+  }
+
+  // 重複チェック
+  const items = window._currentSalesChannels || [];
+  if (items.some(item => item.platformId === platformId || item.id === platformId)) {
+    alert('このプラットフォームIDは既に登録されています');
+    return;
+  }
+
+  try {
+    const maxOrder = items.reduce((max, item) => Math.max(max, item.order || 0), 0);
+
+    const newData = {
+      platformId,
+      name,
+      feeType,
+      order: maxOrder + 1,
+      active: true,
+      monthlyFee: parseInt(document.getElementById('addSalesChannelMonthlyFee')?.value) || 0,
+      monthlyFeeAnnual: parseInt(document.getElementById('addSalesChannelMonthlyFeeAnnual')?.value) || 0,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    // 手数料タイプ別のフィールドを取得
+    switch (feeType) {
+      case 'simple':
+        newData.commission = parseFloat(document.getElementById('addSalesChannelCommission')?.value) || 0;
+        break;
+      case 'variable':
+        newData.commissionMin = parseFloat(document.getElementById('addSalesChannelCommissionMin')?.value) || 0;
+        newData.commissionMax = parseFloat(document.getElementById('addSalesChannelCommissionMax')?.value) || 0;
+        newData.commissionDefault = parseFloat(document.getElementById('addSalesChannelCommissionDefault')?.value) || 0;
+        break;
+      case 'complex':
+        newData.commissionFormula = document.getElementById('addSalesChannelFormula')?.value?.trim() || '';
+        newData.formulaDescription = document.getElementById('addSalesChannelFormulaDesc')?.value?.trim() || '';
+        break;
+      case 'manual':
+        newData.feeNote = document.getElementById('addSalesChannelFeeNote')?.value?.trim() || '';
+        newData.feeEstimate = parseFloat(document.getElementById('addSalesChannelFeeEstimate')?.value) || 0;
+        break;
+    }
+
+    // ドキュメントIDをplatformIdにする
+    const docRef = window.db.collection(currentMasterConfig.collection).doc(platformId);
+    await docRef.set(newData);
+
+    // 画像が選択されていればアップロード
+    if (imageInput?.files?.length > 0) {
+      try {
+        const iconUrl = await uploadSalesChannelImage(imageInput.files[0], platformId);
+        await docRef.update({ iconUrl });
+      } catch (imgError) {
+        console.error('画像アップロードエラー:', imgError);
+      }
+    }
+
+    hideEditItemModal();
+    await renderSalesChannelDropdownUI();
+    showToast('追加しました');
+  } catch (error) {
+    console.error('追加エラー:', error);
+    alert('追加に失敗しました: ' + error.message);
+  }
+}
+
+/**
  * 出品先を編集（モーダル表示）
  */
 window.editSalesChannel = function(itemId) {
@@ -3698,10 +3910,22 @@ window.editSalesChannel = function(itemId) {
       </div>
     </div>
 
-    <div class="form-group" style="margin-bottom:16px;">
-      <label style="display:block;margin-bottom:4px;font-weight:500;">URL</label>
-      <input type="url" class="form-control" id="editSalesChannelUrl" value="${escapeHtml(item.url || '')}" placeholder="https://..." style="font-size:16px;">
+    <!-- 月額費用 -->
+    <div class="form-group" style="margin-bottom:16px;padding:12px;background:#f8f9fa;border-radius:8px;">
+      <label style="display:block;margin-bottom:8px;font-weight:600;color:#495057;">💰 月額費用（有料プラン用）</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label style="display:block;margin-bottom:4px;font-weight:500;font-size:13px;">月払い（円）</label>
+          <input type="number" class="form-control" id="editSalesChannelMonthlyFee" value="${item.monthlyFee || 0}" min="0" style="font-size:16px;">
+        </div>
+        <div class="form-group">
+          <label style="display:block;margin-bottom:4px;font-weight:500;font-size:13px;">年払い（円/月換算）</label>
+          <input type="number" class="form-control" id="editSalesChannelMonthlyFeeAnnual" value="${item.monthlyFeeAnnual || 0}" min="0" style="font-size:16px;">
+        </div>
+      </div>
+      <small class="text-muted">売上分析で純利益計算に使用されます</small>
     </div>
+
     <div class="form-group" style="margin-bottom:16px;">
       <label style="display:block;margin-bottom:4px;font-weight:500;">表示順</label>
       <input type="number" class="form-control" id="editSalesChannelOrder" value="${item.order || 0}" min="0" style="font-size:16px;">
@@ -3828,6 +4052,10 @@ async function saveSalesChannelFromModal(itemId) {
         updateData.formulaDescription = null;
         break;
     }
+
+    // 月額固定費（全タイプ共通）
+    updateData.monthlyFee = parseInt(document.getElementById('editSalesChannelMonthlyFee')?.value) || 0;
+    updateData.monthlyFeeAnnual = parseInt(document.getElementById('editSalesChannelMonthlyFeeAnnual')?.value) || 0;
 
     // 画像が選択されていればアップロード
     if (imageInput?.files?.length > 0) {
