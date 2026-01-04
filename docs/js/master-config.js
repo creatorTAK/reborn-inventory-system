@@ -821,6 +821,17 @@ const masterCategories = {
             }
           },
           {
+            name: 'monthlyFee',
+            label: '月額費用（円）',
+            required: false,
+            type: 'number',
+            placeholder: '例: 16580（有料プランの場合）',
+            default: 0,
+            validation: {
+              min: 0
+            }
+          },
+          {
             name: 'active',
             label: '有効',
             required: false,
