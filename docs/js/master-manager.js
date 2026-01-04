@@ -3697,8 +3697,7 @@ window.openAddSalesChannelModal = function() {
   document.getElementById('editItemSubmitBtn').textContent = '追加';
   document.getElementById('editItemSubmitBtn').onclick = saveNewSalesChannel;
 
-  const modal = new bootstrap.Modal(document.getElementById('editItemModal'));
-  modal.show();
+  document.getElementById('editItemModal').classList.remove('hidden');
 };
 
 // 追加モーダル用: 手数料タイプ切り替え
