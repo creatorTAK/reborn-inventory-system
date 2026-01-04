@@ -11,7 +11,7 @@
   <!-- Algolia Search SDK -->
   <script src="https://cdn.jsdelivr.net/npm/algoliasearch@4/dist/algoliasearch-lite.umd.js"></script>
   <!-- REBORN Theme -->
-  <link rel="stylesheet" href="/css/reborn-theme.css?v=513">
+  <link rel="stylesheet" href="/css/reborn-theme.css?v=514">
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -3255,20 +3255,12 @@
     }
 
     /**
-     * 出品先マスタ読み込み（Firestore版 - compat API）
+     * 出品先マスタ読み込み（FirestoreApi経由）
      */
     async function loadSalesChannelsMaster() {
       try {
         console.log('🏪 [DEBUG] 出品先マスタ読み込み開始');
-        const snapshot = await db.collection('salesChannels')
-          .orderBy('order', 'asc')
-          .get();
-        
-        salesChannelsMaster = [];
-        snapshot.forEach(doc => {
-          salesChannelsMaster.push({ id: doc.id, ...doc.data() });
-        });
-        
+        salesChannelsMaster = await FirestoreApi.getSalesChannelsMaster();
         console.log('🏪 [DEBUG] 出品先マスタ:', salesChannelsMaster);
         
         // ドロップダウンを生成
@@ -4382,6 +4374,24 @@
     }
 
     /**
+     * 出品先マスタを取得
+     */
+    async function getSalesChannelsMaster() {
+      try {
+        const q = query(collection(db, 'salesChannels'), orderBy('order', 'asc'));
+        const snapshot = await getDocs(q);
+        const channels = [];
+        snapshot.forEach(docSnapshot => {
+          channels.push({ id: docSnapshot.id, ...docSnapshot.data() });
+        });
+        return channels;
+      } catch (error) {
+        console.error('[Firestore API] 出品先マスタ取得エラー:', error);
+        throw error;
+      }
+    }
+
+    /**
      * 販売記録を保存（商品ドキュメントを更新）
      */
     async function saveSalesRecordToFirestore(salesData) {
@@ -4619,6 +4629,7 @@
       getProductByManagementNumber,
       getShippingMethodMaster,
       getPackagingMaterialsMaster,
+      getSalesChannelsMaster,
       saveSalesRecord: saveSalesRecordToFirestore
     };
 
