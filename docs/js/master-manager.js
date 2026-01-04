@@ -3393,13 +3393,13 @@ async function renderSalesChannelDropdownUI() {
     // 手数料タイプのバッジを生成
     const getFeeTypeBadge = (feeType) => {
       const types = {
-        simple: { label: '固定', color: '#28a745' },
-        variable: { label: '変動', color: '#ffc107' },
-        complex: { label: '複合', color: '#17a2b8' },
-        manual: { label: '手動', color: '#6c757d' }
+        simple: { label: '固定%', color: '#28a745' },
+        variable: { label: '変動', color: '#e67e22' },
+        complex: { label: '複合', color: '#3498db' },
+        manual: { label: '手動', color: '#95a5a6' }
       };
       const t = types[feeType] || types.simple;
-      return `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:${t.color};color:#fff;margin-left:4px;">${t.label}</span>`;
+      return `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${t.color};color:#fff;font-weight:500;white-space:nowrap;">${t.label}</span>`;
     };
 
     // UIを生成
@@ -3436,21 +3436,20 @@ async function renderSalesChannelDropdownUI() {
 
               return `
               <div class="master-options-item" data-item-id="${item.id}" style="${!item.active ? 'opacity:0.5;' : ''}">
-                <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;margin-right:12px;">
+                <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
                   ${thumbnail}
                   <div style="flex:1;min-width:0;">
-                    <div style="display:flex;align-items:center;gap:4px;">
-                      <span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.name)}</span>
+                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                      <span style="font-weight:600;font-size:14px;">${escapeHtml(item.name)}</span>
                       ${statusBadge}
-                    </div>
-                    <div style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;">
-                      ${escapeHtml(item.platformId)}
-                      ${feeText ? ` • 手数料 ${feeText}` : ''}
                       ${feeTypeBadge}
+                    </div>
+                    <div style="font-size:12px;color:#666;margin-top:2px;">
+                      ${feeText ? `手数料 ${feeText}` : '<span style="color:#aaa;">手数料未設定</span>'}
                     </div>
                   </div>
                 </div>
-                <div class="item-actions" style="flex-shrink:0;">
+                <div class="item-actions" style="display:flex;gap:4px;flex-shrink:0;">
                   <button class="btn-icon btn-edit" onclick="editSalesChannel('${item.id}')" title="編集">
                     <i class="bi bi-pencil"></i>
                   </button>
