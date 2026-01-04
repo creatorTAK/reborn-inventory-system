@@ -490,6 +490,28 @@
               <td id="detail-operatingProfit">-</td>
               <td id="detail-operatingProfitRate">-</td>
             </tr>
+            <tr style="border-top: 2px solid #e5e7eb;">
+              <td class="category-header">
+                月額固定費
+                <button class="btn btn-link btn-sm p-0 ms-1" type="button" data-bs-toggle="collapse" data-bs-target="#monthlyFeeDetail" style="font-size: 0.7rem;">
+                  <i class="bi bi-info-circle"></i>
+                </button>
+              </td>
+              <td id="detail-monthlyFee">-</td>
+              <td id="detail-monthlyFeeRate">-</td>
+            </tr>
+            <tr class="collapse" id="monthlyFeeDetail">
+              <td colspan="3" style="background: #f9fafb; padding: 8px 12px;">
+                <div id="monthlyFeeBreakdown" class="small text-muted">
+                  <!-- 月額費用の内訳が動的に表示される -->
+                </div>
+              </td>
+            </tr>
+            <tr style="background: #dbeafe; font-weight: 700;">
+              <td class="category-header">純利益</td>
+              <td id="detail-netProfit">-</td>
+              <td id="detail-netProfitRate">-</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -649,7 +671,9 @@
         // 利益
         finalProfit: 0,
         // 在庫日数合計（平均計算用）
-        totalStockDays: 0
+        totalStockDays: 0,
+        // 使用プラットフォーム（月額費用計算用）
+        usedPlatforms: new Set()
       };
 
       snapshot.forEach(doc => {
@@ -675,6 +699,9 @@
           metrics.salesCount++;
           metrics.salesAmount += parseFloat(data.saleAmount || 0);
           metrics.platformFee += parseFloat(data.platformFee || 0);
+          // 使用プラットフォームを記録（月額費用計算用）
+          const platformId = data.salesChannelId || data.salePlatform || '';
+          if (platformId) metrics.usedPlatforms.add(platformId);
           metrics.shippingFee += parseFloat(data.shippingFee || 0);
           metrics.packagingCost += parseFloat(data.packagingCostTotal || 0);
           metrics.finalProfit += parseFloat(data.finalProfit || 0);
@@ -803,10 +830,26 @@
       return result;
     }
 
+    /**
+     * 販売チャネル（出品先マスタ）を取得
+     * @returns {Object} channelId => { name, monthlyFee, monthlyFeeAnnual, ... }
+     */
+    async function getSalesChannels() {
+      const channelsRef = collection(db, 'salesChannels');
+      const snapshot = await getDocs(channelsRef);
+      const channels = {};
+      snapshot.forEach(doc => {
+        channels[doc.id] = { id: doc.id, ...doc.data() };
+      });
+      console.log('📊 [売上分析] 販売チャネル取得:', Object.keys(channels).length, '件');
+      return channels;
+    }
+
     // グローバルに公開
     window.SalesApi = {
       calculateSalesMetrics,
-      calculatePerformanceByAxis
+      calculatePerformanceByAxis,
+      getSalesChannels
     };
 
     console.log('✅ [売上分析] Firebase初期化完了');
@@ -934,6 +977,9 @@
 
         const metrics = await SalesApi.calculateSalesMetrics(startDate, endDate);
 
+        // 販売チャネルの月額費用を取得
+        const salesChannels = await SalesApi.getSalesChannels();
+
         // 計算
         const cogs = metrics.purchaseAmount; // 売上原価（販売した商品の仕入金額）
         const grossProfit = metrics.salesAmount - cogs;
@@ -944,6 +990,23 @@
         const conversionRate = metrics.listingCount > 0 ? (metrics.salesCount / metrics.listingCount) * 100 : 0;
         const avgStockDays = metrics.salesCount > 0 ? Math.round(metrics.totalStockDays / metrics.salesCount) : 0;
         const avgProfitPerItem = metrics.salesCount > 0 ? Math.round(metrics.finalProfit / metrics.salesCount) : 0;
+
+        // 月額固定費の計算（使用プラットフォームの月額費用合計）
+        let totalMonthlyFee = 0;
+        const monthlyFeeBreakdown = [];
+        metrics.usedPlatforms.forEach(platformId => {
+          const channel = salesChannels[platformId];
+          if (channel && channel.monthlyFee > 0) {
+            totalMonthlyFee += channel.monthlyFee;
+            monthlyFeeBreakdown.push({
+              name: channel.name || platformId,
+              fee: channel.monthlyFee,
+              annual: channel.monthlyFeeAnnual || null
+            });
+          }
+        });
+        const netProfit = operatingProfit - totalMonthlyFee;
+        const netProfitRate = metrics.salesAmount > 0 ? (netProfit / metrics.salesAmount) * 100 : 0;
 
         // 主要KPI更新
         document.getElementById('kpi-sales').textContent = formatCurrency(metrics.salesAmount);
@@ -980,6 +1043,25 @@
         document.getElementById('detail-packagingCostRate').textContent = formatPercent(metrics.salesAmount > 0 ? (metrics.packagingCost / metrics.salesAmount) * 100 : 0);
         document.getElementById('detail-operatingProfit').textContent = formatCurrency(operatingProfit);
         document.getElementById('detail-operatingProfitRate').textContent = formatPercent(operatingProfitRate);
+
+        // 月額固定費表示
+        document.getElementById('detail-monthlyFee').textContent = formatCurrency(totalMonthlyFee);
+        document.getElementById('detail-monthlyFeeRate').textContent = totalMonthlyFee > 0 ? '-' : '-';
+
+        // 月額費用の内訳表示
+        const breakdownEl = document.getElementById('monthlyFeeBreakdown');
+        if (monthlyFeeBreakdown.length > 0) {
+          breakdownEl.innerHTML = monthlyFeeBreakdown.map(item => {
+            const annualNote = item.annual ? ` <span class="text-success">(年払い: ¥${item.annual.toLocaleString()}/月)</span>` : '';
+            return `<div>• ${item.name}: ¥${item.fee.toLocaleString()}/月${annualNote}</div>`;
+          }).join('');
+        } else {
+          breakdownEl.innerHTML = '<div class="text-muted">有料プラン利用なし</div>';
+        }
+
+        // 純利益表示
+        document.getElementById('detail-netProfit').textContent = formatCurrency(netProfit);
+        document.getElementById('detail-netProfitRate').textContent = formatPercent(netProfitRate);
 
         // 在庫状況更新
         document.getElementById('stock-count').textContent = metrics.stockCount;
