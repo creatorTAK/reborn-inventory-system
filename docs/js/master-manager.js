@@ -3353,7 +3353,16 @@ async function renderSalesChannelDropdownUI() {
         platformId: data.platformId || doc.id,
         name: data.name || '',
         iconUrl: data.iconUrl || '',
+        // 手数料関連フィールド
+        feeType: data.feeType || 'simple',
         commission: data.commission || 0,
+        commissionMin: data.commissionMin || 0,
+        commissionMax: data.commissionMax || 0,
+        commissionDefault: data.commissionDefault || 0,
+        commissionFormula: data.commissionFormula || '',
+        formulaDescription: data.formulaDescription || '',
+        feeNote: data.feeNote || '',
+        feeEstimate: data.feeEstimate || 0,
         url: data.url || '',
         order: data.order || 0,
         active: data.active !== false
@@ -3362,6 +3371,36 @@ async function renderSalesChannelDropdownUI() {
 
     // 現在のデータを保持
     window._currentSalesChannels = items;
+
+    // 手数料タイプの表示テキストを生成する関数
+    const getFeeDisplayText = (item) => {
+      switch (item.feeType) {
+        case 'simple':
+          return item.commission ? `${item.commission}%` : '';
+        case 'variable':
+          return item.commissionMin && item.commissionMax
+            ? `${item.commissionMin}〜${item.commissionMax}%`
+            : (item.commissionDefault ? `${item.commissionDefault}%` : '');
+        case 'complex':
+          return item.commissionFormula || '複合計算';
+        case 'manual':
+          return item.feeEstimate ? `約${item.feeEstimate}%` : '手動入力';
+        default:
+          return '';
+      }
+    };
+
+    // 手数料タイプのバッジを生成
+    const getFeeTypeBadge = (feeType) => {
+      const types = {
+        simple: { label: '固定', color: '#28a745' },
+        variable: { label: '変動', color: '#ffc107' },
+        complex: { label: '複合', color: '#17a2b8' },
+        manual: { label: '手動', color: '#6c757d' }
+      };
+      const t = types[feeType] || types.simple;
+      return `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:${t.color};color:#fff;margin-left:4px;">${t.label}</span>`;
+    };
 
     // UIを生成
     container.innerHTML = `
@@ -3383,7 +3422,8 @@ async function renderSalesChannelDropdownUI() {
               const statusBadge = item.active
                 ? ''
                 : `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#6c757d;color:#fff;margin-left:8px;">無効</span>`;
-              const commissionText = item.commission ? `${item.commission}%` : '';
+              const feeText = getFeeDisplayText(item);
+              const feeTypeBadge = getFeeTypeBadge(item.feeType);
 
               return `
               <div class="master-options-item" data-item-id="${item.id}" style="${!item.active ? 'opacity:0.5;' : ''}">
@@ -3394,7 +3434,11 @@ async function renderSalesChannelDropdownUI() {
                       <span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.name)}</span>
                       ${statusBadge}
                     </div>
-                    <div style="font-size:11px;color:#888;">${escapeHtml(item.platformId)}${commissionText ? ` • 手数料 ${commissionText}` : ''}</div>
+                    <div style="font-size:11px;color:#888;display:flex;align-items:center;gap:4px;">
+                      ${escapeHtml(item.platformId)}
+                      ${feeText ? ` • 手数料 ${feeText}` : ''}
+                      ${feeTypeBadge}
+                    </div>
                   </div>
                 </div>
                 <div class="item-actions" style="flex-shrink:0;">
@@ -3555,6 +3599,8 @@ window.editSalesChannel = function(itemId) {
     ? `<img src="${escapeHtml(item.iconUrl)}" alt="現在の画像" style="width:60px;height:60px;object-fit:contain;border-radius:6px;border:1px solid #ddd;background:#fff;">`
     : `<div style="width:60px;height:60px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="bi bi-shop" style="font-size:24px;color:#aaa;"></i></div>`;
 
+  const feeType = item.feeType || 'simple';
+
   document.getElementById('editItemModalTitle').textContent = '出品先を編集';
   document.getElementById('editItemModalBody').innerHTML = `
     <div class="form-group" style="margin-bottom:16px;">
@@ -3576,10 +3622,71 @@ window.editSalesChannel = function(itemId) {
         </div>
       </div>
     </div>
+
+    <!-- 手数料タイプ選択 -->
     <div class="form-group" style="margin-bottom:16px;">
-      <label style="display:block;margin-bottom:4px;font-weight:500;">手数料率（%）</label>
-      <input type="number" class="form-control" id="editSalesChannelCommission" value="${item.commission || 0}" min="0" max="100" style="font-size:16px;">
+      <label style="display:block;margin-bottom:4px;font-weight:500;">手数料タイプ</label>
+      <select class="form-select" id="editSalesChannelFeeType" style="font-size:16px;" onchange="toggleFeeTypeFields()">
+        <option value="simple" ${feeType === 'simple' ? 'selected' : ''}>固定%（メルカリ、Yahoo!フリマ等）</option>
+        <option value="variable" ${feeType === 'variable' ? 'selected' : ''}>変動制（ラクマ等）</option>
+        <option value="complex" ${feeType === 'complex' ? 'selected' : ''}>複合計算（BASE等）</option>
+        <option value="manual" ${feeType === 'manual' ? 'selected' : ''}>手動入力（楽天、Amazon等）</option>
+      </select>
     </div>
+
+    <!-- simple: 固定% -->
+    <div id="feeFields_simple" class="fee-type-fields" style="display:${feeType === 'simple' ? 'block' : 'none'};">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">手数料率（%）</label>
+        <input type="number" class="form-control" id="editSalesChannelCommission" value="${item.commission || 0}" min="0" max="100" step="0.1" style="font-size:16px;">
+      </div>
+    </div>
+
+    <!-- variable: 変動制 -->
+    <div id="feeFields_variable" class="fee-type-fields" style="display:${feeType === 'variable' ? 'block' : 'none'};">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div class="form-group">
+          <label style="display:block;margin-bottom:4px;font-weight:500;">最小（%）</label>
+          <input type="number" class="form-control" id="editSalesChannelCommissionMin" value="${item.commissionMin || 0}" min="0" max="100" step="0.1" style="font-size:16px;">
+        </div>
+        <div class="form-group">
+          <label style="display:block;margin-bottom:4px;font-weight:500;">最大（%）</label>
+          <input type="number" class="form-control" id="editSalesChannelCommissionMax" value="${item.commissionMax || 0}" min="0" max="100" step="0.1" style="font-size:16px;">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">デフォルト（%）</label>
+        <input type="number" class="form-control" id="editSalesChannelCommissionDefault" value="${item.commissionDefault || 0}" min="0" max="100" step="0.1" style="font-size:16px;">
+        <small class="text-muted">販売記録時に初期選択される値</small>
+      </div>
+    </div>
+
+    <!-- complex: 複合計算 -->
+    <div id="feeFields_complex" class="fee-type-fields" style="display:${feeType === 'complex' ? 'block' : 'none'};">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">計算式</label>
+        <input type="text" class="form-control" id="editSalesChannelFormula" value="${escapeHtml(item.commissionFormula || '')}" placeholder="例: 3.6% + 40円 + 3%" style="font-size:16px;">
+        <small class="text-muted">形式: X% + Y円 + Z%（自動計算用）</small>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">計算式の説明</label>
+        <input type="text" class="form-control" id="editSalesChannelFormulaDesc" value="${escapeHtml(item.formulaDescription || '')}" placeholder="例: 決済手数料3.6%+40円、サービス利用料3%" style="font-size:16px;">
+      </div>
+    </div>
+
+    <!-- manual: 手動入力 -->
+    <div id="feeFields_manual" class="fee-type-fields" style="display:${feeType === 'manual' ? 'block' : 'none'};">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">手数料の説明</label>
+        <textarea class="form-control" id="editSalesChannelFeeNote" rows="3" placeholder="例: カテゴリ別8〜15%、成約料あり、FBA手数料別途" style="font-size:16px;">${escapeHtml(item.feeNote || '')}</textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:4px;font-weight:500;">目安手数料率（%）</label>
+        <input type="number" class="form-control" id="editSalesChannelFeeEstimate" value="${item.feeEstimate || 0}" min="0" max="100" step="0.1" style="font-size:16px;">
+        <small class="text-muted">参考値として表示されます</small>
+      </div>
+    </div>
+
     <div class="form-group" style="margin-bottom:16px;">
       <label style="display:block;margin-bottom:4px;font-weight:500;">URL</label>
       <input type="url" class="form-control" id="editSalesChannelUrl" value="${escapeHtml(item.url || '')}" placeholder="https://..." style="font-size:16px;">
@@ -3605,6 +3712,21 @@ window.editSalesChannel = function(itemId) {
 };
 
 /**
+ * 手数料タイプに応じてフィールドを表示/非表示
+ */
+window.toggleFeeTypeFields = function() {
+  const feeType = document.getElementById('editSalesChannelFeeType').value;
+  const types = ['simple', 'variable', 'complex', 'manual'];
+
+  types.forEach(type => {
+    const fields = document.getElementById(`feeFields_${type}`);
+    if (fields) {
+      fields.style.display = type === feeType ? 'block' : 'none';
+    }
+  });
+};
+
+/**
  * 編集用の出品先画像プレビュー
  */
 window.previewEditSalesChannelImage = function(input) {
@@ -3623,7 +3745,7 @@ window.previewEditSalesChannelImage = function(input) {
  */
 async function saveSalesChannelFromModal(itemId) {
   const nameInput = document.getElementById('editSalesChannelName');
-  const commissionInput = document.getElementById('editSalesChannelCommission');
+  const feeTypeSelect = document.getElementById('editSalesChannelFeeType');
   const urlInput = document.getElementById('editSalesChannelUrl');
   const orderInput = document.getElementById('editSalesChannelOrder');
   const activeInput = document.getElementById('editSalesChannelActive');
@@ -3636,15 +3758,65 @@ async function saveSalesChannelFromModal(itemId) {
     return;
   }
 
+  const feeType = feeTypeSelect?.value || 'simple';
+
   try {
     const updateData = {
       name: newName,
-      commission: parseFloat(commissionInput.value) || 0,
+      feeType: feeType,
       url: urlInput.value.trim(),
       order: parseInt(orderInput.value, 10) || 0,
       active: activeInput.checked,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
+
+    // 手数料タイプ別のフィールドを取得
+    switch (feeType) {
+      case 'simple':
+        updateData.commission = parseFloat(document.getElementById('editSalesChannelCommission')?.value) || 0;
+        // 他のタイプのフィールドをクリア
+        updateData.commissionMin = null;
+        updateData.commissionMax = null;
+        updateData.commissionDefault = null;
+        updateData.commissionFormula = null;
+        updateData.formulaDescription = null;
+        updateData.feeNote = null;
+        updateData.feeEstimate = null;
+        break;
+      case 'variable':
+        updateData.commissionMin = parseFloat(document.getElementById('editSalesChannelCommissionMin')?.value) || 0;
+        updateData.commissionMax = parseFloat(document.getElementById('editSalesChannelCommissionMax')?.value) || 0;
+        updateData.commissionDefault = parseFloat(document.getElementById('editSalesChannelCommissionDefault')?.value) || 0;
+        // 他のタイプのフィールドをクリア
+        updateData.commission = null;
+        updateData.commissionFormula = null;
+        updateData.formulaDescription = null;
+        updateData.feeNote = null;
+        updateData.feeEstimate = null;
+        break;
+      case 'complex':
+        updateData.commissionFormula = document.getElementById('editSalesChannelFormula')?.value?.trim() || '';
+        updateData.formulaDescription = document.getElementById('editSalesChannelFormulaDesc')?.value?.trim() || '';
+        // 他のタイプのフィールドをクリア
+        updateData.commission = null;
+        updateData.commissionMin = null;
+        updateData.commissionMax = null;
+        updateData.commissionDefault = null;
+        updateData.feeNote = null;
+        updateData.feeEstimate = null;
+        break;
+      case 'manual':
+        updateData.feeNote = document.getElementById('editSalesChannelFeeNote')?.value?.trim() || '';
+        updateData.feeEstimate = parseFloat(document.getElementById('editSalesChannelFeeEstimate')?.value) || 0;
+        // 他のタイプのフィールドをクリア
+        updateData.commission = null;
+        updateData.commissionMin = null;
+        updateData.commissionMax = null;
+        updateData.commissionDefault = null;
+        updateData.commissionFormula = null;
+        updateData.formulaDescription = null;
+        break;
+    }
 
     // 画像が選択されていればアップロード
     if (imageInput?.files?.length > 0) {

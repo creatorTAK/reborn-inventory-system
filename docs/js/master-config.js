@@ -656,6 +656,13 @@ const masterCategories = {
         description: '出品先プラットフォームを管理',
         // カスタムUI（サムネイル表示対応）
         type: 'salesChannelDropdown',
+        // 手数料タイプ定義
+        feeTypes: [
+          { id: 'simple', name: '固定%', description: '一律の手数料率（メルカリ、Yahoo!フリマ等）', icon: 'bi-percent' },
+          { id: 'variable', name: '変動制', description: 'ユーザーのランクや実績で変動（ラクマ等）', icon: 'bi-graph-up' },
+          { id: 'complex', name: '複合計算', description: '%＋固定額＋別途%など（BASE等）', icon: 'bi-calculator' },
+          { id: 'manual', name: '手動入力', description: '複雑すぎて自動計算不可（楽天、Amazon等）', icon: 'bi-pencil' }
+        ],
         fields: [
           {
             name: 'platformId',
@@ -687,12 +694,107 @@ const masterCategories = {
             type: 'image',
             placeholder: '画像をアップロード'
           },
+          // 手数料タイプ
+          {
+            name: 'feeType',
+            label: '手数料タイプ',
+            required: true,
+            type: 'select',
+            default: 'simple',
+            options: ['simple', 'variable', 'complex', 'manual']
+          },
+          // simple: 固定%
           {
             name: 'commission',
             label: '手数料率（%）',
             required: false,
             type: 'number',
             placeholder: '例: 10',
+            showIf: { feeType: 'simple' },
+            validation: {
+              min: 0,
+              max: 100
+            }
+          },
+          // variable: 変動制（最小〜最大）
+          {
+            name: 'commissionMin',
+            label: '最小手数料率（%）',
+            required: false,
+            type: 'number',
+            placeholder: '例: 4.5',
+            showIf: { feeType: 'variable' },
+            validation: {
+              min: 0,
+              max: 100
+            }
+          },
+          {
+            name: 'commissionMax',
+            label: '最大手数料率（%）',
+            required: false,
+            type: 'number',
+            placeholder: '例: 10',
+            showIf: { feeType: 'variable' },
+            validation: {
+              min: 0,
+              max: 100
+            }
+          },
+          {
+            name: 'commissionDefault',
+            label: 'デフォルト手数料率（%）',
+            required: false,
+            type: 'number',
+            placeholder: '例: 10（初回ユーザー向け）',
+            showIf: { feeType: 'variable' },
+            validation: {
+              min: 0,
+              max: 100
+            }
+          },
+          // complex: 複合計算式
+          {
+            name: 'commissionFormula',
+            label: '計算式',
+            required: false,
+            type: 'text',
+            placeholder: '例: 3.6% + 40円 + 3%',
+            showIf: { feeType: 'complex' },
+            validation: {
+              maxLength: 200
+            }
+          },
+          {
+            name: 'formulaDescription',
+            label: '計算式の説明',
+            required: false,
+            type: 'text',
+            placeholder: '例: 決済手数料3.6%+40円、サービス利用料3%',
+            showIf: { feeType: 'complex' },
+            validation: {
+              maxLength: 200
+            }
+          },
+          // manual: 手動入力（説明のみ）
+          {
+            name: 'feeNote',
+            label: '手数料の説明',
+            required: false,
+            type: 'textarea',
+            placeholder: '例: カテゴリ別8〜15%、成約料あり、FBA手数料別途',
+            showIf: { feeType: 'manual' },
+            validation: {
+              maxLength: 500
+            }
+          },
+          {
+            name: 'feeEstimate',
+            label: '目安手数料率（%）',
+            required: false,
+            type: 'number',
+            placeholder: '例: 15（参考値）',
+            showIf: { feeType: 'manual' },
             validation: {
               min: 0,
               max: 100
@@ -726,7 +828,7 @@ const masterCategories = {
             default: true
           }
         ],
-        displayFields: ['name', 'commission'],
+        displayFields: ['name', 'feeType', 'commission'],
         searchFields: ['name', 'platformId'],
         sortBy: 'order',
         sortOrder: 'asc',
