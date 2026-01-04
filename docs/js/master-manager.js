@@ -3420,10 +3420,14 @@ async function renderSalesChannelDropdownUI() {
               const normalizedIconUrl = item.iconUrl
                 ? (item.iconUrl.startsWith('http') || item.iconUrl.startsWith('/') ? item.iconUrl : '/' + item.iconUrl)
                 : '';
-              const fallbackIcon = `<div style="width:32px;height:32px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="bi bi-shop" style="font-size:16px;color:#aaa;"></i></div>`;
+              // サムネイル: 画像がある場合はimgタグ、なければフォールバックアイコン
+              // onerrorでは画像を非表示にしてフォールバックを表示
               const thumbnail = normalizedIconUrl
-                ? `<img src="${escapeHtml(normalizedIconUrl)}" alt="" style="width:32px;height:32px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid #e9ecef;flex-shrink:0;" onerror="this.outerHTML='${fallbackIcon.replace(/'/g, "\\'")}';">`
-                : fallbackIcon;
+                ? `<div style="width:32px;height:32px;flex-shrink:0;position:relative;">
+                     <div style="position:absolute;inset:0;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;"><i class="bi bi-shop" style="font-size:16px;color:#aaa;"></i></div>
+                     <img src="${escapeHtml(normalizedIconUrl)}" alt="" style="position:relative;width:32px;height:32px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid #e9ecef;" onerror="this.style.display='none';">
+                   </div>`
+                : `<div style="width:32px;height:32px;background:#f0f0f0;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="bi bi-shop" style="font-size:16px;color:#aaa;"></i></div>`;
               const statusBadge = item.active
                 ? ''
                 : `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#6c757d;color:#fff;margin-left:8px;">無効</span>`;
