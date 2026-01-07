@@ -6219,7 +6219,7 @@
     }
 
     // 🔧 v508: やることリストをget()に変更（コスト削減）
-    // リアルタイム監視 → 1回取得に変更
+    // 🔧 v531: completed未定義のタスクもカウントするよう修正
     async function startTodoListener() {
       const userEmail = localStorage.getItem('reborn_user_email');
       if (!userEmail) {
@@ -6229,15 +6229,23 @@
 
       try {
         const db = await getFirebaseDb();
-        const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-        // 未完了タスクを1回取得（onSnapshot → getDocs）
+        // 全タスクを取得し、クライアント側で未完了をカウント
+        // （completed == false クエリは未定義のタスクを含まないため）
         const tasksRef = collection(db, 'userTasks', userEmail, 'tasks');
-        const q = query(tasksRef, where('completed', '==', false));
-        
-        const snapshot = await getDocs(q);
-        const count = snapshot.size;
-        console.log('[Todo] 未完了タスク数:', count);
+        const snapshot = await getDocs(tasksRef);
+
+        // completed が true でないタスクをカウント（未定義も含む）
+        let count = 0;
+        snapshot.forEach(doc => {
+          const task = doc.data();
+          if (!task.completed) {
+            count++;
+          }
+        });
+
+        console.log('[Todo] 未完了タスク数:', count, '(全タスク:', snapshot.size, ')');
         updateTodoBadge(count);
 
         console.log('[Todo] 取得完了（1回のみ）');
