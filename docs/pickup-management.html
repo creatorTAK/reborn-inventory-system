@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>回収管理 | FURIRA</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="/css/reborn-theme.css?v=1">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+    }
+
+    .content-container {
+      padding: 16px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .page-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin: 0;
+    }
+
+    .refresh-btn {
+      background: none;
+      border: none;
+      color: #6b7280;
+      font-size: 1.25rem;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+
+    .refresh-btn:hover {
+      background: #f3f4f6;
+    }
+
+    .refresh-btn.spinning i {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* フィルタータブ */
+    .filter-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .filter-tab {
+      padding: 8px 16px;
+      border-radius: 20px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      font-size: 14px;
+      font-weight: 500;
+      color: #6b7280;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .filter-tab:hover {
+      border-color: #40B4E5;
+    }
+
+    .filter-tab.active {
+      background: #40B4E5;
+      border-color: #40B4E5;
+      color: #fff;
+    }
+
+    .filter-tab .count {
+      background: rgba(0,0,0,0.1);
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-left: 6px;
+      font-size: 12px;
+    }
+
+    .filter-tab.active .count {
+      background: rgba(255,255,255,0.3);
+    }
+
+    /* リクエストカード */
+    .request-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 12px;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .request-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+
+    .request-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .request-status {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .request-status.new {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .request-status.contacting {
+      background: #fef3c7;
+      color: #d97706;
+    }
+
+    .request-status.scheduled {
+      background: #dbeafe;
+      color: #2563eb;
+    }
+
+    .request-status.collected {
+      background: #d1fae5;
+      color: #059669;
+    }
+
+    .request-status.processed {
+      background: #e5e7eb;
+      color: #6b7280;
+    }
+
+    .request-date {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    .request-card-body {
+      padding: 16px;
+    }
+
+    .request-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+
+    .request-info {
+      display: grid;
+      gap: 6px;
+    }
+
+    .request-info-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 14px;
+      color: #4b5563;
+    }
+
+    .request-info-row i {
+      color: #9ca3af;
+      width: 18px;
+      text-align: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .request-card-footer {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #f9fafb;
+      border-top: 1px solid #f3f4f6;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .action-btn.primary {
+      background: #40B4E5;
+      color: #fff;
+    }
+
+    .action-btn.primary:hover {
+      background: #1E8FBF;
+    }
+
+    .action-btn.secondary {
+      background: #e5e7eb;
+      color: #4b5563;
+    }
+
+    .action-btn.secondary:hover {
+      background: #d1d5db;
+    }
+
+    /* 空状態 */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #9ca3af;
+    }
+
+    .empty-state i {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state p {
+      font-size: 16px;
+    }
+
+    /* ローディング */
+    .loading-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #9ca3af;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e5e7eb;
+      border-top-color: #40B4E5;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    /* モーダル */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: #fff;
+      border-radius: 16px;
+      max-width: 500px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1f2937;
+      margin: 0;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: #9ca3af;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+
+    .form-group select,
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    .form-group select:focus,
+    .form-group input:focus {
+      outline: none;
+      border-color: #40B4E5;
+      box-shadow: 0 0 0 3px rgba(64, 180, 229, 0.15);
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 12px;
+      padding: 16px 20px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    /* 予定日時表示 */
+    .scheduled-info {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 8px;
+    }
+
+    .scheduled-info-title {
+      font-size: 12px;
+      color: #3b82f6;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .scheduled-info-value {
+      font-size: 16px;
+      color: #1e40af;
+      font-weight: 600;
+    }
+
+    /* 統計カード */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    /* レスポンシブ */
+    @media (max-width: 480px) {
+      .stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .stat-card {
+        padding: 12px 8px;
+      }
+
+      .stat-value {
+        font-size: 24px;
+      }
+
+      .stat-label {
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="content-container">
+    <!-- ヘッダー -->
+    <div class="page-header">
+      <h1 class="page-title">
+        <i class="bi bi-box-seam me-2"></i>回収管理
+      </h1>
+      <button class="refresh-btn" onclick="loadRequests()" title="更新">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+
+    <!-- 統計 -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-new">-</div>
+        <div class="stat-label">新規</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-scheduled">-</div>
+        <div class="stat-label">予定</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total">-</div>
+        <div class="stat-label">累計</div>
+      </div>
+    </div>
+
+    <!-- フィルタータブ -->
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-filter="all" onclick="setFilter('all')">
+        すべて<span class="count" id="count-all">0</span>
+      </button>
+      <button class="filter-tab" data-filter="new" onclick="setFilter('new')">
+        新規<span class="count" id="count-new">0</span>
+      </button>
+      <button class="filter-tab" data-filter="contacting" onclick="setFilter('contacting')">
+        連絡中<span class="count" id="count-contacting">0</span>
+      </button>
+      <button class="filter-tab" data-filter="scheduled" onclick="setFilter('scheduled')">
+        予定<span class="count" id="count-scheduled">0</span>
+      </button>
+      <button class="filter-tab" data-filter="collected" onclick="setFilter('collected')">
+        回収済<span class="count" id="count-collected">0</span>
+      </button>
+    </div>
+
+    <!-- リクエスト一覧 -->
+    <div id="requests-container">
+      <div class="loading-state">
+        <div class="loading-spinner"></div>
+        <p>読み込み中...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 詳細モーダル -->
+  <div class="modal-backdrop" id="detail-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">回収依頼詳細</h2>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <!-- 動的に生成 -->
+      </div>
+      <div class="modal-footer">
+        <button class="action-btn secondary" onclick="closeModal()">閉じる</button>
+        <button class="action-btn primary" id="modal-action-btn" onclick="saveChanges()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, query, orderBy, getDocs, doc, updateDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAwJKTz1gm3CIz_R4YTlbQopgaBq1ULt1A",
+      authDomain: "furira.jp",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "345653439471",
+      appId: "1:345653439471:web:7620819ce3f022d9cd241a"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    window.firebaseDB = db;
+    window.firestoreCollection = collection;
+    window.firestoreQuery = query;
+    window.firestoreOrderBy = orderBy;
+    window.firestoreGetDocs = getDocs;
+    window.firestoreDoc = doc;
+    window.firestoreUpdateDoc = updateDoc;
+    window.firestoreTimestamp = Timestamp;
+
+    // ページ読み込み時にデータ取得
+    window.addEventListener('DOMContentLoaded', () => {
+      loadRequests();
+    });
+  </script>
+
+  <script>
+    let allRequests = [];
+    let currentFilter = 'all';
+    let selectedRequest = null;
+
+    const STATUS_LABELS = {
+      'new': '新規',
+      'contacting': '連絡中',
+      'scheduled': '予定',
+      'collected': '回収済',
+      'processed': '処理完了'
+    };
+
+    const PREFERRED_DAY_LABELS = {
+      'weekday': '平日',
+      'weekend': '土日',
+      'any': 'どちらでも'
+    };
+
+    const PREFERRED_TIME_LABELS = {
+      'morning': '午前',
+      'afternoon': '午後',
+      'evening': '夕方',
+      'any': '指定なし'
+    };
+
+    const AMOUNT_LABELS = {
+      '1': '1袋',
+      '2-3': '2〜3袋',
+      '4+': '4袋以上'
+    };
+
+    // データ読み込み
+    async function loadRequests() {
+      const container = document.getElementById('requests-container');
+      const refreshBtn = document.querySelector('.refresh-btn');
+
+      refreshBtn.classList.add('spinning');
+      container.innerHTML = `
+        <div class="loading-state">
+          <div class="loading-spinner"></div>
+          <p>読み込み中...</p>
+        </div>
+      `;
+
+      try {
+        const db = window.firebaseDB;
+        const q = window.firestoreQuery(
+          window.firestoreCollection(db, 'pickup_requests'),
+          window.firestoreOrderBy('createdAt', 'desc')
+        );
+
+        const snapshot = await window.firestoreGetDocs(q);
+        allRequests = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        updateStats();
+        renderRequests();
+      } catch (error) {
+        console.error('データ取得エラー:', error);
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="bi bi-exclamation-triangle"></i>
+            <p>データの取得に失敗しました</p>
+          </div>
+        `;
+      } finally {
+        refreshBtn.classList.remove('spinning');
+      }
+    }
+
+    // 統計更新
+    function updateStats() {
+      const newCount = allRequests.filter(r => r.status === 'new').length;
+      const scheduledCount = allRequests.filter(r => r.status === 'scheduled').length;
+
+      document.getElementById('stat-new').textContent = newCount;
+      document.getElementById('stat-scheduled').textContent = scheduledCount;
+      document.getElementById('stat-total').textContent = allRequests.length;
+
+      // フィルターカウント更新
+      document.getElementById('count-all').textContent = allRequests.length;
+      document.getElementById('count-new').textContent = newCount;
+      document.getElementById('count-contacting').textContent = allRequests.filter(r => r.status === 'contacting').length;
+      document.getElementById('count-scheduled').textContent = scheduledCount;
+      document.getElementById('count-collected').textContent = allRequests.filter(r => r.status === 'collected' || r.status === 'processed').length;
+    }
+
+    // フィルター設定
+    function setFilter(filter) {
+      currentFilter = filter;
+
+      document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.filter === filter);
+      });
+
+      renderRequests();
+    }
+
+    // リクエスト一覧表示
+    function renderRequests() {
+      const container = document.getElementById('requests-container');
+
+      let filtered = allRequests;
+      if (currentFilter !== 'all') {
+        if (currentFilter === 'collected') {
+          filtered = allRequests.filter(r => r.status === 'collected' || r.status === 'processed');
+        } else {
+          filtered = allRequests.filter(r => r.status === currentFilter);
+        }
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="bi bi-inbox"></i>
+            <p>該当する依頼がありません</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(request => createRequestCard(request)).join('');
+    }
+
+    // リクエストカード生成
+    function createRequestCard(request) {
+      const createdAt = request.createdAt?.toDate?.() || new Date(request.createdAt);
+      const dateStr = createdAt.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+
+      let scheduledHtml = '';
+      if (request.scheduledDate) {
+        scheduledHtml = `
+          <div class="scheduled-info">
+            <div class="scheduled-info-title">回収予定</div>
+            <div class="scheduled-info-value">${request.scheduledDate} ${request.scheduledTime || ''}</div>
+          </div>
+        `;
+      }
+
+      const contactInfo = request.contactMethod === 'line'
+        ? '<i class="bi bi-line"></i> LINE'
+        : `<i class="bi bi-telephone"></i> ${request.phone || ''}`;
+
+      return `
+        <div class="request-card" data-id="${request.id}">
+          <div class="request-card-header">
+            <span class="request-status ${request.status}">${STATUS_LABELS[request.status] || request.status}</span>
+            <span class="request-date">${dateStr}</span>
+          </div>
+          <div class="request-card-body">
+            <div class="request-name">${escapeHtml(request.name)}様</div>
+            <div class="request-info">
+              <div class="request-info-row">
+                <i class="bi bi-geo-alt"></i>
+                <span>${escapeHtml(request.address)}</span>
+              </div>
+              <div class="request-info-row">
+                ${contactInfo}
+              </div>
+              <div class="request-info-row">
+                <i class="bi bi-calendar"></i>
+                <span>${PREFERRED_DAY_LABELS[request.preferredDay] || request.preferredDay} / ${PREFERRED_TIME_LABELS[request.preferredTime] || request.preferredTime}</span>
+              </div>
+              <div class="request-info-row">
+                <i class="bi bi-bag"></i>
+                <span>${AMOUNT_LABELS[request.estimatedAmount] || request.estimatedAmount}</span>
+              </div>
+            </div>
+            ${scheduledHtml}
+          </div>
+          <div class="request-card-footer">
+            <button class="action-btn secondary" onclick="openDetail('${request.id}')">
+              <i class="bi bi-pencil me-1"></i>編集
+            </button>
+            ${getQuickActionButton(request)}
+          </div>
+        </div>
+      `;
+    }
+
+    // クイックアクションボタン
+    function getQuickActionButton(request) {
+      switch (request.status) {
+        case 'new':
+          return `<button class="action-btn primary" onclick="quickUpdateStatus('${request.id}', 'contacting')">連絡する</button>`;
+        case 'contacting':
+          return `<button class="action-btn primary" onclick="openDetail('${request.id}')">予定を設定</button>`;
+        case 'scheduled':
+          return `<button class="action-btn primary" onclick="quickUpdateStatus('${request.id}', 'collected')">回収完了</button>`;
+        case 'collected':
+          return `<button class="action-btn primary" onclick="quickUpdateStatus('${request.id}', 'processed')">処理完了</button>`;
+        default:
+          return '';
+      }
+    }
+
+    // クイックステータス更新
+    async function quickUpdateStatus(id, newStatus) {
+      try {
+        const db = window.firebaseDB;
+        const docRef = window.firestoreDoc(db, 'pickup_requests', id);
+        await window.firestoreUpdateDoc(docRef, {
+          status: newStatus,
+          updatedAt: window.firestoreTimestamp.now(),
+          ...(newStatus === 'collected' ? { collectedAt: window.firestoreTimestamp.now() } : {}),
+          ...(newStatus === 'processed' ? { processedAt: window.firestoreTimestamp.now() } : {})
+        });
+
+        await loadRequests();
+      } catch (error) {
+        console.error('更新エラー:', error);
+        alert('更新に失敗しました');
+      }
+    }
+
+    // 詳細モーダルを開く
+    function openDetail(id) {
+      selectedRequest = allRequests.find(r => r.id === id);
+      if (!selectedRequest) return;
+
+      const modalBody = document.getElementById('modal-body');
+      modalBody.innerHTML = `
+        <div class="form-group">
+          <label>お名前</label>
+          <input type="text" id="edit-name" value="${escapeHtml(selectedRequest.name)}" readonly style="background: #f3f4f6;">
+        </div>
+        <div class="form-group">
+          <label>住所</label>
+          <input type="text" id="edit-address" value="${escapeHtml(selectedRequest.address)}" readonly style="background: #f3f4f6;">
+        </div>
+        <div class="form-group">
+          <label>連絡先</label>
+          <input type="text" value="${selectedRequest.contactMethod === 'line' ? 'LINE' : selectedRequest.phone || ''}" readonly style="background: #f3f4f6;">
+        </div>
+        <div class="form-group">
+          <label>備考</label>
+          <input type="text" value="${escapeHtml(selectedRequest.note || 'なし')}" readonly style="background: #f3f4f6;">
+        </div>
+        <hr>
+        <div class="form-group">
+          <label>ステータス</label>
+          <select id="edit-status">
+            <option value="new" ${selectedRequest.status === 'new' ? 'selected' : ''}>新規</option>
+            <option value="contacting" ${selectedRequest.status === 'contacting' ? 'selected' : ''}>連絡中</option>
+            <option value="scheduled" ${selectedRequest.status === 'scheduled' ? 'selected' : ''}>予定</option>
+            <option value="collected" ${selectedRequest.status === 'collected' ? 'selected' : ''}>回収済</option>
+            <option value="processed" ${selectedRequest.status === 'processed' ? 'selected' : ''}>処理完了</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>回収予定日</label>
+          <input type="date" id="edit-scheduled-date" value="${selectedRequest.scheduledDate || ''}">
+        </div>
+        <div class="form-group">
+          <label>回収予定時間</label>
+          <input type="time" id="edit-scheduled-time" value="${selectedRequest.scheduledTime || ''}">
+        </div>
+      `;
+
+      document.getElementById('detail-modal').classList.add('active');
+    }
+
+    // モーダルを閉じる
+    function closeModal() {
+      document.getElementById('detail-modal').classList.remove('active');
+      selectedRequest = null;
+    }
+
+    // 変更を保存
+    async function saveChanges() {
+      if (!selectedRequest) return;
+
+      const status = document.getElementById('edit-status').value;
+      const scheduledDate = document.getElementById('edit-scheduled-date').value;
+      const scheduledTime = document.getElementById('edit-scheduled-time').value;
+
+      try {
+        const db = window.firebaseDB;
+        const docRef = window.firestoreDoc(db, 'pickup_requests', selectedRequest.id);
+        await window.firestoreUpdateDoc(docRef, {
+          status: status,
+          scheduledDate: scheduledDate || null,
+          scheduledTime: scheduledTime || null,
+          updatedAt: window.firestoreTimestamp.now()
+        });
+
+        closeModal();
+        await loadRequests();
+      } catch (error) {
+        console.error('保存エラー:', error);
+        alert('保存に失敗しました');
+      }
+    }
+
+    // HTMLエスケープ
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // グローバルに公開
+    window.loadRequests = loadRequests;
+    window.setFilter = setFilter;
+    window.openDetail = openDetail;
+    window.closeModal = closeModal;
+    window.saveChanges = saveChanges;
+    window.quickUpdateStatus = quickUpdateStatus;
+  </script>
+</body>
+</html>
