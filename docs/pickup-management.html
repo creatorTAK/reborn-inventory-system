@@ -676,6 +676,22 @@
         `;
       }
 
+      // 回収方法バッジ
+      const methodBadge = request.collectMethod === 'shipping'
+        ? '<span style="background: #fef3c7; color: #d97706; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">郵送</span>'
+        : '<span style="background: #d1fae5; color: #059669; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">回収</span>';
+
+      // 買取金額表示
+      let paymentHtml = '';
+      if (request.weight && request.payment) {
+        paymentHtml = `
+          <div class="request-info-row" style="color: #059669; font-weight: 600;">
+            <i class="bi bi-cash"></i>
+            <span>${request.weight}kg → ${request.payment.toLocaleString()}円</span>
+          </div>
+        `;
+      }
+
       const contactInfo = request.contactMethod === 'line'
         ? '<i class="bi bi-line"></i> LINE'
         : `<i class="bi bi-telephone"></i> ${request.phone || ''}`;
@@ -684,26 +700,28 @@
         <div class="request-card" data-id="${request.id}">
           <div class="request-card-header">
             <span class="request-status ${request.status}">${STATUS_LABELS[request.status] || request.status}</span>
-            <span class="request-date">${dateStr}</span>
+            ${methodBadge}
+            <span class="request-date" style="margin-left: auto;">${dateStr}</span>
           </div>
           <div class="request-card-body">
             <div class="request-name">${escapeHtml(request.name)}様</div>
             <div class="request-info">
               <div class="request-info-row">
                 <i class="bi bi-geo-alt"></i>
-                <span>${escapeHtml(request.address)}</span>
+                <span>${escapeHtml(request.address || '郵送')}</span>
               </div>
               <div class="request-info-row">
                 ${contactInfo}
               </div>
               <div class="request-info-row">
                 <i class="bi bi-calendar"></i>
-                <span>${PREFERRED_DAY_LABELS[request.preferredDay] || request.preferredDay} / ${PREFERRED_TIME_LABELS[request.preferredTime] || request.preferredTime}</span>
+                <span>${PREFERRED_DAY_LABELS[request.preferredDay] || request.preferredDay || '-'} / ${PREFERRED_TIME_LABELS[request.preferredTime] || request.preferredTime || '-'}</span>
               </div>
               <div class="request-info-row">
                 <i class="bi bi-bag"></i>
-                <span>${AMOUNT_LABELS[request.estimatedAmount] || request.estimatedAmount}</span>
+                <span>${AMOUNT_LABELS[request.estimatedAmount] || request.estimatedAmount || '-'}</span>
               </div>
+              ${paymentHtml}
             </div>
             ${scheduledHtml}
           </div>
@@ -794,10 +812,43 @@
           <label>回収予定時間</label>
           <input type="time" id="edit-scheduled-time" value="${selectedRequest.scheduledTime || ''}">
         </div>
+        <hr>
+        <div class="form-group">
+          <label>回収方法</label>
+          <select id="edit-collect-method">
+            <option value="pickup" ${(selectedRequest.collectMethod || 'pickup') === 'pickup' ? 'selected' : ''}>回収（買取あり）</option>
+            <option value="shipping" ${selectedRequest.collectMethod === 'shipping' ? 'selected' : ''}>郵送（無償引取）</option>
+          </select>
+        </div>
+        <div class="form-group" id="weight-group">
+          <label>重量（kg）※回収の場合のみ</label>
+          <input type="number" id="edit-weight" step="0.1" min="0" placeholder="例: 5.5" value="${selectedRequest.weight || ''}" onchange="calculatePayment()">
+        </div>
+        <div class="form-group" id="payment-group">
+          <label>買取金額（円）</label>
+          <input type="number" id="edit-payment" readonly style="background: #f3f4f6; font-weight: bold; color: #059669;" value="${selectedRequest.payment || ''}">
+          <small style="color: #6b7280;">※回収の場合: 1kg = 100円で自動計算</small>
+        </div>
       `;
 
       document.getElementById('detail-modal').classList.add('active');
     }
+
+    // 買取金額を計算
+    function calculatePayment() {
+      const method = document.getElementById('edit-collect-method').value;
+      const weight = parseFloat(document.getElementById('edit-weight').value) || 0;
+      const paymentInput = document.getElementById('edit-payment');
+
+      if (method === 'pickup' && weight > 0) {
+        paymentInput.value = Math.floor(weight * 100);
+      } else {
+        paymentInput.value = 0;
+      }
+    }
+
+    // グローバルに公開
+    window.calculatePayment = calculatePayment;
 
     // モーダルを閉じる
     function closeModal() {
@@ -812,6 +863,9 @@
       const status = document.getElementById('edit-status').value;
       const scheduledDate = document.getElementById('edit-scheduled-date').value;
       const scheduledTime = document.getElementById('edit-scheduled-time').value;
+      const collectMethod = document.getElementById('edit-collect-method').value;
+      const weight = parseFloat(document.getElementById('edit-weight').value) || null;
+      const payment = parseInt(document.getElementById('edit-payment').value) || 0;
 
       try {
         const db = window.firebaseDB;
@@ -820,6 +874,9 @@
           status: status,
           scheduledDate: scheduledDate || null,
           scheduledTime: scheduledTime || null,
+          collectMethod: collectMethod,
+          weight: weight,
+          payment: payment,
           updatedAt: window.firestoreTimestamp.now()
         });
 
