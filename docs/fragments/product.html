@@ -2391,12 +2391,6 @@
       // Setup management number watcher
       prdSetupMgmtNumberWatcher();
 
-      // SPA再初期化: product-scripts.jsの自動実行コードは初回ロード時のみ動作
-      // 再訪問時はUIリスナー・セレクト充填・管理番号UIを復元する
-      if (typeof window.reinitProductScripts === 'function') {
-        await window.reinitProductScripts();
-      }
-
       // Set operator name from localStorage (SPA mode has no URL params)
       var staffField = document.getElementById('担当者');
       if (staffField && !staffField.value) {
@@ -2409,8 +2403,16 @@
         window.checkAndApplySlotData();
       }
 
-      // Auto-open QR scanner if setting enabled
+      // Auto-open QR scanner if setting enabled (即座に実行、ユーザー体感を優先)
       prdAutoOpenQrScannerIfEnabled();
+
+      // SPA再初期化: バックグラウンドで実行（Firestore読み込みが重いためawaitしない）
+      // カテゴリカスケード・セレクト充填・管理番号UIはQRスキャン中に準備完了する
+      if (typeof window.reinitProductScripts === 'function') {
+        window.reinitProductScripts().catch(function(e) {
+          console.error('[Prd SPA] reinit error:', e);
+        });
+      }
 
       // Preload master data in background
       prdPreloadMasterData();
