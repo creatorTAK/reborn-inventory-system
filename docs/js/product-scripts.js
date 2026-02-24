@@ -9256,36 +9256,45 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     // カテゴリマスタ取得（PWA版：Firestoreから直接取得）
     (async function loadCategoryMaster() {
       try {
-        // グローバルに定義されたdbを使用
-        if (!window.db) {
-          console.error('❌ Firestoreが初期化されていません');
-          show('NG(MASTER): Firestoreが初期化されていません');
-          return;
-        }
-        const db = window.db;
-        const docRef = db.collection('categories').doc('master');
-        const docSnap = await docRef.get();
-
-        if (!docSnap.exists) {
-          show('NG(MASTER): カテゴリマスタが見つかりません');
-          return;
+        // 1. localStorageキャッシュから即座に読み込み
+        var cachedCatRows = localStorage.getItem('rebornCache_categoryMaster');
+        if (cachedCatRows) {
+          try {
+            CAT_ROWS = JSON.parse(cachedCatRows);
+            console.log('⚡ カテゴリマスタをキャッシュから即座に読み込み:', CAT_ROWS.length + '件');
+          } catch (e) { /* パースエラーは無視 */ }
         }
 
-        const data = docSnap.data();
-        const rows = data.rows || [];
+        // 2. Firestoreからバックグラウンド取得
+        if (window.db) {
+          try {
+            const db = window.db;
+            const docRef = db.collection('categories').doc('master');
+            const docSnap = await docRef.get();
+            if (docSnap.exists) {
+              const data = docSnap.data();
+              const rows = data.rows || [];
+              CAT_ROWS = rows.map(r=>({
+                特大分類:String(r.特大分類||'').trim(),
+                大分類:String(r.大分類||'').trim(),
+                中分類:String(r.中分類||'').trim(),
+                小分類:String(r.小分類||'').trim(),
+                細分類:String(r.細分類||'').trim(),
+                細分類2:String(r.細分類2||'').trim(),
+                アイテム名:String(r.アイテム名||'').trim(),
+              }));
+              // キャッシュ更新
+              localStorage.setItem('rebornCache_categoryMaster', JSON.stringify(CAT_ROWS));
+              console.log('✅ カテゴリマスタをFirestoreから更新:', CAT_ROWS.length + '件');
+            }
+          } catch (firestoreErr) {
+            console.warn('⚠️ Firestoreカテゴリ読み込み失敗（キャッシュを使用）:', firestoreErr.message);
+          }
+        }
 
-        CAT_ROWS = rows.map(r=>({
-          特大分類:String(r.特大分類||'').trim(),
-          大分類:String(r.大分類||'').trim(),
-          中分類:String(r.中分類||'').trim(),
-          小分類:String(r.小分類||'').trim(),
-          細分類:String(r.細分類||'').trim(),
-          細分類2:String(r.細分類2||'').trim(),
-          アイテム名:String(r.アイテム名||'').trim(),
-        }));
-        // 特大分類が選択されるまで大分類は空のまま（特大分類選択後に選択肢が表示される）
-        // const l1s = uniqKeepOrder(CAT_ROWS.map(r=>r.大分類));
-        // fillSelectSafe(document.getElementById('大分類(カテゴリ)'), l1s);
+        if (!CAT_ROWS || CAT_ROWS.length === 0) {
+          console.warn('⚠️ カテゴリマスタが空です');
+        }
 
         // カテゴリプルダウンのイベントリスナーを設定
         const l0Select = document.getElementById('特大分類');
@@ -9336,41 +9345,47 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     // マスタオプション取得（PWA版：Firestoreから直接取得）
     (async function loadMasterOptions() {
       try {
-        // グローバルに定義されたdbを使用
-        if (!window.db) {
-          console.error('❌ Firestoreが初期化されていません');
-          show('NG(MASTER): Firestoreが初期化されていません');
-          return;
-        }
-        const db = window.db;
+        var opts = {};
 
-        // masterOptionsコレクション全体を取得（各フィールドが個別ドキュメント）
-        const snapshot = await db.collection('masterOptions').get();
-
-        if (snapshot.empty) {
-          show('NG(MASTER): マスタオプションが見つかりません');
-          return;
+        // 1. localStorageキャッシュから即座に読み込み
+        var cachedOpts = localStorage.getItem('rebornCache_masterOptions');
+        if (cachedOpts) {
+          try {
+            opts = JSON.parse(cachedOpts);
+            MASTER_OPTIONS = opts;
+            console.log('⚡ マスタオプションをキャッシュから即座に読み込み:', Object.keys(opts).length + 'フィールド');
+          } catch (e) { /* パースエラーは無視 */ }
         }
 
-        // 各ドキュメントからフィールドを再構築
-        const opts = {};
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          // _indexドキュメントはスキップ
-          if (doc.id === '_index') return;
-
-          // fieldName と items を取得
-          if (data.fieldName && data.items) {
-            opts[data.fieldName] = data.items;
+        // 2. Firestoreからバックグラウンド取得
+        if (window.db) {
+          try {
+            const db = window.db;
+            const snapshot = await db.collection('masterOptions').get();
+            if (!snapshot.empty) {
+              var freshOpts = {};
+              snapshot.forEach(doc => {
+                const data = doc.data();
+                if (doc.id !== '_index' && data.fieldName && data.items) {
+                  freshOpts[data.fieldName] = data.items;
+                }
+              });
+              if (Object.keys(freshOpts).length > 0) {
+                opts = freshOpts;
+                MASTER_OPTIONS = opts;
+                localStorage.setItem('rebornCache_masterOptions', JSON.stringify(opts));
+                console.log('✅ マスタオプションをFirestoreから更新:', Object.keys(opts).length + 'フィールド');
+              }
+            }
+          } catch (firestoreErr) {
+            console.warn('⚠️ Firestoreマスタオプション読み込み失敗（キャッシュを使用）:', firestoreErr.message);
           }
-        });
+        }
 
         if (Object.keys(opts).length === 0) {
-          show('NG(MASTER): 空の応答');
+          console.warn('⚠️ マスタオプションが空です');
           return;
         }
-
-        console.log('✅ マスタオプション取得完了:', Object.keys(opts).length + 'フィールド');
 
         // マスターオプションをグローバル変数に保存
         MASTER_OPTIONS = opts;
@@ -10926,27 +10941,39 @@ window.reinitProductScripts = async function() {
 
   // 2. カテゴリマスタ → カスケードリスナー再設定
   if (!CAT_ROWS || CAT_ROWS.length === 0) {
+    // まずlocalStorageキャッシュから読み込み
     try {
-      if (window.db) {
-        var catDoc = await window.db.collection('categories').doc('master').get();
-        if (catDoc.exists) {
-          var rows = catDoc.data().rows || [];
-          CAT_ROWS = rows.map(function(r) {
-            return {
-              特大分類: String(r.特大分類 || '').trim(),
-              大分類: String(r.大分類 || '').trim(),
-              中分類: String(r.中分類 || '').trim(),
-              小分類: String(r.小分類 || '').trim(),
-              細分類: String(r.細分類 || '').trim(),
-              細分類2: String(r.細分類2 || '').trim(),
-              アイテム名: String(r.アイテム名 || '').trim()
-            };
-          });
-          console.log('✅ [SPA reinit] カテゴリマスタ読み込み:', CAT_ROWS.length + '件');
-        }
+      var cachedCat = localStorage.getItem('rebornCache_categoryMaster');
+      if (cachedCat) {
+        CAT_ROWS = JSON.parse(cachedCat);
+        console.log('⚡ [SPA reinit] カテゴリマスタをキャッシュから読み込み:', CAT_ROWS.length + '件');
       }
-    } catch (e) {
-      console.error('❌ [SPA reinit] カテゴリマスタ読み込みエラー:', e);
+    } catch (e) { /* パースエラー無視 */ }
+    // キャッシュもなければFirestoreから取得
+    if (!CAT_ROWS || CAT_ROWS.length === 0) {
+      try {
+        if (window.db) {
+          var catDoc = await window.db.collection('categories').doc('master').get();
+          if (catDoc.exists) {
+            var rows = catDoc.data().rows || [];
+            CAT_ROWS = rows.map(function(r) {
+              return {
+                特大分類: String(r.特大分類 || '').trim(),
+                大分類: String(r.大分類 || '').trim(),
+                中分類: String(r.中分類 || '').trim(),
+                小分類: String(r.小分類 || '').trim(),
+                細分類: String(r.細分類 || '').trim(),
+                細分類2: String(r.細分類2 || '').trim(),
+                アイテム名: String(r.アイテム名 || '').trim()
+              };
+            });
+            localStorage.setItem('rebornCache_categoryMaster', JSON.stringify(CAT_ROWS));
+            console.log('✅ [SPA reinit] カテゴリマスタをFirestoreから読み込み:', CAT_ROWS.length + '件');
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ [SPA reinit] カテゴリマスタ読み込みエラー:', e.message);
+      }
     }
   }
 
@@ -10976,21 +11003,33 @@ window.reinitProductScripts = async function() {
 
   // 3. マスタオプション → セレクト再充填 + リスナー再設定
   if (!MASTER_OPTIONS || Object.keys(MASTER_OPTIONS).length === 0) {
+    // まずlocalStorageキャッシュから読み込み
     try {
-      if (window.db) {
-        var snapshot = await window.db.collection('masterOptions').get();
-        var opts = {};
-        snapshot.forEach(function(doc) {
-          var data = doc.data();
-          if (doc.id !== '_index' && data.fieldName && data.items) {
-            opts[data.fieldName] = data.items;
-          }
-        });
-        MASTER_OPTIONS = opts;
-        console.log('✅ [SPA reinit] マスタオプション読み込み:', Object.keys(opts).length + 'フィールド');
+      var cachedOpts = localStorage.getItem('rebornCache_masterOptions');
+      if (cachedOpts) {
+        MASTER_OPTIONS = JSON.parse(cachedOpts);
+        console.log('⚡ [SPA reinit] マスタオプションをキャッシュから読み込み:', Object.keys(MASTER_OPTIONS).length + 'フィールド');
       }
-    } catch (e) {
-      console.error('❌ [SPA reinit] マスタオプション読み込みエラー:', e);
+    } catch (e) { /* パースエラー無視 */ }
+    // キャッシュもなければFirestoreから取得
+    if (!MASTER_OPTIONS || Object.keys(MASTER_OPTIONS).length === 0) {
+      try {
+        if (window.db) {
+          var snapshot = await window.db.collection('masterOptions').get();
+          var opts = {};
+          snapshot.forEach(function(doc) {
+            var data = doc.data();
+            if (doc.id !== '_index' && data.fieldName && data.items) {
+              opts[data.fieldName] = data.items;
+            }
+          });
+          MASTER_OPTIONS = opts;
+          localStorage.setItem('rebornCache_masterOptions', JSON.stringify(opts));
+          console.log('✅ [SPA reinit] マスタオプションをFirestoreから読み込み:', Object.keys(opts).length + 'フィールド');
+        }
+      } catch (e) {
+        console.warn('⚠️ [SPA reinit] マスタオプション読み込みエラー:', e.message);
+      }
     }
   }
 
