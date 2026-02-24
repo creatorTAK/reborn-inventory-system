@@ -182,5 +182,14 @@ const FURIRA_PAGES = {
     init: 'initChatUiPage',
     destroy: 'destroyChatUiPage',
     bottomNav: 'chat'
+  },
+
+  // === Phase 6: 最終ページ（GAS→Firestore移行完了） ===
+  inventory_history: {
+    type: 'fragment',
+    fragmentUrl: '/fragments/inventory_history.html',
+    init: 'initInventoryHistoryPage',
+    destroy: 'destroyInventoryHistoryPage',
+    bottomNav: null
   }
 };
