@@ -115,5 +115,42 @@ const FURIRA_PAGES = {
     init: 'initProductPage',
     destroy: 'destroyProductPage',
     bottomNav: null
+  },
+
+  // === Phase 4: 大規模ページ ===
+  'config-system': {
+    type: 'fragment',
+    fragmentUrl: '/fragments/config.html',
+    init: 'initConfigPage',
+    destroy: 'destroyConfigPage',
+    bottomNav: null
+  },
+  'config-product': {
+    type: 'fragment',
+    fragmentUrl: '/fragments/config.html',
+    init: 'initConfigPage',
+    destroy: 'destroyConfigPage',
+    bottomNav: null
+  },
+  'config-permission-users': {
+    type: 'fragment',
+    fragmentUrl: '/fragments/config.html',
+    init: 'initConfigPage',
+    destroy: 'destroyConfigPage',
+    bottomNav: null
+  },
+  mypage: {
+    type: 'fragment',
+    fragmentUrl: '/fragments/mypage.html',
+    init: 'initMypagePage',
+    destroy: 'destroyMypagePage',
+    bottomNav: 'mypage'
+  },
+  purchase: {
+    type: 'fragment',
+    fragmentUrl: '/fragments/purchase.html',
+    init: 'initPurchasePage',
+    destroy: 'destroyPurchasePage',
+    bottomNav: null
   }
 };
