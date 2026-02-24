@@ -152,5 +152,35 @@ const FURIRA_PAGES = {
     init: 'initPurchasePage',
     destroy: 'destroyPurchasePage',
     bottomNav: null
+  },
+
+  // === Phase 5: チャット・在庫ページ ===
+  'todo-history': {
+    type: 'fragment',
+    fragmentUrl: '/fragments/todo_history.html',
+    init: 'initTodoHistoryPage',
+    destroy: 'destroyTodoHistoryPage',
+    bottomNav: null
+  },
+  inventory: {
+    type: 'fragment',
+    fragmentUrl: '/fragments/inventory.html',
+    init: 'initInventoryPage',
+    destroy: 'destroyInventoryPage',
+    bottomNav: null
+  },
+  chat: {
+    type: 'fragment',
+    fragmentUrl: '/fragments/chat_rooms_list.html',
+    init: 'initChatRoomsPage',
+    destroy: 'destroyChatRoomsPage',
+    bottomNav: 'chat'
+  },
+  'chat-room': {
+    type: 'fragment',
+    fragmentUrl: '/fragments/chat_ui_firestore.html',
+    init: 'initChatUiPage',
+    destroy: 'destroyChatUiPage',
+    bottomNav: 'chat'
   }
 };
