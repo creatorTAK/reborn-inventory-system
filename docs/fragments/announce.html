@@ -1,0 +1,453 @@
+<!-- SPA Fragment: announce (お知らせ) -->
+<div id="spa-page-announce">
+  <style>
+    #spa-page-announce {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f8f9fa;
+      min-height: 100vh;
+      padding-top: 100px;
+    }
+    #spa-page-announce .announce-tabs {
+      position: fixed;
+      top: 56px;
+      left: 0;
+      right: 0;
+      height: 44px;
+      background: white;
+      display: flex;
+      border-bottom: 1px solid #e5e7eb;
+      z-index: 999;
+    }
+    #spa-page-announce .announce-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 500;
+      color: #6b7280;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+    }
+    #spa-page-announce .announce-tab.active { color: #ef4444; font-weight: 600; }
+    #spa-page-announce .announce-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 20%;
+      right: 20%;
+      height: 2px;
+      background: #ef4444;
+    }
+    #spa-page-announce .tab-badge {
+      background: #ef4444; color: white; font-size: 10px; font-weight: 600;
+      padding: 1px 5px; border-radius: 10px; margin-left: 4px; min-width: 16px; text-align: center;
+    }
+    #spa-page-announce .announce-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 56px;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      z-index: 1000;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    #spa-page-announce .header-back-btn {
+      width: 40px; height: 40px; border: none; background: transparent; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
+      color: #606060; cursor: pointer; transition: background 0.2s;
+    }
+    #spa-page-announce .header-back-btn:hover { background: #f2f2f2; }
+    #spa-page-announce .header-back-btn:active { background: #e5e5e5; }
+    #spa-page-announce .header-title {
+      flex: 1; font-size: 17px; font-weight: 600; color: #1f2937; text-align: center; padding-right: 40px;
+    }
+    #spa-page-announce .content-container { max-width: 600px; margin: 0 auto; padding: 0; }
+    #spa-page-announce .announce-list { background: white; }
+    #spa-page-announce .announce-item {
+      display: flex; padding: 16px; border-bottom: 1px solid #d1d5db; cursor: pointer; transition: background 0.2s;
+    }
+    #spa-page-announce .announce-item:hover { background: #f9fafb; }
+    #spa-page-announce .announce-item.unread { background: #f0f9ff; }
+    #spa-page-announce .announce-item.unread:hover { background: #e0f2fe; }
+    #spa-page-announce .announce-icon {
+      width: 44px; height: 44px; border-radius: 50%; background: #f3f4f6; border: 1px solid #e5e7eb;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 12px; overflow: hidden;
+    }
+    #spa-page-announce .announce-icon img { width: 40px; height: 40px; object-fit: contain; }
+    #spa-page-announce .announce-content { flex: 1; min-width: 0; }
+    #spa-page-announce .announce-title-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+    #spa-page-announce .announce-priority {
+      font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
+    }
+    #spa-page-announce .announce-priority.danger { background: #fee2e2; color: #dc2626; }
+    #spa-page-announce .announce-priority.warning { background: #fef3c7; color: #d97706; }
+    #spa-page-announce .announce-priority.info { background: #e0f2fe; color: #0284c7; }
+    #spa-page-announce .announce-title {
+      font-size: 15px; font-weight: 500; color: #1f2937; line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    #spa-page-announce .announce-date { font-size: 12px; color: #9ca3af; margin-top: 4px; }
+    #spa-page-announce .unread-dot {
+      width: 8px; height: 8px; background: #3b82f6; border-radius: 50%; flex-shrink: 0; margin-top: 6px;
+    }
+    #spa-page-announce .announce-empty { text-align: center; padding: 60px 20px; color: #9ca3af; }
+    #spa-page-announce .announce-empty i { font-size: 48px; margin-bottom: 16px; }
+    #spa-page-announce .announce-empty p { font-size: 15px; }
+    #spa-page-announce .announce-detail-view { display: none; background: white; min-height: calc(100vh - 56px); }
+    #spa-page-announce .announce-detail-view.active { display: block; }
+    #spa-page-announce .announce-list-view.hidden { display: none; }
+    #spa-page-announce .detail-header {
+      display: flex; align-items: center; padding: 16px; border-bottom: 1px solid #d1d5db;
+    }
+    #spa-page-announce .detail-icon {
+      width: 48px; height: 48px; border-radius: 50%; background: #f3f4f6; border: 1px solid #e5e7eb;
+      display: flex; align-items: center; justify-content: center; margin-right: 12px;
+    }
+    #spa-page-announce .detail-icon img { width: 44px; height: 44px; object-fit: contain; }
+    #spa-page-announce .detail-source { font-size: 15px; font-weight: 600; color: #1f2937; }
+    #spa-page-announce .detail-source-sub { font-size: 13px; color: #9ca3af; }
+    #spa-page-announce .detail-content { padding: 20px 16px; }
+    #spa-page-announce .detail-title { font-size: 18px; font-weight: 600; color: #1f2937; margin-bottom: 12px; line-height: 1.5; }
+    #spa-page-announce .detail-meta { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    #spa-page-announce .detail-body { font-size: 15px; color: #374151; line-height: 1.8; white-space: pre-wrap; }
+    #spa-page-announce .loading-container { display: flex; justify-content: center; align-items: center; padding: 60px 20px; }
+  </style>
+
+  <header class="announce-header">
+    <button class="header-back-btn" onclick="annHandleBack()">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+    <div class="header-title" id="ann-headerTitle">お知らせ</div>
+  </header>
+
+  <div class="announce-tabs" id="ann-tabsContainer">
+    <div class="announce-tab active" data-tab="personal" onclick="annSwitchTab('personal')">
+      あなた宛
+      <span class="tab-badge" id="ann-personalBadge" style="display: none;">0</span>
+    </div>
+    <div class="announce-tab" data-tab="global" onclick="annSwitchTab('global')">
+      全体
+      <span class="tab-badge" id="ann-globalBadge" style="display: none;">0</span>
+    </div>
+  </div>
+
+  <div class="content-container">
+    <div class="announce-list-view" id="ann-listView">
+      <div class="loading-container" id="ann-loadingContainer">
+        <div class="spinner-border text-primary" role="status"></div>
+      </div>
+      <div class="announce-list" id="ann-announceList" style="display: none;"></div>
+      <div class="announce-empty" id="ann-emptyState" style="display: none;">
+        <i class="bi bi-bell-slash"></i>
+        <p>お知らせはありません</p>
+      </div>
+    </div>
+
+    <div class="announce-detail-view" id="ann-detailView">
+      <div class="detail-header">
+        <div class="detail-icon">
+          <img src="/images/furira-square-logo.png" alt="FURIRA">
+        </div>
+        <div>
+          <div class="detail-source">FURIRA運営</div>
+          <div class="detail-source-sub">運営からのお知らせ</div>
+        </div>
+      </div>
+      <div class="detail-content">
+        <div class="detail-title" id="ann-detailTitle"></div>
+        <div class="detail-meta">
+          <span class="announce-priority" id="ann-detailPriority"></span>
+          <span class="detail-date" id="ann-detailDate"></span>
+        </div>
+        <div class="detail-body" id="ann-detailBody"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var _annGlobalAnnouncements = [];
+  var _annPersonalAnnouncements = [];
+  var _annReadAnnouncementIds = new Set();
+  var _annReadPersonalIds = new Set();
+  var _annCurrentView = 'list';
+  var _annCurrentTab = 'personal';
+  var _annCurrentUser = null;
+
+  function initAnnouncePage() {
+    // ユーザー情報をlocalStorageから取得
+    var userEmail = localStorage.getItem('reborn_user_email');
+    var userName = localStorage.getItem('reborn_user_name');
+    if (userEmail) {
+      _annCurrentUser = { email: userEmail, name: userName || 'ゲスト' };
+    }
+    _annCurrentView = 'list';
+    _annCurrentTab = 'personal';
+
+    // タブUIリセット
+    document.querySelectorAll('#spa-page-announce .announce-tab').forEach(function(t) {
+      t.classList.toggle('active', t.dataset.tab === 'personal');
+    });
+    document.getElementById('ann-tabsContainer').style.display = 'flex';
+    document.getElementById('ann-headerTitle').textContent = 'お知らせ';
+
+    Promise.all([_annLoadGlobal(), _annLoadPersonal()]).then(function() {
+      _annUpdateBadges();
+      _annRenderList();
+    });
+  }
+
+  function destroyAnnouncePage() {
+    _annGlobalAnnouncements = [];
+    _annPersonalAnnouncements = [];
+    _annReadAnnouncementIds = new Set();
+    _annReadPersonalIds = new Set();
+    _annCurrentUser = null;
+  }
+
+  async function _annLoadGlobal() {
+    try {
+      var db = window.firebaseDB;
+      var collectionFn = window.firestoreCollection;
+      var getDocsFn = window.firestoreGetDocs;
+
+      var snapshot = await getDocsFn(collectionFn(db, 'announcements'));
+      _annGlobalAnnouncements = [];
+      snapshot.forEach(function(docSnap) {
+        _annGlobalAnnouncements.push(Object.assign({ id: docSnap.id }, docSnap.data(), { type: 'global' }));
+      });
+      _annGlobalAnnouncements.sort(function(a, b) {
+        var dateA = a.createdAt ? (typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt.toDate()) : new Date(0);
+        var dateB = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt.toDate()) : new Date(0);
+        return dateB - dateA;
+      });
+
+      _annReadAnnouncementIds = new Set();
+      if (_annCurrentUser && _annCurrentUser.email) {
+        var readSnapshot = await getDocsFn(collectionFn(db, 'readAnnouncements'));
+        readSnapshot.forEach(function(docSnap) {
+          var data = docSnap.data();
+          if (data.userEmail === _annCurrentUser.email) {
+            _annReadAnnouncementIds.add(data.announcementId);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[Announce SPA] 全体お知らせ読み込みエラー:', error);
+    }
+  }
+
+  async function _annLoadPersonal() {
+    if (!_annCurrentUser || !_annCurrentUser.email) {
+      _annPersonalAnnouncements = [];
+      return;
+    }
+    try {
+      var db = window.firebaseDB;
+      var collectionFn = window.firestoreCollection;
+      var getDocsFn = window.firestoreGetDocs;
+
+      var snapshot = await getDocsFn(collectionFn(db, 'users', _annCurrentUser.email, 'personalAnnouncements'));
+      _annPersonalAnnouncements = [];
+      snapshot.forEach(function(docSnap) {
+        _annPersonalAnnouncements.push(Object.assign({ id: docSnap.id }, docSnap.data(), { type: 'personal' }));
+      });
+      _annPersonalAnnouncements.sort(function(a, b) {
+        var dateA = a.createdAt ? (typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt.toDate()) : new Date(0);
+        var dateB = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt.toDate()) : new Date(0);
+        return dateB - dateA;
+      });
+
+      _annReadPersonalIds = new Set();
+      var readSnapshot = await getDocsFn(collectionFn(db, 'users', _annCurrentUser.email, 'readPersonalAnnouncements'));
+      readSnapshot.forEach(function(docSnap) {
+        _annReadPersonalIds.add(docSnap.data().announcementId);
+      });
+    } catch (error) {
+      console.error('[Announce SPA] 個人お知らせ読み込みエラー:', error);
+      _annPersonalAnnouncements = [];
+    }
+  }
+
+  function _annUpdateBadges() {
+    var globalUnread = _annGlobalAnnouncements.filter(function(a) { return !_annReadAnnouncementIds.has(a.id); }).length;
+    var globalBadge = document.getElementById('ann-globalBadge');
+    if (globalBadge) {
+      if (globalUnread > 0) {
+        globalBadge.textContent = globalUnread > 99 ? '99+' : globalUnread;
+        globalBadge.style.display = 'inline';
+      } else {
+        globalBadge.style.display = 'none';
+      }
+    }
+
+    var personalUnread = _annPersonalAnnouncements.filter(function(a) { return !_annReadPersonalIds.has(a.id); }).length;
+    var personalBadge = document.getElementById('ann-personalBadge');
+    if (personalBadge) {
+      if (personalUnread > 0) {
+        personalBadge.textContent = personalUnread > 99 ? '99+' : personalUnread;
+        personalBadge.style.display = 'inline';
+      } else {
+        personalBadge.style.display = 'none';
+      }
+    }
+  }
+
+  function _annGetRelativeTime(date) {
+    var now = new Date();
+    var diff = now - date;
+    var minutes = Math.floor(diff / (1000 * 60));
+    var hours = Math.floor(diff / (1000 * 60 * 60));
+    var days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    if (minutes < 1) return 'たった今';
+    if (minutes < 60) return minutes + '分前';
+    if (hours < 24) return hours + '時間前';
+    if (days < 7) return days + '日前';
+    return (date.getMonth() + 1) + '/' + date.getDate();
+  }
+
+  function _annGetPriorityLabel(priority) {
+    switch (priority) {
+      case 'danger': return '重要';
+      case 'warning': return '注意';
+      default: return 'お知らせ';
+    }
+  }
+
+  function _annEscapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function _annRenderList() {
+    document.getElementById('ann-loadingContainer').style.display = 'none';
+
+    var announcements = _annCurrentTab === 'personal' ? _annPersonalAnnouncements : _annGlobalAnnouncements;
+    var readIds = _annCurrentTab === 'personal' ? _annReadPersonalIds : _annReadAnnouncementIds;
+
+    if (announcements.length === 0) {
+      var emptyMsg = _annCurrentTab === 'personal' ? 'あなた宛のお知らせはありません' : 'お知らせはありません';
+      document.getElementById('ann-emptyState').innerHTML = '<i class="bi bi-bell-slash"></i><p>' + emptyMsg + '</p>';
+      document.getElementById('ann-emptyState').style.display = 'block';
+      document.getElementById('ann-announceList').style.display = 'none';
+      return;
+    }
+
+    var listHtml = announcements.map(function(item) {
+      var isUnread = !readIds.has(item.id);
+      var date = item.createdAt ? (typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt.toDate()) : new Date();
+      var relativeTime = _annGetRelativeTime(date);
+      var priority = item.priority || 'info';
+      var priorityLabel = _annGetPriorityLabel(priority);
+
+      return '<div class="announce-item ' + (isUnread ? 'unread' : '') + '" data-id="' + item.id + '" data-type="' + item.type + '">' +
+        '<div class="announce-icon"><img src="/images/furira-square-logo.png" alt="FURIRA"></div>' +
+        '<div class="announce-content">' +
+          '<div class="announce-title-row"><span class="announce-priority ' + priority + '">' + priorityLabel + '</span></div>' +
+          '<div class="announce-title">' + _annEscapeHtml(item.title || '') + '</div>' +
+          '<div class="announce-date">' + relativeTime + '</div>' +
+        '</div>' +
+        (isUnread ? '<div class="unread-dot"></div>' : '') +
+      '</div>';
+    }).join('');
+
+    document.getElementById('ann-announceList').innerHTML = listHtml;
+    document.getElementById('ann-announceList').style.display = 'block';
+    document.getElementById('ann-emptyState').style.display = 'none';
+
+    document.querySelectorAll('#spa-page-announce .announce-item').forEach(function(item) {
+      item.addEventListener('click', function() {
+        _annShowDetail(item.dataset.id, item.dataset.type);
+      });
+    });
+  }
+
+  async function _annShowDetail(announcementId, type) {
+    var announcements = type === 'personal' ? _annPersonalAnnouncements : _annGlobalAnnouncements;
+    var item = announcements.find(function(a) { return a.id === announcementId; });
+    if (!item) return;
+
+    _annCurrentView = 'detail';
+    document.getElementById('ann-headerTitle').textContent = 'お知らせ詳細';
+
+    var date = item.createdAt ? (typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt.toDate()) : new Date();
+    var dateStr = date.getFullYear() + '年' + (date.getMonth() + 1) + '月' + date.getDate() + '日 ' + date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0');
+    var priority = item.priority || 'info';
+    var priorityLabel = _annGetPriorityLabel(priority);
+
+    document.getElementById('ann-detailTitle').textContent = item.title || '';
+    document.getElementById('ann-detailPriority').textContent = priorityLabel;
+    document.getElementById('ann-detailPriority').className = 'announce-priority ' + priority;
+    document.getElementById('ann-detailDate').textContent = dateStr;
+    document.getElementById('ann-detailBody').textContent = item.body || '';
+
+    document.getElementById('ann-listView').classList.add('hidden');
+    document.getElementById('ann-detailView').classList.add('active');
+    document.getElementById('ann-tabsContainer').style.display = 'none';
+
+    // 既読にする
+    if (_annCurrentUser && _annCurrentUser.email) {
+      var readIds = type === 'personal' ? _annReadPersonalIds : _annReadAnnouncementIds;
+      if (!readIds.has(announcementId)) {
+        try {
+          var db = window.firebaseDB;
+          var collectionFn = window.firestoreCollection;
+          var addDocFn = window.firestoreAddDoc;
+          var TimestampFn = window.firestoreTimestamp;
+
+          if (type === 'personal') {
+            await addDocFn(collectionFn(db, 'users', _annCurrentUser.email, 'readPersonalAnnouncements'), {
+              announcementId: announcementId, readAt: TimestampFn.now()
+            });
+            _annReadPersonalIds.add(announcementId);
+          } else {
+            await addDocFn(collectionFn(db, 'readAnnouncements'), {
+              announcementId: announcementId, userEmail: _annCurrentUser.email, readAt: TimestampFn.now()
+            });
+            _annReadAnnouncementIds.add(announcementId);
+          }
+          _annUpdateBadges();
+        } catch (error) {
+          console.error('[Announce SPA] 既読記録エラー:', error);
+        }
+      }
+    }
+  }
+
+  function _annShowList() {
+    _annCurrentView = 'list';
+    document.getElementById('ann-headerTitle').textContent = 'お知らせ';
+    document.getElementById('ann-listView').classList.remove('hidden');
+    document.getElementById('ann-detailView').classList.remove('active');
+    document.getElementById('ann-tabsContainer').style.display = 'flex';
+    _annRenderList();
+  }
+
+  function annHandleBack() {
+    if (_annCurrentView === 'detail') {
+      _annShowList();
+    } else {
+      spaGoBack();
+    }
+  }
+
+  function annSwitchTab(tab) {
+    if (_annCurrentTab === tab) return;
+    _annCurrentTab = tab;
+    document.querySelectorAll('#spa-page-announce .announce-tab').forEach(function(t) {
+      t.classList.toggle('active', t.dataset.tab === tab);
+    });
+    if (_annCurrentView === 'detail') {
+      _annShowList();
+    } else {
+      _annRenderList();
+    }
+  }
+</script>

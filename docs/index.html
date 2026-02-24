@@ -919,6 +919,18 @@
     #bottom-nav.hidden {
       display: none;
     }
+
+    /* SPA Fragment コンテナ */
+    #spa-content {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      background: #f8f9fa;
+    }
   </style>
 </head>
 <body>
@@ -1360,6 +1372,9 @@
       <!-- UI-013: ローディングスピナー（動きのある視覚フィードバック） -->
       <div class="loading-spinner"></div>
     </div>
+
+    <!-- SPA Fragment コンテンツ領域 -->
+    <div id="spa-content" style="display:none;"></div>
 
     <!-- GAS Web App を iframe で表示（遅延ロード: DOMContentLoaded後に src設定） -->
     <iframe
@@ -5163,6 +5178,24 @@
         pushHistory(page);
       }
 
+      // SPA Fragment分岐: FURIRA_PAGESに登録済みならSPA方式で表示
+      if (typeof FURIRA_PAGES !== 'undefined' && FURIRA_PAGES[page] && FURIRA_PAGES[page].type === 'fragment') {
+        console.log('[SPA] Fragment方式で遷移:', page);
+        closeDrawer();
+        // ヘッダー非表示（各Fragmentが独自ヘッダーを持つ）
+        if (header) header.style.display = 'none';
+        if (skeleton) skeleton.classList.add('hidden');
+        // ドロワーのactive状態を更新
+        document.querySelectorAll('.drawer-item').forEach(item => item.classList.remove('active'));
+        switchPage(page);
+        return;
+      }
+
+      // iframe遷移の場合、SPA表示をクリーンアップ
+      if (typeof deactivateSpaIfNeeded === 'function') {
+        deactivateSpaIfNeeded();
+      }
+
       // 📊 パフォーマンス計測開始
       const startTime = performance.now();
       console.log('⏱️ [計測開始] ページ遷移:', page, '履歴:', navHistory);
@@ -7715,6 +7748,10 @@
       }
     });
   </script>
+
+  <!-- SPA Router -->
+  <script src="/js/spa-pages-config.js"></script>
+  <script src="/js/spa-router.js"></script>
 
   <!-- Master Background Preload (ブランド＋カテゴリ) -->
   <script src="/js/master-cache.js?v=395"></script>
