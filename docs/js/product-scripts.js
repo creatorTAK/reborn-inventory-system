@@ -10912,3 +10912,184 @@ if (document.readyState === 'loading') {
 } else {
   setTimeout(initSalesTypeControl, 500);
 }
+
+// ==========================================================================
+// SPA再訪問用: DOM再構築後の再初期化関数
+// product-scripts.jsの自動実行コードは初回ロード時のみ動作するため、
+// SPA遷移で再表示される際はこの関数でUIとリスナーを復元する
+// ==========================================================================
+window.reinitProductScripts = async function() {
+  console.log('🔄 [SPA reinit] 開始');
+
+  // 1. DOMキャッシュクリア（古い参照を破棄）
+  clearElementCache();
+
+  // 2. カテゴリマスタ → カスケードリスナー再設定
+  if (!CAT_ROWS || CAT_ROWS.length === 0) {
+    try {
+      if (window.db) {
+        var catDoc = await window.db.collection('categories').doc('master').get();
+        if (catDoc.exists) {
+          var rows = catDoc.data().rows || [];
+          CAT_ROWS = rows.map(function(r) {
+            return {
+              特大分類: String(r.特大分類 || '').trim(),
+              大分類: String(r.大分類 || '').trim(),
+              中分類: String(r.中分類 || '').trim(),
+              小分類: String(r.小分類 || '').trim(),
+              細分類: String(r.細分類 || '').trim(),
+              細分類2: String(r.細分類2 || '').trim(),
+              アイテム名: String(r.アイテム名 || '').trim()
+            };
+          });
+          console.log('✅ [SPA reinit] カテゴリマスタ読み込み:', CAT_ROWS.length + '件');
+        }
+      }
+    } catch (e) {
+      console.error('❌ [SPA reinit] カテゴリマスタ読み込みエラー:', e);
+    }
+  }
+
+  // カテゴリカスケードリスナー（remove→addで重複回避）
+  var catFields = [
+    { id: '特大分類', fn: onL0Changed },
+    { id: '大分類(カテゴリ)', fn: onL1Changed },
+    { id: '中分類(カテゴリ)', fn: onL2Changed },
+    { id: '小分類(カテゴリ)', fn: onL3Changed },
+    { id: '細分類(カテゴリ)', fn: onL4Changed },
+    { id: '細分類2', fn: onL5Changed },
+    { id: 'アイテム名', fn: updateItemNameDisplay }
+  ];
+  catFields.forEach(function(f) {
+    var el = document.getElementById(f.id);
+    if (el) {
+      el.removeEventListener('change', f.fn);
+      el.addEventListener('change', f.fn);
+    }
+  });
+
+  var szBasic = document.getElementById('サイズ');
+  if (szBasic) {
+    szBasic.removeEventListener('change', syncBasicSizeToDescription);
+    szBasic.addEventListener('change', syncBasicSizeToDescription);
+  }
+
+  // 3. マスタオプション → セレクト再充填 + リスナー再設定
+  if (!MASTER_OPTIONS || Object.keys(MASTER_OPTIONS).length === 0) {
+    try {
+      if (window.db) {
+        var snapshot = await window.db.collection('masterOptions').get();
+        var opts = {};
+        snapshot.forEach(function(doc) {
+          var data = doc.data();
+          if (doc.id !== '_index' && data.fieldName && data.items) {
+            opts[data.fieldName] = data.items;
+          }
+        });
+        MASTER_OPTIONS = opts;
+        console.log('✅ [SPA reinit] マスタオプション読み込み:', Object.keys(opts).length + 'フィールド');
+      }
+    } catch (e) {
+      console.error('❌ [SPA reinit] マスタオプション読み込みエラー:', e);
+    }
+  }
+
+  if (MASTER_OPTIONS && Object.keys(MASTER_OPTIONS).length > 0) {
+    var _fill = function(id, arr) {
+      var sel = document.getElementById(id);
+      if (!sel) return;
+      sel.innerHTML = '<option value="">--選択してください--</option>';
+      (arr || []).forEach(function(v) {
+        sel.insertAdjacentHTML('beforeend', '<option value="' + v + '">' + v + '</option>');
+      });
+    };
+
+    _fill('担当者', MASTER_OPTIONS['担当者'] || []);
+    _fill('仕入先', MASTER_OPTIONS['仕入先'] || []);
+    _fill('生地・素材・質感系', MASTER_OPTIONS['生地・素材・質感系'] || []);
+    _fill('サイズ', MASTER_OPTIONS['サイズ'] || []);
+    _fill('商品の状態', unifyConditionList(MASTER_OPTIONS['商品の状態'] || []));
+    _fill('サイズ(表記)_トップス', MASTER_OPTIONS['サイズ(表記)'] || []);
+    _fill('サイズ(表記)_ボトムス', MASTER_OPTIONS['サイズ(表記)'] || []);
+
+    var titleFields = [
+      '季節感・機能性','着用シーン・イベント','見た目・印象','トレンド表現',
+      'サイズ感・体型カバー','年代・テイスト・スタイル','カラー/配色/トーン','柄・模様',
+      'ディテール・仕様','シルエット/ライン','ネックライン','襟・衿',
+      '袖・袖付け','丈','革/加工','毛皮/加工','生産国'
+    ];
+    titleFields.forEach(function(name) { _fill(name, MASTER_OPTIONS[name] || []); });
+
+    _fill('出品先', MASTER_OPTIONS['出品先'] || []);
+    _fill('配送料の負担', MASTER_OPTIONS['配送料の負担'] || []);
+    _fill('配送の方法', MASTER_OPTIONS['配送の方法'] || []);
+    _fill('発送元の地域', MASTER_OPTIONS['発送元の地域'] || []);
+    _fill('発送までの日数', MASTER_OPTIONS['発送までの日数'] || []);
+
+    window.globalMasterOptions = MASTER_OPTIONS;
+
+    // マスタ依存のリスナー再設定
+    var sizeSelect = document.getElementById('サイズ');
+    if (sizeSelect) {
+      sizeSelect.removeEventListener('change', updateNamePreview);
+      sizeSelect.addEventListener('change', updateNamePreview);
+    }
+    var condSelect = document.getElementById('商品の状態');
+    if (condSelect) {
+      condSelect.removeEventListener('change', updateDescriptionFromDetail);
+      condSelect.addEventListener('change', updateDescriptionFromDetail);
+      condSelect.removeEventListener('change', updateConditionButtons);
+      condSelect.addEventListener('change', updateConditionButtons);
+    }
+    var staffSel = document.getElementById('担当者');
+    if (staffSel) {
+      staffSel.removeEventListener('change', updateNamePreview);
+      staffSel.addEventListener('change', updateNamePreview);
+    }
+
+    // カラー・素材マスタ初期化
+    initializeColorMasters();
+    initializeMaterialMasters();
+    setupColorSearch();
+
+    // ブランド検索（Algolia）
+    if (typeof window.attachBrandSuggestAlgolia === 'function') {
+      window.attachBrandSuggestAlgolia('ブランド(英語)', { limit: 15, minChars: 1, debounceMs: 300 });
+      window.attachBrandSuggestAlgolia('商品名_ブランド(英語)', { limit: 15, minChars: 1, debounceMs: 300 });
+    }
+  }
+
+  // 4. 設定読み込み + 依存初期化
+  await loadAllConfig();
+  initializeSalesWords();
+  loadConditionButtonsFromConfig();
+  loadHashtagConfig();
+  loadDiscountConfig();
+  await loadShippingDefaults();
+  await loadProcureListingDefaults();
+  loadOperatorName();
+  loadTitleBlockOrder();
+  loadRankOptions();
+
+  // 5. 各種システム再セットアップ
+  setupAttributeSelectors();
+  setupSizeSystem();
+  setupSalesWordEventListeners();
+  wireDescWatcher();
+  updateDesc();
+  setupDetailEventListener();
+  setupQuickInsertButtons();
+
+  // 6. 管理番号UI初期化
+  initManagementNumberUI();
+
+  // 7. プレビュー系
+  wirePreviewWatchers();
+  updateNamePreview();
+  adjustPreviewHeight();
+
+  // 8. 出品タイプ制御
+  setTimeout(initSalesTypeControl, 300);
+
+  console.log('✅ [SPA reinit] 完了');
+};
