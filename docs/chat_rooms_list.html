@@ -6,7 +6,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- デバッグコンソール有効化 -->
+  <!-- 🔧 パフォーマンス改善: console.log条件付き抑制 -->
+  <script>
+    if (!localStorage.getItem('debug_mode')) {
+      console.log = console.warn = console.info = console.debug = function() {};
+    }
+  </script>
 
   <title>チャット</title>
   <!-- Bootstrap Icons -->
@@ -1472,6 +1477,7 @@
     let unsubscribeRooms = null; // Firestoreリスナーの解除用
     let currentUserBlockedList = []; // ブロック中ユーザーリスト（LINE風ブロック）
     let roomUnreadCounts = new Map(); // ルームごとの未読数を追跡（バッジ同期用）
+    let unreadListeners = []; // 未読カウントリスナーのunsubscribe関数を保持（リーク防止）
 
     // ========================================
     // sessionStorageキャッシュ（即時表示用）
@@ -2004,6 +2010,11 @@
         }
 
         const container = document.getElementById('roomsContainer');
+
+        // 🔧 パフォーマンス改善: 再描画前に既存の未読リスナーを全て解除（リーク防止）
+        unreadListeners.forEach(unsub => { try { unsub(); } catch(e) {} });
+        unreadListeners = [];
+
         container.innerHTML = '';
 
         // 🔧 ルームリスト再読み込み時にバッジカウントマップをクリア
@@ -2496,7 +2507,7 @@
       // ブロック中のルームはバッジを表示しない
       if (currentUserEmail && !isBlockedRoom) {
         const unreadRef = doc(db, `rooms/${room.id}/unreadCounts/${currentUserEmail}`);
-        onSnapshot(unreadRef, (unreadDoc) => {
+        const unsubUnread = onSnapshot(unreadRef, (unreadDoc) => {
           const badgeEl = document.getElementById(`unread-badge-${room.id}`);
           const unreadData = unreadDoc.data();
           const unreadCount = unreadData?.unreadCount || 0;
@@ -2526,6 +2537,7 @@
         }, (error) => {
           console.error('[Rooms List] 未読カウント取得エラー:', room.id, error);
         });
+        unreadListeners.push(unsubUnread);
       } else if (isBlockedRoom) {
         // ブロック中のルームは未読カウント0として扱う
         roomUnreadCounts.set(room.id, 0);
@@ -4469,13 +4481,20 @@
     console.log('[chat_rooms_list] DOMContentLoaded fired');
     const backButton = document.getElementById('back-button');
     console.log('[chat_rooms_list] backButton element:', backButton);
-    
+
     if (backButton) {
       backButton.addEventListener('click', goBack);
       console.log('[chat_rooms_list] ✅ 戻るボタンにgoBack()イベントリスナーを設定しました');
     } else {
       console.error('[chat_rooms_list] ❌ 戻るボタンが見つかりません');
     }
+  });
+
+  // 🔧 パフォーマンス改善: ページ離脱時にFirestoreリスナーを全て解除
+  window.addEventListener('pagehide', () => {
+    unreadListeners.forEach(unsub => { try { unsub(); } catch(e) {} });
+    unreadListeners = [];
+    if (unsubscribeRooms) { try { unsubscribeRooms(); } catch(e) {} unsubscribeRooms = null; }
   });
 </script>
 

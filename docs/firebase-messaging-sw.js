@@ -9,7 +9,7 @@ const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 // 通知の重複を防ぐためのキャッシュ（軽量化）
 const notificationCache = new Map();
 const MAX_CACHE_SIZE = 200;
-const CACHE_TTL_MS = 5000; // 5秒で自動削除
+const CACHE_TTL_MS = 10000; // 🔧 パフォーマンス改善: 10秒に延長（重複排除の信頼性向上）
 
 // ネットワークタイムアウト
 const NETWORK_TIMEOUT = 4000; // 4秒
@@ -239,7 +239,9 @@ self.addEventListener('push', (event) => {
   const notificationType = data.type || 'chat'; // 'chat' or 'system'
   const userName = data.userName; // システム通知用
 
-  const cacheKey = messageId || `${Date.now()}_${Math.random()}`;
+  // 🔧 パフォーマンス改善: roomId+messageIdで重複排除（より確実な重複検出）
+  const roomId = data.roomId || '';
+  const cacheKey = messageId ? `${roomId}_${messageId}` : `${Date.now()}_${Math.random()}`;
 
   // ================================================================================
   // 🎯 CRITICAL: 全ての非同期処理を event.waitUntil() でラップ

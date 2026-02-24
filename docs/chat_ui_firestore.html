@@ -5,22 +5,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
-  <!-- 🚨 緊急デバッグ: 全console無効化（Safari対応） - デバッグのため一時解除 -->
-  <!--
+  <!-- 🔧 パフォーマンス改善: console.log条件付き抑制（debug_modeで復活可能） -->
   <script>
-    window.console = {
-      log: function() {},
-      warn: function() {},
-      error: function() {},
-      info: function() {},
-      debug: function() {}
-    };
+    if (!localStorage.getItem('debug_mode')) {
+      console.log = console.warn = console.info = console.debug = function() {};
+    }
   </script>
-  -->
 
   <base target="_top">
-  <!-- Agora Web SDK for Voice Call -->
-  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
+  <!-- 🔧 パフォーマンス改善: Agora Web SDK は通話開始時に遅延読み込み（300KB削減） -->
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <!-- REBORN Brand Colors & Theme -->
@@ -3418,10 +3411,14 @@
         startIncomingCallListener();
       }
 
-      // ページ離脱時にSWへ通知 + Firestore更新
+      // ページ離脱時にSWへ通知 + Firestore更新 + リスナークリーンアップ
       window.addEventListener('pagehide', () => {
         notifySwLeftRoom();
         clearViewingStatus();
+        // 🔧 パフォーマンス改善: Firestoreリスナーを解除
+        if (unsubscribeMessages) { try { unsubscribeMessages(); } catch(e) {} unsubscribeMessages = null; }
+        if (incomingCallListener) { try { incomingCallListener(); } catch(e) {} incomingCallListener = null; }
+        if (currentCallDocListener) { try { currentCallDocListener(); } catch(e) {} currentCallDocListener = null; }
       });
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
@@ -3440,6 +3437,10 @@
       // beforeunload でも閲覧終了を記録（pagehideが発火しない場合の保険）
       window.addEventListener('beforeunload', () => {
         clearViewingStatus();
+        // 🔧 パフォーマンス改善: Firestoreリスナーを解除
+        if (unsubscribeMessages) { try { unsubscribeMessages(); } catch(e) {} unsubscribeMessages = null; }
+        if (incomingCallListener) { try { incomingCallListener(); } catch(e) {} incomingCallListener = null; }
+        if (currentCallDocListener) { try { currentCallDocListener(); } catch(e) {} currentCallDocListener = null; }
       });
 
       // ルームのmembersに自分を追加（未追加の場合）
@@ -4554,6 +4555,8 @@
     let isFirstMessageLoad = true;
     // 初回読み込みフラグ（全体描画 vs 差分更新の判定用）
     let isInitialLoad = true;
+    // メッセージリスナーのunsubscribe関数（リーク防止）
+    let unsubscribeMessages = null;
 
     // 既読ラベルだけを更新する関数（レイアウトシフト防止）
     function updateReadStatusOnly(msgId, readBy) {
@@ -4668,6 +4671,12 @@
 
     // Firestoreメッセージをリアルタイムリスニング
     async function startListening() {
+      // 既存リスナーを解除（二重登録防止）
+      if (unsubscribeMessages) {
+        try { unsubscribeMessages(); } catch(e) {}
+        unsubscribeMessages = null;
+      }
+
       // 先にブロック状態をチェック
       await checkBlockStatus();
 
@@ -4677,59 +4686,109 @@
         limit(50)
       );
 
-      onSnapshot(q, (snapshot) => {
+      unsubscribeMessages = onSnapshot(q, (snapshot) => {
         console.log('[Firestore] メッセージ更新:', snapshot.size + '件');
 
         const container = document.getElementById('messagesContainer');
-
-        // 変更タイプを分析（既読更新のみかどうか判定）
         const changes = snapshot.docChanges();
-        const isReadOnlyUpdate = !isInitialLoad && changes.length > 0 && changes.every(change => {
-          // 'modified' で、かつ readBy のみが変更された場合
-          return change.type === 'modified';
-        });
 
-        // 既読更新のみの場合は差分更新（レイアウトシフト防止）
-        if (isReadOnlyUpdate) {
-          console.log('[Firestore] 既読更新のみ - 差分更新');
+        // ========================================
+        // 🔧 パフォーマンス改善: 差分レンダリング
+        // 初回のみ全描画、以降はdocChanges()で差分更新
+        // ========================================
+
+        if (!isInitialLoad) {
+          // --- 差分更新モード ---
+          let hasNewMessages = false;
+          const unreadMessageIds = [];
+
           changes.forEach(change => {
+            const msgData = { id: change.doc.id, ...change.doc.data() };
+
             if (change.type === 'modified') {
-              const msgData = { id: change.doc.id, ...change.doc.data() };
+              // 既読更新 or メッセージ編集 → DOM要素を更新
               updateReadStatusOnly(msgData.id, msgData.readBy);
+            } else if (change.type === 'added') {
+              // 新メッセージ → DOMに追加
+              // ブロックチェック
+              if (isBlockedByMe) {
+                const blockedName = (otherUserEmail || '').trim().toLowerCase();
+                const msgUserName = (msgData.userName || '').trim().toLowerCase();
+                const msgUserEmail = (msgData.userEmail || '').trim().toLowerCase();
+                if (blockedName === msgUserName || blockedName === msgUserEmail) {
+                  return;
+                }
+              }
+
+              // 日付セパレータチェック
+              if (msgData.timestamp && msgData.timestamp.toDate) {
+                const msgDate = msgData.timestamp.toDate();
+                const dateStr = formatDateForSeparator(msgDate);
+                // 最後の日付セパレータと異なれば追加
+                const lastSep = container.querySelector('.date-separator:last-of-type');
+                const lastSepText = lastSep?.textContent?.trim();
+                if (dateStr !== lastSepText) {
+                  appendDateSeparator(dateStr);
+                }
+              }
+
+              appendMessage(msgData);
+              hasNewMessages = true;
+
+              // 未読チェック
+              if (msgData.userEmail !== currentUserEmail) {
+                const readBy = msgData.readBy || [];
+                if (!readBy.includes(currentUserEmail)) {
+                  unreadMessageIds.push(change.doc.id);
+                }
+              }
+            } else if (change.type === 'removed') {
+              // メッセージ削除 → DOM要素を削除
+              const msgEl = container.querySelector(`[data-message-id="${msgData.id}"]`);
+              if (msgEl) msgEl.remove();
             }
           });
+
+          // 新メッセージがあった場合のみスクロール
+          if (hasNewMessages) {
+            // スクロールが最下部付近にある場合のみ自動スクロール
+            const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+            if (isNearBottom) {
+              container.scrollTop = container.scrollHeight;
+            }
+
+            // 固定日付バッジを更新
+            setTimeout(() => { container.dispatchEvent(new Event('scroll')); }, 100);
+          }
+
+          // 未読処理
+          if (unreadMessageIds.length > 0) {
+            markMessagesAsRead(unreadMessageIds);
+            resetUnreadCountRealtime();
+          }
+          clearAppBadge();
           return;
         }
 
-        // 初回または新規メッセージがある場合は全体を再描画
-        console.log('[Firestore] 全体再描画');
+        // --- 初回全描画モード ---
+        console.log('[Firestore] 初回全体描画');
         isInitialLoad = false;
         container.innerHTML = '';
 
         // 新しい順で取得したので、逆順で表示
         const messages = [];
-        const unreadMessageIds = []; // 未読メッセージIDを収集
+        const unreadMessageIds = [];
         snapshot.forEach((doc) => {
           const msgData = { id: doc.id, ...doc.data() };
 
           // ブロック中の相手からのメッセージはスキップ（LINE風）
           if (isBlockedByMe) {
-            // デバッグ：比較対象を表示
-            console.log('[Block Debug] isBlockedByMe:', isBlockedByMe);
-            console.log('[Block Debug] otherUserEmail (blocked target):', otherUserEmail);
-            console.log('[Block Debug] msgData.userName:', msgData.userName);
-            console.log('[Block Debug] msgData.userEmail:', msgData.userEmail);
-
-            // ユーザー名またはメールで比較（大文字小文字を区別しない）
             const blockedName = (otherUserEmail || '').trim().toLowerCase();
             const msgUserName = (msgData.userName || '').trim().toLowerCase();
             const msgUserEmail = (msgData.userEmail || '').trim().toLowerCase();
 
             if (blockedName === msgUserName || blockedName === msgUserEmail) {
-              console.log('[Block] ✅ ブロック中ユーザーのメッセージをスキップ:', msgData.id, msgData.userName);
-              return; // このメッセージは表示しない
-            } else {
-              console.log('[Block] ⚠️ 比較不一致 - メッセージは表示される');
+              return;
             }
           }
 
@@ -4747,7 +4806,6 @@
         // 日付セパレータを挿入しながらメッセージを表示
         let lastDateStr = null;
         messages.forEach((msg) => {
-          // 日付セパレータの挿入
           if (msg.timestamp && msg.timestamp.toDate) {
             const msgDate = msg.timestamp.toDate();
             const dateStr = formatDateForSeparator(msgDate);
@@ -4762,20 +4820,14 @@
         // 最下部にスクロール
         container.scrollTop = container.scrollHeight;
 
-        // 固定日付バッジを更新（スクロールイベントをトリガー）
-        setTimeout(() => {
-          container.dispatchEvent(new Event('scroll'));
-        }, 100);
+        // 固定日付バッジを更新
+        setTimeout(() => { container.dispatchEvent(new Event('scroll')); }, 100);
 
         // 未読メッセージがあれば既読にする
         if (unreadMessageIds.length > 0) {
           markMessagesAsRead(unreadMessageIds);
-          
-          // リアルタイムで未読カウントもリセット（チャットルームを開いている間は常に0）
           resetUnreadCountRealtime();
         }
-
-        // チャットルームを開いている間は常にバッジをクリア（通知で増えた分をリセット）
         clearAppBadge();
 
         // 初回読み込み時、検索キーワードが引き継がれていたら自動検索を実行
@@ -4783,16 +4835,13 @@
           isFirstMessageLoad = false;
           console.log('[Search] 検索キーワード引き継ぎ:', searchQueryParam);
           setTimeout(() => {
-            // 検索モードを開く
             openSearchMode();
-            // 検索キーワードをセット
             const searchInput = document.getElementById('searchInput');
             if (searchInput) {
               searchInput.value = searchQueryParam;
-              // 検索を実行
               searchMessages();
             }
-          }, 300);  // メッセージ描画完了を待つ
+          }, 300);
         } else if (isFirstMessageLoad) {
           isFirstMessageLoad = false;
         }
@@ -7957,6 +8006,22 @@
     let isMuted = false;
     let isSpeakerOn = true;
 
+    // 🔧 パフォーマンス改善: Agora SDKの遅延読み込み（300KB削減）
+    let _agoraLoaded = false;
+    function loadAgoraSDK() {
+      if (_agoraLoaded || typeof AgoraRTC !== 'undefined') {
+        _agoraLoaded = true;
+        return Promise.resolve();
+      }
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js';
+        script.onload = () => { _agoraLoaded = true; resolve(); };
+        script.onerror = () => reject(new Error('Agora SDK の読み込みに失敗しました'));
+        document.head.appendChild(script);
+      });
+    }
+
     // 通話開始
     // targetUserName, targetIconUrl: プロフィールポップアップからの通話時に指定
     window.showCallPreparing = async function(targetUserName, targetIconUrl) {
@@ -8020,6 +8085,8 @@
 
     // Agora通話開始
     async function startAgoraCall() {
+      // Agora SDKを遅延読み込み
+      await loadAgoraSDK();
       // Agoraクライアント作成
       agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
@@ -8349,6 +8416,8 @@
 
     // Agoraチャンネルに参加（応答側用）
     async function joinAgoraCall(channelName) {
+      // Agora SDKを遅延読み込み
+      await loadAgoraSDK();
       // Agoraクライアント作成
       agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
