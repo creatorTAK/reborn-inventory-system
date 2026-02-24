@@ -1,0 +1,1234 @@
+<!-- FURIRA SPA Fragment: todo_list (タスク一覧) -->
+<div id="spa-page-todo-list">
+  <style>
+    #spa-page-todo-list * { margin: 0; padding: 0; box-sizing: border-box; }
+    #spa-page-todo-list { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; min-height: 100vh; }
+    #spa-page-todo-list .sub-header { display: flex; align-items: center; justify-content: center; height: 56px; padding: 0 16px; background: #ffffff; border-bottom: 1px solid #f0f0f0; position: sticky; top: 0; z-index: 1000; }
+    #spa-page-todo-list .sub-header-back { position: absolute; left: 16px; width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #606060; font-size: 20px; transition: background 0.2s; }
+    #spa-page-todo-list .sub-header-back:hover { background: #f2f2f2; }
+    #spa-page-todo-list .sub-header-back:active { background: #e5e5e5; }
+    #spa-page-todo-list .sub-header-title { font-weight: 600; font-size: 16px; color: #1f2937; }
+    #spa-page-todo-list .sub-header-icons { position: absolute; right: 16px; display: flex; align-items: center; gap: 2px; }
+    #spa-page-todo-list .sub-header-icon { width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #606060; font-size: 20px; transition: background 0.2s; position: relative; }
+    #spa-page-todo-list .sub-header-icon:hover { background: #f2f2f2; }
+    #spa-page-todo-list .sub-header-icon:active { background: #e5e5e5; }
+    #spa-page-todo-list .settings-dropdown { position: absolute; top: 100%; right: 0; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); min-width: 200px; padding: 8px 0; display: none; z-index: 1001; }
+    #spa-page-todo-list .settings-dropdown.active { display: block; }
+    #spa-page-todo-list .settings-dropdown-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: none; background: none; width: 100%; font-size: 14px; color: #374151; cursor: pointer; text-align: left; }
+    #spa-page-todo-list .settings-dropdown-item:hover { background: #f3f4f6; }
+    #spa-page-todo-list .settings-dropdown-item i { font-size: 18px; color: #6b7280; width: 20px; text-align: center; }
+    #spa-page-todo-list .announce-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; background: #ef4444; border-radius: 50%; display: none; }
+    #spa-page-todo-list .announce-dot.visible { display: block; }
+    #spa-page-todo-list .search-bar { display: flex; align-items: center; background: #e5e7eb; border-radius: 12px; padding: 12px 14px; gap: 10px; margin: 12px 16px; }
+    #spa-page-todo-list .search-bar i { color: #9ca3af; font-size: 16px; }
+    #spa-page-todo-list .search-bar input { flex: 1; border: none; background: transparent; font-size: 16px; color: #1f2937; outline: none; }
+    #spa-page-todo-list .search-bar input::placeholder { color: #9ca3af; }
+    #spa-page-todo-list .search-bar .clear-btn { display: none; background: none; border: none; color: #9ca3af; cursor: pointer; padding: 0; font-size: 16px; }
+    #spa-page-todo-list .search-bar .clear-btn.show { display: block; }
+    #spa-page-todo-list .settings-dropdown-divider { height: 1px; background: #e5e7eb; margin: 4px 0; }
+    #spa-page-todo-list .settings-dropdown-item.admin-only { border-top: 1px solid #e5e7eb; color: #6366f1; }
+    #spa-page-todo-list .settings-dropdown-item.admin-only i { color: #6366f1; }
+    #spa-page-todo-list .task-admin-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 2000; justify-content: center; align-items: flex-start; padding: 20px; overflow-y: auto; }
+    #spa-page-todo-list .task-admin-modal.active { display: flex; }
+    #spa-page-todo-list .task-admin-content { background: white; border-radius: 16px; width: 100%; max-width: 500px; max-height: calc(100vh - 40px); overflow-y: auto; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2); }
+    #spa-page-todo-list .task-admin-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; background: white; z-index: 1; }
+    #spa-page-todo-list .task-admin-header h2 { font-size: 18px; font-weight: 600; color: #1f2937; margin: 0; }
+    #spa-page-todo-list .task-admin-close { background: none; border: none; font-size: 24px; color: #6b7280; cursor: pointer; padding: 0; line-height: 1; }
+    #spa-page-todo-list .task-admin-body { padding: 16px 20px; }
+    #spa-page-todo-list .task-summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+    #spa-page-todo-list .task-summary-card { background: #f9fafb; border-radius: 12px; padding: 16px; text-align: center; }
+    #spa-page-todo-list .task-summary-card .number { font-size: 24px; font-weight: 700; }
+    #spa-page-todo-list .task-summary-card .label { font-size: 11px; color: #6b7280; margin-top: 4px; }
+    #spa-page-todo-list .deadline-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1100; justify-content: center; align-items: center; padding: 20px; }
+    #spa-page-todo-list .deadline-modal.active { display: flex; }
+    #spa-page-todo-list .deadline-modal-content { background: white; border-radius: 16px; width: 100%; max-width: 400px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+    #spa-page-todo-list .deadline-modal-header { padding: 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+    #spa-page-todo-list .deadline-modal-header h3 { margin: 0; font-size: 18px; font-weight: 600; color: #1f2937; }
+    #spa-page-todo-list .deadline-modal-close { background: none; border: none; font-size: 24px; color: #9ca3af; cursor: pointer; padding: 0; line-height: 1; }
+    #spa-page-todo-list .deadline-modal-body { padding: 20px; }
+    #spa-page-todo-list .deadline-modal-footer { padding: 16px 20px; background: #f9fafb; display: flex; gap: 12px; }
+    #spa-page-todo-list .deadline-modal-btn { flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    #spa-page-todo-list .deadline-modal-btn.cancel { border: 1px solid #d1d5db; background: white; color: #374151; }
+    #spa-page-todo-list .deadline-modal-btn.primary { border: none; background: linear-gradient(135deg, var(--reborn-primary) 0%, var(--reborn-primary-dark) 100%); color: white; }
+    #spa-page-todo-list .deadline-input-group { margin-bottom: 16px; }
+    #spa-page-todo-list .deadline-input-group label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 8px; }
+    #spa-page-todo-list .deadline-input-row { display: flex; align-items: center; gap: 8px; }
+    #spa-page-todo-list .deadline-input-row input { width: 80px; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; text-align: center; }
+    #spa-page-todo-list .deadline-input-row span { font-size: 14px; color: #6b7280; }
+    #spa-page-todo-list .deadline-preview { margin-top: 8px; font-size: 12px; color: #6b7280; }
+    #spa-page-todo-list .deadline-note { font-size: 11px; color: #9ca3af; margin-top: 12px; padding: 10px; background: #f9fafb; border-radius: 6px; }
+    #spa-page-todo-list .extension-requests-section { margin-bottom: 16px; }
+    #spa-page-todo-list .extension-request-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid #f59e0b; }
+    #spa-page-todo-list .extension-request-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    #spa-page-todo-list .extension-request-avatar { width: 36px; height: 36px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    #spa-page-todo-list .extension-request-info h4 { margin: 0; font-size: 14px; font-weight: 600; color: #1f2937; }
+    #spa-page-todo-list .extension-request-info span { font-size: 11px; color: #6b7280; }
+    #spa-page-todo-list .extension-request-body { margin-bottom: 12px; }
+    #spa-page-todo-list .extension-request-dates { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #374151; margin-bottom: 8px; }
+    #spa-page-todo-list .extension-request-dates .arrow { color: #9ca3af; }
+    #spa-page-todo-list .extension-request-dates .new-date { color: #f59e0b; font-weight: 600; }
+    #spa-page-todo-list .extension-request-reason { font-size: 13px; color: #6b7280; padding: 10px; background: #f9fafb; border-radius: 6px; border-left: 3px solid #e5e7eb; }
+    #spa-page-todo-list .extension-request-actions { display: flex; gap: 8px; }
+    #spa-page-todo-list .extension-request-btn { flex: 1; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+    #spa-page-todo-list .extension-request-btn.reject { border: 1px solid #ef4444; background: white; color: #ef4444; }
+    #spa-page-todo-list .extension-request-btn.approve { border: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; }
+    #spa-page-todo-list .request-extension-btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background: #fef3c7; color: #b45309; border: none; border-radius: 6px; font-size: 11px; font-weight: 500; cursor: pointer; margin-top: 8px; }
+    #spa-page-todo-list .request-extension-btn:hover { background: #fde68a; }
+    #spa-page-todo-list .pending-extension-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: #fef3c7; color: #b45309; border-radius: 4px; font-size: 10px; font-weight: 500; margin-top: 8px; }
+    #spa-page-todo-list .my-extension-requests-section { margin-bottom: 16px; }
+    #spa-page-todo-list .my-extension-card { background: white; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
+    #spa-page-todo-list .my-extension-info { flex: 1; }
+    #spa-page-todo-list .my-extension-task { font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 4px; }
+    #spa-page-todo-list .my-extension-date { font-size: 11px; color: #9ca3af; }
+    #spa-page-todo-list .my-extension-status { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    #spa-page-todo-list .my-extension-status.pending { background: #fef3c7; color: #b45309; }
+    #spa-page-todo-list .my-extension-status.approved { background: #d1fae5; color: #059669; }
+    #spa-page-todo-list .my-extension-status.rejected { background: #fee2e2; color: #dc2626; }
+    #spa-page-todo-list .my-extension-result { font-size: 11px; color: #6b7280; margin-top: 4px; }
+    #spa-page-todo-list .tasks-container { padding: 8px 16px 16px 16px; max-width: 600px; margin: 0 auto; }
+    #spa-page-todo-list .section-title { font-size: 14px; font-weight: 600; color: #6b7280; margin-bottom: 12px; padding-left: 4px; }
+    #spa-page-todo-list .task-item { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); cursor: pointer; transition: all 0.2s ease; border-left: 4px solid var(--reborn-primary); }
+    #spa-page-todo-list .task-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    #spa-page-todo-list .task-item.completed { opacity: 0.6; border-left-color: #9ca3af; }
+    #spa-page-todo-list .task-header { display: flex; align-items: flex-start; gap: 12px; }
+    #spa-page-todo-list .task-icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: #fef3c7; color: #92400e; font-size: 12px; }
+    #spa-page-todo-list .history-link { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; margin-top: 16px; background: #f3f4f6; border-radius: 12px; color: #6b7280; font-size: 14px; cursor: pointer; transition: all 0.2s ease; }
+    #spa-page-todo-list .history-link:hover { background: #e5e7eb; }
+    #spa-page-todo-list .history-link .history-count { background: var(--reborn-primary); color: white; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    #spa-page-todo-list .task-content { flex: 1; }
+    #spa-page-todo-list .task-title { font-size: 15px; font-weight: 600; color: #1f2937; margin-bottom: 4px; }
+    #spa-page-todo-list .task-description { font-size: 13px; color: #6b7280; line-height: 1.4; }
+    #spa-page-todo-list .task-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #9ca3af; }
+    #spa-page-todo-list .task-action { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; background: linear-gradient(135deg, #40B4E5 0%, #1E8FBF 100%); color: white; border-radius: 8px; font-size: 13px; font-weight: 600; margin-top: 12px; cursor: pointer; transition: all 0.2s; -webkit-tap-highlight-color: transparent; }
+    #spa-page-todo-list .task-action:active { transform: scale(0.97); opacity: 0.9; }
+    #spa-page-todo-list .status-card { background: white; border-radius: 16px; padding: 32px 20px; margin-top: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    #spa-page-todo-list .empty-state { text-align: center; color: #6b7280; }
+    #spa-page-todo-list .empty-state i { font-size: 48px; margin-bottom: 12px; display: block; color: #d1d5db; }
+    #spa-page-todo-list .empty-state p { font-size: 15px; color: #9ca3af; }
+    #spa-page-todo-list .loading { text-align: center; padding: 40px; color: #6b7280; }
+    #spa-page-todo-list .type-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    #spa-page-todo-list .type-badge.pending_user_approval { background: #fef3c7; color: #92400e; }
+    #spa-page-todo-list .type-badge.inventory_alert { background: #fee2e2; color: #991b1b; }
+    #spa-page-todo-list .type-badge.inventory_action { background: #fee2e2; color: #dc2626; }
+    #spa-page-todo-list .type-badge.inventory_warning { background: #fef3c7; color: #d97706; }
+    #spa-page-todo-list .type-badge.goal_setting { background: #dbeafe; color: #2563eb; }
+    #spa-page-todo-list .type-badge.shipping_info_registration,
+    #spa-page-todo-list .type-badge.bank_account_registration { background: #dbeafe; color: #1e40af; }
+    #spa-page-todo-list .type-badge.receiving_task { background: #dcfce7; color: #166534; }
+    #spa-page-todo-list .type-badge.product_registration_task { background: #fef3c7; color: #92400e; }
+    #spa-page-todo-list .type-badge.revision_request { background: #fef2f2; color: #dc2626; }
+    #spa-page-todo-list .type-badge.inspection_task { background: #ecfdf5; color: #047857; }
+    #spa-page-todo-list .type-badge.default { background: #e0e7ff; color: #3730a3; }
+    #spa-page-todo-list .remind-btn { padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 11px; cursor: pointer; }
+    #spa-page-todo-list .remind-btn:active { opacity: 0.8; }
+  </style>
+
+  <!-- サブヘッダー -->
+  <div class="sub-header">
+    <button class="sub-header-back" onclick="navigateToPage('home')" title="戻る">
+      <i class="bi bi-chevron-left"></i>
+    </button>
+    <span class="sub-header-title">タスク</span>
+    <div class="sub-header-icons">
+      <button class="sub-header-icon" title="通知" onclick="navigateToPage('announce')">
+        <i class="bi bi-bell"></i>
+        <span class="announce-dot" id="tdl-announceDot"></span>
+      </button>
+      <div style="position: relative;">
+        <button class="sub-header-icon" title="メニュー" onclick="tdlToggleSettingsDropdown(event)">
+          <i class="bi bi-list"></i>
+        </button>
+        <div class="settings-dropdown" id="tdl-settingsDropdown">
+          <button class="settings-dropdown-item" onclick="tdlGoToHistory()">
+            <i class="bi bi-clock-history"></i>
+            <span>完了した履歴</span>
+          </button>
+          <button class="settings-dropdown-item admin-only" id="tdl-adminTaskManagement" onclick="tdlOpenTaskManagement()" style="display: none;">
+            <i class="bi bi-people"></i>
+            <span>タスク管理</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 検索バー -->
+  <div class="search-bar">
+    <i class="bi bi-search"></i>
+    <input type="text" id="tdl-searchInput" placeholder="タスクを検索" oninput="tdlPerformSearch()" />
+    <button class="clear-btn" id="tdl-searchClearBtn" onclick="tdlClearSearch()">
+      <i class="bi bi-x-circle-fill"></i>
+    </button>
+  </div>
+
+  <!-- タスク管理モーダル（管理者専用） -->
+  <div class="task-admin-modal" id="tdl-taskAdminModal" onclick="tdlCloseTaskManagement(event)">
+    <div class="task-admin-content" onclick="event.stopPropagation()">
+      <div class="task-admin-header">
+        <h2>タスク管理</h2>
+        <button class="task-admin-close" onclick="tdlCloseTaskManagement()">&times;</button>
+      </div>
+      <div class="task-admin-body">
+        <div class="task-summary-cards">
+          <div class="task-summary-card">
+            <div class="number" style="color: #3b82f6;" id="tdl-adminTaskTotal">-</div>
+            <div class="label">総ユーザー</div>
+          </div>
+          <div class="task-summary-card">
+            <div class="number" style="color: #f59e0b;" id="tdl-adminTaskPending">-</div>
+            <div class="label">未完了あり</div>
+          </div>
+          <div class="task-summary-card">
+            <div class="number" style="color: #ef4444;" id="tdl-adminTaskOverdue">-</div>
+            <div class="label">期限切れ/放置</div>
+          </div>
+        </div>
+        <div style="background: #f9fafb; border-radius: 12px; overflow: hidden;">
+          <div style="padding: 12px 16px; background: #e5e7eb; font-weight: 600; font-size: 14px; color: #374151;">ユーザー別タスク状況</div>
+          <div id="tdl-adminUserTaskList" style="max-height: 300px; overflow-y: auto;">
+            <div style="padding: 20px; text-align: center; color: #9ca3af;">読み込み中...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 管理者用: 延長申請一覧セクション -->
+  <div id="tdl-extensionRequestsSection" class="tasks-container extension-requests-section" style="display: none;">
+    <div class="section-title" style="display: flex; align-items: center; gap: 8px;">
+      <i class="bi bi-clock-history" style="color: #f59e0b;"></i>
+      延長申請
+      <span id="tdl-extensionRequestsCount" style="background: #f59e0b; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;">0</span>
+    </div>
+    <div id="tdl-extensionRequestsList">
+      <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">読み込み中...</div>
+    </div>
+  </div>
+
+  <!-- スタッフ用: 自分の延長申請状況 -->
+  <div id="tdl-myExtensionRequestsSection" class="tasks-container my-extension-requests-section" style="display: none;">
+    <div class="section-title" style="display: flex; align-items: center; gap: 8px;">
+      <i class="bi bi-hourglass-split" style="color: #6366f1;"></i>
+      あなたの延長申請
+      <span id="tdl-myExtensionRequestsCount" style="background: #6366f1; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;">0</span>
+    </div>
+    <div id="tdl-myExtensionRequestsList">
+      <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">読み込み中...</div>
+    </div>
+  </div>
+
+  <div class="tasks-container">
+    <div id="tdl-loading" class="loading">
+      <i class="bi bi-arrow-repeat"></i> 読み込み中...
+    </div>
+    <div id="tdl-pending-tasks" style="display: none;">
+      <div class="section-title">未完了のタスク</div>
+      <div id="tdl-pending-tasks-list"></div>
+    </div>
+    <div id="tdl-status-card" class="status-card" style="display: none;">
+      <div id="tdl-empty-state" class="empty-state" style="display: none;">
+        <i class="bi bi-check-circle"></i>
+        <p>やることはありません</p>
+      </div>
+      <div id="tdl-history-link-container" style="display: none;">
+        <div class="history-link" onclick="tdlGoToHistory()">
+          <i class="bi bi-clock-history"></i>
+          <span>完了した履歴を見る</span>
+          <span id="tdl-completed-count" class="history-count"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 受取完了モーダル（期限設定） -->
+  <div id="tdl-receivingCompleteModal" class="deadline-modal">
+    <div class="deadline-modal-content">
+      <div class="deadline-modal-header">
+        <h3><i class="bi bi-check-circle" style="color: #10b981; margin-right: 8px;"></i>受取完了</h3>
+        <button class="deadline-modal-close" onclick="tdlCloseReceivingCompleteModal()">&times;</button>
+      </div>
+      <div class="deadline-modal-body">
+        <div style="background: #f0fdf4; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <div style="font-size: 13px; color: #166534;">
+            <strong id="tdl-receivingItemCount">0</strong>点の商品を受け取りました
+          </div>
+        </div>
+        <div class="deadline-input-group">
+          <label><i class="bi bi-calendar-event" style="margin-right: 6px;"></i>商品登録期限</label>
+          <div class="deadline-input-row">
+            <input type="number" id="tdl-receivingDueDays" min="1" max="30" value="7" onchange="tdlUpdateReceivingDueDatePreview()">
+            <span>日後</span>
+          </div>
+          <div class="deadline-preview" id="tdl-receivingDueDatePreview"></div>
+        </div>
+        <div class="deadline-note">
+          <i class="bi bi-info-circle" style="margin-right: 4px;"></i>
+          この期限は受取点数や担当者の状況に応じて調整できます。<br>
+          設定後の延長には管理者の承認が必要です。
+        </div>
+      </div>
+      <div class="deadline-modal-footer">
+        <button class="deadline-modal-btn cancel" onclick="tdlCloseReceivingCompleteModal()">キャンセル</button>
+        <button class="deadline-modal-btn primary" onclick="tdlSubmitReceivingComplete()">完了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 延長申請モーダル -->
+  <div id="tdl-extensionRequestModal" class="deadline-modal">
+    <div class="deadline-modal-content">
+      <div class="deadline-modal-header">
+        <h3><i class="bi bi-clock-history" style="color: #f59e0b; margin-right: 8px;"></i>期限延長申請</h3>
+        <button class="deadline-modal-close" onclick="tdlCloseExtensionRequestModal()">&times;</button>
+      </div>
+      <div class="deadline-modal-body">
+        <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <div style="font-size: 12px; color: #92400e;">
+            <strong>現在の期限:</strong> <span id="tdl-extensionCurrentDueDate">-</span>
+          </div>
+        </div>
+        <div class="deadline-input-group">
+          <label><i class="bi bi-plus-circle" style="margin-right: 6px;"></i>延長日数</label>
+          <div class="deadline-input-row">
+            <input type="number" id="tdl-extensionDays" min="1" max="14" value="3" onchange="tdlUpdateExtensionDueDatePreview()">
+            <span>日延長</span>
+          </div>
+          <div class="deadline-preview" id="tdl-extensionDueDatePreview"></div>
+        </div>
+        <div class="deadline-input-group">
+          <label><i class="bi bi-chat-left-text" style="margin-right: 6px;"></i>申請理由（必須）</label>
+          <textarea id="tdl-extensionReason" placeholder="例: 物量が多く、撮影に時間がかかっているため" style="width: 100%; height: 80px; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; resize: none; box-sizing: border-box;"></textarea>
+        </div>
+        <div class="deadline-note">
+          <i class="bi bi-shield-check" style="margin-right: 4px;"></i>
+          申請は管理者に送信され、承認後に期限が延長されます。
+        </div>
+      </div>
+      <div class="deadline-modal-footer">
+        <button class="deadline-modal-btn cancel" onclick="tdlCloseExtensionRequestModal()">キャンセル</button>
+        <button class="deadline-modal-btn primary" onclick="tdlSubmitExtensionRequest()">申請する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 却下理由入力モーダル -->
+  <div id="tdl-rejectModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: white; border-radius: 16px; width: 100%; max-width: 400px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+      <div style="padding: 20px; border-bottom: 1px solid #e5e7eb;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #1f2937;">却下理由</h3>
+          <button onclick="tdlCloseRejectModal()" style="background: none; border: none; font-size: 24px; color: #9ca3af; cursor: pointer; padding: 0; line-height: 1;">&times;</button>
+        </div>
+      </div>
+      <div style="padding: 20px;">
+        <p style="margin: 0 0 12px 0; font-size: 14px; color: #6b7280;">修正が必要な理由を入力してください。担当者に通知されます。</p>
+        <textarea id="tdl-rejectReason" placeholder="例: 画像が暗いので撮り直してください" style="width: 100%; height: 120px; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; resize: none; box-sizing: border-box;"></textarea>
+      </div>
+      <div style="padding: 16px 20px; background: #f9fafb; display: flex; gap: 12px;">
+        <button onclick="tdlCloseRejectModal()" style="flex: 1; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; background: white; font-size: 14px; font-weight: 500; color: #374151; cursor: pointer;">キャンセル</button>
+        <button onclick="tdlSubmitReject()" style="flex: 1; padding: 12px; border: none; border-radius: 8px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); font-size: 14px; font-weight: 500; color: white; cursor: pointer;">却下する</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================
+    // Todo List Page SPA Fragment
+    // ============================================
+
+    var _tdl_db = window.db;
+    var _tdl_userEmail = localStorage.getItem('userEmail') || '';
+    var _tdl_allPendingTasks = [];
+    var _tdl_pendingReceivingTask = null;
+    var _tdl_pendingExtensionTask = null;
+    var _tdl_rejectingTaskId = null;
+    var _tdl_rejectingTaskType = null;
+    var _tdl_isAdmin = false;
+
+    // タスク一覧を読み込み
+    async function tdlLoadTasks() {
+      if (!_tdl_userEmail) {
+        document.getElementById('tdl-loading').style.display = 'none';
+        document.getElementById('tdl-empty-state').style.display = 'block';
+        return;
+      }
+
+      try {
+        var tasksRef = _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks');
+        var snapshot = await tasksRef.orderBy('createdAt', 'desc').get();
+
+        var pendingTasks = [];
+        var completedTasks = [];
+
+        snapshot.forEach(function(doc) {
+          var task = Object.assign({ id: doc.id }, doc.data());
+          if (task.completed) {
+            completedTasks.push(task);
+          } else {
+            pendingTasks.push(task);
+          }
+        });
+
+        document.getElementById('tdl-loading').style.display = 'none';
+
+        // 365日経過した完了タスクを自動削除
+        var oneYearAgo = new Date();
+        oneYearAgo.setDate(oneYearAgo.getDate() - 365);
+        for (var i = 0; i < completedTasks.length; i++) {
+          var task = completedTasks[i];
+          if (task.completedAt) {
+            var completedDate = task.completedAt.toDate ? task.completedAt.toDate() : new Date(task.completedAt);
+            if (completedDate < oneYearAgo) {
+              await _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(task.id).delete();
+              console.log('1年経過タスクを削除:', task.id);
+            }
+          }
+        }
+
+        // 未完了タスクを保存・表示
+        _tdl_allPendingTasks = pendingTasks;
+        if (pendingTasks.length > 0) {
+          document.getElementById('tdl-pending-tasks').style.display = 'block';
+          document.getElementById('tdl-pending-tasks-list').innerHTML = pendingTasks.map(function(t) { return tdlRenderTask(t); }).join('');
+        }
+
+        // 完了タスクがある場合は履歴リンクを表示
+        var recentCompletedTasks = completedTasks.filter(function(task) {
+          if (!task.completedAt) return true;
+          var completedDate = task.completedAt.toDate ? task.completedAt.toDate() : new Date(task.completedAt);
+          return completedDate >= oneYearAgo;
+        });
+
+        var showEmptyState = pendingTasks.length === 0;
+        var showHistoryLink = recentCompletedTasks.length > 0;
+
+        if (showEmptyState || showHistoryLink) {
+          document.getElementById('tdl-status-card').style.display = 'block';
+          if (showEmptyState) {
+            document.getElementById('tdl-empty-state').style.display = 'block';
+          }
+          if (showHistoryLink) {
+            document.getElementById('tdl-history-link-container').style.display = 'block';
+            document.getElementById('tdl-completed-count').textContent = recentCompletedTasks.length + '件';
+          }
+        }
+
+      } catch (error) {
+        console.error('タスク読み込みエラー:', error);
+        document.getElementById('tdl-loading').innerHTML = '<i class="bi bi-exclamation-circle"></i> 読み込みエラー';
+      }
+    }
+
+    // タスクをレンダリング
+    function tdlRenderTask(task) {
+      var typeLabel = tdlGetTypeLabel(task.type);
+      var typeBadgeClass = task.type || 'default';
+      var createdAt = task.createdAt ? tdlFormatDate(task.createdAt.toDate ? task.createdAt.toDate() : new Date(task.createdAt)) : '';
+
+      var iconHtml;
+      if (task.type === 'pending_user_approval' && task.relatedData && task.relatedData.pendingUserPhoto) {
+        iconHtml = '<img src="' + tdlEscapeHtml(task.relatedData.pendingUserPhoto) + '" alt="ユーザー" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">';
+      } else {
+        iconHtml = tdlGetTypeIcon(task.type);
+      }
+
+      var completableTaskTypes = ['listing_approval', 'shipping_task', 'revision_request', 'inspection_task'];
+      var showCompleteButton = completableTaskTypes.indexOf(task.type) !== -1;
+
+      // 期限表示
+      var dueDateHtml = '';
+      if (task.dueDate) {
+        var dueDate = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
+        var now = new Date();
+        var diffTime = dueDate - now;
+        var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) {
+          dueDateHtml = '<span style="color: #ef4444; font-weight: 600; font-size: 11px;">⚠️ 期限切れ（' + Math.abs(diffDays) + '日超過）</span>';
+        } else if (diffDays === 0) {
+          dueDateHtml = '<span style="color: #f59e0b; font-weight: 600; font-size: 11px;">⏰ 本日期限</span>';
+        } else if (diffDays === 1) {
+          dueDateHtml = '<span style="color: #f59e0b; font-size: 11px;">📅 明日まで</span>';
+        } else {
+          dueDateHtml = '<span style="color: #6b7280; font-size: 11px;">📅 ' + (dueDate.getMonth() + 1) + '/' + dueDate.getDate() + 'まで</span>';
+        }
+      }
+
+      // 商品登録タスクのプログレスバー
+      var progressHtml = '';
+      var extensionBtnHtml = '';
+      if (task.type === 'product_registration_task' && task.relatedData) {
+        var totalCount = task.relatedData.totalCount || 0;
+        var registeredCount = task.relatedData.registeredCount || 0;
+        var remainingCount = task.relatedData.remainingCount || totalCount;
+        var progressPercent = totalCount > 0 ? Math.round((registeredCount / totalCount) * 100) : 0;
+
+        progressHtml = '<div style="margin-top: 8px; padding: 8px; background: #f3f4f6; border-radius: 8px;">' +
+          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
+          '<span style="color: #374151; font-weight: 600;">📦 登録進捗</span>' +
+          '<span style="color: #6b7280;">' + registeredCount + ' / ' + totalCount + ' 点 (' + progressPercent + '%)</span></div>' +
+          '<div style="background: #e5e7eb; border-radius: 4px; height: 8px; overflow: hidden;">' +
+          '<div style="background: linear-gradient(90deg, #10b981 0%, #34d399 100%); height: 100%; width: ' + progressPercent + '%; transition: width 0.5s ease;"></div></div>' +
+          '<div style="text-align: center; margin-top: 6px; font-size: 14px; color: ' + (remainingCount === 0 ? '#10b981' : '#f59e0b') + '; font-weight: 600;">' +
+          (remainingCount === 0 ? '✅ 完了!' : '残り ' + remainingCount + ' 点') + '</div></div>';
+
+        if (task.pendingExtension) {
+          extensionBtnHtml = '<div class="pending-extension-badge"><i class="bi bi-hourglass-split"></i> 延長申請中</div>';
+        } else if (task.dueDate) {
+          extensionBtnHtml = '<button class="request-extension-btn" onclick="event.stopPropagation(); tdlOpenExtensionRequestModalForTask(\'' + task.id + '\')"><i class="bi bi-clock-history"></i> 期限延長を申請</button>';
+        }
+      }
+
+      // アクションボタン
+      var actionButtons = '';
+      if (task.link) {
+        actionButtons += '<div class="task-action" onclick="tdlHandleTaskClick(\'' + task.id + '\', \'' + task.link + '\')"><i class="bi bi-arrow-right-circle"></i> 対応する</div>';
+      }
+      if (showCompleteButton) {
+        if (task.type === 'listing_approval') {
+          actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 承認</div>';
+          actionButtons += '<div class="task-action reject-btn" onclick="tdlOpenRejectModal(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); margin-left: 8px;"><i class="bi bi-x-circle"></i> 却下</div>';
+        } else if (task.type === 'revision_request') {
+          actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 修正完了</div>';
+        } else {
+          actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 完了</div>';
+        }
+      }
+
+      return '<div class="task-item" data-task-id="' + task.id + '">' +
+        '<div class="task-header"><div class="task-icon">' + iconHtml + '</div>' +
+        '<div class="task-content"><div class="task-title">' + tdlEscapeHtml(task.title) + '</div>' +
+        '<div class="task-description">' + tdlEscapeHtml(task.description) + '</div>' +
+        '<div class="task-meta"><span class="type-badge ' + typeBadgeClass + '">' + typeLabel + '</span>' +
+        '<span>' + createdAt + '</span>' + dueDateHtml + '</div>' +
+        progressHtml + extensionBtnHtml +
+        '<div style="display: flex; gap: 8px; flex-wrap: wrap;">' + actionButtons + '</div>' +
+        '</div></div></div>';
+    }
+
+    // タスクIDから延長申請モーダルを開く
+    async function tdlOpenExtensionRequestModalForTask(taskId) {
+      try {
+        var taskRef = _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(taskId);
+        var taskDoc = await taskRef.get();
+        if (!taskDoc.exists) { alert('タスクが見つかりません'); return; }
+        var taskData = taskDoc.data();
+        taskData.id = taskId;
+        tdlOpenExtensionRequestModal(taskId, taskData);
+      } catch (error) {
+        console.error('タスクデータ取得エラー:', error);
+        alert('タスクデータの取得に失敗しました');
+      }
+    }
+
+    // タスクを完了にする
+    async function tdlCompleteTask(taskId, taskType) {
+      var rewardTaskTypes = ['listing_approval', 'shipping_task', 'product_registration_task', 'inspection_task'];
+
+      if (taskType === 'receiving_task') {
+        try {
+          var taskRef = _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(taskId);
+          var taskDoc = await taskRef.get();
+          if (!taskDoc.exists) { alert('タスクが見つかりません'); return; }
+          tdlOpenReceivingCompleteModal(taskId, taskDoc.data());
+          return;
+        } catch (error) {
+          console.error('タスクデータ取得エラー:', error);
+          alert('タスクデータの取得に失敗しました');
+          return;
+        }
+      }
+
+      var confirmMsg;
+      if (taskType === 'revision_request') {
+        confirmMsg = '修正を完了しますか？\n（管理者に再承認タスクが送信されます）';
+      } else if (rewardTaskTypes.indexOf(taskType) !== -1) {
+        confirmMsg = 'このタスクを完了にしますか？\n（報酬が自動記録されます）';
+      } else {
+        confirmMsg = 'このタスクを完了にしますか？';
+      }
+
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        var taskRef = _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(taskId);
+        var taskDoc = await taskRef.get();
+        if (!taskDoc.exists) { alert('タスクが見つかりません'); return; }
+        var taskData = taskDoc.data();
+
+        if (taskType === 'revision_request') {
+          await tdlCreateReApprovalTask(taskData);
+        }
+
+        await taskRef.update({ completed: true, completedAt: new Date().toISOString() });
+        console.log('✅ [Task] タスク完了:', taskId);
+        alert('タスクを完了しました');
+        tdlLoadTasks();
+      } catch (error) {
+        console.error('❌ [Task] タスク完了エラー:', error);
+        alert('タスクの完了に失敗しました');
+      }
+    }
+
+    // 再承認タスクを作成
+    async function tdlCreateReApprovalTask(revisionTaskData) {
+      var relatedData = revisionTaskData.relatedData || {};
+      var productId = relatedData.productId;
+      var managementNumber = relatedData.managementNumber;
+      var rejectedBy = relatedData.rejectedBy;
+
+      if (!rejectedBy) { console.warn('⚠️ 再承認タスク作成スキップ: 却下者情報なし'); return; }
+
+      try {
+        var staffName = 'スタッフ';
+        if (productId) {
+          var productDoc = await _tdl_db.collection('products').doc(productId).get();
+          if (productDoc.exists) { staffName = productDoc.data().registrant || staffName; }
+        }
+
+        var reApprovalTaskRef = _tdl_db.collection('userTasks').doc(rejectedBy).collection('tasks').doc();
+        await reApprovalTaskRef.set({
+          type: 'listing_approval',
+          title: '再確認: ' + (managementNumber || '商品'),
+          description: staffName + 'さんが修正を完了しました。再度確認してください。',
+          createdAt: new Date().toISOString(),
+          completed: false,
+          priority: 'high',
+          link: productId ? '/product.html?edit=' + productId : null,
+          relatedData: { productId: productId, managementNumber: managementNumber, staffEmail: _tdl_userEmail, staffName: staffName, isReApproval: true }
+        });
+        console.log('✅ [Task] 再承認タスク作成:', rejectedBy);
+      } catch (error) {
+        console.error('❌ [Task] 再承認タスク作成エラー:', error);
+        throw error;
+      }
+    }
+
+    // タスクタイプのアイコンを取得
+    function tdlGetTypeIcon(type) {
+      var icons = { 'pending_user_approval': '👤', 'inventory_alert': '📦', 'inventory_action': '🔴', 'inventory_warning': '🟡', 'listing_approval': '📤', 'shipping_task': '📦', 'shipping_info_registration': '📦', 'bank_account_registration': '🏦', 'receiving_task': '📬', 'product_registration_task': '📝', 'revision_request': '🔄', 'inspection_task': '🔍', 'goal_setting': '🎯' };
+      return icons[type] || '📋';
+    }
+
+    function tdlGetTypeLabel(type) {
+      var labels = { 'pending_user_approval': 'ユーザー承認', 'inventory_alert': '在庫アラート', 'inventory_action': '滞留対策', 'inventory_warning': '滞留確認', 'listing_approval': '出品確認', 'shipping_task': '梱包・発送', 'shipping_info_registration': '初期設定', 'bank_account_registration': '初期設定', 'receiving_task': '仕入商品受取', 'product_registration_task': '商品登録', 'revision_request': '修正依頼', 'inspection_task': '検品作業', 'goal_setting': '目標設定' };
+      return labels[type] || 'タスク';
+    }
+
+    function tdlGetTaskTypeLabel(taskType) {
+      var typeLabels = { 'shipping_task': '発送', 'listing_approval': '出品確認', 'inspection': '検品', 'photography': '撮影', 'receiving_task': '仕入受取', 'product_registration_task': '商品登録', 'other': 'その他' };
+      return typeLabels[taskType] || taskType;
+    }
+
+    function tdlFormatDate(date) {
+      var now = new Date();
+      var diff = now - date;
+      var minutes = Math.floor(diff / 60000);
+      var hours = Math.floor(diff / 3600000);
+      var days = Math.floor(diff / 86400000);
+      if (minutes < 1) return 'たった今';
+      if (minutes < 60) return minutes + '分前';
+      if (hours < 24) return hours + '時間前';
+      if (days < 7) return days + '日前';
+      return (date.getMonth() + 1) + '/' + date.getDate();
+    }
+
+    function tdlEscapeHtml(text) {
+      if (!text) return '';
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ナビゲーション
+    function tdlHandleTaskClick(taskId, link) {
+      if (!link) return;
+      navigateToPage(link);
+    }
+
+    function tdlGoToHistory() {
+      var dropdown = document.getElementById('tdl-settingsDropdown');
+      if (dropdown) dropdown.classList.remove('active');
+      navigateToPage('todo-history');
+    }
+
+    function tdlToggleSettingsDropdown(event) {
+      event.stopPropagation();
+      var dropdown = document.getElementById('tdl-settingsDropdown');
+      dropdown.classList.toggle('active');
+    }
+
+    function _tdlDropdownClickHandler(event) {
+      var dropdown = document.getElementById('tdl-settingsDropdown');
+      if (dropdown && !event.target.closest('.settings-dropdown') && !event.target.closest('.sub-header-icon')) {
+        dropdown.classList.remove('active');
+      }
+    }
+
+    // 検索機能
+    function tdlPerformSearch() {
+      var query = document.getElementById('tdl-searchInput').value.toLowerCase().trim();
+      var clearBtn = document.getElementById('tdl-searchClearBtn');
+      if (query) { clearBtn.classList.add('show'); } else { clearBtn.classList.remove('show'); }
+
+      var filteredTasks = _tdl_allPendingTasks.filter(function(task) {
+        var title = (task.title || '').toLowerCase();
+        var description = (task.description || '').toLowerCase();
+        return title.indexOf(query) !== -1 || description.indexOf(query) !== -1;
+      });
+
+      var container = document.getElementById('tdl-pending-tasks');
+      var list = document.getElementById('tdl-pending-tasks-list');
+
+      if (filteredTasks.length > 0) {
+        container.style.display = 'block';
+        list.innerHTML = filteredTasks.map(function(t) { return tdlRenderTask(t); }).join('');
+      } else {
+        if (query) {
+          container.style.display = 'block';
+          list.innerHTML = '<div style="text-align: center; padding: 32px; color: #9ca3af;"><i class="bi bi-search" style="font-size: 32px; display: block; margin-bottom: 8px;"></i><p>「' + tdlEscapeHtml(query) + '」に一致するタスクはありません</p></div>';
+        } else {
+          container.style.display = _tdl_allPendingTasks.length > 0 ? 'block' : 'none';
+          list.innerHTML = _tdl_allPendingTasks.map(function(t) { return tdlRenderTask(t); }).join('');
+        }
+      }
+    }
+
+    function tdlClearSearch() {
+      document.getElementById('tdl-searchInput').value = '';
+      document.getElementById('tdl-searchClearBtn').classList.remove('show');
+      var container = document.getElementById('tdl-pending-tasks');
+      var list = document.getElementById('tdl-pending-tasks-list');
+      if (_tdl_allPendingTasks.length > 0) {
+        container.style.display = 'block';
+        list.innerHTML = _tdl_allPendingTasks.map(function(t) { return tdlRenderTask(t); }).join('');
+      } else {
+        container.style.display = 'none';
+      }
+    }
+
+    // ========================================
+    // 管理者タスク管理機能
+    // ========================================
+
+    async function tdlCheckAdminStatus() {
+      if (!_tdl_userEmail) return;
+      try {
+        var userDoc = await _tdl_db.collection('users').doc(_tdl_userEmail).get();
+        if (userDoc.exists) {
+          var userData = userDoc.data();
+          if (userData.permissionId === 'owner' || userData.permissionId === 'admin') {
+            _tdl_isAdmin = true;
+            var adminMenu = document.getElementById('tdl-adminTaskManagement');
+            if (adminMenu) adminMenu.style.display = 'flex';
+            var extSection = document.getElementById('tdl-extensionRequestsSection');
+            if (extSection) extSection.style.display = 'block';
+          }
+        }
+      } catch (error) {
+        console.error('管理者ステータス確認エラー:', error);
+      }
+    }
+
+    // ========================================
+    // 受取完了モーダル
+    // ========================================
+
+    function tdlOpenReceivingCompleteModal(taskId, taskData) {
+      _tdl_pendingReceivingTask = { taskId: taskId, taskData: taskData };
+      var itemCount = (taskData.relatedData && taskData.relatedData.itemCount) || 0;
+      document.getElementById('tdl-receivingItemCount').textContent = itemCount;
+      tdlLoadDefaultDueDays().then(function(days) {
+        document.getElementById('tdl-receivingDueDays').value = days;
+        tdlUpdateReceivingDueDatePreview();
+      });
+      document.getElementById('tdl-receivingCompleteModal').classList.add('active');
+    }
+
+    function tdlCloseReceivingCompleteModal() {
+      _tdl_pendingReceivingTask = null;
+      document.getElementById('tdl-receivingCompleteModal').classList.remove('active');
+    }
+
+    async function tdlLoadDefaultDueDays() {
+      try {
+        var settingsDoc = await _tdl_db.collection('settings').doc('taskSettings').get();
+        if (settingsDoc.exists) {
+          var data = settingsDoc.data();
+          return (data.productRegistration && data.productRegistration.defaultDueDays) || 7;
+        }
+      } catch (e) { console.warn('タスク設定取得失敗'); }
+      return 7;
+    }
+
+    function tdlUpdateReceivingDueDatePreview() {
+      var days = parseInt(document.getElementById('tdl-receivingDueDays').value) || 7;
+      var dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + days);
+      var preview = (dueDate.getMonth() + 1) + '/' + dueDate.getDate() + '（' + ['日','月','火','水','木','金','土'][dueDate.getDay()] + '）まで';
+      document.getElementById('tdl-receivingDueDatePreview').textContent = '→ ' + preview;
+    }
+
+    async function tdlSubmitReceivingComplete() {
+      if (!_tdl_pendingReceivingTask) return;
+      var taskId = _tdl_pendingReceivingTask.taskId;
+      var taskData = _tdl_pendingReceivingTask.taskData;
+      var dueDays = parseInt(document.getElementById('tdl-receivingDueDays').value) || 7;
+
+      try {
+        await tdlCreateProductRegistrationTaskWithDeadline(taskData.relatedData, dueDays);
+        var taskRef = _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(taskId);
+        await taskRef.update({ completed: true, completedAt: new Date().toISOString() });
+        tdlCloseReceivingCompleteModal();
+        alert('受取を完了しました');
+        tdlLoadTasks();
+      } catch (error) {
+        console.error('受取完了エラー:', error);
+        alert('受取完了に失敗しました');
+      }
+    }
+
+    async function tdlCreateProductRegistrationTaskWithDeadline(relatedData, dueDays) {
+      if (!relatedData || !relatedData.batchId) { console.warn('商品登録タスク作成スキップ'); return; }
+      var batchId = relatedData.batchId;
+      var itemCount = relatedData.itemCount;
+      var supplier = relatedData.supplier;
+
+      var dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + dueDays);
+
+      var newTaskId = 'task-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+      var taskData = {
+        type: 'product_registration_task',
+        title: '商品登録（残り' + itemCount + '点）',
+        description: '受取完了した' + itemCount + '点の商品を登録してください。期限: ' + (dueDate.getMonth() + 1) + '/' + dueDate.getDate(),
+        link: 'scan',
+        relatedData: { batchId: batchId, totalCount: itemCount, remainingCount: itemCount, registeredCount: 0, supplier: supplier },
+        dueDate: dueDate.toISOString(),
+        originalDueDate: dueDate.toISOString(),
+        dueDateSetBy: _tdl_userEmail,
+        extensionCount: 0,
+        createdAt: new Date().toISOString(),
+        completed: false,
+        read: false
+      };
+
+      await _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(newTaskId).set(taskData);
+      await _tdl_db.collection('purchaseBatches').doc(batchId).update({
+        status: 'received',
+        receivedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        registrationTaskId: newTaskId,
+        registrationDueDate: dueDate.toISOString()
+      });
+      console.log('📝 [Task] 商品登録タスク作成（カスタム期限）:', newTaskId, dueDays + '日');
+    }
+
+    // ========================================
+    // 延長申請機能
+    // ========================================
+
+    function tdlOpenExtensionRequestModal(taskId, taskData) {
+      _tdl_pendingExtensionTask = { taskId: taskId, taskData: taskData };
+      var currentDueDate = taskData.dueDate ? (taskData.dueDate.toDate ? taskData.dueDate.toDate() : new Date(taskData.dueDate)) : new Date();
+      var dateStr = (currentDueDate.getMonth() + 1) + '/' + currentDueDate.getDate() + '（' + ['日','月','火','水','木','金','土'][currentDueDate.getDay()] + '）';
+      document.getElementById('tdl-extensionCurrentDueDate').textContent = dateStr;
+      document.getElementById('tdl-extensionDays').value = 3;
+      document.getElementById('tdl-extensionReason').value = '';
+      tdlUpdateExtensionDueDatePreview();
+      document.getElementById('tdl-extensionRequestModal').classList.add('active');
+    }
+
+    function tdlCloseExtensionRequestModal() {
+      _tdl_pendingExtensionTask = null;
+      document.getElementById('tdl-extensionRequestModal').classList.remove('active');
+    }
+
+    function tdlUpdateExtensionDueDatePreview() {
+      if (!_tdl_pendingExtensionTask) return;
+      var days = parseInt(document.getElementById('tdl-extensionDays').value) || 3;
+      var currentDueDate = _tdl_pendingExtensionTask.taskData.dueDate ? (_tdl_pendingExtensionTask.taskData.dueDate.toDate ? _tdl_pendingExtensionTask.taskData.dueDate.toDate() : new Date(_tdl_pendingExtensionTask.taskData.dueDate)) : new Date();
+      var newDueDate = new Date(currentDueDate);
+      newDueDate.setDate(newDueDate.getDate() + days);
+      var preview = (newDueDate.getMonth() + 1) + '/' + newDueDate.getDate() + '（' + ['日','月','火','水','木','金','土'][newDueDate.getDay()] + '）まで';
+      document.getElementById('tdl-extensionDueDatePreview').textContent = '→ ' + preview;
+    }
+
+    async function tdlSubmitExtensionRequest() {
+      if (!_tdl_pendingExtensionTask) return;
+      var taskId = _tdl_pendingExtensionTask.taskId;
+      var taskData = _tdl_pendingExtensionTask.taskData;
+      var extensionDays = parseInt(document.getElementById('tdl-extensionDays').value) || 3;
+      var reason = document.getElementById('tdl-extensionReason').value.trim();
+
+      if (!reason) { alert('申請理由を入力してください'); return; }
+
+      try {
+        var currentDueDate = taskData.dueDate ? (taskData.dueDate.toDate ? taskData.dueDate.toDate() : new Date(taskData.dueDate)) : new Date();
+        var newDueDate = new Date(currentDueDate);
+        newDueDate.setDate(newDueDate.getDate() + extensionDays);
+
+        var userName = _tdl_userEmail;
+        try {
+          var userDoc = await _tdl_db.collection('users').doc(_tdl_userEmail).get();
+          if (userDoc.exists) { userName = userDoc.data().userName || userDoc.data().name || _tdl_userEmail; }
+        } catch (e) {}
+
+        var requestId = 'ext-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+        await _tdl_db.collection('extensionRequests').doc(requestId).set({
+          taskId: taskId, taskOwnerEmail: _tdl_userEmail,
+          taskTitle: taskData.title || '商品登録タスク', taskType: taskData.type,
+          requestedBy: _tdl_userEmail, requestedByName: userName,
+          currentDueDate: currentDueDate.toISOString(), requestedDays: extensionDays,
+          newDueDate: newDueDate.toISOString(), reason: reason,
+          status: 'pending', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        var taskRef = _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(taskId);
+        await taskRef.update({ pendingExtension: true, pendingExtensionId: requestId });
+
+        console.log('📝 [Extension] 延長申請作成:', requestId);
+        tdlCloseExtensionRequestModal();
+        alert('延長申請を送信しました。管理者の承認をお待ちください。');
+        tdlLoadTasks();
+
+        // 管理者全員にプッシュ通知
+        try {
+          var adminsSnapshot = await _tdl_db.collection('users').where('status', '==', 'active').get();
+          var adminTokens = [];
+          adminsSnapshot.forEach(function(doc) {
+            var ud = doc.data();
+            if ((ud.permissionId === 'owner' || ud.permissionId === 'admin') && ud.fcmToken) { adminTokens.push(ud.fcmToken); }
+          });
+          if (adminTokens.length > 0) {
+            await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tokens: adminTokens, title: '📋 期限延長申請', body: userName + 'さんから延長申請が届きました（' + extensionDays + '日間）', data: { type: 'extension_request', requestId: requestId } })
+            });
+          }
+        } catch (notifyError) { console.error('管理者への通知送信エラー:', notifyError); }
+      } catch (error) {
+        console.error('延長申請エラー:', error);
+        alert('延長申請に失敗しました');
+      }
+    }
+
+    // 延長申請一覧（管理者用）
+    async function tdlLoadExtensionRequests() {
+      if (!_tdl_isAdmin) return;
+      try {
+        var snapshot = await _tdl_db.collection('extensionRequests').where('status', '==', 'pending').orderBy('createdAt', 'desc').get();
+        var container = document.getElementById('tdl-extensionRequestsList');
+        if (!container) return;
+
+        if (snapshot.empty) {
+          container.innerHTML = '<div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">申請はありません</div>';
+          document.getElementById('tdl-extensionRequestsCount').textContent = '0';
+          return;
+        }
+
+        var html = '';
+        snapshot.forEach(function(doc) {
+          var req = doc.data();
+          var createdAt = req.createdAt && req.createdAt.toDate ? req.createdAt.toDate() : new Date();
+          var currentDate = new Date(req.currentDueDate);
+          var newDate = new Date(req.newDueDate);
+          html += '<div class="extension-request-card"><div class="extension-request-header"><div class="extension-request-avatar">👤</div><div class="extension-request-info"><h4>' + tdlEscapeHtml(req.requestedByName) + '</h4><span>' + (createdAt.getMonth() + 1) + '/' + createdAt.getDate() + ' 申請</span></div></div><div class="extension-request-body"><div style="font-size: 13px; color: #374151; margin-bottom: 8px;">' + tdlEscapeHtml(req.taskTitle) + '</div><div class="extension-request-dates"><span>' + (currentDate.getMonth() + 1) + '/' + currentDate.getDate() + '</span><span class="arrow">→</span><span class="new-date">' + (newDate.getMonth() + 1) + '/' + newDate.getDate() + '（+' + req.requestedDays + '日）</span></div><div class="extension-request-reason">💬 ' + tdlEscapeHtml(req.reason) + '</div></div><div class="extension-request-actions"><button class="extension-request-btn reject" onclick="tdlRejectExtensionRequest(\'' + doc.id + '\')">却下</button><button class="extension-request-btn approve" onclick="tdlApproveExtensionRequest(\'' + doc.id + '\')">承認</button></div></div>';
+        });
+        container.innerHTML = html;
+        document.getElementById('tdl-extensionRequestsCount').textContent = snapshot.size;
+      } catch (error) {
+        console.error('延長申請読み込みエラー:', error);
+      }
+    }
+
+    // 自分の延長申請（スタッフ用）
+    async function tdlLoadMyExtensionRequests() {
+      try {
+        var snapshot = await _tdl_db.collection('extensionRequests').where('taskOwnerEmail', '==', _tdl_userEmail).orderBy('createdAt', 'desc').limit(10).get();
+        var section = document.getElementById('tdl-myExtensionRequestsSection');
+        var container = document.getElementById('tdl-myExtensionRequestsList');
+        var countEl = document.getElementById('tdl-myExtensionRequestsCount');
+        if (!section || !container || !countEl) return;
+
+        if (snapshot.empty) { section.style.display = 'none'; return; }
+
+        var html = '';
+        var pendingCount = 0;
+        snapshot.forEach(function(doc) {
+          var req = doc.data();
+          var createdAt = req.createdAt && req.createdAt.toDate ? req.createdAt.toDate() : new Date();
+          var statusClass = 'pending', statusText = '⏳ 承認待ち', resultHtml = '';
+          if (req.status === 'approved') { statusClass = 'approved'; statusText = '✅ 承認済み'; resultHtml = '<div class="my-extension-result">→ 期限が' + req.requestedDays + '日間延長されました</div>'; }
+          else if (req.status === 'rejected') { statusClass = 'rejected'; statusText = '❌ 却下'; resultHtml = '<div class="my-extension-result">→ 延長申請は承認されませんでした</div>'; }
+          else { pendingCount++; }
+          html += '<div class="my-extension-card"><div class="my-extension-info"><div class="my-extension-task">' + tdlEscapeHtml(req.taskTitle) + '</div><div class="my-extension-date">' + (createdAt.getMonth() + 1) + '/' + createdAt.getDate() + ' 申請 | +' + req.requestedDays + '日</div>' + resultHtml + '</div><div class="my-extension-status ' + statusClass + '">' + statusText + '</div></div>';
+        });
+        container.innerHTML = html;
+        countEl.textContent = pendingCount > 0 ? pendingCount : snapshot.size;
+        section.style.display = 'block';
+      } catch (error) {
+        console.error('自分の延長申請読み込みエラー:', error);
+        var sec = document.getElementById('tdl-myExtensionRequestsSection');
+        if (sec) sec.style.display = 'none';
+      }
+    }
+
+    // 延長申請を承認
+    async function tdlApproveExtensionRequest(requestId) {
+      if (!confirm('この延長申請を承認しますか？')) return;
+      try {
+        var reqDoc = await _tdl_db.collection('extensionRequests').doc(requestId).get();
+        if (!reqDoc.exists) { alert('申請が見つかりません'); return; }
+        var req = reqDoc.data();
+
+        var taskRef = _tdl_db.collection('userTasks').doc(req.taskOwnerEmail).collection('tasks').doc(req.taskId);
+        var taskDoc = await taskRef.get();
+        if (taskDoc.exists) {
+          var td = taskDoc.data();
+          await taskRef.update({ dueDate: req.newDueDate, extensionCount: (td.extensionCount || 0) + 1, pendingExtension: false, pendingExtensionId: null, lastExtendedAt: firebase.firestore.FieldValue.serverTimestamp(), lastExtendedBy: _tdl_userEmail });
+        }
+        await _tdl_db.collection('extensionRequests').doc(requestId).update({ status: 'approved', reviewedAt: firebase.firestore.FieldValue.serverTimestamp(), reviewedBy: _tdl_userEmail });
+        console.log('✅ [Extension] 申請承認:', requestId);
+        alert('延長申請を承認しました');
+        tdlLoadExtensionRequests();
+
+        try {
+          var requesterDoc = await _tdl_db.collection('users').doc(req.taskOwnerEmail).get();
+          if (requesterDoc.exists && requesterDoc.data().fcmToken) {
+            await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tokens: [requesterDoc.data().fcmToken], title: '✅ 延長申請が承認されました', body: '期限が' + req.requestedDays + '日間延長されました', data: { type: 'extension_approved', taskId: req.taskId } })
+            });
+          }
+        } catch (notifyError) { console.error('申請者への通知送信エラー:', notifyError); }
+      } catch (error) {
+        console.error('承認エラー:', error);
+        alert('承認に失敗しました');
+      }
+    }
+
+    // 延長申請を却下
+    async function tdlRejectExtensionRequest(requestId) {
+      if (!confirm('この延長申請を却下しますか？')) return;
+      try {
+        var reqDoc = await _tdl_db.collection('extensionRequests').doc(requestId).get();
+        if (!reqDoc.exists) { alert('申請が見つかりません'); return; }
+        var req = reqDoc.data();
+
+        var taskRef = _tdl_db.collection('userTasks').doc(req.taskOwnerEmail).collection('tasks').doc(req.taskId);
+        await taskRef.update({ pendingExtension: false, pendingExtensionId: null });
+        await _tdl_db.collection('extensionRequests').doc(requestId).update({ status: 'rejected', reviewedAt: firebase.firestore.FieldValue.serverTimestamp(), reviewedBy: _tdl_userEmail });
+        console.log('❌ [Extension] 申請却下:', requestId);
+        alert('延長申請を却下しました');
+        tdlLoadExtensionRequests();
+
+        try {
+          var requesterDoc = await _tdl_db.collection('users').doc(req.taskOwnerEmail).get();
+          if (requesterDoc.exists && requesterDoc.data().fcmToken) {
+            await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tokens: [requesterDoc.data().fcmToken], title: '⚠️ 延長申請が却下されました', body: '延長申請は承認されませんでした。詳細は管理者にお問い合わせください。', data: { type: 'extension_rejected', taskId: req.taskId } })
+            });
+          }
+        } catch (notifyError) { console.error('申請者への却下通知送信エラー:', notifyError); }
+      } catch (error) {
+        console.error('却下エラー:', error);
+        alert('却下に失敗しました');
+      }
+    }
+
+    // ========================================
+    // タスク管理モーダル（管理者専用）
+    // ========================================
+
+    async function tdlOpenTaskManagement() {
+      var dropdown = document.getElementById('tdl-settingsDropdown');
+      if (dropdown) dropdown.classList.remove('active');
+      var modal = document.getElementById('tdl-taskAdminModal');
+      if (modal) { modal.classList.add('active'); await tdlLoadAdminTaskData(); }
+    }
+
+    function tdlCloseTaskManagement(event) {
+      if (event && event.target !== event.currentTarget) return;
+      var modal = document.getElementById('tdl-taskAdminModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    async function tdlLoadAdminTaskData() {
+      var userListEl = document.getElementById('tdl-adminUserTaskList');
+      var totalUsersEl = document.getElementById('tdl-adminTaskTotal');
+      var pendingTasksEl = document.getElementById('tdl-adminTaskPending');
+      var overdueEl = document.getElementById('tdl-adminTaskOverdue');
+      if (!userListEl) return;
+
+      userListEl.innerHTML = '<div style="text-align: center; padding: 20px; color: #9ca3af;"><i class="bi bi-arrow-repeat spin"></i> 読み込み中...</div>';
+
+      try {
+        var usersSnapshot = await _tdl_db.collection('users').get();
+        var usersData = [];
+        var usersWithPending = 0;
+        var overdueCount = 0;
+        var threeDaysAgo = new Date();
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+        for (var i = 0; i < usersSnapshot.docs.length; i++) {
+          var userDoc = usersSnapshot.docs[i];
+          var userData = userDoc.data();
+          var email = userDoc.id;
+          var tasksSnapshot = await _tdl_db.collection('userTasks').doc(email).collection('tasks').orderBy('createdAt', 'desc').get();
+
+          var pending = 0, completedThisWeek = 0, overdue = 0;
+          var pendingByType = {};
+          var now = new Date();
+          var weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - now.getDay());
+          weekStart.setHours(0, 0, 0, 0);
+
+          tasksSnapshot.docs.forEach(function(doc) {
+            var task = doc.data();
+            if (task.completed) {
+              var completedAt = task.completedAt && task.completedAt.toDate ? task.completedAt.toDate() : (task.completedAt ? new Date(task.completedAt) : null);
+              if (completedAt && completedAt >= weekStart) completedThisWeek++;
+            } else {
+              pending++;
+              var taskType = task.type || 'other';
+              var typeLabel = tdlGetTaskTypeLabel(taskType);
+              pendingByType[typeLabel] = (pendingByType[typeLabel] || 0) + 1;
+              if (task.dueDate) {
+                var dd = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
+                if (dd < now) overdue++;
+              } else if (task.createdAt) {
+                var cd = task.createdAt.toDate ? task.createdAt.toDate() : new Date(task.createdAt);
+                if (cd < threeDaysAgo) overdue++;
+              }
+            }
+          });
+
+          if (pending > 0) usersWithPending++;
+          overdueCount += overdue;
+          usersData.push({ email: email, name: userData.userName || userData.displayName || userData.name || email.split('@')[0], photoURL: userData.photoURL || '', pending: pending, completedThisWeek: completedThisWeek, pendingByType: pendingByType, overdue: overdue });
+        }
+
+        if (totalUsersEl) totalUsersEl.textContent = usersData.length;
+        if (pendingTasksEl) pendingTasksEl.textContent = usersWithPending;
+        if (overdueEl) overdueEl.textContent = overdueCount;
+
+        usersData.sort(function(a, b) { return b.pending - a.pending; });
+
+        if (usersData.length === 0) {
+          userListEl.innerHTML = '<div style="text-align: center; padding: 20px; color: #9ca3af;">ユーザーがいません</div>';
+          return;
+        }
+
+        userListEl.innerHTML = usersData.map(function(user) {
+          var pendingTypeText = user.pending > 0 ? Object.entries(user.pendingByType).map(function(e) { return e[0] + ': ' + e[1]; }).join(', ') : '';
+          return '<div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: ' + (user.overdue > 0 ? '#fef2f2' : '#f9fafb') + '; border-radius: 8px; margin-bottom: 8px; ' + (user.overdue > 0 ? 'border-left: 3px solid #ef4444;' : '') + '">' +
+            '<div style="display: flex; align-items: center; gap: 12px;">' +
+            (user.photoURL ? '<img src="' + tdlEscapeHtml(user.photoURL) + '" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">' : '<div style="width: 40px; height: 40px; background: #e5e7eb; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><i class="bi bi-person" style="color: #9ca3af; font-size: 18px;"></i></div>') +
+            '<div style="font-weight: 500;">' + tdlEscapeHtml(user.name) + '</div></div>' +
+            '<div style="text-align: right;"><div style="font-size: 12px; color: #6b7280;">未完了: <span style="color: ' + (user.pending > 0 ? '#ef4444' : '#22c55e') + '; font-weight: 600;">' + user.pending + '</span>' +
+            (pendingTypeText ? '<span style="font-size: 10px; color: #9ca3af; margin-left: 4px;">(' + pendingTypeText + ')</span>' : '') + '</div>' +
+            (user.overdue > 0 ? '<div style="font-size: 11px; color: #ef4444;">⚠️ ' + user.overdue + '件が要対応</div>' : '<div style="font-size: 12px; color: #6b7280;">今週完了: <span style="color: #22c55e;">' + user.completedThisWeek + '</span></div>') +
+            '</div></div>';
+        }).join('');
+      } catch (error) {
+        console.error('管理者タスクデータ読み込みエラー:', error);
+        userListEl.innerHTML = '<div style="text-align: center; padding: 20px; color: #ef4444;">データの読み込みに失敗しました</div>';
+      }
+    }
+
+    // ========================================
+    // 却下機能
+    // ========================================
+
+    function tdlOpenRejectModal(taskId, taskType) {
+      _tdl_rejectingTaskId = taskId;
+      _tdl_rejectingTaskType = taskType;
+      document.getElementById('tdl-rejectReason').value = '';
+      document.getElementById('tdl-rejectModal').style.display = 'flex';
+    }
+
+    function tdlCloseRejectModal() {
+      _tdl_rejectingTaskId = null;
+      _tdl_rejectingTaskType = null;
+      document.getElementById('tdl-rejectModal').style.display = 'none';
+    }
+
+    async function tdlSubmitReject() {
+      var reason = document.getElementById('tdl-rejectReason').value.trim();
+      if (!reason) { alert('却下理由を入力してください'); return; }
+      if (!_tdl_rejectingTaskId) { alert('タスクが選択されていません'); return; }
+
+      try {
+        var taskRef = _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(_tdl_rejectingTaskId);
+        var taskDoc = await taskRef.get();
+        if (!taskDoc.exists) { alert('タスクが見つかりません'); return; }
+
+        var taskData = taskDoc.data();
+        var staffEmail = (taskData.relatedData && taskData.relatedData.staffEmail) || (taskData.relatedData && taskData.relatedData.createdByEmail);
+        var staffName = (taskData.relatedData && taskData.relatedData.staffName) || (taskData.relatedData && taskData.relatedData.createdBy) || '担当者';
+        var productId = taskData.relatedData && taskData.relatedData.productId;
+        var managementNumber = taskData.relatedData && taskData.relatedData.managementNumber;
+
+        if (!staffEmail) { alert('担当者の情報が見つかりません'); return; }
+
+        await taskRef.update({ rejected: true, rejectedAt: new Date().toISOString(), rejectedBy: _tdl_userEmail, rejectReason: reason, completed: false });
+
+        var revisionTaskRef = _tdl_db.collection('userTasks').doc(staffEmail).collection('tasks').doc();
+        await revisionTaskRef.set({
+          type: 'revision_request',
+          title: '修正依頼: ' + (taskData.title || '出品確認'),
+          description: '【却下理由】\n' + reason,
+          createdAt: new Date().toISOString(),
+          completed: false,
+          priority: 'high',
+          link: productId ? '/product.html?edit=' + productId : null,
+          relatedData: { originalTaskId: _tdl_rejectingTaskId, originalTaskType: _tdl_rejectingTaskType, productId: productId, managementNumber: managementNumber, rejectedBy: _tdl_userEmail, rejectReason: reason }
+        });
+
+        console.log('✅ [Task] タスク却下完了:', _tdl_rejectingTaskId);
+        tdlCloseRejectModal();
+        alert(staffName + 'さんに修正依頼を送信しました');
+        tdlLoadTasks();
+      } catch (error) {
+        console.error('❌ [Task] 却下エラー:', error);
+        alert('却下処理に失敗しました');
+      }
+    }
+
+    // ============================================
+    // SPA Lifecycle
+    // ============================================
+
+    function initTodoListPage() {
+      console.log('[TodoList SPA] initTodoListPage called');
+      _tdl_db = window.db;
+      _tdl_userEmail = localStorage.getItem('userEmail') || '';
+      _tdl_allPendingTasks = [];
+      _tdl_pendingReceivingTask = null;
+      _tdl_pendingExtensionTask = null;
+      _tdl_rejectingTaskId = null;
+      _tdl_rejectingTaskType = null;
+      _tdl_isAdmin = false;
+
+      document.addEventListener('click', _tdlDropdownClickHandler);
+
+      tdlLoadTasks();
+      tdlLoadMyExtensionRequests();
+      tdlCheckAdminStatus().then(function() {
+        tdlLoadExtensionRequests();
+      });
+    }
+
+    function destroyTodoListPage() {
+      console.log('[TodoList SPA] destroyTodoListPage called');
+      document.removeEventListener('click', _tdlDropdownClickHandler);
+      _tdl_allPendingTasks = [];
+      _tdl_pendingReceivingTask = null;
+      _tdl_pendingExtensionTask = null;
+      _tdl_rejectingTaskId = null;
+      _tdl_rejectingTaskType = null;
+      _tdl_isAdmin = false;
+    }
+  </script>
+</div>
