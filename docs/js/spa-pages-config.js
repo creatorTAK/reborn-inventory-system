@@ -78,5 +78,42 @@ const FURIRA_PAGES = {
     init: 'initPickupPage',
     destroy: 'destroyPickupPage',
     bottomNav: null
+  },
+
+  // === Phase 3: 中規模ページ ===
+  sales: {
+    type: 'fragment',
+    fragmentUrl: '/fragments/sales.html',
+    init: 'initSalesPage',
+    destroy: 'destroySalesPage',
+    bottomNav: null
+  },
+  stocktaking: {
+    type: 'fragment',
+    fragmentUrl: '/fragments/stocktaking.html',
+    init: 'initStocktakingPage',
+    destroy: 'destroyStocktakingPage',
+    bottomNav: null
+  },
+  'master-product': {
+    type: 'fragment',
+    fragmentUrl: '/fragments/master-management.html',
+    init: 'initMasterManagementPage',
+    destroy: 'destroyMasterManagementPage',
+    bottomNav: null
+  },
+  'master-business': {
+    type: 'fragment',
+    fragmentUrl: '/fragments/master-management.html',
+    init: 'initMasterManagementPage',
+    destroy: 'destroyMasterManagementPage',
+    bottomNav: null
+  },
+  product: {
+    type: 'fragment',
+    fragmentUrl: '/fragments/product.html',
+    init: 'initProductPage',
+    destroy: 'destroyProductPage',
+    bottomNav: null
   }
 };
