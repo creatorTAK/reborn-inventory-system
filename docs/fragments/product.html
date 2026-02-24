@@ -2345,6 +2345,9 @@
     }
 
     try {
+      // 初回ロード判定: スクリプトが既にロード済みなら再訪問
+      var _prd_isRevisit = !!window.initLoadingOverlay;
+
       // Load all external dependencies
       await prdLoadDependencies();
 
@@ -2406,9 +2409,10 @@
       // Auto-open QR scanner if setting enabled (即座に実行、ユーザー体感を優先)
       prdAutoOpenQrScannerIfEnabled();
 
-      // SPA再初期化: バックグラウンドで実行（Firestore読み込みが重いためawaitしない）
-      // カテゴリカスケード・セレクト充填・管理番号UIはQRスキャン中に準備完了する
-      if (typeof window.reinitProductScripts === 'function') {
+      // SPA再初期化: 再訪問時のみ実行（初回はauto-executingコードが処理する）
+      // バックグラウンド実行でQRスキャンをブロックしない
+      if (_prd_isRevisit && typeof window.reinitProductScripts === 'function') {
+        console.log('[Prd SPA] Re-visit detected, running reinit in background');
         window.reinitProductScripts().catch(function(e) {
           console.error('[Prd SPA] reinit error:', e);
         });
