@@ -2136,7 +2136,9 @@
           link: '/product.html?edit=' + productId,
           relatedData: { productId: productId, managementNumber: product.managementNumber, staffName: staffName, listingAmount: product.listingAmount || 0 }
         };
-        if (window.parent && window.parent !== window) {
+        if (typeof addTaskToOwners === 'function') {
+          addTaskToOwners(taskData);
+        } else if (window.parent && window.parent !== window) {
           window.parent.postMessage({ type: 'addTaskToOwners', taskData: taskData }, '*');
         }
       } catch (error) { console.error('[inv] タスク追加エラー:', error); }
@@ -2564,14 +2566,22 @@
         _inv_dropdownClickHandler = null;
       }
 
-      // Close any open modals
+      // Close any open modals and remove backdrops
       ['invProductDetailModal', 'invStockEditModal', 'invSalesRecordModal', 'invPresetSelectorModal'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) {
           var modal = bootstrap.Modal.getInstance(el);
           if (modal) modal.hide();
+          el.classList.remove('show');
+          el.setAttribute('aria-hidden', 'true');
+          el.style.display = 'none';
         }
       });
+      // Bootstrap backdrop除去
+      document.querySelectorAll('.modal-backdrop').forEach(function(bd) { bd.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
 
       // Close lightbox
       var lb = document.getElementById('invImageLightbox');
