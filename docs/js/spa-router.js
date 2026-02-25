@@ -10,6 +10,9 @@
   // Fragment HTMLキャッシュ（2回目以降は即時表示）
   const _fragmentCache = {};
 
+  // v581: フラグメントURLにバージョンパラメータを付与（SW/CDNキャッシュ対策）
+  const _FRAGMENT_VERSION = '581';
+
   // 現在表示中のSPAページ名
   let _currentSpaPage = null;
 
@@ -68,7 +71,8 @@
         console.log(`[SPA] キャッシュから読み込み: ${pageName}`);
       } else {
         // fetchで取得
-        const response = await fetch(pageConfig.fragmentUrl);
+        const fragmentUrl = pageConfig.fragmentUrl + '?v=' + _FRAGMENT_VERSION;
+        const response = await fetch(fragmentUrl);
         // v577: await後にレース条件チェック
         if (thisGeneration !== _switchGeneration) {
           console.log(`[SPA] switchPage中断: ${pageName} (新しい遷移が優先 gen:${thisGeneration}→${_switchGeneration})`);
