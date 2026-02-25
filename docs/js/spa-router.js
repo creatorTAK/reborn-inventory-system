@@ -48,6 +48,7 @@
     // iframe非表示 → SPA表示
     iframe.style.display = 'none';
     spaContent.style.display = 'block';
+    spaContent.scrollTop = 0;
 
     _isSpaActive = true;
     _currentSpaPage = pageName;
