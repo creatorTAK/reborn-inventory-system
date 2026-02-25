@@ -16,6 +16,11 @@
   // SPA表示中かどうか
   let _isSpaActive = false;
 
+  // v577: レース条件防止用の世代カウンター
+  // 新しいswitchPageが呼ばれるたびにインクリメント
+  // await後にカウンターが変わっていたら中断（後の遷移が優先）
+  let _switchGeneration = 0;
+
   /**
    * SPAページに切り替え
    * @param {string} pageName - FURIRA_PAGESのキー
@@ -32,8 +37,11 @@
       return false;
     }
 
+    // v577: この呼び出しの世代番号を記録
+    const thisGeneration = ++_switchGeneration;
+
     const startTime = performance.now();
-    console.log(`[SPA] switchPage: ${pageName} 開始`);
+    console.log(`[SPA] switchPage: ${pageName} 開始 (gen:${thisGeneration})`);
 
     // 前ページのクリーンアップ
     cleanupCurrentPage();
@@ -61,12 +69,28 @@
       } else {
         // fetchで取得
         const response = await fetch(pageConfig.fragmentUrl);
+        // v577: await後にレース条件チェック
+        if (thisGeneration !== _switchGeneration) {
+          console.log(`[SPA] switchPage中断: ${pageName} (新しい遷移が優先 gen:${thisGeneration}→${_switchGeneration})`);
+          return false;
+        }
         if (!response.ok) {
           throw new Error(`Fragment fetch failed: ${response.status}`);
         }
         html = await response.text();
+        // v577: 2回目のレース条件チェック
+        if (thisGeneration !== _switchGeneration) {
+          console.log(`[SPA] switchPage中断: ${pageName} (新しい遷移が優先 gen:${thisGeneration}→${_switchGeneration})`);
+          return false;
+        }
         _fragmentCache[pageName] = html;
         console.log(`[SPA] fetchで取得: ${pageName}`);
+      }
+
+      // v577: DOM注入前の最終チェック
+      if (thisGeneration !== _switchGeneration) {
+        console.log(`[SPA] switchPage中断: ${pageName} (新しい遷移が優先)`);
+        return false;
       }
 
       // DOM注入（scriptタグは後で実行）
@@ -76,16 +100,26 @@
       spaContent.scrollTop = 0;
       window.scrollTo(0, 0);
 
-      // init関数を呼び出し
+      // v577: init関数を個別try-catchで実行
+      // init失敗してもページDOMは表示を維持（SPA全体を停止しない）
       if (pageConfig.init && typeof window[pageConfig.init] === 'function') {
-        window[pageConfig.init]();
-        console.log(`[SPA] init実行: ${pageConfig.init}()`);
+        try {
+          window[pageConfig.init]();
+          console.log(`[SPA] init実行: ${pageConfig.init}()`);
+        } catch (initError) {
+          console.error(`[SPA] init関数エラー: ${pageConfig.init}()`, initError);
+        }
       }
 
       const loadTime = performance.now() - startTime;
       console.log(`[SPA] ${pageName} 表示完了: ${loadTime.toFixed(0)}ms`);
 
     } catch (error) {
+      // v577: 中断された遷移のエラーは無視
+      if (thisGeneration !== _switchGeneration) {
+        console.log(`[SPA] 中断済み遷移のエラーを無視: ${pageName}`);
+        return false;
+      }
       console.error(`[SPA] Fragment読み込みエラー: ${pageName}`, error);
       // エラー時はiframeにfallback
       _deactivateSpa();
@@ -140,7 +174,7 @@
       }
     }
 
-    // ボトムナビ・レイアウトをデフォルト状態に復元
+    // v575: ボトムナビ・レイアウトをデフォルト状態に復元
     // destroyが失敗した場合や、destroyで復元しないページでも確実にリセット
     const bottomNav = document.getElementById('bottom-nav');
     if (bottomNav) bottomNav.classList.remove('hidden');
