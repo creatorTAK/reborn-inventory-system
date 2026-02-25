@@ -1657,6 +1657,7 @@
       { id: 'sales', label: '売上管理', defaultOwnerOnly: false },
       { id: 'accounting', label: '確定申告', defaultOwnerOnly: false },
       { id: 'compensation', label: '報酬管理', defaultOwnerOnly: false },
+      { id: 'pickup-management', label: '回収管理', defaultOwnerOnly: true },
       {
         id: 'master', label: 'マスタ管理', isTopGroup: true,
         children: [
@@ -3623,6 +3624,7 @@
       if (_cfg_permissionSettingsLoaded) return;
       if (!window.db) { setTimeout(cfgLoadPermissionSettings, 500); return; }
       try {
+        console.log('[config-fragment] Loading permission settings...');
         var usersSnapshot = await window.db.collection('users').get();
         _cfg_usersData = [];
         usersSnapshot.forEach(function(doc) {
@@ -3639,8 +3641,29 @@
         document.getElementById('cfg-permissionSettingsLoading').style.display = 'none';
         document.getElementById('cfg-permissionSettingsContent').style.display = 'block';
         _cfg_permissionSettingsLoaded = true;
-      } catch (e) { console.error('[config-fragment] permission load error:', e); }
+        console.log('[config-fragment] Permission settings loaded successfully');
+      } catch (e) {
+        console.error('[config-fragment] permission load error:', e);
+        var loadingEl = document.getElementById('cfg-permissionSettingsLoading');
+        if (loadingEl) {
+          loadingEl.innerHTML = '<div style="color: #ef4444; font-size: 14px;">権限設定の読み込みに失敗しました</div>' +
+            '<div style="color: #6b7280; font-size: 12px; margin-top: 8px;">' + (e.message || e) + '</div>' +
+            '<button onclick="cfgRetryLoadPermission()" style="margin-top: 12px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">再試行</button>';
+        }
+      }
     }
+
+    function cfgRetryLoadPermission() {
+      _cfg_permissionSettingsLoaded = false;
+      var loadingEl = document.getElementById('cfg-permissionSettingsLoading');
+      if (loadingEl) {
+        loadingEl.innerHTML = '<div style="font-size: 14px; color: #6b7280;">読み込み中...</div>';
+        loadingEl.style.display = '';
+      }
+      document.getElementById('cfg-permissionSettingsContent').style.display = 'none';
+      cfgLoadPermissionSettings();
+    }
+    window.cfgRetryLoadPermission = cfgRetryLoadPermission;
 
     function cfgGetActivePermissions() {
       var activeIds = new Set(['owner']);
