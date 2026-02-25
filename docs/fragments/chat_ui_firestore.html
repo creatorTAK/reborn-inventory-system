@@ -411,12 +411,6 @@
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 50;
     }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
@@ -3394,8 +3388,11 @@
         item: null, fileUrl: null, fileName: null, senderName: null
       };
 
-      // Hide bottom nav
-      if (typeof hideBottomNav === 'function') hideBottomNav();
+      // Hide bottom nav (直接DOM操作 - SPA FragmentではpostMessage経由のhideBottomNavが使えない)
+      var bottomNav = document.getElementById('bottom-nav');
+      if (bottomNav) bottomNav.classList.add('hidden');
+      var spaContent = document.getElementById('spa-content');
+      if (spaContent) spaContent.style.bottom = '0';
 
       // Hide SPA header
       var spaHeader = document.getElementById('spa-header');
@@ -3493,8 +3490,11 @@
       // 7. Clear Firestore viewing status
       cuiClearViewingStatus();
 
-      // 8. Show bottom nav and SPA header
-      if (typeof showBottomNav === 'function') showBottomNav();
+      // 8. Show bottom nav and SPA header (直接DOM操作で復元)
+      var bottomNav = document.getElementById('bottom-nav');
+      if (bottomNav) bottomNav.classList.remove('hidden');
+      var spaContent = document.getElementById('spa-content');
+      if (spaContent) spaContent.style.bottom = '';
       var spaHeader = document.getElementById('spa-header');
       if (spaHeader) spaHeader.style.display = '';
 
@@ -3532,11 +3532,8 @@
     async function cuiInitialize() {
       console.log('[Chat UI] 初期化開始');
 
-      // ボトムナビを非表示（トークルーム表示中は不要）
-      if (window.parent && window.parent !== window) {
-        if (typeof hideBottomNav === 'function') hideBottomNav();
-        console.log('[Chat UI] ボトムナビ非表示要求を送信');
-      }
+      // ボトムナビを非表示（initChatUiPage側で既に処理済み）
+      console.log('[Chat UI] ボトムナビ非表示は initChatUiPage で処理済み');
 
       // メンバー管理関連のイベントリスナー設定
       document.getElementById('headerTitle').addEventListener('click', function() {
