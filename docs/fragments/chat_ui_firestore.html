@@ -3412,11 +3412,40 @@
       };
       _dbgAdd('initChatUiPage開始 roomId=' + cuiCurrentRoomId);
 
-      // 500msごとに状態チェック
+      // 定期状態チェック + リカバリ機構
+      var _cuiRecoveryAttempted = false;
       setInterval(function() {
         var mc = document.getElementById('messagesContainer');
-        _dbgAdd('CHECK children=' + (mc ? mc.children.length : 'N/A') + ' mcH=' + (mc ? mc.offsetHeight : 'N/A'));
-      }, 2000);
+        if (!mc) return;
+        var childCount = mc.children.length;
+        var cachedMsgs = window._cuiLastSnapshotMessages || [];
+        _dbgAdd('CHECK ch=' + childCount + ' H=' + mc.offsetHeight + ' cache=' + cachedMsgs.length);
+
+        // リカバリ: DOM空 + キャッシュにメッセージあり → 再描画
+        if (childCount === 0 && cachedMsgs.length > 0 && !_cuiRecoveryAttempted) {
+          _cuiRecoveryAttempted = true;
+          _dbgAdd('🔄 リカバリ開始: ' + cachedMsgs.length + '件を再描画');
+          try {
+            mc.innerHTML = '';
+            var lastDateStr = null;
+            cachedMsgs.forEach(function(msg) {
+              if (msg.timestamp && msg.timestamp.toDate) {
+                var msgDate = msg.timestamp.toDate();
+                var dateStr = formatDateForSeparator(msgDate);
+                if (dateStr !== lastDateStr) {
+                  appendDateSeparator(dateStr);
+                  lastDateStr = dateStr;
+                }
+              }
+              appendMessage(msg);
+            });
+            mc.scrollTop = mc.scrollHeight;
+            _dbgAdd('✅ リカバリ完了 children=' + mc.children.length);
+          } catch (e) {
+            _dbgAdd('❌ リカバリエラー: ' + e.message);
+          }
+        }
+      }, 3000);
 
       // Run the main initialization
       cuiInitialize();
@@ -5203,10 +5232,15 @@
 
       if (typeof _dbgAdd === 'function') _dbgAdd('onSnapshot登録 query=' + !!q + ' onSnapshot=' + !!onSnapshot);
       cuiUnsubscribeMessages = onSnapshot(q, (snapshot) => {
+       try {
         if (typeof _dbgAdd === 'function') _dbgAdd('onSnapshot発火 size=' + snapshot.size + ' isInitial=' + cuiIsInitialLoad);
         console.log('[Firestore] メッセージ更新:', snapshot.size + '件');
 
         var container = document.getElementById('messagesContainer');
+        if (!container) {
+          if (typeof _dbgAdd === 'function') _dbgAdd('❌ container=null! DOM破壊済み');
+          return;
+        }
         var changes = snapshot.docChanges();
 
         // ========================================
@@ -5284,13 +5318,16 @@
             resetUnreadCountRealtime();
           }
           clearAppBadge();
+          if (typeof _dbgAdd === 'function') _dbgAdd('差分更新完了 children=' + container.children.length);
           return;
         }
 
         // --- 初回全描画モード ---
         console.log('[Firestore] 初回全体描画');
-        if (typeof _dbgAdd === 'function') _dbgAdd('初回描画開始 container=' + !!container);
+        if (typeof _dbgAdd === 'function') _dbgAdd('初回描画開始 container=' + !!container + ' snapshot.size=' + snapshot.size);
         cuiIsInitialLoad = false;
+        // メッセージデータをキャッシュ（リカバリ用）
+        window._cuiLastSnapshotMessages = [];
         container.innerHTML = '';
 
         // 新しい順で取得したので、逆順で表示
@@ -5321,8 +5358,12 @@
           }
         });
 
+        // メッセージデータをキャッシュ（リカバリ用）
+        window._cuiLastSnapshotMessages = messages;
+
         // 日付セパレータを挿入しながらメッセージを表示
         var lastDateStr = null;
+        var appendedCount = 0;
         messages.forEach((msg) => {
           if (msg.timestamp && msg.timestamp.toDate) {
             var msgDate = msg.timestamp.toDate();
@@ -5333,7 +5374,9 @@
             }
           }
           appendMessage(msg);
+          appendedCount++;
         });
+        if (typeof _dbgAdd === 'function') _dbgAdd('appendMessage完了 ' + appendedCount + '件 DOMchildren=' + container.children.length);
 
         // 最下部にスクロール
         container.scrollTop = container.scrollHeight;
@@ -5363,9 +5406,23 @@
         } else if (cuiIsFirstMessageLoad) {
           cuiIsFirstMessageLoad = false;
         }
+
+        // 🔍 描画後検証: メッセージが実際にDOMに存在するか確認
+        var postContainer = document.getElementById('messagesContainer');
+        var childCount = postContainer ? postContainer.children.length : -1;
+        if (typeof _dbgAdd === 'function') _dbgAdd('描画完了 children=' + childCount);
+        if (childCount === 0 && snapshot.size > 0) {
+          if (typeof _dbgAdd === 'function') _dbgAdd('⚠️ 描画異常: snapshot=' + snapshot.size + ' だがDOM=0');
+        }
+
+       } catch (renderError) {
+        // onSnapshotコールバック内のエラーをキャッチ
+        console.error('[Firestore] onSnapshotコールバックエラー:', renderError);
+        if (typeof _dbgAdd === 'function') _dbgAdd('❌ onSnapshotエラー: ' + renderError.message);
+       }
       }, (error) => {
         console.error('[Firestore] リスニングエラー:', error);
-        alert('メッセージの受信に失敗しました: ' + error.message);
+        if (typeof _dbgAdd === 'function') _dbgAdd('❌ Firestoreエラー: ' + error.message);
       });
     }
 
