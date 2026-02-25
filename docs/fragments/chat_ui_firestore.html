@@ -13,22 +13,17 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       margin: 0;
       padding: 0;
-      padding-top: calc(env(safe-area-inset-top, 0px) + 56px); /* セーフエリア + ヘッダー分のスペース */
+      padding-top: calc(env(safe-area-inset-top, 0px) + 56px); /* safe-area + 固定.headerの高さ分 */
       box-sizing: border-box;
       overflow: hidden;
       background-color: #f8f9fa;
       display: flex;
       flex-direction: column;
+      height: 100%; /* #spa-content を満たす（position:fixedはSPA内で不安定） */
       /* 長押しメニュー表示時のテキスト選択を無効化 */
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 50;
     }
 
     /* ヘッダー */
@@ -386,8 +381,8 @@
     }
     /* 固定日付バッジ（LINE風：ヘッダー直下に固定） */
     #spa-page-chat-ui .sticky-date-badge {
-      position: fixed;
-      top: calc(env(safe-area-inset-top, 0px) + 68px); /* セーフエリア + ヘッダー(56px) + 余白(12px) */
+      position: absolute;
+      top: 12px;
       left: 50%;
       transform: translateX(-50%);
       background-color: rgba(0, 0, 0, 0.15);
@@ -395,7 +390,7 @@
       font-size: 0.7rem;
       padding: 4px 12px;
       border-radius: 12px;
-      z-index: 101; /* ヘッダー(100)より上に表示 */
+      z-index: 10;
       pointer-events: none;
       transition: opacity 0.2s;
     }
@@ -3388,15 +3383,14 @@
         item: null, fileUrl: null, fileName: null, senderName: null
       };
 
-      // Hide bottom nav (直接DOM操作 - SPA FragmentではpostMessage経由のhideBottomNavが使えない)
+      // Hide bottom nav + spa-content全画面化（チャットルーム専用レイアウト）
       var bottomNav = document.getElementById('bottom-nav');
       if (bottomNav) bottomNav.classList.add('hidden');
       var spaContent = document.getElementById('spa-content');
-      if (spaContent) spaContent.style.bottom = '0';
-
-      // Hide SPA header
-      var spaHeader = document.getElementById('spa-header');
-      if (spaHeader) spaHeader.style.display = 'none';
+      if (spaContent) {
+        spaContent.style.bottom = '0';
+        spaContent.style.overflow = 'hidden'; // チャットUI内部でスクロール管理するため
+      }
 
       // Make the fragment visible
       var container = document.getElementById('spa-page-chat-ui');
@@ -3490,13 +3484,14 @@
       // 7. Clear Firestore viewing status
       cuiClearViewingStatus();
 
-      // 8. Show bottom nav and SPA header (直接DOM操作で復元)
+      // 8. Show bottom nav + spa-content復元
       var bottomNav = document.getElementById('bottom-nav');
       if (bottomNav) bottomNav.classList.remove('hidden');
       var spaContent = document.getElementById('spa-content');
-      if (spaContent) spaContent.style.bottom = '';
-      var spaHeader = document.getElementById('spa-header');
-      if (spaHeader) spaHeader.style.display = '';
+      if (spaContent) {
+        spaContent.style.bottom = '';
+        spaContent.style.overflow = '';
+      }
 
       // 9. Reset state
       cuiCurrentUserName = '';
