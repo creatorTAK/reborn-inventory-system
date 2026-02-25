@@ -48,7 +48,6 @@
     // iframe非表示 → SPA表示
     iframe.style.display = 'none';
     spaContent.style.display = 'block';
-    spaContent.scrollTop = 0;
 
     _isSpaActive = true;
     _currentSpaPage = pageName;
@@ -72,6 +71,10 @@
 
       // DOM注入（scriptタグは後で実行）
       _injectFragment(spaContent, html, pageName);
+
+      // スクロール位置リセット（DOM注入後に実行）
+      spaContent.scrollTop = 0;
+      window.scrollTo(0, 0);
 
       // init関数を呼び出し
       if (pageConfig.init && typeof window[pageConfig.init] === 'function') {
