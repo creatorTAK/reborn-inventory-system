@@ -140,9 +140,14 @@
       }
     }
 
-    // SPAコンテンツをクリア
+    // ボトムナビ・レイアウトをデフォルト状態に復元
+    // destroyが失敗した場合や、destroyで復元しないページでも確実にリセット
+    const bottomNav = document.getElementById('bottom-nav');
+    if (bottomNav) bottomNav.classList.remove('hidden');
     const spaContent = document.getElementById('spa-content');
     if (spaContent) {
+      spaContent.style.bottom = '';
+      spaContent.style.overflow = '';
       spaContent.innerHTML = '';
     }
 
