@@ -4882,16 +4882,21 @@
         console.log('[Mypage] _mpInit中断 - 既に別ページに遷移済み');
         return;
       }
-      // v582c: Firebase modular SDK初期化待ち（イベントベース）
-      if (!window._firebaseModularReady) {
-        console.log('[Mypage] Firebase modular SDK未初期化、イベント待機');
-        window.addEventListener('firebaseModularReady', function() {
-          if (typeof getCurrentSpaPage === 'function' && getCurrentSpaPage() === 'mypage') {
-            _mpInit();
-          }
-        }, { once: true });
+      // v583: Firebase初期化待ち（シンプルなポーリング）
+      if (!window.firebaseDB || !window.firestoreCollection) {
+        if (!_mpInitRetryCount) _mpInitRetryCount = 0;
+        _mpInitRetryCount++;
+        if (_mpInitRetryCount > 40) {
+          console.error('[Mypage] Firebase初期化タイムアウト（8秒）');
+          var errDiv = document.getElementById('spa-page-mypage');
+          if (errDiv) errDiv.innerHTML = '<div style="text-align:center;padding:60px 20px;"><p style="color:#666;margin-bottom:16px;">読み込みに失敗しました</p><button onclick="location.reload()" class="btn btn-primary btn-sm">再読み込み</button></div>';
+          return;
+        }
+        console.log('[Mypage] Firebase未初期化、リトライ(' + _mpInitRetryCount + '/40)');
+        setTimeout(_mpInit, 200);
         return;
       }
+      _mpInitRetryCount = 0;
       db = window.firebaseDB;
       storage = window.firebaseStorage;
       collection = window.firestoreCollection;
