@@ -2,7 +2,7 @@
 // プッシュ通知とオフライン対応の基盤
 
 const CACHE_NAME = 'reborn-v211-dropdown-restore'; // ドロップダウンメニュー復元
-const SW_VERSION = 'v211-dropdown-restore'; // 確認用バージョン
+const SW_VERSION = 'v211-dropdown-restore';
 const urlsToCache = [
   '/',
   '/index.html',

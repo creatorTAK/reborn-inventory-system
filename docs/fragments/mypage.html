@@ -4882,19 +4882,16 @@
         console.log('[Mypage] _mpInit中断 - 既に別ページに遷移済み');
         return;
       }
-      // v582: Firebase初期化待ち（未初期化ならリトライ）
-      if (!window.firebaseDB || !window.firestoreCollection) {
-        if (!_mpInitRetryCount) _mpInitRetryCount = 0;
-        _mpInitRetryCount++;
-        if (_mpInitRetryCount < 20) {
-          console.log('[Mypage] Firebase未初期化、リトライ(' + _mpInitRetryCount + ')');
-          setTimeout(_mpInit, 300);
-          return;
-        }
-        console.error('[Mypage] Firebase初期化タイムアウト');
+      // v582c: Firebase modular SDK初期化待ち（イベントベース）
+      if (!window._firebaseModularReady) {
+        console.log('[Mypage] Firebase modular SDK未初期化、イベント待機');
+        window.addEventListener('firebaseModularReady', function() {
+          if (typeof getCurrentSpaPage === 'function' && getCurrentSpaPage() === 'mypage') {
+            _mpInit();
+          }
+        }, { once: true });
         return;
       }
-      _mpInitRetryCount = 0;
       db = window.firebaseDB;
       storage = window.firebaseStorage;
       collection = window.firestoreCollection;
