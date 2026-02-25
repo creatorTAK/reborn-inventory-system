@@ -301,18 +301,21 @@
         var permissionId = userData.permissionId || 'staff';
         localStorage.setItem('reborn_user_permission', permissionId);
 
-        if (permissionId !== 'owner') {
-          // v580: メニュー権限設定を取得（ドキュメント無しでもdefaultOwnerOnly適用）
-          var menuPermDoc = await db.collection('settings').doc('menuPermissions').get();
-          var menuPermissions = menuPermDoc.exists ? menuPermDoc.data() : {};
-          for (var menuId in _mhMenuIdMap) {
-            var menuPerm = menuPermissions[menuId];
-            var element = document.getElementById(_mhMenuIdMap[menuId]);
-            if (!element) continue;
-            var isVisible = menuPerm
-              ? (!menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId))
-              : (_mhDefaultOwnerOnly.indexOf(menuId) === -1);
-            if (!isVisible) element.style.display = 'none';
+        // v580b: メニュー権限設定を取得（owner含む全ユーザーで実行）
+        var menuPermDoc = await db.collection('settings').doc('menuPermissions').get();
+        var menuPermissions = menuPermDoc.exists ? menuPermDoc.data() : {};
+        console.log('[SPA menu_home] 権限チェック: permissionId=' + permissionId + ', menuPermDoc.exists=' + menuPermDoc.exists);
+        for (var menuId in _mhMenuIdMap) {
+          var menuPerm = menuPermissions[menuId];
+          var element = document.getElementById(_mhMenuIdMap[menuId]);
+          if (!element) continue;
+          if (permissionId === 'owner') continue; // ownerは全表示
+          var isVisible = menuPerm
+            ? (!menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId))
+            : (_mhDefaultOwnerOnly.indexOf(menuId) === -1);
+          if (!isVisible) {
+            element.style.display = 'none';
+            console.log('[SPA menu_home] 非表示: ' + menuId + ' (permissionId=' + permissionId + ')');
           }
         }
       }
