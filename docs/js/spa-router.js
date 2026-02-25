@@ -1,33 +1,29 @@
 /**
- * SPA Router — Fragment読み込み + キャッシュ管理
+ * SPA Router v585 — DOM保持型ページ切替
  *
- * switchPage(pageName): FURIRA_PAGESに登録済みならFragment読み込み、未登録はfalse返却
- * cleanupCurrentPage(): 前ページのdestroy関数を呼び、DOMをクリア
+ * 一度表示したページのDOMはメモリに保持し、
+ * 再訪問時はDOM表示切替のみ（fetch/パース/スクリプト実行なし）。
+ * 初回訪問時のみfetch + inject + スクリプト実行を行う。
  */
 (function() {
   'use strict';
 
-  // Fragment HTMLキャッシュ（2回目以降は即時表示）
+  // Fragment HTMLキャッシュ（プリフェッチ用。初回injectに使用）
   const _fragmentCache = {};
 
-  // v581: フラグメントURLにバージョンパラメータを付与（SW/CDNキャッシュ対策）
-  const _FRAGMENT_VERSION = '584';
+  // DOM保持キャッシュ（ページ名 → DOMコンテナ要素）
+  // 一度表示したページのDOMを保持し、再訪問時は表示切替のみ
+  const _pageContainers = {};
 
-  // 現在表示中のSPAページ名
+  const _FRAGMENT_VERSION = '585';
+
   let _currentSpaPage = null;
-
-  // SPA表示中かどうか
   let _isSpaActive = false;
-
-  // v577: レース条件防止用の世代カウンター
   let _switchGeneration = 0;
-
-  // v584: プリフェッチ済みフラグ
   let _prefetchDone = false;
 
   /**
-   * v584: ボトムナビページをバックグラウンドでプリフェッチ
-   * 最初のページ表示後に呼び出し、以降のページ遷移を即時化する
+   * ボトムナビページをバックグラウンドでHTMLプリフェッチ
    */
   function _prefetchBottomNavPages() {
     if (typeof FURIRA_PAGES === 'undefined') return;
@@ -39,7 +35,6 @@
 
       const url = config.fragmentUrl;
       if (fetchedUrls[url]) {
-        // 同じURLを別ページ名で使う場合（todo/todo-list等）、結果を共有
         fetchedUrls[url].then(html => { if (html) _fragmentCache[pageName] = html; });
         continue;
       }
@@ -62,7 +57,6 @@
    * SPAページに切り替え
    */
   async function switchPage(pageName) {
-    // FURIRA_PAGESに未登録 → iframe fallback
     if (typeof FURIRA_PAGES === 'undefined' || !FURIRA_PAGES[pageName]) {
       return false;
     }
@@ -72,96 +66,109 @@
       return false;
     }
 
-    // v577: この呼び出しの世代番号を記録
     const thisGeneration = ++_switchGeneration;
-
     const startTime = performance.now();
-    console.log(`[SPA] switchPage: ${pageName} 開始 (gen:${thisGeneration})`);
 
-    // 前ページのクリーンアップ
-    cleanupCurrentPage();
+    // 現在ページを非表示（DOMは保持）
+    _hideCurrentPage();
 
     const spaContent = document.getElementById('spa-content');
     const iframe = document.getElementById('gas-iframe');
-    if (!spaContent || !iframe) {
-      console.error('[SPA] #spa-content or #gas-iframe not found');
-      return false;
-    }
+    if (!spaContent || !iframe) return false;
 
-    // iframe非表示 → SPA表示
+    // スピナーが残っていれば除去
+    const oldSpinner = document.getElementById('spa-loading-spinner');
+    if (oldSpinner) oldSpinner.remove();
+
     iframe.style.display = 'none';
     spaContent.style.display = 'block';
-
     _isSpaActive = true;
     _currentSpaPage = pageName;
 
-    // v584: スピナーはネットワーク取得時のみ表示（キャッシュヒット時は不要）
-    const isCached = !!_fragmentCache[pageName];
-    if (!isCached) {
-      spaContent.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:200px"><div class="spinner-border text-primary" role="status"></div></div>';
-    }
-
-    try {
-      let html;
-      if (isCached) {
-        // キャッシュヒット → 即時表示
-        html = _fragmentCache[pageName];
-        console.log(`[SPA] キャッシュから即時表示: ${pageName}`);
-      } else {
-        // fetchで取得
-        const fragmentUrl = pageConfig.fragmentUrl + '?v=' + _FRAGMENT_VERSION;
-        const response = await fetch(fragmentUrl);
-        if (thisGeneration !== _switchGeneration) {
-          console.log(`[SPA] switchPage中断: ${pageName} (新しい遷移が優先)`);
-          return false;
-        }
-        if (!response.ok) {
-          throw new Error(`Fragment fetch failed: ${response.status}`);
-        }
-        html = await response.text();
-        if (thisGeneration !== _switchGeneration) {
-          console.log(`[SPA] switchPage中断: ${pageName} (新しい遷移が優先)`);
-          return false;
-        }
-        _fragmentCache[pageName] = html;
-        console.log(`[SPA] fetchで取得: ${pageName}`);
-      }
-
-      if (thisGeneration !== _switchGeneration) {
-        return false;
-      }
-
-      // DOM注入（scriptタグは後で実行）
-      _injectFragment(spaContent, html, pageName);
-
-      // スクロール位置リセット
+    // ========================================
+    // ★ 再訪問: キャッシュ済みDOMを即時表示
+    // ========================================
+    if (_pageContainers[pageName]) {
+      _pageContainers[pageName].style.display = '';
       spaContent.scrollTop = 0;
       window.scrollTo(0, 0);
 
-      // init関数実行
+      // init呼び出し（データ再取得 + リスナー再登録）
       if (pageConfig.init && typeof window[pageConfig.init] === 'function') {
         try {
           window[pageConfig.init]();
-          console.log(`[SPA] init実行: ${pageConfig.init}()`);
-        } catch (initError) {
-          console.error(`[SPA] init関数エラー: ${pageConfig.init}()`, initError);
+        } catch (e) {
+          console.error(`[SPA] init関数エラー: ${pageConfig.init}()`, e);
         }
       }
 
-      const loadTime = performance.now() - startTime;
-      console.log(`[SPA] ${pageName} 表示完了: ${loadTime.toFixed(0)}ms`);
+      console.log(`[SPA] ★ ${pageName} 即時表示: ${(performance.now() - startTime).toFixed(0)}ms`);
+      return true;
+    }
 
-      // v584: 最初のページ表示後にボトムナビページをプリフェッチ
+    // ========================================
+    // 初回訪問: fetch → コンテナ作成 → inject
+    // ========================================
+    console.log(`[SPA] ${pageName} 初回読み込み開始`);
+
+    // スピナー表示
+    const spinnerEl = document.createElement('div');
+    spinnerEl.id = 'spa-loading-spinner';
+    spinnerEl.style.cssText = 'display:flex;align-items:center;justify-content:center;height:200px';
+    spinnerEl.innerHTML = '<div class="spinner-border text-primary" role="status"></div>';
+    spaContent.appendChild(spinnerEl);
+
+    try {
+      let html;
+      if (_fragmentCache[pageName]) {
+        html = _fragmentCache[pageName];
+      } else {
+        const fragmentUrl = pageConfig.fragmentUrl + '?v=' + _FRAGMENT_VERSION;
+        const response = await fetch(fragmentUrl);
+        if (thisGeneration !== _switchGeneration) return false;
+        if (!response.ok) throw new Error(`Fragment fetch failed: ${response.status}`);
+        html = await response.text();
+        if (thisGeneration !== _switchGeneration) return false;
+        _fragmentCache[pageName] = html;
+      }
+
+      if (thisGeneration !== _switchGeneration) return false;
+
+      // スピナー除去
+      if (spinnerEl.parentNode) spinnerEl.remove();
+
+      // ページコンテナ作成 & DOM注入
+      const container = document.createElement('div');
+      container.setAttribute('data-spa-page', pageName);
+      spaContent.appendChild(container);
+      _pageContainers[pageName] = container;
+
+      _injectFragment(container, html, pageName);
+
+      spaContent.scrollTop = 0;
+      window.scrollTo(0, 0);
+
+      // init実行
+      if (pageConfig.init && typeof window[pageConfig.init] === 'function') {
+        try {
+          window[pageConfig.init]();
+        } catch (e) {
+          console.error(`[SPA] init関数エラー: ${pageConfig.init}()`, e);
+        }
+      }
+
+      console.log(`[SPA] ${pageName} 初回表示完了: ${(performance.now() - startTime).toFixed(0)}ms`);
+
+      // プリフェッチ開始（初回ページ表示後）
       if (!_prefetchDone) {
         _prefetchDone = true;
         setTimeout(_prefetchBottomNavPages, 300);
       }
 
     } catch (error) {
-      if (thisGeneration !== _switchGeneration) {
-        return false;
-      }
+      if (thisGeneration !== _switchGeneration) return false;
       console.error(`[SPA] Fragment読み込みエラー: ${pageName}`, error);
+      if (spinnerEl.parentNode) spinnerEl.remove();
       _deactivateSpa();
       return false;
     }
@@ -170,11 +177,10 @@
   }
 
   /**
-   * Fragment HTMLをDOMに注入し、<script>タグを実行
+   * Fragment HTMLをコンテナに注入し、scriptタグを実行
    */
-  function _injectFragment(container, html, pageName) {
+  function _injectFragment(container, html) {
     container.innerHTML = html;
-
     const scripts = container.querySelectorAll('script');
     scripts.forEach(oldScript => {
       const newScript = document.createElement('script');
@@ -188,36 +194,51 @@
   }
 
   /**
-   * 現在のSPAページをクリーンアップ
+   * 現在ページを非表示にする（DOMは保持、destroyは呼ぶ）
    */
-  function cleanupCurrentPage() {
+  function _hideCurrentPage() {
     if (!_currentSpaPage || !_isSpaActive) return;
 
     const pageConfig = typeof FURIRA_PAGES !== 'undefined' ? FURIRA_PAGES[_currentSpaPage] : null;
 
+    // destroy呼び出し（リスナー解除、タイマー停止等）
     if (pageConfig && pageConfig.destroy && typeof window[pageConfig.destroy] === 'function') {
       try {
         window[pageConfig.destroy]();
-        console.log(`[SPA] destroy実行: ${pageConfig.destroy}()`);
       } catch (e) {
         console.error(`[SPA] destroy失敗: ${pageConfig.destroy}()`, e);
       }
     }
 
+    // ページコンテナを非表示（DOMは残す）
+    if (_pageContainers[_currentSpaPage]) {
+      _pageContainers[_currentSpaPage].style.display = 'none';
+    }
+
+    // ボトムナビ・レイアウトをデフォルト状態に復元
     const bottomNav = document.getElementById('bottom-nav');
     if (bottomNav) bottomNav.classList.remove('hidden');
     const spaContent = document.getElementById('spa-content');
     if (spaContent) {
       spaContent.style.bottom = '';
       spaContent.style.overflow = '';
-      spaContent.innerHTML = '';
     }
 
     _currentSpaPage = null;
   }
 
+  /**
+   * 後方互換: 外部からのクリーンアップ呼び出し
+   */
+  function cleanupCurrentPage() {
+    _hideCurrentPage();
+  }
+
+  /**
+   * SPA表示を解除してiframe表示に戻す
+   */
   function _deactivateSpa() {
-    cleanupCurrentPage();
+    _hideCurrentPage();
     const spaContent = document.getElementById('spa-content');
     const iframe = document.getElementById('gas-iframe');
     if (spaContent) spaContent.style.display = 'none';
@@ -226,9 +247,7 @@
   }
 
   function deactivateSpaIfNeeded() {
-    if (_isSpaActive) {
-      _deactivateSpa();
-    }
+    if (_isSpaActive) _deactivateSpa();
   }
 
   function isSpaActive() {
