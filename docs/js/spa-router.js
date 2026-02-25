@@ -11,7 +11,7 @@
   const _fragmentCache = {};
 
   // v581: フラグメントURLにバージョンパラメータを付与（SW/CDNキャッシュ対策）
-  const _FRAGMENT_VERSION = '583';
+  const _FRAGMENT_VERSION = '583b';
 
   // 現在表示中のSPAページ名
   let _currentSpaPage = null;
@@ -98,16 +98,6 @@
       if (thisGeneration !== _switchGeneration) {
         console.log(`[SPA] switchPage中断: ${pageName} (新しい遷移が優先)`);
         return false;
-      }
-
-      // v583: init呼び出し前にFirebase modular SDK初期化を待つ（最大8秒）
-      if (!window._firebaseModularReady) {
-        console.log(`[SPA] Firebase modular SDK待機中...`);
-        await Promise.race([
-          new Promise(r => window.addEventListener('firebaseModularReady', r, { once: true })),
-          new Promise(r => setTimeout(r, 8000))
-        ]);
-        if (thisGeneration !== _switchGeneration) return false;
       }
 
       // DOM注入（scriptタグは後で実行）
