@@ -1684,24 +1684,52 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-  <!-- v560: compat Firestore を同期的に初期化（module実行前にwindow.dbを確保） -->
+  <!-- v561: compat Firestore 保護付き初期化（window.dbをPropertyで保護） -->
   <script>
   (function() {
+    var _compatDb = null;
+    var firebaseConfig = {
+      apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+      authDomain: "furira.jp",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "345706548795",
+      appId: "1:345706548795:web:058a553da6b4b74db5161e"
+    };
+
+    // window.db をPropertyで保護: .collection()を持つcompat instanceのみ受け入れ
+    // これにより、v9 modular instanceで上書きされる問題を根本的に防ぐ
+    Object.defineProperty(window, 'db', {
+      get: function() { return _compatDb; },
+      set: function(v) {
+        if (v && typeof v.collection === 'function') {
+          _compatDb = v;
+        }
+        // .collection()がないインスタンスは無視（v9 modular等）
+      },
+      configurable: true,
+      enumerable: true
+    });
+
+    // getCompatDb() ヘルパー（フォールバック用）
+    window.getCompatDb = function() {
+      if (_compatDb) return _compatDb;
+      try {
+        if (typeof firebase !== 'undefined' && firebase.firestore) {
+          if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+          _compatDb = firebase.firestore();
+          return _compatDb;
+        }
+      } catch(e) {}
+      return null;
+    };
+
+    // 初回同期初期化
     try {
       if (typeof firebase !== 'undefined' && firebase.initializeApp) {
-        var firebaseConfig = {
-          apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
-          authDomain: "furira.jp",
-          projectId: "reborn-chat",
-          storageBucket: "reborn-chat.firebasestorage.app",
-          messagingSenderId: "345706548795",
-          appId: "1:345706548795:web:058a553da6b4b74db5161e"
-        };
-        if (!firebase.apps.length) {
-          firebase.initializeApp(firebaseConfig);
-        }
-        window.db = firebase.firestore();
-        console.log('[Firebase] compat Firestore 同期初期化完了');
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        _compatDb = firebase.firestore();
+        console.log('[Firebase] compat Firestore 同期初期化完了（Property保護付き）');
       }
     } catch(e) { console.warn('[Firebase] compat 同期初期化エラー:', e); }
   })();
