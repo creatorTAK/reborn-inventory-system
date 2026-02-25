@@ -4907,7 +4907,12 @@
     }
 
     // 初期化（キャッシュ優先 + 並列実行）
-    async function init() {
+    async function _mpInit() {
+      // v577: ページ遷移済みなら中断（非同期Promise.then経由で呼ばれるため）
+      if (typeof getCurrentSpaPage === 'function' && getCurrentSpaPage() !== 'mypage') {
+        console.log('[Mypage] _mpInit中断 - 既に別ページに遷移済み');
+        return;
+      }
       const startTime = performance.now();
 
       // ユーザー情報取得
@@ -8020,14 +8025,8 @@
       }
     }
 
-    // 戻る（履歴ベース）
-    window.goBack = function() {
-      if (window.parent && window.parent !== window) {
-        mpGoBack();
-      } else {
-        window.history.back();
-      }
-    };
+    // v577: window.goBack削除（chat-room/master-managementと衝突するため）
+    // 戻るボタンは mpGoBack() を直接使用
 
     // ローディング表示
     function showLoading(show) {
@@ -10263,10 +10262,10 @@
       // Wait for scripts to load, then initialize
       Promise.all(loadPromises).then(function() {
         console.log('[Mypage SPA] External scripts loaded');
-        init();
+        _mpInit();
       }).catch(function(err) {
         console.error('[Mypage SPA] Script loading error:', err);
-        init();
+        _mpInit();
       });
     }
 
