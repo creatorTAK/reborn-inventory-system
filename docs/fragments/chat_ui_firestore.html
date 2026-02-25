@@ -805,12 +805,6 @@
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 50;
     }
     #spa-page-chat-ui .delete-button {
       background: none;
@@ -3395,58 +3389,6 @@
       var container = document.getElementById('spa-page-chat-ui');
       if (container) container.style.display = 'flex';
 
-      // 🔍 DEBUG: 画面上デバッグパネル（メッセージ消失原因追跡）
-      var _dbgPanel = document.createElement('div');
-      _dbgPanel.id = 'cuiDebugPanel';
-      _dbgPanel.style.cssText = 'position:fixed;bottom:70px;left:5px;right:5px;background:rgba(0,0,0,0.85);color:#0f0;font-size:10px;padding:6px;z-index:99999;border-radius:6px;max-height:180px;overflow-y:auto;font-family:monospace;line-height:1.4;';
-      document.body.appendChild(_dbgPanel);
-      var _dbgLog = [];
-      window._dbgAdd = function(msg) {
-        var t = new Date();
-        var ts = t.getMinutes() + ':' + String(t.getSeconds()).padStart(2,'0') + '.' + String(t.getMilliseconds()).padStart(3,'0');
-        _dbgLog.push(ts + ' ' + msg);
-        if (_dbgLog.length > 30) _dbgLog.shift();
-        _dbgPanel.textContent = _dbgLog.join('\n');
-        _dbgPanel.scrollTop = _dbgPanel.scrollHeight;
-        console.log('[DBG] ' + msg);
-      };
-      _dbgAdd('initChatUiPage開始 roomId=' + cuiCurrentRoomId);
-
-      // 定期状態チェック + リカバリ機構
-      var _cuiRecoveryAttempted = false;
-      setInterval(function() {
-        var mc = document.getElementById('messagesContainer');
-        if (!mc) return;
-        var childCount = mc.children.length;
-        var cachedMsgs = window._cuiLastSnapshotMessages || [];
-        _dbgAdd('CHECK ch=' + childCount + ' H=' + mc.offsetHeight + ' cache=' + cachedMsgs.length);
-
-        // リカバリ: DOM空 + キャッシュにメッセージあり → 再描画
-        if (childCount === 0 && cachedMsgs.length > 0 && !_cuiRecoveryAttempted) {
-          _cuiRecoveryAttempted = true;
-          _dbgAdd('🔄 リカバリ開始: ' + cachedMsgs.length + '件を再描画');
-          try {
-            mc.innerHTML = '';
-            var lastDateStr = null;
-            cachedMsgs.forEach(function(msg) {
-              if (msg.timestamp && msg.timestamp.toDate) {
-                var msgDate = msg.timestamp.toDate();
-                var dateStr = formatDateForSeparator(msgDate);
-                if (dateStr !== lastDateStr) {
-                  appendDateSeparator(dateStr);
-                  lastDateStr = dateStr;
-                }
-              }
-              appendMessage(msg);
-            });
-            mc.scrollTop = mc.scrollHeight;
-            _dbgAdd('✅ リカバリ完了 children=' + mc.children.length);
-          } catch (e) {
-            _dbgAdd('❌ リカバリエラー: ' + e.message);
-          }
-        }
-      }, 3000);
-
       // Run the main initialization
       cuiInitialize();
 
@@ -3804,7 +3746,6 @@
         // 直接Firestoreからユーザー一覧を取得
         console.log('[User Cache] Firestoreから直接ユーザー一覧取得開始');
 
-        if (typeof _dbgAdd === 'function') _dbgAdd('getDocs(users)開始 _cuiDb=' + !!_cuiDb + ' collection=' + !!collection);
         getDocs(collection(_cuiDb, 'users'))
           .then(snapshot => {
             var users = [];
@@ -3822,12 +3763,10 @@
 
             // メッセージを表示
             console.log('[User Cache] キャッシュ取得完了、メッセージリスニング開始');
-            if (typeof _dbgAdd === 'function') _dbgAdd('users取得完了 ' + users.length + '件 → startListening()');
             startListening();
           })
           .catch(error => {
             console.error('[User Cache] ユーザー一覧取得エラー:', error);
-            if (typeof _dbgAdd === 'function') _dbgAdd('users取得エラー: ' + error.message + ' → startListening()');
             // エラーの場合でもメッセージは表示する
             startListening();
           });
@@ -5214,7 +5153,6 @@
 
     // Firestoreメッセージをリアルタイムリスニング
     async function startListening() {
-      if (typeof _dbgAdd === 'function') _dbgAdd('startListening開始 roomId=' + cuiCurrentRoomId);
       // 既存リスナーを解除（二重登録防止）
       if (cuiUnsubscribeMessages) {
         try { cuiUnsubscribeMessages(); } catch(e) {}
@@ -5230,17 +5168,12 @@
         limit(50)
       );
 
-      if (typeof _dbgAdd === 'function') _dbgAdd('onSnapshot登録 query=' + !!q + ' onSnapshot=' + !!onSnapshot);
       cuiUnsubscribeMessages = onSnapshot(q, (snapshot) => {
        try {
-        if (typeof _dbgAdd === 'function') _dbgAdd('onSnapshot発火 size=' + snapshot.size + ' isInitial=' + cuiIsInitialLoad);
         console.log('[Firestore] メッセージ更新:', snapshot.size + '件');
 
         var container = document.getElementById('messagesContainer');
-        if (!container) {
-          if (typeof _dbgAdd === 'function') _dbgAdd('❌ container=null! DOM破壊済み');
-          return;
-        }
+        if (!container) return;
         var changes = snapshot.docChanges();
 
         // ========================================
@@ -5318,16 +5251,12 @@
             resetUnreadCountRealtime();
           }
           clearAppBadge();
-          if (typeof _dbgAdd === 'function') _dbgAdd('差分更新完了 children=' + container.children.length);
           return;
         }
 
         // --- 初回全描画モード ---
         console.log('[Firestore] 初回全体描画');
-        if (typeof _dbgAdd === 'function') _dbgAdd('初回描画開始 container=' + !!container + ' snapshot.size=' + snapshot.size);
         cuiIsInitialLoad = false;
-        // メッセージデータをキャッシュ（リカバリ用）
-        window._cuiLastSnapshotMessages = [];
         container.innerHTML = '';
 
         // 新しい順で取得したので、逆順で表示
@@ -5358,12 +5287,8 @@
           }
         });
 
-        // メッセージデータをキャッシュ（リカバリ用）
-        window._cuiLastSnapshotMessages = messages;
-
         // 日付セパレータを挿入しながらメッセージを表示
         var lastDateStr = null;
-        var appendedCount = 0;
         messages.forEach((msg) => {
           if (msg.timestamp && msg.timestamp.toDate) {
             var msgDate = msg.timestamp.toDate();
@@ -5374,9 +5299,7 @@
             }
           }
           appendMessage(msg);
-          appendedCount++;
         });
-        if (typeof _dbgAdd === 'function') _dbgAdd('appendMessage完了 ' + appendedCount + '件 DOMchildren=' + container.children.length);
 
         // 最下部にスクロール
         container.scrollTop = container.scrollHeight;
@@ -5407,22 +5330,11 @@
           cuiIsFirstMessageLoad = false;
         }
 
-        // 🔍 描画後検証: メッセージが実際にDOMに存在するか確認
-        var postContainer = document.getElementById('messagesContainer');
-        var childCount = postContainer ? postContainer.children.length : -1;
-        if (typeof _dbgAdd === 'function') _dbgAdd('描画完了 children=' + childCount);
-        if (childCount === 0 && snapshot.size > 0) {
-          if (typeof _dbgAdd === 'function') _dbgAdd('⚠️ 描画異常: snapshot=' + snapshot.size + ' だがDOM=0');
-        }
-
        } catch (renderError) {
-        // onSnapshotコールバック内のエラーをキャッチ
         console.error('[Firestore] onSnapshotコールバックエラー:', renderError);
-        if (typeof _dbgAdd === 'function') _dbgAdd('❌ onSnapshotエラー: ' + renderError.message);
        }
       }, (error) => {
         console.error('[Firestore] リスニングエラー:', error);
-        if (typeof _dbgAdd === 'function') _dbgAdd('❌ Firestoreエラー: ' + error.message);
       });
     }
 
