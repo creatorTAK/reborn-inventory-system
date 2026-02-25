@@ -302,20 +302,17 @@
         localStorage.setItem('reborn_user_permission', permissionId);
 
         if (permissionId !== 'owner') {
-          // メニュー権限設定を取得
+          // v580: メニュー権限設定を取得（ドキュメント無しでもdefaultOwnerOnly適用）
           var menuPermDoc = await db.collection('settings').doc('menuPermissions').get();
-          if (menuPermDoc.exists) {
-            var menuPermissions = menuPermDoc.data();
-            for (var menuId in _mhMenuIdMap) {
-              var menuPerm = menuPermissions[menuId];
-              var element = document.getElementById(_mhMenuIdMap[menuId]);
-              if (!element) continue;
-              // v580: データ無しの場合、defaultOwnerOnlyリストをチェック
-              var isVisible = menuPerm
-                ? (!menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId))
-                : (_mhDefaultOwnerOnly.indexOf(menuId) === -1);
-              if (!isVisible) element.style.display = 'none';
-            }
+          var menuPermissions = menuPermDoc.exists ? menuPermDoc.data() : {};
+          for (var menuId in _mhMenuIdMap) {
+            var menuPerm = menuPermissions[menuId];
+            var element = document.getElementById(_mhMenuIdMap[menuId]);
+            if (!element) continue;
+            var isVisible = menuPerm
+              ? (!menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId))
+              : (_mhDefaultOwnerOnly.indexOf(menuId) === -1);
+            if (!isVisible) element.style.display = 'none';
           }
         }
       }
