@@ -275,11 +275,16 @@
     // クリーンアップ不要（リスナーなし）
   }
 
+  var _mhPermRetryCount = 0;
   async function _mhCheckPermissionAndBadges() {
     // 親のcompat Firestoreを使用
     var db = window.db;
-    if (!db) {
-      console.warn('[SPA menu_home] Firestore未初期化');
+    if (!db || typeof db.collection !== 'function') {
+      _mhPermRetryCount++;
+      if (_mhPermRetryCount < 10) {
+        console.warn('[SPA menu_home] Firestore未初期化、リトライ(' + _mhPermRetryCount + ')');
+        setTimeout(_mhCheckPermissionAndBadges, 500);
+      }
       return;
     }
 

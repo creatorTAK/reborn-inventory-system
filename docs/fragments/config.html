@@ -1873,10 +1873,14 @@
     // Firestore Data Loading
     // ============================================
 
+    var _cfg_firestoreRetryCount = 0;
     async function cfgInitFirestoreData() {
-      if (!window.db) {
-        console.log('[config-fragment] Waiting for Firestore...');
-        setTimeout(cfgInitFirestoreData, 500);
+      if (!window.db || typeof window.db.collection !== 'function') {
+        _cfg_firestoreRetryCount++;
+        if (_cfg_firestoreRetryCount < 10) {
+          console.log('[config-fragment] Waiting for Firestore compat... (' + _cfg_firestoreRetryCount + ')');
+          setTimeout(cfgInitFirestoreData, 500);
+        }
         return;
       }
 
@@ -3622,7 +3626,7 @@
 
     async function cfgLoadPermissionSettings() {
       if (_cfg_permissionSettingsLoaded) return;
-      if (!window.db) { setTimeout(cfgLoadPermissionSettings, 500); return; }
+      if (!window.db || typeof window.db.collection !== 'function') { setTimeout(cfgLoadPermissionSettings, 500); return; }
       try {
         console.log('[config-fragment] Loading permission settings...');
         var usersSnapshot = await window.db.collection('users').get();

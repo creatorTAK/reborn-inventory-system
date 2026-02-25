@@ -1684,6 +1684,29 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
+  <!-- v560: compat Firestore を同期的に初期化（module実行前にwindow.dbを確保） -->
+  <script>
+  (function() {
+    try {
+      if (typeof firebase !== 'undefined' && firebase.initializeApp) {
+        var firebaseConfig = {
+          apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+          authDomain: "furira.jp",
+          projectId: "reborn-chat",
+          storageBucket: "reborn-chat.firebasestorage.app",
+          messagingSenderId: "345706548795",
+          appId: "1:345706548795:web:058a553da6b4b74db5161e"
+        };
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        window.db = firebase.firestore();
+        console.log('[Firebase] compat Firestore 同期初期化完了');
+      }
+    } catch(e) { console.warn('[Firebase] compat 同期初期化エラー:', e); }
+  })();
+  </script>
+
   <!-- Firebase SDKs (Modular format) -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
@@ -1717,11 +1740,13 @@
       appleProvider.addScope('email');
       appleProvider.addScope('name');
 
-      // Compat SDK初期化（firestore-api.js用）
-      if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
+      // Compat SDK初期化（同期スクリプトで初期化済みの場合はスキップ）
+      if (!window.db || typeof window.db.collection !== 'function') {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        window.db = firebase.firestore();
       }
-      window.db = firebase.firestore(); // Compat版
 
       // オフライン永続化を有効化（IndexedDBキャッシュ）
       // ネットワーク不安定時もキャッシュからデータを返せるようにする
