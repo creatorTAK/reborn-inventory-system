@@ -11,7 +11,7 @@
   const _fragmentCache = {};
 
   // v581: フラグメントURLにバージョンパラメータを付与（SW/CDNキャッシュ対策）
-  const _FRAGMENT_VERSION = '582';
+  const _FRAGMENT_VERSION = '582b';
 
   // 現在表示中のSPAページ名
   let _currentSpaPage = null;

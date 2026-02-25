@@ -4788,6 +4788,7 @@
     var currentNoteData = null;
     var noteSaveTimer = null;
     var sortableInstance = null;
+    var _mpInitRetryCount = 0;
     var MYPAGE_CACHE_KEY = 'reborn_mypage_cache';
     var MYPAGE_BG_IMAGE_CACHE_KEY = 'reborn_mypage_bg_image';
     var MYPAGE_CACHE_DURATION_MS = 3 * 60 * 1000;
@@ -4881,7 +4882,19 @@
         console.log('[Mypage] _mpInit中断 - 既に別ページに遷移済み');
         return;
       }
-      // v581: Firebase参照をinit時に再取得（スクリプト実行時に未初期化の場合対策）
+      // v582: Firebase初期化待ち（未初期化ならリトライ）
+      if (!window.firebaseDB || !window.firestoreCollection) {
+        if (!_mpInitRetryCount) _mpInitRetryCount = 0;
+        _mpInitRetryCount++;
+        if (_mpInitRetryCount < 20) {
+          console.log('[Mypage] Firebase未初期化、リトライ(' + _mpInitRetryCount + ')');
+          setTimeout(_mpInit, 300);
+          return;
+        }
+        console.error('[Mypage] Firebase初期化タイムアウト');
+        return;
+      }
+      _mpInitRetryCount = 0;
       db = window.firebaseDB;
       storage = window.firebaseStorage;
       collection = window.firestoreCollection;
@@ -4900,7 +4913,7 @@
       ref = window.storageRef;
       uploadBytes = window.storageUploadBytes;
       getDownloadURL = window.storageGetDownloadURL;
-      const startTime = performance.now();
+      var startTime = performance.now();
 
       // ユーザー情報取得
       currentUser = {
