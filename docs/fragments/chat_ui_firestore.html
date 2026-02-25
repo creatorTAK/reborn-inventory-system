@@ -3395,6 +3395,51 @@
       var container = document.getElementById('spa-page-chat-ui');
       if (container) container.style.display = 'flex';
 
+      // 🔍 DEBUG: メッセージ消失原因追跡
+      var _debugMc = document.getElementById('messagesContainer');
+      var _debugSpa = document.getElementById('spa-content');
+      if (_debugMc) {
+        new MutationObserver(function(mutations) {
+          mutations.forEach(function(m) {
+            if (m.removedNodes.length > 0) {
+              console.error('[DEBUG-MO] messagesContainer子要素が削除されました:', m.removedNodes.length, '個');
+              console.trace('[DEBUG-MO] 削除のスタックトレース');
+            }
+          });
+        }).observe(_debugMc, { childList: true });
+      }
+      if (_debugSpa) {
+        new MutationObserver(function(mutations) {
+          mutations.forEach(function(m) {
+            if (m.removedNodes.length > 0) {
+              for (var i = 0; i < m.removedNodes.length; i++) {
+                if (m.removedNodes[i].id === 'spa-page-chat-ui') {
+                  console.error('[DEBUG-MO] ⚠️ spa-page-chat-ui がspa-contentから削除されました!');
+                  console.trace('[DEBUG-MO] 削除のスタックトレース');
+                }
+              }
+            }
+          });
+        }).observe(_debugSpa, { childList: true });
+      }
+      // 🔍 DEBUG: 500msごとに状態チェック
+      var _debugInterval = setInterval(function() {
+        var mc = document.getElementById('messagesContainer');
+        var page = document.getElementById('spa-page-chat-ui');
+        var sp = document.getElementById('spa-content');
+        console.log('[DEBUG-CHECK]',
+          'children:', mc ? mc.children.length : 'N/A',
+          'mcH:', mc ? mc.offsetHeight : 'N/A',
+          'wrapH:', mc ? mc.parentElement.offsetHeight : 'N/A',
+          'pageH:', page ? page.offsetHeight : 'N/A',
+          'spaH:', sp ? sp.offsetHeight : 'N/A',
+          'spaDisplay:', sp ? sp.style.display : 'N/A'
+        );
+        if (mc && mc.children.length === 0) {
+          console.error('[DEBUG-CHECK] ⚠️ messagesContainerが空です！');
+        }
+      }, 500);
+
       // Run the main initialization
       cuiInitialize();
 
@@ -4126,7 +4171,7 @@
         // バッチ更新で効率化
         var batch = writeBatch(_cuiDb);
 
-        for (varmsgId of messageIds) {
+        for (var msgId of messageIds) {
           var msgRef = doc(_cuiDb, `rooms/${cuiCurrentRoomId}/messages/${msgId}`);
           // arrayUnion で重複なく追加
           batch.update(msgRef, {
@@ -6109,7 +6154,7 @@
           'audio/webm'
         ];
         
-        for (vartype of preferredTypes) {
+        for (var type of preferredTypes) {
           if (MediaRecorder.isTypeSupported(type)) {
             recorderOptions.mimeType = type;
             break;
@@ -6379,7 +6424,7 @@
       var maxSize = 10 * 1024 * 1024; // 10MB
       var validFiles = [];
 
-      for (varfile of files) {
+      for (var file of files) {
         if (file.size > maxSize) {
           alert(`${file.name} は10MBを超えています。スキップします。`);
           continue;
@@ -6580,7 +6625,7 @@
         console.log('[Unread] メンバーメール一覧:', memberEmails, '自分:', cuiCurrentUserEmail);
 
         // 自分以外のメンバーの未読カウントを+1
-        for (varmemberEmail of memberEmails) {
+        for (var memberEmail of memberEmails) {
           if (memberEmail !== cuiCurrentUserEmail) {
             var unreadRef = doc(_cuiDb, `rooms/${cuiCurrentRoomId}/unreadCounts/${memberEmail}`);
             await setDoc(unreadRef, {
@@ -6621,7 +6666,7 @@
 
         // 自分以外のメンバーのFCMトークンを取得
         var tokens = [];
-        for (varmemberEmail of memberEmails) {
+        for (var memberEmail of memberEmails) {
           if (memberEmail === cuiCurrentUserEmail) continue; // 自分はスキップ
 
           // 閲覧中チェック
