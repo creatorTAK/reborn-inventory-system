@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v330';  // v330: キャッシュ強制更新
+const CACHE_VERSION = 'v331';  // v331: index.htmlプリキャッシュ除去（古いHTML残留防止）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -15,9 +15,9 @@ const CACHE_TTL_MS = 10000; // 🔧 パフォーマンス改善: 10秒に延長�
 const NETWORK_TIMEOUT = 4000; // 4秒
 
 // 事前キャッシュするリソース
+// ⚠️ index.html と / はfetchイベントでバイパスしているためプリキャッシュ不要
+// プリキャッシュすると古いHTMLがキャッシュに残り、バージョン不一致の原因になる
 const PRECACHE_RESOURCES = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icon-180.png',
   '/icon-192.png',
