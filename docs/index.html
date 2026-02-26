@@ -1433,11 +1433,11 @@
       </button>
     </nav>
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0226i</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0226j</div>
     <script>
     // PWAタスクキル復帰時のバージョンチェック（bfcache対策）
     (function(){
-      var LOCAL_VER = 'v0226i';
+      var LOCAL_VER = 'v0226j';
       var lastCheck = Date.now();
       document.addEventListener('visibilitychange', function(){
         if (document.visibilityState !== 'visible') return;
@@ -4832,21 +4832,23 @@
           throw new Error('Firestore関数が初期化されていません');
         }
 
-        // 1. システム全体のオーナーデバイスをチェック
-        const allDevicesQuery = queryFunc(
-          collectionGroupFunc(db, 'devices'),
-          whereFunc('permissionId', '==', 'owner'),
-          whereFunc('active', '==', true)
-        );
-        const ownerDevices = await getDocsFunc(allDevicesQuery);
-
-        // オーナー制限チェック
+        // 1. オーナー制限チェック（collectionGroupクエリ失敗時はスキップ）
         let finalPermissionId = userPermissionId;
         let finalPermissionDisplay = userPermissionDisplay;
-        if (ownerDevices.size > 0 && userPermissionId === 'owner') {
-          finalPermissionId = 'staff';
-          finalPermissionDisplay = 'スタッフ';
-          console.log('⚠️ システム全体で既にオーナーデバイスが存在するため、スタッフに降格');
+        try {
+          const allDevicesQuery = queryFunc(
+            collectionGroupFunc(db, 'devices'),
+            whereFunc('permissionId', '==', 'owner'),
+            whereFunc('active', '==', true)
+          );
+          const ownerDevices = await getDocsFunc(allDevicesQuery);
+          if (ownerDevices.size > 0 && userPermissionId === 'owner') {
+            finalPermissionId = 'staff';
+            finalPermissionDisplay = 'スタッフ';
+            console.log('⚠️ システム全体で既にオーナーデバイスが存在するため、スタッフに降格');
+          }
+        } catch (ownerCheckError) {
+          console.warn('⚠️ オーナーチェックスキップ（インデックス未作成の可能性）:', ownerCheckError.message);
         }
 
         // 2. このユーザーの既存デバイスを取得
