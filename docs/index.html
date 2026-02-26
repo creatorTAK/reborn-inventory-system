@@ -1433,11 +1433,11 @@
       </button>
     </nav>
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0226o</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0227a</div>
     <script>
     // PWAタスクキル復帰時のバージョンチェック（bfcache対策）
     (function(){
-      var LOCAL_VER = 'v0226o';
+      var LOCAL_VER = 'v0227a';
       var lastCheck = Date.now();
       document.addEventListener('visibilitychange', function(){
         if (document.visibilityState !== 'visible') return;
@@ -7456,42 +7456,50 @@
     // アプリ起動時にデバイス同期を実行
     window.refreshDeviceRegistration = refreshDeviceRegistration;
 
-    // 🔧 パフォーマンス改善: チャット未読リスナー管理
-    // - 名前付きFirebaseインスタンス('chat-fab-app')廃止 → 共有getFirebaseDb()に統合
-    // - N+1個別リスナー廃止 → ルーム一覧onSnapshot + バッチgetDoc
-    // - 重複初期化防止ガードフラグ追加
-    // - stopChatUnreadListener()で一括クリーンアップ
+    // 🔧 チャット未読リスナー管理（compat API + リアルタイムonSnapshot）
+    // - compat API（window.db）を使用（modular APIとの競合回避）
+    // - 各ルームのunreadCountsをonSnapshotでリアルタイムリスニング
+    // - ルーム一覧変更時はデバウンスしてリスナー再構築
     let _chatUnreadListenerStarted = false;
     let _unsubscribeRoomQuery = null;
     let _unsubscribeDmRoomQuery = null;
+    let _chatUnreadRoomListeners = [];
+    let _chatSetupDebounceTimer = null;
 
     function stopChatUnreadListener() {
       if (_unsubscribeRoomQuery) { try { _unsubscribeRoomQuery(); } catch(e) {} _unsubscribeRoomQuery = null; }
       if (_unsubscribeDmRoomQuery) { try { _unsubscribeDmRoomQuery(); } catch(e) {} _unsubscribeDmRoomQuery = null; }
-      // 個別ルームリスナーも全解除（旧方式の残りがあれば）
-      if (window.chatRoomListeners) {
-        window.chatRoomListeners.forEach(unsub => { try { unsub(); } catch(e) {} });
-        window.chatRoomListeners.clear();
-      }
+      // 個別ルーム未読リスナーを全解除
+      _chatUnreadRoomListeners.forEach(function(unsub) { try { unsub(); } catch(e) {} });
+      _chatUnreadRoomListeners = [];
+      if (_chatSetupDebounceTimer) { clearTimeout(_chatSetupDebounceTimer); _chatSetupDebounceTimer = null; }
       window.chatUnreadByRoom = {};
       _chatUnreadListenerStarted = false;
     }
 
-    // Firestore未読カウントリスニング
-    async function startChatUnreadListener() {
+    // Firestore未読カウントリスニング（compat API + リアルタイムonSnapshot）
+    function startChatUnreadListener() {
       // 🔧 重複初期化防止
       if (_chatUnreadListenerStarted) {
-        console.log('[Chat FAB] 既にリスニング中のためスキップ');
+        console.log('[Chat Unread] 既にリスニング中のためスキップ');
         return;
       }
 
-      console.log('[Chat FAB] 未読カウントリスニング開始');
+      console.log('[Chat Unread] 未読カウントリスニング開始');
 
       try {
-        const userName = localStorage.getItem('reborn_user_name');
-        const userEmail = localStorage.getItem('reborn_user_email');
+        var userName = localStorage.getItem('reborn_user_name');
+        var userEmail = localStorage.getItem('reborn_user_email');
         if (!userName || !userEmail) {
-          console.log('[Chat FAB] ユーザー情報未設定のためリスニング中断');
+          console.log('[Chat Unread] ユーザー情報未設定のためリスニング中断');
+          return;
+        }
+
+        // compat APIを使用（modular APIとの競合回避）
+        var db = window.db || (window.firebase && firebase.firestore());
+        if (!db) {
+          console.warn('[Chat Unread] window.db未初期化、1秒後リトライ');
+          setTimeout(startChatUnreadListener, 1000);
           return;
         }
 
@@ -7499,80 +7507,70 @@
         stopChatUnreadListener();
         _chatUnreadListenerStarted = true;
 
-        // 🔧 共有Firebaseインスタンスを使用（名前付きインスタンス廃止）
-        const db = await getFirebaseDb();
-        const { collection, doc, query, where, onSnapshot, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-        console.log('[Chat FAB] 共有Firebaseインスタンスを使用');
-
-        // 未読カウント管理用
+        console.log('[Chat Unread] compat APIでリアルタイムリスニング開始');
         if (!window.chatUnreadByRoom) window.chatUnreadByRoom = {};
-        if (!window.chatRoomListeners) window.chatRoomListeners = new Map();
 
         // 未読カウント合計を更新する関数
         function updateTotalUnread() {
-          const totalUnread = Object.values(window.chatUnreadByRoom).reduce((sum, count) => sum + count, 0);
-          console.log('[Chat FAB] 未読カウント合計:', totalUnread);
+          var totalUnread = Object.values(window.chatUnreadByRoom).reduce(function(sum, count) { return sum + count; }, 0);
+          console.log('[Chat Unread] 未読カウント合計:', totalUnread);
           updateChatBadge(totalUnread);
         }
 
-        // 🔧 バッチ未読取得（N+1リスナー廃止）
-        // ルーム一覧変更時に全ルームの未読をPromise.allでバッチ取得
-        async function batchFetchUnread(roomIds) {
-          const results = await Promise.all(
-            roomIds.map(async (roomId) => {
-              try {
-                const unreadDocRef = doc(db, `rooms/${roomId}/unreadCounts/${userEmail}`);
-                const unreadDoc = await getDoc(unreadDocRef);
-                const unreadData = unreadDoc.data();
-                return { roomId, count: unreadData?.unreadCount || 0 };
-              } catch (e) {
-                return { roomId, count: 0 };
-              }
-            })
-          );
-          results.forEach(({ roomId, count }) => {
-            window.chatUnreadByRoom[roomId] = count;
+        // 各ルームの未読カウントをonSnapshotでリアルタイムリスニング
+        var _allRoomIds = new Set(['room_default_all', 'system', 'system-notifications', 'room_inventory_alert']);
+        var _currentListeningRoomIds = new Set();
+
+        function setupRoomUnreadListeners() {
+          // 新しいルームのリスナーだけ追加（既存は維持）
+          _allRoomIds.forEach(function(roomId) {
+            if (_currentListeningRoomIds.has(roomId)) return; // 既にリスニング中
+            _currentListeningRoomIds.add(roomId);
+
+            var unreadRef = db.collection('rooms').doc(roomId).collection('unreadCounts').doc(userEmail);
+            var unsub = unreadRef.onSnapshot(function(doc) {
+              var data = doc.data();
+              var count = (data && data.unreadCount) || 0;
+              window.chatUnreadByRoom[roomId] = count;
+              updateTotalUnread();
+            }, function(error) {
+              console.error('[Chat Unread] 未読リスナーエラー:', roomId, error);
+            });
+            _chatUnreadRoomListeners.push(unsub);
           });
-          updateTotalUnread();
+          console.log('[Chat Unread] リスニング中ルーム数:', _currentListeningRoomIds.size);
         }
 
-        // デフォルトルームID
-        const defaultRoomIds = ['room_default_all', 'system', 'system-notifications', 'room_inventory_alert'];
+        // ルーム一覧変更時のデバウンス（両クエリが短時間に連続発火するため）
+        function scheduleSetupListeners() {
+          if (_chatSetupDebounceTimer) clearTimeout(_chatSetupDebounceTimer);
+          _chatSetupDebounceTimer = setTimeout(setupRoomUnreadListeners, 300);
+        }
 
         // 【リスナー1】自分が参加している通常ルームを取得（members = ユーザー名）
-        const roomsQuery = query(
-          collection(db, 'rooms'),
-          where('members', 'array-contains', userName)
-        );
+        _unsubscribeRoomQuery = db.collection('rooms')
+          .where('members', 'array-contains', userName)
+          .onSnapshot(function(snapshot) {
+            console.log('[Chat Unread] 通常ルーム数（members）:', snapshot.size);
+            snapshot.forEach(function(doc) { _allRoomIds.add(doc.id); });
+            scheduleSetupListeners();
+          }, function(error) {
+            console.error('[Chat Unread] ルームリスト取得エラー（members）:', error);
+          });
 
-        _unsubscribeRoomQuery = onSnapshot(roomsQuery, (roomsSnapshot) => {
-          console.log('[Chat FAB] 通常ルーム数（members）:', roomsSnapshot.size);
-          const roomIds = [];
-          roomsSnapshot.forEach((roomDoc) => roomIds.push(roomDoc.id));
-          // デフォルトルームも含めてバッチ取得
-          const allIds = [...new Set([...roomIds, ...defaultRoomIds])];
-          batchFetchUnread(allIds);
-        }, (error) => {
-          console.error('[Chat FAB] ルームリスト取得エラー（members）:', error);
-        });
-
-        // 【リスナー1.5】個別チャットルームを取得（memberEmails = メールアドレス）
-        const dmRoomsQuery = query(
-          collection(db, 'rooms'),
-          where('memberEmails', 'array-contains', userEmail)
-        );
-
-        _unsubscribeDmRoomQuery = onSnapshot(dmRoomsQuery, (roomsSnapshot) => {
-          console.log('[Chat FAB] 個別チャットルーム数（memberEmails）:', roomsSnapshot.size);
-          const roomIds = [];
-          roomsSnapshot.forEach((roomDoc) => roomIds.push(roomDoc.id));
-          batchFetchUnread(roomIds);
-        }, (error) => {
-          console.error('[Chat FAB] ルームリスト取得エラー（memberEmails）:', error);
-        });
+        // 【リスナー2】個別チャットルームを取得（memberEmails = メールアドレス）
+        _unsubscribeDmRoomQuery = db.collection('rooms')
+          .where('memberEmails', 'array-contains', userEmail)
+          .onSnapshot(function(snapshot) {
+            console.log('[Chat Unread] 個別チャットルーム数（memberEmails）:', snapshot.size);
+            snapshot.forEach(function(doc) { _allRoomIds.add(doc.id); });
+            scheduleSetupListeners();
+          }, function(error) {
+            console.error('[Chat Unread] ルームリスト取得エラー（memberEmails）:', error);
+          });
 
       } catch (error) {
-        console.error('[Chat FAB] 初期化エラー:', error);
+        console.error('[Chat Unread] 初期化エラー:', error);
         _chatUnreadListenerStarted = false;
       }
     }

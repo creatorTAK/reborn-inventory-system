@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v334';  // v334: CHAT_MENTION/incoming_call追加、タイプ名修正
+const CACHE_VERSION = 'v335';  // v335: チャット未読リスナーcompat API化+リアルタイムonSnapshot
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -300,7 +300,8 @@ self.addEventListener('push', (event) => {
         data: {
           url: link,
           messageId: messageId,
-          type: notificationType
+          type: notificationType,
+          roomId: roomId
         },
         tag: messageId || cacheKey,
         renotify: true
