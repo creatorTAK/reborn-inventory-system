@@ -1,31 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- 📌 フラッシュ防止: subtab=usersの場合、コンテンツを非表示にしてタブ切り替え後に表示 -->
-  <script>
-    (function() {
-      if (new URLSearchParams(window.location.search).get('subtab') === 'users') {
-        document.documentElement.classList.add('subtab-users-mode');
-        // 最終安全策: 5秒後にtab-readyが未設定なら強制表示
-        setTimeout(function() {
-          if (!document.documentElement.classList.contains('tab-ready')) {
-            console.warn('[config.html] 5秒フォールバック: tab-readyを強制追加');
-            document.documentElement.classList.add('tab-ready');
-          }
-        }, 5000);
-      }
-    })();
-  </script>
-  <style>
-    /* subtab=usersの場合、タブコンテンツ全体を非表示（タブ切り替え完了後にJSで表示） */
-    html.subtab-users-mode #systemConfigTabContent {
-      visibility: hidden;
-    }
-    /* タブ切り替え完了後に表示するクラス */
-    html.subtab-users-mode.tab-ready #systemConfigTabContent {
-      visibility: visible;
-    }
-  </style>
+  <!-- subtab-users-mode機構を除去（問題多発のため） -->
 
   <base target="_top">
   <meta charset="UTF-8">
@@ -3837,23 +3813,8 @@
               </div>
 
             <!-- ユーザー詳細モーダル -->
-            <div id="userDetailModal" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; min-height: 100vh; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
-              <div style="background: white; border-radius: 16px; width: 90%; max-width: 400px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
-                <!-- モーダルヘッダー -->
-                <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; background: white; border-radius: 16px 16px 0 0;">
-                  <button onclick="closeUserDetailModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280;">&#x2190;</button>
-                  <span style="font-size: 16px; font-weight: 600;">ユーザー詳細</span>
-                  <div style="width: 24px;"></div>
-                </div>
-                <!-- モーダルコンテンツ（スクロール領域） -->
-                <div id="userDetailContent" style="padding: 16px; overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch;">
-                  <!-- 詳細情報がここに動的に追加される -->
-                </div>
-                <!-- アクションボタン領域（固定フッター） -->
-                <div id="userDetailActions" style="padding: 12px 16px; border-top: 1px solid #e5e7eb; flex-shrink: 0; background: white; border-radius: 0 0 16px 16px;">
-                  <!-- アクションボタンがここに動的に追加される -->
-                </div>
-              </div>
+            <div id="userDetailModal" style="display:none;">
+              <!-- JS側で全画面オーバーレイとして表示制御 -->
             </div>
 
             </div>
@@ -10053,73 +10014,24 @@ ${prompt || '（未設定）'}
           const subtabParam = urlParams.get('subtab');
           console.log('[config.html] subtabParam:', subtabParam);
           if (subtabParam === 'users') {
-            // ユーザー管理タブをアクティブにする
-            let _usersTabRetryCount = 0;
-            const activateUsersTab = () => {
-              _usersTabRetryCount++;
-              console.log('[config.html] ユーザー管理タブをアクティブ化中... (試行' + _usersTabRetryCount + ')');
-              const usersTab = document.getElementById('system-users-tab');
-              const usersPane = document.getElementById('system-users');
-              console.log('[config.html] usersTab要素:', usersTab, 'usersPane要素:', usersPane);
-
-              if (usersTab && usersPane) {
-                // Bootstrap Tabが利用可能か確認
-                if (typeof bootstrap !== 'undefined' && bootstrap.Tab) {
-                  const tab = new bootstrap.Tab(usersTab);
-                  tab.show();
-                  console.log('[config.html] ✅ ユーザー管理タブをアクティブにしました（Bootstrap Tab）');
-                } else {
-                  // Bootstrapが未ロードの場合は手動でクラスを切り替え
-                  console.log('[config.html] Bootstrap未ロード、手動で切り替え');
-                  document.querySelectorAll('#systemConfigTabs .nav-link').forEach(el => el.classList.remove('active'));
-                  document.querySelectorAll('#systemConfigTabContent .tab-pane').forEach(el => el.classList.remove('show', 'active'));
-                  usersTab.classList.add('active');
-                  usersPane.classList.add('show', 'active');
-                }
-
-                // フラッシュ防止: タブ切り替え完了後にコンテンツを表示
-                document.documentElement.classList.add('tab-ready');
-                console.log('[config.html] ✅ tab-readyクラスを追加（コンテンツ表示）');
-
-                // ユーザー管理データを読み込む（少し遅延させてタブ切り替え完了を待つ）
-                setTimeout(function() {
-                  if (typeof loadUserManagement === 'function') {
-                    console.log('[config.html] loadUserManagement()を呼び出し');
-                    loadUserManagement();
-                  } else {
-                    console.warn('[config.html] loadUserManagement()が未定義');
-                  }
-                }, 100);
-
-                return true;
-              }
-              console.warn('[config.html] ⚠️ タブ要素が見つかりません (試行' + _usersTabRetryCount + ')');
-              return false;
-            };
-
-            // 即座に実行を試みる → 失敗時は段階的リトライ（最大5回）
-            if (!activateUsersTab()) {
-              const retryDelays = [50, 200, 500, 1000, 2000];
-              retryDelays.forEach(function(delay, i) {
-                setTimeout(function() {
-                  if (!document.documentElement.classList.contains('tab-ready')) {
-                    console.log('[config.html] リトライ ' + (i + 2) + ' (' + delay + 'ms後)');
-                    activateUsersTab();
-                  }
-                }, delay);
-              });
-
-              // 最終フォールバック: 3秒後にtab-readyがなければ強制表示
+            // ユーザー管理タブをアクティブにする（シンプル版）
+            console.log('[config.html] subtab=users: ユーザー管理タブ直接表示');
+            // 手動でクラスを切り替え（Bootstrap依存しない）
+            document.querySelectorAll('#systemConfigTabs .nav-link').forEach(function(el) { el.classList.remove('active'); });
+            document.querySelectorAll('#systemConfigTabContent .tab-pane').forEach(function(el) { el.classList.remove('show', 'active'); });
+            var usersTab = document.getElementById('system-users-tab');
+            var usersPane = document.getElementById('system-users');
+            if (usersTab) usersTab.classList.add('active');
+            if (usersPane) usersPane.classList.add('show', 'active');
+            console.log('[config.html] ユーザー管理タブ: usersTab=', !!usersTab, 'usersPane=', !!usersPane);
+            // loadUserManagement呼び出し
+            if (typeof loadUserManagement === 'function') {
+              loadUserManagement();
+            } else {
+              console.warn('[config.html] loadUserManagement未定義、200ms後リトライ');
               setTimeout(function() {
-                if (!document.documentElement.classList.contains('tab-ready')) {
-                  console.warn('[config.html] ⚠️ タブ切り替え失敗 → tab-readyを強制追加');
-                  document.documentElement.classList.add('tab-ready');
-                  // loadUserManagementも強制呼び出し
-                  if (typeof loadUserManagement === 'function') {
-                    loadUserManagement();
-                  }
-                }
-              }, 3000);
+                if (typeof loadUserManagement === 'function') loadUserManagement();
+              }, 200);
             }
           }
         }
@@ -12012,8 +11924,6 @@ ${prompt || '（未設定）'}
   window.openUserDetailModal = function(encodedData, status) {
     const user = JSON.parse(decodeURIComponent(encodedData));
     const modal = document.getElementById('userDetailModal');
-    const content = document.getElementById('userDetailContent');
-    const actionsDiv = document.getElementById('userDetailActions');
     const currentEmail = localStorage.getItem('reborn_user_email');
     const isSelf = (user.userEmail || user.email) === currentEmail;
 
@@ -12101,7 +12011,7 @@ ${prompt || '（未設定）'}
     }
 
     // コンテンツ領域（よりコンパクトに）
-    content.innerHTML = `
+    var contentHtml = `
       <div style="text-align: center; margin-bottom: 16px;">
         ${photoUrl ?
           `<img src="${photoUrl}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; margin-bottom: 8px;">` :
@@ -12149,23 +12059,42 @@ ${prompt || '（未設定）'}
       </div>
     `;
 
-    // アクションボタンを固定フッターに配置
-    actionsDiv.innerHTML = actionButtons;
+    // iOS Safari iframe対策: body固定 + position:fixed
+    window._modalScrollY = window.scrollY || 0;
+    document.body.style.position = 'fixed';
+    document.body.style.top = '-' + window._modalScrollY + 'px';
+    document.body.style.left = '0';
+    document.body.style.right = '0';
 
-    // iOS Safari対策: bodyスクロール無効化 + スクロール位置にモーダルを配置
-    var scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
-    modal.style.top = scrollTop + 'px';
-    document.body.style.overflow = 'hidden';
-    modal.style.display = 'flex';
-    console.log('[USER] モーダル表示完了, scrollTop:', scrollTop);
+    // モーダルHTMLをJS側で構築（inline styleで確実に制御）
+    modal.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;padding:16px;" onclick="if(event.target===this)closeUserDetailModal()">'
+      + '<div style="background:white;border-radius:16px;width:100%;max-width:400px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;">'
+      + '<div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">'
+      + '<button onclick="closeUserDetailModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7280;">&#x2190;</button>'
+      + '<span style="font-size:16px;font-weight:600;">ユーザー詳細</span>'
+      + '<div style="width:24px;"></div>'
+      + '</div>'
+      + '<div style="padding:16px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;">' + contentHtml + '</div>'
+      + '<div style="padding:12px 16px;border-top:1px solid #e5e7eb;flex-shrink:0;">' + actionButtons + '</div>'
+      + '</div></div>';
+
+    modal.style.display = 'block';
+    console.log('[USER] モーダル表示完了');
   }
 
   /**
    * ユーザー詳細モーダルを閉じる
    */
   window.closeUserDetailModal = function() {
-    document.getElementById('userDetailModal').style.display = 'none';
-    document.body.style.overflow = '';
+    var modal = document.getElementById('userDetailModal');
+    modal.style.display = 'none';
+    modal.innerHTML = '';
+    // body固定を解除
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    window.scrollTo(0, window._modalScrollY || 0);
   }
 
   /**
