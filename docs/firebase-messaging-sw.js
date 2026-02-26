@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v333';  // v333: notificationclick全通知タイプ→ページ遷移マッピング
+const CACHE_VERSION = 'v334';  // v334: CHAT_MENTION/incoming_call追加、タイプ名修正
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -512,13 +512,15 @@ self.addEventListener('notificationclick', (event) => {
   if (!targetPage) {
     // 通知タイプ → 遷移先ページのマッピング
     // GAS: 'chat', 'system'
-    // Firebase Functions: 'CHAT_MESSAGE', 'MENTION', 'INCOMING_CALL', 'PRODUCT_REGISTERED'
+    // Firebase Functions: 'CHAT_MESSAGE', 'CHAT_MENTION', 'incoming_call', 'PRODUCT_REGISTERED'
     // PWA/Cloudflare: 'chat_message', 'pending_user', 'task_request', 'task_completion', 'extension_request', 'user_approved'
     const typePageMap = {
       'chat': 'chat',
       'CHAT_MESSAGE': 'chat',
       'chat_message': 'chat',
+      'CHAT_MENTION': 'chat',
       'MENTION': 'chat',
+      'incoming_call': 'chat',
       'INCOMING_CALL': 'chat',
       'system': 'todo-list',
       'pending_user': 'todo-list',

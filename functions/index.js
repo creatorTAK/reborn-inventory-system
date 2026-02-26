@@ -711,7 +711,7 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
     if (normalUsers.length > 0) {
       console.log(`📤 [onChatMessageCreated] sendChatNotifications呼び出し開始`);
       notificationPromises.push(
-        sendChatNotifications(senderName, messageText, roomData.name || '個別チャット', normalUsers, roomData.mutedBy || [])
+        sendChatNotifications(senderName, messageText, roomData.name || '個別チャット', normalUsers, roomData.mutedBy || [], roomId)
       );
     } else {
       console.log(`⏭️ [onChatMessageCreated] normalUsers.length=0, FCM通知スキップ`);
@@ -721,7 +721,7 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
     if (mentionedUsers.length > 0) {
       const mentionNotificationText = `${senderName}があなたをメンションしました: ${messageText}`;
       notificationPromises.push(
-        sendMentionNotifications(senderName, messageText, roomData.name || '個別チャット', mentionedUsers)
+        sendMentionNotifications(senderName, messageText, roomData.name || '個別チャット', mentionedUsers, roomId)
       );
     }
 
@@ -939,7 +939,7 @@ async function updateChatUnreadCounts(roomId, targetUsers) {
 /**
  * チャットメッセージのFCM通知送信
  */
-async function sendChatNotifications(senderName, messageText, roomName, targetUsers, mutedBy = []) {
+async function sendChatNotifications(senderName, messageText, roomName, targetUsers, mutedBy = [], roomId = '') {
   console.log('💬 [sendChatNotifications] 関数開始');
   try {
     if (targetUsers.length === 0) {
@@ -1063,6 +1063,7 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
         },
         data: {
           type: 'CHAT_MESSAGE',
+          roomId: roomId || '',
           roomName: roomName,
           senderName: senderName,
           badgeCount: '1'
@@ -1104,6 +1105,7 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
         },
         data: {
           type: 'CHAT_MESSAGE',
+          roomId: roomId || '',
           roomName: roomName,
           senderName: senderName,
           badgeCount: '1'
@@ -1138,7 +1140,7 @@ async function sendChatNotifications(senderName, messageText, roomName, targetUs
 /**
  * メンション通知のFCM送信（ミュート設定を無視）
  */
-async function sendMentionNotifications(senderName, messageText, roomName, mentionedUsers) {
+async function sendMentionNotifications(senderName, messageText, roomName, mentionedUsers, roomId = '') {
   console.log('📢 [sendMentionNotifications] 関数開始');
   try {
     if (mentionedUsers.length === 0) {
@@ -1228,6 +1230,7 @@ async function sendMentionNotifications(senderName, messageText, roomName, menti
       },
       data: {
         type: 'CHAT_MENTION',
+        roomId: roomId || '',
         roomName: roomName,
         senderName: senderName,
         messageText: messageText
