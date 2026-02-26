@@ -5309,6 +5309,11 @@
         deactivateSpaIfNeeded();
       }
 
+      // SPA→iframe遷移時にバッジ再検証（onSnapshotリスナー切断対策）
+      if (typeof verifyTodoBadge === 'function') {
+        setTimeout(verifyTodoBadge, 1000);
+      }
+
       // 📊 パフォーマンス計測開始
       const startTime = performance.now();
       console.log('⏱️ [計測開始] ページ遷移:', page, '履歴:', navHistory);
@@ -6348,6 +6353,32 @@
         console.error('[Todo] 初期化エラー:', error);
       }
     }
+
+    // Todoバッジ再検証（onSnapshot切断時の保険）
+    async function verifyTodoBadge() {
+      try {
+        var userEmail = localStorage.getItem('reborn_user_email');
+        if (!userEmail || !window.db) return;
+        var snapshot = await window.db.collection('userTasks').doc(userEmail).collection('tasks').get();
+        var count = 0;
+        snapshot.forEach(function(doc) {
+          if (!doc.data().completed) count++;
+        });
+        if (count !== todoUnreadCount) {
+          console.log('[Todo] バッジ再検証: 補正', todoUnreadCount, '→', count);
+          updateTodoBadge(count);
+        }
+      } catch (e) {
+        console.warn('[Todo] バッジ再検証エラー:', e);
+      }
+    }
+
+    // アプリ復帰時にバッジを再検証
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') {
+        setTimeout(verifyTodoBadge, 500);
+      }
+    });
 
     // 🔧 v508: お知らせをget()に変更（コスト削減）
     // 4つのonSnapshot → 1回の取得に統合
