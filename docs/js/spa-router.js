@@ -1,9 +1,12 @@
 /**
- * SPA Router v585 — DOM保持型ページ切替
+ * SPA Router v587 — DOM保持型ページ切替（共有fragment対応）
  *
  * 一度表示したページのDOMはメモリに保持し、
  * 再訪問時はDOM表示切替のみ（fetch/パース/スクリプト実行なし）。
  * 初回訪問時のみfetch + inject + スクリプト実行を行う。
+ *
+ * 同じfragmentUrlを共有する複数ページ（config-system/config-product等）は
+ * コンテナを使い回し、init/destroyで表示内容を切り替える。
  */
 (function() {
   'use strict';
@@ -15,7 +18,7 @@
   // 一度表示したページのDOMを保持し、再訪問時は表示切替のみ
   const _pageContainers = {};
 
-  const _FRAGMENT_VERSION = '586c';
+  const _FRAGMENT_VERSION = '587';
 
   let _currentSpaPage = null;
   let _isSpaActive = false;
@@ -84,6 +87,24 @@
     spaContent.style.display = 'block';
     _isSpaActive = true;
     _currentSpaPage = pageName;
+
+    // ========================================
+    // ★ 共有fragment検出: 同じfragmentUrlのコンテナを使い回す
+    // ========================================
+    if (!_pageContainers[pageName]) {
+      const sharedKey = Object.keys(_pageContainers).find(key =>
+        key !== pageName &&
+        FURIRA_PAGES[key] &&
+        FURIRA_PAGES[key].fragmentUrl === pageConfig.fragmentUrl
+      );
+      if (sharedKey) {
+        // 既存コンテナの所有権を移譲（DOM再作成なし）
+        _pageContainers[pageName] = _pageContainers[sharedKey];
+        delete _pageContainers[sharedKey];
+        _pageContainers[pageName].setAttribute('data-spa-page', pageName);
+        console.log(`[SPA] 共有fragment移譲: ${sharedKey} → ${pageName}`);
+      }
+    }
 
     // ========================================
     // ★ 再訪問: キャッシュ済みDOMを即時表示
