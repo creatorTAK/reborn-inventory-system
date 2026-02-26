@@ -15,7 +15,12 @@ const {initializeApp} = require('firebase-admin/app');
 const {getFirestore, FieldValue} = require('firebase-admin/firestore');
 const {getMessaging} = require('firebase-admin/messaging');
 const {getStorage} = require('firebase-admin/storage');
-const sharp = require('sharp');
+// sharp は遅延ロード（デプロイ時のタイムアウト防止）
+let _sharp = null;
+function getSharp() {
+  if (!_sharp) _sharp = require('sharp');
+  return _sharp;
+}
 const path = require('path');
 
 // Firebase Admin初期化
@@ -1489,7 +1494,7 @@ exports.generateThumbnail = onObjectFinalized({
     const [imageBuffer] = await file.download();
 
     // サムネイル生成（200x200、アスペクト比維持）
-    const thumbnailBuffer = await sharp(imageBuffer)
+    const thumbnailBuffer = await getSharp()(imageBuffer)
       .resize(200, 200, {
         fit: 'cover',
         position: 'center'
