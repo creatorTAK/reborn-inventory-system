@@ -717,14 +717,14 @@
       background: rgba(0,0,0,0.6);
       z-index: 10000;
       justify-content: center;
-      align-items: flex-end;
+      align-items: center;
     }
 
     #spa-page-config #cfg-userDetailModal .cfg-modal-sheet {
       background: white;
-      border-radius: 16px 16px 0 0;
-      width: 100%;
-      max-width: 500px;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
       max-height: 85vh;
       display: flex;
       flex-direction: column;
@@ -3557,7 +3557,10 @@
       var actionButtons = '';
 
       if (status === 'pending') {
-        actionButtons = '<button onclick="cfgApproveUser(\'' + user.id + '\')" style="width: 100%; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">承認</button>';
+        actionButtons = '<div style="display: flex; gap: 8px;">' +
+          '<button onclick="cfgRejectUser(\'' + user.id + '\')" style="flex: 1; padding: 10px; background: #fee2e2; color: #dc2626; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">拒否</button>' +
+          '<button onclick="cfgApproveUser(\'' + user.id + '\')" style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">承認</button>' +
+          '</div>';
       } else if (status === 'active' && !isSelf) {
         actionButtons = '<button onclick="cfgDisableUser(\'' + user.id + '\')" style="width: 100%; padding: 10px; background: #fee2e2; color: #dc2626; border: none; border-radius: 8px; font-size: 13px; cursor: pointer;">このユーザーを無効化</button>';
       } else if (status === 'inactive') {
@@ -3594,6 +3597,21 @@
       } catch (e) { alert('エラー: ' + e.message); }
     }
     window.cfgApproveUser = cfgApproveUser;
+
+    async function cfgRejectUser(userId) {
+      if (!confirm('このユーザーの登録を拒否しますか？')) return;
+      try {
+        await window.db.collection('users').doc(userId).update({
+          status: 'rejected',
+          rejectedAt: new Date().toISOString(),
+          rejectedBy: localStorage.getItem('reborn_user_email')
+        });
+        cfgCloseUserDetailModal();
+        alert('ユーザーを拒否しました');
+        cfgLoadUserManagement();
+      } catch (e) { alert('エラー: ' + e.message); }
+    }
+    window.cfgRejectUser = cfgRejectUser;
 
     async function cfgDisableUser(userId) {
       if (!confirm('このユーザーを無効化しますか？')) return;
