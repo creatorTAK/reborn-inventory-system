@@ -263,20 +263,24 @@
   function initMenuHomePage() {
     console.log('[SPA menu_home] init開始');
 
-    // v581: 権限による即時メニュー制御（Firestoreチェック前にlocalStorageで即非表示）
+    // v587: キャッシュ済み非表示メニューを即時適用（チラつき防止）
     var permissionId = localStorage.getItem('reborn_user_permission_id')
                     || localStorage.getItem('reborn_user_permission');
     if (permissionId && permissionId !== 'owner') {
+      // 前回のFirestoreチェック結果をキャッシュから即時適用
+      try {
+        var cached = JSON.parse(localStorage.getItem('reborn_hidden_menus') || '[]');
+        for (var i = 0; i < cached.length; i++) {
+          var cachedEl = document.getElementById(_mhMenuIdMap[cached[i]]);
+          if (cachedEl) cachedEl.style.display = 'none';
+        }
+      } catch(e) {}
+      // config-productは常に非表示（ハードコード）
       var el = document.getElementById('mh-menu-config-product');
       if (el) el.style.display = 'none';
-      // defaultOwnerOnlyメニューも即時非表示
-      for (var i = 0; i < _mhDefaultOwnerOnly.length; i++) {
-        var ownerEl = document.getElementById(_mhMenuIdMap[_mhDefaultOwnerOnly[i]]);
-        if (ownerEl) ownerEl.style.display = 'none';
-      }
     }
 
-    // Firestore権限チェック + バッジ取得
+    // Firestore権限チェック + バッジ取得（キャッシュ更新含む）
     _mhCheckPermissionAndBadges();
   }
 
@@ -312,6 +316,7 @@
         var menuPermDoc = await db.collection('settings').doc('menuPermissions').get();
         var menuPermissions = menuPermDoc.exists ? menuPermDoc.data() : {};
         console.log('[SPA menu_home] 権限チェック: permissionId=' + permissionId + ', menuPermDoc.exists=' + menuPermDoc.exists);
+        var hiddenMenus = [];
         for (var menuId in _mhMenuIdMap) {
           var menuPerm = menuPermissions[menuId];
           var element = document.getElementById(_mhMenuIdMap[menuId]);
@@ -322,9 +327,12 @@
             : (_mhDefaultOwnerOnly.indexOf(menuId) === -1);
           if (!isVisible) {
             element.style.display = 'none';
+            hiddenMenus.push(menuId);
             console.log('[SPA menu_home] 非表示: ' + menuId + ' (permissionId=' + permissionId + ')');
           }
         }
+        // v587: 非表示メニューをキャッシュ（次回即時適用用）
+        localStorage.setItem('reborn_hidden_menus', JSON.stringify(hiddenMenus));
       }
 
       // バッジ取得（Todo未完了 + チャット未読）
