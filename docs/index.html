@@ -1433,7 +1433,30 @@
       </button>
     </nav>
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0226c</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0226d</div>
+    <script>
+    // PWAタスクキル復帰時のバージョンチェック（bfcache対策）
+    (function(){
+      var LOCAL_VER = 'v0226d';
+      var lastCheck = Date.now();
+      document.addEventListener('visibilitychange', function(){
+        if (document.visibilityState !== 'visible') return;
+        // 30秒以上バックグラウンドだった場合のみチェック
+        if (Date.now() - lastCheck < 30000) { lastCheck = Date.now(); return; }
+        lastCheck = Date.now();
+        fetch('/index.html?_vc=' + Date.now(), {cache:'no-store'})
+          .then(function(r){ return r.text(); })
+          .then(function(html){
+            var m = html.match(/id="debug-version"[^>]*>(v[^<]+)</);
+            if (m && m[1] !== LOCAL_VER) {
+              console.log('[Version] 新バージョン検出:', m[1], '← 現在:', LOCAL_VER);
+              location.reload();
+            }
+          })
+          .catch(function(){});
+      });
+    })();
+    </script>
 
   </div>
 
