@@ -15,7 +15,7 @@
   // 一度表示したページのDOMを保持し、再訪問時は表示切替のみ
   const _pageContainers = {};
 
-  const _FRAGMENT_VERSION = '585b';
+  const _FRAGMENT_VERSION = '586';
 
   let _currentSpaPage = null;
   let _isSpaActive = false;
