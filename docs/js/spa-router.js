@@ -90,7 +90,7 @@
     // ========================================
     if (_pageContainers[pageName]) {
       _pageContainers[pageName].style.display = '';
-      spaContent.scrollTop = 0;
+      _pageContainers[pageName].scrollTop = 0;
       window.scrollTo(0, 0);
 
       // init呼び出し（データ再取得 + リスナー再登録）
@@ -145,7 +145,7 @@
 
       _injectFragment(container, html, pageName);
 
-      spaContent.scrollTop = 0;
+      container.scrollTop = 0;
       window.scrollTo(0, 0);
 
       // init実行
