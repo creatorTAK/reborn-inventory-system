@@ -568,7 +568,7 @@ self.addEventListener('install', (event) => {
 // Service Worker 有効化
 // ================================================================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW v160] Activating...');
+  console.log('[SW v331] Activating...');
 
   event.waitUntil(
     caches.keys()
@@ -576,14 +576,21 @@ self.addEventListener('activate', (event) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
             if (cacheName !== CACHE_NAME) {
-              console.log('[SW v160] Deleting old cache:', cacheName);
+              console.log('[SW v331] Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
+            // 現在のキャッシュからもindex.htmlを削除（古い残留対策）
+            return caches.open(cacheName).then((cache) => {
+              return Promise.all([
+                cache.delete('/index.html'),
+                cache.delete('/')
+              ]);
+            });
           })
         );
       })
       .then(() => {
-        console.log('[SW v160] Activated, claiming clients');
+        console.log('[SW v331] Activated, claiming clients');
         return self.clients.claim();
       })
   );
