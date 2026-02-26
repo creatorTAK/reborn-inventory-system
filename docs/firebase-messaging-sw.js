@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v335';  // v335: チャット未読リスナーcompat API化+リアルタイムonSnapshot
+const CACHE_VERSION = 'v336';  // v336: アプリバッジをチャット+タスク合算に修正
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -65,6 +65,41 @@ function openDB(dbName) {
   });
 }
 
+// 指定DBのバッジカウントを読み取る（読み取り専用）
+function readBadgeCount(dbName) {
+  return openDB(dbName).then(db => new Promise((resolve) => {
+    const tx = db.transaction('badge', 'readonly');
+    const store = tx.objectStore('badge');
+    const getReq = store.get('count');
+    getReq.onsuccess = () => {
+      resolve(Number(getReq.result || 0));
+    };
+    getReq.onerror = () => resolve(0);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => { db.close(); resolve(0); };
+  })).catch(() => 0);
+}
+
+// 両DB（チャット+タスク）の合算でアプリバッジを更新
+async function updateCombinedAppBadge() {
+  try {
+    const chatCount = await readBadgeCount('RebornBadgeDB');
+    const todoCount = await readBadgeCount('SystemNotificationDB');
+    const totalCount = chatCount + todoCount;
+    if (navigator.setAppBadge) {
+      if (totalCount > 0) {
+        await navigator.setAppBadge(totalCount);
+        console.log(`[Badge] ✅ setAppBadge(${totalCount}) チャット:${chatCount} + タスク:${todoCount}`);
+      } else {
+        await navigator.clearAppBadge();
+        console.log('[Badge] アプリバッジクリア');
+      }
+    }
+  } catch (err) {
+    console.warn('[Badge] ⚠️ 合算バッジ更新失敗:', err);
+  }
+}
+
 function incrementBadge(dbName) {
   return openDB(dbName).then(db => new Promise((resolve, reject) => {
     const tx = db.transaction('badge', 'readwrite');
@@ -75,21 +110,12 @@ function incrementBadge(dbName) {
       const currentCount = Number(getReq.result || 0) + 1;
       store.put(currentCount, 'count');
       console.log(`[Badge] ${dbName} count:`, currentCount);
-
-      // 🔔 ホーム画面アイコンにバッジを設定
-      if (navigator.setAppBadge) {
-        navigator.setAppBadge(currentCount).then(() => {
-          console.log(`[Badge] ✅ setAppBadge(${currentCount}) 成功`);
-        }).catch(err => {
-          console.warn(`[Badge] ⚠️ setAppBadge失敗:`, err);
-        });
-      } else {
-        console.log('[Badge] setAppBadge API未対応');
-      }
     };
 
     tx.oncomplete = () => {
       db.close();
+      // 🔔 両DBの合算でホーム画面アイコンバッジを設定
+      updateCombinedAppBadge();
       resolve(true);
     };
     tx.onerror = () => {
