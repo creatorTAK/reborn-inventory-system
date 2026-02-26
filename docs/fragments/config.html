@@ -3587,16 +3587,82 @@
     async function cfgApproveUser(userId) {
       if (!confirm('このユーザーを承認しますか？')) return;
       try {
+        // ユーザー情報を取得
+        var userDoc = await window.db.collection('users').doc(userId).get();
+        var userData = userDoc.exists ? userDoc.data() : {};
+        var userName = userData.userName || userId.split('@')[0];
+
+        // ステータスを有効に更新
         await window.db.collection('users').doc(userId).update({
           status: 'active', permissionId: 'staff', permissionDisplay: 'スタッフ',
           approvedAt: new Date().toISOString(), approvedBy: localStorage.getItem('reborn_user_email')
         });
+
+        // 管理者の承認待ちタスクを完了にする
+        try { await cfgCompletePendingUserTask(userId); } catch (e) { console.error('[Approve] タスク完了エラー:', e); }
+
+        // ウェルカム通知・タスクを作成（発送先・口座登録）
+        try { await cfgCreateWelcomeAnnouncements(userId, userName); } catch (e) { console.error('[Approve] ウェルカム作成エラー:', e); }
+
         cfgCloseUserDetailModal();
         alert('ユーザーを承認しました');
         cfgLoadUserManagement();
       } catch (e) { alert('エラー: ' + e.message); }
     }
     window.cfgApproveUser = cfgApproveUser;
+
+    // 管理者の承認待ちタスクを完了にする
+    async function cfgCompletePendingUserTask(pendingUserEmail) {
+      var ownersSnapshot = await window.db.collection('users').where('permissionId', '==', 'owner').get();
+      if (ownersSnapshot.empty) return;
+      for (var i = 0; i < ownersSnapshot.docs.length; i++) {
+        var ownerEmail = ownersSnapshot.docs[i].data().userEmail;
+        var tasksRef = window.db.collection('userTasks').doc(ownerEmail).collection('tasks');
+        var tasksSnapshot = await tasksRef.where('type', '==', 'pending_user_approval').where('completed', '==', false).get();
+        for (var j = 0; j < tasksSnapshot.docs.length; j++) {
+          var taskData = tasksSnapshot.docs[j].data();
+          if (taskData.relatedData && taskData.relatedData.pendingUserEmail === pendingUserEmail) {
+            await tasksSnapshot.docs[j].ref.update({ completed: true, completedAt: new Date().toISOString() });
+            console.log('[Approve] ✅ 管理者タスク完了:', ownerEmail, pendingUserEmail);
+          }
+        }
+      }
+    }
+
+    // ウェルカム通知とタスクを作成
+    async function cfgCreateWelcomeAnnouncements(userEmail, userName) {
+      var now = new Date().toISOString();
+      var personalRef = window.db.collection('users').doc(userEmail).collection('personalAnnouncements');
+      var tasksRef = window.db.collection('userTasks').doc(userEmail).collection('tasks');
+
+      // 通知1 + タスク1: 発送先情報登録
+      await personalRef.add({
+        title: '発送先情報を登録してください',
+        body: 'フリラへようこそ！\n\n商品が売れた際の発送準備に必要な情報を登録してください。\n\n【登録手順】\n1. 画面下部の「マイページ」をタップ\n2. 歯車アイコン（設定）をタップ\n3. 「設定管理」を選択\n4. 「発送先情報」ボタンをタップ\n5. 必要情報を入力して保存',
+        priority: 'normal', createdAt: now, type: 'shipping_request'
+      });
+      await tasksRef.add({
+        type: 'shipping_info_registration', title: '発送先情報を登録',
+        description: 'マイページ > 右上メニュー（≡） > 個人情報設定',
+        link: 'mypage-personal-info', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        completed: false, read: false
+      });
+
+      // 通知2 + タスク2: 口座情報登録
+      await personalRef.add({
+        title: '口座情報を登録してください',
+        body: '報酬の受け取りに必要な口座情報を登録してください。\n\n【登録手順】\n1. 画面下部の「マイページ」をタップ\n2. 歯車アイコン（設定）をタップ\n3. 「設定管理」を選択\n4. 「口座情報」ボタンをタップ\n5. 必要情報を入力して保存',
+        priority: 'normal', createdAt: now, type: 'bank_request'
+      });
+      await tasksRef.add({
+        type: 'bank_account_registration', title: '口座情報を登録',
+        description: 'マイページ > 右上メニュー（≡） > 個人情報設定',
+        link: 'mypage-personal-info', createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        completed: false, read: false
+      });
+
+      console.log('[Approve] ✅ ウェルカム通知・タスク作成完了:', userEmail);
+    }
 
     async function cfgRejectUser(userId) {
       if (!confirm('このユーザーの登録を拒否しますか？')) return;
