@@ -10046,12 +10046,13 @@ ${prompt || '（未設定）'}
           console.log('[config.html] subtabParam:', subtabParam);
           if (subtabParam === 'users') {
             // ユーザー管理タブをアクティブにする
+            let _usersTabRetryCount = 0;
             const activateUsersTab = () => {
-              console.log('[config.html] ユーザー管理タブをアクティブ化中...');
+              _usersTabRetryCount++;
+              console.log('[config.html] ユーザー管理タブをアクティブ化中... (試行' + _usersTabRetryCount + ')');
               const usersTab = document.getElementById('system-users-tab');
               const usersPane = document.getElementById('system-users');
-              console.log('[config.html] usersTab要素:', usersTab);
-              console.log('[config.html] usersPane要素:', usersPane);
+              console.log('[config.html] usersTab要素:', usersTab, 'usersPane要素:', usersPane);
 
               if (usersTab && usersPane) {
                 // Bootstrap Tabが利用可能か確認
@@ -10084,13 +10085,33 @@ ${prompt || '（未設定）'}
 
                 return true;
               }
+              console.warn('[config.html] ⚠️ タブ要素が見つかりません (試行' + _usersTabRetryCount + ')');
               return false;
             };
 
-            // 即座に実行を試みる
+            // 即座に実行を試みる → 失敗時は段階的リトライ（最大5回）
             if (!activateUsersTab()) {
-              // 失敗した場合は少し待ってリトライ
-              setTimeout(activateUsersTab, 50);
+              const retryDelays = [50, 200, 500, 1000, 2000];
+              retryDelays.forEach(function(delay, i) {
+                setTimeout(function() {
+                  if (!document.documentElement.classList.contains('tab-ready')) {
+                    console.log('[config.html] リトライ ' + (i + 2) + ' (' + delay + 'ms後)');
+                    activateUsersTab();
+                  }
+                }, delay);
+              });
+
+              // 最終フォールバック: 3秒後にtab-readyがなければ強制表示
+              setTimeout(function() {
+                if (!document.documentElement.classList.contains('tab-ready')) {
+                  console.warn('[config.html] ⚠️ タブ切り替え失敗 → tab-readyを強制追加');
+                  document.documentElement.classList.add('tab-ready');
+                  // loadUserManagementも強制呼び出し
+                  if (typeof loadUserManagement === 'function') {
+                    loadUserManagement();
+                  }
+                }
+              }, 3000);
             }
           }
         }
@@ -11754,11 +11775,14 @@ ${prompt || '（未設定）'}
    * ユーザー管理を読み込み
    */
   async function loadUserManagement() {
+    console.log('[USER] loadUserManagement() 呼び出し開始');
     const loadingDiv = document.getElementById('userManagementLoading');
     const contentDiv = document.getElementById('userManagementContent');
+    console.log('[USER] loadingDiv:', !!loadingDiv, 'contentDiv:', !!contentDiv);
 
     // オーナー権限チェック
     const permissionId = localStorage.getItem('reborn_user_permission_id');
+    console.log('[USER] permissionId:', permissionId);
     if (permissionId !== 'owner') {
       loadingDiv.innerHTML = `
         <div style="text-align: center; padding: 40px;">
@@ -11770,7 +11794,7 @@ ${prompt || '（未設定）'}
     }
 
     try {
-      console.log('[USER] ユーザー管理を読み込み中...');
+      console.log('[USER] ユーザー管理を読み込み中... window.db:', !!window.db);
 
       // Firestoreからユーザー一覧を取得
       const usersSnapshot = await window.db.collection('users').get();
