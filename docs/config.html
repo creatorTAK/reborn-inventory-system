@@ -3812,9 +3812,9 @@
                 </div>
               </div>
 
-            <!-- ユーザー詳細モーダル -->
-            <div id="userDetailModal" style="display:none;">
-              <!-- JS側で全画面オーバーレイとして表示制御 -->
+            <!-- ユーザー詳細ページ（フルページビュー方式 - モーダル廃止） -->
+            <div id="userDetailPage" style="display:none;">
+              <!-- JS側でフルページコンテンツを構築 -->
             </div>
 
             </div>
@@ -11695,74 +11695,123 @@ ${prompt || '（未設定）'}
    * ユーザー管理を読み込み
    */
   let _loadUserMgmtRetryCount = 0;
+  let _loadUserMgmtInProgress = false;
 
   async function loadUserManagement() {
-    console.log('[USER] loadUserManagement() 呼び出し開始 (リトライ:', _loadUserMgmtRetryCount, ')');
-    const loadingDiv = document.getElementById('userManagementLoading');
-    const contentDiv = document.getElementById('userManagementContent');
-    console.log('[USER] loadingDiv:', !!loadingDiv, 'contentDiv:', !!contentDiv);
+    // 同時実行防止（ウォッチドッグとの競合防止）
+    if (_loadUserMgmtInProgress) {
+      console.log('[USER] 既に実行中、スキップ');
+      return;
+    }
+    _loadUserMgmtInProgress = true;
+
+    console.log('[USER] loadUserManagement() 開始');
+    var loadingDiv = document.getElementById('userManagementLoading');
+    var contentDiv = document.getElementById('userManagementContent');
 
     if (!loadingDiv || !contentDiv) {
-      console.error('[USER] DOM要素が見つかりません');
+      console.error('[USER] DOM要素なし');
+      _loadUserMgmtInProgress = false;
       return;
     }
 
-    // window.db が未初期化の場合はリトライ（最大5回、段階的遅延）
+    // リロード時: loading表示を復元
+    loadingDiv.style.display = '';
+    contentDiv.style.display = 'none';
+
+    // ステータス表示（ユーザーに見える形で）
+    var statusEl = document.getElementById('userMgmtDebugStatus');
+    if (!statusEl) {
+      statusEl = document.createElement('div');
+      statusEl.id = 'userMgmtDebugStatus';
+      statusEl.style.cssText = 'font-size:11px;color:#9ca3af;text-align:center;margin-top:8px;';
+      loadingDiv.appendChild(statusEl);
+    }
+
+    // window.db チェック（最大10秒待機）
     if (!window.db) {
       _loadUserMgmtRetryCount++;
-      console.warn('[USER] window.db未初期化 (リトライ', _loadUserMgmtRetryCount, '/5)');
-      if (_loadUserMgmtRetryCount <= 5) {
-        var delay = _loadUserMgmtRetryCount * 500; // 500, 1000, 1500, 2000, 2500ms
-        console.log('[USER] ' + delay + 'ms後にリトライ');
-        setTimeout(loadUserManagement, delay);
+      statusEl.textContent = 'DB接続待ち... (' + _loadUserMgmtRetryCount + '/10)';
+      if (_loadUserMgmtRetryCount <= 10) {
+        _loadUserMgmtInProgress = false;
+        setTimeout(loadUserManagement, 1000);
         return;
       }
-      // 5回リトライ後も失敗
-      console.error('[USER] window.db初期化タイムアウト');
-      loadingDiv.innerHTML = '<div style="text-align:center;padding:40px;"><div style="font-size:48px;margin-bottom:16px;">&#x26A0;&#xFE0F;</div><div style="font-size:14px;color:#dc2626;">データベース接続に失敗しました</div><div style="font-size:12px;color:#6b7280;margin-top:8px;">アプリを再起動してください</div></div>';
+      statusEl.textContent = 'DB接続失敗。タップで再試行';
+      statusEl.style.color = '#dc2626';
+      statusEl.style.cursor = 'pointer';
+      statusEl.onclick = function() { _loadUserMgmtRetryCount = 0; _loadUserMgmtInProgress = false; loadUserManagement(); };
+      _loadUserMgmtInProgress = false;
       return;
     }
 
-    // オーナー権限チェック（両方のキーを確認）
-    const permissionId = localStorage.getItem('reborn_user_permission_id')
-                      || localStorage.getItem('reborn_user_permission');
-    console.log('[USER] permissionId:', permissionId);
+    // オーナー権限チェック
+    var permissionId = localStorage.getItem('reborn_user_permission_id')
+                    || localStorage.getItem('reborn_user_permission');
     if (permissionId !== 'owner') {
-      loadingDiv.innerHTML = '<div style="text-align:center;padding:40px;"><div style="font-size:48px;margin-bottom:16px;">&#x1F512;</div><div style="font-size:14px;color:#dc2626;">この機能は管理者のみ利用できます</div><div style="font-size:12px;color:#6b7280;margin-top:8px;">権限ID: ' + (permissionId || 'なし') + '</div></div>';
+      loadingDiv.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626;font-size:14px;">管理者のみ利用可能です（権限: ' + (permissionId || 'なし') + '）</div>';
+      _loadUserMgmtInProgress = false;
       return;
     }
+
+    statusEl.textContent = 'ユーザーデータ取得中...';
 
     try {
-      console.log('[USER] ユーザー管理を読み込み中... window.db:', !!window.db);
+      // Firestoreクエリ + 10秒タイムアウト
+      var usersSnapshot = await Promise.race([
+        window.db.collection('users').get(),
+        new Promise(function(_, reject) {
+          setTimeout(function() { reject(new Error('タイムアウト(10秒)')); }, 10000);
+        })
+      ]);
 
-      // Firestoreからユーザー一覧を取得
-      const usersSnapshot = await window.db.collection('users').get();
-      const users = [];
-
-      usersSnapshot.forEach(doc => {
+      var users = [];
+      usersSnapshot.forEach(function(doc) {
         users.push({ id: doc.id, ...doc.data() });
       });
 
-      console.log('[USER] 取得したユーザー数:', users.length);
-
-      // グローバルに保存（検索用）
+      console.log('[USER] ユーザー数:', users.length);
       allUsersData = users;
-
-      // ユーザーリストを描画
       renderAllUsers(users);
 
-      // 表示切替
       loadingDiv.style.display = 'none';
       contentDiv.style.display = 'block';
-
-      // リトライカウンタリセット
       _loadUserMgmtRetryCount = 0;
 
     } catch (error) {
-      console.error('[USER] ユーザー管理読み込みエラー:', error);
-      loadingDiv.innerHTML = '<div style="text-align:center;padding:40px;"><div style="font-size:48px;margin-bottom:16px;">&#x274C;</div><div style="font-size:14px;color:#dc2626;">読み込みに失敗しました</div><div style="font-size:12px;color:#6b7280;margin-top:8px;">' + error.message + '</div></div>';
+      console.error('[USER] エラー:', error);
+      statusEl.textContent = 'エラー: ' + error.message + '（タップで再試行）';
+      statusEl.style.color = '#dc2626';
+      statusEl.style.cursor = 'pointer';
+      statusEl.onclick = function() {
+        statusEl.textContent = '再試行中...';
+        statusEl.style.color = '#9ca3af';
+        statusEl.onclick = null;
+        _loadUserMgmtRetryCount = 0;
+        _loadUserMgmtInProgress = false;
+        loadUserManagement();
+      };
     }
+    _loadUserMgmtInProgress = false;
   }
+
+  // ウォッチドッグ: 5秒後にまだ読み込み中なら自動リトライ
+  setTimeout(function userMgmtWatchdog() {
+    var pane = document.getElementById('system-users');
+    var loading = document.getElementById('userManagementLoading');
+    var content = document.getElementById('userManagementContent');
+    // タブがアクティブ + loading表示中 + content非表示 = スタック
+    if (pane && pane.classList.contains('active') &&
+        loading && loading.style.display !== 'none' &&
+        content && content.style.display === 'none' &&
+        !_loadUserMgmtInProgress) {
+      console.log('[USER WATCHDOG] スタック検出、再試行');
+      _loadUserMgmtRetryCount = 0;
+      loadUserManagement();
+    }
+    // 10秒ごとに再チェック
+    setTimeout(userMgmtWatchdog, 10000);
+  }, 5000);
 
   /**
    * 全ユーザーを描画（権限別グループ）
@@ -11921,180 +11970,133 @@ ${prompt || '（未設定）'}
   /**
    * ユーザー詳細モーダルを開く
    */
+  /**
+   * ユーザー詳細をフルページビューで表示（モーダル廃止）
+   * iframe内でposition:fixedが不安定なため、ページ切り替え方式に変更
+   */
   window.openUserDetailModal = function(encodedData, status) {
-    const user = JSON.parse(decodeURIComponent(encodedData));
-    const modal = document.getElementById('userDetailModal');
-    const currentEmail = localStorage.getItem('reborn_user_email');
-    const isSelf = (user.userEmail || user.email) === currentEmail;
+    var user = JSON.parse(decodeURIComponent(encodedData));
+    var detailPage = document.getElementById('userDetailPage');
+    var loadingDiv = document.getElementById('userManagementLoading');
+    var contentDiv = document.getElementById('userManagementContent');
+    var currentEmail = localStorage.getItem('reborn_user_email');
+    var isSelf = (user.userEmail || user.email) === currentEmail;
 
-    const photoUrl = user.photoURL || '';
-    const userName = user.userName || user.name || 'Unknown';
-    const userEmail = user.userEmail || user.email || '';
-    const permId = user.permissionId || 'staff';
-    const permDef = PERMISSION_DEFINITIONS[permId] || { label: permId };
-    const createdAt = user.createdAt ? new Date(user.createdAt).toLocaleDateString('ja-JP') : '不明';
+    var photoUrl = user.photoURL || '';
+    var userName = user.userName || user.name || 'Unknown';
+    var userEmail = user.userEmail || user.email || '';
+    var permId = user.permissionId || 'staff';
+    var permDef = PERMISSION_DEFINITIONS[permId] || { label: permId };
+    var createdAt = user.createdAt ? new Date(user.createdAt).toLocaleDateString('ja-JP') : '不明';
 
     // オンライン状態判定
-    const ONLINE_THRESHOLD = 5 * 60 * 1000; // 5分
-    const now = Date.now();
-    let isOnline = false;
+    var isOnline = false;
     if (user.lastActiveAt) {
-      const lastActive = typeof user.lastActiveAt === 'string'
+      var lastActive = typeof user.lastActiveAt === 'string'
         ? new Date(user.lastActiveAt).getTime()
-        : user.lastActiveAt.toDate ? user.lastActiveAt.toDate().getTime() : 0;
-      isOnline = (now - lastActive) < ONLINE_THRESHOLD;
+        : user.lastActiveAt && user.lastActiveAt.toDate ? user.lastActiveAt.toDate().getTime() : 0;
+      isOnline = (Date.now() - lastActive) < 300000;
     }
-    const onlineStatusHtml = isOnline
-      ? '<span style="display: inline-flex; align-items: center; gap: 4px; color: #10b981; font-size: 11px;"><span style="width: 6px; height: 6px; background: #10b981; border-radius: 50%; display: inline-block;"></span>オンライン</span>'
-      : '<span style="display: inline-flex; align-items: center; gap: 4px; color: #9ca3af; font-size: 11px;"><span style="width: 6px; height: 6px; background: #d1d5db; border-radius: 50%; display: inline-block;"></span>オフライン</span>';
+    var onlineDot = isOnline ? '#10b981' : '#d1d5db';
+    var onlineText = isOnline ? 'オンライン' : 'オフライン';
+    var onlineColor = isOnline ? '#10b981' : '#9ca3af';
 
     // 権限選択オプション
-    const permissionOptions = Object.values(PERMISSION_DEFINITIONS)
-      .sort((a, b) => a.order - b.order)
-      .map(p => `<option value="${p.id}" ${p.id === permId ? 'selected' : ''} ${p.id === 'owner' && !isSelf ? 'disabled' : ''}>${p.label}</option>`)
+    var permissionOptions = Object.values(PERMISSION_DEFINITIONS)
+      .sort(function(a, b) { return a.order - b.order; })
+      .map(function(p) { return '<option value="' + p.id + '"' + (p.id === permId ? ' selected' : '') + (p.id === 'owner' && !isSelf ? ' disabled' : '') + '>' + p.label + '</option>'; })
       .join('');
 
-    // アクションボタンを固定フッターに配置
-    let actionButtons = '';
+    // アクションボタン
+    var actionButtons = '';
     if (status === 'pending') {
-      actionButtons = `
-        <div style="margin-bottom: 8px;">
-          <label style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">承認する権限:</label>
-          <select id="modal-permission-select" style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
-            ${Object.values(PERMISSION_DEFINITIONS).filter(p => p.id !== 'owner').sort((a, b) => a.order - b.order).map(p => `<option value="${p.id}">${p.label}</option>`).join('')}
-          </select>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <button onclick="approveUserFromModal('${user.id}')"
-                  style="flex: 1; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
-            承認
-          </button>
-          <button onclick="rejectUser('${user.id}'); closeUserDetailModal();"
-                  style="flex: 1; padding: 10px; background: #ef4444; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
-            却下
-          </button>
-        </div>
-      `;
+      actionButtons = '<div style="margin-bottom:8px;"><label style="display:block;font-size:11px;color:#6b7280;margin-bottom:4px;">承認する権限:</label>'
+        + '<select id="modal-permission-select" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:16px;background:white;">'
+        + Object.values(PERMISSION_DEFINITIONS).filter(function(p){return p.id!=='owner';}).sort(function(a,b){return a.order-b.order;}).map(function(p){return '<option value="'+p.id+'">'+p.label+'</option>';}).join('')
+        + '</select></div>'
+        + '<div style="display:flex;gap:8px;">'
+        + '<button onclick="approveUserFromModal(\'' + user.id + '\')" style="flex:1;padding:12px;background:#10b981;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">承認</button>'
+        + '<button onclick="rejectUser(\'' + user.id + '\');closeUserDetailModal();" style="flex:1;padding:12px;background:#ef4444;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">却下</button>'
+        + '</div>';
     } else if (status === 'active' && !isSelf) {
-      actionButtons = `
-        <div style="margin-bottom: 8px;">
-          <label style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">権限を変更:</label>
-          <select id="modal-permission-select" onchange="changeUserPermission('${user.id}', this.value)"
-                  style="width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: white;">
-            ${permissionOptions}
-          </select>
-        </div>
-        <button onclick="disableUser('${user.id}'); closeUserDetailModal();"
-                style="width: 100%; padding: 10px; background: #fee2e2; color: #dc2626; border: none; border-radius: 8px; font-size: 13px; cursor: pointer;">
-          このユーザーを無効化
-        </button>
-      `;
+      actionButtons = '<div style="margin-bottom:8px;"><label style="display:block;font-size:11px;color:#6b7280;margin-bottom:4px;">権限を変更:</label>'
+        + '<select id="modal-permission-select" onchange="changeUserPermission(\'' + user.id + '\',this.value)" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:16px;background:white;">'
+        + permissionOptions + '</select></div>'
+        + '<button onclick="disableUser(\'' + user.id + '\');closeUserDetailModal();" style="width:100%;padding:12px;background:#fee2e2;color:#dc2626;border:none;border-radius:8px;font-size:13px;cursor:pointer;">このユーザーを無効化</button>';
     } else if (status === 'inactive') {
-      actionButtons = `
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button onclick="enableUser('${user.id}'); closeUserDetailModal();"
-                  style="width: 100%; padding: 10px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
-            有効化
-          </button>
-          <button onclick="deleteUser('${user.id}', '${userName.replace(/'/g, "\\'")}'); closeUserDetailModal();"
-                  style="width: 100%; padding: 10px; background: #fee2e2; color: #dc2626; border: none; border-radius: 8px; font-size: 13px; cursor: pointer;">
-            完全に削除
-          </button>
-        </div>
-      `;
+      actionButtons = '<div style="display:flex;flex-direction:column;gap:8px;">'
+        + '<button onclick="enableUser(\'' + user.id + '\');closeUserDetailModal();" style="width:100%;padding:12px;background:#10b981;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">有効化</button>'
+        + '<button onclick="deleteUser(\'' + user.id + '\',\'' + userName.replace(/'/g, "\\'") + '\');closeUserDetailModal();" style="width:100%;padding:12px;background:#fee2e2;color:#dc2626;border:none;border-radius:8px;font-size:13px;cursor:pointer;">完全に削除</button>'
+        + '</div>';
     } else if (isSelf) {
-      actionButtons = `
-        <div style="padding: 10px; background: #f0f9ff; border-radius: 8px; text-align: center; color: #0369a1; font-size: 12px;">
-          これはあなたのアカウントです
-        </div>
-      `;
+      actionButtons = '<div style="padding:10px;background:#f0f9ff;border-radius:8px;text-align:center;color:#0369a1;font-size:12px;">これはあなたのアカウントです</div>';
     }
 
-    // コンテンツ領域（よりコンパクトに）
-    var contentHtml = `
-      <div style="text-align: center; margin-bottom: 16px;">
-        ${photoUrl ?
-          `<img src="${photoUrl}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; margin-bottom: 8px;">` :
-          `<div style="width: 64px; height: 64px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; color: #9ca3af; margin: 0 auto 8px;"><i class="bi bi-person" style="font-size: 32px;"></i></div>`
-        }
-        <div style="font-size: 16px; font-weight: 600; color: #374151;">${userName}</div>
-        <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">${userEmail}</div>
-        <div style="margin-top: 4px;">${onlineStatusHtml}</div>
-      </div>
+    // ユーザー管理リストを隠す
+    if (loadingDiv) loadingDiv.style.display = 'none';
+    if (contentDiv) contentDiv.style.display = 'none';
 
-      <div style="background: #f9fafb; border-radius: 8px; padding: 12px;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-          <span style="color: #6b7280; font-size: 12px;">権限</span>
-          <span style="font-weight: 500; font-size: 12px;">${status === 'pending' ? '承認待ち' : permDef.label}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-          <span style="color: #6b7280; font-size: 12px;">登録日</span>
-          <span style="font-weight: 500; font-size: 12px;">${createdAt}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span style="color: #6b7280; font-size: 12px;">ステータス</span>
-          <span style="font-weight: 500; font-size: 12px;">${status === 'active' ? '有効' : status === 'pending' ? '承認待ち' : '無効'}</span>
-        </div>
-      </div>
-
-      <!-- 発送先・口座情報（コンパクト版） -->
-      <div style="background: #fff7ed; border-radius: 8px; padding: 12px; margin-top: 10px; border: 1px solid #fed7aa;">
-        <div style="font-size: 11px; font-weight: 600; color: #c2410c; margin-bottom: 8px;"><i class="bi bi-list-check"></i> 配送・振込先情報</div>
-        <div style="display: flex; gap: 12px;">
-          <div style="flex: 1;">
-            <div style="color: #6b7280; font-size: 10px; margin-bottom: 2px;">発送先情報</div>
-            ${user.personalInfo && user.personalInfo.shipping && user.personalInfo.shipping.name ?
-              `<div style="font-size: 11px; color: #374151; line-height: 1.3;">${user.personalInfo.shipping.name}</div>` :
-              `<div style="font-size: 11px; color: #9ca3af;">未登録</div>`
-            }
-          </div>
-          <div style="flex: 1;">
-            <div style="color: #6b7280; font-size: 10px; margin-bottom: 2px;">口座情報</div>
-            ${user.personalInfo && user.personalInfo.bank && user.personalInfo.bank.bankName ?
-              `<div style="font-size: 11px; color: #374151; line-height: 1.3;">${user.personalInfo.bank.bankName}</div>` :
-              `<div style="font-size: 11px; color: #9ca3af;">未登録</div>`
-            }
-          </div>
-        </div>
-      </div>
-    `;
-
-    // iOS Safari iframe対策: body固定 + position:fixed
-    window._modalScrollY = window.scrollY || 0;
-    document.body.style.position = 'fixed';
-    document.body.style.top = '-' + window._modalScrollY + 'px';
-    document.body.style.left = '0';
-    document.body.style.right = '0';
-
-    // モーダルHTMLをJS側で構築（inline styleで確実に制御）
-    modal.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;padding:16px;" onclick="if(event.target===this)closeUserDetailModal()">'
-      + '<div style="background:white;border-radius:16px;width:100%;max-width:400px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;">'
-      + '<div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">'
-      + '<button onclick="closeUserDetailModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#6b7280;">&#x2190;</button>'
+    // フルページビューでユーザー詳細を表示（position:fixed/vh不使用）
+    detailPage.innerHTML = '<div style="padding:16px;">'
+      // ヘッダー（戻るボタン）
+      + '<div style="display:flex;align-items:center;margin-bottom:16px;">'
+      + '<button onclick="closeUserDetailModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;padding:4px 8px 4px 0;">&#x2190;</button>'
       + '<span style="font-size:16px;font-weight:600;">ユーザー詳細</span>'
-      + '<div style="width:24px;"></div>'
       + '</div>'
-      + '<div style="padding:16px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;">' + contentHtml + '</div>'
-      + '<div style="padding:12px 16px;border-top:1px solid #e5e7eb;flex-shrink:0;">' + actionButtons + '</div>'
-      + '</div></div>';
+      // プロフィール
+      + '<div style="text-align:center;margin-bottom:16px;">'
+      + (photoUrl
+        ? '<img src="' + photoUrl + '" style="width:64px;height:64px;border-radius:50%;object-fit:cover;margin-bottom:8px;">'
+        : '<div style="width:64px;height:64px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center;color:#9ca3af;margin:0 auto 8px;"><i class="bi bi-person" style="font-size:32px;"></i></div>')
+      + '<div style="font-size:16px;font-weight:600;color:#374151;">' + userName + '</div>'
+      + '<div style="font-size:12px;color:#6b7280;margin-top:2px;">' + userEmail + '</div>'
+      + '<div style="margin-top:4px;"><span style="display:inline-flex;align-items:center;gap:4px;color:' + onlineColor + ';font-size:11px;"><span style="width:6px;height:6px;background:' + onlineDot + ';border-radius:50%;display:inline-block;"></span>' + onlineText + '</span></div>'
+      + '</div>'
+      // ステータス情報
+      + '<div style="background:#f9fafb;border-radius:8px;padding:12px;margin-bottom:10px;">'
+      + '<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#6b7280;font-size:12px;">権限</span><span style="font-weight:500;font-size:12px;">' + (status === 'pending' ? '承認待ち' : permDef.label) + '</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#6b7280;font-size:12px;">登録日</span><span style="font-weight:500;font-size:12px;">' + createdAt + '</span></div>'
+      + '<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;font-size:12px;">ステータス</span><span style="font-weight:500;font-size:12px;">' + (status === 'active' ? '有効' : status === 'pending' ? '承認待ち' : '無効') + '</span></div>'
+      + '</div>'
+      // 発送先・口座情報
+      + '<div style="background:#fff7ed;border-radius:8px;padding:12px;margin-bottom:16px;border:1px solid #fed7aa;">'
+      + '<div style="font-size:11px;font-weight:600;color:#c2410c;margin-bottom:8px;"><i class="bi bi-list-check"></i> 配送・振込先情報</div>'
+      + '<div style="display:flex;gap:12px;">'
+      + '<div style="flex:1;"><div style="color:#6b7280;font-size:10px;margin-bottom:2px;">発送先</div>'
+      + (user.personalInfo && user.personalInfo.shipping && user.personalInfo.shipping.name
+        ? '<div style="font-size:11px;color:#374151;">' + user.personalInfo.shipping.name + '</div>'
+        : '<div style="font-size:11px;color:#9ca3af;">未登録</div>')
+      + '</div>'
+      + '<div style="flex:1;"><div style="color:#6b7280;font-size:10px;margin-bottom:2px;">口座</div>'
+      + (user.personalInfo && user.personalInfo.bank && user.personalInfo.bank.bankName
+        ? '<div style="font-size:11px;color:#374151;">' + user.personalInfo.bank.bankName + '</div>'
+        : '<div style="font-size:11px;color:#9ca3af;">未登録</div>')
+      + '</div>'
+      + '</div></div>'
+      // アクションボタン
+      + '<div style="margin-top:16px;">' + actionButtons + '</div>'
+      + '</div>';
 
-    modal.style.display = 'block';
-    console.log('[USER] モーダル表示完了');
+    detailPage.style.display = 'block';
+    window.scrollTo(0, 0);
+    console.log('[USER] 詳細ページ表示:', userName, status);
   }
 
   /**
-   * ユーザー詳細モーダルを閉じる
+   * ユーザー詳細ページを閉じてリストに戻る
    */
   window.closeUserDetailModal = function() {
-    var modal = document.getElementById('userDetailModal');
-    modal.style.display = 'none';
-    modal.innerHTML = '';
-    // body固定を解除
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.left = '';
-    document.body.style.right = '';
-    window.scrollTo(0, window._modalScrollY || 0);
+    var detailPage = document.getElementById('userDetailPage');
+    var contentDiv = document.getElementById('userManagementContent');
+
+    if (detailPage) {
+      detailPage.style.display = 'none';
+      detailPage.innerHTML = '';
+    }
+    if (contentDiv) {
+      contentDiv.style.display = 'block';
+    }
+    window.scrollTo(0, 0);
   }
 
   /**
