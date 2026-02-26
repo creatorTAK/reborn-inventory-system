@@ -501,24 +501,41 @@ async function isAnyClientViewingChat() {
 // 通知クリックイベント
 // ================================================================================
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW v160] Notification clicked');
+  console.log('[SW v161] Notification clicked');
 
   event.notification.close();
 
-  const urlToOpen = event.notification.data?.url || '/';
+  // ターゲットページ決定（targetPage > type推定 > ホーム）
+  const data = event.notification.data || {};
+  let targetPage = data.targetPage || '';
+  if (!targetPage && data.type === 'system') targetPage = 'todo-list';
+  if (!targetPage && data.type === 'chat') targetPage = 'chat';
+
+  console.log('[SW v161] targetPage:', targetPage, 'type:', data.type);
+
+  const baseUrl = self.location.origin + '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        // 既にタブが開いている場合はそれをフォーカス
+        // 既にアプリが開いていればフォーカス + postMessageでナビゲーション指示
         for (let client of clientList) {
-          if (client.url === urlToOpen && 'focus' in client) {
-            return client.focus();
+          if (new URL(client.url).origin === self.location.origin && 'focus' in client) {
+            return client.focus().then(function(c) {
+              if (targetPage) {
+                c.postMessage({
+                  type: 'navigateFromNotification',
+                  page: targetPage
+                });
+              }
+              return c;
+            });
           }
         }
-        // なければ新しいタブを開く
+        // なければ新しいタブを開く（page付き）
+        const openUrl = targetPage ? baseUrl + '?page=' + targetPage : baseUrl;
         if (clients.openWindow) {
-          return clients.openWindow(urlToOpen);
+          return clients.openWindow(openUrl);
         }
       })
   );
