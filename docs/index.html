@@ -1433,11 +1433,11 @@
       </button>
     </nav>
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0226n</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0226o</div>
     <script>
     // PWAタスクキル復帰時のバージョンチェック（bfcache対策）
     (function(){
-      var LOCAL_VER = 'v0226n';
+      var LOCAL_VER = 'v0226o';
       var lastCheck = Date.now();
       document.addEventListener('visibilitychange', function(){
         if (document.visibilityState !== 'visible') return;
@@ -2452,18 +2452,33 @@
         if (navigator.serviceWorker) {
           navigator.serviceWorker.addEventListener('message', function(event) {
             if (event.data && event.data.type === 'navigateFromNotification') {
-              console.log('[Notification] ページ遷移:', event.data.page);
-              navigateToPage(event.data.page);
+              console.log('[Notification] ページ遷移:', event.data.page, 'roomId:', event.data.roomId);
+              // チャット通知でroomIdがあれば直接ルームを開く
+              if (event.data.page === 'chat' && event.data.roomId) {
+                localStorage.setItem('current_chat_room_id', event.data.roomId);
+                navigateToPage('chat-room');
+              } else {
+                navigateToPage(event.data.page);
+              }
             }
           });
         }
 
         // 通知タップからのナビゲーション: URL ?page= パラメータ対応
-        var urlPage = new URLSearchParams(window.location.search).get('page');
+        var urlParams = new URLSearchParams(window.location.search);
+        var urlPage = urlParams.get('page');
+        var urlRoomId = urlParams.get('roomId');
         if (urlPage) {
-          console.log('[Notification] URL page パラメータ:', urlPage);
+          console.log('[Notification] URL page パラメータ:', urlPage, 'roomId:', urlRoomId);
           history.replaceState(null, '', '/');
-          setTimeout(function() { navigateToPage(urlPage); }, 100);
+          setTimeout(function() {
+            if (urlPage === 'chat' && urlRoomId) {
+              localStorage.setItem('current_chat_room_id', urlRoomId);
+              navigateToPage('chat-room');
+            } else {
+              navigateToPage(urlPage);
+            }
+          }, 100);
         }
 
         // 🏠 初期設定完了済みの場合、ヘッダーを非表示にしてメニュー画面を表示（UI-013）
@@ -5035,19 +5050,32 @@
       if (navigator.serviceWorker) {
         navigator.serviceWorker.addEventListener('message', function(event) {
           if (event.data && event.data.type === 'navigateFromNotification') {
-            console.log('[Notification] ページ遷移:', event.data.page);
-            navigateToPage(event.data.page);
+            console.log('[Notification] ページ遷移:', event.data.page, 'roomId:', event.data.roomId);
+            if (event.data.page === 'chat' && event.data.roomId) {
+              localStorage.setItem('current_chat_room_id', event.data.roomId);
+              navigateToPage('chat-room');
+            } else {
+              navigateToPage(event.data.page);
+            }
           }
         });
       }
 
       // 通知タップからのナビゲーション: URL ?page= パラメータ対応
-      var urlPage = new URLSearchParams(window.location.search).get('page');
+      var urlParams2 = new URLSearchParams(window.location.search);
+      var urlPage = urlParams2.get('page');
+      var urlRoomId2 = urlParams2.get('roomId');
       if (urlPage) {
-        console.log('[Notification] URL page パラメータ:', urlPage);
-        // URLからパラメータを除去（再読み込み時の二重遷移防止）
+        console.log('[Notification] URL page パラメータ:', urlPage, 'roomId:', urlRoomId2);
         history.replaceState(null, '', '/');
-        setTimeout(function() { navigateToPage(urlPage); }, 100);
+        setTimeout(function() {
+          if (urlPage === 'chat' && urlRoomId2) {
+            localStorage.setItem('current_chat_room_id', urlRoomId2);
+            navigateToPage('chat-room');
+          } else {
+            navigateToPage(urlPage);
+          }
+        }, 100);
       }
 
       // ブラウザ戻るボタン対応（popstate）

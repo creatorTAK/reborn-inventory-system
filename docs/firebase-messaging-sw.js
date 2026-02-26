@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v332';  // v332: notificationclick pending_user→todo-list遷移追加
+const CACHE_VERSION = 'v333';  // v333: notificationclick全通知タイプ→ページ遷移マッピング
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -508,11 +508,28 @@ self.addEventListener('notificationclick', (event) => {
   // ターゲットページ決定（targetPage > type推定 > ホーム）
   const data = event.notification.data || {};
   let targetPage = data.targetPage || '';
-  if (!targetPage && data.type === 'system') targetPage = 'todo-list';
-  if (!targetPage && data.type === 'pending_user') targetPage = 'todo-list';
-  if (!targetPage && data.type === 'chat') targetPage = 'chat';
 
-  console.log('[SW v161] targetPage:', targetPage, 'type:', data.type);
+  if (!targetPage) {
+    // 通知タイプ → 遷移先ページのマッピング
+    // GAS: 'chat', 'system'
+    // Firebase Functions: 'CHAT_MESSAGE', 'MENTION', 'INCOMING_CALL', 'PRODUCT_REGISTERED'
+    // PWA/Cloudflare: 'chat_message', 'pending_user', 'task_request', 'task_completion', 'extension_request', 'user_approved'
+    const typePageMap = {
+      'chat': 'chat',
+      'CHAT_MESSAGE': 'chat',
+      'chat_message': 'chat',
+      'MENTION': 'chat',
+      'INCOMING_CALL': 'chat',
+      'system': 'todo-list',
+      'pending_user': 'todo-list',
+      'task_request': 'todo-list',
+      'task_completion': 'todo-list',
+      'extension_request': 'todo-list'
+    };
+    targetPage = typePageMap[data.type] || '';
+  }
+
+  console.log('[SW v332] notificationclick targetPage:', targetPage, 'type:', data.type, 'roomId:', data.roomId || 'none');
 
   const baseUrl = self.location.origin + '/';
 
@@ -526,7 +543,8 @@ self.addEventListener('notificationclick', (event) => {
               if (targetPage) {
                 c.postMessage({
                   type: 'navigateFromNotification',
-                  page: targetPage
+                  page: targetPage,
+                  roomId: data.roomId || ''
                 });
               }
               return c;
@@ -534,7 +552,11 @@ self.addEventListener('notificationclick', (event) => {
           }
         }
         // なければ新しいタブを開く（page付き）
-        const openUrl = targetPage ? baseUrl + '?page=' + targetPage : baseUrl;
+        let openUrl = baseUrl;
+        if (targetPage) {
+          openUrl += '?page=' + targetPage;
+          if (data.roomId) openUrl += '&roomId=' + encodeURIComponent(data.roomId);
+        }
         if (clients.openWindow) {
           return clients.openWindow(openUrl);
         }
