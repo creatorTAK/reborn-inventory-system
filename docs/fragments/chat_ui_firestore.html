@@ -9437,6 +9437,41 @@
 
     // 画像プレビューは各アイテムの×ボタンで個別削除
     // clearAllImages()で全削除も可能
+
+    // 🔧 iOS キーボード表示時のレイアウト修正（visualViewport API）
+    // iOS PWAではキーボードが開いてもviewportサイズが変わらず、
+    // 入力欄がキーボードの裏に隠れてメッセージが見えなくなる問題を修正
+    if (window.visualViewport) {
+      var chatContainer = document.getElementById('spa-page-chat-ui');
+      var spaContent = document.getElementById('spa-content');
+      var _lastVVHeight = window.visualViewport.height;
+
+      function handleViewportResize() {
+        var vv = window.visualViewport;
+        var newHeight = vv.height;
+
+        if (!chatContainer) return;
+
+        // キーボードが出た（高さが縮小した）
+        if (newHeight < _lastVVHeight - 50 || newHeight < window.innerHeight - 50) {
+          chatContainer.style.height = newHeight + 'px';
+          if (spaContent) spaContent.style.height = newHeight + 'px';
+          // メッセージを最下部にスクロール
+          var mc = document.getElementById('messagesContainer');
+          if (mc) {
+            setTimeout(function() { mc.scrollTop = mc.scrollHeight; }, 100);
+          }
+        } else {
+          // キーボードが閉じた（高さが戻った）
+          chatContainer.style.height = '100%';
+          if (spaContent) spaContent.style.height = '';
+        }
+        _lastVVHeight = newHeight;
+      }
+
+      window.visualViewport.addEventListener('resize', handleViewportResize);
+      _cuiAddEventListener(window.visualViewport, 'resize', handleViewportResize);
+    }
   }
 
 
