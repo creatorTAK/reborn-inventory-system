@@ -72,13 +72,14 @@ const FURIRA_PAGES = {
     destroy: 'destroyAccountingPage',
     bottomNav: null
   },
-  'pickup-management': {
-    type: 'fragment',
-    fragmentUrl: '/fragments/pickup-management.html',
-    init: 'initPickupPage',
-    destroy: 'destroyPickupPage',
-    bottomNav: null
-  },
+  // 'pickup-management': 一時的に非表示（改善後に復活予定）
+  // {
+  //   type: 'fragment',
+  //   fragmentUrl: '/fragments/pickup-management.html',
+  //   init: 'initPickupPage',
+  //   destroy: 'destroyPickupPage',
+  //   bottomNav: null
+  // },
 
   // === Phase 3: 中規模ページ ===
   sales: {
