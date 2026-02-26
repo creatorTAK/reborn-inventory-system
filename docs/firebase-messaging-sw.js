@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v331';  // v331: index.htmlプリキャッシュ除去（古いHTML残留防止）
+const CACHE_VERSION = 'v332';  // v332: notificationclick pending_user→todo-list遷移追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -509,6 +509,7 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   let targetPage = data.targetPage || '';
   if (!targetPage && data.type === 'system') targetPage = 'todo-list';
+  if (!targetPage && data.type === 'pending_user') targetPage = 'todo-list';
   if (!targetPage && data.type === 'chat') targetPage = 'chat';
 
   console.log('[SW v161] targetPage:', targetPage, 'type:', data.type);
