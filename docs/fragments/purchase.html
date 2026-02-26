@@ -2501,6 +2501,8 @@
     var _pur_entryGeneratedQRData = [];
     var _pur_currentEntryPrintMode = 'label';
     var _pur_dropdownClickHandler = null;
+    var _pur_ENTRY_DRAFT_KEY = 'purchase_entry_draft';
+    var _pur_entryDraftSaveTimer = null;
     var _pur_html5QrCode = null;
     var _pur_qrCheckHistory = [];
     var _pur_dispatchProgressData = [];
@@ -3388,8 +3390,15 @@
               if (_pur_entryLabelPresets[k]) Object.assign(_pur_entryLabelPresets[k], results[4][k]);
             });
           }
-          // 初期商品追加
-          if (_pur_entryItems.length === 0) purAddEntryItem(true);
+          // 下書き確認 → 復元 or 初期商品追加
+          if (_pur_entryItems.length === 0) {
+            var draft = purLoadEntryDraft();
+            if (draft && draft.items && draft.items.length > 0) {
+              purShowDraftRestoreDialog(draft);
+            } else {
+              purAddEntryItem(true);
+            }
+          }
           purLoadSimpleSettings();
           purLoadEntryLabelSettings();
         }).catch(function(err) { console.error('[Pur] マスタデータ読み込みエラー:', err); })
@@ -4565,10 +4574,135 @@
       }).then(function() { alert('キャンセルしました'); purLoadInspectionRequests(); });
     }
 
-    function purSendDispatchNotification() {
-      alert('発送通知を送信しました');
-      document.getElementById('pur-btnSendDispatch').style.display = 'none';
-      document.getElementById('pur-dispatchNotificationSent').style.display = 'block';
+    // ============================================
+    // Entry Draft Save/Restore
+    // ============================================
+
+    function purSaveEntryDraft(immediate) {
+      if (_pur_entryDraftSaveTimer) clearTimeout(_pur_entryDraftSaveTimer);
+      var doSave = function() {
+        if (_pur_entryItems.length === 0) { purClearEntryDraft(); return; }
+        var hasValidData = _pur_entryItems.some(function(item) {
+          return (item.category && (item.category.major || item.category.superCategory)) || (item.brand && item.brand.trim() !== '');
+        });
+        if (!hasValidData) { purClearEntryDraft(); return; }
+        var draft = {
+          savedAt: new Date().toISOString(),
+          items: _pur_entryItems.map(function(item) { return Object.assign({}, item); }),
+          defaults: {
+            purchaseDate: (document.getElementById('pur-defaultPurchaseDate') || {}).value || '',
+            supplier: (document.getElementById('pur-defaultSupplier') || {}).value || '',
+            assignee: (document.getElementById('pur-defaultAssignee') || {}).value || '',
+            amount: (document.getElementById('pur-defaultAmount') || {}).value || ''
+          }
+        };
+        try {
+          localStorage.setItem(_pur_ENTRY_DRAFT_KEY, JSON.stringify(draft));
+          console.log('[purchase] 下書き保存完了:', _pur_entryItems.length, '件');
+        } catch (e) { console.error('[purchase] 下書き保存エラー:', e); }
+      };
+      if (immediate) doSave(); else _pur_entryDraftSaveTimer = setTimeout(doSave, 500);
+    }
+
+    function purLoadEntryDraft() {
+      try {
+        var json = localStorage.getItem(_pur_ENTRY_DRAFT_KEY);
+        return json ? JSON.parse(json) : null;
+      } catch (e) { return null; }
+    }
+
+    function purClearEntryDraft() {
+      localStorage.removeItem(_pur_ENTRY_DRAFT_KEY);
+    }
+
+    function purRestoreEntryDraft(draft) {
+      if (!draft || !draft.items || draft.items.length === 0) return;
+      console.log('[purchase] 下書きから復元開始');
+      if (draft.defaults) {
+        var fields = { 'pur-defaultPurchaseDate': 'purchaseDate', 'pur-defaultSupplier': 'supplier', 'pur-defaultAssignee': 'assignee', 'pur-defaultAmount': 'amount' };
+        Object.keys(fields).forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el && draft.defaults[fields[id]]) el.value = draft.defaults[fields[id]];
+        });
+      }
+      _pur_entryItems = [];
+      var container = document.getElementById('pur-entryItemsContainer');
+      if (container) container.innerHTML = '';
+      draft.items.forEach(function(savedItem) {
+        purAddEntryItem(true);
+        var item = _pur_entryItems[_pur_entryItems.length - 1];
+        var newId = item.id;
+        Object.keys(savedItem).forEach(function(key) { if (key !== 'id') item[key] = savedItem[key]; });
+        item.id = newId;
+      });
+      console.log('[purchase] 下書きから復元完了:', draft.items.length, '件');
+    }
+
+    function purShowDraftRestoreDialog(draft) {
+      var savedAt = new Date(draft.savedAt);
+      var timeStr = savedAt.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      var itemCount = draft.items.length;
+      if (confirm('前回の下書き（' + timeStr + '保存、' + itemCount + '件）があります。\n\n復元しますか？\n\n※「キャンセル」を押すと新規入力になります')) {
+        purRestoreEntryDraft(draft);
+      } else {
+        purClearEntryDraft();
+        purAddEntryItem();
+      }
+    }
+
+    async function purSendDispatchNotification() {
+      var dispatchArea = document.getElementById('pur-dispatchNotificationArea');
+      if (!dispatchArea) return;
+      var batchId = dispatchArea.dataset.batchId;
+      var assigneeUserId = dispatchArea.dataset.assigneeUserId;
+      var assigneeName = dispatchArea.dataset.assigneeName || '';
+      var itemCount = parseInt(dispatchArea.dataset.itemCount) || 0;
+      var supplier = dispatchArea.dataset.supplier || '';
+
+      if (!batchId || !assigneeUserId) {
+        alert('発送通知に必要な情報がありません');
+        return;
+      }
+
+      var btn = document.getElementById('pur-btnSendDispatch');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 送信中...'; }
+
+      try {
+        var db = window.db;
+        if (!db) throw new Error('Firestoreが初期化されていません');
+
+        // 1. receiving_taskを作成
+        var taskId = 'task-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+        var taskData = {
+          type: 'receiving_task',
+          title: '仕入商品の受取（' + itemCount + '点）',
+          description: supplier + 'から' + itemCount + '点の商品が発送されました。商品を受け取ったらこのタスクを完了にしてください。',
+          link: 'purchase',
+          relatedData: { batchId: batchId, itemCount: itemCount, supplier: supplier, assigneeName: assigneeName },
+          createdAt: new Date().toISOString(),
+          completed: false,
+          read: false
+        };
+        await db.collection('userTasks').doc(assigneeUserId).collection('tasks').doc(taskId).set(taskData);
+
+        // 2. purchaseBatchesのstatusをshippedに更新
+        await db.collection('purchaseBatches').doc(batchId).update({
+          status: 'shipped',
+          shippedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          dispatchTaskId: taskId
+        });
+
+        console.log('[purchase] 発送通知タスク作成完了:', taskId);
+
+        // 3. UI更新
+        var sentEl = document.getElementById('pur-dispatchNotificationSent');
+        if (sentEl) sentEl.style.display = 'block';
+        if (btn) btn.innerHTML = '<i class="bi bi-check"></i> 送信完了';
+      } catch (error) {
+        console.error('[purchase] 発送通知エラー:', error);
+        alert('発送通知の送信に失敗しました: ' + error.message);
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-send"></i> 発送通知を送信'; }
+      }
     }
 
     // ============================================
@@ -5486,7 +5620,7 @@
         // Initialize entry tab
         purInitializeEntryTab();
 
-        // Load supplier filter
+        // Load supplier filter + initial data
         purGetSuppliers().then(function(suppliers) {
           var select = document.getElementById('pur-supplierFilter');
           if (select) {
@@ -5496,6 +5630,8 @@
               select.appendChild(opt);
             });
           }
+          // 初期データロード
+          purLoadPurchaseData();
         });
 
         // Load Algolia brand modules

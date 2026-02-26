@@ -1124,6 +1124,7 @@
             '<div style="text-align: right;"><div style="font-size: 12px; color: #6b7280;">未完了: <span style="color: ' + (user.pending > 0 ? '#ef4444' : '#22c55e') + '; font-weight: 600;">' + user.pending + '</span>' +
             (pendingTypeText ? '<span style="font-size: 10px; color: #9ca3af; margin-left: 4px;">(' + pendingTypeText + ')</span>' : '') + '</div>' +
             (user.overdue > 0 ? '<div style="font-size: 11px; color: #ef4444;">⚠️ ' + user.overdue + '件が要対応</div>' : '<div style="font-size: 12px; color: #6b7280;">今週完了: <span style="color: #22c55e;">' + user.completedThisWeek + '</span></div>') +
+            (user.pending > 0 ? '<button onclick="tdlSendReminder(\'' + tdlEscapeHtml(user.email) + '\', \'' + tdlEscapeHtml(user.name) + '\')" style="margin-top: 4px; padding: 2px 8px; font-size: 11px; background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; border-radius: 4px; cursor: pointer;"><i class="bi bi-bell"></i> 通知</button>' : '') +
             '</div></div>';
         }).join('');
       } catch (error) {
@@ -1131,6 +1132,24 @@
         userListEl.innerHTML = '<div style="text-align: center; padding: 20px; color: #ef4444;">データの読み込みに失敗しました</div>';
       }
     }
+
+    async function tdlSendReminder(userEmail, userName) {
+      if (!confirm(userName + 'さんにタスク未完了の通知を送信しますか？')) return;
+      try {
+        await _tdl_db.collection('users').doc(userEmail).collection('userAnnouncements').add({
+          title: 'タスク未完了のお知らせ',
+          content: '未完了のタスクがあります。確認をお願いします。',
+          createdAt: firebase.firestore.Timestamp.now(),
+          read: false,
+          type: 'reminder'
+        });
+        alert(userName + 'さんに通知を送信しました');
+      } catch (error) {
+        console.error('リマインダー送信エラー:', error);
+        alert('通知の送信に失敗しました');
+      }
+    }
+    window.tdlSendReminder = tdlSendReminder;
 
     // ========================================
     // 却下機能

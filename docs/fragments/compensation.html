@@ -447,6 +447,23 @@
           </table>
         </div>
       </div>
+      <div class="comp-card-section">
+        <h6><i class="bi bi-graph-up"></i> 月別推移</h6>
+        <div class="table-responsive">
+          <table class="comp-data-table">
+            <thead>
+              <tr>
+                <th>月</th>
+                <th class="text-end">件数</th>
+                <th class="text-end">報酬額</th>
+              </tr>
+            </thead>
+            <tbody id="comp-monthlyTrendBody">
+              <tr><td colspan="3" class="text-center text-muted py-4">データがありません</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- 担当者別タブ -->
@@ -733,6 +750,27 @@
       if (paymentDate) paymentDate.value = new Date().toISOString().split('T')[0];
 
       compLoadCompensationData();
+    }
+
+    async function compGetProductTaskCounts(year, month) {
+      if (!window.db) return {};
+      try {
+        var snapshot = await window.db.collection('products').get();
+        var staffStats = {};
+        snapshot.forEach(function(docSnap) {
+          var data = docSnap.data();
+          var date = data.createdAt && data.createdAt.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : null);
+          if (!date) return;
+          if (date.getFullYear() !== year) return;
+          if (month !== 'all' && (date.getMonth() + 1) !== parseInt(month)) return;
+
+          var staff = data.assignedTo || data.createdBy || '不明';
+          if (!staffStats[staff]) staffStats[staff] = { listing: 0, shipping: 0, photography: 0, inspection: 0 };
+          if (data.status === '出品中' || data.status === '販売済み') staffStats[staff].listing++;
+          if (data.status === '販売済み' && data.shippingCompleted) staffStats[staff].shipping++;
+        });
+        return staffStats;
+      } catch (e) { console.error('[Comp] productTaskCounts error:', e); return {}; }
     }
 
     async function compLoadCompensationData() {

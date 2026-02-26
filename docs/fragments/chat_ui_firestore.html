@@ -3350,7 +3350,8 @@
       cuiCurrentRoomId = localStorage.getItem('current_chat_room_id') || '';
       cuiCurrentUserName = localStorage.getItem('reborn_user_name') || '';
       cuiCurrentUserEmail = localStorage.getItem('reborn_user_email') || '';
-      cuiSearchQueryParam = '';
+      cuiSearchQueryParam = localStorage.getItem('current_chat_search_query') || '';
+      if (cuiSearchQueryParam) localStorage.removeItem('current_chat_search_query');
 
       // Set pwa* params so cuiInitialize() can use them
       pwaRoomIdParam = cuiCurrentRoomId;
@@ -3475,7 +3476,7 @@
       _cuiEventListeners = [];
 
       // 7. Clear Firestore viewing status
-      cuiClearViewingStatus();
+      clearViewingStatus();
 
       // 8. Show bottom nav + spa-content復元
       var bottomNav = document.getElementById('bottom-nav');
@@ -3895,22 +3896,20 @@
       }
 
       // ページ離脱時にSWへ通知 + Firestore更新 + リスナークリーンアップ
-      window.addEventListener('pagehide', () => {
+      _cuiAddEventListener(window, 'pagehide', function() {
         notifySwLeftRoom();
         clearViewingStatus();
-        // 🔧 パフォーマンス改善: Firestoreリスナーを解除
         if (cuiUnsubscribeMessages) { try { cuiUnsubscribeMessages(); } catch(e) {} cuiUnsubscribeMessages = null; }
         if (cuiIncomingCallListener) { try { cuiIncomingCallListener(); } catch(e) {} cuiIncomingCallListener = null; }
         if (cuiCurrentCallDocListener) { try { cuiCurrentCallDocListener(); } catch(e) {} cuiCurrentCallDocListener = null; }
       });
-      window.addEventListener('visibilitychange', () => {
+      _cuiAddEventListener(window, 'visibilitychange', function() {
         if (document.visibilityState === 'hidden') {
           notifySwLeftRoom();
           clearViewingStatus();
         } else if (document.visibilityState === 'visible') {
           notifySwViewingRoom(cuiCurrentRoomId);
           setViewingStatus(cuiCurrentRoomId);
-          // 着信リスナー再開
           if (typeof startIncomingCallListener === 'function') {
             startIncomingCallListener();
           }
@@ -3918,9 +3917,8 @@
       });
 
       // beforeunload でも閲覧終了を記録（pagehideが発火しない場合の保険）
-      window.addEventListener('beforeunload', () => {
+      _cuiAddEventListener(window, 'beforeunload', function() {
         clearViewingStatus();
-        // 🔧 パフォーマンス改善: Firestoreリスナーを解除
         if (cuiUnsubscribeMessages) { try { cuiUnsubscribeMessages(); } catch(e) {} cuiUnsubscribeMessages = null; }
         if (cuiIncomingCallListener) { try { cuiIncomingCallListener(); } catch(e) {} cuiIncomingCallListener = null; }
         if (cuiCurrentCallDocListener) { try { cuiCurrentCallDocListener(); } catch(e) {} cuiCurrentCallDocListener = null; }
