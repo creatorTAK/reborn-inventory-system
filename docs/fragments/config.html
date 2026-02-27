@@ -1171,7 +1171,7 @@
     <div class="cfg-tab-pane" id="cfg-system">
       <!-- サブタブナビゲーション -->
       <div class="cfg-subtabs" id="cfg-systemConfigTabs">
-        <button class="cfg-subtab active" data-target="cfg-system-basic"><i class="bi bi-person-circle"></i> 基本</button>
+        <button class="cfg-subtab active" data-target="cfg-system-basic"><i class="bi bi-person-circle"></i> 基本設定</button>
         <button class="cfg-subtab" data-target="cfg-system-management"><i class="bi bi-123"></i> 管理番号</button>
         <button class="cfg-subtab" data-target="cfg-system-shipping"><i class="bi bi-box-seam"></i> 配送</button>
         <button class="cfg-subtab" data-target="cfg-system-procure"><i class="bi bi-briefcase"></i> 仕入・出品</button>
@@ -1232,10 +1232,6 @@
                   <input type="checkbox" id="cfg-basicNotificationSound" checked style="width: 16px; height: 16px; cursor: pointer;">
                 </div>
               </div>
-              <!-- 保存ボタン -->
-              <button type="button" onclick="cfgSaveBasicSettings()" style="margin-top: 16px; width: 100%; padding: 12px; background: #40B4E5; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
-                基本設定を保存
-              </button>
             </div>
           </div>
           <!-- 発送先情報 -->
@@ -2447,7 +2443,10 @@
         // 5. 権限設定を保存
         await cfgSavePermissionSettings(false);
 
-        // 6. 設定変更を通知（postMessage + BroadcastChannel）
+        // 6. 基本設定（ユーザー名・通知）を保存
+        await cfgSaveBasicSettings(true);
+
+        // 7. 設定変更を通知（postMessage + BroadcastChannel）
         cfgNotifyConfigChange();
 
         alert('設定を保存しました');
@@ -4260,10 +4259,13 @@
       if (content) content.style.display = 'block';
     }
 
-    async function cfgSaveBasicSettings() {
+    async function cfgSaveBasicSettings(silent) {
       var nameInput = document.getElementById('cfg-basicUserName');
       var userName = nameInput ? nameInput.value.trim() : '';
-      if (!userName) { alert('ユーザー名を入力してください'); return; }
+      if (!userName) {
+        if (!silent) alert('ユーザー名を入力してください');
+        return;
+      }
 
       var settings = {
         userName: userName,
@@ -4304,10 +4306,10 @@
         var clearBtn = document.getElementById('cfg-clearUserNameBtn');
         if (clearBtn) clearBtn.style.display = settings.userName ? 'block' : 'none';
 
-        alert('基本設定を保存しました');
+        if (!silent) alert('基本設定を保存しました');
       } catch (e) {
         console.error('[config] 基本設定保存エラー:', e);
-        alert('保存に失敗しました: ' + e.message);
+        if (!silent) alert('保存に失敗しました: ' + e.message);
       }
     }
     window.cfgSaveBasicSettings = cfgSaveBasicSettings;
