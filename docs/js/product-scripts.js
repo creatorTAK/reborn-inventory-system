@@ -577,17 +577,19 @@ window.CONFIG_STORAGE_KEYS = {
       console.log(`    [${i}] ${key}`);
     }
 
-    // マイグレーション: 旧ハードコード配送デフォルトを強制クリア
-    if (!localStorage.getItem('_m_shipping_v0228b')) {
+    // マイグレーション: 旧デフォルト設定を強制クリア（配送・仕入出品）
+    if (!localStorage.getItem('_m_defaults_v0228c')) {
       localStorage.removeItem('rebornConfig_shippingDefault');
-      localStorage.setItem('_m_shipping_v0228b', '1');
+      localStorage.removeItem('rebornConfig_procureListingDefault');
+      localStorage.setItem('_m_defaults_v0228c', '1');
       // Firestoreからも削除
       try {
         if (typeof firebase !== 'undefined' && firebase.firestore) {
           firebase.firestore().collection('settings').doc('common').update({
-            shippingDefault: firebase.firestore.FieldValue.delete()
+            shippingDefault: firebase.firestore.FieldValue.delete(),
+            procureListingDefault: firebase.firestore.FieldValue.delete()
           }).then(function() {
-            console.log('✅ Migration: 旧配送デフォルトをFirestoreから削除完了');
+            console.log('✅ Migration: 旧デフォルト設定をFirestoreから削除完了');
           }).catch(function() {});
         }
       } catch(e) {}
@@ -1036,16 +1038,8 @@ window.continueProductRegistration = function() {
     }
   }
 
-  // 仕入・出品デフォルト設定（設定マスタから読み込む）
-  let PROCURE_LISTING_DEFAULTS = {
-    '仕入日_今日': false,
-    'デフォルト仕入日': '',
-    'デフォルト仕入先': '',
-    '出品日_今日': false,
-    'デフォルト出品日': '',
-    'デフォルト出品先': '',
-    'デフォルト販売タイプ': 'fixed'
-  };
+  // 仕入・出品デフォルト設定（設定マスタから読み込む。未設定時は空）
+  let PROCURE_LISTING_DEFAULTS = {};
 
   // 設定マスタから仕入・出品デフォルトを読み込む
   async function loadProcureListingDefaults() {
@@ -1056,27 +1050,33 @@ window.continueProductRegistration = function() {
     // 付属品チェックボックスを読み込む
     await loadAccessoriesCheckboxes();
 
-    // PWA版: localStorage/Firestoreから読み込み
+    var loaded = null;
+
+    // PWA版: CACHED_CONFIG または localStorage から読み込み
     if (window.CACHED_CONFIG && window.CACHED_CONFIG['仕入出品デフォルト']) {
-      PROCURE_LISTING_DEFAULTS = window.CACHED_CONFIG['仕入出品デフォルト'];
-      console.log('✅ 仕入・出品デフォルト設定を読み込みました (PWA版):', PROCURE_LISTING_DEFAULTS);
-      applyProcureListingDefaults();
-      return;
+      loaded = window.CACHED_CONFIG['仕入出品デフォルト'];
     }
 
     // localStorageから直接読み込み（フォールバック）
-    const saved = localStorage.getItem('rebornConfig_procureListingDefault');
-    if (saved) {
-      try {
-        PROCURE_LISTING_DEFAULTS = JSON.parse(saved);
-        console.log('✅ 仕入・出品デフォルト設定を読み込みました (localStorage):', PROCURE_LISTING_DEFAULTS);
-        applyProcureListingDefaults();
-        return;
-      } catch (e) {
-        console.error('仕入・出品デフォルト設定パースエラー:', e);
+    if (!loaded) {
+      const saved = localStorage.getItem('rebornConfig_procureListingDefault');
+      if (saved) {
+        try { loaded = JSON.parse(saved); } catch (e) {}
       }
     }
 
+    // 実際に意味のある値が設定されているかチェック
+    if (loaded && typeof loaded === 'object') {
+      var hasValues = Object.keys(loaded).some(function(k) {
+        var v = loaded[k];
+        return v !== '' && v !== false && v !== null && v !== undefined;
+      });
+      if (hasValues) {
+        PROCURE_LISTING_DEFAULTS = loaded;
+        console.log('✅ 仕入・出品デフォルト設定を読み込みました:', PROCURE_LISTING_DEFAULTS);
+        applyProcureListingDefaults();
+      }
+    }
   }
 
   // 付属品チェックボックスをFirestoreから読み込んで描画

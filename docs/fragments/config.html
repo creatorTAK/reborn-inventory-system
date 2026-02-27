@@ -1718,6 +1718,11 @@
                 <input type="date" id="cfg-出品日" class="form-control" style="display: none; margin-top: 6px;">
               </div>
             </div>
+            <div style="margin-top: 14px; text-align: right;">
+              <button type="button" onclick="cfgClearProcureListingDefaults()" style="padding: 8px 16px; background: white; color: #ef4444; border: 2px solid #ef4444; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer;">
+                <i class="bi bi-trash"></i> クリア
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2842,19 +2847,35 @@
     function cfgRenderProcureListingDefaults(defaults) {
       if (!defaults) return;
       var el;
+      // 仕入先（新キー: デフォルト仕入先 / 旧キー: 仕入先）
       el = document.getElementById('cfg-仕入先');
-      if (el && defaults['仕入先']) el.value = defaults['仕入先'];
+      if (el) {
+        var supplier = defaults['デフォルト仕入先'] || defaults['仕入先'] || '';
+        if (supplier) el.value = supplier;
+      }
+      // 仕入日
       el = document.getElementById('cfg-仕入日');
-      if (el && defaults['仕入日']) el.value = defaults['仕入日'];
-      if (defaults['仕入日モード'] === 'fixed') {
+      var procureDate = defaults['デフォルト仕入日'] || defaults['仕入日'] || '';
+      if (el && procureDate) el.value = procureDate;
+      // 仕入日モード（新キー: 仕入日_今日=false → fixed / 旧キー: 仕入日モード='fixed'）
+      var procureIsFixed = defaults['仕入日_今日'] === false || defaults['仕入日モード'] === 'fixed';
+      if (procureIsFixed) {
         var radio = document.querySelector('input[name="cfg-procureDateMode"][value="fixed"]');
         if (radio) { radio.checked = true; cfgToggleProcureDateField('fixed'); }
       }
+      // 出品先（新キー: デフォルト出品先 / 旧キー: 出品先）
       el = document.getElementById('cfg-出品先');
-      if (el && defaults['出品先']) el.value = defaults['出品先'];
+      if (el) {
+        var salesCh = defaults['デフォルト出品先'] || defaults['出品先'] || '';
+        if (salesCh) el.value = salesCh;
+      }
+      // 出品日
       el = document.getElementById('cfg-出品日');
-      if (el && defaults['出品日']) el.value = defaults['出品日'];
-      if (defaults['出品日モード'] === 'fixed') {
+      var listingDate = defaults['デフォルト出品日'] || defaults['出品日'] || '';
+      if (el && listingDate) el.value = listingDate;
+      // 出品日モード
+      var listingIsFixed = defaults['出品日_今日'] === false || defaults['出品日モード'] === 'fixed';
+      if (listingIsFixed) {
         var radio2 = document.querySelector('input[name="cfg-listingDateMode"][value="fixed"]');
         if (radio2) { radio2.checked = true; cfgToggleListingDateField('fixed'); }
       }
@@ -2990,14 +3011,19 @@
 
     // 仕入・出品デフォルト値を収集
     function cfgCollectProcureListingDefaults() {
-      return {
-        '仕入先': (document.getElementById('cfg-仕入先') || {}).value || '',
-        '仕入日モード': (document.querySelector('input[name="cfg-procureDateMode"]:checked') || {}).value || 'today',
-        '仕入日': (document.getElementById('cfg-仕入日') || {}).value || '',
-        '出品先': (document.getElementById('cfg-出品先') || {}).value || '',
-        '出品日モード': (document.querySelector('input[name="cfg-listingDateMode"]:checked') || {}).value || 'today',
-        '出品日': (document.getElementById('cfg-出品日') || {}).value || ''
+      var procureDateMode = (document.querySelector('input[name="cfg-procureDateMode"]:checked') || {}).value || 'today';
+      var listingDateMode = (document.querySelector('input[name="cfg-listingDateMode"]:checked') || {}).value || 'today';
+      var result = {
+        '仕入日_今日': procureDateMode === 'today',
+        'デフォルト仕入日': (document.getElementById('cfg-仕入日') || {}).value || '',
+        '出品日_今日': listingDateMode === 'today',
+        'デフォルト出品日': (document.getElementById('cfg-出品日') || {}).value || ''
       };
+      var supplier = (document.getElementById('cfg-仕入先') || {}).value || '';
+      if (supplier) result['デフォルト仕入先'] = supplier;
+      var salesChannel = (document.getElementById('cfg-出品先') || {}).value || '';
+      if (salesChannel) result['デフォルト出品先'] = salesChannel;
+      return result;
     }
 
     // ============================================
@@ -6067,6 +6093,25 @@
       alert('配送デフォルト設定をクリアしました。\n変更を保存するには「設定を保存」ボタンをクリックしてください。');
     }
     window.cfgClearShippingDefaults = cfgClearShippingDefaults;
+
+    function cfgClearProcureListingDefaults() {
+      if (!confirm('仕入・出品デフォルト設定をすべてクリアしますか？')) return;
+      var el;
+      el = document.getElementById('cfg-仕入先');
+      if (el) el.value = '';
+      el = document.getElementById('cfg-仕入日');
+      if (el) el.value = '';
+      el = document.getElementById('cfg-出品先');
+      if (el) el.value = '';
+      el = document.getElementById('cfg-出品日');
+      if (el) el.value = '';
+      var radioToday = document.querySelector('input[name="cfg-procureDateMode"][value="today"]');
+      if (radioToday) { radioToday.checked = true; cfgToggleProcureDateField('today'); }
+      var radioToday2 = document.querySelector('input[name="cfg-listingDateMode"][value="today"]');
+      if (radioToday2) { radioToday2.checked = true; cfgToggleListingDateField('today'); }
+      alert('仕入・出品デフォルト設定をクリアしました。\n変更を保存するには「設定を保存」ボタンをクリックしてください。');
+    }
+    window.cfgClearProcureListingDefaults = cfgClearProcureListingDefaults;
 
     function cfgClearConditionButtons() {
       if (!confirm('商品状態ボタン設定をすべてクリアしますか？\n\n全カテゴリのカスタムボタンが削除されます。')) return;
