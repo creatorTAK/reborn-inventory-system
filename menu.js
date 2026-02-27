@@ -244,62 +244,9 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    if (action === 'subscribeFCM') {
-      // FCMトークンを保存（チーム利用対応: デバイス情報、メールアドレス、権限、通知設定も保存）
-      const token = requestBody.token;
-      const deviceInfo = requestBody.deviceInfo || null;
-      const userId = requestBody.userId || null;
-      const userName = requestBody.userName || null;
-      const email = requestBody.email || null;
-      const permission = requestBody.permission || 'スタッフ';
-      const notificationEnabled = requestBody.notificationEnabled !== undefined ? requestBody.notificationEnabled : true;
-      const notificationSound = requestBody.notificationSound !== undefined ? requestBody.notificationSound : true;
-      const result = saveFCMToken(token, deviceInfo, userId, userName, email, permission, notificationEnabled, notificationSound);
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
+    // [REMOVED] subscribeFCM POST action - FCMトークン管理はFirestore activeDevicesに移行済み
 
-    if (action === 'sendFCM') {
-      // FCM通知を送信（POSTメソッド）
-      try {
-        // デバッグログをスプレッドシートに書き込む
-        const ss = SpreadsheetApp.getActiveSpreadsheet();
-        let debugSheet = ss.getSheetByName('デバッグログ');
-        if (!debugSheet) {
-          debugSheet = ss.insertSheet('デバッグログ');
-          debugSheet.appendRow(['タイムスタンプ', 'メソッド', 'アクション', '受信データ', 'title', 'body', '送信結果']);
-        }
-
-        const timestamp = new Date().toLocaleString('ja-JP');
-        const rawData = JSON.stringify(requestBody);
-
-        // POSTデータから直接取得（エンコード/デコード不要）
-        const title = requestBody.title || 'REBORN';
-        const body = requestBody.body || 'テスト通知です';
-
-        const result = sendFCMNotification(title, body);
-
-        // デバッグ情報をスプレッドシートに記録
-        debugSheet.appendRow([
-          timestamp,
-          'POST',
-          'sendFCM',
-          rawData,
-          title,
-          body,
-          JSON.stringify(result)
-        ]);
-
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
-      } catch (error) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'error',
-          message: 'エラー: ' + error.toString()
-        }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-    }
+    // [REMOVED] sendFCM action - FCM通知はFirebase Functionsに移行済み
 
     if (action === 'receiveAck') {
       // ACK（受信確認）を記録
@@ -330,20 +277,7 @@ function doPost(e) {
       }
     }
 
-    if (action === 'sendChatNotification') {
-      // チャット通知を個別ユーザーに送信
-      const title = requestBody.title;
-      const body = requestBody.body;
-      const targetUserName = requestBody.targetUserName;
-      const badgeCount = requestBody.badgeCount;
-
-      Logger.log('[チャット通知] ' + targetUserName + 'に送信: ' + title + ', バッジ: ' + badgeCount);
-
-      const result = sendFCMNotificationToUser(title, body, targetUserName, badgeCount);
-
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
+    // [REMOVED] sendChatNotification action - チャット通知はFirebase Functions (onChatMessageCreated) に移行済み
 
     // AI生成アクション（PWA版対応）
     if (action === 'generateAI') {
@@ -590,138 +524,11 @@ function doGet(e) {
         }
       }
 
-      if (action === 'subscribeFCM') {
-        // FCMトークンを保存（GETメソッド、チーム利用対応 + ユーザー名対応 + メールアドレス + 権限 + 通知設定）
-        const token = e.parameter.token;
-        const deviceInfoParam = e.parameter.deviceInfo;
-        const userIdParam = e.parameter.userId;
-        const userNameParam = e.parameter.userName;
-        const emailParam = e.parameter.email;
-        const permissionParam = e.parameter.permission;
-        const notificationEnabledParam = e.parameter.notificationEnabled;
-        const notificationSoundParam = e.parameter.notificationSound;
+      // [REMOVED] subscribeFCM GET action - FCMトークン管理はFirestore activeDevicesに移行済み
 
-        // デバッグログをスプレッドシートに書き込む
-        try {
-          const ss = SpreadsheetApp.getActiveSpreadsheet();
-          let debugSheet = ss.getSheetByName('FCM登録デバッグ');
-          if (!debugSheet) {
-            debugSheet = ss.insertSheet('FCM登録デバッグ');
-            debugSheet.appendRow(['タイムスタンプ', 'トークン（先頭20文字）', 'deviceInfoParam', 'userIdParam', 'userId (decoded)', 'userNameParam', 'userName (decoded)', 'email', 'permission', 'notificationEnabled', 'notificationSound']);
-          }
+      // [REMOVED] sendFCM GET action - FCM通知はFirebase Functionsに移行済み
 
-          const deviceInfo = deviceInfoParam ? JSON.parse(decodeURIComponent(deviceInfoParam)) : null;
-          const userId = userIdParam ? decodeURIComponent(userIdParam) : null;
-          const userName = userNameParam ? decodeURIComponent(userNameParam) : null;
-          const email = emailParam ? decodeURIComponent(emailParam) : null;
-          const permission = permissionParam ? decodeURIComponent(permissionParam) : 'スタッフ';
-          const notificationEnabled = notificationEnabledParam === 'true' || notificationEnabledParam === true;
-          const notificationSound = notificationSoundParam === 'true' || notificationSoundParam === true;
-
-          debugSheet.appendRow([
-            Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss'),
-            token ? token.substring(0, 20) + '...' : 'null',
-            deviceInfoParam ? 'あり（' + deviceInfoParam.substring(0, 30) + '...）' : 'null',
-            userIdParam || 'null',
-            userId || 'null',
-            userNameParam || 'null',
-            userName || 'null',
-            email || 'null',
-            permission || 'null',
-            notificationEnabled,
-            notificationSound
-          ]);
-        } catch (debugError) {
-          Logger.log('Debug sheet error: ' + debugError);
-        }
-
-        const deviceInfo = deviceInfoParam ? JSON.parse(decodeURIComponent(deviceInfoParam)) : null;
-        const userId = userIdParam ? decodeURIComponent(userIdParam) : null;
-        const userName = userNameParam ? decodeURIComponent(userNameParam) : null;
-        const email = emailParam ? decodeURIComponent(emailParam) : null;
-        const permission = permissionParam ? decodeURIComponent(permissionParam) : 'スタッフ';
-        const notificationEnabled = notificationEnabledParam === 'true' || notificationEnabledParam === true;
-        const notificationSound = notificationSoundParam === 'true' || notificationSoundParam === true;
-
-        const result = saveFCMToken(token, deviceInfo, userId, userName, email, permission, notificationEnabled, notificationSound);
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-
-      if (action === 'sendFCM') {
-        // FCM通知を送信（GETメソッド + Base64デコード）
-        try {
-          // デバッグログをスプレッドシートに書き込む
-          const ss = SpreadsheetApp.getActiveSpreadsheet();
-          let debugSheet = ss.getSheetByName('デバッグログ');
-          if (!debugSheet) {
-            debugSheet = ss.insertSheet('デバッグログ');
-            debugSheet.appendRow(['タイムスタンプ', 'アクション', '受信パラメータ', 'デコード後title', 'デコード後body', '送信結果']);
-          }
-
-          const timestamp = new Date().toLocaleString('ja-JP');
-          const rawParams = JSON.stringify(e.parameter);
-
-          // URLパラメータからBase64エンコードされた文字列を取得
-          const titleEncoded = e.parameter.title || '';
-          const bodyEncoded = e.parameter.body || '';
-
-          // デフォルト値
-          let title = 'REBORN';
-          let body = 'テスト通知です';
-
-          // Base64デコード + URIデコード
-          try {
-            if (titleEncoded) {
-              // Base64デコード → バイト配列 → 文字列 → URIデコード
-              const titleBytes = Utilities.base64Decode(titleEncoded);
-              const titleDecoded = Utilities.newBlob(titleBytes).getDataAsString();
-              title = decodeURIComponent(titleDecoded);
-            }
-            if (bodyEncoded) {
-              const bodyBytes = Utilities.base64Decode(bodyEncoded);
-              const bodyDecoded = Utilities.newBlob(bodyBytes).getDataAsString();
-              body = decodeURIComponent(bodyDecoded);
-            }
-          } catch (decodeError) {
-            Logger.log('パラメータのデコードに失敗: ' + decodeError);
-            // デコード失敗時はデフォルト値を使用
-          }
-
-          const result = sendFCMNotification(title, body);
-
-          // デバッグ情報をスプレッドシートに記録
-          debugSheet.appendRow([
-            timestamp,
-            'sendFCM',
-            rawParams,
-            title,
-            body,
-            JSON.stringify(result)
-          ]);
-
-          return ContentService.createTextOutput(JSON.stringify(result))
-            .setMimeType(ContentService.MimeType.JSON);
-        } catch (error) {
-          return ContentService.createTextOutput(JSON.stringify({
-            status: 'error',
-            message: 'エラー: ' + error.toString()
-          }))
-            .setMimeType(ContentService.MimeType.JSON);
-        }
-      }
-
-      if (action === 'getNotificationHistory') {
-        // 通知履歴を取得
-        const limit = parseInt(e.parameter.limit) || 50;
-        const history = getNotificationHistory(limit);
-
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'success',
-          history: history
-        }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
+      // [REMOVED] getNotificationHistory action - 通知履歴はFirestoreに移行済み
 
       if (action === 'getInventoryDashboard') {
         const start = new Date();
@@ -795,59 +602,11 @@ function doGet(e) {
         });
       }
 
-      // INV-006: 在庫アラート設定取得
-      if (action === 'getInventoryAlertSettings') {
-        const result = getInventoryAlertSettingsAPI();
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
+      // [REMOVED] INV-006: 在庫アラート関連アクション (getInventoryAlertSettings, updateInventoryAlertSetting,
+      //   runInventoryAlertCheck, initializeInventoryAlertSettings) - PWA master-manager.js + Firestoreに移行済み
 
-      // INV-006: 在庫アラート設定更新
-      if (action === 'updateInventoryAlertSetting') {
-        const materialName = e.parameter.materialName;
-        const threshold = e.parameter.threshold ? parseInt(e.parameter.threshold) : undefined;
-        const notificationEnabled = e.parameter.notificationEnabled === 'true';
-
-        const result = updateInventoryAlertSettingAPI(materialName, threshold, notificationEnabled);
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-
-      // INV-006: 在庫アラート手動実行
-      if (action === 'runInventoryAlertCheck') {
-        const result = runInventoryAlertCheckAPI();
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-
-      // INV-006: 在庫アラート設定初期化
-      if (action === 'initializeInventoryAlertSettings') {
-        const result = initializeInventoryAlertSettings();
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-
-      // INV-006 Phase 5: 定期実行トリガー設定
-      if (action === 'setupDailyInventoryAlertTrigger') {
-        const hour = e.parameter.hour ? parseInt(e.parameter.hour) : 9;
-        const result = setupDailyInventoryAlertTriggerAPI(hour);
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-
-      // INV-006 Phase 5: トリガー削除
-      if (action === 'removeDailyInventoryAlertTrigger') {
-        const result = removeDailyInventoryAlertTriggerAPI();
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-
-      // INV-006 Phase 5: トリガー一覧取得
-      if (action === 'getInventoryAlertTriggers') {
-        const result = getInventoryAlertTriggersAPI();
-        return ContentService.createTextOutput(JSON.stringify(result))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
+      // [REMOVED] INV-006 Phase 5: トリガー関連アクション (setupDailyInventoryAlertTrigger,
+      //   removeDailyInventoryAlertTrigger, getInventoryAlertTriggers) - inventory_alert_manager.js削除に伴い除去
 
       // ユーザー権限管理: Phase 1マイグレーション実行
       if (action === 'executePhase1Migration') {
@@ -1699,69 +1458,8 @@ function onOpen() {
 
 }
 
-/**
- * ⚠️ 在庫アラートを手動実行（メニューから）
- */
-function runInventoryAlertManual() {
-  try {
-    const result = runInventoryAlertCheckAPI();
-
-    const ui = SpreadsheetApp.getUi();
-    if (result.success) {
-      ui.alert(
-        '在庫アラート実行完了',
-        `${result.message}\n\nアラート件数: ${result.alertCount}件`,
-        ui.ButtonSet.OK
-      );
-    } else {
-      ui.alert(
-        '在庫アラート実行エラー',
-        result.message,
-        ui.ButtonSet.OK
-      );
-    }
-  } catch (error) {
-    const ui = SpreadsheetApp.getUi();
-    ui.alert(
-      'エラー',
-      'エラーが発生しました: ' + error.toString(),
-      ui.ButtonSet.OK
-    );
-    Logger.log('[runInventoryAlertManual] エラー: ' + error);
-  }
-}
-
-/**
- * 🔓 在庫アラート設定シートの保護を解除（メニューから）
- */
-function removeInventoryAlertProtectionFromMenu() {
-  try {
-    const result = removeInventoryAlertSheetProtection();
-
-    const ui = SpreadsheetApp.getUi();
-    if (result.success) {
-      ui.alert(
-        '在庫アラート設定の保護解除完了',
-        result.message,
-        ui.ButtonSet.OK
-      );
-    } else {
-      ui.alert(
-        '在庫アラート設定の保護解除エラー',
-        result.message,
-        ui.ButtonSet.OK
-      );
-    }
-  } catch (error) {
-    const ui = SpreadsheetApp.getUi();
-    ui.alert(
-      'エラー',
-      'エラーが発生しました: ' + error.toString(),
-      ui.ButtonSet.OK
-    );
-    Logger.log('[removeInventoryAlertProtectionFromMenu] エラー: ' + error);
-  }
-}
+// [REMOVED] runInventoryAlertManual, removeInventoryAlertProtectionFromMenu
+// 在庫アラートはPWA master-manager.js + Firestoreに移行済み
 
 /**
  * 🧪 Webhookテスト結果シートを開く

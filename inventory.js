@@ -2460,15 +2460,7 @@ function saveSalesRecordAPI(salesData) {
 
     Logger.log(`[販売記録] ${salesData.managementNumber} を保存しました`);
 
-    // INV-006: 在庫アラートチェック（販売記録後）
-    try {
-      const alertResult = runInventoryAlertCheck();
-      if (alertResult.success && alertResult.alertCount > 0) {
-        Logger.log(`[在庫アラート] ${alertResult.alertCount}件のアラート通知を送信しました`);
-      }
-    } catch (alertError) {
-      Logger.log(`[警告] 在庫アラートチェックエラー: ${alertError.message}`);
-    }
+    // [REMOVED] INV-006: 在庫アラートチェック - PWA master-manager.js + Firestoreに移行済み
 
     return { success: true, message: '販売記録を保存しました' };
     

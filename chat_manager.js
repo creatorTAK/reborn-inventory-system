@@ -160,14 +160,7 @@ function sendMessage(message, channelId, fcmToken, userName) {
 
     Logger.log('[sendMessage] メッセージを保存しました: ' + messageId);
 
-    // FCM通知を送信（送信者以外の全ユーザーに）
-    try {
-      if (typeof sendChatNotification === 'function') {
-        sendChatNotification(senderName, message, senderName);
-      }
-    } catch (notifError) {
-      Logger.log('[sendMessage] 通知送信エラー（継続）: ' + notifError);
-    }
+    // [REMOVED] GAS FCM通知 - Firebase Functions (onChatMessageCreated) がFirestoreトリガーで自動通知
 
     return {
       success: true,
@@ -269,150 +262,7 @@ function getMessages(channelId, limit) {
   }
 }
 
-/**
- * FCM通知を送信（新着チャットメッセージ）
- * @param {String} senderName - 送信者名
- * @param {String} message - メッセージ本文
- * @param {String} excludeUser - 通知を送信しないユーザー（送信者自身）
- */
-function sendChatNotification(senderName, message, excludeUser) {
-  try {
-    Logger.log('[sendChatNotification] 通知送信開始');
-    Logger.log('[sendChatNotification] 送信者: ' + senderName);
-    Logger.log('[sendChatNotification] 除外ユーザー: ' + excludeUser);
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const fcmSheet = ss.getSheetByName('FCM通知登録');
-
-    if (!fcmSheet) {
-      Logger.log('[sendChatNotification] FCM通知登録シートが見つかりません');
-      return;
-    }
-
-    const data = fcmSheet.getDataRange().getValues();
-    const headers = data[0];
-
-    const userNameCol = headers.indexOf('ユーザー名');
-    const tokenCol = headers.indexOf('FCMトークン');
-    const statusCol = headers.indexOf('ステータス');
-
-    if (userNameCol === -1 || tokenCol === -1) {
-      Logger.log('[sendChatNotification] 必要なカラムが見つかりません');
-      return;
-    }
-
-    // 送信対象のトークンを収集（ユーザー名も一緒に保存）
-    const recipients = [];
-    for (let i = 1; i < data.length; i++) {
-      const userName = data[i][userNameCol];
-      const token = data[i][tokenCol];
-      const status = statusCol !== -1 ? data[i][statusCol] : '';
-
-      // 除外ユーザーはスキップ
-      if (userName === excludeUser) {
-        Logger.log('[sendChatNotification] 送信者をスキップ: ' + userName);
-        continue;
-      }
-
-      // アクティブなユーザーのみ
-      if (status !== 'アクティブ') {
-        continue;
-      }
-
-      // トークンが有効
-      if (token && token !== '') {
-        recipients.push({
-          userName: userName,
-          token: token
-        });
-        Logger.log('[sendChatNotification] 送信対象に追加: ' + userName);
-      }
-    }
-
-    if (recipients.length === 0) {
-      Logger.log('[sendChatNotification] 送信対象のトークンがありません');
-      return;
-    }
-
-    // メッセージ本文を短縮（通知用）
-    let shortMessage = message.length > 50 ? message.substring(0, 50) + '...' : message;
-
-    // FCM通知を送信（収集したトークンに対して直接送信）
-    const title = '💬 ' + senderName + 'さんからメッセージ';
-    const body = shortMessage;
-
-    // 一意のメッセージIDを生成（ACKシステム用）
-    const messageId = new Date().getTime() + '_' + Math.random().toString(36).substring(2, 15);
-    Logger.log('[sendChatNotification] メッセージID: ' + messageId);
-    Logger.log('[sendChatNotification] 送信対象: ' + recipients.length + '件');
-
-    // sendFCMToTokenV1を使って各トークンに送信
-    if (typeof sendFCMToTokenV1 === 'function' && typeof getAccessToken === 'function') {
-      const accessToken = getAccessToken();
-      if (!accessToken) {
-        Logger.log('[sendChatNotification] アクセストークン取得失敗');
-        return;
-      }
-
-      let successCount = 0;
-      let failCount = 0;
-      const failedUsers = [];
-
-      recipients.forEach(function(recipient, index) {
-        try {
-          Logger.log('[sendChatNotification] [' + (index + 1) + '/' + recipients.length + '] ' + recipient.userName + ' に送信中...');
-          const result = sendFCMToTokenV1(accessToken, recipient.token, title, body, messageId, 1, 'chat', recipient.userName);
-          if (result.success) {
-            successCount++;
-            Logger.log('  → ✅ 成功: ' + recipient.userName);
-            // 最終送信日時を更新
-            if (typeof updateLastSentTime === 'function') {
-              updateLastSentTime(recipient.token);
-            }
-          } else {
-            failCount++;
-            const errorDetail = result.error || '不明なエラー';
-            const tokenDeactivated = result.tokenDeactivated ? '（トークン自動非アクティブ化）' : '';
-            Logger.log('  → ❌ 失敗: ' + recipient.userName + ' - ' + errorDetail + tokenDeactivated);
-            failedUsers.push({
-              userName: recipient.userName,
-              error: errorDetail,
-              tokenDeactivated: result.tokenDeactivated || false
-            });
-          }
-        } catch (error) {
-          Logger.log('  → 💥 例外: ' + recipient.userName + ' - ' + error);
-          failCount++;
-          failedUsers.push({
-            userName: recipient.userName,
-            error: error.toString(),
-            tokenDeactivated: false
-          });
-        }
-      });
-
-      Logger.log('[sendChatNotification] 送信完了: 成功=' + successCount + ', 失敗=' + failCount);
-      if (failedUsers.length > 0) {
-        Logger.log('[sendChatNotification] 失敗ユーザー詳細:');
-        failedUsers.forEach(function(failed) {
-          Logger.log('  - ' + failed.userName + ': ' + failed.error + (failed.tokenDeactivated ? ' [非アクティブ化済み]' : ''));
-        });
-      }
-
-      // 通知ログに記録（失敗ユーザー情報も含める）
-      if (typeof logNotification === 'function') {
-        const failedUsersStr = failedUsers.map(function(f) {
-          return f.userName + '(' + f.error + ')';
-        }).join(', ');
-        logNotification(title, body, successCount, failCount, failedUsersStr);
-      }
-    } else {
-      Logger.log('[sendChatNotification] sendFCMToTokenV1またはgetAccessToken関数が見つかりません');
-    }
-  } catch (error) {
-    Logger.log('[sendChatNotification] ERROR: ' + error);
-  }
-}
+// [REMOVED] sendChatNotification - Firebase Functions (onChatMessageCreated) がFirestoreトリガーで自動通知するため不要
 
 /**
  * 新着メッセージを取得（Polling用）
@@ -509,5 +359,4 @@ function getNewMessages(lastCheckTime, userName, channelId) {
 // グローバル露出
 globalThis.sendMessage = sendMessage;
 globalThis.getMessages = getMessages;
-globalThis.sendChatNotification = sendChatNotification;
 globalThis.getNewMessages = getNewMessages;
