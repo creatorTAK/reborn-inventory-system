@@ -2704,8 +2704,31 @@
           cfgLoadShippingDays()
         ]);
 
+        // 配送オプション読み込み完了後に保存済み設定値を再適用
+        // （cfgLoadAllConfigがオプション読み込み前に実行されるため、ここで再設定が必要）
+        try {
+          var sd = localStorage.getItem(_cfg_CONFIG_STORAGE_KEYS.SHIPPING_DEFAULT);
+          var shippingConfig = sd ? JSON.parse(sd) : null;
+          if (!shippingConfig && window.db) {
+            var doc = await window.db.collection('settings').doc('common').get();
+            if (doc.exists && doc.data().shippingDefault) shippingConfig = doc.data().shippingDefault;
+          }
+          if (shippingConfig) cfgRenderShippingDefaults(shippingConfig);
+        } catch (e) { console.warn('[config] shipping defaults re-apply error:', e); }
+
         // Load procure/listing dropdowns
         await cfgInitProcureListingDropdowns();
+
+        // 仕入出品オプション読み込み完了後に保存済み設定値を再適用
+        try {
+          var pl = localStorage.getItem(_cfg_CONFIG_STORAGE_KEYS.PROCURE_LISTING_DEFAULT);
+          var plConfig = pl ? JSON.parse(pl) : null;
+          if (!plConfig && window.db) {
+            var doc2 = await window.db.collection('settings').doc('common').get();
+            if (doc2.exists && doc2.data().procureListingDefault) plConfig = doc2.data().procureListingDefault;
+          }
+          if (plConfig) cfgRenderProcureListingDefaults(plConfig);
+        } catch (e) { console.warn('[config] procure/listing defaults re-apply error:', e); }
 
         // Load platforms from Firestore
         await cfgLoadPlatformsFromFirestore();

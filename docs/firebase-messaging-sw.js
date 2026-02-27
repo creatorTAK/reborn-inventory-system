@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v343';  // v343: Firestore直接フォールバック+最終セーフティネット
+const CACHE_VERSION = 'v344';  // v344: 設定画面のデフォルト値復元タイミング修正
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
