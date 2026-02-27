@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v337';  // v337: 通知タップ→ページ遷移（IndexedDB pending navigation）
+const CACHE_VERSION = 'v338';  // v338: CSS幅統一（.group明示的width指定）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
