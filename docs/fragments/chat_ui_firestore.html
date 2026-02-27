@@ -3382,8 +3382,13 @@
       if (bottomNav) bottomNav.classList.add('hidden');
       var spaContent = document.getElementById('spa-content');
       if (spaContent) {
+        // position:fixedでiOSキーボード時のbodyスクロールの影響を受けないようにする
+        spaContent.style.position = 'fixed';
+        spaContent.style.top = '0';
+        spaContent.style.left = '0';
+        spaContent.style.right = '0';
         spaContent.style.bottom = '0';
-        spaContent.style.overflow = 'hidden'; // チャットUI内部でスクロール管理するため
+        spaContent.style.overflow = 'hidden';
       }
 
       // Make the fragment visible
@@ -3483,7 +3488,12 @@
       if (bottomNav) bottomNav.classList.remove('hidden');
       var spaContent = document.getElementById('spa-content');
       if (spaContent) {
+        spaContent.style.position = '';
+        spaContent.style.top = '';
+        spaContent.style.left = '';
+        spaContent.style.right = '';
         spaContent.style.bottom = '';
+        spaContent.style.height = '';
         spaContent.style.overflow = '';
       }
 
@@ -9439,52 +9449,38 @@
     // clearAllImages()で全削除も可能
 
     // 🔧 iOS キーボード表示時のレイアウト修正（visualViewport API）
-    // 方針: キーボード表示時にチャットUI全体をposition:fixedにし、
-    // iOSのbodyスクロールの影響を受けないようにする
+    // #spa-contentはinitChatUiPageでposition:fixedに設定済み
+    // → bodyスクロールの影響を受けない
+    // → visualViewportの高さに合わせてリサイズするだけでOK
     (function() {
       if (!window.visualViewport) return;
 
-      var chatContainer = document.getElementById('spa-page-chat-ui');
+      var spaContent = document.getElementById('spa-content');
       var mc = document.getElementById('messagesContainer');
-      if (!chatContainer) return;
+      if (!spaContent) return;
 
-      var _keyboardVisible = false;
-
-      function adjustLayout() {
+      function adjustForKeyboard() {
         var vv = window.visualViewport;
         var isKeyboard = vv.height < window.innerHeight - 100;
 
-        if (isKeyboard && !_keyboardVisible) {
-          _keyboardVisible = true;
-          // position:fixedでbodyスクロールから切り離す
-          chatContainer.style.position = 'fixed';
-          chatContainer.style.top = '0';
-          chatContainer.style.left = '0';
-          chatContainer.style.right = '0';
-          chatContainer.style.height = vv.height + 'px';
-          chatContainer.style.zIndex = '10000';
+        if (isKeyboard) {
+          // キーボード表示中: spa-contentの高さを可視領域に合わせる
+          spaContent.style.height = vv.height + 'px';
+          spaContent.style.bottom = 'auto';
           // メッセージを最下部にスクロール
-          if (mc) setTimeout(function() { mc.scrollTop = mc.scrollHeight; }, 50);
-        } else if (isKeyboard && _keyboardVisible) {
-          // キーボードサイズ変更（予測変換バー等）
-          chatContainer.style.height = vv.height + 'px';
-        } else if (!isKeyboard && _keyboardVisible) {
-          // キーボードが閉じた
-          _keyboardVisible = false;
-          chatContainer.style.position = '';
-          chatContainer.style.top = '';
-          chatContainer.style.left = '';
-          chatContainer.style.right = '';
-          chatContainer.style.height = '100%';
-          chatContainer.style.zIndex = '';
+          if (mc) mc.scrollTop = mc.scrollHeight;
+        } else {
+          // キーボード非表示: 全画面に戻す
+          spaContent.style.height = '';
+          spaContent.style.bottom = '0';
         }
       }
 
-      _cuiAddEventListener(window.visualViewport, 'resize', adjustLayout);
+      _cuiAddEventListener(window.visualViewport, 'resize', adjustForKeyboard);
 
-      // focus時にも発動（visualViewport.resizeより早く対応）
+      // focus時にも発動（キーボードアニメーション待ち）
       _cuiAddEventListener(messageInput, 'focus', function() {
-        setTimeout(adjustLayout, 300);
+        setTimeout(adjustForKeyboard, 300);
       });
     })();
   }
