@@ -1101,24 +1101,14 @@
     async function invSaveSalesRecordToFirestore(salesData) {
       try {
         var db = window.db;
-        var coll = window.firestoreCollection;
-        var getDocs = window.firestoreGetDocs;
-        var docRef = window.firestoreDoc;
-        var updateDoc = window.firestoreUpdateDoc;
-        var addDoc = window.firestoreAddDoc;
-        var getDoc = window.firestoreGetDoc;
-        var serverTs = window.firestoreServerTimestamp;
+        var serverTs = firebase.firestore.FieldValue.serverTimestamp;
 
-        var q = window.firestoreQuery;
-        var where = window.firestoreWhere;
-        var limit = window.firestoreLimit;
-        var snapshot = await getDocs(q(coll(db, 'products'), where('managementNumber', '==', salesData.managementNumber), limit(1)));
+        var snapshot = await db.collection('products').where('managementNumber', '==', salesData.managementNumber).limit(1).get();
         if (snapshot.empty) throw new Error('商品が見つかりません: ' + salesData.managementNumber);
         var productDocId = snapshot.docs[0].id;
         var productData = snapshot.docs[0].data();
 
-        var productRef = docRef(db, 'products', productDocId);
-        await updateDoc(productRef, {
+        await db.collection('products').doc(productDocId).update({
           status: '販売済', saleDate: salesData.salesDate, saleAmount: salesData.salesAmount,
           salePlatform: salesData.salesPlatform, shippingMethod1: salesData.shippingMethod1,
           shippingMethod2: salesData.shippingMethod2, shippingFee: salesData.shippingFee,
@@ -1134,17 +1124,16 @@
             var material = salesData.packagingMaterials[mi];
             if (material.materialId) {
               try {
-                await addDoc(coll(db, 'packagingTransactions'), {
+                await db.collection('packagingTransactions').add({
                   materialId: material.materialId, type: 'out', quantity: 1, reason: 'sale',
                   relatedSaleId: productDocId, notes: '販売: ' + salesData.managementNumber,
                   createdBy: (window.currentUser && window.currentUser.name) || 'unknown', createdAt: serverTs()
                 });
-                var materialRef = docRef(db, 'packagingMaterials', material.materialId);
-                var materialDoc = await getDoc(materialRef);
-                if (materialDoc.exists()) {
+                var materialDoc = await db.collection('packagingMaterials').doc(material.materialId).get();
+                if (materialDoc.exists) {
                   var currentStock = (materialDoc.data() && materialDoc.data().currentStock) || 0;
                   var newStock = Math.max(0, currentStock - 1);
-                  await updateDoc(materialRef, { currentStock: newStock, updatedAt: serverTs() });
+                  await db.collection('packagingMaterials').doc(material.materialId).update({ currentStock: newStock, updatedAt: serverTs() });
                 }
               } catch (stockError) {
                 console.warn('[inv] 出庫処理エラー:', material.productName, stockError);
@@ -1167,13 +1156,7 @@
     async function invAddShippingTaskToStaff(productData, salesData, productDocId) {
       try {
         var db = window.db;
-        var coll = window.firestoreCollection;
-        var addDoc = window.firestoreAddDoc;
-        var serverTs = window.firestoreServerTimestamp;
-        var Timestamp = window.firestoreTimestamp;
-        var getDocs = window.firestoreGetDocs;
-        var q = window.firestoreQuery;
-        var where = window.firestoreWhere;
+        var serverTs = firebase.firestore.FieldValue.serverTimestamp;
 
         var staffName = productData.createdBy || '不明';
         var staffEmail = productData.createdByEmail || null;
@@ -1204,18 +1187,15 @@
           }
         };
 
-        var tasksRef = coll(db, 'userTasks', staffEmail, 'tasks');
-        await addDoc(tasksRef, Object.assign({}, taskData, {
+        await db.collection('userTasks').doc(staffEmail).collection('tasks').add(Object.assign({}, taskData, {
           createdAt: serverTs(),
-          dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
+          dueDate: dueDate ? firebase.firestore.Timestamp.fromDate(dueDate) : null,
           completed: false, read: false
         }));
 
         // Push notification
         try {
-          var devicesRef = coll(db, 'users', staffEmail, 'devices');
-          var activeDevicesQuery = q(devicesRef, where('active', '==', true));
-          var devicesSnapshot = await getDocs(activeDevicesQuery);
+          var devicesSnapshot = await db.collection('users').doc(staffEmail).collection('devices').where('active', '==', true).get();
           var tokens = [];
           devicesSnapshot.forEach(function(deviceDoc) {
             var deviceData = deviceDoc.data();
@@ -1327,6 +1307,15 @@
     function invFormatCurrency(value) {
       if (!value && value !== 0) return '-';
       return '\u00a5' + Number(value).toLocaleString();
+    }
+    function invFormatDate(value) {
+      if (!value) return '-';
+      var d;
+      if (value.toDate) d = value.toDate();
+      else if (value.seconds) d = new Date(value.seconds * 1000);
+      else d = new Date(value);
+      if (isNaN(d.getTime())) return String(value);
+      return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
     }
     function invGetThumbUrl(originalUrl) {
       if (!originalUrl) return originalUrl;
@@ -1518,6 +1507,11 @@
       filtered.sort(function(a, b) {
         var aVal = a[params.sortBy] || '';
         var bVal = b[params.sortBy] || '';
+        // Firestore Timestampを比較可能な値に変換
+        if (aVal && aVal.toDate) aVal = aVal.toDate().getTime();
+        else if (aVal && aVal.seconds) aVal = aVal.seconds * 1000;
+        if (bVal && bVal.toDate) bVal = bVal.toDate().getTime();
+        else if (bVal && bVal.seconds) bVal = bVal.seconds * 1000;
         return params.sortOrder === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
       });
 
@@ -1778,20 +1772,15 @@
 
     // ===== Filter dropdowns =====
     async function invInitFilterDropdowns() {
-      if (!window.db || !window.firestoreGetDoc || !window.firestoreGetDocs) return;
+      if (!window.db) return;
       try {
         var db = window.db;
-        var coll = window.firestoreCollection;
-        var docFn = window.firestoreDoc;
-        var getDoc = window.firestoreGetDoc;
-        var getDocs = window.firestoreGetDocs;
 
         var categorySelect = document.getElementById('invFilterCategory');
         if (categorySelect) {
           try {
-            var catDocRef = docFn(db, 'categories', 'master');
-            var catDocSnap = await getDoc(catDocRef);
-            if (catDocSnap.exists()) {
+            var catDocSnap = await db.collection('categories').doc('master').get();
+            if (catDocSnap.exists) {
               var rows = catDocSnap.data().rows || [];
               var mainCategories = Array.from(new Set(rows.map(function(r) { return r['大分類']; }).filter(Boolean)));
               mainCategories.sort();
@@ -1803,8 +1792,7 @@
         var sizeSelect = document.getElementById('invFilterSize');
         var colorSelect = document.getElementById('invFilterColor');
         try {
-          var masterOptionsRef = coll(db, 'masterOptions');
-          var snapshot = await getDocs(masterOptionsRef);
+          var snapshot = await db.collection('masterOptions').get();
           snapshot.forEach(function(docSnap) {
             var data = docSnap.data();
             if (data.fieldName === 'サイズ' && data.items && sizeSelect) {
@@ -1908,16 +1896,16 @@
         + '<div class="col-12">' + imageBlockHtml + '</div>'
         + (product.damageMarker && product.damageMarker.image ? '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-exclamation-triangle me-1"></i>傷・汚れマーキング</h6></div><div class="col-12"><div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px;"><div style="font-size: 12px; color: #78716c; margin-bottom: 8px;">' + (product.damageMarker.type || '') + '</div><img src="' + product.damageMarker.image + '" alt="傷・汚れマーキング" style="max-width: 100%; border-radius: 6px; border: 1px solid #e5e7eb;">' + (product.damageMarker.note ? '<div style="margin-top: 8px; padding: 8px; background: white; border-radius: 4px; border: 1px solid #e5e7eb;"><div style="font-size: 11px; color: #78716c; margin-bottom: 4px;">補足説明</div><div style="font-size: 13px; color: #374151; white-space: pre-wrap;">' + product.damageMarker.note + '</div></div>' : '') + '</div></div>' : '')
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-cart me-1"></i>仕入情報 ' + (isEditable ? '<span class="badge bg-success small">編集可能</span>' : '') + '</h6></div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">仕入日</label><div class="form-control-plaintext">' + (product.purchaseDate || '-') + '</div></div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">仕入日</label><div class="form-control-plaintext">' + invFormatDate(product.purchaseDate) + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">仕入先</label><div class="form-control-plaintext">' + (product.supplier || '-') + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">仕入金額</label>' + createField(product.purchaseAmount, 'invPurchaseAmount', 'number') + '</div>'
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-megaphone me-1"></i>出品情報 ' + (isEditable ? '<span class="badge bg-success small">編集可能</span>' : '') + '</h6></div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">出品日</label><div class="form-control-plaintext">' + (product.listingDate || '-') + '</div></div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">出品日</label><div class="form-control-plaintext">' + invFormatDate(product.listingDate) + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">出品先</label><div class="form-control-plaintext">' + (product.listingDestination || '-') + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">販売タイプ</label><div class="form-control-plaintext">' + salesTypeDisplay + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">出品金額</label>' + createField(product.listingAmount, 'invListingAmount', 'number') + '</div>'
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-currency-yen me-1"></i>販売情報</h6></div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">販売日</label><div class="form-control-plaintext">' + (product.saleDate || '-') + '</div></div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">販売日</label><div class="form-control-plaintext">' + invFormatDate(product.saleDate) + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">販売先</label><div class="form-control-plaintext">' + (product.salePlatform || '-') + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">販売金額</label><div class="form-control-plaintext">' + invFormatCurrency(product.saleAmount) + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">利益金額</label><div class="form-control-plaintext text-success fw-bold">' + invFormatCurrency(product.profit) + '</div></div>'
@@ -2035,23 +2023,15 @@
       invShowLoading();
       try {
         var db = window.db;
-        var coll = window.firestoreCollection;
-        var getDocs = window.firestoreGetDocs;
-        var where = window.firestoreWhere;
-        var q = window.firestoreQuery;
-        var limit = window.firestoreLimit;
-        var docRef = window.firestoreDoc;
-        var updateDoc = window.firestoreUpdateDoc;
+        var serverTs = firebase.firestore.FieldValue.serverTimestamp;
 
-        var productsRef = coll(db, 'products');
-        var qry = q(productsRef, where('managementNumber', '==', managementNumber), limit(1));
-        var snapshot = await getDocs(qry);
+        var snapshot = await db.collection('products').where('managementNumber', '==', managementNumber).limit(1).get();
         if (!snapshot.empty) {
-          var productRef = snapshot.docs[0].ref;
-          var productData = snapshot.docs[0].data();
-          await updateDoc(productRef, { stockQuantity: newQuantity, updatedAt: new Date().toISOString() });
+          var productDoc = snapshot.docs[0];
+          var productData = productDoc.data();
+          await productDoc.ref.update({ stockQuantity: newQuantity, updatedAt: serverTs() });
           if (productData.skuId) {
-            await updateDoc(docRef(db, 'skus', productData.skuId), { currentStock: newQuantity, updatedAt: new Date().toISOString() });
+            await db.collection('skus').doc(productData.skuId).update({ currentStock: newQuantity, updatedAt: serverTs() });
           }
           invHideLoading();
           bootstrap.Modal.getInstance(document.getElementById('invStockEditModal')).hide();
@@ -2067,16 +2047,10 @@
       invShowLoading();
       try {
         var db = window.db;
-        var coll = window.firestoreCollection;
-        var getDocs = window.firestoreGetDocs;
-        var addDoc = window.firestoreAddDoc;
-        var q = window.firestoreQuery;
-        var where = window.firestoreWhere;
-        var limit = window.firestoreLimit;
-        var serverTs = window.firestoreServerTimestamp;
+        var serverTs = firebase.firestore.FieldValue.serverTimestamp;
 
         // managementNumberフィールドで元商品を検索
-        var sourceSnap = await getDocs(q(coll(db, 'products'), where('managementNumber', '==', managementNumber), limit(1)));
+        var sourceSnap = await db.collection('products').where('managementNumber', '==', managementNumber).limit(1).get();
         if (sourceSnap.empty) { invHideLoading(); invShowError('元の商品が見つかりません'); return; }
         var sourceData = sourceSnap.docs[0].data();
 
@@ -2085,7 +2059,7 @@
         var suffix = 1;
         while (suffix <= 99) {
           newManagementNumber = managementNumber + '-C' + suffix;
-          var existCheck = await getDocs(q(coll(db, 'products'), where('managementNumber', '==', newManagementNumber), limit(1)));
+          var existCheck = await db.collection('products').where('managementNumber', '==', newManagementNumber).limit(1).get();
           if (existCheck.empty) break;
           suffix++;
         }
@@ -2101,7 +2075,7 @@
         });
         if (newData.listing) { newData.listing = { date: '', amount: 0 }; }
         if (newData.sale) { delete newData.sale; }
-        await addDoc(coll(db, 'products'), newData);
+        await db.collection('products').add(newData);
 
         invHideLoading();
         alert('商品を複製しました！\n新しい管理番号: ' + newManagementNumber);
@@ -2146,13 +2120,9 @@
       invShowLoading();
       try {
         var db = window.db;
-        var docRef = window.firestoreDoc;
-        var updateDoc = window.firestoreUpdateDoc;
-        var serverTs = window.firestoreServerTimestamp;
+        var serverTs = firebase.firestore.FieldValue.serverTimestamp;
 
         // invCurrentProduct.id は getProductByManagementNumber が返すFirestoreドキュメントID
-        var productRef = docRef(db, 'products', invCurrentProduct.id);
-
         var updateData = { updatedAt: serverTs() };
         if (statusChanged) { updateData.status = newStatus; }
 
@@ -2163,7 +2133,7 @@
           updateData[firestoreField] = change.value;
         });
 
-        await updateDoc(productRef, updateData);
+        await db.collection('products').doc(invCurrentProduct.id).update(updateData);
         invCompleteProductUpdate(statusChanged, newStatus, oldStatus);
       } catch (error) { invHideLoading(); invShowError('更新エラー: ' + (error.message || error)); }
     }
@@ -2440,9 +2410,7 @@
       invShowModal('invPresetSelectorModal');
       try {
         var db = window.db;
-        var coll = window.firestoreCollection;
-        var getDocs = window.firestoreGetDocs;
-        var snapshot = await getDocs(coll(db, 'packagingPresets'));
+        var snapshot = await db.collection('packagingPresets').get();
         if (snapshot.empty) { container.innerHTML = '<div class="text-center py-3 text-muted"><p>プリセットがまだ登録されていません</p></div>'; return; }
         var html = '<div class="list-group">';
         snapshot.forEach(function(docSnap) {
@@ -2464,10 +2432,8 @@
     async function invApplyPreset(presetId) {
       try {
         var db = window.db;
-        var docRef = window.firestoreDoc;
-        var getDoc = window.firestoreGetDoc;
-        var presetDoc = await getDoc(docRef(db, 'packagingPresets', presetId));
-        if (!presetDoc.exists()) { alert('プリセットが見つかりません'); return; }
+        var presetDoc = await db.collection('packagingPresets').doc(presetId).get();
+        if (!presetDoc.exists) { alert('プリセットが見つかりません'); return; }
         var preset = presetDoc.data();
         var materials = preset.materials || [];
         invPackagingMaterialCount = materials.length;
