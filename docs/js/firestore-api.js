@@ -381,11 +381,14 @@ async function getProductByManagementNumber(managementNumber) {
   try {
     const db = await initializeFirestore();
 
-    // ドキュメントIDは管理番号（特殊文字置換済み）
-    const docId = managementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
-    const docSnap = await db.collection('products').doc(docId).get();
+    // managementNumberフィールドで検索（ドキュメントIDに依存しない）
+    const snapshot = await db.collection('products')
+      .where('managementNumber', '==', managementNumber)
+      .limit(1)
+      .get();
 
-    if (docSnap.exists) {
+    if (!snapshot.empty) {
+      const docSnap = snapshot.docs[0];
       const data = docSnap.data();
       return {
         id: docSnap.id,

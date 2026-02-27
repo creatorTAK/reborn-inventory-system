@@ -1111,18 +1111,13 @@
         var getDoc = window.firestoreGetDoc;
         var serverTs = window.firestoreServerTimestamp;
 
-        var productsRef = coll(db, 'products');
-        var snapshot = await getDocs(productsRef);
-        var productDocId = null;
-        var productData = null;
-        snapshot.forEach(function(docSnap) {
-          var data = docSnap.data();
-          if (data.managementNumber === salesData.managementNumber) {
-            productDocId = docSnap.id;
-            productData = data;
-          }
-        });
-        if (!productDocId) throw new Error('商品が見つかりません: ' + salesData.managementNumber);
+        var q = window.firestoreQuery;
+        var where = window.firestoreWhere;
+        var limit = window.firestoreLimit;
+        var snapshot = await getDocs(q(coll(db, 'products'), where('managementNumber', '==', salesData.managementNumber), limit(1)));
+        if (snapshot.empty) throw new Error('商品が見つかりません: ' + salesData.managementNumber);
+        var productDocId = snapshot.docs[0].id;
+        var productData = snapshot.docs[0].data();
 
         var productRef = docRef(db, 'products', productDocId);
         await updateDoc(productRef, {
@@ -2064,30 +2059,31 @@
       invShowLoading();
       try {
         var db = window.db;
-        var docRef = window.firestoreDoc;
-        var getDoc = window.firestoreGetDoc;
-        var setDoc = window.firestoreSetDoc;
+        var coll = window.firestoreCollection;
+        var getDocs = window.firestoreGetDocs;
+        var addDoc = window.firestoreAddDoc;
+        var q = window.firestoreQuery;
+        var where = window.firestoreWhere;
+        var limit = window.firestoreLimit;
         var serverTs = window.firestoreServerTimestamp;
 
-        var docId = managementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
-        var sourceDoc = await getDoc(docRef(db, 'products', docId));
-        if (!sourceDoc.exists()) { invHideLoading(); invShowError('元の商品が見つかりません'); return; }
-        var sourceData = sourceDoc.data();
+        // managementNumberフィールドで元商品を検索
+        var sourceSnap = await getDocs(q(coll(db, 'products'), where('managementNumber', '==', managementNumber), limit(1)));
+        if (sourceSnap.empty) { invHideLoading(); invShowError('元の商品が見つかりません'); return; }
+        var sourceData = sourceSnap.docs[0].data();
 
         // 新しい管理番号を生成（元の番号 + -C + 連番）
         var newManagementNumber;
         var suffix = 1;
         while (suffix <= 99) {
           newManagementNumber = managementNumber + '-C' + suffix;
-          var newDocId = newManagementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
-          var existCheck = await getDoc(docRef(db, 'products', newDocId));
-          if (!existCheck.exists()) break;
+          var existCheck = await getDocs(q(coll(db, 'products'), where('managementNumber', '==', newManagementNumber), limit(1)));
+          if (existCheck.empty) break;
           suffix++;
         }
         if (suffix > 99) { throw new Error('複製番号の生成に失敗しました'); }
 
-        // 新ドキュメント作成（ステータス・販売情報リセット）
-        var finalDocId = newManagementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
+        // 新ドキュメント作成（ステータス・販売情報リセット、IDは自動生成）
         var newData = Object.assign({}, sourceData, {
           managementNumber: newManagementNumber,
           status: '登録済み',
@@ -2097,7 +2093,7 @@
         });
         if (newData.listing) { newData.listing = { date: '', amount: 0 }; }
         if (newData.sale) { delete newData.sale; }
-        await setDoc(docRef(db, 'products', finalDocId), newData);
+        await addDoc(coll(db, 'products'), newData);
 
         invHideLoading();
         alert('商品を複製しました！\n新しい管理番号: ' + newManagementNumber);
@@ -2144,16 +2140,10 @@
         var db = window.db;
         var docRef = window.firestoreDoc;
         var updateDoc = window.firestoreUpdateDoc;
-        var getDoc = window.firestoreGetDoc;
         var serverTs = window.firestoreServerTimestamp;
 
-        var docId = invCurrentProduct.managementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
-        var productRef = docRef(db, 'products', docId);
-        // docIdで見つからない場合、idフィールドで試行
-        var docSnap = await getDoc(productRef);
-        if (!docSnap.exists() && invCurrentProduct.id) {
-          productRef = docRef(db, 'products', invCurrentProduct.id);
-        }
+        // invCurrentProduct.id は getProductByManagementNumber が返すFirestoreドキュメントID
+        var productRef = docRef(db, 'products', invCurrentProduct.id);
 
         var updateData = { updatedAt: serverTs() };
         if (statusChanged) { updateData.status = newStatus; }
