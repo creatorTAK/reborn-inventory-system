@@ -485,6 +485,112 @@
     }
 
     /* ============================================ */
+    /* iOS PWA対応: body直下モーダル（スタッキングコンテキスト脱出用） */
+    /* ============================================ */
+    body > .cfg-modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 99999;
+      justify-content: center;
+      align-items: center;
+    }
+    body > .cfg-modal-overlay.active {
+      display: flex;
+    }
+    body > .cfg-modal-overlay .cfg-modal-content {
+      background: white;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 400px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    body > .cfg-modal-overlay .cfg-modal-header {
+      padding: 16px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    body > .cfg-modal-overlay .cfg-modal-header h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #1f2937;
+    }
+    body > .cfg-modal-overlay .cfg-modal-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: #6b7280;
+      cursor: pointer;
+      padding: 8px;
+      -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+    }
+    body > .cfg-modal-overlay .cfg-modal-body {
+      padding: 16px;
+    }
+
+    /* iOS PWA対応: body直下 mnb-modal */
+    body > .mnb-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 99999;
+      align-items: center;
+      justify-content: center;
+    }
+    body > .mnb-modal.active { display: flex; }
+    body > .mnb-modal .mnb-modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+    }
+    body > .mnb-modal .mnb-modal-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #1f2937; }
+    body > .mnb-modal .mnb-form-group { margin-bottom: 12px; }
+    body > .mnb-modal .mnb-form-label { display: block; font-size: 12px; font-weight: 500; color: #374151; margin-bottom: 4px; }
+    body > .mnb-modal .mnb-form-input,
+    body > .mnb-modal .mnb-form-select { width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 16px; box-sizing: border-box; }
+    body > .mnb-modal .mnb-modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    body > .mnb-modal .mnb-modal-btn { flex: 1; padding: 8px 14px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
+    body > .mnb-modal .mnb-modal-btn-primary { background: #3b82f6; color: white; }
+    body > .mnb-modal .mnb-modal-btn-secondary { background: #e5e7eb; color: #374151; }
+    body > .mnb-modal .mnb-type-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px; }
+    body > .mnb-modal .mnb-type-card { padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.2s; background: white; }
+    body > .mnb-modal .mnb-type-card.selected { border-color: #3b82f6; background: #eff6ff; }
+
+    /* iOS PWA対応: body直下 userDetailModal */
+    body > #cfg-userDetailModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 99999;
+      justify-content: center;
+      align-items: center;
+    }
+    body > #cfg-userDetailModal .cfg-modal-sheet {
+      background: white;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ============================================ */
     /* 管理番号ビルダー（旧版ManagementNumberBuilder移植） */
     /* ============================================ */
     #spa-page-config .mnb-container {
@@ -2139,6 +2245,32 @@
     // Prefix: cfg (functions), _cfg_ (variables)
     // ============================================
 
+    // --- Modal Helper (iOS PWA stacking context fix) ---
+    // [data-spa-page]のoverflow-y:auto + -webkit-overflow-scrolling:touchが
+    // iOSでスタッキングコンテキストを作成し、position:fixedモーダルの
+    // タッチイベントをブロックする。モーダルをbodyに移動して回避。
+    function _cfgShowModal(modalId) {
+      var modal = document.getElementById(modalId);
+      if (!modal) return null;
+      modal._cfgOrigParent = modal.parentNode;
+      modal._cfgOrigNext = modal.nextSibling;
+      document.body.appendChild(modal);
+      modal.classList.add('active');
+      return modal;
+    }
+    function _cfgHideModal(modalId) {
+      var modal = document.getElementById(modalId);
+      if (!modal) return;
+      modal.classList.remove('active');
+      if (modal._cfgOrigParent) {
+        if (modal._cfgOrigNext && modal._cfgOrigNext.parentNode === modal._cfgOrigParent) {
+          modal._cfgOrigParent.insertBefore(modal, modal._cfgOrigNext);
+        } else {
+          modal._cfgOrigParent.appendChild(modal);
+        }
+      }
+    }
+
     // --- State Variables ---
     var _cfg_initialized = false;
     var _cfg_destroyed = false;
@@ -2519,7 +2651,7 @@
           if (elem) { elem.value = seg.config[field.id] || ''; if (field.type === 'select') self.updateConditionalFields(field.id, elem.value); }
         });
         document.getElementById('cfg-mnbSeparator').value = seg.separator || '-';
-        document.getElementById('cfg-mnbModal').classList.add('active');
+        _cfgShowModal('cfg-mnbModal');
       },
 
       getData: function() { return { segments: this.segments }; },
@@ -2605,6 +2737,11 @@
       _cfg_saleswordFavorites = [];
       _cfg_customTaskCounter = 0;
       _cfg_userTaskAssignmentRetryCount = 0;
+
+      // body直下に残ったモーダルを元に戻す
+      ['cfg-platformSelectModal', 'cfg-platformEditModal', 'cfg-shippingInfoModal', 'cfg-bankAccountModal', 'cfg-mnbModal', 'cfg-userDetailModal'].forEach(function(id) {
+        _cfgHideModal(id);
+      });
     }
     window.destroyConfigPage = destroyConfigPage;
 
@@ -4261,14 +4398,13 @@
     window.cfgSelectRegistrationMode = cfgSelectRegistrationMode;
 
     function cfgOpenPlatformSelectModal() {
-      var modal = document.getElementById('cfg-platformSelectModal');
-      if (modal) { modal.classList.add('active'); cfgRenderPlatformSelectList(); }
+      _cfgShowModal('cfg-platformSelectModal');
+      cfgRenderPlatformSelectList();
     }
     window.cfgOpenPlatformSelectModal = cfgOpenPlatformSelectModal;
 
     function cfgClosePlatformSelectModal() {
-      var modal = document.getElementById('cfg-platformSelectModal');
-      if (modal) modal.classList.remove('active');
+      _cfgHideModal('cfg-platformSelectModal');
     }
     window.cfgClosePlatformSelectModal = cfgClosePlatformSelectModal;
 
@@ -4361,14 +4497,12 @@
         }
       }
 
-      var modal = document.getElementById('cfg-platformEditModal');
-      if (modal) modal.classList.add('active');
+      _cfgShowModal('cfg-platformEditModal');
     }
     window.cfgOpenPlatformEditModal = cfgOpenPlatformEditModal;
 
     function cfgClosePlatformEditModal() {
-      var modal = document.getElementById('cfg-platformEditModal');
-      if (modal) modal.classList.remove('active');
+      _cfgHideModal('cfg-platformEditModal');
       _cfg_currentEditingPlatformId = null;
       _cfg_pendingIconFile = null;
     }
@@ -4563,12 +4697,12 @@
       document.getElementById('cfg-mnbTypeGridContainer').style.display = 'block';
       var grid = document.getElementById('cfg-mnbTypeGrid');
       if (grid) grid.querySelectorAll('.mnb-type-card').forEach(function(c) { c.classList.remove('selected'); });
-      document.getElementById('cfg-mnbModal').classList.add('active');
+      _cfgShowModal('cfg-mnbModal');
     }
     window.cfgOpenAddSegmentModal = cfgOpenAddSegmentModal;
 
     function cfgCloseSegmentModal() {
-      document.getElementById('cfg-mnbModal').classList.remove('active');
+      _cfgHideModal('cfg-mnbModal');
     }
     window.cfgCloseSegmentModal = cfgCloseSegmentModal;
 
@@ -5388,19 +5522,25 @@
       }
 
       actionsDiv.innerHTML = actionButtons;
+      // body直下に移動（iOS PWAスタッキングコンテキスト対応）
+      modal._cfgOrigParent = modal.parentNode;
+      modal._cfgOrigNext = modal.nextSibling;
+      document.body.appendChild(modal);
       modal.style.display = 'flex';
-      // ボトムナビを非表示（z-indexスタッキングコンテキスト問題の回避）
-      var bottomNav = document.getElementById('bottom-nav');
-      if (bottomNav) bottomNav.style.display = 'none';
     }
     window.cfgOpenUserDetailModal = cfgOpenUserDetailModal;
 
     function cfgCloseUserDetailModal() {
       var modal = document.getElementById('cfg-userDetailModal');
-      if (modal) modal.style.display = 'none';
-      // ボトムナビを復元
-      var bottomNav = document.getElementById('bottom-nav');
-      if (bottomNav) bottomNav.style.display = '';
+      if (!modal) return;
+      modal.style.display = 'none';
+      if (modal._cfgOrigParent) {
+        if (modal._cfgOrigNext && modal._cfgOrigNext.parentNode === modal._cfgOrigParent) {
+          modal._cfgOrigParent.insertBefore(modal, modal._cfgOrigNext);
+        } else {
+          modal._cfgOrigParent.appendChild(modal);
+        }
+      }
     }
     window.cfgCloseUserDetailModal = cfgCloseUserDetailModal;
 
@@ -5883,11 +6023,8 @@
     window.cfgSearchShippingAddress = cfgSearchShippingAddress;
 
     async function cfgOpenShippingInfoModal() {
-      var modal = document.getElementById('cfg-shippingInfoModal');
-      if (modal) {
-        modal.classList.add('active');
-        await cfgLoadShippingInfo();
-      }
+      _cfgShowModal('cfg-shippingInfoModal');
+      await cfgLoadShippingInfo();
     }
     window.cfgOpenShippingInfoModal = cfgOpenShippingInfoModal;
 
@@ -5908,8 +6045,7 @@
     }
 
     function cfgCloseShippingInfoModal() {
-      var modal = document.getElementById('cfg-shippingInfoModal');
-      if (modal) modal.classList.remove('active');
+      _cfgHideModal('cfg-shippingInfoModal');
     }
     window.cfgCloseShippingInfoModal = cfgCloseShippingInfoModal;
 
@@ -5941,11 +6077,8 @@
     window.cfgSaveShippingInfo = cfgSaveShippingInfo;
 
     async function cfgOpenBankAccountModal() {
-      var modal = document.getElementById('cfg-bankAccountModal');
-      if (modal) {
-        modal.classList.add('active');
-        await cfgLoadBankAccountInfo();
-      }
+      _cfgShowModal('cfg-bankAccountModal');
+      await cfgLoadBankAccountInfo();
     }
     window.cfgOpenBankAccountModal = cfgOpenBankAccountModal;
 
@@ -5966,8 +6099,7 @@
     }
 
     function cfgCloseBankAccountModal() {
-      var modal = document.getElementById('cfg-bankAccountModal');
-      if (modal) modal.classList.remove('active');
+      _cfgHideModal('cfg-bankAccountModal');
     }
     window.cfgCloseBankAccountModal = cfgCloseBankAccountModal;
 
