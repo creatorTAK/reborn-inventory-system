@@ -577,24 +577,6 @@ window.CONFIG_STORAGE_KEYS = {
       console.log(`    [${i}] ${key}`);
     }
 
-    // マイグレーション: 旧デフォルト設定を強制クリア（配送・仕入出品）
-    if (!localStorage.getItem('_m_defaults_v0228c')) {
-      localStorage.removeItem('rebornConfig_shippingDefault');
-      localStorage.removeItem('rebornConfig_procureListingDefault');
-      localStorage.setItem('_m_defaults_v0228c', '1');
-      // Firestoreからも削除
-      try {
-        if (typeof firebase !== 'undefined' && firebase.firestore) {
-          firebase.firestore().collection('settings').doc('common').update({
-            shippingDefault: firebase.firestore.FieldValue.delete(),
-            procureListingDefault: firebase.firestore.FieldValue.delete()
-          }).then(function() {
-            console.log('✅ Migration: 旧デフォルト設定をFirestoreから削除完了');
-          }).catch(function() {});
-        }
-      } catch(e) {}
-    }
-
     // 1. まずlocalStorageから即座に読み込み（高速表示）
     try {
       if (!window.CACHED_CONFIG) {
