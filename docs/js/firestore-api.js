@@ -120,13 +120,8 @@ async function getUserListFromFirestore() {
     // Firestore初期化
     const db = await initializeFirestore();
 
-    // Firebase SDKを動的インポート
-    const { collection, getDocs, query, where } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-
     // ユーザー一覧取得（アクティブユーザーのみ）
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('status', '==', 'アクティブ'));
-    const snapshot = await getDocs(q);
+    const snapshot = await db.collection('users').where('status', '==', 'アクティブ').get();
 
     const users = [];
     snapshot.forEach(doc => {
@@ -214,12 +209,10 @@ function clearUserListCache() {
 async function getUserByName(userName) {
   try {
     const db = await initializeFirestore();
-    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
-    const userRef = doc(db, 'users', userName);
-    const docSnap = await getDoc(userRef);
+    const docSnap = await db.collection('users').doc(userName).get();
 
-    if (docSnap.exists()) {
+    if (docSnap.exists) {
       const data = docSnap.data();
       return {
         id: docSnap.id,
@@ -387,14 +380,12 @@ async function getProductList(filters = {}, forceRefresh = false) {
 async function getProductByManagementNumber(managementNumber) {
   try {
     const db = await initializeFirestore();
-    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
 
     // ドキュメントIDは管理番号（特殊文字置換済み）
     const docId = managementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
-    const productRef = doc(db, 'products', docId);
-    const docSnap = await getDoc(productRef);
+    const docSnap = await db.collection('products').doc(docId).get();
 
-    if (docSnap.exists()) {
+    if (docSnap.exists) {
       const data = docSnap.data();
       return {
         id: docSnap.id,
