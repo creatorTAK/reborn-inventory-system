@@ -944,13 +944,8 @@ window.continueProductRegistration = function() {
 })();
 
 
-  // 配送デフォルト設定（設定マスタから読み込む）
-  let SHIPPING_DEFAULTS = {
-    '配送料の負担': '送料込み(出品者負担)',
-    '配送の方法': 'ゆうゆうメルカリ便',
-    '発送元の地域': '岡山県',
-    '発送までの日数': '1~2日で発送'
-  };
+  // 配送デフォルト設定（設定マスタから読み込む。未設定時は空）
+  let SHIPPING_DEFAULTS = {};
 
   // Firestoreから配送方法カテゴリをセレクトボックスに読み込む
   /**
@@ -977,7 +972,7 @@ window.continueProductRegistration = function() {
           .get();
 
         // セレクトボックスをクリアして再構築
-        select.innerHTML = '';
+        select.innerHTML = '<option value="">選択してください</option>';
 
         // ドキュメントID（カテゴリ名）を追加
         snapshot.forEach(doc => {
