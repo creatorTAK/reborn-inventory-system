@@ -3771,19 +3771,6 @@
             // エラーの場合でもメッセージは表示する
             startListening();
           });
-      } else if (typeof google !== 'undefined' && google.script && google.script.run) {
-        // GAS版：google.script.runで呼び出し
-        google.script.run
-          .withSuccessHandler(function(users) {
-            if (users && users.length > 0) {
-              cuiUsersCache = users;
-              console.log('[User Cache] GAS版 ユーザー一覧キャッシュ完了:', cuiUsersCache.length + '件');
-            }
-          })
-          .withFailureHandler(function(error) {
-            console.error('[User Cache] GAS版 ユーザー一覧取得エラー:', error);
-          })
-          .getUserListForUI();
       }
 
       // メッセージ入力（hidden textarea パターン）
@@ -4014,58 +4001,6 @@
           stickyDateBadge.classList.add('hidden');
         }
       }
-    }
-
-    // GAS版：ユーザー選択ドロップダウン表示
-    function showUserSelect() {
-      var container = document.getElementById('userSelectContainer');
-      var select = document.getElementById('userSelect');
-
-      container.style.display = 'block';
-
-      // FCM通知登録シートからユーザーリスト取得
-      google.script.run
-        .withSuccessHandler(function(users) {
-          console.log('[GAS] ユーザー取得成功:', users);
-
-          if (!users || users.length === 0) {
-            console.error('[GAS] ユーザーが見つかりません');
-            return;
-          }
-
-          // ユーザー一覧をキャッシュ（アイコン表示用）
-          cuiUsersCache = users;
-          console.log('[User Cache] ユーザー一覧キャッシュ完了:', cuiUsersCache.length + '件');
-
-          // 前回選択したユーザー名を取得
-          var savedUserName = localStorage.getItem('reborn_chat_user_name');
-
-          // ドロップダウンに追加
-          select.innerHTML = '<option value="">選択してください</option>';
-          users.forEach(function(user) {
-            var option = document.createElement('option');
-            option.value = user.userName;
-            option.textContent = user.userName;
-
-            if (savedUserName && user.userName === savedUserName) {
-              option.selected = true;
-              cuiCurrentUserName = user.userName;
-            }
-
-            select.appendChild(option);
-          });
-
-          // 選択変更時
-          select.addEventListener('change', function() {
-            cuiCurrentUserName = this.value;
-            localStorage.setItem('reborn_chat_user_name', cuiCurrentUserName);
-            console.log('[GAS] ユーザー名選択:', cuiCurrentUserName);
-          });
-        })
-        .withFailureHandler(function(error) {
-          console.error('[GAS] エラー:', error);
-        })
-        .getActiveUsers();
     }
 
     // PWA版：ユーザー名入力UI表示
@@ -6931,14 +6866,6 @@
           // フォールバック: history.back()
           console.warn('[Navigation] フォールバック: history.back()');
           window.history.back();
-        }
-      } else {
-        // GAS版: メニュー画面に戻る
-        console.log('[Navigation] GAS版: google.script.run 呼び出し');
-        if (typeof google !== 'undefined' && google.script && google.script.run) {
-          google.script.run.showChatRoomsList();
-        } else {
-          console.error('[Navigation] google.script.run が利用できません');
         }
       }
     };

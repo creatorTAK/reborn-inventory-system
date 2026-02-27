@@ -2058,17 +2058,51 @@
       } catch (error) { invHideLoading(); alert('在庫の更新に失敗しました: ' + error.message); }
     }
 
-    // ===== Duplicate product =====
-    function invDuplicateProduct(managementNumber) {
+    // ===== Duplicate product (Firestore直接操作) =====
+    async function invDuplicateProduct(managementNumber) {
       if (!confirm('商品「' + managementNumber + '」を複製しますか？')) return;
       invShowLoading();
-      var baseUrl = window.location.href.split('?')[0];
-      var params = new URLSearchParams({ action: 'duplicateProduct', managementNumber: managementNumber });
-      fetch(baseUrl + '?' + params.toString()).then(function(r) { return r.json(); }).then(function(response) {
+      try {
+        var db = window.db;
+        var docRef = window.firestoreDoc;
+        var getDoc = window.firestoreGetDoc;
+        var setDoc = window.firestoreSetDoc;
+        var serverTs = window.firestoreServerTimestamp;
+
+        var docId = managementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
+        var sourceDoc = await getDoc(docRef(db, 'products', docId));
+        if (!sourceDoc.exists()) { invHideLoading(); invShowError('元の商品が見つかりません'); return; }
+        var sourceData = sourceDoc.data();
+
+        // 新しい管理番号を生成（元の番号 + -C + 連番）
+        var newManagementNumber;
+        var suffix = 1;
+        while (suffix <= 99) {
+          newManagementNumber = managementNumber + '-C' + suffix;
+          var newDocId = newManagementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
+          var existCheck = await getDoc(docRef(db, 'products', newDocId));
+          if (!existCheck.exists()) break;
+          suffix++;
+        }
+        if (suffix > 99) { throw new Error('複製番号の生成に失敗しました'); }
+
+        // 新ドキュメント作成（ステータス・販売情報リセット）
+        var finalDocId = newManagementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
+        var newData = Object.assign({}, sourceData, {
+          managementNumber: newManagementNumber,
+          status: '登録済み',
+          saleDate: '', saleAmount: 0, profit: 0, profitRate: '',
+          listingDate: '', listingAmount: 0,
+          createdAt: serverTs(), updatedAt: serverTs()
+        });
+        if (newData.listing) { newData.listing = { date: '', amount: 0 }; }
+        if (newData.sale) { delete newData.sale; }
+        await setDoc(docRef(db, 'products', finalDocId), newData);
+
         invHideLoading();
-        if (response.success) { alert('商品を複製しました！\n新しい管理番号: ' + response.data.newManagementNumber); invLoadDashboardAndSearch(); }
-        else { invShowError('複製エラー: ' + response.error); }
-      }).catch(function(error) { invHideLoading(); invShowError('複製エラー: ' + (error.message || error)); });
+        alert('商品を複製しました！\n新しい管理番号: ' + newManagementNumber);
+        invLoadDashboardAndSearch();
+      } catch (error) { invHideLoading(); invShowError('複製エラー: ' + (error.message || error)); }
     }
 
     // ===== Save product status =====
@@ -2106,26 +2140,34 @@
       if (!confirm(confirmMessage)) return;
 
       invShowLoading();
-      var updateCount = 0;
-      var totalUpdates = (statusChanged ? 1 : 0) + changedFields.length;
-      var baseUrl = window.location.href.split('?')[0];
+      try {
+        var db = window.db;
+        var docRef = window.firestoreDoc;
+        var updateDoc = window.firestoreUpdateDoc;
+        var getDoc = window.firestoreGetDoc;
+        var serverTs = window.firestoreServerTimestamp;
 
-      if (statusChanged) {
-        var params = new URLSearchParams({ action: 'updateProductStatus', managementNumber: invCurrentProduct.managementNumber, newStatus: newStatus });
-        fetch(baseUrl + '?' + params.toString()).then(function(r) { return r.json(); }).then(function(response) {
-          updateCount++;
-          if (!response.success) { invHideLoading(); invShowError('ステータス更新エラー: ' + response.error); }
-          else if (updateCount === totalUpdates) invCompleteProductUpdate(statusChanged, newStatus, oldStatus);
-        }).catch(function(error) { invHideLoading(); invShowError('ステータス更新エラー: ' + (error.message || error)); });
-      }
-      changedFields.forEach(function(change) {
-        var params = new URLSearchParams({ action: 'updateProduct', managementNumber: invCurrentProduct.managementNumber, field: change.field, value: change.value, editor: '在庫管理画面' });
-        fetch(baseUrl + '?' + params.toString()).then(function(r) { return r.json(); }).then(function(response) {
-          updateCount++;
-          if (!response.success) { invHideLoading(); invShowError('フィールド「' + change.field + '」更新エラー: ' + response.error); }
-          else if (updateCount === totalUpdates) invCompleteProductUpdate(statusChanged, newStatus, oldStatus);
-        }).catch(function(error) { invHideLoading(); invShowError('フィールド「' + change.field + '」更新エラー: ' + (error.message || error)); });
-      });
+        var docId = invCurrentProduct.managementNumber.replace(/[\/\.\$\#\[\]]/g, '_');
+        var productRef = docRef(db, 'products', docId);
+        // docIdで見つからない場合、idフィールドで試行
+        var docSnap = await getDoc(productRef);
+        if (!docSnap.exists() && invCurrentProduct.id) {
+          productRef = docRef(db, 'products', invCurrentProduct.id);
+        }
+
+        var updateData = { updatedAt: serverTs() };
+        if (statusChanged) { updateData.status = newStatus; }
+
+        // フィールド名マッピング（UI apiName → Firestoreフィールド）
+        var fieldMapping = { 'ブランド': 'brand', '商品名': 'productName', 'サイズ': 'size', '商品説明': 'description', '仕入金額': 'purchaseAmount', '出品金額': 'listingAmount' };
+        changedFields.forEach(function(change) {
+          var firestoreField = fieldMapping[change.field] || change.field;
+          updateData[firestoreField] = change.value;
+        });
+
+        await updateDoc(productRef, updateData);
+        invCompleteProductUpdate(statusChanged, newStatus, oldStatus);
+      } catch (error) { invHideLoading(); invShowError('更新エラー: ' + (error.message || error)); }
     }
 
     function invCompleteProductUpdate(statusChanged, newStatus, oldStatus) {

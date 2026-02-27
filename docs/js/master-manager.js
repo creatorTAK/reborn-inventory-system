@@ -113,92 +113,6 @@ function hiraganaToKatakana(str) {
 }
 
 // ============================================
-// GAS版マスタUI表示（フェーズ0: 発送方法・梱包資材）
-// ============================================
-
-/**
- * GAS版マスタUIをiframe表示
- * @param {string} type - マスタタイプ（shipping/packaging）
- */
-function showGasMasterUI(type) {
-  console.log(`🚀 [GAS Master UI] 表示開始: ${type}`);
-
-  // 汎用エンジンのUIを非表示
-  hideGenericMasterUI();
-
-  // iframe コンテナを表示
-  const iframeContainer = document.getElementById('gasMasterIframeContainer');
-  const iframe = document.getElementById('gasMasterIframe');
-
-  if (!iframeContainer || !iframe) {
-    console.error('❌ [GAS Master UI] iframeコンテナが見つかりません');
-    alert('GAS版マスタUIの表示に失敗しました。');
-    return;
-  }
-
-  // GAS Web App URLの構築
-  const baseUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
-  const menuParam = type === 'shipping' ? 'shipping-master' : 'packaging-master';
-
-  // FCMトークンを取得（通知用）
-  const fcmToken = localStorage.getItem('fcmToken') || '';
-  const fcmParam = fcmToken ? `&fcmToken=${encodeURIComponent(fcmToken)}` : '';
-
-  // セキュリティパラメータ（ユーザーメール）
-  const userEmail = localStorage.getItem('userEmail') || '';
-  const securityParams = `&userEmail=${encodeURIComponent(userEmail)}`;
-
-  // iframe URLを設定
-  iframe.src = `${baseUrl}?menu=${menuParam}${fcmParam}${securityParams}`;
-
-  // iframeコンテナを表示
-  iframeContainer.classList.remove('hidden');
-
-  console.log(`✅ [GAS Master UI] 表示完了: ${iframe.src}`);
-}
-
-/**
- * 汎用エンジンのUIを非表示
- */
-function hideGenericMasterUI() {
-  const searchContainer = document.querySelector('.search-container');
-  const actionBar = document.querySelector('.action-bar');
-  const selectionToolbar = document.getElementById('selectionToolbar');
-  const masterListContainer = document.getElementById('masterListContainer');
-  const emptyState = document.getElementById('emptyState');
-
-  if (searchContainer) searchContainer.classList.add('hidden');
-  if (actionBar) actionBar.classList.add('hidden');
-  if (selectionToolbar) selectionToolbar.classList.add('hidden');
-  if (masterListContainer) masterListContainer.classList.add('hidden');
-  if (emptyState) emptyState.classList.add('hidden');
-}
-
-/**
- * GAS版UIを非表示にして汎用エンジンUIを表示
- */
-function hideGasMasterUI() {
-  // iframeコンテナを非表示
-  const iframeContainer = document.getElementById('gasMasterIframeContainer');
-  if (iframeContainer) {
-    iframeContainer.classList.add('hidden');
-  }
-
-  // 汎用エンジンのUIを表示
-  const searchContainer = document.querySelector('.search-container');
-  const actionBar = document.querySelector('.action-bar');
-  const selectionToolbar = document.getElementById('selectionToolbar');
-  const masterListContainer = document.getElementById('masterListContainer');
-  const emptyState = document.getElementById('emptyState');
-
-  if (searchContainer) searchContainer.classList.remove('hidden');
-  if (actionBar) actionBar.classList.remove('hidden');
-  // selectionToolbarは選択モード時のみ表示（初期は非表示のまま）
-  if (masterListContainer) masterListContainer.classList.remove('hidden');
-  // emptyStateは状況に応じて表示（初期は非表示のまま）
-}
-
-// ============================================
 // ヘルパー関数
 // ============================================
 
@@ -487,9 +401,6 @@ function setupEventListeners() {
 async function loadMaster(category, type) {
   console.log(`📋 [Master Manager] マスタロード開始: ${category}/${type}`);
 
-  // 全マスタを汎用Firestoreエンジンで表示（GAS版UI廃止）
-  hideGasMasterUI();
-  
   // 管理番号以外のマスタではセレクターを非表示
   if (type !== 'rank' && type !== 'categoryCode') {
     hideManagementNumberSelector();

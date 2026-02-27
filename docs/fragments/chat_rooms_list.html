@@ -1686,11 +1686,17 @@ async function crlLoadGroupMemberList() {
     var users;
     if (crlUsersCache && crlUsersCache.length > 0) {
       users = crlUsersCache;
-    } else if (typeof google !== 'undefined' && google.script && google.script.run) {
-      users = await new Promise(function(resolve, reject) {
-        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getUserListForUI();
-      });
-    } else { throw new Error('ユーザー一覧が利用できません'); }
+    } else {
+      // Firestore からユーザー一覧を取得
+      var db = crlGetDb();
+      if (db) {
+        var snapshot = await db.collection('users').get();
+        users = [];
+        snapshot.forEach(function(doc) { users.push({ id: doc.id, userEmail: doc.id, userName: doc.data().userName, status: doc.data().status }); });
+        users = users.filter(function(u) { return u.userName && (u.status === 'active' || !u.status); });
+        if (users.length > 0) crlUsersCache = users;
+      } else { throw new Error('ユーザー一覧が利用できません'); }
+    }
 
     if (!users || users.length === 0) {
       crlGroupMemberUsersList = [];
@@ -1810,10 +1816,6 @@ async function crlLoadUserList() {
       snapshot.forEach(function(doc) { allUsers.push({ id: doc.id, userEmail: doc.id, ...doc.data() }); });
       users = allUsers.filter(function(u) { return u.userName && (u.status === 'active' || !u.status); });
       if (users.length > 0) crlUsersCache = users;
-    } else if (typeof google !== 'undefined' && google.script && google.script.run) {
-      users = await new Promise(function(resolve, reject) {
-        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getUserListForUI();
-      });
     } else { throw new Error('ユーザー一覧が利用できません'); }
 
     if (!users || users.length === 0) {
@@ -2660,17 +2662,6 @@ function initChatRoomsPage() {
       console.error('[CRL] ユーザー取得エラー:', error);
       crlStartListening();
     });
-  } else if (typeof google !== 'undefined' && google.script && google.script.run) {
-    google.script.run
-      .withSuccessHandler(function(users) {
-        if (users && users.length > 0) crlUsersCache = users;
-        crlStartListening();
-      })
-      .withFailureHandler(function(error) {
-        console.error('[CRL] GAS版ユーザー取得エラー:', error);
-        crlStartListening();
-      })
-      .getUserListForUI();
   } else {
     crlStartListening();
   }

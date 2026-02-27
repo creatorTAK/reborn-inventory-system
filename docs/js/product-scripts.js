@@ -1020,22 +1020,6 @@ window.continueProductRegistration = function() {
       }
     }
 
-    // GAS版（従来の処理）
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(config) {
-          if (config) {
-            SHIPPING_DEFAULTS = config;
-            console.log('配送デフォルト設定を読み込みました (GAS版):', config);
-            // デフォルト値を適用
-            applyShippingDefaults();
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('配送デフォルト設定読み込みエラー:', error);
-        })
-        .getShippingDefaults();
-    }
   }
 
   // 仕入・出品デフォルト設定（設定マスタから読み込む）
@@ -1079,22 +1063,6 @@ window.continueProductRegistration = function() {
       }
     }
 
-    // GAS版（従来の処理）
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(config) {
-          if (config) {
-            PROCURE_LISTING_DEFAULTS = config;
-            console.log('仕入・出品デフォルト設定を読み込みました (GAS版):', config);
-            // デフォルト値を適用
-            applyProcureListingDefaults();
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('仕入・出品デフォルト設定読み込みエラー:', error);
-        })
-        .getProcureListingDefaults();
-    }
   }
 
   // 付属品チェックボックスをFirestoreから読み込んで描画
@@ -1393,35 +1361,9 @@ window.continueProductRegistration = function() {
   // 商品名ブロックの並び順（設定マスタから読み込む）
   let TITLE_BLOCK_ORDER = ['salesword', 'brand', 'item', 'attribute'];
 
-  // 設定マスタから商品名ブロックの並び順を読み込む
+  // 設定マスタから商品名ブロックの並び順を読み込む（PWA版: CACHED_CONFIG経由）
   function loadTitleBlockOrder() {
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(order) {
-          if (order && Array.isArray(order)) {
-            // 'item'が含まれていない古い設定の場合は、brandの後に挿入
-            if (!order.includes('item')) {
-              const brandIndex = order.indexOf('brand');
-              if (brandIndex !== -1) {
-                order.splice(brandIndex + 1, 0, 'item');
-              } else {
-                // brandもない場合はデフォルト順序を使用
-                order = ['salesword', 'brand', 'item', 'attribute'];
-              }
-              console.log('商品名ブロック並び順に item を追加しました:', order);
-              // 更新した並び順を保存
-              saveTitleBlockOrder();
-            }
-            TITLE_BLOCK_ORDER = order;
-            console.log('商品名ブロックの並び順を読み込みました:', order);
-            applyTitleBlockOrder();
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('商品名ブロック並び順読み込みエラー:', error);
-        })
-        .getTitleBlockOrder();
-    }
+    // no-op: PWA版ではCACHED_CONFIGから読み込み済み
   }
 
   // 設定マスタから商品状態ボタンを読み込む
@@ -1455,24 +1397,8 @@ window.continueProductRegistration = function() {
       }
     }
 
-    // 2. キャッシュにない場合、GASから読み込み（レガシー対応）
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(buttons) {
-          if (buttons) {
-            CONDITION_BUTTONS = buttons;
-            console.log('✅ 商品状態ボタン設定を読み込みました（GAS）:', Object.keys(CONDITION_BUTTONS).length, '種類');
-            // 既に商品の状態が選択されている場合はボタンを更新
-            updateConditionButtons();
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('商品状態ボタン設定読み込みエラー:', error);
-        })
-        .getConditionButtons();
-    } else {
-      console.warn('⚠️ 商品状態ボタン設定が見つかりません（キャッシュ/GAS両方利用不可）');
-    }
+    // キャッシュにない場合
+    console.warn('⚠️ 商品状態ボタン設定が見つかりません（キャッシュ利用不可）');
   }
 
   // 素材システム用のグローバル変数
@@ -1499,22 +1425,8 @@ window.continueProductRegistration = function() {
       return;
     }
 
-    // 2. MASTER_OPTIONSにない場合、GASから読み込み（レガシー対応）
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(opts) {
-          MATERIAL_LOCATIONS = opts['素材(箇所)'] || [];
-          MATERIAL_TYPES = opts['素材(種類)'] || [];
-          populateMaterialSelects(1);
-          console.log('素材マスタ取得完了（GAS） - 箇所:', MATERIAL_LOCATIONS.length, '種類:', MATERIAL_TYPES.length);
-        })
-        .withFailureHandler(function(error) {
-          console.error('素材マスタ取得エラー:', error);
-        })
-        .getMasterOptions();
-    } else {
-      console.warn('⚠️ 素材マスタデータが見つかりません（Firestore/GAS両方利用不可）');
-    }
+    // Firestoreにもない場合
+    console.warn('⚠️ 素材マスタデータが見つかりません（Firestoreデータ利用不可）');
   }
 
   // カラーマスタデータの取得と設定
@@ -1528,21 +1440,8 @@ window.continueProductRegistration = function() {
       return;
     }
 
-    // 2. MASTER_OPTIONSにない場合、GASから読み込み（レガシー対応）
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(opts) {
-          COLOR_OPTIONS = opts['カラー/配色/トーン'] || [];
-          populateColorSelect(1);
-          console.log('カラーマスタ取得完了（GAS）:', COLOR_OPTIONS.length);
-        })
-        .withFailureHandler(function(error) {
-          console.error('カラーマスタ取得エラー:', error);
-        })
-        .getMasterOptions();
-    } else {
-      console.warn('⚠️ カラーマスタデータが見つかりません（Firestore/GAS両方利用不可）');
-    }
+    // Firestoreにもない場合
+    console.warn('⚠️ カラーマスタデータが見つかりません（Firestoreデータ利用不可）');
   }
 
   // セレクトボックスにマスタデータを設定
@@ -2526,35 +2425,9 @@ window.continueProductRegistration = function() {
       return;
     }
 
-    // 2. CACHED_CONFIGにない場合、GASから読み込み（レガシー対応）
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(config) {
-          if (config) {
-            HASHTAG_CONFIG = config;
-            console.log('ハッシュタグ設定をGASから読み込みました:', config);
-            // ハッシュタグチェックボックスを生成
-            renderHashtagCheckboxes();
-            // 設定読み込み後、商品の説明を更新
-            if (typeof updateDescriptionFromDetail === 'function') {
-              updateDescriptionFromDetail();
-            }
-          } else {
-            // GASからも設定がない場合はチェックボックスを空で表示
-            console.log('⚠️ ハッシュタグ設定が見つかりません');
-            renderHashtagCheckboxes();
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('ハッシュタグ設定読み込みエラー:', error);
-          renderHashtagCheckboxes();
-        })
-        .getHashtagConfig();
-    } else {
-      // PWA環境でGASがない場合
-      console.log('⚠️ GAS環境ではありません。ハッシュタグ設定なし。');
-      renderHashtagCheckboxes();
-    }
+    // CACHED_CONFIGにもない場合はチェックボックスを空で表示
+    console.log('⚠️ ハッシュタグ設定が見つかりません');
+    renderHashtagCheckboxes();
   }
 
   /**
@@ -2925,35 +2798,9 @@ window.continueProductRegistration = function() {
       return;
     }
 
-    // 2. CACHED_CONFIGにない場合、GASから読み込み（レガシー対応）
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(config) {
-          if (config) {
-            DISCOUNT_CONFIG = config;
-            console.log('割引情報設定をGASから読み込みました:', Object.keys(config).length, '種類');
-            // チェックボックスを生成
-            renderDiscountCheckboxes();
-            // 設定読み込み後、商品の説明を更新
-            if (typeof updateDescriptionFromDetail === 'function') {
-              updateDescriptionFromDetail();
-            }
-          } else {
-            // GASからも設定がない場合はチェックボックスを空で表示
-            console.log('⚠️ 割引情報設定が見つかりません');
-            renderDiscountCheckboxes();
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('割引情報設定読み込みエラー:', error);
-          renderDiscountCheckboxes();
-        })
-        .getDiscountConfig();
-    } else {
-      // PWA環境でGASがない場合
-      console.log('⚠️ GAS環境ではありません。割引情報設定なし。');
-      renderDiscountCheckboxes();
-    }
+    // CACHED_CONFIGにもない場合はチェックボックスを空で表示
+    console.log('⚠️ 割引情報設定が見つかりません');
+    renderDiscountCheckboxes();
   }
 
   // 割引情報テキストを生成（チェックボックス対応版）
@@ -3468,56 +3315,10 @@ window.continueProductRegistration = function() {
       console.log('⚠️ セグメント配列が空です');
     }
 
-    // PWA版：google.script.runは使用不可、localStorageのみ
-    if (!(typeof google !== 'undefined' && google.script && google.script.run)) {
-      console.log('PWA版：管理番号設定はlocalStorageのみを使用');
-      // セグメント設定がなければレガシーUIを使用
-      console.log('🔍 レガシーUI判定:', {
-        segments: segments,
-        notSegments: !segments,
-        willCallLegacy: !segments || segments.length === 0
-      });
-      if (!segments || segments.length === 0) {
-        console.log('✅ 管理番号未設定メッセージを表示します');
-        showManagementNumberNotConfigured();
-      } else {
-        console.log('❌ セグメント設定が存在するため、レガシーUIをスキップ');
-      }
-      return;
+    // PWA版：管理番号設定はlocalStorageのみを使用
+    if (!segments || segments.length === 0) {
+      showManagementNumberNotConfigured();
     }
-
-    // GAS版：バックグラウンドで最新設定を取得
-    google.script.run
-      .withSuccessHandler(function(segments) {
-        if (!segments || segments.length === 0) {
-          // セグメント設定がない場合は未設定メッセージを表示
-          localStorage.removeItem('reborn_mgmt_segments');
-          if (!cachedSegments) {
-            showManagementNumberNotConfigured();
-          }
-          return;
-        }
-
-        // 設定が変更されている場合のみUIを更新
-        const currentCache = localStorage.getItem('reborn_mgmt_segments');
-        const newCache = JSON.stringify(segments);
-
-        if (currentCache !== newCache) {
-          console.log('🔄 管理番号設定が更新されました');
-          localStorage.setItem('reborn_mgmt_segments', newCache);
-          renderManagementSegmentUI(segments);
-        } else {
-          console.log('✅ 管理番号設定は最新です');
-        }
-      })
-      .withFailureHandler(function(e) {
-        console.error('セグメント設定の読み込みに失敗:', e);
-        // キャッシュがなければ未設定メッセージを表示
-        if (!cachedSegments) {
-          showManagementNumberNotConfigured();
-        }
-      })
-      .getManagementNumberSegments();
   }
 
   // セグメントUIを生成
@@ -3863,26 +3664,8 @@ window.continueProductRegistration = function() {
     // 採番中を表示
     setManagementNumber('', '採番中...');
 
-    // PWA版かGAS版かを判定
-    if (typeof google === 'undefined' || !google.script || !google.script.run) {
-      // PWA版：Firestoreから採番
-      generateSegmentBasedManagementNumberPWA(userInputs);
-    } else {
-      // GAS版：従来通り
-      google.script.run
-        .withSuccessHandler(function(managementNumber) {
-          if (typeof managementNumber === 'string' && managementNumber.startsWith('NG(')) {
-            setManagementNumber('', managementNumber);
-            return;
-          }
-          setManagementNumber(managementNumber, '');
-        })
-        .withFailureHandler(function(e) {
-          console.error('管理番号生成エラー:', e);
-          setManagementNumber('', 'エラー');
-        })
-        .generateSegmentBasedManagementNumber(userInputs);
-    }
+    // PWA版：Firestoreから採番
+    generateSegmentBasedManagementNumberPWA(userInputs);
   }
 
   // PWA版：セグメント設定に基づいて管理番号を生成
@@ -4256,55 +4039,39 @@ window.continueProductRegistration = function() {
     setManagementNumber('', '採番中…');
 
     // PWA版：セグメント設定に基づいて管理番号を生成
-    if (!(typeof google !== 'undefined' && google.script && google.script.run)) {
-      try {
-        if (!window.db) {
-          throw new Error('Firestoreが初期化されていません');
-        }
-
-        // localStorage から segments 設定を読み込み
-        const saved = localStorage.getItem('rebornConfig_managementNumber');
-        let segments = [];
-
-        if (saved) {
-          const config = JSON.parse(saved);
-          segments = config.segments || [];
-          console.log('📋 管理番号セグメント設定:', segments);
-        }
-
-        // セグメントが未設定の場合、デフォルト（棚番号-4桁連番、1001開始）
-        if (segments.length === 0) {
-          segments = [
-            { type: 'shelf', config: { format: 'AA' }, separator: '-' },
-            { type: 'sequence', config: { digits: '4', start: '1001' }, separator: '' }
-          ];
-          console.log('⚠️ セグメント未設定、デフォルト使用（AA-1001形式）:', segments);
-        }
-
-        // 管理番号を生成
-        const managementNumber = await generateManagementNumber(segments, shelf);
-        setManagementNumber(managementNumber, '');
-        console.log('✅ 管理番号採番成功 (PWA版):', managementNumber);
-      } catch (error) {
-        console.error('❌ 採番エラー:', error);
-        setManagementNumber('', 'エラー');
-        show(`NG(採番): ${error.message}`);
+    try {
+      if (!window.db) {
+        throw new Error('Firestoreが初期化されていません');
       }
-      return;
-    }
 
-    // GAS版（従来）
-    google.script.run.withSuccessHandler(res=>{
-      if (typeof res === 'string' && res.startsWith('NG(')) {
-        show(res);
-        setManagementNumber('', 'エラー');
-        return;
+      // localStorage から segments 設定を読み込み
+      const saved = localStorage.getItem('rebornConfig_managementNumber');
+      let segments = [];
+
+      if (saved) {
+        const config = JSON.parse(saved);
+        segments = config.segments || [];
+        console.log('📋 管理番号セグメント設定:', segments);
       }
-      setManagementNumber(res, '');
-    }).withFailureHandler(e=> {
-      show(`NG(UNKNOWN): ${e && e.message ? e.message : e}`);
+
+      // セグメントが未設定の場合、デフォルト（棚番号-4桁連番、1001開始）
+      if (segments.length === 0) {
+        segments = [
+          { type: 'shelf', config: { format: 'AA' }, separator: '-' },
+          { type: 'sequence', config: { digits: '4', start: '1001' }, separator: '' }
+        ];
+        console.log('⚠️ セグメント未設定、デフォルト使用（AA-1001形式）:', segments);
+      }
+
+      // 管理番号を生成
+      const managementNumber = await generateManagementNumber(segments, shelf);
+      setManagementNumber(managementNumber, '');
+      console.log('✅ 管理番号採番成功:', managementNumber);
+    } catch (error) {
+      console.error('❌ 採番エラー:', error);
       setManagementNumber('', 'エラー');
-    }).getNextManagementNumber(shelf);
+      show(`NG(採番): ${error.message}`);
+    }
   }
 
   /**
@@ -4713,17 +4480,6 @@ window.continueProductRegistration = function() {
     TITLE_BLOCK_ORDER = Array.from(blocks).map(block => block.dataset.blockId);
     console.log('商品名ブロックの並び順を更新:', TITLE_BLOCK_ORDER);
 
-    // 設定マスタに保存
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(result) {
-          console.log('商品名ブロックの並び順を設定マスタに保存しました');
-        })
-        .withFailureHandler(function(error) {
-          console.error('商品名ブロック並び順保存エラー:', error);
-        })
-        .saveTitleBlockOrder(TITLE_BLOCK_ORDER);
-    }
   }
 
   /**
@@ -5064,66 +4820,9 @@ window.continueProductRegistration = function() {
     }, 500); // 500msごとにチェック
   }
 
-  // PropertiesServiceから管理番号配置設定をlocalStorageに読み込む
+  // 管理番号配置設定の読み込み（PWA版: CACHED_CONFIG/localStorageから取得済み）
   function loadManagementNumberPlacementFromServer() {
-    console.log('🔄 PropertiesServiceから管理番号配置設定を読み込み中...');
-    console.log('google:', typeof google);
-    console.log('google.script:', typeof google !== 'undefined' ? typeof google.script : 'undefined');
-    console.log('google.script.run:', typeof google !== 'undefined' && google.script ? typeof google.script.run : 'undefined');
-
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      console.log('✅ google.script.run利用可能、loadConfigMaster呼び出し開始');
-      google.script.run
-        .withSuccessHandler(function(config) {
-          console.log('📦 loadConfigMaster成功、config:', config);
-          if (config && config.管理番号設定) {
-            const mgmtConfig = config.管理番号設定;
-            console.log('📋 管理番号設定取得:', mgmtConfig);
-
-            // PropertiesServiceに配置設定が保存されているか確認
-            const hasPlacementSettings =
-              mgmtConfig.showInTitle !== undefined ||
-              mgmtConfig.showInDescription !== undefined ||
-              mgmtConfig.titleFormat !== undefined;
-
-            if (hasPlacementSettings) {
-              // PropertiesServiceに配置設定がある場合のみ上書き
-              const settings = {
-                inTitle: mgmtConfig.showInTitle || false,
-                inDesc: mgmtConfig.showInDescription || false,
-                format: mgmtConfig.titleFormat || '【】'
-              };
-
-              try {
-                localStorage.setItem('managementNumberPlacement', JSON.stringify(settings));
-                console.log('✅ PropertiesServiceから管理番号配置設定を取得し、localStorageに保存:', settings);
-
-                // 設定をチェックボックスに反映（存在する場合のみ）
-                restoreManagementNumberPlacementSettings();
-
-                // 商品名と説明文を更新
-                updateNamePreview();
-                if (typeof updateDescriptionFromDetail === 'function') {
-                  updateDescriptionFromDetail();
-                }
-              } catch (e) {
-                console.error('❌ localStorage保存エラー:', e);
-              }
-            } else {
-              console.log('⚠️ PropertiesServiceに管理番号配置設定が保存されていません。localStorageの設定を維持します。');
-              console.log('現在のlocalStorage設定:', localStorage.getItem('managementNumberPlacement'));
-            }
-          } else {
-            console.log('⚠️ PropertiesServiceに管理番号配置設定が存在しません。config:', config);
-          }
-        })
-        .withFailureHandler(function(error) {
-          console.error('❌ PropertiesServiceからの読み込みエラー:', error);
-        })
-        .loadConfigMaster();
-    } else {
-      console.warn('⚠️ google.script.runが利用できません');
-    }
+    // no-op: PWA版ではCACHED_CONFIGから読み込み済み
   }
 
   // 管理番号配置設定を復元（localStorageからチェックボックスに反映）
@@ -6230,11 +5929,8 @@ window.continueProductRegistration = function() {
         }
       }
 
-      // PWA版かGAS版かを判定
-      const isPWA = !(typeof google !== 'undefined' && google.script && google.script.run);
-
-      if (isPWA) {
-        // PWA版: Cloudflare Worker経由でGemini APIを呼び出す
+      // PWA版: Cloudflare Worker経由でGemini APIを呼び出す
+      {
         const WORKER_URL = 'https://reborn-help-chatbot.mercari-yasuhirotakuji.workers.dev/generate-description';
 
         fetch(WORKER_URL, {
@@ -6281,62 +5977,6 @@ window.continueProductRegistration = function() {
           resetAiButton(aiGenBtn, originalText);
         });
 
-      } else {
-        // GAS版: google.script.runを使用
-        google.script.run
-          .withSuccessHandler(function(generatedText) {
-            debug.log('AI生成成功:', generatedText);
-
-            // AI生成文をグローバル変数に保存
-            window.AI_GENERATED_TEXT = generatedText;
-
-            // プレビューを更新
-            updateDescriptionFromDetail();
-
-            // 成功メッセージ
-            alert(`✅ AI説明文を生成しました！
-
-商品の説明プレビューを確認して、必要に応じて直接編集してください。
-
-⚠️ 注意事項
-• 品番から取得した情報は、Google検索結果の品質に依存します
-• 画像から取得した情報は、AIの判断に基づいています
-• 必ず内容をご確認の上、誤りがあれば修正してください`);
-
-            // ボタンを元に戻す
-            resetAiButton(aiGenBtn, originalText);
-
-            // 画像データはクリアしない（保存時に画像URLを記録するため）
-            debug.log('AI生成成功。画像データは保存時まで保持します。');
-          })
-          .withFailureHandler(function(error) {
-            console.error('AI生成エラー:', error);
-
-            // エラーメッセージの表示
-            let errorMsg = 'AI説明文の生成に失敗しました。\n\n';
-
-            if (error.message && error.message.includes('NG(CONFIG)')) {
-              errorMsg += 'APIキーが設定されていません。\n\n';
-              errorMsg += '【設定手順】\n';
-              errorMsg += '1. Google Apps Scriptエディタを開く\n';
-              errorMsg += '2. ⚙️ プロジェクトの設定を開く\n';
-              errorMsg += '3. スクリプト プロパティに追加:\n';
-              errorMsg += '   プロパティ: GEMINI_API_KEY\n';
-              errorMsg += '   値: あなたのAPIキー';
-            } else if (error.message && error.message.includes('NG(API)')) {
-              errorMsg += 'API呼び出しに失敗しました。\n';
-              errorMsg += 'しばらく時間をおいて再度お試しください。\n\n';
-              errorMsg += `エラー詳細: ${error.message}`;
-            } else {
-              errorMsg += `エラー詳細: ${error.message || 'Unknown error'}`;
-            }
-
-            alert('❌ ' + errorMsg);
-
-            // ボタンを元に戻す
-            resetAiButton(aiGenBtn, originalText);
-          })
-          .generateProductDescription(productInfo, images);
       }
 
     } catch (error) {
@@ -6699,79 +6339,8 @@ window.continueProductRegistration = function() {
   function initializeSalesWords() {
     console.log('=== セールスワード初期化開始 ===');
     // PWA版：Firestoreから読み込み
-    if (!(typeof google !== 'undefined' && google.script && google.script.run)) {
-      console.log('PWA版：Firestoreからセールスワードを読み込み');
-      loadSalesWordsFromFirestore();
-      return;
-    }
-
-    // セールスワード専用データ取得と設定マスタからの「よく使う」読み込みを並行実行
-    let salesWordData = null;
-    let favoriteSalesWords = [];
-    // defaultSalesword はグローバル変数として宣言済み（190行目）
-
-    google.script.run
-      .withSuccessHandler(function(data) {
-        console.log('セールスワードデータ取得成功:', data);
-        salesWordData = data;
-        checkAndSetup();
-      })
-      .withFailureHandler(function(error) {
-        console.error('セールスワードデータ取得エラー:', error);
-        setupFallbackSalesWords();
-      })
-      .getSalesWordData();
-
-    google.script.run
-      .withSuccessHandler(function(config) {
-        if (config && config.よく使うセールスワード) {
-          // 新しい構造（よく使う + 表示形式 + デフォルト）に対応
-          if (typeof config.よく使うセールスワード === 'object' && config.よく使うセールスワード.よく使う) {
-            favoriteSalesWords = config.よく使うセールスワード.よく使う || [];
-            // 表示形式設定を読み込み
-            if (config.よく使うセールスワード.表示形式) {
-              SALESWORD_FORMAT = config.よく使うセールスワード.表示形式;
-              console.log('セールスワード表示形式取得成功:', SALESWORD_FORMAT);
-            }
-            // デフォルトセールスワード設定を読み込み
-            if (config.よく使うセールスワード.デフォルト) {
-              defaultSalesword = config.よく使うセールスワード.デフォルト;
-              console.log('デフォルトセールスワード取得成功:', defaultSalesword);
-            }
-          } else {
-            // 旧形式（配列のみ）に対応
-            favoriteSalesWords = config.よく使うセールスワード;
-          }
-          console.log('よく使うセールスワード取得成功:', favoriteSalesWords);
-        }
-        checkAndSetup();
-      })
-      .withFailureHandler(function(error) {
-        console.error('よく使うセールスワード取得エラー:', error);
-        checkAndSetup();
-      })
-      .loadConfigMaster();
-
-    function checkAndSetup() {
-      if (salesWordData !== null) {
-        SALESWORD_DATA = salesWordData;
-
-        // 「よく使う」カテゴリを追加
-        if (favoriteSalesWords.length > 0) {
-          SALESWORD_DATA.wordsByCategory['よく使う'] = favoriteSalesWords;
-        }
-
-        setupCategoryDropdown();
-
-        // デフォルトセールスワードを適用（CACHED_CONFIGから読み込み）
-        applyDefaultSalesword();
-
-        console.log('セールスワード初期化完了');
-
-        // セールスワード検索機能を初期化
-        setupSaleswordSearch();
-      }
-    }
+    console.log('PWA版：Firestoreからセールスワードを読み込み');
+    loadSalesWordsFromFirestore();
   }
 
   /**
@@ -7646,12 +7215,9 @@ window.continueProductRegistration = function() {
     // バックグラウンドで実際の保存処理
     console.log('[DEBUG] Checking productImages:', productImages ? productImages.length : 0);
 
-    // PWA版かGAS版かを判定
-    const isPWA = !(typeof google !== 'undefined' && google.script && google.script.run);
-
-    if (isPWA) {
-      // PWA版：Firestore直接保存（PROD-002 Phase 1）
-      console.log('[PWA] Firestoreに保存');
+    // PWA版：Firestore直接保存
+    console.log('[PWA] Firestoreに保存');
+    {
       try {
         // 商品画像がある場合は先にストレージにアップロード
         if (productImages && productImages.length > 0 && (IMAGE_STORAGE_PROVIDER === 'firebase' || IMAGE_STORAGE_PROVIDER === 'r2')) {
@@ -7729,85 +7295,6 @@ window.continueProductRegistration = function() {
         console.error('[onSave] エラー:', error);
         hideLoadingOverlay();
         show(`NG(ERROR): ${error.message}`);
-      }
-    } else {
-      // GAS版：従来の画像アップロード処理
-      if (productImages && productImages.length > 0) {
-        // 商品IDを取得（管理番号を使用）
-        const productId = d['管理番号'] || 'unknown_' + new Date().getTime();
-        console.log('[DEBUG] Product has images, uploading first. ProductId:', productId);
-
-        // アップロード用データを準備
-        const imagesToUpload = productImages.map(img => ({
-          data: img.data,
-          name: img.name,
-          forAI: false  // 商品画像（AI用ではない）
-        }));
-
-        // 画像をストレージにアップロード（プロバイダーに応じて切り替え）
-        const uploadParams = {
-          images: imagesToUpload,
-          productId: productId
-        };
-
-        debug.log(`📤 画像アップロード開始: プロバイダー=${IMAGE_STORAGE_PROVIDER}`);
-
-        // プロバイダーに応じて関数を呼び出し
-        if (IMAGE_STORAGE_PROVIDER === 'gdrive') {
-          google.script.run
-            .withSuccessHandler(function(uploadResult) {
-              console.log('[DEBUG] Upload result:', uploadResult);
-              if (uploadResult.success) {
-                debug.log(`✅ 商品画像アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
-                debug.log(`📂 ストレージ: ${IMAGE_STORAGE_PROVIDER}`);
-
-                // JSON形式でURLを保存
-                const imageUrlsJson = JSON.stringify(uploadResult.urls);
-                d['JSON_データ'] = imageUrlsJson;
-
-                // スプレッドシートに保存
-                console.log('[DEBUG] Calling saveProductToSheet after image upload');
-                saveProductToSheet(d);
-              } else {
-                console.log('[DEBUG] Image upload failed:', uploadResult.error);
-                show(`NG(IMAGE_UPLOAD): ${uploadResult.error}`);
-              }
-            })
-            .withFailureHandler(function(error) {
-              console.log('[DEBUG] Image upload API call failed:', error);
-              show(`NG(IMAGE_UPLOAD): ${error && error.message ? error.message : error}`);
-            })
-            .uploadImagesToGoogleDrive(uploadParams);
-        } else {
-          google.script.run
-            .withSuccessHandler(function(uploadResult) {
-              console.log('[DEBUG] Upload result:', uploadResult);
-              if (uploadResult.success) {
-                debug.log(`✅ 商品画像アップロード成功: ${uploadResult.successCount}/${uploadResult.totalCount}枚`);
-                debug.log(`📂 ストレージ: ${IMAGE_STORAGE_PROVIDER}`);
-
-                // JSON形式でURLを保存
-                const imageUrlsJson = JSON.stringify(uploadResult.urls);
-                d['JSON_データ'] = imageUrlsJson;
-
-                // スプレッドシートに保存
-                console.log('[DEBUG] Calling saveProductToSheet after image upload');
-                saveProductToSheet(d);
-              } else {
-                console.log('[DEBUG] Image upload failed:', uploadResult.error);
-                show(`NG(IMAGE_UPLOAD): ${uploadResult.error}`);
-              }
-            })
-            .withFailureHandler(function(error) {
-              console.log('[DEBUG] Image upload API call failed:', error);
-              show(`NG(IMAGE_UPLOAD): ${error && error.message ? error.message : error}`);
-            })
-            .uploadImagesToR2(uploadParams);
-        }
-      } else {
-        // 商品画像がない場合は直接保存
-        console.log('[DEBUG] No product images, calling saveProductToSheet directly');
-        saveProductToSheet(d);
       }
     }
   }
@@ -9675,23 +9162,8 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
       }
     });
 
-    // 商品状態履歴を取得してオートコンプリート設定
-    if (typeof google !== 'undefined' && google.script && google.script.run) {
-      google.script.run
-        .withSuccessHandler(function(history) {
-          CONDITION_HISTORY = history || [];
-          console.log('商品状態履歴取得完了:', CONDITION_HISTORY.length, '件');
-
-          // オートコンプリートを設定
-          attachConditionSuggest('商品状態詳細', CONDITION_HISTORY);
-        })
-        .withFailureHandler(function(error) {
-          console.error('商品状態履歴取得エラー:', error);
-          // エラー時もボタンは使えるようにする
-          attachConditionSuggest('商品状態詳細', []);
-        })
-        .getProductConditionHistory();
-    }
+    // 商品状態履歴のオートコンプリート設定
+    attachConditionSuggest('商品状態詳細', CONDITION_HISTORY || []);
 
     window.addEventListener('resize', ()=>{
       adjustPreviewHeight();

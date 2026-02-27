@@ -206,39 +206,6 @@ function getNotificationSoundSetting() {
 }
 
 // ================================================================================
-// ACK送信（タイムアウト付き）
-// ================================================================================
-function sendAck(messageId) {
-  if (!messageId) return Promise.resolve();
-
-  const ackUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), NETWORK_TIMEOUT);
-
-  return fetch(ackUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'receiveAck',
-      messageId: messageId,
-      timestamp: Date.now()
-    }),
-    signal: controller.signal
-  })
-  .then(res => res.json())
-  .then(data => console.log('[ACK] Success:', data))
-  .catch(err => {
-    if (err.name === 'AbortError') {
-      console.warn('[ACK] Timeout:', messageId);
-    } else {
-      console.error('[ACK] Error:', err);
-    }
-  })
-  .finally(() => clearTimeout(timeoutId));
-}
-
-// ================================================================================
 // Firestore unreadCount更新（タイムアウト付き）
 // ================================================================================
 function updateFirestoreUnreadCount(userName) {
@@ -338,12 +305,7 @@ self.addEventListener('push', (event) => {
         await incrementBadge('RebornBadgeDB');
       }
 
-      // 3. ACK送信（並列実行、失敗しても続行）
-      if (messageId) {
-        sendAck(messageId); // 並列実行（await不要）
-      }
-
-      // 4. 古い通知のクリーンアップ（5件以上で全削除）
+      // 3. 古い通知のクリーンアップ（5件以上で全削除）
       const existingNotifications = await self.registration.getNotifications();
       console.log('[Notification] Existing notifications:', existingNotifications.length);
 

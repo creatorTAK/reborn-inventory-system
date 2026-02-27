@@ -61,9 +61,7 @@
   <link rel="apple-touch-startup-image" href="/splash/splash-1488x2266.png" media="(device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2)">
 
   <!-- Performance: プリコネクト（DNS解決・TCP・TLS接続を先行実行） -->
-  <link rel="dns-prefetch" href="https://script.google.com">
   <link rel="dns-prefetch" href="https://www.gstatic.com">
-  <link rel="preconnect" href="https://script.google.com" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 
   <!-- GAS Web App URL（全iframe子ページから参照可能） -->
@@ -1387,11 +1385,8 @@
     <!-- SPA Fragment コンテンツ領域 -->
     <div id="spa-content" style="display:none;"></div>
 
-    <!-- GAS Web App を iframe で表示（遅延ロード: DOMContentLoaded後に src設定） -->
-    <iframe
-      id="gas-iframe"
-      data-src="https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec?v=817&ts=20251112">
-    </iframe>
+    <!-- iframe表示エリア（SPA遷移でページを表示） -->
+    <iframe id="gas-iframe"></iframe>
 
     <!-- ========================================
          ボトムナビゲーション (v287)
@@ -1433,11 +1428,11 @@
       </button>
     </nav>
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0227k</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0227l</div>
     <script>
     // PWAタスクキル復帰時のバージョンチェック（bfcache対策）
     (function(){
-      var LOCAL_VER = 'v0227k';
+      var LOCAL_VER = 'v0227l';
       var lastCheck = Date.now();
       document.addEventListener('visibilitychange', function(){
         if (document.visibilityState !== 'visible') return;
@@ -1485,8 +1480,6 @@
 
       // ========== origin検証（デバッグ中は緩和） ==========
       const allowedOrigins = [
-        'https://script.google.com',
-        'https://script.googleusercontent.com',
         'https://furira.jp',
         'https://reborn-inventory-system.pages.dev'
       ];
@@ -5383,7 +5376,7 @@
       const iframe = document.getElementById('gas-iframe');
       const header = document.getElementById('app-header');
       const skeleton = document.getElementById('skeleton-loader');
-      const baseUrl = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
+      // GAS baseUrl は廃止済み（PWA版はSPA Fragment方式で遷移）
       // 🔧 v301: スケルトンUI表示を一時的に無効化（デバッグ用）
       const skipSkeleton = true; // options.skipSkeleton || false;
       const skipHistory = options.skipHistory || false;
@@ -5638,12 +5631,6 @@
         // PWA版マスタ管理（業務関連）をiframeに読み込む
         const pwaBaseUrl = location.origin;
         iframe.src = pwaBaseUrl + '/master-management.html?v=20251228d&category=business' + sessionIdParam;
-      } else if (page === 'shipping-master') {
-        // GAS版発送方法マスタ管理
-        iframe.src = baseUrl + '?menu=shipping-master' + fcmParam + securityParams;
-      } else if (page === 'packaging-master') {
-        // GAS版梱包資材マスタ管理
-        iframe.src = baseUrl + '?menu=packaging-master' + fcmParam + securityParams;
       } else if (page === 'todo-list' || page === 'todo') {
         // やることリスト（'todo' と 'todo-list' の両方に対応）
         console.log('[navigateToPage] やることリストを表示 (page=' + page + ')');
@@ -5845,20 +5832,12 @@
       }
     }
 
-    // postMessage受信処理（GASからの通知受信）
-    // 🔐 origin検証のみ（event.source比較なし、pmToken検証なし）
-    const ALLOWED_ORIGINS = new Set([
-      'https://script.google.com'
-    ]);
+    // postMessage受信処理
+    const ALLOWED_ORIGINS = new Set([]);
 
     function isAllowedOrigin(origin) {
       if (ALLOWED_ORIGINS.has(origin)) return true;
-      try {
-        const url = new URL(origin);
-        return url.hostname.endsWith('.googleusercontent.com');
-      } catch {
-        return false;
-      }
+      return false;
     }
 
     window.addEventListener('message', async function(event) {
