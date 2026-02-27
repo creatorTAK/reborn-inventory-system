@@ -577,6 +577,391 @@ async function callGeminiAPI(apiKey, message, history) {
   throw new Error('Invalid response from Gemini API');
 }
 
+// =============================================================================
+// 商品説明文AI生成 (GAS gemini_api.js から移植)
+// =============================================================================
+
+const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+const GEMINI_MODEL_TIERS = [
+  { name: 'gemini-2.5-flash', tier: 'premium', isThinkingModel: true, minMaxTokens: 4096 },
+  { name: 'gemini-2.0-flash', tier: 'standard', isThinkingModel: false, minMaxTokens: 1024 },
+  { name: 'gemini-1.5-flash', tier: 'lite', isThinkingModel: false, minMaxTokens: 1024 },
+];
+
+const SAFETY_SETTINGS = [
+  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+];
+
+const MIN_DESCRIPTION_LENGTH = 200;
+const MAX_DESCRIPTION_LENGTH = 300;
+
+function getMinLengthFromConfig(aiConfig) {
+  const map = { short: 150, medium: 200, long: 300 };
+  return map[aiConfig.length] || MIN_DESCRIPTION_LENGTH;
+}
+
+function getMaxLengthFromConfig(aiConfig) {
+  const map = { short: 200, medium: 300, long: 500 };
+  return map[aiConfig.length] || MAX_DESCRIPTION_LENGTH;
+}
+
+/**
+ * 商品情報からプロンプトを構築 (GAS buildDescriptionPrompt 移植)
+ */
+function buildDescriptionPrompt(productInfo, aiConfig, imageCount) {
+  if (!productInfo.brandName || !productInfo.itemName) {
+    throw new Error('ブランド名とアイテム名は必須です。');
+  }
+
+  imageCount = imageCount || 0;
+  const config = aiConfig || {};
+  const minLength = getMinLengthFromConfig(config);
+  const maxLength = getMaxLengthFromConfig(config);
+
+  // カスタムプロンプトテンプレート
+  if (config.promptTemplate && config.promptTemplate.trim()) {
+    let customPrompt = config.promptTemplate;
+    customPrompt = customPrompt
+      .replace(/\{brand\}/g, productInfo.brandName + (productInfo.brandKana ? `（${productInfo.brandKana}）` : ''))
+      .replace(/\{item\}/g, productInfo.itemName || '')
+      .replace(/\{category\}/g, productInfo.category || '')
+      .replace(/\{size\}/g, productInfo.size || '')
+      .replace(/\{condition\}/g, productInfo.condition || '')
+      .replace(/\{material\}/g, productInfo.material || '')
+      .replace(/\{color\}/g, productInfo.color || '')
+      .replace(/\{attributes\}/g, productInfo.attributes || '')
+      .replace(/\{modelNumber\}/g, productInfo.modelNumber || '')
+      .replace(/\{length\}/g, `${minLength}-${maxLength}`);
+    return customPrompt;
+  }
+
+  // デフォルトプロンプト
+  let prompt = '';
+
+  if (imageCount > 0) {
+    prompt = `あなたはメルカリの出品説明文を作成する専門家です。
+
+**添付された${imageCount}枚の商品画像を詳しく観察し**、画像から読み取れる具体的な情報をメインに、魅力的で購買意欲を高める商品説明文を作成してください。
+
+テキスト情報は補足として参考にしてください。
+
+【商品情報（参考）】`;
+  } else {
+    prompt = `あなたはメルカリの出品説明文を作成する専門家です。以下の商品情報から、魅力的で購買意欲を高める商品説明文を作成してください。
+
+【商品情報】`;
+  }
+
+  if (config.includeBrand !== false && productInfo.brandName) {
+    prompt += `\nブランド: ${productInfo.brandName}`;
+    if (productInfo.brandKana) prompt += `（${productInfo.brandKana}）`;
+  }
+
+  if (config.includeCategory !== false && productInfo.category) {
+    prompt += `\nカテゴリ: ${productInfo.category}`;
+  }
+
+  prompt += `\nアイテム: ${productInfo.itemName}`;
+
+  if (config.includeSize !== false && productInfo.size) {
+    prompt += `\nサイズ: ${productInfo.size}`;
+  }
+
+  if (config.includeCondition !== false && productInfo.condition) {
+    prompt += `\n状態: ${productInfo.condition}`;
+  }
+
+  if (config.includeMaterial !== false && productInfo.material) {
+    prompt += `\n素材: ${productInfo.material}`;
+  }
+
+  if (config.includeColor !== false && productInfo.color) {
+    prompt += `\nカラー: ${productInfo.color}`;
+  }
+
+  if (config.includeAttributes !== false && productInfo.attributes) {
+    prompt += `\n商品属性: ${productInfo.attributes}`;
+  }
+
+  if (productInfo.modelNumber) {
+    prompt += `\n品番・型番: ${productInfo.modelNumber}
+
+※重要: この品番・型番でGoogle検索を行い、以下の情報を含めてください：
+  - 発売年・シーズン
+  - メーカー希望小売価格（定価）
+  - 商品の公式説明・特徴
+  - 人気度や評価（あれば）
+  - 素材やディテールの詳細情報`;
+  }
+
+  // トーン
+  let toneInstruction = '';
+  switch (config.tone) {
+    case 'polite':
+      toneInstruction = '丁寧で格調高い文体で書いてください。'; break;
+    case 'standard':
+      toneInstruction = '丁寧で親しみやすい文体で書いてください。プロフェッショナルだが堅苦しくない表現を心がけてください。'; break;
+    case 'enthusiastic':
+      toneInstruction = '熱量高めで、おすすめ感を強調してください。'; break;
+    case 'casual':
+    default:
+      toneInstruction = 'フレンドリーでカジュアルな文体で書いてください。'; break;
+  }
+
+  // 見出しスタイル
+  let headingInstruction = '';
+  switch (config.headingStyle) {
+    case 'emoji':
+      headingInstruction = '見出しには絵文字を使ってください。例: ✨ 商品の特徴、👔 コーディネート提案、🎯 おすすめシーン'; break;
+    case 'brackets':
+      headingInstruction = '見出しには【】を使ってください。例: 【商品の特徴】、【コーディネート提案】、【おすすめシーン】'; break;
+    case 'square':
+      headingInstruction = '見出しには■を使ってください。例: ■ 商品の特徴、■ コーディネート提案、■ おすすめシーン'; break;
+    case 'none':
+      headingInstruction = '見出しは使わず、改行のみで区切ってください。'; break;
+    default:
+      headingInstruction = '見出しには【】を使ってください。例: 【商品の特徴】、【コーディネート提案】、【おすすめシーン】'; break;
+  }
+
+  // 画像解析指示
+  if (imageCount > 0) {
+    prompt += `
+
+【重要: 画像解析を最優先してください】
+${imageCount}枚の商品画像が添付されています。
+
+**必ず画像を詳細に観察し、以下の情報を具体的に説明文に含めてください**：
+
+1. **色・柄・プリント**
+   - 正確な色名（例: ネイビー、オフホワイト、ベージュ等）
+   - 柄の種類（無地、ボーダー、チェック、花柄、プリント等）
+   - 柄のサイズや配置
+
+2. **素材感・質感**
+   - 見た目から推測される素材（コットン、デニム、ニット、レザー等）
+   - 生地の厚み（薄手、中厚、厚手）
+   - 表面の質感（光沢、マット、起毛等）
+
+3. **デザイン・ディテール**
+   - シルエット（タイト、レギュラー、オーバーサイズ等）
+   - 襟の形（ラウンドネック、Vネック、ポロカラー等）
+   - ポケットの有無・位置・デザイン
+   - ボタン・ファスナーの種類
+   - 装飾（刺繍、ワッペン、リブ等）
+
+4. **状態・コンディション**
+   - 使用感の有無
+   - 汚れ・シミ・ダメージの有無と位置
+   - 全体的な綺麗さ
+
+5. **雰囲気・スタイル**
+   - カジュアル/フォーマル/ストリート等のテイスト
+   - どんなコーディネートに合うか
+   - どんなシーンで着られるか
+
+6. **ロゴ・文字・タグ（重要）**
+   - ブランドロゴに書かれている文字を正確に読み取る
+   - モデル名やシリーズ名（ロゴやタグから読み取れる場合）
+   - 品番・型番（タグに記載されている場合）
+   - プリントされた文字やグラフィック
+   - 内側のタグに書かれている情報
+
+**画像から読み取れる情報を具体的に、詳しく書いてください。特にロゴや文字は正確に読み取り、商品名の特定に活用してください。曖昧な表現は避けてください。**`;
+  }
+
+  prompt += `
+
+【作成条件】
+1. 文字数: ${minLength}〜${maxLength}文字
+2. ${toneInstruction}
+3. ${headingInstruction}
+4. 以下の要素を含めること：
+   - 商品の特徴やアピールポイント`;
+
+  if (config.includeCoordinate !== false) {
+    prompt += `\n   - おすすめのコーディネート提案`;
+  }
+
+  if (config.includeScene !== false) {
+    prompt += `\n   - 着用シーンの提案`;
+  }
+
+  prompt += `
+5. 自然で読みやすい文章
+6. 購入者の視点に立った魅力的な表現
+7. 過度な誇張表現は避ける
+
+説明文のみを出力してください。余計な前置きや注釈は不要です。`;
+
+  return prompt;
+}
+
+/**
+ * 指定モデルでGemini APIを呼び出し (503リトライ + Google Search Grounding対応)
+ */
+async function callGeminiWithModel(apiKey, prompt, aiConfig, productInfo, images, modelName) {
+  const modelConfig = GEMINI_MODEL_TIERS.find(m => m.name === modelName) || GEMINI_MODEL_TIERS[0];
+  const config = aiConfig || {};
+  const temperature = config.temperature !== undefined ? config.temperature : 0.7;
+  const minTokens = modelConfig.isThinkingModel ? modelConfig.minMaxTokens : 1024;
+  const maxTokens = Math.max(config.maxTokens || 1024, minTokens);
+
+  // parts構築（テキスト + 画像）
+  const parts = [{ text: prompt }];
+  if (images && images.length > 0) {
+    for (const image of images) {
+      parts.push({ inline_data: { mime_type: image.mimeType, data: image.data } });
+    }
+  }
+
+  const requestBody = {
+    contents: [{ parts }],
+    generationConfig: {
+      temperature,
+      maxOutputTokens: maxTokens,
+      topP: 0.8,
+      topK: 40,
+      thinkingConfig: { thinkingBudget: 0 }, // 思考モード無効（コスト削減）
+    },
+    safetySettings: SAFETY_SETTINGS,
+  };
+
+  // Google Search Grounding（品番がある場合）
+  let useGoogleSearch = false;
+  if (productInfo && productInfo.modelNumber && productInfo.modelNumber.trim()) {
+    requestBody.tools = [{ googleSearch: {} }];
+    useGoogleSearch = true;
+  }
+
+  const url = `${GEMINI_API_BASE_URL}/${modelName}:generateContent?key=${apiKey}`;
+
+  // 503リトライ（最大3回、2秒間隔）
+  const MAX_RETRIES = 3;
+  let response, statusCode, responseText;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+    statusCode = response.status;
+
+    if (statusCode !== 503) break;
+
+    if (attempt < MAX_RETRIES) {
+      console.log(`[Description] 503 error (attempt ${attempt}/${MAX_RETRIES}), retrying in 2s...`);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+
+  responseText = await response.text();
+
+  // Google Search Grounding エラー時のフォールバック
+  if (statusCode !== 200 && useGoogleSearch) {
+    let errorData;
+    try { errorData = JSON.parse(responseText); } catch { errorData = {}; }
+    const errorMsg = errorData.error?.message || '';
+    if (errorMsg.includes('google_search') || errorMsg.includes('googleSearch') || errorMsg.includes('grounding')) {
+      console.log('[Description] Google Search Grounding not supported, retrying without it...');
+      delete requestBody.tools;
+      const retryResp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+      statusCode = retryResp.status;
+      responseText = await retryResp.text();
+    }
+  }
+
+  if (statusCode !== 200) {
+    let errorData;
+    try { errorData = JSON.parse(responseText); } catch { errorData = {}; }
+    const errorMessage = errorData.error?.message || `HTTP ${statusCode}`;
+    throw new Error(`${statusCode}: ${errorMessage}`);
+  }
+
+  const data = JSON.parse(responseText);
+
+  if (!data.candidates || data.candidates.length === 0) {
+    throw new Error('Gemini APIから結果が返されませんでした。');
+  }
+
+  const candidate = data.candidates[0];
+
+  if (candidate.finishReason === 'SAFETY') {
+    throw new Error('安全性フィルタにより生成がブロックされました。');
+  }
+
+  if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+    throw new Error('生成されたテキストが空です。');
+  }
+
+  return candidate.content.parts[0].text.trim();
+}
+
+/**
+ * フォールバック付きGemini API呼び出し（3段階モデル）
+ */
+async function callGeminiForDescription(apiKey, prompt, aiConfig, productInfo, images) {
+  let lastError = null;
+
+  for (let i = 0; i < GEMINI_MODEL_TIERS.length; i++) {
+    const model = GEMINI_MODEL_TIERS[i];
+    try {
+      console.log(`[Description] Trying model ${i + 1}/${GEMINI_MODEL_TIERS.length}: ${model.name}`);
+      const result = await callGeminiWithModel(apiKey, prompt, aiConfig, productInfo, images, model.name);
+      console.log(`[Description] Success with ${model.name}`);
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.log(`[Description] Error with ${model.name}: ${error.message}`);
+
+      const msg = error.message || '';
+      const shouldFallback = msg.includes('429') || msg.includes('503') || msg.includes('500') ||
+                             msg.includes('MAX_TOKENS') || msg.includes('空です');
+
+      if (shouldFallback && i < GEMINI_MODEL_TIERS.length - 1) {
+        console.log(`[Description] Falling back: ${model.name} -> ${GEMINI_MODEL_TIERS[i + 1].name}`);
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError || new Error('全てのモデルで生成に失敗しました。');
+}
+
+/**
+ * /generate-description エンドポイントのハンドラ
+ */
+async function handleGenerateDescription(request, env) {
+  if (!env.GEMINI_API_KEY) {
+    return jsonResponse({ error: 'Server configuration error' }, 500);
+  }
+
+  const body = await request.json();
+  const { productInfo, images, aiConfig } = body;
+
+  if (!productInfo || !productInfo.brandName || !productInfo.itemName) {
+    return jsonResponse({ error: 'productInfo with brandName and itemName is required' }, 400);
+  }
+
+  const imageArray = images || [];
+  const prompt = buildDescriptionPrompt(productInfo, aiConfig || {}, imageArray.length);
+  const generatedText = await callGeminiForDescription(
+    env.GEMINI_API_KEY, prompt, aiConfig || {}, productInfo, imageArray
+  );
+
+  return jsonResponse({ success: true, generatedText });
+}
+
 // Main handler
 export default {
   async fetch(request, env) {
@@ -622,6 +1007,19 @@ export default {
         return jsonResponse({
           error: 'Failed to process message',
           details: error.message
+        }, 500);
+      }
+    }
+
+    // Product description generation endpoint
+    if (url.pathname === '/generate-description' && request.method === 'POST') {
+      try {
+        return await handleGenerateDescription(request, env);
+      } catch (error) {
+        console.error('Description generation error:', error);
+        return jsonResponse({
+          success: false,
+          error: error.message || 'AI説明文の生成に失敗しました。'
         }, 500);
       }
     }

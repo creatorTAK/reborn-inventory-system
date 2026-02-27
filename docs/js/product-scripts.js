@@ -6234,18 +6234,18 @@ window.continueProductRegistration = function() {
       const isPWA = !(typeof google !== 'undefined' && google.script && google.script.run);
 
       if (isPWA) {
-        // PWA版: fetch経由でGAS WebアプリAPIを呼び出す
-        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx6ybbRLDqKQJ8IR-NPoVP8981Gtozzz0N3880XanEGRS4--iZtset8PFrVcD_u9YAHMA/exec';
+        // PWA版: Cloudflare Worker経由でGemini APIを呼び出す
+        const WORKER_URL = 'https://reborn-help-chatbot.mercari-yasuhirotakuji.workers.dev/generate-description';
 
-        fetch(GAS_API_URL, {
+        fetch(WORKER_URL, {
           method: 'POST',
           headers: {
-            'Content-Type': 'text/plain;charset=utf-8'
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            action: 'generateAI',
             productInfo: productInfo,
-            images: images
+            images: images,
+            aiConfig: window.CACHED_CONFIG['AI生成設定'] || {}
           })
         })
         .then(response => response.json())
