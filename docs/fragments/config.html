@@ -4111,17 +4111,33 @@
             supplierSelect.appendChild(opt);
           });
         }
-        // 出品先
-        var marketplaceSnap = await window.db.collection('salesChannels').orderBy('name', 'asc').get();
+        // 出品先（masterOptionsから取得 = 商品登録画面と同じソース）
         var marketplaceSelect = document.getElementById('cfg-出品先');
         if (marketplaceSelect) {
           while (marketplaceSelect.options.length > 1) marketplaceSelect.remove(1);
-          marketplaceSnap.forEach(function(doc) {
-            var data = doc.data();
-            var opt = document.createElement('option');
-            opt.value = data.name || doc.id; opt.textContent = opt.value;
-            marketplaceSelect.appendChild(opt);
-          });
+          try {
+            var moSnap = await window.db.collection('masterOptions')
+              .where('fieldName', '==', '出品先').get();
+            if (!moSnap.empty) {
+              moSnap.forEach(function(doc) {
+                var data = doc.data();
+                (data.items || []).forEach(function(name) {
+                  var opt = document.createElement('option');
+                  opt.value = name; opt.textContent = name;
+                  marketplaceSelect.appendChild(opt);
+                });
+              });
+            } else {
+              // masterOptionsに無い場合はsalesChannelsからフォールバック
+              var chSnap = await window.db.collection('salesChannels').orderBy('name', 'asc').get();
+              chSnap.forEach(function(doc) {
+                var data = doc.data();
+                var opt = document.createElement('option');
+                opt.value = data.name || doc.id; opt.textContent = opt.value;
+                marketplaceSelect.appendChild(opt);
+              });
+            }
+          } catch(e) { console.error('[config] 出品先読み込みエラー:', e); }
         }
       } catch (e) { console.error('[config-fragment] procure dropdown error:', e); }
     }
