@@ -994,27 +994,30 @@ window.continueProductRegistration = function() {
     // まず配送方法オプションをFirestoreから読み込む
     await loadShippingMethodOptions();
 
+    var loaded = null;
+
     // PWA版: CACHED_CONFIG または localStorage から読み込み
     if (window.CACHED_CONFIG && window.CACHED_CONFIG['配送デフォルト']) {
-      SHIPPING_DEFAULTS = window.CACHED_CONFIG['配送デフォルト'];
-      console.log('✅ 配送デフォルト設定を読み込みました (PWA版):', SHIPPING_DEFAULTS);
-      applyShippingDefaults();
-      return;
+      loaded = window.CACHED_CONFIG['配送デフォルト'];
     }
 
     // localStorageから直接読み込み（フォールバック）
-    const saved = localStorage.getItem('rebornConfig_shippingDefault');
-    if (saved) {
-      try {
-        SHIPPING_DEFAULTS = JSON.parse(saved);
-        console.log('✅ 配送デフォルト設定を読み込みました (localStorage):', SHIPPING_DEFAULTS);
-        applyShippingDefaults();
-        return;
-      } catch (e) {
-        console.error('配送デフォルト設定パースエラー:', e);
+    if (!loaded) {
+      const saved = localStorage.getItem('rebornConfig_shippingDefault');
+      if (saved) {
+        try { loaded = JSON.parse(saved); } catch (e) {}
       }
     }
 
+    // 実際に値が設定されているかチェック（空文字のみのデータは無視）
+    if (loaded && typeof loaded === 'object') {
+      var hasValues = Object.keys(loaded).some(function(k) { return loaded[k] && loaded[k] !== ''; });
+      if (hasValues) {
+        SHIPPING_DEFAULTS = loaded;
+        console.log('✅ 配送デフォルト設定を読み込みました:', SHIPPING_DEFAULTS);
+        applyShippingDefaults();
+      }
+    }
   }
 
   // 仕入・出品デフォルト設定（設定マスタから読み込む）
@@ -3042,6 +3045,7 @@ window.continueProductRegistration = function() {
       const el = document.getElementById(k);
       if (!el) continue;
       const def = SHIPPING_DEFAULTS[k];
+      if (!def) continue;
       const exists = Array.from(el.options).some(o => String(o.value) === def);
       if (!exists) el.insertAdjacentHTML('beforeend', `<option value="${def}">${def}</option>`);
       el.value = def;
