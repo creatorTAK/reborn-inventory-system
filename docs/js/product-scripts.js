@@ -1074,9 +1074,17 @@ window.continueProductRegistration = function() {
       if (hasValues) {
         PROCURE_LISTING_DEFAULTS = loaded;
         console.log('✅ 仕入・出品デフォルト設定を読み込みました:', PROCURE_LISTING_DEFAULTS);
-        applyProcureListingDefaults();
       }
     }
+
+    // 設定未保存でも「今日の日付」をデフォルト適用（設定画面の初期状態と一致）
+    if (!PROCURE_LISTING_DEFAULTS['仕入日_今日'] && PROCURE_LISTING_DEFAULTS['仕入日_今日'] !== false) {
+      PROCURE_LISTING_DEFAULTS['仕入日_今日'] = true;
+    }
+    if (!PROCURE_LISTING_DEFAULTS['出品日_今日'] && PROCURE_LISTING_DEFAULTS['出品日_今日'] !== false) {
+      PROCURE_LISTING_DEFAULTS['出品日_今日'] = true;
+    }
+    applyProcureListingDefaults();
   }
 
   // 付属品チェックボックスをFirestoreから読み込んで描画
