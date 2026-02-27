@@ -1,5 +1,5 @@
 /**
- * SPA Router v587 — DOM保持型ページ切替（共有fragment対応）
+ * SPA Router v589 — DOM保持型ページ切替（共有fragment対応）
  *
  * 一度表示したページのDOMはメモリに保持し、
  * 再訪問時はDOM表示切替のみ（fetch/パース/スクリプト実行なし）。
@@ -18,7 +18,7 @@
   // 一度表示したページのDOMを保持し、再訪問時は表示切替のみ
   const _pageContainers = {};
 
-  const _FRAGMENT_VERSION = '588';
+  const _FRAGMENT_VERSION = '589';
 
   let _currentSpaPage = null;
   let _isSpaActive = false;
@@ -161,6 +161,7 @@
       // ページコンテナ作成 & DOM注入
       const container = document.createElement('div');
       container.setAttribute('data-spa-page', pageName);
+      container.style.opacity = '0'; // init完了まで非表示（権限フィルタリング等のチラつき防止）
       spaContent.appendChild(container);
       _pageContainers[pageName] = container;
 
@@ -177,6 +178,10 @@
           console.error(`[SPA] init関数エラー: ${pageConfig.init}()`, e);
         }
       }
+
+      // init完了後にコンテナを表示（フィルタリング完了済み）
+      container.style.transition = 'opacity 0.12s ease';
+      container.style.opacity = '1';
 
       console.log(`[SPA] ${pageName} 初回表示完了: ${(performance.now() - startTime).toFixed(0)}ms`);
 
