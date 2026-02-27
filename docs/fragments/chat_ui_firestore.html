@@ -9439,62 +9439,52 @@
     // clearAllImages()で全削除も可能
 
     // 🔧 iOS キーボード表示時のレイアウト修正（visualViewport API）
-    // iOS PWAではキーボードが開いてもviewportサイズが変わらず、
-    // iOSがbodyをスクロールして入力欄を表示→メッセージが画面外に消える
-    // 対策: visualViewportでキーボード高さを検知し、チャットUI全体を可視領域に収める
+    // 方針: キーボード表示時にチャットUI全体をposition:fixedにし、
+    // iOSのbodyスクロールの影響を受けないようにする
     (function() {
       if (!window.visualViewport) return;
 
       var chatContainer = document.getElementById('spa-page-chat-ui');
-      var spaContent = document.getElementById('spa-content');
       var mc = document.getElementById('messagesContainer');
       if (!chatContainer) return;
 
-      var _initialHeight = window.innerHeight;
       var _keyboardVisible = false;
 
       function adjustLayout() {
         var vv = window.visualViewport;
-        var keyboardHeight = _initialHeight - vv.height;
-        var isKeyboard = keyboardHeight > 100;
+        var isKeyboard = vv.height < window.innerHeight - 100;
 
-        if (isKeyboard) {
+        if (isKeyboard && !_keyboardVisible) {
           _keyboardVisible = true;
-
-          // iOSのbodyスクロールを強制リセット（画面が上にズレるのを防止）
-          window.scrollTo(0, 0);
-          document.documentElement.scrollTop = 0;
-          document.body.scrollTop = 0;
-
-          // チャットUIを可視領域の高さに縮める
+          // position:fixedでbodyスクロールから切り離す
+          chatContainer.style.position = 'fixed';
+          chatContainer.style.top = '0';
+          chatContainer.style.left = '0';
+          chatContainer.style.right = '0';
           chatContainer.style.height = vv.height + 'px';
-          if (spaContent) spaContent.style.height = vv.height + 'px';
-
+          chatContainer.style.zIndex = '10000';
           // メッセージを最下部にスクロール
-          if (mc) mc.scrollTop = mc.scrollHeight;
-        } else if (_keyboardVisible) {
+          if (mc) setTimeout(function() { mc.scrollTop = mc.scrollHeight; }, 50);
+        } else if (isKeyboard && _keyboardVisible) {
+          // キーボードサイズ変更（予測変換バー等）
+          chatContainer.style.height = vv.height + 'px';
+        } else if (!isKeyboard && _keyboardVisible) {
+          // キーボードが閉じた
           _keyboardVisible = false;
+          chatContainer.style.position = '';
+          chatContainer.style.top = '';
+          chatContainer.style.left = '';
+          chatContainer.style.right = '';
           chatContainer.style.height = '100%';
-          if (spaContent) spaContent.style.height = '';
+          chatContainer.style.zIndex = '';
         }
       }
 
-      // visualViewport の resize と scroll 両方を監視
       _cuiAddEventListener(window.visualViewport, 'resize', adjustLayout);
-      _cuiAddEventListener(window.visualViewport, 'scroll', function() {
-        if (_keyboardVisible) {
-          // キーボード表示中にiOSがスクロールしようとするのを抑止
-          window.scrollTo(0, 0);
-          document.documentElement.scrollTop = 0;
-          document.body.scrollTop = 0;
-        }
-      });
 
       // focus時にも発動（visualViewport.resizeより早く対応）
       _cuiAddEventListener(messageInput, 'focus', function() {
-        // キーボードアニメーション完了を待ってから調整
         setTimeout(adjustLayout, 300);
-        setTimeout(adjustLayout, 600);
       });
     })();
   }
