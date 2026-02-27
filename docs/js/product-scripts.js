@@ -989,24 +989,38 @@ window.continueProductRegistration = function() {
     }
   }
 
-  // 設定マスタから配送デフォルトを読み込む
+  // 設定マスタから配送デフォルトを読み込む（3段フォールバック）
   async function loadShippingDefaults() {
     // まず配送方法オプションをFirestoreから読み込む
     await loadShippingMethodOptions();
 
     var loaded = null;
 
-    // PWA版: CACHED_CONFIG または localStorage から読み込み
+    // 1. CACHED_CONFIG から（loadAllConfigで既に読み込み済みの場合）
     if (window.CACHED_CONFIG && window.CACHED_CONFIG['配送デフォルト']) {
       loaded = window.CACHED_CONFIG['配送デフォルト'];
+      console.log('[配送デフォルト] CACHED_CONFIGから取得:', loaded);
     }
 
-    // localStorageから直接読み込み（フォールバック）
+    // 2. localStorage から（フォールバック）
     if (!loaded) {
-      const saved = localStorage.getItem('rebornConfig_shippingDefault');
-      if (saved) {
-        try { loaded = JSON.parse(saved); } catch (e) {}
-      }
+      try {
+        var saved = localStorage.getItem('rebornConfig_shippingDefault');
+        if (saved) { loaded = JSON.parse(saved); console.log('[配送デフォルト] localStorageから取得:', loaded); }
+      } catch (e) {}
+    }
+
+    // 3. Firestore直接読み込み（localStorage消失時の最終フォールバック）
+    if (!loaded && window.db) {
+      try {
+        var doc = await window.db.collection('settings').doc('common').get();
+        if (doc.exists && doc.data().shippingDefault) {
+          loaded = doc.data().shippingDefault;
+          console.log('[配送デフォルト] Firestoreから直接取得:', loaded);
+          // localStorageにキャッシュ
+          localStorage.setItem('rebornConfig_shippingDefault', JSON.stringify(loaded));
+        }
+      } catch (e) { console.warn('[配送デフォルト] Firestore読み込みエラー:', e); }
     }
 
     // 実際に値が設定されているかチェック（空文字のみのデータは無視）
@@ -1023,7 +1037,7 @@ window.continueProductRegistration = function() {
   // 仕入・出品デフォルト設定（設定マスタから読み込む。未設定時は空）
   let PROCURE_LISTING_DEFAULTS = {};
 
-  // 設定マスタから仕入・出品デフォルトを読み込む
+  // 設定マスタから仕入・出品デフォルトを読み込む（3段フォールバック）
   async function loadProcureListingDefaults() {
     // まず仕入先・出品先の選択肢をFirestoreから読み込む
     await loadSupplierAndSalesChannelOptions();
@@ -1034,17 +1048,30 @@ window.continueProductRegistration = function() {
 
     var loaded = null;
 
-    // PWA版: CACHED_CONFIG または localStorage から読み込み
+    // 1. CACHED_CONFIG から
     if (window.CACHED_CONFIG && window.CACHED_CONFIG['仕入出品デフォルト']) {
       loaded = window.CACHED_CONFIG['仕入出品デフォルト'];
+      console.log('[仕入出品デフォルト] CACHED_CONFIGから取得:', loaded);
     }
 
-    // localStorageから直接読み込み（フォールバック）
+    // 2. localStorage から
     if (!loaded) {
-      const saved = localStorage.getItem('rebornConfig_procureListingDefault');
-      if (saved) {
-        try { loaded = JSON.parse(saved); } catch (e) {}
-      }
+      try {
+        var saved = localStorage.getItem('rebornConfig_procureListingDefault');
+        if (saved) { loaded = JSON.parse(saved); console.log('[仕入出品デフォルト] localStorageから取得:', loaded); }
+      } catch (e) {}
+    }
+
+    // 3. Firestore直接読み込み（最終フォールバック）
+    if (!loaded && window.db) {
+      try {
+        var doc = await window.db.collection('settings').doc('common').get();
+        if (doc.exists && doc.data().procureListingDefault) {
+          loaded = doc.data().procureListingDefault;
+          console.log('[仕入出品デフォルト] Firestoreから直接取得:', loaded);
+          localStorage.setItem('rebornConfig_procureListingDefault', JSON.stringify(loaded));
+        }
+      } catch (e) { console.warn('[仕入出品デフォルト] Firestore読み込みエラー:', e); }
     }
 
     // 実際に意味のある値が設定されているかチェック
@@ -9872,6 +9899,52 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
     loadDescriptionBlocksCollapseState();
     loadTitleBlocksCollapseState();
     }, 1000);
+
+  // 最終セーフティネット: loadMasterOptions()のfillSelがセレクトをクリアした後に
+  // デフォルト設定を確実に再適用する（タイミング競合対策）
+  setTimeout(async () => {
+    try {
+      console.log('[SafetyNet] デフォルト設定の最終チェック開始');
+
+      // 配送デフォルトが未適用なら再取得・再適用
+      var shippingApplied = false;
+      var fields = ['配送料の負担', '配送の方法', '発送元の地域', '発送までの日数'];
+      for (var i = 0; i < fields.length; i++) {
+        var sel = document.getElementById(fields[i]);
+        if (sel && sel.value && sel.value !== '') { shippingApplied = true; break; }
+      }
+
+      if (!shippingApplied) {
+        console.log('[SafetyNet] 配送デフォルト未適用 → Firestoreから再取得');
+        if (window.db) {
+          var doc = await window.db.collection('settings').doc('common').get();
+          if (doc.exists) {
+            var data = doc.data();
+            if (data.shippingDefault) {
+              SHIPPING_DEFAULTS = data.shippingDefault;
+              applyShippingDefaults();
+              console.log('[SafetyNet] ✅ 配送デフォルト適用:', data.shippingDefault);
+            }
+            if (data.procureListingDefault) {
+              PROCURE_LISTING_DEFAULTS = data.procureListingDefault;
+              if (!PROCURE_LISTING_DEFAULTS['仕入日_今日'] && PROCURE_LISTING_DEFAULTS['仕入日_今日'] !== false) {
+                PROCURE_LISTING_DEFAULTS['仕入日_今日'] = true;
+              }
+              if (!PROCURE_LISTING_DEFAULTS['出品日_今日'] && PROCURE_LISTING_DEFAULTS['出品日_今日'] !== false) {
+                PROCURE_LISTING_DEFAULTS['出品日_今日'] = true;
+              }
+              applyProcureListingDefaults();
+              console.log('[SafetyNet] ✅ 仕入出品デフォルト適用:', data.procureListingDefault);
+            }
+          }
+        }
+      } else {
+        console.log('[SafetyNet] 配送デフォルト適用済み、スキップ');
+      }
+    } catch (e) {
+      console.warn('[SafetyNet] エラー:', e);
+    }
+  }, 3000);
 
 // ============================================
 // 商品保存（Firestore直接保存） - PROD-002 完全移行
