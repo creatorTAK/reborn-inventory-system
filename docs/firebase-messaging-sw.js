@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v345';  // v345: 設定モーダルiOS PWA操作不能修正（body移動方式）
+const CACHE_VERSION = 'v346';  // v346: ホームメニューフリッカー修正（キャッシュ更新必須）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
