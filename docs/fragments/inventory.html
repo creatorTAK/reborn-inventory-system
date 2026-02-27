@@ -1043,13 +1043,19 @@
     // ===== Inlined Firestore API functions (not in shared FirestoreApi) =====
     async function invGetShippingMethodMaster() {
       var db = window.db;
-      var coll = window.firestoreCollection;
-      var getDocs = window.firestoreGetDocs;
-      var snapshot = await getDocs(coll(db, 'shippingMethods'));
+      var snapshot = await db.collection('shippingMethods').get();
       var methods = [];
       snapshot.forEach(function(docSnap) {
         var data = docSnap.data();
-        methods.push({ method1: data.category, method2: data.detail, fee: data.price });
+        if (data.items && Array.isArray(data.items)) {
+          // カテゴリ別ドキュメント形式: {items: [{detail, price}, ...]}
+          data.items.forEach(function(item) {
+            methods.push({ method1: docSnap.id, method2: item.detail, fee: item.price });
+          });
+        } else {
+          // 個別ドキュメント形式: {category, detail, price}
+          methods.push({ method1: data.category, method2: data.detail, fee: data.price });
+        }
       });
       methods.sort(function(a, b) { return (a.method1 || '').localeCompare(b.method1 || '', 'ja'); });
       return methods;
@@ -1057,9 +1063,7 @@
 
     async function invGetPackagingMaterialsMaster() {
       var db = window.db;
-      var coll = window.firestoreCollection;
-      var getDocs = window.firestoreGetDocs;
-      var snapshot = await getDocs(coll(db, 'packagingMaterials'));
+      var snapshot = await db.collection('packagingMaterials').get();
       var byCategory = {};
       var categoriesSet = new Set();
       snapshot.forEach(function(docSnap) {
@@ -1081,17 +1085,11 @@
 
     async function invGetSalesChannelsMaster() {
       var db = window.db;
-      var coll = window.firestoreCollection;
-      var getDocs = window.firestoreGetDocs;
-      var orderBy = window.firestoreOrderBy;
-      var q = window.firestoreQuery;
       var snapshot;
       try {
-        var ref = coll(db, 'salesChannels');
-        var qry = q(ref, orderBy('order', 'asc'));
-        snapshot = await getDocs(qry);
+        snapshot = await db.collection('salesChannels').orderBy('order', 'asc').get();
       } catch (e) {
-        snapshot = await getDocs(coll(db, 'salesChannels'));
+        snapshot = await db.collection('salesChannels').get();
       }
       var channels = [];
       snapshot.forEach(function(docSnap) {
