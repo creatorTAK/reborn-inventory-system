@@ -2481,6 +2481,19 @@
     </div>
   </div>
 
+  <!-- QR確認 結果表示エリア -->
+  <div id="pur-qrCheckResult" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; overflow-y: auto; padding: 20px;">
+    <!-- 動的に内容が挿入される -->
+  </div>
+
+  <!-- QR確認 スキャン履歴 -->
+  <div id="pur-qrCheckHistorySection" style="display: none; position: fixed; bottom: 80px; right: 16px; width: 320px; max-height: 300px; overflow-y: auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 9998; padding: 12px;">
+    <div style="font-weight: 600; font-size: 0.9rem; color: #374151; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb;">
+      <i class="bi bi-clock-history me-1"></i>スキャン履歴
+    </div>
+    <div id="pur-qrCheckHistoryList"></div>
+  </div>
+
   <script>
     // ============================================
     // Purchase SPA Fragment - JavaScript
@@ -2505,6 +2518,7 @@
     var _pur_entryDraftSaveTimer = null;
     var _pur_html5QrCode = null;
     var _pur_qrCheckHistory = [];
+    var _pur_MAX_HISTORY = 10;
     var _pur_dispatchProgressData = [];
     var _pur_inspectionRequestsData = [];
     var _pur_damageMarkerState = new Map();
@@ -4734,17 +4748,246 @@
       }
     }
     function purOnQRCheckScanSuccess(decodedText) {
+      console.log('[Pur] QR確認スキャン成功:', decodedText);
       purStopQRCheckScanner();
       purCloseQRCheckScanner();
-      purShowLoading();
-      purGetSlotBySlotId(decodedText).then(function(slotData) {
-        purHideLoading();
-        if (slotData) {
-          alert('スロット情報\nID: ' + slotData.slotId + '\n仕入先: ' + (slotData.supplier||'-') + '\n金額: ' + purFormatCurrency(slotData.amount) + '\nステータス: ' + (slotData.status||'-'));
-        } else {
-          alert('QRコード情報が見つかりませんでした: ' + decodedText);
+
+      // BATCH-形式のslotId対応
+      if (decodedText.startsWith('BATCH-')) {
+        purShowLoading();
+        purGetSlotBySlotId(decodedText).then(function(slotData) {
+          purHideLoading();
+          if (!slotData) {
+            purShowQRCheckError('このスロットは見つかりませんでした。');
+            return;
+          }
+          // バッチデータを取得して総数を得る
+          var db = firebase.firestore();
+          return db.collection('purchaseBatches').doc(slotData.batchId).get().then(function(batchSnap) {
+            var batchData = batchSnap.exists ? batchSnap.data() : null;
+            var totalCount = (batchData && batchData.itemCount) ? batchData.itemCount : '-';
+            var qrData = {
+              s: slotData.slotId,
+              n: slotData.slotNumber,
+              t: totalCount,
+              d: slotData.purchaseDate,
+              sup: slotData.supplier,
+              amt: slotData.amount,
+              asg: slotData.assignee,
+              m: slotData.memo || '',
+              itemType: slotData.itemType || 'unique',
+              quantity: slotData.quantity || 1,
+              skuId: slotData.skuId || null,
+              unitPrice: slotData.unitPrice || null,
+              cat: slotData.category || null,
+              sz: slotData.size || '',
+              br: slotData.brand || '',
+              brk: slotData.brandKana || '',
+              cnd: slotData.condition || '',
+              rnk: slotData.rank || '',
+              acc: slotData.accessories || [],
+              nt: slotData.note || '',
+              dmFront: slotData.damageMarkerFront || null,
+              dmBack: slotData.damageMarkerBack || null
+            };
+            purShowQRCheckResult(qrData);
+            purAddToQRCheckHistory(qrData);
+          });
+        }).catch(function(error) {
+          purHideLoading();
+          console.error('[Pur] QRスキャン処理エラー:', error);
+          purShowQRCheckError('データの取得に失敗しました。');
+        });
+        return;
+      }
+
+      // 旧形式（JSON）対応
+      var qrData = null;
+      try {
+        qrData = JSON.parse(decodedText);
+      } catch (e) {
+        purShowQRCheckError('このQRコードは仕入管理用ではありません。');
+        return;
+      }
+      if (!qrData.s || !qrData.n) {
+        purShowQRCheckError('このQRコードは仕入管理用ではありません。');
+        return;
+      }
+      purShowQRCheckResult(qrData);
+      purAddToQRCheckHistory(qrData);
+    }
+
+    // QR確認 結果表示
+    function purShowQRCheckResult(qrData) {
+      var resultDiv = document.getElementById('pur-qrCheckResult');
+      resultDiv.style.display = 'flex';
+      resultDiv.style.justifyContent = 'center';
+      resultDiv.style.alignItems = 'flex-start';
+
+      var slotId = qrData.s || '-';
+      var slotNumber = qrData.n || '-';
+      var totalCount = qrData.t || '-';
+      var purchaseDate = qrData.d || '-';
+      var supplier = qrData.sup || '-';
+      var amount = qrData.amt || 0;
+      var assignee = qrData.asg || '-';
+      var memo = qrData.m || '';
+      var categoryObj = qrData.cat || {};
+      var categoryDisplay = '';
+      if (typeof categoryObj === 'object' && categoryObj !== null) {
+        categoryDisplay = [
+          categoryObj.superCategory, categoryObj.major, categoryObj.middle,
+          categoryObj.small, categoryObj.fine, categoryObj.fine2, categoryObj.itemName
+        ].filter(function(x) { return x; }).join(' > ');
+      } else {
+        categoryDisplay = categoryObj || '';
+      }
+      var size = qrData.sz || '';
+      var brand = qrData.br || '';
+      var brandKana = qrData.brk || '';
+      var condition = qrData.cnd || '';
+      var accessories = qrData.acc || [];
+      var note = qrData.nt || '';
+      var damageMarkerFront = qrData.dmFront || null;
+      var damageMarkerBack = qrData.dmBack || null;
+      var hasDamageMarker = damageMarkerFront || damageMarkerBack;
+      var itemType = qrData.itemType || 'unique';
+      var quantity = qrData.quantity || 1;
+      var skuId = qrData.skuId || null;
+      var unitPrice = qrData.unitPrice || null;
+      var isSkuBased = itemType === 'sku-based';
+      var hasInspectionData = categoryDisplay || size || brand || condition || accessories.length > 0 || note;
+
+      var html = '<div style="background: white; border-radius: 16px; width: 90%; max-width: 420px; margin-top: 40px; padding: 0; overflow: hidden;">';
+      html += '<div class="pur-qr-result-card">';
+      html += '<div class="pur-qr-result-header"><i class="bi bi-check-circle-fill"></i><span>QRコード情報</span></div>';
+      html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">連番</span><span class="pur-qr-result-value highlight">#' + slotNumber + ' / ' + totalCount + '</span></div>';
+      html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">商品タイプ</span><span class="pur-qr-result-value">' + (isSkuBased ? '<span class="badge bg-info">新品(複数)</span>' : '<span class="badge bg-secondary">1点物</span>') + '</span></div>';
+      if (isSkuBased) {
+        html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">数量</span><span class="pur-qr-result-value highlight">' + quantity + '点</span></div>';
+        html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">仕入単価</span><span class="pur-qr-result-value">¥' + (unitPrice ? Number(unitPrice).toLocaleString() : '-') + '</span></div>';
+        if (skuId) {
+          html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">SKU ID</span><span class="pur-qr-result-value" style="font-size:0.85em;">' + skuId + '</span></div>';
         }
-      }).catch(function() { purHideLoading(); alert('情報の取得に失敗しました'); });
+      }
+      html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">金額' + (isSkuBased ? '（合計）' : '') + '</span><span class="pur-qr-result-value highlight">¥' + Number(amount).toLocaleString() + '</span></div>';
+      html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">仕入先</span><span class="pur-qr-result-value">' + supplier + '</span></div>';
+      html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">仕入日</span><span class="pur-qr-result-value">' + purchaseDate + '</span></div>';
+      html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">発送先</span><span class="pur-qr-result-value">' + assignee + '</span></div>';
+      if (memo) {
+        html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">メモ</span><span class="pur-qr-result-value">' + memo + '</span></div>';
+      }
+      if (hasInspectionData) {
+        html += '<div class="pur-qr-result-section"><div class="pur-qr-result-section-title"><i class="bi bi-clipboard-check me-1"></i>検品情報</div>';
+        if (categoryDisplay) html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">カテゴリー</span><span class="pur-qr-result-value">' + categoryDisplay + '</span></div>';
+        if (size) html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">サイズ</span><span class="pur-qr-result-value">' + size + '</span></div>';
+        if (brand) html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">ブランド</span><span class="pur-qr-result-value">' + brand + (brandKana ? ' (' + brandKana + ')' : '') + '</span></div>';
+        if (condition) html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">状態</span><span class="pur-qr-result-value">' + condition + '</span></div>';
+        if (accessories.length > 0) html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">付属品</span><span class="pur-qr-result-value">' + accessories.join('、') + '</span></div>';
+        if (note) html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">メモ</span><span class="pur-qr-result-value">' + note + '</span></div>';
+        html += '</div>';
+      }
+      if (hasDamageMarker) {
+        html += '<div class="pur-qr-result-section"><div class="pur-qr-result-section-title"><i class="bi bi-pencil-square me-1"></i>商品状態（詳細）</div>';
+        html += '<div style="text-align:center;margin-top:10px;">';
+        html += '<div style="display:flex;justify-content:center;gap:8px;margin-bottom:12px;">';
+        if (damageMarkerFront) html += '<button type="button" class="btn btn-sm pur-qr-dm-side-btn active" onclick="purToggleQRDamageMarkerSide(this,\'front\')"><i class="bi bi-phone"></i> 表</button>';
+        if (damageMarkerBack) html += '<button type="button" class="btn btn-sm pur-qr-dm-side-btn' + (!damageMarkerFront ? ' active' : '') + '" onclick="purToggleQRDamageMarkerSide(this,\'back\')"><i class="bi bi-phone-flip"></i> 裏</button>';
+        html += '</div>';
+        if (damageMarkerFront) {
+          html += '<div class="pur-qr-dm-image pur-qr-dm-front" style="display:block;">';
+          html += '<img src="' + damageMarkerFront.image + '" alt="マーキング画像（表）" style="max-width:200px;border:1px solid #d1d5db;border-radius:8px;">';
+          if (damageMarkerFront.note) html += '<div style="font-size:0.85rem;color:#374151;margin-top:6px;padding:8px;background:#f9fafb;border-radius:6px;">' + damageMarkerFront.note + '</div>';
+          html += '</div>';
+        }
+        if (damageMarkerBack) {
+          html += '<div class="pur-qr-dm-image pur-qr-dm-back" style="display:' + (!damageMarkerFront ? 'block' : 'none') + ';">';
+          html += '<img src="' + damageMarkerBack.image + '" alt="マーキング画像（裏）" style="max-width:200px;border:1px solid #d1d5db;border-radius:8px;">';
+          if (damageMarkerBack.note) html += '<div style="font-size:0.85rem;color:#374151;margin-top:6px;padding:8px;background:#f9fafb;border-radius:6px;">' + damageMarkerBack.note + '</div>';
+          html += '</div>';
+        }
+        html += '</div></div>';
+      }
+      html += '<div class="pur-qr-result-row"><span class="pur-qr-result-label">スロットID</span><span class="pur-qr-result-value" style="font-size:0.75rem;color:#9ca3af;">' + slotId + '</span></div>';
+      html += '</div>';
+      html += '<div class="text-center" style="padding: 16px;"><button class="btn" style="background:linear-gradient(135deg,#4ECDC4,#44A08D);color:white;border-radius:10px;padding:10px 24px;" onclick="purCloseQRCheckResult();purOpenQRCheckScanner()"><i class="bi bi-camera-fill me-2"></i>次をスキャン</button>';
+      html += ' <button class="btn btn-outline-secondary" style="border-radius:10px;padding:10px 24px;margin-left:8px;" onclick="purCloseQRCheckResult()">閉じる</button></div>';
+      html += '</div>';
+
+      resultDiv.innerHTML = html;
+      resultDiv.onclick = function(e) { if (e.target === resultDiv) purCloseQRCheckResult(); };
+    }
+
+    // QR確認 結果を閉じる
+    function purCloseQRCheckResult() {
+      var resultDiv = document.getElementById('pur-qrCheckResult');
+      if (resultDiv) { resultDiv.style.display = 'none'; resultDiv.innerHTML = ''; }
+    }
+
+    // QR確認 エラー表示
+    function purShowQRCheckError(message) {
+      var resultDiv = document.getElementById('pur-qrCheckResult');
+      resultDiv.style.display = 'flex';
+      resultDiv.style.justifyContent = 'center';
+      resultDiv.style.alignItems = 'flex-start';
+      var html = '<div style="background:white;border-radius:16px;width:90%;max-width:420px;margin-top:40px;padding:0;overflow:hidden;">';
+      html += '<div class="pur-qr-result-card error">';
+      html += '<div class="pur-qr-result-header"><i class="bi bi-x-circle-fill"></i><span>エラー</span></div>';
+      html += '<p class="mb-0">' + message + '</p>';
+      html += '</div>';
+      html += '<div class="text-center" style="padding:16px;"><button class="btn" style="background:linear-gradient(135deg,#4ECDC4,#44A08D);color:white;border-radius:10px;padding:10px 24px;" onclick="purCloseQRCheckResult();purOpenQRCheckScanner()"><i class="bi bi-camera-fill me-2"></i>再スキャン</button>';
+      html += ' <button class="btn btn-outline-secondary" style="border-radius:10px;padding:10px 24px;margin-left:8px;" onclick="purCloseQRCheckResult()">閉じる</button></div>';
+      html += '</div>';
+      resultDiv.innerHTML = html;
+      resultDiv.onclick = function(e) { if (e.target === resultDiv) purCloseQRCheckResult(); };
+    }
+
+    // QR確認 傷マーキング表/裏切替
+    function purToggleQRDamageMarkerSide(btn, side) {
+      var buttons = document.querySelectorAll('.pur-qr-dm-side-btn');
+      for (var i = 0; i < buttons.length; i++) buttons[i].classList.remove('active');
+      btn.classList.add('active');
+      var images = document.querySelectorAll('.pur-qr-dm-image');
+      for (var i = 0; i < images.length; i++) images[i].style.display = 'none';
+      var target = document.querySelector('.pur-qr-dm-' + side);
+      if (target) target.style.display = 'block';
+    }
+
+    // QR確認 履歴に追加
+    function purAddToQRCheckHistory(qrData) {
+      var historyItem = {
+        slotNumber: qrData.n,
+        totalCount: qrData.t,
+        amount: qrData.amt,
+        supplier: qrData.sup,
+        time: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+      };
+      _pur_qrCheckHistory.unshift(historyItem);
+      if (_pur_qrCheckHistory.length > _pur_MAX_HISTORY) {
+        _pur_qrCheckHistory.pop();
+      }
+      purUpdateQRCheckHistoryDisplay();
+    }
+
+    // QR確認 履歴表示を更新
+    function purUpdateQRCheckHistoryDisplay() {
+      var historySection = document.getElementById('pur-qrCheckHistorySection');
+      var historyContainer = document.getElementById('pur-qrCheckHistoryList');
+      if (_pur_qrCheckHistory.length === 0) {
+        historySection.style.display = 'none';
+        return;
+      }
+      historySection.style.display = 'block';
+      historyContainer.innerHTML = _pur_qrCheckHistory.map(function(item) {
+        return '<div class="pur-qr-history-item">' +
+          '<div class="pur-history-info">' +
+          '<span class="pur-history-number">#' + item.slotNumber + '/' + item.totalCount + '</span>' +
+          '<span class="pur-history-amount ms-2">¥' + Number(item.amount).toLocaleString() + '</span>' +
+          '<span class="ms-2">' + item.supplier + '</span>' +
+          '</div>' +
+          '<span class="pur-history-time">' + item.time + '</span>' +
+          '</div>';
+      }).join('');
     }
 
     // ============================================
@@ -5692,6 +5935,9 @@
       _pur_batchDamageMarkerState = { front: null, back: null, currentSide: 'front', currentSubcategory: null, currentFineCategory: null };
       _pur_batchDamageMarkerSaved = { front: null, back: null };
       _pur_qrCheckHistory = [];
+      purCloseQRCheckResult();
+      var histSec = document.getElementById('pur-qrCheckHistorySection');
+      if (histSec) histSec.style.display = 'none';
       _pur_entryItemNextId = 1;
     }
   </script>
