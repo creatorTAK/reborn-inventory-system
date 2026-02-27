@@ -1731,6 +1731,7 @@
 
     // Salesword
     var _cfg_SALESWORD_LIST = [];
+    var _cfg_pendingSaleswordConfig = null; // マスタロード後の再描画用
 
     // Description elements (for order)
     var _cfg_DESCRIPTION_ELEMENTS = [
@@ -1908,6 +1909,7 @@
       _cfg_usersData = [];
       _cfg_allUsersData = [];
       _cfg_SALESWORD_LIST = [];
+      _cfg_pendingSaleswordConfig = null;
       _cfg_customTaskCounter = 0;
       _cfg_userTaskAssignmentRetryCount = 0;
     }
@@ -2010,7 +2012,7 @@
         ]);
 
         // Load procure/listing dropdowns
-        cfgInitProcureListingDropdowns();
+        await cfgInitProcureListingDropdowns();
 
         // Load platforms from Firestore
         await cfgLoadPlatformsFromFirestore();
@@ -2030,10 +2032,10 @@
         await cfgCheckUserPermissionAndUpdateUI();
 
         // Load salesword master
-        cfgLoadSaleswordMasterData();
+        await cfgLoadSaleswordMasterData();
 
         // Load basic settings (user profile, notifications)
-        cfgLoadBasicSettings();
+        await cfgLoadBasicSettings();
 
         // Init user icon file handler
         cfgInitUserIconHandler();
@@ -2127,8 +2129,14 @@
       // Procure/Listing defaults
       if (config['仕入出品デフォルト']) cfgRenderProcureListingDefaults(config['仕入出品デフォルト']);
 
-      // Salesword
-      if (config['よく使うセールスワード']) cfgRenderSaleswordConfig(config['よく使うセールスワード']);
+      // Salesword（マスタ未ロード時は保留して後で再描画）
+      if (config['よく使うセールスワード']) {
+        if (_cfg_SALESWORD_LIST.length > 0) {
+          cfgRenderSaleswordConfig(config['よく使うセールスワード']);
+        } else {
+          _cfg_pendingSaleswordConfig = config['よく使うセールスワード'];
+        }
+      }
 
       // Description order
       if (config.descriptionOrder) cfgRenderDescriptionOrder(config.descriptionOrder);
@@ -2735,9 +2743,20 @@
         var snapshot = await window.db.collection('saleswords').orderBy('order', 'asc').get();
         _cfg_SALESWORD_LIST = [];
         snapshot.forEach(function(doc) {
-          _cfg_SALESWORD_LIST.push({ id: doc.id, ...doc.data() });
+          var data = doc.data();
+          var category = data.category || doc.id;
+          var words = data.words || [];
+          // カテゴリ→ワード配列をフラットリストに変換
+          words.forEach(function(word) {
+            _cfg_SALESWORD_LIST.push({ id: category + '/' + word, name: word, category: category });
+          });
         });
         console.log('[config-fragment] Salesword master loaded:', _cfg_SALESWORD_LIST.length);
+        // マスタロード完了後、保留中のセールスワード設定を再描画
+        if (_cfg_pendingSaleswordConfig) {
+          cfgRenderSaleswordConfig(_cfg_pendingSaleswordConfig);
+          _cfg_pendingSaleswordConfig = null;
+        }
       } catch (e) {
         console.error('[config-fragment] Salesword master error:', e);
       }
@@ -2824,8 +2843,8 @@
       var prompt = document.getElementById('cfg-aiCustomPrompt');
 
       var lines = [];
-      if (tone) lines.push('トーン: ' + tone.options[tone.selectedIndex].text);
-      if (length) lines.push('長さ: ' + length.options[length.selectedIndex].text);
+      if (tone && tone.selectedIndex >= 0) lines.push('トーン: ' + tone.options[tone.selectedIndex].text);
+      if (length && length.selectedIndex >= 0) lines.push('長さ: ' + length.options[length.selectedIndex].text);
       if (temp) lines.push('温度: ' + parseFloat(temp.value).toFixed(1));
       if (prompt && prompt.value.trim()) lines.push('追加指示: ' + prompt.value.trim());
       preview.textContent = lines.join(' | ');
