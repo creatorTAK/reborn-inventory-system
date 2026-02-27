@@ -990,7 +990,7 @@ window.continueProductRegistration = function() {
           .get();
 
         // セレクトボックスをクリアして再構築
-        select.innerHTML = '<option value="">選択してください</option>';
+        select.innerHTML = '<option value="">--選択してください--</option>';
 
         // ドキュメントID（カテゴリ名）を追加
         snapshot.forEach(doc => {
@@ -10559,6 +10559,10 @@ window.reinitProductScripts = async function() {
     _fill('配送の方法', MASTER_OPTIONS['配送の方法'] || []);
     _fill('発送元の地域', MASTER_OPTIONS['発送元の地域'] || []);
     _fill('発送までの日数', MASTER_OPTIONS['発送までの日数'] || []);
+
+    // マスタオプション再読み込み後にデフォルト設定を再適用
+    if (typeof applyShippingDefaults === 'function') applyShippingDefaults();
+    if (typeof applyProcureListingDefaults === 'function') applyProcureListingDefaults();
 
     window.globalMasterOptions = MASTER_OPTIONS;
 

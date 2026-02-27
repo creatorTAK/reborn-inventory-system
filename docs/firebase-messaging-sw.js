@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v340';  // v340: flexレイアウト撤回+overflow-x:hidden
+const CACHE_VERSION = 'v341';  // v341: 配送デフォルト保存修正+配送グリッドレイアウト
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
