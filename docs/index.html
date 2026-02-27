@@ -1433,11 +1433,11 @@
       </button>
     </nav>
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0227g</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0227h</div>
     <script>
     // PWAタスクキル復帰時のバージョンチェック（bfcache対策）
     (function(){
-      var LOCAL_VER = 'v0227g';
+      var LOCAL_VER = 'v0227h';
       var lastCheck = Date.now();
       document.addEventListener('visibilitychange', function(){
         if (document.visibilityState !== 'visible') return;
@@ -2480,6 +2480,76 @@
             }
           }, 100);
         }
+
+        // 🔧 通知タップからのナビゲーション: IndexedDB Pending Navigation 対応
+        // iOS PWAではnotificationclickが発火しないことがあるため、
+        // SWのpushイベントで保存されたナビゲーション先をアプリ復帰時に読み取る
+        function checkPendingNavigation() {
+          try {
+            var req = indexedDB.open('PendingNavigationDB', 1);
+            req.onupgradeneeded = function(e) {
+              var db = e.target.result;
+              if (!db.objectStoreNames.contains('nav')) {
+                db.createObjectStore('nav');
+              }
+            };
+            req.onsuccess = function() {
+              var db = req.result;
+              try {
+                var tx = db.transaction('nav', 'readwrite');
+                var store = tx.objectStore('nav');
+                var getReq = store.get('pending');
+                getReq.onsuccess = function() {
+                  var data = getReq.result;
+                  if (data && data.page) {
+                    // 30秒以内のpending navigationのみ有効
+                    var age = Date.now() - (data.timestamp || 0);
+                    console.log('[PendingNav] Found:', data.page, 'roomId:', data.roomId, 'age:', age + 'ms');
+                    if (age < 30000) {
+                      // 消費済みとして削除
+                      store.delete('pending');
+                      console.log('[PendingNav] Navigating to:', data.page);
+                      setTimeout(function() {
+                        if (data.page === 'chat' && data.roomId) {
+                          localStorage.setItem('current_chat_room_id', data.roomId);
+                          navigateToPage('chat-room');
+                        } else {
+                          navigateToPage(data.page);
+                        }
+                      }, 300);
+                    } else {
+                      // 古いpendingは削除
+                      store.delete('pending');
+                      console.log('[PendingNav] Expired, deleted');
+                    }
+                  }
+                };
+                tx.oncomplete = function() { db.close(); };
+                tx.onerror = function() { db.close(); };
+              } catch(e) {
+                db.close();
+                console.error('[PendingNav] TX error:', e);
+              }
+            };
+            req.onerror = function() {
+              console.error('[PendingNav] DB open error');
+            };
+          } catch(e) {
+            console.error('[PendingNav] Error:', e);
+          }
+        }
+
+        // アプリ起動時にpending navigationをチェック
+        if (!urlPage) {
+          setTimeout(checkPendingNavigation, 500);
+        }
+
+        // visibilitychangeでアプリ復帰時もチェック（バックグラウンド→フォアグラウンド）
+        document.addEventListener('visibilitychange', function() {
+          if (document.visibilityState === 'visible') {
+            checkPendingNavigation();
+          }
+        });
 
         // 🏠 初期設定完了済みの場合、ヘッダーを非表示にしてメニュー画面を表示（UI-013）
         // スケルトンUI表示中もヘッダーを非表示に保つ

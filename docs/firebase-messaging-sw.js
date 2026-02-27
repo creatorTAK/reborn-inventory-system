@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v336';  // v336: アプリバッジをチャット+タスク合算に修正
+const CACHE_VERSION = 'v337';  // v337: 通知タップ→ページ遷移（IndexedDB pending navigation）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -63,6 +63,48 @@ function openDB(dbName) {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+}
+
+// ================================================================================
+// Pending Navigation DB（通知タップ→ページ遷移用）
+// iOS PWAではnotificationclickが発火しないことがあるため、
+// pushイベントでナビゲーション先を保存し、アプリ復帰時に読み取る
+// ================================================================================
+function openPendingNavDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('PendingNavigationDB', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('nav')) {
+        db.createObjectStore('nav');
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function savePendingNavigation(page, roomId) {
+  return openPendingNavDB().then(db => new Promise((resolve) => {
+    const tx = db.transaction('nav', 'readwrite');
+    const store = tx.objectStore('nav');
+    store.put({ page: page, roomId: roomId || '', timestamp: Date.now() }, 'pending');
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); resolve(false); };
+  })).catch((err) => {
+    console.error('[SW] savePendingNavigation error:', err);
+    return false;
+  });
+}
+
+function clearPendingNavigation() {
+  return openPendingNavDB().then(db => new Promise((resolve) => {
+    const tx = db.transaction('nav', 'readwrite');
+    const store = tx.objectStore('nav');
+    store.delete('pending');
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); resolve(false); };
+  })).catch(() => false);
 }
 
 // 指定DBのバッジカウントを読み取る（読み取り専用）
@@ -333,10 +375,27 @@ self.addEventListener('push', (event) => {
         renotify: true
       };
 
-      console.log('[SW v145] Showing notification:', title, 'silent:', !soundEnabled);
+      console.log('[SW v337] Showing notification:', title, 'silent:', !soundEnabled);
       await self.registration.showNotification(title, notificationOptions);
 
-      console.log('[SW v145] Push event handled successfully');
+      // 🔧 Pending Navigation: 通知タイプからナビゲーション先を決定して保存
+      // iOS PWAではnotificationclickが発火しないことがあるため、
+      // pushイベント（確実に発火）の段階でナビゲーション先を保存しておく
+      const typePageMap = {
+        'chat': 'chat', 'CHAT_MESSAGE': 'chat', 'chat_message': 'chat',
+        'CHAT_MENTION': 'chat', 'MENTION': 'chat',
+        'incoming_call': 'chat', 'INCOMING_CALL': 'chat',
+        'system': 'todo-list', 'pending_user': 'todo-list',
+        'task_request': 'todo-list', 'task_completion': 'todo-list',
+        'extension_request': 'todo-list'
+      };
+      const pendingPage = typePageMap[notificationType] || '';
+      if (pendingPage) {
+        await savePendingNavigation(pendingPage, roomId);
+        console.log('[SW v337] Saved pending navigation:', pendingPage, 'roomId:', roomId);
+      }
+
+      console.log('[SW v337] Push event handled successfully');
 
     } catch (error) {
       console.error('[SW v160] Error in push handler:', error);
@@ -558,7 +617,11 @@ self.addEventListener('notificationclick', (event) => {
     targetPage = typePageMap[data.type] || '';
   }
 
-  console.log('[SW v332] notificationclick targetPage:', targetPage, 'type:', data.type, 'roomId:', data.roomId || 'none');
+  console.log('[SW v337] notificationclick targetPage:', targetPage, 'type:', data.type, 'roomId:', data.roomId || 'none');
+
+  // notificationclickが発火した場合、pending navigationをクリア
+  // （こちらが直接ナビゲーションを行うため二重遷移を防止）
+  clearPendingNavigation();
 
   const baseUrl = self.location.origin + '/';
 
