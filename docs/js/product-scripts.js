@@ -10629,5 +10629,27 @@ window.reinitProductScripts = async function() {
   // 8. 出品タイプ制御
   setTimeout(initSalesTypeControl, 300);
 
+  // 9. セールスワードデフォルト再適用
+  if (typeof applyDefaultSalesword === 'function') {
+    setTimeout(function() { applyDefaultSalesword(); }, 500);
+  }
+
+  // 10. イベントリスナー再設定（初期ロードと同等）
+  setupHashtagPreviewListeners();
+  setupSizeHyokiListeners();
+  setupRaglanListener();
+
+  // 11. ブロック管理（ドラッグ&ドロップ、順序、折りたたみ状態）
+  initTitleBlockDragDrop();
+  applyTitleBlockOrder();
+  initDescriptionBlocksDragDrop();
+  loadDescriptionBlocksOrder();
+  loadDescriptionBlocksCollapseState();
+  loadTitleBlocksCollapseState();
+
+  // 12. 管理番号オブザーバー・配置設定
+  try { loadManagementNumberPlacementFromServer(); } catch (e) { console.error('[reinit] mnb placement error:', e); }
+  try { setupManagementNumberObserver(); } catch (e) { console.error('[reinit] mnb observer error:', e); }
+
   console.log('✅ [SPA reinit] 完了');
 };
