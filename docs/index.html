@@ -1433,11 +1433,11 @@
       </button>
     </nav>
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0227h</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0227i</div>
     <script>
     // PWAタスクキル復帰時のバージョンチェック（bfcache対策）
     (function(){
-      var LOCAL_VER = 'v0227h';
+      var LOCAL_VER = 'v0227i';
       var lastCheck = Date.now();
       document.addEventListener('visibilitychange', function(){
         if (document.visibilityState !== 'visible') return;
@@ -2017,8 +2017,7 @@
   <!-- master-config.js と master-cache.js は動的ロードに移行（Service Worker対策） -->
 
   <script>
-    // GAS API URL (Cloudflare Worker プロキシ経由 - CORS問題解決)
-    const GAS_API_URL = '/gas-proxy';
+    // [REMOVED] GAS_API_URL - GAS API呼び出しは全てFirestore/Firebase Functionsに移行済み
 
     // VAPID公開鍵
     const VAPID_PUBLIC_KEY = 'BAhqpnZ0bAewADDuEn2-TGyKLZqL3vPRbI3W8j-_HZT6r82P-E66kcXjFD2Hzmhwd4nFNBVzHMwaqv0kPGaFeEE';
@@ -2150,47 +2149,7 @@
     window.brandsPreloading = false;
     window.brandsCacheTimestamp = null;
 
-    /**
-     * GAS経由でFirestoreから管理番号設定をプリロード（Algolia移行版）
-     * - ブランドはAlgoliaで検索（プリロード不要）
-     * - 管理番号設定のみGAS経由で取得（1-2秒で完了）
-     */
-    async function preloadManagementConfigForPWA() {
-      if (window.managementConfigCache || window.managementConfigPreloading) {
-        console.log('⏩ [PWA] 管理番号設定プリロードスキップ（既にロード済みまたはロード中）');
-        return;
-      }
-
-      window.managementConfigPreloading = true;
-          const startTime = performance.now();
-
-      try {
-        // GAS getManagementConfig() を呼び出し
-        const response = await fetch(GAS_API_URL + '?action=getManagementConfig');
-
-        if (!response.ok) {
-          throw new Error('GAS API エラー: ' + response.status);
-        }
-
-        const config = await response.json();
-
-        window.managementConfigCache = config;
-        window.managementConfigCacheTimestamp = Date.now();
-        window.managementConfigPreloading = false;
-
-        const endTime = performance.now();
-        const duration = (endTime - startTime).toFixed(2);
-
-        console.log(`✅ [PWA-GAS経由] 管理番号設定プリロード完了: prefix="${config?.prefix}", segments=${config?.segments?.length}件 (${duration}ms)`);
-
-        return config;
-
-      } catch (error) {
-        console.error('❌ [PWA-GAS経由] 管理番号設定プリロードエラー:', error);
-        window.managementConfigPreloading = false;
-        return null;
-      }
-    }
+    // [REMOVED] preloadManagementConfigForPWA - 管理番号設定はproduct-scripts.jsがFirestore(settings/common)から直接取得するため不要
 
     // Unhandled Promise Rejection をキャッチ（Safari等のFCMエラー対応）
     window.addEventListener('unhandledrejection', (event) => {
@@ -5277,23 +5236,9 @@
 
         // トークンが変更された場合のみ、GASとFirestoreデバイスを更新
         if (tokenChanged) {
-          // GASに新しいトークンを送信
-          const response = await fetch(GAS_API_URL + '?action=subscribeFCM&token=' + encodeURIComponent(currentToken) +
-                                      '&deviceInfo=' + encodeURIComponent(JSON.stringify(deviceInfo)) +
-                                      '&userId=' + encodeURIComponent(userEmail) +
-                                      '&userName=' + encodeURIComponent(userName) +
-                                      '&email=' + encodeURIComponent(userEmail) +
-                                      '&permission=' + encodeURIComponent(permissionDisplay) +
-                                      '&notificationEnabled=' + encodeURIComponent(notificationEnabled) +
-                                      '&notificationSound=' + encodeURIComponent(notificationSound));
-
-          if (response.ok) {
-            // localStorageに新しいトークンを保存
-            localStorage.setItem('reborn_fcm_token', currentToken);
-            console.log('✅ FCMトークンを自動更新しました（GAS）');
-          } else {
-            console.error('❌ FCMトークンの送信に失敗:', response.status);
-          }
+          // [REMOVED] GAS subscribeFCM呼び出し - activeDevices(上で更新済み)がFirebase Functionsの通知送信元
+          // localStorageにトークン保存（変更検知用）
+          localStorage.setItem('reborn_fcm_token', currentToken);
 
           // Firestoreのデバイス情報も更新
           try {
