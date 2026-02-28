@@ -1278,17 +1278,14 @@
         <div class="cfg-subtab-pane" id="cfg-product-condition">
           <div class="cfg-card">
             <div class="cfg-card-title"><i class="bi bi-check-circle"></i> 商品状態ボタン設定</div>
-            <div class="cfg-card-desc">商品登録画面の状態ボタンをカスタマイズします</div>
+            <div class="cfg-card-desc">商品登録画面で状態を選んだ時に表示されるクイック入力ボタンを設定します</div>
             <div style="background: #f0f9ff; border-left: 3px solid #0ea5e9; padding: 10px 12px; border-radius: 0 8px 8px 0; margin-bottom: 14px; font-size: 12px; color: #0369a1;">
-              💡 S/A/B/C等のボタンラベルと対応するメルカリの状態値を設定します
+              💡 各商品状態ごとに、説明文のクイック入力ボタン（ラベル＋テキスト）を設定できます
             </div>
-            <div id="cfg-conditionButtonsContainer"></div>
+            <div id="cfg-conditionButtonsContainer" style="display: flex; flex-direction: column; gap: 8px;"></div>
             <div style="display: flex; gap: 8px; margin-top: 12px;">
-              <button type="button" onclick="cfgAddConditionButton()" style="flex: 1; padding: 10px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;">
-                <i class="bi bi-plus-lg"></i> ボタンを追加
-              </button>
-              <button type="button" onclick="cfgClearConditionButtons()" style="padding: 10px 16px; background: white; color: #ef4444; border: 2px solid #ef4444; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;">
-                <i class="bi bi-trash"></i> クリア
+              <button type="button" onclick="cfgClearConditionButtons()" style="flex: 1; padding: 10px 16px; background: white; color: #ef4444; border: 2px solid #ef4444; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;">
+                <i class="bi bi-trash"></i> 全クリア
               </button>
             </div>
           </div>
@@ -2365,12 +2362,31 @@
     ];
 
     var _cfg_CONDITION_BUTTON_PRESETS = {
-      'S（新品）': '新品、未使用',
-      'A（未使用に近い）': '未使用に近い',
-      'B（目立った傷なし）': '目立った傷や汚れなし',
-      'C（やや傷あり）': 'やや傷や汚れあり',
-      'D（傷あり）': '傷や汚れあり',
-      'E（状態悪い）': '全体的に状態が悪い'
+      '新品、未使用': [
+        { label: 'タグ付き未使用', text: 'タグ付き未使用品です。' },
+        { label: '箱付き新品', text: '新品未使用品です。箱・付属品もすべて揃っています。' },
+        { label: '未開封品', text: '未開封の新品です。' }
+      ],
+      '未使用に近い': [
+        { label: '試着のみ', text: '試着のみで着用しておりません。' },
+        { label: '数回使用', text: '数回使用しましたが、目立つ傷や汚れなく未使用に近い状態です。' },
+        { label: '保管品', text: '自宅保管品ですが、使用感なくきれいな状態です。' }
+      ],
+      '目立った傷や汚れなし': [
+        { label: '通常使用', text: '通常使用による多少の使用感はありますが、目立った傷や汚れはありません。' },
+        { label: '美品', text: '全体的にきれいな状態です。目立つダメージはありません。' }
+      ],
+      'やや傷や汚れあり': [
+        { label: '使用感あり', text: '使用感があり、多少の傷や汚れがあります。写真をご確認ください。' },
+        { label: '小キズあり', text: '小さな傷がありますが、使用には問題ありません。' }
+      ],
+      '傷や汚れあり': [
+        { label: '傷汚れ目立つ', text: '傷や汚れが目立ちます。写真にてご確認ください。' },
+        { label: 'ジャンク品', text: '傷や汚れがあり、状態は良くありません。ご了承の上ご購入ください。' }
+      ],
+      '全体的に状態が悪い': [
+        { label: '難あり', text: '全体的に状態が悪く、難があります。ご理解のある方のみご購入ください。' }
+      ]
     };
 
     // Platform master data
@@ -3270,98 +3286,172 @@
       if (!container) return;
       container.innerHTML = '';
 
-      if (!buttons || buttons.length === 0) {
-        // Default buttons
-        buttons = [
-          { label: 'S', value: '新品、未使用' },
-          { label: 'A', value: '未使用に近い' },
-          { label: 'B', value: '目立った傷や汚れなし' },
-          { label: 'C', value: 'やや傷や汚れあり' }
-        ];
+      // buttons: [{商品の状態, ボタンラベル, ボタンテキスト}, ...] (配列) or null
+      // 状態別にグループ化
+      var grouped = {};
+      if (buttons && Array.isArray(buttons) && buttons.length > 0) {
+        buttons.forEach(function(btn) {
+          var state = btn['商品の状態'] || btn['商品の状態'] || '';
+          if (!state) return;
+          if (!grouped[state]) grouped[state] = [];
+          grouped[state].push({
+            label: btn['ボタンラベル'] || btn['ラベル'] || '',
+            text: btn['ボタンテキスト'] || btn['テキスト'] || ''
+          });
+        });
       }
 
-      buttons.forEach(function(btn, index) {
-        container.appendChild(cfgCreateButtonConfigItem(btn, index));
+      _cfg_CONDITION_STATES.forEach(function(state) {
+        var stateKey = state.value;
+        var safeId = stateKey.replace(/[、・]/g, '');
+        var items = grouped[stateKey] || [];
+        var isOpen = items.length > 0;
+
+        var section = document.createElement('div');
+        section.style.cssText = 'border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;';
+
+        // アコーディオンヘッダー
+        var header = document.createElement('div');
+        header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; background: ' + state.color + '12;';
+        header.onclick = function() { cfgToggleConditionAccordion(safeId); };
+        header.innerHTML =
+          '<div style="display: flex; align-items: center; gap: 8px;">' +
+            '<span style="width: 10px; height: 10px; border-radius: 50%; background: ' + state.color + '; display: inline-block;"></span>' +
+            '<span style="font-size: 13px; font-weight: 600; color: #1f2937;">' + state.label + '</span>' +
+            '<span id="cfg-condition-count-' + safeId + '" style="font-size: 11px; color: #6b7280;">(' + items.length + '件)</span>' +
+          '</div>' +
+          '<div style="display: flex; align-items: center; gap: 8px;">' +
+            '<button type="button" onclick="event.stopPropagation(); cfgAddConditionButton(\'' + stateKey + '\')" style="background: ' + state.color + '; color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer;"><i class="bi bi-plus-lg"></i> 追加</button>' +
+            '<i id="cfg-condition-chevron-' + safeId + '" class="bi bi-chevron-' + (isOpen ? 'up' : 'down') + '" style="color: #6b7280; font-size: 14px;"></i>' +
+          '</div>';
+        section.appendChild(header);
+
+        // アコーディオンボディ
+        var body = document.createElement('div');
+        body.id = 'cfg-condition-' + safeId;
+        body.style.cssText = 'padding: 8px 12px; display: ' + (isOpen ? 'flex' : 'none') + '; flex-direction: column; gap: 6px;';
+        body.dataset.state = stateKey;
+
+        items.forEach(function(item, idx) {
+          body.appendChild(cfgCreateConditionButtonItem(stateKey, idx, item.label, item.text));
+        });
+
+        section.appendChild(body);
+        container.appendChild(section);
       });
     }
 
-    function cfgCreateButtonConfigItem(btn, index) {
+    function cfgCreateConditionButtonItem(state, index, label, text) {
       var item = document.createElement('div');
-      item.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 10px; background: #f9fafb; border-radius: 8px; margin-bottom: 6px;';
-      item.dataset.index = index;
+      item.style.cssText = 'display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: #f9fafb; border-radius: 8px;';
+      item.dataset.condIndex = index;
+      item.dataset.condState = state;
 
-      var presetOptions = Object.keys(_cfg_CONDITION_BUTTON_PRESETS).map(function(key) {
-        return '<option value="' + key + '"' + (btn.label === key.split('（')[0] ? ' selected' : '') + '>' + key + '</option>';
+      // プリセット選択肢生成
+      var presets = _cfg_CONDITION_BUTTON_PRESETS[state] || [];
+      var presetOptions = presets.map(function(p, i) {
+        var isSelected = (p.label === label && p.text === text);
+        return '<option value="' + i + '"' + (isSelected ? ' selected' : '') + '>' + p.label + '</option>';
       }).join('');
 
       item.innerHTML =
-        '<div style="flex: 1;">' +
-          '<input type="text" class="cfg-btn-label-input form-control" value="' + (btn.label || '') + '" placeholder="ボタンラベル" style="margin-bottom: 4px; font-size: 13px;">' +
-          '<select class="cfg-btn-value-select form-control" style="font-size: 12px;" onchange="cfgHandleLabelPresetChange(this)">' +
-            '<option value="">-- プリセットから選択 --</option>' +
-            presetOptions +
-            '<option value="custom">カスタム...</option>' +
-          '</select>' +
-          '<input type="text" class="cfg-btn-value-input form-control" value="' + (btn.value || '') + '" placeholder="メルカリ上の状態値" style="margin-top: 4px; font-size: 12px; display: ' + (btn.value && !Object.values(_cfg_CONDITION_BUTTON_PRESETS).includes(btn.value) ? 'block' : 'none') + ';">' +
+        '<div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">' +
+          '<div style="display: flex; gap: 6px; align-items: center;">' +
+            '<select class="cfg-cond-preset form-control" style="font-size: 11px; flex: 0 0 auto; width: auto; padding: 2px 6px;" onchange="cfgHandleConditionPresetChange(this, \'' + state + '\', ' + index + ')">' +
+              '<option value="">-- プリセット --</option>' +
+              presetOptions +
+              '<option value="custom">カスタム</option>' +
+            '</select>' +
+            '<input type="text" class="cfg-cond-label form-control" value="' + (label || '').replace(/"/g, '&quot;') + '" placeholder="ボタンラベル" style="font-size: 13px; font-weight: 500;">' +
+          '</div>' +
+          '<textarea class="cfg-cond-text form-control" placeholder="クリック時に挿入されるテキスト" style="font-size: 12px; min-height: 48px; resize: vertical;">' + (text || '') + '</textarea>' +
         '</div>' +
-        '<button type="button" onclick="cfgRemoveConditionButton(this)" style="background: none; border: none; color: #ef4444; font-size: 16px; cursor: pointer; padding: 4px;"><i class="bi bi-x-lg"></i></button>';
+        '<button type="button" onclick="cfgRemoveConditionButton(\'' + state + '\', this)" style="background: none; border: none; color: #ef4444; font-size: 16px; cursor: pointer; padding: 4px; margin-top: 2px;"><i class="bi bi-x-lg"></i></button>';
 
       return item;
     }
 
-    function cfgHandleLabelPresetChange(select) {
-      var item = select.closest('[data-index]');
-      if (!item) return;
-      var customInput = item.querySelector('.cfg-btn-value-input');
-      if (select.value === 'custom') {
-        customInput.style.display = 'block';
-      } else if (select.value) {
-        customInput.style.display = 'none';
-        customInput.value = _cfg_CONDITION_BUTTON_PRESETS[select.value] || '';
-        // Auto-fill label
-        var labelInput = item.querySelector('.cfg-btn-label-input');
-        if (labelInput && !labelInput.value) {
-          labelInput.value = select.value.split('（')[0];
-        }
+    function cfgToggleConditionAccordion(safeId) {
+      var body = document.getElementById('cfg-condition-' + safeId);
+      var chevron = document.getElementById('cfg-condition-chevron-' + safeId);
+      if (!body) return;
+      var isHidden = body.style.display === 'none';
+      body.style.display = isHidden ? 'flex' : 'none';
+      if (chevron) {
+        chevron.className = 'bi bi-chevron-' + (isHidden ? 'up' : 'down');
       }
     }
-    window.cfgHandleLabelPresetChange = cfgHandleLabelPresetChange;
+    window.cfgToggleConditionAccordion = cfgToggleConditionAccordion;
 
-    function cfgAddConditionButton() {
-      var container = document.getElementById('cfg-conditionButtonsContainer');
-      if (!container) return;
-      var index = container.children.length;
-      container.appendChild(cfgCreateButtonConfigItem({ label: '', value: '' }, index));
+    function cfgAddConditionButton(state) {
+      var safeId = state.replace(/[、・]/g, '');
+      var body = document.getElementById('cfg-condition-' + safeId);
+      if (!body) return;
+      // 表示を開く
+      body.style.display = 'flex';
+      var chevron = document.getElementById('cfg-condition-chevron-' + safeId);
+      if (chevron) chevron.className = 'bi bi-chevron-up';
+      var index = body.children.length;
+      body.appendChild(cfgCreateConditionButtonItem(state, index, '', ''));
+      // カウント更新
+      var countEl = document.getElementById('cfg-condition-count-' + safeId);
+      if (countEl) countEl.textContent = '(' + (index + 1) + '件)';
     }
     window.cfgAddConditionButton = cfgAddConditionButton;
 
-    function cfgRemoveConditionButton(btn) {
-      var item = btn.closest('[data-index]');
-      if (item) item.remove();
+    function cfgRemoveConditionButton(state, btn) {
+      var item = btn.closest('[data-cond-index]');
+      if (!item) return;
+      var safeId = state.replace(/[、・]/g, '');
+      item.remove();
+      // リインデックス
+      var body = document.getElementById('cfg-condition-' + safeId);
+      if (body) {
+        Array.from(body.children).forEach(function(child, i) {
+          child.dataset.condIndex = i;
+        });
+        var countEl = document.getElementById('cfg-condition-count-' + safeId);
+        if (countEl) countEl.textContent = '(' + body.children.length + '件)';
+      }
     }
     window.cfgRemoveConditionButton = cfgRemoveConditionButton;
 
+    function cfgHandleConditionPresetChange(select, state, index) {
+      var item = select.closest('[data-cond-index]');
+      if (!item) return;
+      var labelInput = item.querySelector('.cfg-cond-label');
+      var textArea = item.querySelector('.cfg-cond-text');
+      if (select.value === '' || select.value === 'custom') return;
+      var presets = _cfg_CONDITION_BUTTON_PRESETS[state] || [];
+      var preset = presets[parseInt(select.value)];
+      if (preset) {
+        if (labelInput) labelInput.value = preset.label;
+        if (textArea) textArea.value = preset.text;
+      }
+    }
+    window.cfgHandleConditionPresetChange = cfgHandleConditionPresetChange;
+
     function cfgCollectConditionButtons() {
-      var container = document.getElementById('cfg-conditionButtonsContainer');
-      if (!container) return [];
-      var buttons = [];
-      container.querySelectorAll('[data-index]').forEach(function(item) {
-        var label = item.querySelector('.cfg-btn-label-input').value.trim();
-        var select = item.querySelector('.cfg-btn-value-select');
-        var customInput = item.querySelector('.cfg-btn-value-input');
-        var value = '';
-        if (select.value === 'custom' || customInput.style.display !== 'none') {
-          value = customInput.value.trim();
-        } else if (select.value) {
-          value = _cfg_CONDITION_BUTTON_PRESETS[select.value] || customInput.value.trim();
-        } else {
-          value = customInput.value.trim();
-        }
-        if (label || value) {
-          buttons.push({ label: label, value: value });
-        }
+      var result = [];
+      _cfg_CONDITION_STATES.forEach(function(state) {
+        var safeId = state.value.replace(/[、・]/g, '');
+        var body = document.getElementById('cfg-condition-' + safeId);
+        if (!body) return;
+        body.querySelectorAll('[data-cond-index]').forEach(function(item) {
+          var label = (item.querySelector('.cfg-cond-label') || {}).value || '';
+          var text = (item.querySelector('.cfg-cond-text') || {}).value || '';
+          label = label.trim();
+          text = text.trim();
+          if (label || text) {
+            result.push({
+              '商品の状態': state.value,
+              'ボタンラベル': label,
+              'ボタンテキスト': text
+            });
+          }
+        });
       });
-      return buttons;
+      return result;
     }
 
     // ============================================
@@ -6868,8 +6958,11 @@
     function cfgClearConditionButtons() {
       if (!confirm('商品状態ボタン設定をすべてクリアしますか？\n\n全カテゴリのカスタムボタンが削除されます。')) return;
       _cfg_CONDITION_STATES.forEach(function(state) {
-        var container = document.getElementById('cfg-condition-' + state.value.replace(/[、・]/g, ''));
+        var safeId = state.value.replace(/[、・]/g, '');
+        var container = document.getElementById('cfg-condition-' + safeId);
         if (container) container.innerHTML = '';
+        var countEl = document.getElementById('cfg-condition-count-' + safeId);
+        if (countEl) countEl.textContent = '(0件)';
       });
       alert('商品状態ボタン設定をクリアしました。\n変更を保存するには「設定を保存」ボタンをクリックしてください。');
     }
