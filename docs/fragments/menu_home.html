@@ -261,8 +261,17 @@
     grid.appendChild(frag);
   }
 
-  // メニュー構築待ちフラグ（Firestore応答後に構築する場合true）
+  // Firestore応答待ちフラグ & タイムアウト
   var _mhWaitingForFirestore = false;
+  var _mhBuildTimeout = null;
+
+  // Firestore待ちを解決してメニューを構築する共通関数
+  function _mhResolveWaiting(hiddenSet) {
+    if (!_mhWaitingForFirestore) return;
+    _mhWaitingForFirestore = false;
+    if (_mhBuildTimeout) { clearTimeout(_mhBuildTimeout); _mhBuildTimeout = null; }
+    _mhBuildMenuGrid(hiddenSet);
+  }
 
   function initMenuHomePage() {
     console.log('[SPA menu_home] init開始');
@@ -286,14 +295,17 @@
       return;
     }
 
+    // ---- 初回訪問: メニュー構築判定 ----
     var permissionId = localStorage.getItem('reborn_user_permission_id')
                     || localStorage.getItem('reborn_user_permission');
-    var isStaff = permissionId && permissionId !== 'owner';
 
-    if (isStaff) {
+    if (permissionId === 'owner') {
+      // ★ 確定ownerのみ即時全メニュー構築
+      _mhBuildMenuGrid({});
+    } else if (permissionId && permissionId !== 'owner') {
+      // ★ 確定スタッフ: キャッシュあれば即時、なければFirestore待ち
       var raw = localStorage.getItem('reborn_hidden_menus');
       if (raw) {
-        // キャッシュあり → 即時構築（フリッカーなし）
         var hiddenSet = { 'config-product': true };
         try {
           var cached = JSON.parse(raw);
@@ -301,13 +313,29 @@
         } catch(e) {}
         _mhBuildMenuGrid(hiddenSet);
       } else {
-        // キャッシュなし → メニューを生成しない。Firestore応答後に構築。
-        console.log('[SPA menu_home] キャッシュなし、Firestore応答待ち');
         _mhWaitingForFirestore = true;
       }
     } else {
-      // owner → 全メニュー表示
-      _mhBuildMenuGrid({});
+      // ★ 権限不明（タスクキルでlocalStorage消失等）→ 絶対にメニューを構築しない
+      // Firestore応答後に正しい権限で構築する
+      console.log('[SPA menu_home] 権限不明 → Firestore応答待ち');
+      _mhWaitingForFirestore = true;
+    }
+
+    // Firestore待ちの場合: 3秒タイムアウトでフォールバック
+    if (_mhWaitingForFirestore) {
+      _mhBuildTimeout = setTimeout(function() {
+        if (!_mhWaitingForFirestore) return;
+        console.warn('[SPA menu_home] Firestore 3秒タイムアウト → フォールバック構築');
+        // タイムアウト時はキャッシュがあれば使用、なければ全表示
+        var fb = {};
+        var raw2 = localStorage.getItem('reborn_hidden_menus');
+        if (raw2) {
+          fb = { 'config-product': true };
+          try { var c = JSON.parse(raw2); for (var k = 0; k < c.length; k++) fb[c[k]] = true; } catch(e) {}
+        }
+        _mhResolveWaiting(fb);
+      }, 3000);
     }
 
     // Firestore権限チェック + バッジ取得
@@ -315,7 +343,7 @@
   }
 
   function destroyMenuHomePage() {
-    // クリーンアップ不要（リスナーなし）
+    if (_mhBuildTimeout) { clearTimeout(_mhBuildTimeout); _mhBuildTimeout = null; }
   }
 
   var _mhPermRetryCount = 0;
@@ -327,12 +355,20 @@
       if (_mhPermRetryCount < 10) {
         console.warn('[SPA menu_home] Firestore未初期化、リトライ(' + _mhPermRetryCount + ')');
         setTimeout(_mhCheckPermissionAndBadges, 500);
+      } else if (_mhWaitingForFirestore) {
+        // 全リトライ失敗 → フォールバック
+        console.error('[SPA menu_home] Firestore初期化失敗 → フォールバック構築');
+        _mhResolveWaiting({});
       }
       return;
     }
 
     var userEmail = localStorage.getItem('reborn_user_email');
-    if (!userEmail) return;
+    if (!userEmail) {
+      // メールアドレスなし（未ログイン等）→ メニュー構築できない
+      if (_mhWaitingForFirestore) _mhResolveWaiting({});
+      return;
+    }
 
     try {
       // 権限チェック
@@ -342,44 +378,50 @@
         var permissionId = userData.permissionId || 'staff';
         localStorage.setItem('reborn_user_permission', permissionId);
 
-        // v580b: メニュー権限設定を取得（owner含む全ユーザーで実行）
+        // メニュー権限設定を取得
         var menuPermDoc = await db.collection('settings').doc('menuPermissions').get();
         var menuPermissions = menuPermDoc.exists ? menuPermDoc.data() : {};
-        console.log('[SPA menu_home] 権限チェック: permissionId=' + permissionId + ', menuPermDoc.exists=' + menuPermDoc.exists);
+        console.log('[SPA menu_home] 権限: permissionId=' + permissionId);
         var hiddenMenus = [];
         for (var menuId in _mhMenuIdMap) {
           var menuPerm = menuPermissions[menuId];
-          if (permissionId === 'owner') continue; // ownerは全表示
+          if (permissionId === 'owner') continue;
           var isVisible = menuPerm
             ? (!menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId))
             : (_mhDefaultOwnerOnly.indexOf(menuId) === -1);
           if (!isVisible) {
             hiddenMenus.push(menuId);
-            // 既にDOMにある場合は非表示にする
+            // 既にDOMにある場合は非表示にする（キャッシュ即時構築パスのDOM更新）
             var element = document.getElementById(_mhMenuIdMap[menuId]);
             if (element) element.style.display = 'none';
           }
         }
-        // キャッシュ保存（次回即時適用用）
         localStorage.setItem('reborn_hidden_menus', JSON.stringify(hiddenMenus));
 
         // Firestore待ちだった場合 → ここで初めてメニューを構築
         if (_mhWaitingForFirestore) {
-          _mhWaitingForFirestore = false;
-          var hiddenSet = { 'config-product': true };
-          for (var h = 0; h < hiddenMenus.length; h++) hiddenSet[hiddenMenus[h]] = true;
-          _mhBuildMenuGrid(hiddenSet);
+          if (permissionId === 'owner') {
+            _mhResolveWaiting({});
+          } else {
+            var hiddenSet = { 'config-product': true };
+            for (var h = 0; h < hiddenMenus.length; h++) hiddenSet[hiddenMenus[h]] = true;
+            _mhResolveWaiting(hiddenSet);
+          }
           console.log('[SPA menu_home] Firestore応答後にメニュー構築完了');
+        }
+      } else {
+        // userDoc不存在 → フォールバック
+        if (_mhWaitingForFirestore) {
+          console.warn('[SPA menu_home] ユーザードキュメントなし → フォールバック');
+          _mhResolveWaiting({});
         }
       }
 
       // バッジ取得（Todo未完了 + チャット未読）
-      // Todo
       var tasksRef = db.collection('userTasks').doc(userEmail).collection('tasks');
       var todoSnapshot = await tasksRef.where('completed', '==', false).get();
       console.log('[SPA menu_home] Todo未完了:', todoSnapshot.size);
 
-      // チャット未読
       var totalUnread = 0;
       var roomsSnapshot = await db.collection('rooms').where('members', 'array-contains', userEmail).get();
       var roomIds = [];
@@ -401,6 +443,16 @@
 
     } catch (error) {
       console.error('[SPA menu_home] 権限/バッジエラー:', error);
+      // ★ エラー時もFirestore待ちを解決（メニューが永遠に出ないのを防止）
+      if (_mhWaitingForFirestore) {
+        var fb = {};
+        var raw3 = localStorage.getItem('reborn_hidden_menus');
+        if (raw3) {
+          fb = { 'config-product': true };
+          try { var c2 = JSON.parse(raw3); for (var k2 = 0; k2 < c2.length; k2++) fb[c2[k2]] = true; } catch(e) {}
+        }
+        _mhResolveWaiting(fb);
+      }
     }
   }
 
