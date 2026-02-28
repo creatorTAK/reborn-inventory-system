@@ -8815,8 +8815,15 @@ if (inputId === '商品名_ブランド(英語)' || inputId === 'ブランド(�
           console.warn('⚠️ カテゴリマスタが空です');
         }
 
-        // カテゴリプルダウンのイベントリスナーを設定
+        // 特大分類をマスタデータから動的生成
         const l0Select = document.getElementById('特大分類');
+        if (l0Select && CAT_ROWS.length > 0) {
+          const l0Values = uniqKeepOrder(CAT_ROWS.map(r => r.特大分類).filter(Boolean));
+          fillSelectSafe(l0Select, l0Values);
+          console.log('✅ 特大分類をマスタから動的生成:', l0Values.length + '件');
+        }
+
+        // カテゴリプルダウンのイベントリスナーを設定
         const l1Select = document.getElementById('大分類(カテゴリ)');
         const l2Select = document.getElementById('中分類(カテゴリ)');
         const l3Select = document.getElementById('小分類(カテゴリ)');
