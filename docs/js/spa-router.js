@@ -183,12 +183,8 @@ window.__SPA_ROUTER_VER = '598';
       }
 
       // init完了後にコンテナを表示
-      // ★ initが非同期メニュー構築を待つ場合はスキップ（フラグメント側でopacity制御）
-      if (!window.__spaDelayReveal) {
-        container.style.transition = 'opacity 0.12s ease';
-        container.style.opacity = '1';
-      }
-      window.__spaDelayReveal = false;
+      container.style.transition = 'opacity 0.12s ease';
+      container.style.opacity = '1';
 
       console.log(`[SPA] ${pageName} 初回表示完了: ${(performance.now() - startTime).toFixed(0)}ms`);
 
