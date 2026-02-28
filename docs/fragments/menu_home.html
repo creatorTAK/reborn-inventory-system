@@ -265,7 +265,7 @@
     'config-system': 'mh-menu-config-system'
   };
 
-  async function initMenuHomePage() {
+  function initMenuHomePage() {
     console.log('[SPA menu_home] init開始');
 
     // フォーカス抑制
@@ -295,19 +295,12 @@
                     || localStorage.getItem('reborn_user_permission');
     var cachedHidden = null;
 
-    // キャッシュ確認
+    // localStorageキャッシュから非表示メニュー取得
     if (permissionId && permissionId !== 'owner') {
       try {
         var raw = localStorage.getItem('reborn_hidden_menus');
         if (raw) cachedHidden = JSON.parse(raw);
       } catch(e) {}
-    }
-
-    // キャッシュが無い非ownerユーザー → Firestoreを待つ（フリッカー完全防止）
-    if (permissionId && permissionId !== 'owner' && !cachedHidden) {
-      console.log('[SPA menu_home] キャッシュなし、Firestore待機...');
-      cachedHidden = await _mhFetchHiddenMenus(permissionId);
-      console.log('[SPA menu_home] Firestore応答:', cachedHidden);
     }
 
     // DocumentFragmentでフィルタリング → DOM挿入
@@ -335,38 +328,8 @@
       menuItems[i].setAttribute('tabindex', '-1');
     }
 
-    // バックグラウンドでFirestore再確認 + バッジ取得
+    // Firestore権限チェック + バッジ取得（バックグラウンド）
     _mhCheckPermissionAndBadges();
-  }
-
-  // Firestoreから非表示メニューリストを取得（初回キャッシュなし時に使用）
-  async function _mhFetchHiddenMenus(permissionId) {
-    var db = (typeof getCompatDb === 'function') ? getCompatDb() : window.db;
-    // Firestore未初期化時は最大5秒待機
-    for (var retry = 0; retry < 10 && (!db || typeof db.collection !== 'function'); retry++) {
-      await new Promise(function(r) { setTimeout(r, 500); });
-      db = (typeof getCompatDb === 'function') ? getCompatDb() : window.db;
-    }
-    if (!db || typeof db.collection !== 'function') return [];
-
-    try {
-      var menuPermDoc = await db.collection('settings').doc('menuPermissions').get();
-      var menuPermissions = menuPermDoc.exists ? menuPermDoc.data() : {};
-      var hidden = [];
-      for (var menuId in _mhMenuIdMap) {
-        var menuPerm = menuPermissions[menuId];
-        var isVisible = menuPerm
-          ? (!menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId))
-          : (_mhDefaultOwnerOnly.indexOf(menuId) === -1);
-        if (!isVisible) hidden.push(menuId);
-      }
-      // キャッシュ保存
-      localStorage.setItem('reborn_hidden_menus', JSON.stringify(hidden));
-      return hidden;
-    } catch(e) {
-      console.error('[SPA menu_home] Firestore権限取得エラー:', e);
-      return [];
-    }
   }
 
   function destroyMenuHomePage() {
