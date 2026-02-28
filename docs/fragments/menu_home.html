@@ -154,6 +154,8 @@
 
     <!-- メニューグリッド: 空。initMenuHomePageがJSで許可メニューのみ動的生成 -->
     <div class="menu-items"></div>
+    <!-- デバッグパネル（問題解決後に削除） -->
+    <pre id="mh-debug-panel" style="margin-top:12px;padding:8px;background:#111;color:#0f0;font-size:10px;border-radius:8px;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto;"></pre>
   </div>
 </div>
 
@@ -208,6 +210,7 @@
   function _mhBuildMenuGrid(hiddenSet) {
     var grid = document.querySelector('#spa-page-menu-home .menu-items');
     if (!grid) return;
+    _mhDebug('buildMenuGrid: hidden=' + Object.keys(hiddenSet).join(','));
     grid.innerHTML = ''; // 既存を消して再構築
 
     var frag = document.createDocumentFragment();
@@ -270,11 +273,21 @@
     if (!_mhWaitingForFirestore) return;
     _mhWaitingForFirestore = false;
     if (_mhBuildTimeout) { clearTimeout(_mhBuildTimeout); _mhBuildTimeout = null; }
+    _mhDebug('resolveWaiting: hidden=' + Object.keys(hiddenSet).join(','));
     _mhBuildMenuGrid(hiddenSet);
   }
 
+  // デバッグ表示（問題解決後に削除）
+  var _mhDebugLog = [];
+  function _mhDebug(msg) {
+    _mhDebugLog.push('[' + new Date().toLocaleTimeString() + '] ' + msg);
+    var el = document.getElementById('mh-debug-panel');
+    if (el) el.textContent = _mhDebugLog.join('\n');
+  }
+
   function initMenuHomePage() {
-    console.log('[SPA menu_home] init開始');
+    _mhDebugLog = [];
+    _mhDebug('init開始');
 
     // フォーカス抑制
     if (document.activeElement && document.activeElement !== document.body) {
@@ -291,6 +304,7 @@
 
     // 再訪問時（DOM保持済み）はFirestoreバッジのみ更新
     if (grid.children.length > 0) {
+      _mhDebug('再訪問: children=' + grid.children.length);
       _mhCheckPermissionAndBadges();
       return;
     }
@@ -298,27 +312,28 @@
     // ---- 初回訪問: メニュー構築判定 ----
     var permissionId = localStorage.getItem('reborn_user_permission_id')
                     || localStorage.getItem('reborn_user_permission');
+    var raw = localStorage.getItem('reborn_hidden_menus');
+
+    _mhDebug('permId=' + permissionId + ', cache=' + (raw ? raw : 'null'));
 
     if (permissionId === 'owner') {
-      // ★ 確定ownerのみ即時全メニュー構築
+      _mhDebug('→ owner即時構築');
       _mhBuildMenuGrid({});
     } else if (permissionId && permissionId !== 'owner') {
-      // ★ 確定スタッフ: キャッシュあれば即時、なければFirestore待ち
-      var raw = localStorage.getItem('reborn_hidden_menus');
       if (raw) {
         var hiddenSet = { 'config-product': true };
         try {
           var cached = JSON.parse(raw);
           for (var i = 0; i < cached.length; i++) hiddenSet[cached[i]] = true;
         } catch(e) {}
+        _mhDebug('→ staff+cache構築, hidden=' + Object.keys(hiddenSet).join(','));
         _mhBuildMenuGrid(hiddenSet);
       } else {
+        _mhDebug('→ staff+cacheなし → Firestore待ち');
         _mhWaitingForFirestore = true;
       }
     } else {
-      // ★ 権限不明（タスクキルでlocalStorage消失等）→ 絶対にメニューを構築しない
-      // Firestore応答後に正しい権限で構築する
-      console.log('[SPA menu_home] 権限不明 → Firestore応答待ち');
+      _mhDebug('→ 権限不明 → Firestore待ち');
       _mhWaitingForFirestore = true;
     }
 
@@ -381,7 +396,7 @@
         // メニュー権限設定を取得
         var menuPermDoc = await db.collection('settings').doc('menuPermissions').get();
         var menuPermissions = menuPermDoc.exists ? menuPermDoc.data() : {};
-        console.log('[SPA menu_home] 権限: permissionId=' + permissionId);
+        _mhDebug('Firestore応答: perm=' + permissionId + ', menuPermKeys=' + Object.keys(menuPermissions).join(','));
         var hiddenMenus = [];
         for (var menuId in _mhMenuIdMap) {
           var menuPerm = menuPermissions[menuId];
