@@ -248,31 +248,31 @@
       word-break: break-word;
       overflow-wrap: break-word;
     }
-    /* ライトボックス */
-    #spa-page-inventory .inv-lightbox-overlay {
+    /* ライトボックス（Bootstrapモーダルより上に表示するためIDセレクタ使用） */
+    #invImageLightbox {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
       background-color: rgba(0, 0, 0, 0.9);
-      z-index: 9999;
+      z-index: 99999;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-    #spa-page-inventory .inv-lightbox-content {
+    #invImageLightbox .inv-lightbox-content {
       position: relative;
       max-width: 95%;
       max-height: 95%;
     }
-    #spa-page-inventory .inv-lightbox-content img {
+    #invImageLightbox .inv-lightbox-content img {
       max-width: 100%;
       max-height: 90vh;
       object-fit: contain;
       border-radius: 4px;
     }
-    #spa-page-inventory .inv-lightbox-close {
+    #invImageLightbox .inv-lightbox-close {
       position: absolute;
       top: -55px;
       right: 0;
@@ -282,10 +282,10 @@
       cursor: pointer;
       padding: 5px 15px;
     }
-    #spa-page-inventory .inv-lightbox-close:hover {
+    #invImageLightbox .inv-lightbox-close:hover {
       color: #ccc;
     }
-    #spa-page-inventory .inv-lightbox-nav {
+    #invImageLightbox .inv-lightbox-nav {
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
@@ -297,16 +297,16 @@
       opacity: 0.7;
       transition: opacity 0.2s;
     }
-    #spa-page-inventory .inv-lightbox-nav:hover {
+    #invImageLightbox .inv-lightbox-nav:hover {
       opacity: 1;
     }
-    #spa-page-inventory .inv-lightbox-prev {
+    #invImageLightbox .inv-lightbox-prev {
       left: 10px;
     }
-    #spa-page-inventory .inv-lightbox-next {
+    #invImageLightbox .inv-lightbox-next {
       right: 10px;
     }
-    #spa-page-inventory .inv-lightbox-counter {
+    #invImageLightbox .inv-lightbox-counter {
       position: absolute;
       bottom: -35px;
       left: 50%;
@@ -1844,8 +1844,8 @@
         imageBlockHtml = '<div id="invThumbnailContainer" style="display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; -webkit-overflow-scrolling: touch;">';
         imagesToDisplay.forEach(function(url, index) {
           var thumbUrl = invGetThumbUrl(url);
-          imageBlockHtml += '<div class="inv-thumb-wrapper loading" data-index="' + index + '" style="width: 56px; height: 56px; flex-shrink: 0; border: 2px solid #e0e0e0; border-radius: 6px; cursor: pointer; background: #f5f5f5; position: relative;">';
-          imageBlockHtml += '<img src="' + thumbUrl + '" data-index="' + index + '" data-original="' + url + '" style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 4px;" alt="" onload="this.classList.add(\'loaded\'); this.parentElement.classList.remove(\'loading\');" onerror="this.src=\'' + url + '\'">';
+          imageBlockHtml += '<div class="inv-thumb-wrapper loading" data-index="' + index + '" style="width: 56px; height: 56px; flex-shrink: 0; border: 2px solid #e0e0e0; border-radius: 6px; cursor: pointer; background: #f5f5f5; position: relative;" onclick="invOpenLightbox(' + index + ')">';
+          imageBlockHtml += '<img src="' + url + '" data-index="' + index + '" data-original="' + url + '" style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 4px;" alt="" onload="this.classList.add(\'loaded\'); this.parentElement.classList.remove(\'loading\');">';
           imageBlockHtml += '</div>';
         });
         imageBlockHtml += '</div>';
@@ -1914,23 +1914,8 @@
 
       // Description toggle is handled by window.invToggleDescription (inline onclick)
 
-      // Lightbox setup
+      // Lightbox setup (タップは各サムネイルのinline onclickで処理)
       invSetupLightbox();
-
-      var thumbnailContainer = document.getElementById('invThumbnailContainer');
-      if (thumbnailContainer) {
-        thumbnailContainer.onclick = function(e) {
-          var thumbWrapper = e.target.closest('.inv-thumb-wrapper');
-          if (!thumbWrapper && e.target.tagName === 'IMG') thumbWrapper = e.target.parentElement;
-          if (thumbWrapper && thumbWrapper.dataset.index !== undefined) {
-            var clickedIndex = parseInt(thumbWrapper.dataset.index, 10);
-            if (inv_currentProductImages && inv_currentProductImages[clickedIndex]) {
-              invShowLightboxImage(clickedIndex);
-              document.getElementById('invImageLightbox').style.display = 'flex';
-            }
-          }
-        };
-      }
     }
 
     // ===== Lightbox =====
@@ -1962,6 +1947,12 @@
       var idx = (parseInt(lb.dataset.currentIndex || 0, 10) - 1 + images.length) % images.length;
       invShowLightboxImage(idx);
     }
+    window.invOpenLightbox = function(index) {
+      if (!inv_currentProductImages || !inv_currentProductImages[index]) return;
+      invShowLightboxImage(index);
+      document.getElementById('invImageLightbox').style.display = 'flex';
+    };
+
     window.invToggleDescription = function() {
       var cnt = document.getElementById('invDescriptionDetailContainer');
       var icon = document.getElementById('invDescToggleIcon');
