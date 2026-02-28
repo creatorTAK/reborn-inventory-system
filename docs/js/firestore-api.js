@@ -310,8 +310,11 @@ async function getProductListFromFirestore(filters = {}) {
         // purchase/listing: ネスト構造または旧フラット構造に対応
         purchaseDate: data.purchase?.date || data.purchaseDate || '',
         purchaseAmount: data.purchase?.amount || data.purchaseAmount || 0,
+        supplier: data.purchase?.supplier || data.supplier || '',
         listingDate: data.listing?.date || data.listingDate || '',
         listingAmount: data.listing?.amount || data.listingAmount || 0,
+        listingDestination: data.listing?.destination || data.listingDestination || '',
+        salesType: data.salesType || data.listing?.salesType || '',
         saleDate: data.saleDate || '',
         saleAmount: data.saleAmount || 0,
         profit: data.profit || 0,
@@ -419,8 +422,11 @@ async function getProductByManagementNumber(managementNumber) {
         // purchase/listing: ネスト構造または旧フラット構造に対応
         purchaseDate: data.purchase?.date || data.purchaseDate || '',
         purchaseAmount: data.purchase?.amount || data.purchaseAmount || 0,
+        supplier: data.purchase?.supplier || data.supplier || '',
         listingDate: data.listing?.date || data.listingDate || '',
         listingAmount: data.listing?.amount || data.listingAmount || 0,
+        listingDestination: data.listing?.destination || data.listingDestination || '',
+        salesType: data.salesType || data.listing?.salesType || '',
         saleDate: data.saleDate || '',
         saleAmount: data.saleAmount || 0,
         profit: data.profit || 0,

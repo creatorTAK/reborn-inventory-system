@@ -1845,17 +1845,37 @@
       modal.show();
     }
 
+    // ===== マスタデータキャッシュ =====
+    var invMasterCache = { suppliers: null, salesChannels: null };
+    async function invLoadMasterOptions() {
+      if (invMasterCache.suppliers && invMasterCache.salesChannels) return;
+      try {
+        var db = window.db;
+        var supSnap = await db.collection('suppliers').orderBy('name', 'asc').get();
+        invMasterCache.suppliers = [];
+        supSnap.forEach(function(doc) { var n = doc.data().name; if (n) invMasterCache.suppliers.push(n); });
+        var chSnap = await db.collection('salesChannels').orderBy('name', 'asc').get();
+        invMasterCache.salesChannels = [];
+        chSnap.forEach(function(doc) { var n = doc.data().name; if (n) invMasterCache.salesChannels.push(n); });
+      } catch (e) { console.warn('マスタ取得エラー:', e); invMasterCache.suppliers = invMasterCache.suppliers || []; invMasterCache.salesChannels = invMasterCache.salesChannels || []; }
+    }
+
     // ===== View product detail =====
-    function invViewProduct(managementNumber) {
+    async function invViewProduct(managementNumber) {
       invShowLoading();
-      window.FirestoreApi.getProductByManagementNumber(managementNumber).then(function(product) {
+      try {
+        var results = await Promise.all([
+          window.FirestoreApi.getProductByManagementNumber(managementNumber),
+          invLoadMasterOptions()
+        ]);
+        var product = results[0];
         invHideLoading();
         if (product) {
           invCurrentProduct = product;
           invDisplayProductDetail(product);
           invShowModal('invProductDetailModal');
         } else { invShowError('商品詳細の取得エラー: 商品が見つかりません'); }
-      }).catch(function(error) { invHideLoading(); invShowError('商品詳細の取得エラー: ' + (error.message || error)); });
+      } catch (error) { invHideLoading(); invShowError('商品詳細の取得エラー: ' + (error.message || error)); }
     }
 
     function invDisplayProductDetail(product) {
@@ -1909,6 +1929,28 @@
       } else {
         var stDisplay = product.salesType === 'auction' ? 'オークション形式' : (product.salesType === 'fixed' ? '価格を設定する' : '-');
         salesTypeHtml = '<div class="form-control-plaintext">' + stDisplay + '</div>';
+      }
+
+      // 仕入先ドロップダウン
+      var supplierHtml = '';
+      if (isEditable) {
+        supplierHtml = '<select class="form-select form-select-sm" id="invProductSupplier">';
+        supplierHtml += '<option value="">--選択--</option>';
+        (invMasterCache.suppliers || []).forEach(function(s) { supplierHtml += '<option value="' + s + '"' + (s === product.supplier ? ' selected' : '') + '>' + s + '</option>'; });
+        supplierHtml += '</select>';
+      } else {
+        supplierHtml = '<div class="form-control-plaintext">' + (product.supplier || '-') + '</div>';
+      }
+
+      // 出品先ドロップダウン
+      var listingDestHtml = '';
+      if (isEditable) {
+        listingDestHtml = '<select class="form-select form-select-sm" id="invListingDestination">';
+        listingDestHtml += '<option value="">--選択--</option>';
+        (invMasterCache.salesChannels || []).forEach(function(ch) { listingDestHtml += '<option value="' + ch + '"' + (ch === product.listingDestination ? ' selected' : '') + '>' + ch + '</option>'; });
+        listingDestHtml += '</select>';
+      } else {
+        listingDestHtml = '<div class="form-control-plaintext">' + (product.listingDestination || '-') + '</div>';
       }
 
       // 日付フィールド生成
@@ -1966,11 +2008,11 @@
         + (product.damageMarker && product.damageMarker.image ? '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-exclamation-triangle me-1"></i>傷・汚れマーキング</h6></div><div class="col-12"><div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px;"><div style="font-size: 12px; color: #78716c; margin-bottom: 8px;">' + (product.damageMarker.type || '') + '</div><img src="' + product.damageMarker.image + '" alt="傷・汚れマーキング" style="max-width: 100%; border-radius: 6px; border: 1px solid #e5e7eb;">' + (product.damageMarker.note ? '<div style="margin-top: 8px; padding: 8px; background: white; border-radius: 4px; border: 1px solid #e5e7eb;"><div style="font-size: 11px; color: #78716c; margin-bottom: 4px;">補足説明</div><div style="font-size: 13px; color: #374151; white-space: pre-wrap;">' + product.damageMarker.note + '</div></div>' : '') + '</div></div>' : '')
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-cart me-1"></i>仕入情報 ' + (isEditable ? '<span class="badge bg-success small">編集可能</span>' : '') + '</h6></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">仕入日</label>' + createDateField(product.purchaseDate, 'invPurchaseDate') + '</div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">仕入先</label>' + createField(product.supplier, 'invProductSupplier') + '</div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">仕入先</label>' + supplierHtml + '</div>'
         + '<div class="col-6"><label class="form-label fw-bold small">仕入金額</label>' + createField(product.purchaseAmount, 'invPurchaseAmount', 'number') + '</div>'
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-megaphone me-1"></i>出品情報 ' + (isEditable ? '<span class="badge bg-success small">編集可能</span>' : '') + '</h6></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">出品日</label>' + createDateField(product.listingDate, 'invListingDate') + '</div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">出品先</label>' + createField(product.listingDestination, 'invListingDestination') + '</div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">出品先</label>' + listingDestHtml + '</div>'
         + '<div class="col-6"><label class="form-label fw-bold small">販売タイプ</label>' + salesTypeHtml + '</div>'
         + '<div class="col-6"><label class="form-label fw-bold small">出品金額</label>' + createField(product.listingAmount, 'invListingAmount', 'number') + '</div>'
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-currency-yen me-1"></i>販売情報</h6></div>'
