@@ -3562,6 +3562,54 @@
     }
     window.cfgRemoveWordOverride = cfgRemoveWordOverride;
 
+    var _cfgOvPrefixPresets = ['', '【', '『', '「', '（', '★', '☆', '◆', '◇', '■', '□', '●', '○', '▶', '✨', '🔥'];
+    var _cfgOvSuffixPresets = ['', '】', '』', '」', '）', '★', '☆', '◆', '◇', '■', '□', '●', '○', '◀', '✨', '🔥'];
+
+    function _cfgOvIsCustomPrefix(val) { return val && _cfgOvPrefixPresets.indexOf(val) === -1; }
+    function _cfgOvIsCustomSuffix(val) { return val && _cfgOvSuffixPresets.indexOf(val) === -1; }
+
+    function _cfgOvBuildPrefixOptions(current) {
+      var isCustom = _cfgOvIsCustomPrefix(current);
+      return _cfgOvPrefixPresets.map(function(v) {
+        return '<option value="' + v + '"' + (!isCustom && v === current ? ' selected' : '') + '>' + (v || 'なし') + '</option>';
+      }).join('') + '<option value="custom"' + (isCustom ? ' selected' : '') + '>カスタム入力...</option>';
+    }
+
+    function _cfgOvBuildSuffixOptions(current) {
+      var isCustom = _cfgOvIsCustomSuffix(current);
+      return _cfgOvSuffixPresets.map(function(v) {
+        return '<option value="' + v + '"' + (!isCustom && v === current ? ' selected' : '') + '>' + (v || 'なし') + '</option>';
+      }).join('') + '<option value="custom"' + (isCustom ? ' selected' : '') + '>カスタム入力...</option>';
+    }
+
+    function cfgOvPrefixChange(idx, sel) {
+      var customInput = sel.parentNode.querySelector('.cfg-ov-prefix-custom');
+      if (sel.value === 'custom') {
+        customInput.style.display = '';
+        customInput.focus();
+        _cfg_wordOverrides[idx].prefix = customInput.value;
+      } else {
+        customInput.style.display = 'none';
+        _cfg_wordOverrides[idx].prefix = sel.value;
+      }
+      cfgUpdateWordOverridePreview(idx);
+    }
+    window.cfgOvPrefixChange = cfgOvPrefixChange;
+
+    function cfgOvSuffixChange(idx, sel) {
+      var customInput = sel.parentNode.querySelector('.cfg-ov-suffix-custom');
+      if (sel.value === 'custom') {
+        customInput.style.display = '';
+        customInput.focus();
+        _cfg_wordOverrides[idx].suffix = customInput.value;
+      } else {
+        customInput.style.display = 'none';
+        _cfg_wordOverrides[idx].suffix = sel.value;
+      }
+      cfgUpdateWordOverridePreview(idx);
+    }
+    window.cfgOvSuffixChange = cfgOvSuffixChange;
+
     function cfgRenderWordOverrides() {
       var container = document.getElementById('cfg-wordOverrideList');
       if (!container) return;
@@ -3597,11 +3645,17 @@
           '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">' +
             '<div>' +
               '<label style="font-size: 11px; color: #6b7280; display: block; margin-bottom: 3px;">前記号</label>' +
-              '<input type="text" class="form-control" value="' + (ov.prefix || '') + '" placeholder="例: 【" maxlength="5" style="font-size: 16px; text-align: center;" oninput="_cfg_wordOverrides[' + idx + '].prefix = this.value; cfgUpdateWordOverridePreview(' + idx + ')">' +
+              '<select class="form-control cfg-ov-prefix-sel" data-idx="' + idx + '" style="font-size: 16px;" onchange="cfgOvPrefixChange(' + idx + ', this)">' +
+                _cfgOvBuildPrefixOptions(ov.prefix) +
+              '</select>' +
+              '<input type="text" class="form-control cfg-ov-prefix-custom" data-idx="' + idx + '" value="' + (ov.prefix || '') + '" maxlength="5" placeholder="カスタム前記号" style="font-size: 16px; text-align: center; margin-top: 4px;' + (_cfgOvIsCustomPrefix(ov.prefix) ? '' : ' display: none;') + '" oninput="_cfg_wordOverrides[' + idx + '].prefix = this.value; cfgUpdateWordOverridePreview(' + idx + ')">' +
             '</div>' +
             '<div>' +
               '<label style="font-size: 11px; color: #6b7280; display: block; margin-bottom: 3px;">後記号</label>' +
-              '<input type="text" class="form-control" value="' + (ov.suffix || '') + '" placeholder="例: 】" maxlength="5" style="font-size: 16px; text-align: center;" oninput="_cfg_wordOverrides[' + idx + '].suffix = this.value; cfgUpdateWordOverridePreview(' + idx + ')">' +
+              '<select class="form-control cfg-ov-suffix-sel" data-idx="' + idx + '" style="font-size: 16px;" onchange="cfgOvSuffixChange(' + idx + ', this)">' +
+                _cfgOvBuildSuffixOptions(ov.suffix) +
+              '</select>' +
+              '<input type="text" class="form-control cfg-ov-suffix-custom" data-idx="' + idx + '" value="' + (ov.suffix || '') + '" maxlength="5" placeholder="カスタム後記号" style="font-size: 16px; text-align: center; margin-top: 4px;' + (_cfgOvIsCustomSuffix(ov.suffix) ? '' : ' display: none;') + '" oninput="_cfg_wordOverrides[' + idx + '].suffix = this.value; cfgUpdateWordOverridePreview(' + idx + ')">' +
             '</div>' +
           '</div>' +
           '<div style="background: #e0f2fe; padding: 8px 12px; border-radius: 6px; text-align: center;">' +
