@@ -9,7 +9,7 @@
  * コンテナを使い回し、init/destroyで表示内容を切り替える。
  */
 // グローバルバージョンマーカー（デバッグ用）
-window.__SPA_ROUTER_VER = '597';
+window.__SPA_ROUTER_VER = '598';
 
 (function() {
   'use strict';
@@ -21,7 +21,7 @@ window.__SPA_ROUTER_VER = '597';
   // 一度表示したページのDOMを保持し、再訪問時は表示切替のみ
   const _pageContainers = {};
 
-  const _FRAGMENT_VERSION = '597';
+  const _FRAGMENT_VERSION = '598';
 
   let _currentSpaPage = null;
   let _isSpaActive = false;
@@ -46,7 +46,7 @@ window.__SPA_ROUTER_VER = '597';
       }
 
       const fetchUrl = url + '?v=' + _FRAGMENT_VERSION;
-      fetchedUrls[url] = fetch(fetchUrl)
+      fetchedUrls[url] = fetch(fetchUrl, { cache: 'no-store' })
         .then(r => r.ok ? r.text() : null)
         .then(html => {
           if (html) {
@@ -148,7 +148,7 @@ window.__SPA_ROUTER_VER = '597';
         html = _fragmentCache[pageName];
       } else {
         const fragmentUrl = pageConfig.fragmentUrl + '?v=' + _FRAGMENT_VERSION;
-        const response = await fetch(fragmentUrl);
+        const response = await fetch(fragmentUrl, { cache: 'no-store' });
         if (thisGeneration !== _switchGeneration) return false;
         if (!response.ok) throw new Error(`Fragment fetch failed: ${response.status}`);
         html = await response.text();
