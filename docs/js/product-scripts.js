@@ -2486,7 +2486,7 @@ window.continueProductRegistration = function() {
 
     hashtags.forEach((hashtag, index) => {
       const title = hashtag.title || '';
-      const icon = hashtag.icon || '🏷️';
+      const icon = hashtag.icon || '';
       const suffix = hashtag.suffix || '';
 
       // プレビューテキストを生成（実際の値は商品登録時に動的に変わる）
@@ -2505,11 +2505,18 @@ window.continueProductRegistration = function() {
 
       const checkboxId = `hashtag-checkbox-${index}`;
 
-      console.log(`Creating checkbox ${index}:`, {title, icon, previewText});
+      console.log(`Creating toggle ${index}:`, {title, icon, previewText});
 
-      // シンプルに1行で表示
-      const label = document.createElement('label');
-      label.style.cssText = 'display: block; cursor: pointer; padding: 6px 4px; border-bottom: 1px solid #e5e7eb;';
+      const row = document.createElement('div');
+      row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 4px; border-bottom: 1px solid #e5e7eb;';
+
+      const textSpan = document.createElement('span');
+      textSpan.style.cssText = 'font-size: 12px; color: #374151;';
+      textSpan.textContent = previewText;
+
+      const toggleLabel = document.createElement('label');
+      toggleLabel.className = 'toggle-switch';
+      toggleLabel.style.cssText = 'flex-shrink: 0;';
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -2517,16 +2524,17 @@ window.continueProductRegistration = function() {
       checkbox.setAttribute('data-index', index);
       checkbox.checked = true;
       checkbox.onchange = updateDescriptionFromDetail;
-      checkbox.style.cssText = 'cursor: pointer; margin-right: 6px; vertical-align: middle;';
 
-      const textSpan = document.createElement('span');
-      textSpan.style.cssText = 'font-size: 11px; color: #374151; vertical-align: middle;';
-      textSpan.textContent = previewText;
+      const slider = document.createElement('span');
+      slider.className = 'toggle-slider';
 
-      label.appendChild(checkbox);
-      label.appendChild(textSpan);
+      toggleLabel.appendChild(checkbox);
+      toggleLabel.appendChild(slider);
 
-      container.appendChild(label);
+      row.appendChild(textSpan);
+      row.appendChild(toggleLabel);
+
+      container.appendChild(row);
     });
 
     // 生成後のDOMを確認
@@ -2608,8 +2616,16 @@ window.continueProductRegistration = function() {
     discounts.forEach((discount, index) => {
       const checkboxId = `discount-checkbox-${discount.id}`;
 
-      const label = document.createElement('label');
-      label.style.cssText = 'display: block; cursor: pointer; padding: 6px 4px; border-bottom: 1px solid #e5e7eb;';
+      const row = document.createElement('div');
+      row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 4px; border-bottom: 1px solid #e5e7eb;';
+
+      const textSpan = document.createElement('span');
+      textSpan.style.cssText = 'font-size: 14px; color: #374151;';
+      textSpan.textContent = isModernTheme ? discount.label : `${discount.icon} ${discount.label}`;
+
+      const toggleLabel = document.createElement('label');
+      toggleLabel.className = 'toggle-switch';
+      toggleLabel.style.cssText = 'flex-shrink: 0;';
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -2617,16 +2633,17 @@ window.continueProductRegistration = function() {
       checkbox.setAttribute('data-discount-type', discount.id);
       checkbox.checked = true;
       checkbox.onchange = updateDescriptionFromDetail;
-      checkbox.style.cssText = 'cursor: pointer; margin-right: 6px; vertical-align: middle;';
 
-      const textSpan = document.createElement('span');
-      textSpan.style.cssText = 'font-size: 11px; color: #374151; vertical-align: middle;';
-      textSpan.textContent = isModernTheme ? discount.label : `${discount.icon} ${discount.label}`;
+      const slider = document.createElement('span');
+      slider.className = 'toggle-slider';
 
-      label.appendChild(checkbox);
-      label.appendChild(textSpan);
+      toggleLabel.appendChild(checkbox);
+      toggleLabel.appendChild(slider);
 
-      container.appendChild(label);
+      row.appendChild(textSpan);
+      row.appendChild(toggleLabel);
+
+      container.appendChild(row);
     });
 
     console.log('割引情報チェックボックス生成完了:', discounts.length);
