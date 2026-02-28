@@ -1328,6 +1328,22 @@
       if (isNaN(d.getTime())) return String(value);
       return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
     }
+    function invFormatDateInput(value) {
+      if (!value) return '';
+      var d;
+      if (value.toDate) d = value.toDate();
+      else if (value.seconds) d = new Date(value.seconds * 1000);
+      else d = new Date(value);
+      if (isNaN(d.getTime())) return '';
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    window.invUpdateRankFromCondition = function() {
+      var conditionEl = document.getElementById('invProductCondition');
+      var rankEl = document.getElementById('invRankDisplay');
+      if (!conditionEl || !rankEl) return;
+      var rankMap = { '新品、未使用': 'S - 新品同様', '未使用に近い': 'A - 非常に良い', '目立った傷や汚れなし': 'B - 良い', 'やや傷や汚れあり': 'C - やや難あり', '傷や汚れあり': 'D - 難あり', '全体的に状態が悪い': 'E - 状態不良' };
+      rankEl.textContent = rankMap[conditionEl.value] || '-';
+    };
     function invGetThumbUrl(originalUrl) {
       if (!originalUrl) return originalUrl;
       try {
@@ -1844,7 +1860,7 @@
 
     function invDisplayProductDetail(product) {
       var container = document.getElementById('invProductDetailBody');
-      var isEditable = (product.status === '登録済み' || product.status === '出品準備中');
+      var isEditable = (product.status !== '販売済み');
 
       // Images
       var imagesToDisplay = (product.images && product.images.length > 0) ? product.images : [product.imageUrl1, product.imageUrl2, product.imageUrl3].filter(function(url) { return url; });
@@ -1869,6 +1885,37 @@
       var statusSelectHtml = '<select class="form-select" id="invProductStatus">';
       statusOptions.forEach(function(s) { statusSelectHtml += '<option value="' + s + '"' + (s === product.status ? ' selected' : '') + '>' + s + '</option>'; });
       statusSelectHtml += '</select>';
+
+      // 商品の状態ドロップダウン
+      var conditionOptions = ['新品、未使用', '未使用に近い', '目立った傷や汚れなし', 'やや傷や汚れあり', '傷や汚れあり', '全体的に状態が悪い'];
+      var conditionSelectHtml = '';
+      if (isEditable) {
+        conditionSelectHtml = '<select class="form-select form-select-sm" id="invProductCondition" onchange="invUpdateRankFromCondition()">';
+        conditionSelectHtml += '<option value="">--選択--</option>';
+        conditionOptions.forEach(function(c) { conditionSelectHtml += '<option value="' + c + '"' + (c === product.condition ? ' selected' : '') + '>' + c + '</option>'; });
+        conditionSelectHtml += '</select>';
+      } else {
+        conditionSelectHtml = '<div class="form-control-plaintext">' + (product.condition || '-') + '</div>';
+      }
+
+      // 販売タイプドロップダウン
+      var salesTypeHtml = '';
+      if (isEditable) {
+        salesTypeHtml = '<select class="form-select form-select-sm" id="invSalesType">';
+        salesTypeHtml += '<option value="">--選択--</option>';
+        salesTypeHtml += '<option value="auction"' + (product.salesType === 'auction' ? ' selected' : '') + '>オークション形式</option>';
+        salesTypeHtml += '<option value="fixed"' + (product.salesType === 'fixed' ? ' selected' : '') + '>価格を設定する</option>';
+        salesTypeHtml += '</select>';
+      } else {
+        var stDisplay = product.salesType === 'auction' ? 'オークション形式' : (product.salesType === 'fixed' ? '価格を設定する' : '-');
+        salesTypeHtml = '<div class="form-control-plaintext">' + stDisplay + '</div>';
+      }
+
+      // 日付フィールド生成
+      var createDateField = function(value, fieldName) {
+        if (isEditable) return '<input type="date" class="form-control form-control-sm" id="' + fieldName + '" value="' + invFormatDateInput(value) + '">';
+        return '<div class="form-control-plaintext">' + invFormatDate(value) + '</div>';
+      };
 
       var createField = function(value, fieldName, fieldType) {
         fieldType = fieldType || 'text';
@@ -1900,14 +1947,14 @@
         + '<div class="col-12"><h6 class="border-bottom pb-2"><i class="bi bi-info-circle me-1"></i>基本情報</h6></div>'
         + '<div class="col-6"><label class="form-label fw-bold small mb-0">管理番号</label><div class="form-control-plaintext pt-0" style="font-size: 15px; font-weight: 600;">' + (product.managementNumber || '-') + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small mb-0">ステータス</label>' + statusSelectHtml + '</div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">担当者</label><div class="form-control-plaintext">' + (product.person || '-') + '</div></div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">担当者</label>' + createField(product.person, 'invProductPerson') + '</div>'
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-tag me-1"></i>商品情報 ' + (isEditable ? '<span class="badge bg-success small">編集可能</span>' : '') + '</h6></div>'
         + '<div class="col-12"><label class="form-label fw-bold small">ブランド</label>' + createField(product.brand, 'invProductBrand') + '</div>'
         + '<div class="col-12"><label class="form-label fw-bold small">商品名(タイトル)</label><div style="position: relative;">' + (isEditable ? '<textarea class="form-control form-control-sm" id="invProductName" rows="2" style="padding-right: 36px;">' + (product.productName || '') + '</textarea><div id="invProductNameField" style="display:none;">' + (product.productName || '') + '</div>' : '<div class="form-control-plaintext" id="invProductNameField" style="word-break: break-all; white-space: normal; padding-right: 36px;">' + (product.productName || '-') + '</div>') + '<button type="button" onclick="invCopyText(\'invProductNameField\', this)" class="inv-copy-btn" title="コピー"><i class="bi bi-copy"></i></button></div></div>'
         + '<div class="col-12"><label class="form-label fw-bold small">カテゴリー</label><div class="form-control-plaintext" style="font-size: 13px; line-height: 1.4;">' + catHierarchy + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">サイズ</label>' + createField(product.size, 'invProductSize') + '</div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">商品の状態</label><div class="form-control-plaintext">' + (product.condition || '-') + '</div></div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">ランク</label><div class="form-control-plaintext">' + rankDisplay + '</div></div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">商品の状態</label>' + conditionSelectHtml + '</div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">ランク</label><div class="form-control-plaintext" id="invRankDisplay">' + rankDisplay + '</div></div>'
         + '<div class="col-12"><label class="form-label fw-bold small" onclick="invToggleDescription()" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">商品の説明 <span id="invDescToggleIcon" style="font-size: 12px; color: #6b7280;">&#9660; 全文表示</span></label>'
         + '<div id="invDescriptionDetailContainer" style="max-height: 100px; overflow: hidden; position: relative;">'
         + (isEditable ? '<textarea class="form-control form-control-sm" id="invProductDescription" rows="6" style="padding-right: 36px;">' + (product.productDescription || '') + '</textarea><div id="invDescriptionField" style="display:none;">' + (product.productDescription || '') + '</div>' : '<div class="form-control-plaintext" id="invDescriptionField" style="white-space: pre-wrap; background: #f8f9fa; padding: 10px 36px 10px 10px; border-radius: 6px; font-size: 13px; line-height: 1.5;">' + (product.productDescription || '-') + '</div>')
@@ -1918,13 +1965,13 @@
         + '<div class="col-12">' + imageBlockHtml + '</div>'
         + (product.damageMarker && product.damageMarker.image ? '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-exclamation-triangle me-1"></i>傷・汚れマーキング</h6></div><div class="col-12"><div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px;"><div style="font-size: 12px; color: #78716c; margin-bottom: 8px;">' + (product.damageMarker.type || '') + '</div><img src="' + product.damageMarker.image + '" alt="傷・汚れマーキング" style="max-width: 100%; border-radius: 6px; border: 1px solid #e5e7eb;">' + (product.damageMarker.note ? '<div style="margin-top: 8px; padding: 8px; background: white; border-radius: 4px; border: 1px solid #e5e7eb;"><div style="font-size: 11px; color: #78716c; margin-bottom: 4px;">補足説明</div><div style="font-size: 13px; color: #374151; white-space: pre-wrap;">' + product.damageMarker.note + '</div></div>' : '') + '</div></div>' : '')
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-cart me-1"></i>仕入情報 ' + (isEditable ? '<span class="badge bg-success small">編集可能</span>' : '') + '</h6></div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">仕入日</label><div class="form-control-plaintext">' + invFormatDate(product.purchaseDate) + '</div></div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">仕入先</label><div class="form-control-plaintext">' + (product.supplier || '-') + '</div></div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">仕入日</label>' + createDateField(product.purchaseDate, 'invPurchaseDate') + '</div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">仕入先</label>' + createField(product.supplier, 'invProductSupplier') + '</div>'
         + '<div class="col-6"><label class="form-label fw-bold small">仕入金額</label>' + createField(product.purchaseAmount, 'invPurchaseAmount', 'number') + '</div>'
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-megaphone me-1"></i>出品情報 ' + (isEditable ? '<span class="badge bg-success small">編集可能</span>' : '') + '</h6></div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">出品日</label><div class="form-control-plaintext">' + invFormatDate(product.listingDate) + '</div></div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">出品先</label><div class="form-control-plaintext">' + (product.listingDestination || '-') + '</div></div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">販売タイプ</label><div class="form-control-plaintext">' + salesTypeDisplay + '</div></div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">出品日</label>' + createDateField(product.listingDate, 'invListingDate') + '</div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">出品先</label>' + createField(product.listingDestination, 'invListingDestination') + '</div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">販売タイプ</label>' + salesTypeHtml + '</div>'
         + '<div class="col-6"><label class="form-label fw-bold small">出品金額</label>' + createField(product.listingAmount, 'invListingAmount', 'number') + '</div>'
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-currency-yen me-1"></i>販売情報</h6></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">販売日</label><div class="form-control-plaintext">' + invFormatDate(product.saleDate) + '</div></div>'
@@ -2128,7 +2175,7 @@
       if (!invCurrentProduct) { invShowError('商品データが見つかりません'); return; }
       var newStatus = document.getElementById('invProductStatus').value;
       var oldStatus = invCurrentProduct.status;
-      var isEditable = (oldStatus === '登録済み' || oldStatus === '出品準備中');
+      var isEditable = (oldStatus !== '販売済み');
       var changedFields = [];
       if (isEditable) {
         var fieldMappings = [
@@ -2136,6 +2183,13 @@
           { id: 'invProductName', apiName: '商品名', oldValue: invCurrentProduct.productName },
           { id: 'invProductSize', apiName: 'サイズ', oldValue: invCurrentProduct.size },
           { id: 'invProductDescription', apiName: '商品説明', oldValue: invCurrentProduct.productDescription },
+          { id: 'invProductPerson', apiName: '担当者', oldValue: invCurrentProduct.person },
+          { id: 'invProductCondition', apiName: '商品の状態', oldValue: invCurrentProduct.condition },
+          { id: 'invProductSupplier', apiName: '仕入先', oldValue: invCurrentProduct.supplier },
+          { id: 'invListingDestination', apiName: '出品先', oldValue: invCurrentProduct.listingDestination },
+          { id: 'invSalesType', apiName: '販売タイプ', oldValue: invCurrentProduct.salesType },
+          { id: 'invPurchaseDate', apiName: '仕入日', oldValue: invFormatDateInput(invCurrentProduct.purchaseDate) },
+          { id: 'invListingDate', apiName: '出品日', oldValue: invFormatDateInput(invCurrentProduct.listingDate) },
           { id: 'invPurchaseAmount', apiName: '仕入金額', oldValue: invCurrentProduct.purchaseAmount, isNumber: true },
           { id: 'invListingAmount', apiName: '出品金額', oldValue: invCurrentProduct.listingAmount, isNumber: true }
         ];
@@ -2147,6 +2201,16 @@
             if (String(newValue) !== String(field.oldValue || '')) changedFields.push({ field: field.apiName, value: newValue });
           }
         });
+        // 商品の状態が変更された場合、ランクも自動更新
+        var conditionEl = document.getElementById('invProductCondition');
+        if (conditionEl) {
+          var newCondition = conditionEl.value;
+          if (newCondition && newCondition !== invCurrentProduct.condition) {
+            var rankMap = { '新品、未使用': { code: 'S', name: '新品同様' }, '未使用に近い': { code: 'A', name: '非常に良い' }, '目立った傷や汚れなし': { code: 'B', name: '良い' }, 'やや傷や汚れあり': { code: 'C', name: 'やや難あり' }, '傷や汚れあり': { code: 'D', name: '難あり' }, '全体的に状態が悪い': { code: 'E', name: '状態不良' } };
+            var newRank = rankMap[newCondition] || null;
+            if (newRank) changedFields.push({ field: 'ランク', value: newRank });
+          }
+        }
       }
       var statusChanged = (newStatus !== oldStatus);
       if (!statusChanged && changedFields.length === 0) { alert('変更がありません'); return; }
@@ -2167,10 +2231,15 @@
         if (statusChanged) { updateData.status = newStatus; }
 
         // フィールド名マッピング（UI apiName → Firestoreフィールド）
-        var fieldMapping = { 'ブランド': 'brand', '商品名': 'productName', 'サイズ': 'size', '商品説明': 'description', '仕入金額': 'purchaseAmount', '出品金額': 'listingAmount' };
+        var fieldMapping = { 'ブランド': 'brand', '商品名': 'productName', 'サイズ': 'size', '商品説明': 'description', '担当者': 'person', '商品の状態': 'condition', '仕入先': 'supplier', '出品先': 'listingDestination', '販売タイプ': 'salesType', '仕入日': 'purchaseDate', '出品日': 'listingDate', '仕入金額': 'purchaseAmount', '出品金額': 'listingAmount', 'ランク': 'rank' };
+        var dateFields = ['仕入日', '出品日'];
         changedFields.forEach(function(change) {
           var firestoreField = fieldMapping[change.field] || change.field;
-          updateData[firestoreField] = change.value;
+          if (dateFields.indexOf(change.field) >= 0 && change.value) {
+            updateData[firestoreField] = firebase.firestore.Timestamp.fromDate(new Date(change.value + 'T00:00:00'));
+          } else {
+            updateData[firestoreField] = change.value;
+          }
         });
 
         await db.collection('products').doc(invCurrentProduct.id).update(updateData);
