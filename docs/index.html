@@ -1429,11 +1429,11 @@
       </button>
     </nav>
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0228z19</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0228z20</div>
     <script>
     // PWAバージョンチェック（タスクキル復帰 + バックグラウンド復帰）
     (function(){
-      var LOCAL_VER = 'v0228z19';
+      var LOCAL_VER = 'v0228z20';
       var lastCheck = 0;
 
       function _versionCheck() {
@@ -2518,40 +2518,11 @@
           header.style.display = 'none';
         }
 
-        // 🚀 初期ロード時にPWA版menu_homeを直接ロード（GAS版を経由しない）
-        const iframe = document.getElementById('gas-iframe');
-        if (iframe) {
-          // セッションID生成（端末・タブごとに一意）
-          if (!sessionStorage.getItem('device_session_id')) {
-            const newSessionId = Date.now() + '_' + Math.random().toString(36).substring(2);
-            sessionStorage.setItem('device_session_id', newSessionId);
-            console.log('🆔 新しいセッションIDを生成:', newSessionId);
-          }
-          const sessionId = sessionStorage.getItem('device_session_id');
-
-          // ユーザー情報取得
-          const userName = localStorage.getItem('reborn_user_name') || '';
-          // userIconUrl はlocalStorageから直接読み込むため、URLには含めない（URI Too Long対策）
-
-          const pwaBaseUrl = location.origin;
-          const params = new URLSearchParams({
-            userName: userName,
-            sessionId: sessionId
-          });
-          const menuHomeUrl = pwaBaseUrl + '/menu_home.html?' + params.toString();
-
-          console.log('🏠 [初期設定完了済み] PWA版menu_homeを直接ロード:', menuHomeUrl);
-          console.log('🆔 sessionId:', sessionId);
-          console.log('👤 userName:', userName);
-          iframe.setAttribute('data-src', menuHomeUrl);
-
-          // 管理番号設定のGAS経由プリロードを廃止（2025-11-19）
-          // 理由: product.html が Firestore から直接読み込むため不要
-          /*
-          setTimeout(() => {
-                      preloadManagementConfigForPWA();
-          }, 5000);
-          */
+        // SPA Fragment方式でホーム画面を表示（旧iframe方式を廃止）
+        // 旧コードは全メニューをHTMLで含む /menu_home.html をiframeに読み込んでいたため、
+        // SPA Fragment（権限フィルタリング済み）が表示される前に全メニューが一瞬見える問題の原因だった
+        if (typeof navigateToPage === 'function') {
+          navigateToPage('home');
         }
       }
 
