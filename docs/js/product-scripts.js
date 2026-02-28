@@ -2938,6 +2938,7 @@ window.continueProductRegistration = function() {
 
           // カテゴリ値のマッピング
           const categoryMap = {
+            '特大分類': _val('特大分類'),
             '大分類': _val('大分類(カテゴリ)'),
             '中分類': _val('中分類(カテゴリ)'),
             '小分類': _val('小分類(カテゴリ)'),
