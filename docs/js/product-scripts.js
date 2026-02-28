@@ -10645,11 +10645,7 @@ window.reinitProductScripts = async function() {
     initializeMaterialMasters();
     setupColorSearch();
 
-    // ブランド検索（Algolia）
-    if (typeof window.attachBrandSuggestAlgolia === 'function') {
-      window.attachBrandSuggestAlgolia('ブランド(英語)', { limit: 15, minChars: 1, debounceMs: 300 });
-      window.attachBrandSuggestAlgolia('商品名_ブランド(英語)', { limit: 15, minChars: 1, debounceMs: 300 });
-    }
+    // ブランド検索（Algolia）はwaitForCachedConfigAndSetup内で初期化済み
   }
 
   // 4. 設定読み込み + 依存初期化

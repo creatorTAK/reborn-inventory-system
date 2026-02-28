@@ -186,7 +186,7 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
    */
   function showSuggestions(brands) {
     if (brands.length === 0) {
-      panel.style.display = 'none';
+      panel.hidden = true;
       return;
     }
 
@@ -240,7 +240,7 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
         applyBrandSelection(brand);
 
         // サジェストパネルを非表示
-        panel.style.display = 'none';
+        panel.hidden = true;
 
         // キーボードを閉じる（モバイル対応）
         input.blur();
@@ -255,7 +255,7 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
       panel.appendChild(div);
     });
 
-    panel.style.display = 'block';
+    panel.hidden = false;
   }
 
   /**
@@ -271,7 +271,7 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
 
     // 最小文字数未満の場合、パネルを非表示
     if (query.length < minChars) {
-      panel.style.display = 'none';
+      panel.hidden = true;
       return;
     }
 
@@ -286,7 +286,7 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
   input.addEventListener('focus', function() {
     const query = this.value.trim();
     if (query.length >= minChars && panel.innerHTML) {
-      panel.style.display = 'block';
+      panel.hidden = false;
     }
   });
 
@@ -296,7 +296,7 @@ async function attachBrandSuggestAlgolia(inputId, options = {}) {
 
     // パネルを非表示（クリックイベント処理のため少し遅延）
     setTimeout(() => {
-      panel.style.display = 'none';
+      panel.hidden = true;
     }, 200);
 
     // 入力値が空の場合は何もしない
