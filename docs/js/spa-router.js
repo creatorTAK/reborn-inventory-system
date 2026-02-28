@@ -8,6 +8,9 @@
  * 同じfragmentUrlを共有する複数ページ（config-system/config-product等）は
  * コンテナを使い回し、init/destroyで表示内容を切り替える。
  */
+// グローバルバージョンマーカー（デバッグ用）
+window.__SPA_ROUTER_VER = '597';
+
 (function() {
   'use strict';
 
