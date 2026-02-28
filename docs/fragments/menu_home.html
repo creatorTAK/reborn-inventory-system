@@ -265,7 +265,7 @@
     'config-system': 'mh-menu-config-system'
   };
 
-  function initMenuHomePage() {
+  async function initMenuHomePage() {
     console.log('[SPA menu_home] init開始');
 
     // フォーカス抑制
@@ -278,51 +278,95 @@
       }
     }, 100);
 
-    // v0228z: templateアプローチ — メニューをDOMに入れる前にDocumentFragmentでフィルタリング
-    // iOS WebKitはinnerHTML後に1フレーム描画してからCSS/JSが適用されるため、
-    // CSS隠蔽（opacity/visibility/display:none）ではフリッカーを防げない。
-    // templateのcontentはDocumentFragment（可視DOMに存在しない）なので描画されない。
     var grid = document.querySelector('#spa-page-menu-home .menu-items');
-    if (grid) {
-      // 初回のみtemplateからクローン（再訪問時はDOM保持済み）
-      if (grid.children.length === 0) {
-        var template = document.getElementById('mh-menu-template');
-        if (template) {
-          var clone = template.content.cloneNode(true); // DocumentFragment
+    if (!grid) return;
 
-          // DocumentFragment内でフィルタリング（まだ可視DOMに無いので描画されない）
-          var permissionId = localStorage.getItem('reborn_user_permission_id')
-                          || localStorage.getItem('reborn_user_permission');
-          if (permissionId && permissionId !== 'owner') {
-            try {
-              var cached = JSON.parse(localStorage.getItem('reborn_hidden_menus') || '[]');
-              for (var i = 0; i < cached.length; i++) {
-                var menuElId = _mhMenuIdMap[cached[i]];
-                if (menuElId) {
-                  var el = clone.querySelector('#' + menuElId);
-                  if (el) el.remove(); // DocumentFragmentから除去（DOMに入らない）
-                }
-              }
-            } catch(e) {}
-            // config-productはスタッフに常に非表示
-            var cpEl = clone.querySelector('#mh-menu-config-product');
-            if (cpEl) cpEl.remove();
-          }
-
-          // フィルタリング済みDocumentFragmentを一括挿入（1回の描画のみ）
-          grid.appendChild(clone);
-        }
-      }
-
-      // フォーカス抑制: 挿入後のメニューアイテムにtabindex設定
-      var menuItems = grid.querySelectorAll('a, .accordion-header');
-      for (var i = 0; i < menuItems.length; i++) {
-        menuItems[i].setAttribute('tabindex', '-1');
-      }
+    // 再訪問時（DOM保持済み）はFirestoreバッジのみ更新
+    if (grid.children.length > 0) {
+      _mhCheckPermissionAndBadges();
+      return;
     }
 
-    // Firestore権限チェック + バッジ取得（キャッシュ更新含む）
+    // === 初回: templateからメニューを構築 ===
+    var template = document.getElementById('mh-menu-template');
+    if (!template) return;
+
+    var permissionId = localStorage.getItem('reborn_user_permission_id')
+                    || localStorage.getItem('reborn_user_permission');
+    var cachedHidden = null;
+
+    // キャッシュ確認
+    if (permissionId && permissionId !== 'owner') {
+      try {
+        var raw = localStorage.getItem('reborn_hidden_menus');
+        if (raw) cachedHidden = JSON.parse(raw);
+      } catch(e) {}
+    }
+
+    // キャッシュが無い非ownerユーザー → Firestoreを待つ（フリッカー完全防止）
+    if (permissionId && permissionId !== 'owner' && !cachedHidden) {
+      console.log('[SPA menu_home] キャッシュなし、Firestore待機...');
+      cachedHidden = await _mhFetchHiddenMenus(permissionId);
+      console.log('[SPA menu_home] Firestore応答:', cachedHidden);
+    }
+
+    // DocumentFragmentでフィルタリング → DOM挿入
+    var clone = template.content.cloneNode(true);
+    if (permissionId && permissionId !== 'owner' && cachedHidden && cachedHidden.length > 0) {
+      for (var i = 0; i < cachedHidden.length; i++) {
+        var menuElId = _mhMenuIdMap[cachedHidden[i]];
+        if (menuElId) {
+          var el = clone.querySelector('#' + menuElId);
+          if (el) el.remove();
+        }
+      }
+    }
+    // config-productはスタッフに常に非表示
+    if (permissionId && permissionId !== 'owner') {
+      var cpEl = clone.querySelector('#mh-menu-config-product');
+      if (cpEl) cpEl.remove();
+    }
+
+    grid.appendChild(clone);
+
+    // フォーカス抑制
+    var menuItems = grid.querySelectorAll('a, .accordion-header');
+    for (var i = 0; i < menuItems.length; i++) {
+      menuItems[i].setAttribute('tabindex', '-1');
+    }
+
+    // バックグラウンドでFirestore再確認 + バッジ取得
     _mhCheckPermissionAndBadges();
+  }
+
+  // Firestoreから非表示メニューリストを取得（初回キャッシュなし時に使用）
+  async function _mhFetchHiddenMenus(permissionId) {
+    var db = (typeof getCompatDb === 'function') ? getCompatDb() : window.db;
+    // Firestore未初期化時は最大5秒待機
+    for (var retry = 0; retry < 10 && (!db || typeof db.collection !== 'function'); retry++) {
+      await new Promise(function(r) { setTimeout(r, 500); });
+      db = (typeof getCompatDb === 'function') ? getCompatDb() : window.db;
+    }
+    if (!db || typeof db.collection !== 'function') return [];
+
+    try {
+      var menuPermDoc = await db.collection('settings').doc('menuPermissions').get();
+      var menuPermissions = menuPermDoc.exists ? menuPermDoc.data() : {};
+      var hidden = [];
+      for (var menuId in _mhMenuIdMap) {
+        var menuPerm = menuPermissions[menuId];
+        var isVisible = menuPerm
+          ? (!menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId))
+          : (_mhDefaultOwnerOnly.indexOf(menuId) === -1);
+        if (!isVisible) hidden.push(menuId);
+      }
+      // キャッシュ保存
+      localStorage.setItem('reborn_hidden_menus', JSON.stringify(hidden));
+      return hidden;
+    } catch(e) {
+      console.error('[SPA menu_home] Firestore権限取得エラー:', e);
+      return [];
+    }
   }
 
   function destroyMenuHomePage() {

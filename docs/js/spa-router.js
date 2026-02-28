@@ -18,7 +18,7 @@
   // 一度表示したページのDOMを保持し、再訪問時は表示切替のみ
   const _pageContainers = {};
 
-  const _FRAGMENT_VERSION = '591';
+  const _FRAGMENT_VERSION = '592';
 
   let _currentSpaPage = null;
   let _isSpaActive = false;
@@ -170,14 +170,16 @@
       container.scrollTop = 0;
       window.scrollTo(0, 0);
 
-      // init実行
+      // init実行（async対応: Firestore待機等の完了を待つ）
       if (pageConfig.init && typeof window[pageConfig.init] === 'function') {
         try {
-          window[pageConfig.init]();
+          await window[pageConfig.init]();
         } catch (e) {
           console.error(`[SPA] init関数エラー: ${pageConfig.init}()`, e);
         }
       }
+
+      if (thisGeneration !== _switchGeneration) return false;
 
       // init完了後にコンテナを表示（フィルタリング完了済み）
       container.style.transition = 'opacity 0.12s ease';
