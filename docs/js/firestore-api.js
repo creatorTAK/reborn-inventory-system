@@ -425,8 +425,8 @@ async function getProductByManagementNumber(managementNumber) {
         profit: data.profit || 0,
         profitRate: data.profitRate || '',
         inventoryDays: data.inventoryDays || 0,
-        // 画像: 配列または個別フィールドに対応
-        images: data.images || [],
+        // 画像: オブジェクト{imageUrls}・配列・個別フィールドに対応
+        images: data.images?.imageUrls || (Array.isArray(data.images) ? data.images : []),
         imageUrl1: data.imageUrl1 || '',
         imageUrl2: data.imageUrl2 || '',
         imageUrl3: data.imageUrl3 || ''
