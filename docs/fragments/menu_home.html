@@ -1,6 +1,4 @@
 <!-- SPA Fragment: menu_home (ホーム画面) -->
-<!-- デバッグ: フラグメント配信確認バナー（問題解決後に削除） -->
-<div id="mh-frag-debug-banner" style="position:fixed;bottom:60px;left:0;right:0;background:red;color:white;font-size:14px;padding:8px 12px;z-index:999999;text-align:center;font-weight:bold;">FRAG v598</div>
 <div id="spa-page-menu-home">
   <style>
     #spa-page-menu-home {
@@ -270,6 +268,16 @@
   var _mhWaitingForFirestore = false;
   var _mhBuildTimeout = null;
 
+  // ★ メニュー構築完了後にSPAコンテナを表示する（カクつき防止）
+  function _mhRevealContainer() {
+    var el = document.getElementById('spa-page-menu-home');
+    var c = el ? el.parentElement : null;
+    if (c) {
+      c.style.transition = 'opacity 0.12s ease';
+      c.style.opacity = '1';
+    }
+  }
+
   // Firestore待ちを解決してメニューを構築する共通関数
   function _mhResolveWaiting(hiddenSet) {
     if (!_mhWaitingForFirestore) return;
@@ -277,6 +285,7 @@
     if (_mhBuildTimeout) { clearTimeout(_mhBuildTimeout); _mhBuildTimeout = null; }
     _mhDebug('resolveWaiting: hidden=' + Object.keys(hiddenSet).join(','));
     _mhBuildMenuGrid(hiddenSet);
+    _mhRevealContainer();
   }
 
   // デバッグ表示（問題解決後に削除）
@@ -337,6 +346,11 @@
     } else {
       _mhDebug('→ 権限不明 → Firestore待ち');
       _mhWaitingForFirestore = true;
+    }
+
+    // ★ Firestore待ちの場合: SPAルーターにコンテナ表示を遅延させる（カクつき防止）
+    if (_mhWaitingForFirestore) {
+      window.__spaDelayReveal = true;
     }
 
     // Firestore待ちの場合: 3秒タイムアウトでフォールバック
