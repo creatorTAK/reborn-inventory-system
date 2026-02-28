@@ -641,7 +641,8 @@
         </div>
         <div class="modal-body inv-modal-body-detail" id="invProductDetailBody">
         </div>
-        <div class="modal-footer" style="display: flex; gap: 8px; padding: 12px 16px;">
+        <div class="modal-footer" style="display: flex; gap: 8px; padding: 12px 16px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-outline-info" onclick="invCopyForPurchase()" style="flex: 0 0 100%; font-size: 13px;"><i class="bi bi-clipboard-plus me-1"></i>複製して仕入登録</button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="flex: 1;">閉じる</button>
           <button type="button" class="btn btn-primary" id="invBtnSaveProductStatus" style="flex: 1;">保存</button>
         </div>
@@ -1648,7 +1649,6 @@
         html += '<button class="btn btn-outline-primary" onclick="invViewProduct(\'' + product.managementNumber + '\')">詳細</button>';
         if (product.itemType === 'sku-based') html += '<button class="btn btn-outline-info" onclick="invOpenStockEditModal(\'' + product.managementNumber + '\',' + (product.stockQuantity || 1) + ')">在庫</button>';
         html += '<button class="btn btn-outline-success" onclick="invOpenSalesRecordModal(\'' + product.managementNumber + '\')">販売</button>';
-        html += '<button class="btn btn-outline-secondary" onclick="invDuplicateProduct(\'' + product.managementNumber + '\')">複製</button>';
         html += '</div></div></div></div></div>';
       });
       html += '</div>';
@@ -2128,47 +2128,59 @@
       } catch (error) { invHideLoading(); alert('在庫の更新に失敗しました: ' + error.message); }
     }
 
-    // ===== Duplicate product (Firestore直接操作) =====
-    async function invDuplicateProduct(managementNumber) {
-      if (!confirm('商品「' + managementNumber + '」を複製しますか？')) return;
+    // ===== 複製して仕入登録（localStorage経由で商品登録に渡す） =====
+    window.invCopyForPurchase = async function() {
+      if (!invCurrentProduct) { invShowError('商品データがありません'); return; }
+      var mn = invCurrentProduct.managementNumber;
+      if (!confirm('「' + mn + '」の商品データをコピーして仕入登録に使用しますか？\n\n仕入管理でバッチ作成→QRスキャン後の商品登録画面で自動入力されます。')) return;
+
       invShowLoading();
       try {
         var db = window.db;
-        var serverTs = firebase.firestore.FieldValue.serverTimestamp;
+        // raw Firestoreデータを取得（ネスト構造のまま保存）
+        var snap = await db.collection('products').where('managementNumber', '==', mn).limit(1).get();
+        if (snap.empty) { invHideLoading(); invShowError('商品データが見つかりません'); return; }
+        var rawData = snap.docs[0].data();
 
-        // managementNumberフィールドで元商品を検索
-        var sourceSnap = await db.collection('products').where('managementNumber', '==', managementNumber).limit(1).get();
-        if (sourceSnap.empty) { invHideLoading(); invShowError('元の商品が見つかりません'); return; }
-        var sourceData = sourceSnap.docs[0].data();
+        // コピー対象フィールドを抽出（画像・仕入/出品/販売情報・管理系は除外）
+        var copyData = {
+          sourceManagementNumber: mn,
+          productName: rawData.productName || '',
+          brand: rawData.brand || {},
+          category: rawData.category || {},
+          itemName: rawData.itemName || '',
+          description: rawData.description || rawData.productDescription || '',
+          condition: rawData.condition || '',
+          conditionDetail: rawData.conditionDetail || '',
+          rank: rawData.rank || null,
+          size: rawData.size || {},
+          salesWord: rawData.salesWord || {},
+          attributes: rawData.attributes || {},
+          measurements: rawData.measurements || {},
+          shipping: rawData.shipping || {},
+          salesType: rawData.salesType || rawData.listing?.salesType || '',
+          itemType: rawData.itemType || 'unique',
+          copiedAt: new Date().toISOString()
+        };
 
-        // 新しい管理番号を生成（元の番号 + -C + 連番）
-        var newManagementNumber;
-        var suffix = 1;
-        while (suffix <= 99) {
-          newManagementNumber = managementNumber + '-C' + suffix;
-          var existCheck = await db.collection('products').where('managementNumber', '==', newManagementNumber).limit(1).get();
-          if (existCheck.empty) break;
-          suffix++;
-        }
-        if (suffix > 99) { throw new Error('複製番号の生成に失敗しました'); }
+        // 素材・カラー・ハッシュタグ・割引（動的フィールド）
+        if (rawData.materials) copyData.materials = rawData.materials;
+        if (rawData.colors) copyData.colors = rawData.colors;
+        if (rawData.hashtags) copyData.hashtags = rawData.hashtags;
+        if (rawData.discounts) copyData.discounts = rawData.discounts;
+        if (rawData.accessories) copyData.accessories = rawData.accessories;
 
-        // 新ドキュメント作成（ステータス・販売情報リセット、IDは自動生成）
-        var newData = Object.assign({}, sourceData, {
-          managementNumber: newManagementNumber,
-          status: '登録済み',
-          saleDate: '', saleAmount: 0, profit: 0, profitRate: '',
-          listingDate: '', listingAmount: 0,
-          createdAt: serverTs(), updatedAt: serverTs()
-        });
-        if (newData.listing) { newData.listing = { date: '', amount: 0 }; }
-        if (newData.sale) { delete newData.sale; }
-        await db.collection('products').add(newData);
-
+        localStorage.setItem('reborn_copy_product', JSON.stringify(copyData));
         invHideLoading();
-        alert('商品を複製しました！\n新しい管理番号: ' + newManagementNumber);
-        invLoadDashboardAndSearch();
-      } catch (error) { invHideLoading(); invShowError('複製エラー: ' + (error.message || error)); }
-    }
+
+        // モーダルを閉じる
+        var modalEl = document.getElementById('invProductDetailModal');
+        var modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+
+        alert('商品データをコピーしました！\n\n仕入管理でバッチ作成後、QRスキャン→商品登録画面で「過去の商品データを読み込みますか？」と表示されます。');
+      } catch (error) { invHideLoading(); invShowError('コピーエラー: ' + (error.message || error)); }
+    };
 
     // ===== Save product status =====
     async function invSaveProductStatus() {

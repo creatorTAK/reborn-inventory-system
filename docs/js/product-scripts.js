@@ -415,11 +415,180 @@ window.CONDITION_TO_RANK_MAP = CONDITION_TO_RANK_MAP;
     }, 3000);
   }
 
+  // ===== 複製データ読み込み（在庫管理からのコピー） =====
+  function checkAndApplyCopiedProduct() {
+    try {
+      var copyStr = localStorage.getItem('reborn_copy_product');
+      if (!copyStr) return;
+      var copyData = JSON.parse(copyStr);
+      if (!copyData || !copyData.sourceManagementNumber) {
+        localStorage.removeItem('reborn_copy_product');
+        return;
+      }
+      console.log('[CopyProduct] コピーデータ検出:', copyData.sourceManagementNumber);
+
+      // 確認ダイアログ
+      if (!confirm('過去の商品データ「' + copyData.sourceManagementNumber + '」を読み込みますか？\n\nブランド、カテゴリ、商品名、説明文などが自動入力されます。')) {
+        localStorage.removeItem('reborn_copy_product');
+        console.log('[CopyProduct] ユーザーがキャンセル、データ破棄');
+        return;
+      }
+
+      // データ破棄（再適用防止）
+      localStorage.removeItem('reborn_copy_product');
+
+      // DOM準備を待ってから適用（マスタデータ読み込み完了後）
+      setTimeout(function() { applyCopiedProductToForm(copyData); }, 1500);
+    } catch (e) {
+      console.warn('[CopyProduct] エラー:', e);
+      localStorage.removeItem('reborn_copy_product');
+    }
+  }
+
+  function applyCopiedProductToForm(data) {
+    console.log('[CopyProduct] フォームにデータ反映開始...');
+
+    // --- ブランド ---
+    if (data.brand) {
+      var brandEn = data.brand.nameEn || (typeof data.brand === 'string' ? data.brand : '');
+      var brandKana = data.brand.nameKana || '';
+      if (brandEn) {
+        var el = document.getElementById('ブランド(英語)');
+        if (el) el.value = brandEn;
+        var el2 = document.getElementById('商品名_ブランド(英語)');
+        if (el2) el2.value = brandEn;
+      }
+      if (brandKana) {
+        var el = document.getElementById('ブランド(カナ)');
+        if (el) el.value = brandKana;
+        var el3 = document.getElementById('商品名_ブランド(カナ)');
+        if (el3) el3.value = brandKana;
+      }
+    }
+
+    // --- 商品の状態 ---
+    if (data.condition) {
+      var condEl = document.getElementById('商品の状態');
+      if (condEl) {
+        condEl.value = data.condition;
+        condEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+
+    // --- サイズ ---
+    if (data.size) {
+      var sizeVal = data.size.display || (typeof data.size === 'string' ? data.size : '');
+      if (sizeVal) {
+        var sizeEl = document.getElementById('サイズ');
+        if (sizeEl) sizeEl.value = sizeVal;
+      }
+    }
+
+    // --- カテゴリ（7階層） ---
+    if (data.category) {
+      applyCategoryFromSlot({
+        superCategory: data.category.superCategory || '',
+        major: data.category.major || '',
+        middle: data.category.middle || '',
+        small: data.category.minor || '',
+        fine: data.category.detail1 || '',
+        fine2: data.category.detail2 || '',
+        itemName: data.itemName || ''
+      });
+    }
+
+    // --- セールスワード ---
+    if (data.salesWord) {
+      if (data.salesWord.category) {
+        var swCatEl = document.getElementById('セールスワード(カテゴリ)');
+        if (swCatEl) {
+          swCatEl.value = data.salesWord.category;
+          swCatEl.dispatchEvent(new Event('change', { bubbles: true }));
+          setTimeout(function() {
+            if (data.salesWord.word) {
+              var swEl = document.getElementById('セールスワード');
+              if (swEl) swEl.value = data.salesWord.word;
+            }
+          }, 300);
+        }
+      }
+    }
+
+    // --- 商品の説明 ---
+    if (data.description) {
+      var descEl = document.getElementById('商品の説明');
+      if (descEl) {
+        descEl.value = data.description;
+        descEl.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+
+    // --- 商品状態詳細 ---
+    if (data.conditionDetail) {
+      var cdEl = document.getElementById('商品状態詳細');
+      if (cdEl) cdEl.value = data.conditionDetail;
+    }
+
+    // --- 寸法 ---
+    if (data.measurements) {
+      var mMap = {
+        shoulderWidth: '肩幅', chestWidth: '身幅', sleeveLength: '袖丈',
+        length: '着丈', waist: 'ウエスト', hip: 'ヒップ',
+        rise: '股上', inseam: '股下'
+      };
+      Object.keys(mMap).forEach(function(key) {
+        if (data.measurements[key]) {
+          var mEl = document.getElementById(mMap[key]);
+          if (mEl) mEl.value = data.measurements[key];
+        }
+      });
+    }
+
+    // --- 配送設定 ---
+    if (data.shipping) {
+      var shipMap = {
+        feeBearer: '配送料の負担', method: '配送の方法',
+        region: '発送元の地域', days: '発送までの日数'
+      };
+      Object.keys(shipMap).forEach(function(key) {
+        if (data.shipping[key]) {
+          var sEl = document.getElementById(shipMap[key]);
+          if (sEl) sEl.value = data.shipping[key];
+        }
+      });
+    }
+
+    // --- 商品名プレビュー更新 ---
+    setTimeout(function() {
+      if (typeof updateNamePreview === 'function') updateNamePreview();
+    }, 800);
+
+    // --- 反映完了通知 ---
+    setTimeout(function() {
+      var toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#3b82f6;color:white;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:10000;';
+      toast.innerHTML = '<i class="bi bi-clipboard-check me-2"></i>「' + data.sourceManagementNumber + '」のデータを読み込みました';
+      document.body.appendChild(toast);
+      setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(function() { toast.remove(); }, 300);
+      }, 4000);
+    }, 1000);
+
+    console.log('[CopyProduct] フォームへのデータ反映完了');
+  }
+
   // v315: ページ読み込み時にスロットデータをチェック
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', checkAndApplySlotData);
+    document.addEventListener('DOMContentLoaded', function() {
+      checkAndApplySlotData();
+      // コピーデータは少し遅延してチェック（スロットデータ優先）
+      setTimeout(checkAndApplyCopiedProduct, 2000);
+    });
   } else {
     checkAndApplySlotData();
+    setTimeout(checkAndApplyCopiedProduct, 2000);
   }
 
   /**
