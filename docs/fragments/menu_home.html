@@ -204,6 +204,66 @@
   })();
   var _mhDefaultOwnerOnly = [];
 
+  // メニューグリッド構築（hiddenSetに含まれるメニューはDOM要素を生成しない）
+  function _mhBuildMenuGrid(hiddenSet) {
+    var grid = document.querySelector('#spa-page-menu-home .menu-items');
+    if (!grid) return;
+    grid.innerHTML = ''; // 既存を消して再構築
+
+    var frag = document.createDocumentFragment();
+
+    // 通常メニュー
+    for (var i = 0; i < _mhMenuDefs.length; i++) {
+      var def = _mhMenuDefs[i];
+      if (hiddenSet[def.key]) continue;
+      var a = document.createElement('a');
+      a.href = '#';
+      a.className = 'menu-item';
+      a.id = def.id;
+      a.setAttribute('tabindex', '-1');
+      a.onclick = (function(p) { return function() { navigateToPage(p); return false; }; })(def.page);
+      a.innerHTML = '<div class="menu-item-content"><span class="menu-item-icon"><img src="/images/menu-icons/' + def.icon + '" alt=""></span><span>' + def.label + '</span></div>';
+      frag.appendChild(a);
+    }
+
+    // アコーディオンメニュー
+    for (var ai = 0; ai < _mhAccordionDefs.length; ai++) {
+      var acc = _mhAccordionDefs[ai];
+      var wrap = document.createElement('div');
+      wrap.className = 'accordion-menu';
+      var header = document.createElement('div');
+      header.className = 'accordion-header';
+      header.setAttribute('tabindex', '-1');
+      header.onclick = (function(k) { return function() { mhToggleAccordion(k); }; })(acc.key);
+      header.innerHTML = '<div class="menu-item-content"><span class="menu-item-icon"><img src="/images/menu-icons/' + acc.icon + '" alt=""></span><span>' + acc.label + '</span></div><span class="accordion-arrow" id="mh-' + acc.key + '-arrow">▼</span>';
+      wrap.appendChild(header);
+      var content = document.createElement('div');
+      content.className = 'accordion-content';
+      content.id = 'mh-' + acc.key + '-content';
+      var hasChild = false;
+      for (var c = 0; c < acc.children.length; c++) {
+        var ch = acc.children[c];
+        if (hiddenSet[ch.key]) continue;
+        hasChild = true;
+        var item = document.createElement('a');
+        item.href = '#';
+        item.className = 'accordion-item';
+        if (ch.id) item.id = ch.id;
+        item.setAttribute('tabindex', '-1');
+        item.onclick = (function(p) { return function() { navigateToPage(p); return false; }; })(ch.page);
+        item.innerHTML = '<img src="/images/menu-icons/' + ch.icon + '" alt="" style="width:28px;height:28px;margin-right:8px;vertical-align:middle;">' + ch.label;
+        content.appendChild(item);
+      }
+      wrap.appendChild(content);
+      if (hasChild) frag.appendChild(wrap);
+    }
+
+    grid.appendChild(frag);
+  }
+
+  // メニュー構築待ちフラグ（Firestore応答後に構築する場合true）
+  var _mhWaitingForFirestore = false;
+
   function initMenuHomePage() {
     console.log('[SPA menu_home] init開始');
 
@@ -226,72 +286,31 @@
       return;
     }
 
-    // === 非表示リスト構築 ===
     var permissionId = localStorage.getItem('reborn_user_permission_id')
                     || localStorage.getItem('reborn_user_permission');
-    var hiddenSet = {};
-    if (permissionId && permissionId !== 'owner') {
-      try {
-        var cached = JSON.parse(localStorage.getItem('reborn_hidden_menus') || '[]');
-        for (var i = 0; i < cached.length; i++) hiddenSet[cached[i]] = true;
-      } catch(e) {}
-      hiddenSet['config-product'] = true; // スタッフには常に非表示
-    }
+    var isStaff = permissionId && permissionId !== 'owner';
 
-    // === 許可メニューのみDOM生成（非表示メニューはDOM要素すら作らない） ===
-    var frag = document.createDocumentFragment();
-
-    // 通常メニュー
-    for (var i = 0; i < _mhMenuDefs.length; i++) {
-      var def = _mhMenuDefs[i];
-      if (hiddenSet[def.key]) continue; // ← 回収管理と同じ: 生成しない
-      var a = document.createElement('a');
-      a.href = '#';
-      a.className = 'menu-item';
-      a.id = def.id;
-      a.setAttribute('tabindex', '-1');
-      a.onclick = (function(p) { return function() { navigateToPage(p); return false; }; })(def.page);
-      a.innerHTML = '<div class="menu-item-content"><span class="menu-item-icon"><img src="/images/menu-icons/' + def.icon + '" alt=""></span><span>' + def.label + '</span></div>';
-      frag.appendChild(a);
-    }
-
-    // アコーディオンメニュー
-    for (var a = 0; a < _mhAccordionDefs.length; a++) {
-      var acc = _mhAccordionDefs[a];
-      var wrap = document.createElement('div');
-      wrap.className = 'accordion-menu';
-
-      var header = document.createElement('div');
-      header.className = 'accordion-header';
-      header.setAttribute('tabindex', '-1');
-      header.onclick = (function(k) { return function() { mhToggleAccordion(k); }; })(acc.key);
-      header.innerHTML = '<div class="menu-item-content"><span class="menu-item-icon"><img src="/images/menu-icons/' + acc.icon + '" alt=""></span><span>' + acc.label + '</span></div><span class="accordion-arrow" id="mh-' + acc.key + '-arrow">▼</span>';
-      wrap.appendChild(header);
-
-      var content = document.createElement('div');
-      content.className = 'accordion-content';
-      content.id = 'mh-' + acc.key + '-content';
-      var hasVisibleChild = false;
-      for (var c = 0; c < acc.children.length; c++) {
-        var ch = acc.children[c];
-        if (hiddenSet[ch.key]) continue; // 生成しない
-        hasVisibleChild = true;
-        var item = document.createElement('a');
-        item.href = '#';
-        item.className = 'accordion-item';
-        if (ch.id) item.id = ch.id;
-        item.setAttribute('tabindex', '-1');
-        item.onclick = (function(p) { return function() { navigateToPage(p); return false; }; })(ch.page);
-        item.innerHTML = '<img src="/images/menu-icons/' + ch.icon + '" alt="" style="width:28px;height:28px;margin-right:8px;vertical-align:middle;">' + ch.label;
-        content.appendChild(item);
+    if (isStaff) {
+      var raw = localStorage.getItem('reborn_hidden_menus');
+      if (raw) {
+        // キャッシュあり → 即時構築（フリッカーなし）
+        var hiddenSet = { 'config-product': true };
+        try {
+          var cached = JSON.parse(raw);
+          for (var i = 0; i < cached.length; i++) hiddenSet[cached[i]] = true;
+        } catch(e) {}
+        _mhBuildMenuGrid(hiddenSet);
+      } else {
+        // キャッシュなし → メニューを生成しない。Firestore応答後に構築。
+        console.log('[SPA menu_home] キャッシュなし、Firestore応答待ち');
+        _mhWaitingForFirestore = true;
       }
-      wrap.appendChild(content);
-      if (hasVisibleChild) frag.appendChild(wrap);
+    } else {
+      // owner → 全メニュー表示
+      _mhBuildMenuGrid({});
     }
 
-    grid.appendChild(frag);
-
-    // Firestore権限チェック + バッジ取得（バックグラウンド）
+    // Firestore権限チェック + バッジ取得
     _mhCheckPermissionAndBadges();
   }
 
@@ -330,20 +349,28 @@
         var hiddenMenus = [];
         for (var menuId in _mhMenuIdMap) {
           var menuPerm = menuPermissions[menuId];
-          var element = document.getElementById(_mhMenuIdMap[menuId]);
-          if (!element) continue;
           if (permissionId === 'owner') continue; // ownerは全表示
           var isVisible = menuPerm
             ? (!menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId))
             : (_mhDefaultOwnerOnly.indexOf(menuId) === -1);
           if (!isVisible) {
-            element.style.display = 'none';
             hiddenMenus.push(menuId);
-            console.log('[SPA menu_home] 非表示: ' + menuId + ' (permissionId=' + permissionId + ')');
+            // 既にDOMにある場合は非表示にする
+            var element = document.getElementById(_mhMenuIdMap[menuId]);
+            if (element) element.style.display = 'none';
           }
         }
-        // v587: 非表示メニューをキャッシュ（次回即時適用用）
+        // キャッシュ保存（次回即時適用用）
         localStorage.setItem('reborn_hidden_menus', JSON.stringify(hiddenMenus));
+
+        // Firestore待ちだった場合 → ここで初めてメニューを構築
+        if (_mhWaitingForFirestore) {
+          _mhWaitingForFirestore = false;
+          var hiddenSet = { 'config-product': true };
+          for (var h = 0; h < hiddenMenus.length; h++) hiddenSet[hiddenMenus[h]] = true;
+          _mhBuildMenuGrid(hiddenSet);
+          console.log('[SPA menu_home] Firestore応答後にメニュー構築完了');
+        }
       }
 
       // バッジ取得（Todo未完了 + チャット未読）
