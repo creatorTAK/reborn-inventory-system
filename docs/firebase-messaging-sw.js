@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v347';  // v347: ナビゲーション時ネットワーク強制取得（HTTPキャッシュ問題修正）
+const CACHE_VERSION = 'v348';  // v348: 商品登録画面の入力欄幅統一
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
