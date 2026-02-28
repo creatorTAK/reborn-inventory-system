@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v346';  // v346: ホームメニューフリッカー修正（キャッシュ更新必須）
+const CACHE_VERSION = 'v347';  // v347: ナビゲーション時ネットワーク強制取得（HTTPキャッシュ問題修正）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -691,14 +691,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ⚠️ HTML/JS/CSS: キャッシュを完全にバイパス（Service Workerは介入しない）
-  // これにより、ブラウザは常にサーバーから最新版を取得する
-  if (event.request.mode === 'navigate' ||
-      url.pathname.endsWith('.html') ||
+  // ★ ナビゲーション（index.html）: ネットワーク強制取得（cache:no-store）
+  // iOS PWAタスクキル後にHTTPキャッシュから古いHTMLが返される問題の根本対策
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .catch(() => {
+          // オフライン時: キャッシュがあれば返す
+          return caches.match('/index.html') || caches.match('/');
+        })
+    );
+    return;
+  }
+
+  // その他HTML/JS/CSS: キャッシュを完全にバイパス（SWは介入しない）
+  if (url.pathname.endsWith('.html') ||
       url.pathname === '/' ||
       !url.pathname.includes('.') ||
       url.pathname.match(/\.(js|css)$/)) {
-    // Service Workerは何もしない = ブラウザのデフォルト動作（サーバーにリクエスト）
     return;
   }
 
