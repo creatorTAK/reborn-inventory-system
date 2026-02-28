@@ -321,6 +321,7 @@ async function getProductListFromFirestore(filters = {}) {
         registeredAt: data.registeredAt || '',
         lastEditor: data.lastEditor || '',
         updatedAt: data.updatedAt || '',
+        rank: data.rank || null,
         imageUrl1: data.imageUrl1 || '',
         images: data.images?.imageUrls || data.images || [],
         searchText: data.searchText || ''
@@ -425,6 +426,8 @@ async function getProductByManagementNumber(managementNumber) {
         profit: data.profit || 0,
         profitRate: data.profitRate || '',
         inventoryDays: data.inventoryDays || 0,
+        // ランク: Firestoreから取得、なければ商品の状態から自動変換
+        rank: data.rank || null,
         // 画像: オブジェクト{imageUrls}・配列・個別フィールドに対応
         images: data.images?.imageUrls || (Array.isArray(data.images) ? data.images : []),
         imageUrl1: data.imageUrl1 || '',
