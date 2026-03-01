@@ -670,6 +670,7 @@
 
     <!-- 帳簿出力タブ -->
     <div class="acct-tab-pane" id="acct-tab-export">
+      <!-- 1. 帳簿データ出力（既存） -->
       <div class="acct-card-section">
         <h6><i class="bi bi-file-earmark-arrow-down"></i> 帳簿データ出力</h6>
         <p class="text-muted small" style="margin-bottom:16px;">確定申告に必要な帳簿をCSV形式でダウンロードできます。</p>
@@ -696,52 +697,145 @@
         </button>
       </div>
 
-      <!-- 青色申告用データ -->
+      <!-- 2. 仕訳帳（機能A） -->
       <div class="acct-card-section">
-        <h6><i class="bi bi-file-earmark-ruled"></i> 青色申告決算書用データ</h6>
+        <h6><i class="bi bi-journal-text"></i> 仕訳帳</h6>
         <div class="acct-alert-info">
-          <i class="bi bi-info-circle"></i> 青色申告特別控除（最大65万円）を受けるには、複式簿記での記帳が必要です。
+          <i class="bi bi-info-circle"></i> 三分法に基づく複式簿記の仕訳帳を自動生成します。
+        </div>
+        <div id="acct-journal-summary" style="margin-bottom:12px;">
+          <div class="acct-row" style="margin-bottom:4px;">
+            <div class="acct-col"><div class="acct-expense-category"><div class="acct-d-flex acct-justify-between"><span>販売仕訳</span><span class="fw-bold" id="acct-journal-sales-count">0件</span></div></div></div>
+            <div class="acct-col"><div class="acct-expense-category"><div class="acct-d-flex acct-justify-between"><span>仕入仕訳</span><span class="fw-bold" id="acct-journal-purchase-count">0件</span></div></div></div>
+          </div>
+          <div class="acct-row">
+            <div class="acct-col"><div class="acct-expense-category"><div class="acct-d-flex acct-justify-between"><span>経費仕訳</span><span class="fw-bold" id="acct-journal-expense-count">0件</span></div></div></div>
+            <div class="acct-col"><div class="acct-expense-category"><div class="acct-d-flex acct-justify-between"><span>棚卸仕訳</span><span class="fw-bold" id="acct-journal-inventory-count">0件</span></div></div></div>
+          </div>
+          <div style="margin-top:8px;font-size:13px;color:#6b7280;">
+            合計: <span id="acct-journal-total-count" class="fw-bold">0</span>件
+            ｜ 借方合計: <span id="acct-journal-debit-total" class="fw-bold">-</span>
+            ｜ 貸方合計: <span id="acct-journal-credit-total" class="fw-bold">-</span>
+          </div>
+        </div>
+        <button class="acct-btn-outline-primary w-100" onclick="acctDownloadJournal()">
+          <i class="bi bi-download"></i> 仕訳帳CSVダウンロード
+        </button>
+      </div>
+
+      <!-- 3. 青色申告決算書（機能B） -->
+      <div class="acct-card-section">
+        <h6><i class="bi bi-file-earmark-ruled"></i> 青色申告決算書</h6>
+
+        <!-- 損益計算書 -->
+        <div style="font-size:13px;font-weight:600;color:#2563eb;margin-bottom:8px;"><i class="bi bi-1-circle"></i> 損益計算書</div>
+
+        <div class="acct-pl-row">
+          <span class="acct-pl-label">売上（収入）金額</span>
+          <span class="acct-pl-amount" id="acct-br-sales">-</span>
         </div>
 
-        <div class="acct-row" style="margin-bottom:8px;">
-          <div class="acct-col">
-            <div class="acct-expense-category">
-              <div class="acct-d-flex acct-justify-between">
-                <span>売上金額</span>
-                <span class="fw-bold" id="acct-blue-sales">-</span>
-              </div>
-            </div>
-          </div>
-          <div class="acct-col">
-            <div class="acct-expense-category">
-              <div class="acct-d-flex acct-justify-between">
-                <span>仕入金額</span>
-                <span class="fw-bold" id="acct-blue-purchase">-</span>
-              </div>
-            </div>
-          </div>
+        <div style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;">【売上原価】</div>
+        <div class="acct-pl-row" style="padding-left:16px;">
+          <span class="acct-pl-label">期首商品棚卸高</span>
+          <span class="acct-pl-amount">
+            <input type="number" id="acct-br-opening-inventory" placeholder="0" style="width:100px;padding:4px 8px;font-size:14px;text-align:right;border:1px solid #d1d5db;border-radius:4px;" onchange="acctSaveOpeningInventory();acctUpdateBlueReturnSection()">
+          </span>
         </div>
-        <div class="acct-row">
+        <div class="acct-pl-row" style="padding-left:16px;">
+          <span class="acct-pl-label">仕入金額</span>
+          <span class="acct-pl-amount" id="acct-br-purchase">-</span>
+        </div>
+        <div class="acct-pl-row" style="padding-left:16px;">
+          <span class="acct-pl-label">期末商品棚卸高</span>
+          <span class="acct-pl-amount" id="acct-br-closing-inventory">-</span>
+        </div>
+        <div class="acct-pl-row total">
+          <span class="acct-pl-label">差引原価</span>
+          <span class="acct-pl-amount" id="acct-br-cogs">-</span>
+        </div>
+        <div class="acct-pl-row total" style="background:#ecfdf5;">
+          <span class="acct-pl-label">差引金額（粗利）</span>
+          <span class="acct-pl-amount" id="acct-br-gross-profit">-</span>
+        </div>
+
+        <div style="padding:8px 0;font-size:13px;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;margin-top:8px;">【経費内訳】</div>
+        <div id="acct-br-expense-breakdown"></div>
+        <div class="acct-pl-row total">
+          <span class="acct-pl-label">経費合計</span>
+          <span class="acct-pl-amount" id="acct-br-total-expense">-</span>
+        </div>
+
+        <div class="acct-pl-row total" style="background:#eff6ff;margin-top:8px;">
+          <span class="acct-pl-label" style="font-size:16px;">所得金額</span>
+          <span class="acct-pl-amount" id="acct-br-income" style="font-size:16px;color:#2563eb;">-</span>
+        </div>
+
+        <!-- 月別売上・仕入 -->
+        <div style="font-size:13px;font-weight:600;color:#2563eb;margin:16px 0 8px;"><i class="bi bi-2-circle"></i> 月別売上・仕入</div>
+        <div class="table-responsive">
+          <table class="acct-data-table" id="acct-br-monthly-table">
+            <thead>
+              <tr><th>月</th><th class="text-end">売上</th><th class="text-end">仕入</th></tr>
+            </thead>
+            <tbody id="acct-br-monthly-tbody"></tbody>
+            <tfoot>
+              <tr style="font-weight:700;border-top:2px solid #e5e7eb;">
+                <td>合計</td>
+                <td class="text-end" id="acct-br-monthly-sales-total">-</td>
+                <td class="text-end" id="acct-br-monthly-purchase-total">-</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- CSV出力ボタン群 -->
+        <div class="acct-row" style="margin-top:12px;">
           <div class="acct-col">
-            <div class="acct-expense-category">
-              <div class="acct-d-flex acct-justify-between">
-                <span>経費合計</span>
-                <span class="fw-bold" id="acct-blue-expense">-</span>
-              </div>
-            </div>
+            <button class="acct-btn-outline-primary w-100" onclick="acctDownloadBlueReturn('pl')" style="font-size:13px;">
+              <i class="bi bi-download"></i><br>損益計算書
+            </button>
           </div>
           <div class="acct-col">
-            <div class="acct-expense-category">
-              <div class="acct-d-flex acct-justify-between">
-                <span>期末棚卸高</span>
-                <span class="fw-bold" id="acct-blue-inventory">-</span>
-              </div>
-            </div>
+            <button class="acct-btn-outline-primary w-100" onclick="acctDownloadBlueReturn('monthly')" style="font-size:13px;">
+              <i class="bi bi-download"></i><br>月別データ
+            </button>
+          </div>
+          <div class="acct-col">
+            <button class="acct-btn-outline-primary w-100" onclick="acctDownloadBlueReturn('all')" style="font-size:13px;">
+              <i class="bi bi-download"></i><br>一括
+            </button>
           </div>
         </div>
       </div>
 
-      <!-- チェックリスト -->
+      <!-- 4. e-Tax連携用データ（機能C） -->
+      <div class="acct-card-section">
+        <h6><i class="bi bi-bank"></i> e-Tax転記用データ</h6>
+        <div class="acct-alert-info">
+          <i class="bi bi-info-circle"></i> e-Taxの入力フォームに転記するための参照データです。各項目にe-Tax上の欄番号（ア〜ノ等）を併記しています。
+        </div>
+        <div id="acct-etax-preview" style="margin-bottom:12px;"></div>
+        <div class="acct-row">
+          <div class="acct-col">
+            <button class="acct-btn-outline-primary w-100" onclick="acctDownloadEtax('pl')" style="font-size:13px;">
+              <i class="bi bi-download"></i><br>損益計算書
+            </button>
+          </div>
+          <div class="acct-col">
+            <button class="acct-btn-outline-primary w-100" onclick="acctDownloadEtax('monthly')" style="font-size:13px;">
+              <i class="bi bi-download"></i><br>月別
+            </button>
+          </div>
+          <div class="acct-col">
+            <button class="acct-btn-outline-primary w-100" onclick="acctDownloadEtax('all')" style="font-size:13px;">
+              <i class="bi bi-download"></i><br>一括
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. チェックリスト -->
       <div class="acct-card-section">
         <h6><i class="bi bi-check2-square"></i> 確定申告チェックリスト</h6>
         <div class="acct-check-item">
@@ -759,6 +853,18 @@
         <div class="acct-check-item">
           <input type="checkbox" id="acct-check4">
           <label for="acct-check4">領収書・請求書の整理完了</label>
+        </div>
+        <div class="acct-check-item">
+          <input type="checkbox" id="acct-check5">
+          <label for="acct-check5">仕訳帳の確認・ダウンロード</label>
+        </div>
+        <div class="acct-check-item">
+          <input type="checkbox" id="acct-check6">
+          <label for="acct-check6">青色申告決算書の確認</label>
+        </div>
+        <div class="acct-check-item">
+          <input type="checkbox" id="acct-check7">
+          <label for="acct-check7">e-Taxデータの転記完了</label>
         </div>
       </div>
     </div>
@@ -1248,26 +1354,576 @@
     }
 
     function acctUpdateExportTab(startDate, endDate) {
-      var soldProducts = _acctCurrentProducts.filter(function(p) {
-        var saleDate = p.saleDate || '';
-        return p.status === '\u8CA9\u58F2\u6E08' && saleDate >= startDate && saleDate <= endDate;
-      });
-      var purchasedProducts = _acctCurrentProducts.filter(function(p) {
-        var purchaseDate = (p.purchase && p.purchase.date) || p.purchaseDate || '';
-        return purchaseDate >= startDate && purchaseDate <= endDate;
-      });
-      var inventoryProducts = _acctCurrentProducts.filter(function(p) { return p.status !== '\u8CA9\u58F2\u6E08'; });
+      acctUpdateJournalPreview(startDate, endDate);
+      acctLoadOpeningInventory();
+      acctUpdateBlueReturnSection();
+      acctUpdateEtaxPreview();
+    }
 
-      var totalSales = soldProducts.reduce(function(sum, p) { return sum + (parseFloat(p.saleAmount) || 0); }, 0);
-      var totalPurchase = purchasedProducts.reduce(function(sum, p) { return sum + (parseFloat((p.purchase && p.purchase.amount) || p.purchaseAmount) || 0); }, 0);
-      var totalExpense = _acctCurrentExpenses.reduce(function(sum, e) { return sum + (parseFloat(e.amount) || 0); }, 0);
-      var totalInventory = inventoryProducts.reduce(function(sum, p) { return sum + (parseFloat((p.purchase && p.purchase.amount) || p.purchaseAmount) || 0); }, 0);
+    // ============================================
+    // 機能A: 仕訳帳
+    // ============================================
+
+    function acctGetPurchaseDate(p) {
+      return (p.purchase && p.purchase.date) || p.purchaseDate || '';
+    }
+    function acctGetPurchaseAmount(p) {
+      return parseFloat((p.purchase && p.purchase.amount) || p.purchaseAmount) || 0;
+    }
+
+    function acctGenerateJournalEntries(startDate, endDate) {
+      var entries = [];
+
+      // 販売仕訳: 借方=売掛金, 貸方=売上
+      var sold = _acctCurrentProducts.filter(function(p) {
+        var sd = p.saleDate || '';
+        return p.status === '\u8CA9\u58F2\u6E08' && sd >= startDate && sd <= endDate;
+      });
+      sold.forEach(function(p) {
+        var amt = parseFloat(p.saleAmount) || 0;
+        entries.push({
+          date: p.saleDate || '',
+          debitAccount: '\u58F2\u639B\u91D1',
+          debitAmount: amt,
+          creditAccount: '\u58F2\u4E0A',
+          creditAmount: amt,
+          summary: (p.managementNumber || '') + ' ' + (p.salePlatform || ''),
+          type: 'sales'
+        });
+      });
+
+      // 仕入仕訳: 借方=仕入高, 貸方=現金
+      var purchased = _acctCurrentProducts.filter(function(p) {
+        var d = acctGetPurchaseDate(p);
+        return d >= startDate && d <= endDate;
+      });
+      purchased.forEach(function(p) {
+        var amt = acctGetPurchaseAmount(p);
+        entries.push({
+          date: acctGetPurchaseDate(p),
+          debitAccount: '\u4ED5\u5165\u9AD8',
+          debitAmount: amt,
+          creditAccount: '\u73FE\u91D1',
+          creditAmount: amt,
+          summary: (p.managementNumber || '') + ' ' + (p.supplier || ''),
+          type: 'purchase'
+        });
+      });
+
+      // 経費仕訳: 借方=勘定科目, 貸方=現金
+      _acctCurrentExpenses.forEach(function(e) {
+        var amt = parseFloat(e.amount) || 0;
+        entries.push({
+          date: e.date || '',
+          debitAccount: e.category || '\u96D1\u8CBB',
+          debitAmount: amt,
+          creditAccount: '\u73FE\u91D1',
+          creditAmount: amt,
+          summary: e.note || '',
+          type: 'expense'
+        });
+      });
+
+      // 棚卸仕訳
+      var openingInv = acctGetOpeningInventoryValue();
+      var closingInv = acctCalcClosingInventory();
+
+      if (openingInv > 0) {
+        entries.push({
+          date: startDate,
+          debitAccount: '\u4ED5\u5165\u9AD8',
+          debitAmount: openingInv,
+          creditAccount: '\u7E70\u8D8A\u5546\u54C1',
+          creditAmount: openingInv,
+          summary: '\u671F\u9996\u68DA\u5378\u9AD8',
+          type: 'inventory'
+        });
+      }
+      if (closingInv > 0) {
+        entries.push({
+          date: endDate,
+          debitAccount: '\u7E70\u8D8A\u5546\u54C1',
+          debitAmount: closingInv,
+          creditAccount: '\u4ED5\u5165\u9AD8',
+          creditAmount: closingInv,
+          summary: '\u671F\u672B\u68DA\u5378\u9AD8',
+          type: 'inventory'
+        });
+      }
+
+      // 日付順ソート
+      entries.sort(function(a, b) { return a.date.localeCompare(b.date); });
+      return entries;
+    }
+
+    function acctUpdateJournalPreview(startDate, endDate) {
+      var entries = acctGenerateJournalEntries(startDate, endDate);
+      var salesCount = entries.filter(function(e) { return e.type === 'sales'; }).length;
+      var purchaseCount = entries.filter(function(e) { return e.type === 'purchase'; }).length;
+      var expenseCount = entries.filter(function(e) { return e.type === 'expense'; }).length;
+      var inventoryCount = entries.filter(function(e) { return e.type === 'inventory'; }).length;
+
+      var debitTotal = entries.reduce(function(sum, e) { return sum + e.debitAmount; }, 0);
+      var creditTotal = entries.reduce(function(sum, e) { return sum + e.creditAmount; }, 0);
 
       var el;
-      el = document.getElementById('acct-blue-sales'); if (el) el.textContent = acctFormatCurrency(totalSales);
-      el = document.getElementById('acct-blue-purchase'); if (el) el.textContent = acctFormatCurrency(totalPurchase);
-      el = document.getElementById('acct-blue-expense'); if (el) el.textContent = acctFormatCurrency(totalExpense);
-      el = document.getElementById('acct-blue-inventory'); if (el) el.textContent = acctFormatCurrency(totalInventory);
+      el = document.getElementById('acct-journal-sales-count'); if (el) el.textContent = salesCount + '\u4EF6';
+      el = document.getElementById('acct-journal-purchase-count'); if (el) el.textContent = purchaseCount + '\u4EF6';
+      el = document.getElementById('acct-journal-expense-count'); if (el) el.textContent = expenseCount + '\u4EF6';
+      el = document.getElementById('acct-journal-inventory-count'); if (el) el.textContent = inventoryCount + '\u4EF6';
+      el = document.getElementById('acct-journal-total-count'); if (el) el.textContent = entries.length;
+      el = document.getElementById('acct-journal-debit-total'); if (el) el.textContent = acctFormatCurrency(debitTotal);
+      el = document.getElementById('acct-journal-credit-total'); if (el) el.textContent = acctFormatCurrency(creditTotal);
+    }
+
+    function acctDownloadJournal() {
+      var startDate = _acctCurrentYear + '-01-01';
+      var endDate = _acctCurrentYear + '-12-31';
+      var entries = acctGenerateJournalEntries(startDate, endDate);
+      if (entries.length === 0) { alert('\u4ED5\u8A33\u30C7\u30FC\u30BF\u304C\u3042\u308A\u307E\u305B\u3093'); return; }
+
+      var csv = '\u4ED5\u8A33\u5E33\uFF08' + _acctCurrentYear + '\u5E74\uFF09\n\n';
+      csv += '\u65E5\u4ED8,\u501F\u65B9\u79D1\u76EE,\u501F\u65B9\u91D1\u984D,\u8CB8\u65B9\u79D1\u76EE,\u8CB8\u65B9\u91D1\u984D,\u6458\u8981\n';
+      entries.forEach(function(e) {
+        csv += [e.date, e.debitAccount, e.debitAmount, e.creditAccount, e.creditAmount, '"' + (e.summary || '').replace(/"/g, '""') + '"'].join(',') + '\n';
+      });
+
+      var debitTotal = entries.reduce(function(s, e) { return s + e.debitAmount; }, 0);
+      var creditTotal = entries.reduce(function(s, e) { return s + e.creditAmount; }, 0);
+      csv += '\n\u5408\u8A08,,' + debitTotal + ',,' + creditTotal + ',\n';
+
+      acctDownloadCSV(csv, '\u4ED5\u8A33\u5E33_' + _acctCurrentYear + '\u5E74.csv');
+    }
+
+    // ============================================
+    // 機能B: 青色申告決算書
+    // ============================================
+
+    function acctGetOpeningInventoryValue() {
+      var key = 'reborn_opening_inventory_' + _acctCurrentYear;
+      return parseFloat(localStorage.getItem(key)) || 0;
+    }
+
+    function acctSaveOpeningInventory() {
+      var input = document.getElementById('acct-br-opening-inventory');
+      if (!input) return;
+      var key = 'reborn_opening_inventory_' + _acctCurrentYear;
+      var val = parseFloat(input.value) || 0;
+      localStorage.setItem(key, val);
+    }
+
+    function acctLoadOpeningInventory() {
+      var input = document.getElementById('acct-br-opening-inventory');
+      if (!input) return;
+      var val = acctGetOpeningInventoryValue();
+      input.value = val > 0 ? val : '';
+    }
+
+    function acctCalcClosingInventory() {
+      // 期末棚卸高 = 未販売品の仕入額合計
+      return _acctCurrentProducts.filter(function(p) {
+        return p.status !== '\u8CA9\u58F2\u6E08';
+      }).reduce(function(sum, p) {
+        return sum + acctGetPurchaseAmount(p);
+      }, 0);
+    }
+
+    function acctUpdateBlueReturnSection() {
+      var startDate = _acctCurrentYear + '-01-01';
+      var endDate = _acctCurrentYear + '-12-31';
+
+      // 売上
+      var sold = _acctCurrentProducts.filter(function(p) {
+        var sd = p.saleDate || '';
+        return p.status === '\u8CA9\u58F2\u6E08' && sd >= startDate && sd <= endDate;
+      });
+      var totalSales = sold.reduce(function(sum, p) { return sum + (parseFloat(p.saleAmount) || 0); }, 0);
+
+      // 仕入
+      var purchased = _acctCurrentProducts.filter(function(p) {
+        var d = acctGetPurchaseDate(p);
+        return d >= startDate && d <= endDate;
+      });
+      var totalPurchase = purchased.reduce(function(sum, p) { return sum + acctGetPurchaseAmount(p); }, 0);
+
+      // 棚卸
+      var openingInv = acctGetOpeningInventoryValue();
+      var closingInv = acctCalcClosingInventory();
+
+      // 売上原価 = 期首 + 仕入 - 期末
+      var cogs = openingInv + totalPurchase - closingInv;
+      var grossProfit = totalSales - cogs;
+
+      // 経費内訳（勘定科目ごと集計）
+      var expenseByCategory = {};
+      var totalExpense = 0;
+      _acctCurrentExpenses.forEach(function(e) {
+        var cat = e.category || '\u96D1\u8CBB';
+        var amt = parseFloat(e.amount) || 0;
+        expenseByCategory[cat] = (expenseByCategory[cat] || 0) + amt;
+        totalExpense += amt;
+      });
+
+      var income = grossProfit - totalExpense;
+
+      // DOM更新
+      var el;
+      el = document.getElementById('acct-br-sales'); if (el) el.textContent = acctFormatCurrency(totalSales);
+      el = document.getElementById('acct-br-purchase'); if (el) el.textContent = acctFormatCurrency(totalPurchase);
+      el = document.getElementById('acct-br-closing-inventory'); if (el) el.textContent = acctFormatCurrency(closingInv);
+      el = document.getElementById('acct-br-cogs'); if (el) el.textContent = acctFormatCurrency(cogs);
+      el = document.getElementById('acct-br-gross-profit'); if (el) {
+        el.textContent = acctFormatCurrency(grossProfit);
+        el.className = 'acct-pl-amount ' + (grossProfit >= 0 ? 'positive' : 'negative');
+      }
+
+      // 経費内訳
+      var breakdownEl = document.getElementById('acct-br-expense-breakdown');
+      if (breakdownEl) {
+        var cats = Object.keys(expenseByCategory).sort();
+        var html = '';
+        cats.forEach(function(cat) {
+          html += '<div class="acct-pl-row" style="padding-left:16px;"><span class="acct-pl-label">' + cat + '</span><span class="acct-pl-amount">' + acctFormatCurrency(expenseByCategory[cat]) + '</span></div>';
+        });
+        if (cats.length === 0) {
+          html = '<div style="padding:8px 16px;font-size:13px;color:#9ca3af;">経費データなし</div>';
+        }
+        breakdownEl.innerHTML = html;
+      }
+
+      el = document.getElementById('acct-br-total-expense'); if (el) el.textContent = acctFormatCurrency(totalExpense);
+      el = document.getElementById('acct-br-income'); if (el) {
+        el.textContent = acctFormatCurrency(income);
+        el.className = 'acct-pl-amount ' + (income >= 0 ? '' : 'negative');
+        el.style.fontSize = '16px';
+        el.style.color = income >= 0 ? '#2563eb' : '#ef4444';
+      }
+
+      // 月別売上・仕入
+      acctUpdateMonthlyTable(startDate, endDate, totalSales, totalPurchase);
+    }
+
+    function acctUpdateMonthlyTable(startDate, endDate, annualSales, annualPurchase) {
+      var tbody = document.getElementById('acct-br-monthly-tbody');
+      if (!tbody) return;
+
+      var monthlySales = {};
+      var monthlyPurchase = {};
+      for (var m = 1; m <= 12; m++) {
+        monthlySales[m] = 0;
+        monthlyPurchase[m] = 0;
+      }
+
+      _acctCurrentProducts.forEach(function(p) {
+        // 売上
+        if (p.status === '\u8CA9\u58F2\u6E08') {
+          var sd = p.saleDate || '';
+          if (sd >= startDate && sd <= endDate) {
+            var sMonth = parseInt(sd.substring(5, 7));
+            monthlySales[sMonth] += parseFloat(p.saleAmount) || 0;
+          }
+        }
+        // 仕入
+        var pd = acctGetPurchaseDate(p);
+        if (pd >= startDate && pd <= endDate) {
+          var pMonth = parseInt(pd.substring(5, 7));
+          monthlyPurchase[pMonth] += acctGetPurchaseAmount(p);
+        }
+      });
+
+      var html = '';
+      var salesTotal = 0;
+      var purchaseTotal = 0;
+      for (var i = 1; i <= 12; i++) {
+        salesTotal += monthlySales[i];
+        purchaseTotal += monthlyPurchase[i];
+        html += '<tr><td>' + i + '\u6708</td><td class="text-end">' + acctFormatCurrency(monthlySales[i]) + '</td><td class="text-end">' + acctFormatCurrency(monthlyPurchase[i]) + '</td></tr>';
+      }
+      tbody.innerHTML = html;
+
+      var el;
+      el = document.getElementById('acct-br-monthly-sales-total'); if (el) el.textContent = acctFormatCurrency(salesTotal);
+      el = document.getElementById('acct-br-monthly-purchase-total'); if (el) el.textContent = acctFormatCurrency(purchaseTotal);
+    }
+
+    function acctDownloadBlueReturn(type) {
+      var startDate = _acctCurrentYear + '-01-01';
+      var endDate = _acctCurrentYear + '-12-31';
+      var bom = '\uFEFF';
+      var csv = '';
+      var filename = '';
+
+      if (type === 'pl' || type === 'all') {
+        csv += acctGeneratePLCSV(startDate, endDate);
+      }
+      if (type === 'monthly' || type === 'all') {
+        if (csv) csv += '\n\n';
+        csv += acctGenerateMonthlyCSV(startDate, endDate);
+      }
+
+      if (type === 'pl') filename = '\u640D\u76CA\u8A08\u7B97\u66F8_' + _acctCurrentYear + '\u5E74.csv';
+      else if (type === 'monthly') filename = '\u6708\u5225\u58F2\u4E0A\u4ED5\u5165_' + _acctCurrentYear + '\u5E74.csv';
+      else filename = '\u9752\u8272\u7533\u544A\u6C7A\u7B97\u66F8_' + _acctCurrentYear + '\u5E74.csv';
+
+      acctDownloadCSV(csv, filename);
+    }
+
+    function acctGeneratePLCSV(startDate, endDate) {
+      var sold = _acctCurrentProducts.filter(function(p) {
+        var sd = p.saleDate || '';
+        return p.status === '\u8CA9\u58F2\u6E08' && sd >= startDate && sd <= endDate;
+      });
+      var totalSales = sold.reduce(function(s, p) { return s + (parseFloat(p.saleAmount) || 0); }, 0);
+      var purchased = _acctCurrentProducts.filter(function(p) {
+        var d = acctGetPurchaseDate(p);
+        return d >= startDate && d <= endDate;
+      });
+      var totalPurchase = purchased.reduce(function(s, p) { return s + acctGetPurchaseAmount(p); }, 0);
+      var openingInv = acctGetOpeningInventoryValue();
+      var closingInv = acctCalcClosingInventory();
+      var cogs = openingInv + totalPurchase - closingInv;
+      var grossProfit = totalSales - cogs;
+
+      var expenseByCategory = {};
+      var totalExpense = 0;
+      _acctCurrentExpenses.forEach(function(e) {
+        var cat = e.category || '\u96D1\u8CBB';
+        var amt = parseFloat(e.amount) || 0;
+        expenseByCategory[cat] = (expenseByCategory[cat] || 0) + amt;
+        totalExpense += amt;
+      });
+
+      var csv = '\u640D\u76CA\u8A08\u7B97\u66F8\uFF08' + _acctCurrentYear + '\u5E74\uFF09\n\n';
+      csv += '\u9805\u76EE,\u91D1\u984D\n';
+      csv += '\u58F2\u4E0A\uFF08\u53CE\u5165\uFF09\u91D1\u984D,' + totalSales + '\n';
+      csv += '\u671F\u9996\u5546\u54C1\u68DA\u5378\u9AD8,' + openingInv + '\n';
+      csv += '\u4ED5\u5165\u91D1\u984D,' + totalPurchase + '\n';
+      csv += '\u671F\u672B\u5546\u54C1\u68DA\u5378\u9AD8,' + closingInv + '\n';
+      csv += '\u5DEE\u5F15\u539F\u4FA1,' + cogs + '\n';
+      csv += '\u5DEE\u5F15\u91D1\u984D\uFF08\u7C97\u5229\uFF09,' + grossProfit + '\n\n';
+      csv += '\u7D4C\u8CBB\u5185\u8A33\n';
+      csv += '\u52D8\u5B9A\u79D1\u76EE,\u91D1\u984D\n';
+      Object.keys(expenseByCategory).sort().forEach(function(cat) {
+        csv += '"' + cat + '",' + expenseByCategory[cat] + '\n';
+      });
+      csv += '\u7D4C\u8CBB\u5408\u8A08,' + totalExpense + '\n\n';
+      csv += '\u6240\u5F97\u91D1\u984D,' + (grossProfit - totalExpense) + '\n';
+      return csv;
+    }
+
+    function acctGenerateMonthlyCSV(startDate, endDate) {
+      var monthlySales = {};
+      var monthlyPurchase = {};
+      for (var m = 1; m <= 12; m++) { monthlySales[m] = 0; monthlyPurchase[m] = 0; }
+
+      _acctCurrentProducts.forEach(function(p) {
+        if (p.status === '\u8CA9\u58F2\u6E08') {
+          var sd = p.saleDate || '';
+          if (sd >= startDate && sd <= endDate) {
+            monthlySales[parseInt(sd.substring(5, 7))] += parseFloat(p.saleAmount) || 0;
+          }
+        }
+        var pd = acctGetPurchaseDate(p);
+        if (pd >= startDate && pd <= endDate) {
+          monthlyPurchase[parseInt(pd.substring(5, 7))] += acctGetPurchaseAmount(p);
+        }
+      });
+
+      var csv = '\u6708\u5225\u58F2\u4E0A\u30FB\u4ED5\u5165\uFF08' + _acctCurrentYear + '\u5E74\uFF09\n\n';
+      csv += '\u6708,\u58F2\u4E0A,\u4ED5\u5165\n';
+      var sTotal = 0, pTotal = 0;
+      for (var i = 1; i <= 12; i++) {
+        sTotal += monthlySales[i];
+        pTotal += monthlyPurchase[i];
+        csv += i + '\u6708,' + monthlySales[i] + ',' + monthlyPurchase[i] + '\n';
+      }
+      csv += '\u5408\u8A08,' + sTotal + ',' + pTotal + '\n';
+      return csv;
+    }
+
+    // ============================================
+    // 機能C: e-Tax転記用データ
+    // ============================================
+
+    // e-Tax欄番号マッピング（青色申告決算書）
+    var ACCT_ETAX_EXPENSE_MAP = {
+      '\u8377\u9020\u904B\u8CC3': { code: '\u30B7', label: '\u30B7\u6B04\uFF08\u8377\u9020\u904B\u8CC3\uFF09' },
+      '\u901A\u4FE1\u8CBB': { code: '\u30C4', label: '\u30C4\u6B04\uFF08\u901A\u4FE1\u8CBB\uFF09' },
+      '\u5E83\u544A\u5BA3\u4F1D\u8CBB': { code: '\u30C6', label: '\u30C6\u6B04\uFF08\u5E83\u544A\u5BA3\u4F1D\u8CBB\uFF09' },
+      '\u6D88\u8017\u54C1\u8CBB': { code: '\u30CA', label: '\u30CA\u6B04\uFF08\u6D88\u8017\u54C1\u8CBB\uFF09' },
+      '\u65C5\u8CBB\u4EA4\u901A\u8CBB': { code: '\u30BF', label: '\u30BF\u6B04\uFF08\u65C5\u8CBB\u4EA4\u901A\u8CBB\uFF09' },
+      '\u63A5\u5F85\u4EA4\u969B\u8CBB': { code: '\u30C1', label: '\u30C1\u6B04\uFF08\u63A5\u5F85\u4EA4\u969B\u8CBB\uFF09' },
+      '\u640D\u5BB3\u4FDD\u967A\u6599': { code: '\u30C8', label: '\u30C8\u6B04\uFF08\u640D\u5BB3\u4FDD\u967A\u6599\uFF09' },
+      '\u4FEE\u7E55\u8CBB': { code: '\u30CB', label: '\u30CB\u6B04\uFF08\u4FEE\u7E55\u8CBB\uFF09' },
+      '\u6C34\u9053\u5149\u71B1\u8CBB': { code: '\u30CC', label: '\u30CC\u6B04\uFF08\u6C34\u9053\u5149\u71B1\u8CBB\uFF09' },
+      '\u5730\u4EE3\u5BB6\u8CC3': { code: '\u30CD', label: '\u30CD\u6B04\uFF08\u5730\u4EE3\u5BB6\u8CC3\uFF09' },
+      '\u96D1\u8CBB': { code: '\u30E2', label: '\u30E2\u6B04\uFF08\u96D1\u8CBB\uFF09' },
+      '\u5916\u6CE8\u5DE5\u8CC3': { code: '\u30B9', label: '\u30B9\u6B04\uFF08\u5916\u6CE8\u5DE5\u8CC3\uFF09' },
+      '\u6E1B\u4FA1\u511F\u5374\u8CBB': { code: '\u30CC', label: '\u30CC\u6B04\uFF08\u6E1B\u4FA1\u511F\u5374\u8CBB\uFF09' },
+      '\u798F\u5229\u539A\u751F\u8CBB': { code: '\u30BD', label: '\u30BD\u6B04\uFF08\u798F\u5229\u539A\u751F\u8CBB\uFF09' },
+      '\u7D66\u6599\u8CC3\u91D1': { code: '\u30B5', label: '\u30B5\u6B04\uFF08\u7D66\u6599\u8CC3\u91D1\uFF09' },
+      '\u5229\u5B50\u5272\u5F15\u6599': { code: '\u30CE', label: '\u30CE\u6B04\uFF08\u5229\u5B50\u5272\u5F15\u6599\uFF09' },
+      '\u65B0\u805E\u56F3\u66F8\u8CBB': { code: '\u30C0', label: '\u30C0\u6B04\uFF08\u65B0\u805E\u56F3\u66F8\u8CBB\uFF09' }
+    };
+
+    function acctUpdateEtaxPreview() {
+      var previewEl = document.getElementById('acct-etax-preview');
+      if (!previewEl) return;
+
+      var startDate = _acctCurrentYear + '-01-01';
+      var endDate = _acctCurrentYear + '-12-31';
+
+      var sold = _acctCurrentProducts.filter(function(p) {
+        var sd = p.saleDate || '';
+        return p.status === '\u8CA9\u58F2\u6E08' && sd >= startDate && sd <= endDate;
+      });
+      var totalSales = sold.reduce(function(s, p) { return s + (parseFloat(p.saleAmount) || 0); }, 0);
+      var openingInv = acctGetOpeningInventoryValue();
+      var purchased = _acctCurrentProducts.filter(function(p) {
+        var d = acctGetPurchaseDate(p);
+        return d >= startDate && d <= endDate;
+      });
+      var totalPurchase = purchased.reduce(function(s, p) { return s + acctGetPurchaseAmount(p); }, 0);
+      var closingInv = acctCalcClosingInventory();
+      var cogs = openingInv + totalPurchase - closingInv;
+      var grossProfit = totalSales - cogs;
+
+      var expenseByCategory = {};
+      var totalExpense = 0;
+      _acctCurrentExpenses.forEach(function(e) {
+        var cat = e.category || '\u96D1\u8CBB';
+        var amt = parseFloat(e.amount) || 0;
+        expenseByCategory[cat] = (expenseByCategory[cat] || 0) + amt;
+        totalExpense += amt;
+      });
+      var income = grossProfit - totalExpense;
+
+      var html = '<div style="font-size:12px;color:#6b7280;">';
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f4f6;"><span>\u30A2\u6B04\uFF08\u58F2\u4E0A\uFF09</span><span class="fw-bold">' + acctFormatCurrency(totalSales) + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f4f6;"><span>\u30A6\u6B04\uFF08\u671F\u9996\u68DA\u5378\u9AD8\uFF09</span><span class="fw-bold">' + acctFormatCurrency(openingInv) + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f4f6;"><span>\u30A8\u6B04\uFF08\u4ED5\u5165\u91D1\u984D\uFF09</span><span class="fw-bold">' + acctFormatCurrency(totalPurchase) + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f4f6;"><span>\u30B1\u6B04\uFF08\u671F\u672B\u68DA\u5378\u9AD8\uFF09</span><span class="fw-bold">' + acctFormatCurrency(closingInv) + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f4f6;"><span>\u30B3\u6B04\uFF08\u5DEE\u5F15\u539F\u4FA1\uFF09</span><span class="fw-bold">' + acctFormatCurrency(cogs) + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f4f6;"><span>\u30B5\u6B04\uFF08\u5DEE\u5F15\u91D1\u984D\uFF09</span><span class="fw-bold">' + acctFormatCurrency(grossProfit) + '</span></div>';
+
+      // 経費のe-Tax欄番号
+      Object.keys(expenseByCategory).sort().forEach(function(cat) {
+        var mapping = ACCT_ETAX_EXPENSE_MAP[cat];
+        var label = mapping ? mapping.label : '\u305D\u306E\u4ED6\uFF08' + cat + '\uFF09';
+        html += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f4f6;"><span>' + label + '</span><span class="fw-bold">' + acctFormatCurrency(expenseByCategory[cat]) + '</span></div>';
+      });
+
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;border-top:2px solid #e5e7eb;margin-top:4px;"><span>\u30CE\u6B04\uFF08\u6240\u5F97\u91D1\u984D\uFF09</span><span>' + acctFormatCurrency(income) + '</span></div>';
+      html += '</div>';
+      previewEl.innerHTML = html;
+    }
+
+    function acctDownloadEtax(type) {
+      var startDate = _acctCurrentYear + '-01-01';
+      var endDate = _acctCurrentYear + '-12-31';
+      var csv = '';
+      var filename = '';
+
+      if (type === 'pl' || type === 'all') {
+        csv += acctGenerateEtaxPLCSV(startDate, endDate);
+      }
+      if (type === 'monthly' || type === 'all') {
+        if (csv) csv += '\n\n';
+        csv += acctGenerateEtaxMonthlyCSV(startDate, endDate);
+      }
+
+      if (type === 'pl') filename = 'e-Tax\u640D\u76CA\u8A08\u7B97\u66F8_' + _acctCurrentYear + '\u5E74.csv';
+      else if (type === 'monthly') filename = 'e-Tax\u6708\u5225_' + _acctCurrentYear + '\u5E74.csv';
+      else filename = 'e-Tax\u8EE2\u8A18\u7528_' + _acctCurrentYear + '\u5E74.csv';
+
+      acctDownloadCSV(csv, filename);
+    }
+
+    function acctGenerateEtaxPLCSV(startDate, endDate) {
+      var sold = _acctCurrentProducts.filter(function(p) {
+        var sd = p.saleDate || '';
+        return p.status === '\u8CA9\u58F2\u6E08' && sd >= startDate && sd <= endDate;
+      });
+      var totalSales = sold.reduce(function(s, p) { return s + (parseFloat(p.saleAmount) || 0); }, 0);
+      var openingInv = acctGetOpeningInventoryValue();
+      var purchased = _acctCurrentProducts.filter(function(p) {
+        var d = acctGetPurchaseDate(p);
+        return d >= startDate && d <= endDate;
+      });
+      var totalPurchase = purchased.reduce(function(s, p) { return s + acctGetPurchaseAmount(p); }, 0);
+      var closingInv = acctCalcClosingInventory();
+      var cogs = openingInv + totalPurchase - closingInv;
+      var grossProfit = totalSales - cogs;
+
+      var expenseByCategory = {};
+      var totalExpense = 0;
+      _acctCurrentExpenses.forEach(function(e) {
+        var cat = e.category || '\u96D1\u8CBB';
+        var amt = parseFloat(e.amount) || 0;
+        expenseByCategory[cat] = (expenseByCategory[cat] || 0) + amt;
+        totalExpense += amt;
+      });
+      var income = grossProfit - totalExpense;
+
+      var csv = 'e-Tax\u8EE2\u8A18\u7528 \u640D\u76CA\u8A08\u7B97\u66F8\uFF08' + _acctCurrentYear + '\u5E74\uFF09\n\n';
+      csv += 'e-Tax\u6B04,\u9805\u76EE,\u91D1\u984D\n';
+      csv += '\u30A2,\u58F2\u4E0A\uFF08\u53CE\u5165\uFF09\u91D1\u984D,' + totalSales + '\n';
+      csv += '\u30A6,\u671F\u9996\u5546\u54C1\u68DA\u5378\u9AD8,' + openingInv + '\n';
+      csv += '\u30A8,\u4ED5\u5165\u91D1\u984D,' + totalPurchase + '\n';
+      csv += '\u30B1,\u671F\u672B\u5546\u54C1\u68DA\u5378\u9AD8,' + closingInv + '\n';
+      csv += '\u30B3,\u5DEE\u5F15\u539F\u4FA1,' + cogs + '\n';
+      csv += '\u30B5,\u5DEE\u5F15\u91D1\u984D\uFF08\u7C97\u5229\uFF09,' + grossProfit + '\n\n';
+
+      csv += 'e-Tax\u6B04,\u7D4C\u8CBB\u79D1\u76EE,\u91D1\u984D\n';
+      Object.keys(expenseByCategory).sort().forEach(function(cat) {
+        var mapping = ACCT_ETAX_EXPENSE_MAP[cat];
+        var code = mapping ? mapping.code : '\u305D\u306E\u4ED6';
+        csv += code + ',"' + cat + '",' + expenseByCategory[cat] + '\n';
+      });
+      csv += ',\u7D4C\u8CBB\u5408\u8A08,' + totalExpense + '\n\n';
+      csv += '\u30CE,\u6240\u5F97\u91D1\u984D,' + income + '\n';
+      return csv;
+    }
+
+    function acctGenerateEtaxMonthlyCSV(startDate, endDate) {
+      var monthlySales = {};
+      var monthlyPurchase = {};
+      for (var m = 1; m <= 12; m++) { monthlySales[m] = 0; monthlyPurchase[m] = 0; }
+
+      _acctCurrentProducts.forEach(function(p) {
+        if (p.status === '\u8CA9\u58F2\u6E08') {
+          var sd = p.saleDate || '';
+          if (sd >= startDate && sd <= endDate) {
+            monthlySales[parseInt(sd.substring(5, 7))] += parseFloat(p.saleAmount) || 0;
+          }
+        }
+        var pd = acctGetPurchaseDate(p);
+        if (pd >= startDate && pd <= endDate) {
+          monthlyPurchase[parseInt(pd.substring(5, 7))] += acctGetPurchaseAmount(p);
+        }
+      });
+
+      var csv = 'e-Tax\u8EE2\u8A18\u7528 \u6708\u5225\u58F2\u4E0A\u30FB\u4ED5\u5165\uFF08' + _acctCurrentYear + '\u5E74\uFF09\n\n';
+      csv += '\u6708,\u58F2\u4E0A,\u4ED5\u5165\n';
+      var sTotal = 0, pTotal = 0;
+      for (var i = 1; i <= 12; i++) {
+        sTotal += monthlySales[i];
+        pTotal += monthlyPurchase[i];
+        csv += i + '\u6708,' + monthlySales[i] + ',' + monthlyPurchase[i] + '\n';
+      }
+      csv += '\u5408\u8A08,' + sTotal + ',' + pTotal + '\n';
+      return csv;
+    }
+
+    // 共通CSVダウンロードヘルパー
+    function acctDownloadCSV(csvContent, filename) {
+      var bom = '\uFEFF';
+      var blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+      alert('\u2705 \u30C0\u30A6\u30F3\u30ED\u30FC\u30C9\u3057\u307E\u3057\u305F');
     }
 
     async function acctAddExpense() {
