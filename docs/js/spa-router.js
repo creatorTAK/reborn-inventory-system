@@ -9,7 +9,7 @@
  * コンテナを使い回し、init/destroyで表示内容を切り替える。
  */
 // グローバルバージョンマーカー（デバッグ用）
-window.__SPA_ROUTER_VER = '598';
+window.__SPA_ROUTER_VER = '599';
 
 (function() {
   'use strict';
@@ -21,7 +21,7 @@ window.__SPA_ROUTER_VER = '598';
   // 一度表示したページのDOMを保持し、再訪問時は表示切替のみ
   const _pageContainers = {};
 
-  const _FRAGMENT_VERSION = '598';
+  const _FRAGMENT_VERSION = '599';
 
   let _currentSpaPage = null;
   let _isSpaActive = false;
@@ -92,7 +92,8 @@ window.__SPA_ROUTER_VER = '598';
     _currentSpaPage = pageName;
 
     // ========================================
-    // ★ 共有fragment検出: 同じfragmentUrlのコンテナを使い回す
+    // ★ 共有fragment検出: 同じfragmentUrlを持つ別ページのコンテナがある場合
+    //   移譲ではなく破棄して再生成（init/destroyの状態不整合を防止）
     // ========================================
     if (!_pageContainers[pageName]) {
       const sharedKey = Object.keys(_pageContainers).find(key =>
@@ -101,11 +102,13 @@ window.__SPA_ROUTER_VER = '598';
         FURIRA_PAGES[key].fragmentUrl === pageConfig.fragmentUrl
       );
       if (sharedKey) {
-        // 既存コンテナの所有権を移譲（DOM再作成なし）
-        _pageContainers[pageName] = _pageContainers[sharedKey];
+        // 古いコンテナをDOMから除去し、キャッシュからも削除
+        const oldContainer = _pageContainers[sharedKey];
+        if (oldContainer && oldContainer.parentNode) {
+          oldContainer.parentNode.removeChild(oldContainer);
+        }
         delete _pageContainers[sharedKey];
-        _pageContainers[pageName].setAttribute('data-spa-page', pageName);
-        console.log(`[SPA] 共有fragment移譲: ${sharedKey} → ${pageName}`);
+        console.log(`[SPA] 共有fragment破棄: ${sharedKey}（${pageName}用に再生成）`);
       }
     }
 
@@ -144,8 +147,14 @@ window.__SPA_ROUTER_VER = '598';
 
     try {
       let html;
-      if (_fragmentCache[pageName]) {
-        html = _fragmentCache[pageName];
+      // 同じfragmentUrlを持つ別ページのキャッシュも探す
+      const cachedKey = _fragmentCache[pageName] ? pageName :
+        Object.keys(_fragmentCache).find(k =>
+          FURIRA_PAGES[k] && FURIRA_PAGES[k].fragmentUrl === pageConfig.fragmentUrl
+        );
+      if (cachedKey && _fragmentCache[cachedKey]) {
+        html = _fragmentCache[cachedKey];
+        _fragmentCache[pageName] = html;
       } else {
         const fragmentUrl = pageConfig.fragmentUrl + '?v=' + _FRAGMENT_VERSION;
         const response = await fetch(fragmentUrl, { cache: 'no-store' });
