@@ -98,6 +98,12 @@
     }
     #spa-page-accounting .acct-summary-value.positive { color: #10b981; }
     #spa-page-accounting .acct-summary-value.negative { color: #ef4444; }
+    #spa-page-accounting .acct-summary-sub {
+      font-size: 0.7rem;
+      margin-top: 4px;
+      opacity: 0.85;
+    }
+    #spa-page-accounting .acct-summary-card.highlight .acct-summary-sub { color: rgba(255,255,255,0.75); }
 
     /* テーブル */
     #spa-page-accounting .acct-data-table {
@@ -306,6 +312,18 @@
       cursor: pointer;
     }
 
+    #spa-page-accounting .acct-btn-outline-primary {
+      background: white;
+      color: #3b82f6;
+      border: 1px solid #3b82f6;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    #spa-page-accounting .acct-btn-outline-primary:hover { background: #eff6ff; }
+
     #spa-page-accounting .acct-alert-info {
       background: #eff6ff;
       border: 1px solid #bfdbfe;
@@ -313,6 +331,16 @@
       padding: 12px;
       font-size: 13px;
       color: #1e40af;
+      margin-bottom: 12px;
+    }
+
+    #spa-page-accounting .acct-alert-warning {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 13px;
+      color: #92400e;
       margin-bottom: 12px;
     }
 
@@ -328,6 +356,47 @@
       width: 18px;
       height: 18px;
     }
+
+    /* 税額シミュレーション */
+    #spa-page-accounting .acct-tax-toggle-group {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    #spa-page-accounting .acct-tax-toggle {
+      flex: 1;
+      padding: 8px 4px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: white;
+      font-size: 13px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+      color: #374151;
+    }
+    #spa-page-accounting .acct-tax-toggle.active {
+      background: #2563eb;
+      color: white;
+      border-color: #2563eb;
+    }
+    #spa-page-accounting .acct-tax-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 14px;
+    }
+    #spa-page-accounting .acct-tax-row.acct-tax-total {
+      font-weight: 700;
+      font-size: 16px;
+      border-top: 2px solid #e5e7eb;
+      border-bottom: none;
+      padding-top: 12px;
+      margin-top: 4px;
+    }
+    #spa-page-accounting .acct-tax-row .acct-tax-label { color: #374151; }
+    #spa-page-accounting .acct-tax-row .acct-tax-amount { font-weight: 600; color: #1f2937; }
 
     /* ユーティリティ */
     #spa-page-accounting .text-end { text-align: right; }
@@ -407,6 +476,16 @@
       </div>
     </div>
 
+    <!-- localStorage移行バナー -->
+    <div class="acct-alert-warning" id="acct-migrationBanner" style="display:none;">
+      <i class="bi bi-exclamation-triangle"></i>
+      <strong>データ移行のお知らせ:</strong> ローカルに保存された経費データがあります。Firestoreに移行すると他デバイスでも利用できます。
+      <div style="margin-top:8px;">
+        <button class="acct-btn-success" onclick="acctMigrateFromLocalStorage()" style="font-size:12px;padding:6px 12px;">移行する</button>
+        <button style="background:none;border:none;color:#6b7280;font-size:12px;cursor:pointer;margin-left:8px;" onclick="document.getElementById('acct-migrationBanner').style.display='none'">後で</button>
+      </div>
+    </div>
+
     <!-- タブコンテンツ -->
     <!-- 概要タブ -->
     <div class="acct-tab-pane active" id="acct-tab-overview">
@@ -414,6 +493,7 @@
         <div class="acct-summary-card highlight">
           <div class="acct-summary-label">売上高</div>
           <div class="acct-summary-value" id="acct-kpi-sales">-</div>
+          <div class="acct-summary-sub" id="acct-kpi-sales-sub"></div>
         </div>
         <div class="acct-summary-card">
           <div class="acct-summary-label">仕入高</div>
@@ -426,6 +506,7 @@
         <div class="acct-summary-card highlight">
           <div class="acct-summary-label">所得</div>
           <div class="acct-summary-value" id="acct-kpi-income">-</div>
+          <div class="acct-summary-sub" id="acct-kpi-income-sub"></div>
         </div>
       </div>
 
@@ -456,6 +537,55 @@
         </div>
       </div>
 
+      <!-- 税額シミュレーション -->
+      <div class="acct-card-section">
+        <h6><i class="bi bi-cash-stack"></i> 簡易税額シミュレーション</h6>
+        <div style="font-size:13px;color:#6b7280;margin-bottom:12px;">青色申告特別控除額を選択してください</div>
+        <div class="acct-tax-toggle-group">
+          <button class="acct-tax-toggle active" data-deduction="650000" onclick="acctSelectDeduction(this)">65万円</button>
+          <button class="acct-tax-toggle" data-deduction="100000" onclick="acctSelectDeduction(this)">10万円</button>
+          <button class="acct-tax-toggle" data-deduction="0" onclick="acctSelectDeduction(this)">なし</button>
+        </div>
+        <div id="acct-taxSimContent">
+          <div class="acct-tax-row">
+            <span class="acct-tax-label">事業所得</span>
+            <span class="acct-tax-amount" id="acct-tax-income">-</span>
+          </div>
+          <div class="acct-tax-row">
+            <span class="acct-tax-label">青色申告特別控除</span>
+            <span class="acct-tax-amount" id="acct-tax-blue">-</span>
+          </div>
+          <div class="acct-tax-row">
+            <span class="acct-tax-label">基礎控除</span>
+            <span class="acct-tax-amount" id="acct-tax-basic">-</span>
+          </div>
+          <div class="acct-tax-row" style="font-weight:600;">
+            <span class="acct-tax-label">課税所得</span>
+            <span class="acct-tax-amount" id="acct-tax-taxable">-</span>
+          </div>
+          <div style="border-top:1px solid #e5e7eb;margin:8px 0;"></div>
+          <div class="acct-tax-row">
+            <span class="acct-tax-label">所得税</span>
+            <span class="acct-tax-amount" id="acct-tax-income-tax">-</span>
+          </div>
+          <div class="acct-tax-row">
+            <span class="acct-tax-label">住民税（10%）</span>
+            <span class="acct-tax-amount" id="acct-tax-resident">-</span>
+          </div>
+          <div class="acct-tax-row">
+            <span class="acct-tax-label">個人事業税（5%）</span>
+            <span class="acct-tax-amount" id="acct-tax-business">-</span>
+          </div>
+          <div class="acct-tax-row acct-tax-total">
+            <span class="acct-tax-label">合計納税見込額</span>
+            <span class="acct-tax-amount text-danger" id="acct-tax-total">-</span>
+          </div>
+        </div>
+        <div class="acct-alert-info" style="margin-top:12px;margin-bottom:0;">
+          <i class="bi bi-info-circle"></i> この金額は概算です。実際の納税額は各種控除・扶養状況等により異なります。
+        </div>
+      </div>
+
       <!-- 月別売上 -->
       <div class="acct-card-section">
         <h6><i class="bi bi-graph-up"></i> 月別売上</h6>
@@ -480,7 +610,12 @@
     <!-- 経費タブ -->
     <div class="acct-tab-pane" id="acct-tab-expense">
       <div class="acct-card-section">
-        <h6><i class="bi bi-plus-circle"></i> 経費を追加</h6>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h6 style="margin-bottom:0;"><i class="bi bi-plus-circle"></i> 経費を追加</h6>
+          <button class="acct-btn-outline-primary" onclick="acctCopyLastMonth()" style="font-size:12px;padding:6px 12px;">
+            <i class="bi bi-files"></i> 先月分をコピー
+          </button>
+        </div>
         <div class="acct-expense-form">
           <input type="date" id="acct-expenseDate">
           <select id="acct-expenseCategory">
@@ -637,6 +772,8 @@
     var _acctCurrentProducts = [];
     var _acctCurrentExpenses = [];
     var _acctCurrentYear = new Date().getFullYear();
+    var _acctCurrentIncome = 0;
+    var _acctSelectedDeduction = 650000;
 
     function acctGetJSTToday() {
       var now = new Date();
@@ -683,6 +820,10 @@
       }
     }
 
+    // ============================================
+    // 機能1: Firestore経費データ管理
+    // ============================================
+
     // Firebase: 商品データ取得
     async function acctGetProducts() {
       var db = window.firebaseDB;
@@ -695,33 +836,168 @@
       return products;
     }
 
-    // 経費データ取得（localStorageから）
-    function acctGetExpenses() {
+    // 経費データ取得（Firestoreから）
+    async function acctGetExpenses(fiscalYear) {
+      var db = window.firebaseDB;
+      var expensesRef = window.firestoreCollection(db, 'expenses');
+      var q = window.firestoreQuery(
+        expensesRef,
+        window.firestoreWhere('fiscalYear', '==', fiscalYear)
+      );
+      var snapshot = await window.firestoreGetDocs(q);
+      var expenses = [];
+      snapshot.forEach(function(docSnap) {
+        expenses.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return expenses;
+    }
+
+    // 経費追加（Firestoreへ）
+    async function acctAddExpenseToFirestore(expenseData) {
+      var db = window.firebaseDB;
+      var expensesRef = window.firestoreCollection(db, 'expenses');
+      var year = parseInt((expenseData.date || '').slice(0, 4)) || _acctCurrentYear;
+      var docData = {
+        date: expenseData.date,
+        category: expenseData.category,
+        amount: expenseData.amount,
+        note: expenseData.note || '',
+        fiscalYear: year,
+        createdBy: localStorage.getItem('reborn_user_name') || '',
+        createdAt: window.firestoreServerTimestamp()
+      };
+      var docRef = await window.firestoreAddDoc(expensesRef, docData);
+      return { id: docRef.id, ...docData };
+    }
+
+    // 経費削除（Firestoreから）
+    async function acctDeleteExpenseFromFirestore(expenseId) {
+      var db = window.firebaseDB;
+      var docRef = window.firestoreDoc(db, 'expenses', expenseId);
+      await window.firestoreDeleteDoc(docRef);
+    }
+
+    // localStorageからの移行チェック
+    function acctCheckLocalStorageMigration() {
       try {
-        return JSON.parse(localStorage.getItem('reborn_expenses') || '[]');
-      } catch (e) {
-        return [];
+        var localData = JSON.parse(localStorage.getItem('reborn_expenses') || '[]');
+        if (localData.length > 0) {
+          var banner = document.getElementById('acct-migrationBanner');
+          if (banner) banner.style.display = 'block';
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // localStorageからFirestoreへの移行
+    async function acctMigrateFromLocalStorage() {
+      try {
+        var localData = JSON.parse(localStorage.getItem('reborn_expenses') || '[]');
+        if (localData.length === 0) {
+          alert('移行するデータがありません');
+          return;
+        }
+        if (!confirm(localData.length + '件の経費データをFirestoreに移行します。よろしいですか？')) return;
+
+        acctShowLoading();
+        var migrated = 0;
+        for (var i = 0; i < localData.length; i++) {
+          var e = localData[i];
+          await acctAddExpenseToFirestore({
+            date: e.date,
+            category: e.category,
+            amount: parseFloat(e.amount) || 0,
+            note: e.note || ''
+          });
+          migrated++;
+        }
+        localStorage.removeItem('reborn_expenses');
+        var banner = document.getElementById('acct-migrationBanner');
+        if (banner) banner.style.display = 'none';
+
+        await acctLoadAccountingData();
+        alert(migrated + '件のデータを移行しました');
+      } catch (error) {
+        console.error('移行エラー:', error);
+        alert('移行中にエラーが発生しました');
+      } finally {
+        acctHideLoading();
       }
     }
 
-    // 経費追加
-    function acctAddExpenseToStorage(expenseData) {
-      var expenses = acctGetExpenses();
-      var newExpense = Object.assign({}, expenseData, {
-        id: 'exp_' + Date.now(),
-        createdAt: new Date().toISOString()
+    // ============================================
+    // 機能4: 先月経費コピー
+    // ============================================
+
+    async function acctCopyLastMonth() {
+      var today = acctGetJSTToday();
+      var todayDate = new Date(today);
+      var lastMonth = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+      var lastMonthYear = lastMonth.getFullYear();
+      var lastMonthNum = lastMonth.getMonth() + 1;
+      var lastMonthStr = String(lastMonthNum).padStart(2, '0');
+      var lastMonthPrefix = lastMonthYear + '-' + lastMonthStr;
+
+      var thisMonthNum = todayDate.getMonth() + 1;
+      var thisMonthStr = String(thisMonthNum).padStart(2, '0');
+      var thisYear = todayDate.getFullYear();
+
+      // 前月の経費を取得
+      var lastMonthExpenses = _acctCurrentExpenses.filter(function(e) {
+        return (e.date || '').startsWith(lastMonthPrefix);
       });
-      expenses.push(newExpense);
-      localStorage.setItem('reborn_expenses', JSON.stringify(expenses));
-      return newExpense;
+
+      if (lastMonthExpenses.length === 0) {
+        // 現在の年度に前月データがない場合、前年度からも探す
+        if (lastMonthYear !== _acctCurrentYear) {
+          try {
+            var prevYearExpenses = await acctGetExpenses(lastMonthYear);
+            lastMonthExpenses = prevYearExpenses.filter(function(e) {
+              return (e.date || '').startsWith(lastMonthPrefix);
+            });
+          } catch (err) {
+            console.error('前月データ取得エラー:', err);
+          }
+        }
+        if (lastMonthExpenses.length === 0) {
+          alert(lastMonthYear + '年' + lastMonthNum + '月の経費データがありません');
+          return;
+        }
+      }
+
+      var totalAmount = lastMonthExpenses.reduce(function(sum, e) { return sum + (parseFloat(e.amount) || 0); }, 0);
+      if (!confirm(lastMonthYear + '年' + lastMonthNum + '月の経費 ' + lastMonthExpenses.length + '件（合計' + acctFormatCurrency(totalAmount) + '）を今月分としてコピーしますか？')) return;
+
+      acctShowLoading();
+      try {
+        var copied = 0;
+        for (var i = 0; i < lastMonthExpenses.length; i++) {
+          var e = lastMonthExpenses[i];
+          var origDay = (e.date || '').slice(8, 10);
+          var lastDayOfMonth = new Date(thisYear, thisMonthNum, 0).getDate();
+          var day = Math.min(parseInt(origDay) || 1, lastDayOfMonth);
+          var newDate = thisYear + '-' + thisMonthStr + '-' + String(day).padStart(2, '0');
+
+          await acctAddExpenseToFirestore({
+            date: newDate,
+            category: e.category,
+            amount: parseFloat(e.amount) || 0,
+            note: e.note || ''
+          });
+          copied++;
+        }
+        await acctLoadAccountingData();
+        alert(copied + '件の経費をコピーしました');
+      } catch (error) {
+        console.error('コピーエラー:', error);
+        alert('コピー中にエラーが発生しました');
+      } finally {
+        acctHideLoading();
+      }
     }
 
-    // 経費削除
-    function acctDeleteExpenseFromStorage(expenseId) {
-      var expenses = acctGetExpenses();
-      var filtered = expenses.filter(function(e) { return e.id !== expenseId; });
-      localStorage.setItem('reborn_expenses', JSON.stringify(filtered));
-    }
+    // ============================================
+    // ページ初期化・データ読み込み
+    // ============================================
 
     function acctInitializePage() {
       var yearSelect = document.getElementById('acct-fiscalYear');
@@ -738,6 +1014,7 @@
       var expenseDate = document.getElementById('acct-expenseDate');
       if (expenseDate) expenseDate.value = acctGetJSTToday();
 
+      acctCheckLocalStorageMigration();
       acctLoadAccountingData();
     }
 
@@ -752,12 +1029,10 @@
         if (display) display.textContent = startDate + ' \u301C ' + endDate;
 
         _acctCurrentProducts = await acctGetProducts();
-        _acctCurrentExpenses = acctGetExpenses().filter(function(e) {
-          var d = e.date || '';
-          return d >= startDate && d <= endDate;
-        });
+        _acctCurrentExpenses = await acctGetExpenses(_acctCurrentYear);
 
         acctUpdateOverview(startDate, endDate);
+        acctUpdateTaxSimulation();
         acctUpdateExpenseTab();
         acctUpdateExportTab(startDate, endDate);
 
@@ -767,6 +1042,22 @@
       } finally {
         acctHideLoading();
       }
+    }
+
+    // ============================================
+    // 機能2: 概要タブ（KPI + 前年比 + 粗利率）
+    // ============================================
+
+    function acctCalcSalesForYear(products, year) {
+      var start = year + '-01-01';
+      var end = year + '-12-31';
+      var sold = products.filter(function(p) {
+        var sd = p.saleDate || '';
+        return p.status === '\u8CA9\u58F2\u6E08' && sd >= start && sd <= end;
+      });
+      var sales = sold.reduce(function(sum, p) { return sum + (parseFloat(p.saleAmount) || 0); }, 0);
+      var cost = sold.reduce(function(sum, p) { return sum + (parseFloat((p.purchase && p.purchase.amount) || p.purchaseAmount) || 0); }, 0);
+      return { sales: sales, cost: cost };
     }
 
     function acctUpdateOverview(startDate, endDate) {
@@ -781,11 +1072,37 @@
       var totalExpense = _acctCurrentExpenses.reduce(function(sum, e) { return sum + (parseFloat(e.amount) || 0); }, 0);
       var income = grossProfit - totalExpense;
 
+      _acctCurrentIncome = income;
+
       var el;
       el = document.getElementById('acct-kpi-sales'); if (el) el.textContent = acctFormatCurrency(totalSales);
       el = document.getElementById('acct-kpi-cost'); if (el) el.textContent = acctFormatCurrency(totalCost);
       el = document.getElementById('acct-kpi-expense'); if (el) el.textContent = acctFormatCurrency(totalExpense);
       el = document.getElementById('acct-kpi-income'); if (el) el.textContent = acctFormatCurrency(income);
+
+      // 前年比（売上高カード）
+      var prevYear = acctCalcSalesForYear(_acctCurrentProducts, _acctCurrentYear - 1);
+      var salesSub = document.getElementById('acct-kpi-sales-sub');
+      if (salesSub) {
+        if (prevYear.sales > 0) {
+          var changePercent = ((totalSales - prevYear.sales) / prevYear.sales * 100).toFixed(1);
+          var sign = changePercent >= 0 ? '+' : '';
+          salesSub.textContent = '\u524D\u5E74: ' + acctFormatCurrency(prevYear.sales) + '(' + sign + changePercent + '%)';
+        } else {
+          salesSub.textContent = '';
+        }
+      }
+
+      // 粗利率（所得カード）
+      var incomeSub = document.getElementById('acct-kpi-income-sub');
+      if (incomeSub) {
+        if (totalSales > 0) {
+          var grossMargin = (grossProfit / totalSales * 100).toFixed(1);
+          incomeSub.textContent = '\u7C97\u5229\u7387: ' + grossMargin + '%';
+        } else {
+          incomeSub.textContent = '';
+        }
+      }
 
       el = document.getElementById('acct-pl-sales'); if (el) el.textContent = acctFormatCurrency(totalSales);
       el = document.getElementById('acct-pl-cost'); if (el) el.textContent = acctFormatCurrency(totalCost);
@@ -825,6 +1142,72 @@
         tbody.innerHTML = html;
       }
     }
+
+    // ============================================
+    // 機能3: 簡易税額シミュレーション
+    // ============================================
+
+    function acctSelectDeduction(btn) {
+      var root = document.getElementById('spa-page-accounting');
+      if (!root) return;
+      root.querySelectorAll('.acct-tax-toggle').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      _acctSelectedDeduction = parseInt(btn.dataset.deduction) || 0;
+      acctUpdateTaxSimulation();
+    }
+
+    // 所得税の累進課税計算
+    function acctCalcIncomeTax(taxableIncome) {
+      if (taxableIncome <= 0) return 0;
+      // 令和6年以降の所得税率
+      var brackets = [
+        { limit: 1950000, rate: 0.05, deduction: 0 },
+        { limit: 3300000, rate: 0.10, deduction: 97500 },
+        { limit: 6950000, rate: 0.20, deduction: 427500 },
+        { limit: 9000000, rate: 0.23, deduction: 636000 },
+        { limit: 18000000, rate: 0.33, deduction: 1536000 },
+        { limit: 40000000, rate: 0.40, deduction: 2796000 },
+        { limit: Infinity, rate: 0.45, deduction: 4796000 }
+      ];
+      for (var i = 0; i < brackets.length; i++) {
+        if (taxableIncome <= brackets[i].limit) {
+          return Math.floor(taxableIncome * brackets[i].rate - brackets[i].deduction);
+        }
+      }
+      return 0;
+    }
+
+    function acctUpdateTaxSimulation() {
+      var income = _acctCurrentIncome;
+      var blueDeduction = _acctSelectedDeduction;
+      var basicDeduction = 480000;
+
+      // 青色申告控除は所得を超えない
+      var effectiveBlue = Math.min(blueDeduction, Math.max(income, 0));
+      var afterBlue = Math.max(income - effectiveBlue, 0);
+      var taxableIncome = Math.max(afterBlue - basicDeduction, 0);
+
+      var incomeTax = acctCalcIncomeTax(taxableIncome);
+      var residentTax = Math.floor(taxableIncome * 0.10);
+      // 個人事業税: (所得 - 290万) × 5%、青色申告控除は事業税では適用されない
+      var businessTaxBase = Math.max(income - 2900000, 0);
+      var businessTax = Math.floor(businessTaxBase * 0.05);
+      var totalTax = incomeTax + residentTax + businessTax;
+
+      var el;
+      el = document.getElementById('acct-tax-income'); if (el) el.textContent = acctFormatCurrency(income);
+      el = document.getElementById('acct-tax-blue'); if (el) el.textContent = '-' + acctFormatCurrency(effectiveBlue);
+      el = document.getElementById('acct-tax-basic'); if (el) el.textContent = '-' + acctFormatCurrency(basicDeduction);
+      el = document.getElementById('acct-tax-taxable'); if (el) el.textContent = acctFormatCurrency(taxableIncome);
+      el = document.getElementById('acct-tax-income-tax'); if (el) el.textContent = acctFormatCurrency(incomeTax);
+      el = document.getElementById('acct-tax-resident'); if (el) el.textContent = acctFormatCurrency(residentTax);
+      el = document.getElementById('acct-tax-business'); if (el) el.textContent = businessTaxBase > 0 ? acctFormatCurrency(businessTax) : '\u00A50（290万以下）';
+      el = document.getElementById('acct-tax-total'); if (el) el.textContent = acctFormatCurrency(totalTax);
+    }
+
+    // ============================================
+    // 経費タブ
+    // ============================================
 
     function acctUpdateExpenseTab() {
       var totalExpense = _acctCurrentExpenses.reduce(function(sum, e) { return sum + (parseFloat(e.amount) || 0); }, 0);
@@ -898,21 +1281,35 @@
         return;
       }
 
-      acctAddExpenseToStorage({ date: date, category: category, amount: amount, note: note });
-      var amountEl = document.getElementById('acct-expenseAmount');
-      var noteEl = document.getElementById('acct-expenseNote');
-      if (amountEl) amountEl.value = '';
-      if (noteEl) noteEl.value = '';
+      try {
+        await acctAddExpenseToFirestore({ date: date, category: category, amount: amount, note: note });
+        var amountEl = document.getElementById('acct-expenseAmount');
+        var noteEl = document.getElementById('acct-expenseNote');
+        if (amountEl) amountEl.value = '';
+        if (noteEl) noteEl.value = '';
 
-      await acctLoadAccountingData();
-      alert('\u2705 \u7D4C\u8CBB\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F');
+        await acctLoadAccountingData();
+        alert('\u2705 \u7D4C\u8CBB\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F');
+      } catch (error) {
+        console.error('経費追加エラー:', error);
+        alert('経費の追加に失敗しました');
+      }
     }
 
     async function acctDeleteExpense(expenseId) {
       if (!confirm('\u3053\u306E\u7D4C\u8CBB\u3092\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F')) return;
-      acctDeleteExpenseFromStorage(expenseId);
-      await acctLoadAccountingData();
+      try {
+        await acctDeleteExpenseFromFirestore(expenseId);
+        await acctLoadAccountingData();
+      } catch (error) {
+        console.error('経費削除エラー:', error);
+        alert('経費の削除に失敗しました');
+      }
     }
+
+    // ============================================
+    // 帳簿出力
+    // ============================================
 
     function acctDownloadLedger(type) {
       var startDate = _acctCurrentYear + '-01-01';
@@ -1005,6 +1402,8 @@
       _acctCurrentProducts = [];
       _acctCurrentExpenses = [];
       _acctCurrentYear = new Date().getFullYear();
+      _acctCurrentIncome = 0;
+      _acctSelectedDeduction = 650000;
     }
   </script>
 </div>
