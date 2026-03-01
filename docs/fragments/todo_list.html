@@ -506,6 +506,9 @@
           actionButtons += '<div class="task-action reject-btn" onclick="tdlOpenRejectModal(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); margin-left: 8px;"><i class="bi bi-x-circle"></i> 却下</div>';
         } else if (task.type === 'revision_request') {
           actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 修正完了</div>';
+        } else if (task.type === 'shipping_task') {
+          actionButtons += '<div class="task-action complete-btn" onclick="tdlShippingCompleteAction(\'' + task.id + '\')" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); margin-left: 8px;"><i class="bi bi-truck"></i> 発送完了</div>';
+          actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); margin-left: 4px; font-size: 12px; padding: 4px 10px;"><i class="bi bi-check"></i> タスクのみ完了</div>';
         } else {
           actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 完了</div>';
         }
@@ -534,6 +537,36 @@
       } catch (error) {
         console.error('タスクデータ取得エラー:', error);
         alert('タスクデータの取得に失敗しました');
+      }
+    }
+
+    // 発送タスクから発送完了モーダルへ直接遷移
+    async function tdlShippingCompleteAction(taskId) {
+      try {
+        var taskRef = _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(taskId);
+        var taskDoc = await taskRef.get();
+        if (!taskDoc.exists) { alert('タスクが見つかりません'); return; }
+        var taskData = taskDoc.data();
+        var relData = taskData.relatedData || {};
+
+        if (!relData.managementNumber) {
+          alert('管理番号が見つかりません。タスクのみ完了にしてください。');
+          return;
+        }
+
+        // ペンディングアクションをwindowにセット
+        window._pendingShippingComplete = {
+          managementNumber: relData.managementNumber,
+          taskId: taskId,
+          taskEmail: _tdl_userEmail,
+          productId: relData.productId
+        };
+
+        // 在庫管理ページに遷移
+        navigateToPage('inventory');
+      } catch (error) {
+        console.error('[tdl] 発送完了アクションエラー:', error);
+        alert('エラーが発生しました: ' + (error.message || error));
       }
     }
 

@@ -2965,11 +2965,27 @@
       modal.hide();
       invShowLoading();
 
-      invSaveShippingCompleteToFirestore(data).then(function(result) {
+      invSaveShippingCompleteToFirestore(data).then(async function(result) {
         invHideLoading();
         if (result && result.success) {
           sessionStorage.removeItem(INV_CACHE_KEY_PRODUCTS);
           sessionStorage.removeItem(INV_CACHE_KEY_STATS);
+          // タスク画面から遷移してきた場合、タスクを自動完了
+          if (window._pendingShippingComplete) {
+            var pending = window._pendingShippingComplete;
+            try {
+              var db = window.db;
+              // shippingCompletedフラグをセット
+              if (pending.productId) {
+                await db.collection('products').doc(pending.productId).update({ shippingCompleted: true });
+              }
+              // タスクを完了に
+              await db.collection('userTasks').doc(pending.taskEmail).collection('tasks')
+                .doc(pending.taskId).update({ completed: true, completedAt: new Date().toISOString() });
+              console.log('[inv] タスク自動完了:', pending.taskId);
+            } catch(e) { console.warn('[inv] タスク自動完了エラー:', e); }
+            window._pendingShippingComplete = null;
+          }
           setTimeout(function() { alert('発送完了を保存しました'); invLoadDashboardAndSearch(false); }, 100);
         } else {
           setTimeout(function() { alert('保存に失敗しました: ' + (result.message || result.error || '不明なエラー')); }, 100);
@@ -3122,6 +3138,14 @@
         if (typeof window.FirestoreApi !== 'undefined' && window.FirestoreApi.getProductList) {
           invLoadDashboard();
           invInitFilterDropdowns();
+          // タスク画面から発送完了アクションで遷移してきた場合、モーダルを自動起動
+          if (window._pendingShippingComplete) {
+            var pending = window._pendingShippingComplete;
+            setTimeout(function() {
+              console.log('[inv] ペンディング発送完了を起動:', pending.managementNumber);
+              invOpenShippingCompleteModal(pending.managementNumber);
+            }, 500);
+          }
         } else if (waitCount > 300) {
           alert('Firebase初期化に時間がかかっています。ページを再読み込みしてください。');
         } else {
