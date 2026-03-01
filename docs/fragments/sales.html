@@ -581,11 +581,15 @@
       <div class="sal-tab-pane" id="sal-ar-content">
         <div class="sal-summary-grid">
           <div class="sal-summary-card">
-            <div class="sal-summary-label">取引中 合計</div>
-            <div class="sal-summary-value negative" id="sal-receivable-balance">-</div>
+            <div class="sal-summary-label">取引中 売上</div>
+            <div class="sal-summary-value" id="sal-receivable-balance">-</div>
           </div>
           <div class="sal-summary-card">
-            <div class="sal-summary-label">取引中</div>
+            <div class="sal-summary-label">取引中 利益</div>
+            <div class="sal-summary-value positive" id="sal-receivable-profit">-</div>
+          </div>
+          <div class="sal-summary-card">
+            <div class="sal-summary-label">取引中 件数</div>
             <div class="sal-summary-value" id="sal-receivable-count">-</div>
           </div>
         </div>
@@ -604,14 +608,15 @@
                   <th>管理番号</th>
                   <th>商品名</th>
                   <th>販売先</th>
-                  <th class="text-end">売上金額</th>
+                  <th class="text-end">売上</th>
+                  <th class="text-end">利益</th>
                   <th>経過日数</th>
                   <th>操作</th>
                 </tr>
               </thead>
               <tbody id="sal-receivableTableBody">
                 <tr>
-                  <td colspan="7" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                  <td colspan="8" class="text-center text-muted py-4">データを読み込んでいます...</td>
                 </tr>
               </tbody>
             </table>
@@ -1590,21 +1595,23 @@
       });
 
       if (unpaidItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">取引中の商品はありません</td></tr>';
-        salUpdateReceivableSummary(0, 0);
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">取引中の商品はありません</td></tr>';
+        salUpdateReceivableSummary(0, 0, 0);
         var alertDiv = document.getElementById('sal-overdueAlert');
         if (alertDiv) alertDiv.style.display = 'none';
         return;
       }
 
       var html = '';
-      var totalUnpaid = 0;
+      var totalSales = 0;
+      var totalProfit = 0;
       var overdueCount = 0;
       var overdueAmount = 0;
       var OVERDUE_DAYS = 14;
 
       unpaidItems.forEach(function(item) {
-        totalUnpaid += item.saleAmount;
+        totalSales += item.saleAmount;
+        totalProfit += item.finalProfit;
 
         var daysPassed = item.saleDate ? Math.floor((new Date() - new Date(item.saleDate)) / (1000 * 60 * 60 * 24)) : 0;
         var isOverdue = daysPassed >= OVERDUE_DAYS;
@@ -1618,13 +1625,14 @@
           '<td style="white-space:nowrap;">' + salEscapeHtml(item.productName) + '</td>' +
           '<td>' + (item.salePlatform || '-') + '</td>' +
           '<td class="text-end">' + salFormatCurrency(item.saleAmount) + '</td>' +
+          '<td class="text-end ' + (item.finalProfit >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatCurrency(item.finalProfit) + '</td>' +
           '<td class="' + daysClass + '">' + daysPassed + '日</td>' +
           '<td><span class="sal-status-badge sal-status-paid" style="cursor:pointer;" onclick="salCompleteTransaction(\'' + item.id + '\')">完了にする</span></td>' +
           '</tr>';
       });
 
       tbody.innerHTML = html;
-      salUpdateReceivableSummary(totalUnpaid, unpaidItems.length);
+      salUpdateReceivableSummary(totalSales, unpaidItems.length, totalProfit);
 
       var alertDiv = document.getElementById('sal-overdueAlert');
       if (overdueCount > 0) {
@@ -1636,9 +1644,11 @@
       }
     }
 
-    function salUpdateReceivableSummary(totalUnpaid, count) {
-      document.getElementById('sal-receivable-balance').textContent = salFormatCurrency(totalUnpaid);
+    function salUpdateReceivableSummary(totalSales, count, totalProfit) {
+      document.getElementById('sal-receivable-balance').textContent = salFormatCurrency(totalSales);
       document.getElementById('sal-receivable-count').textContent = count + '件';
+      var profitEl = document.getElementById('sal-receivable-profit');
+      if (profitEl) profitEl.textContent = salFormatCurrency(totalProfit || 0);
     }
 
     // (Payment modal removed - replaced by badge tap workflow and cancel modal)
