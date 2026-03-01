@@ -119,6 +119,16 @@
     #spa-page-todo-list .type-badge.default { background: #e0e7ff; color: #3730a3; }
     #spa-page-todo-list .remind-btn { padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 11px; cursor: pointer; }
     #spa-page-todo-list .remind-btn:active { opacity: 0.8; }
+    /* material-tabs */
+    #spa-page-todo-list .material-tabs { display: flex; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top: 56px; z-index: 999; }
+    #spa-page-todo-list .material-tab { flex: 1; padding: 12px 8px; border: none; background: transparent; font-size: 12px; color: #9ca3af; border-bottom: 2px solid transparent; cursor: pointer; text-align: center; transition: all 0.2s; }
+    #spa-page-todo-list .material-tab:hover { color: #374151; background: #f9fafb; }
+    #spa-page-todo-list .material-tab.active { color: #2563eb; border-bottom-color: #2563eb; }
+    #spa-page-todo-list .material-tab i { display: block; font-size: 18px; margin-bottom: 2px; }
+    #spa-page-todo-list .tab-badge { display: inline-block; background: #ef4444; color: white; font-size: 10px; min-width: 16px; height: 16px; line-height: 16px; border-radius: 8px; padding: 0 4px; margin-left: 4px; font-weight: 600; }
+    #spa-page-todo-list .tab-badge:empty { display: none; }
+    #spa-page-todo-list .tdl-tab-content { display: none; }
+    #spa-page-todo-list .tdl-tab-content.active { display: block; }
   </style>
 
   <!-- サブヘッダー -->
@@ -156,81 +166,100 @@
     </button>
   </div>
 
-  <!-- タスク管理モーダル（管理者専用） -->
-  <div class="task-admin-modal" id="tdl-taskAdminModal" onclick="tdlCloseTaskManagement(event)">
-    <div class="task-admin-content" onclick="event.stopPropagation()">
-      <div class="task-admin-header">
-        <h2>タスク管理</h2>
-        <button class="task-admin-close" onclick="tdlCloseTaskManagement()">&times;</button>
-      </div>
-      <div class="task-admin-body">
-        <div class="task-summary-cards">
-          <div class="task-summary-card">
-            <div class="number" style="color: #3b82f6;" id="tdl-adminTaskTotal">-</div>
-            <div class="label">総ユーザー</div>
+  <!-- タブナビゲーション -->
+  <div class="material-tabs">
+    <button class="material-tab active" data-tab="tasks" onclick="tdlSwitchTab('tasks')">
+      <i class="bi bi-check2-square"></i>
+      タスク
+    </button>
+    <button class="material-tab" data-tab="extensions" onclick="tdlSwitchTab('extensions')">
+      <i class="bi bi-clock-history"></i>
+      延長申請<span class="tab-badge" id="tdl-extensionTabBadge"></span>
+    </button>
+  </div>
+
+  <!-- タスクタブ -->
+  <div id="tdl-tab-tasks" class="tdl-tab-content active">
+    <!-- タスク管理モーダル（管理者専用） -->
+    <div class="task-admin-modal" id="tdl-taskAdminModal" onclick="tdlCloseTaskManagement(event)">
+      <div class="task-admin-content" onclick="event.stopPropagation()">
+        <div class="task-admin-header">
+          <h2>タスク管理</h2>
+          <button class="task-admin-close" onclick="tdlCloseTaskManagement()">&times;</button>
+        </div>
+        <div class="task-admin-body">
+          <div class="task-summary-cards">
+            <div class="task-summary-card">
+              <div class="number" style="color: #3b82f6;" id="tdl-adminTaskTotal">-</div>
+              <div class="label">総ユーザー</div>
+            </div>
+            <div class="task-summary-card">
+              <div class="number" style="color: #f59e0b;" id="tdl-adminTaskPending">-</div>
+              <div class="label">未完了あり</div>
+            </div>
+            <div class="task-summary-card">
+              <div class="number" style="color: #ef4444;" id="tdl-adminTaskOverdue">-</div>
+              <div class="label">期限切れ/放置</div>
+            </div>
           </div>
-          <div class="task-summary-card">
-            <div class="number" style="color: #f59e0b;" id="tdl-adminTaskPending">-</div>
-            <div class="label">未完了あり</div>
-          </div>
-          <div class="task-summary-card">
-            <div class="number" style="color: #ef4444;" id="tdl-adminTaskOverdue">-</div>
-            <div class="label">期限切れ/放置</div>
+          <div style="background: #f9fafb; border-radius: 12px; overflow: hidden;">
+            <div style="padding: 12px 16px; background: #e5e7eb; font-weight: 600; font-size: 14px; color: #374151;">ユーザー別タスク状況</div>
+            <div id="tdl-adminUserTaskList" style="max-height: 300px; overflow-y: auto;">
+              <div style="padding: 20px; text-align: center; color: #9ca3af;">読み込み中...</div>
+            </div>
           </div>
         </div>
-        <div style="background: #f9fafb; border-radius: 12px; overflow: hidden;">
-          <div style="padding: 12px 16px; background: #e5e7eb; font-weight: 600; font-size: 14px; color: #374151;">ユーザー別タスク状況</div>
-          <div id="tdl-adminUserTaskList" style="max-height: 300px; overflow-y: auto;">
-            <div style="padding: 20px; text-align: center; color: #9ca3af;">読み込み中...</div>
+      </div>
+    </div>
+
+    <!-- メインタスク一覧 -->
+    <div class="tasks-container">
+      <div id="tdl-loading" class="loading">
+        <i class="bi bi-arrow-repeat"></i> 読み込み中...
+      </div>
+      <div id="tdl-pending-tasks" style="display: none;">
+        <div class="section-title">未完了のタスク</div>
+        <div id="tdl-pending-tasks-list"></div>
+      </div>
+      <div id="tdl-status-card" class="status-card" style="display: none;">
+        <div id="tdl-empty-state" class="empty-state" style="display: none;">
+          <i class="bi bi-check-circle"></i>
+          <p>やることはありません</p>
+        </div>
+        <div id="tdl-history-link-container" style="display: none;">
+          <div class="history-link" onclick="tdlGoToHistory()">
+            <i class="bi bi-clock-history"></i>
+            <span>完了した履歴を見る</span>
+            <span id="tdl-completed-count" class="history-count"></span>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- 管理者用: 延長申請一覧セクション -->
-  <div id="tdl-extensionRequestsSection" class="tasks-container extension-requests-section" style="display: none;">
-    <div class="section-title" style="display: flex; align-items: center; gap: 8px;">
-      <i class="bi bi-clock-history" style="color: #f59e0b;"></i>
-      延長申請
-      <span id="tdl-extensionRequestsCount" style="background: #f59e0b; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;">0</span>
-    </div>
-    <div id="tdl-extensionRequestsList">
-      <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">読み込み中...</div>
-    </div>
-  </div>
-
-  <!-- スタッフ用: 自分の延長申請状況 -->
-  <div id="tdl-myExtensionRequestsSection" class="tasks-container my-extension-requests-section" style="display: none;">
-    <div class="section-title" style="display: flex; align-items: center; gap: 8px;">
-      <i class="bi bi-hourglass-split" style="color: #6366f1;"></i>
-      あなたの延長申請
-      <span id="tdl-myExtensionRequestsCount" style="background: #6366f1; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;">0</span>
-    </div>
-    <div id="tdl-myExtensionRequestsList">
-      <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">読み込み中...</div>
-    </div>
-  </div>
-
-  <div class="tasks-container">
-    <div id="tdl-loading" class="loading">
-      <i class="bi bi-arrow-repeat"></i> 読み込み中...
-    </div>
-    <div id="tdl-pending-tasks" style="display: none;">
-      <div class="section-title">未完了のタスク</div>
-      <div id="tdl-pending-tasks-list"></div>
-    </div>
-    <div id="tdl-status-card" class="status-card" style="display: none;">
-      <div id="tdl-empty-state" class="empty-state" style="display: none;">
-        <i class="bi bi-check-circle"></i>
-        <p>やることはありません</p>
+  <!-- 延長申請タブ -->
+  <div id="tdl-tab-extensions" class="tdl-tab-content">
+    <!-- 管理者用: 延長申請一覧セクション -->
+    <div id="tdl-extensionRequestsSection" class="tasks-container extension-requests-section" style="display: none;">
+      <div class="section-title" style="display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-clock-history" style="color: #f59e0b;"></i>
+        延長申請
+        <span id="tdl-extensionRequestsCount" style="background: #f59e0b; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;">0</span>
       </div>
-      <div id="tdl-history-link-container" style="display: none;">
-        <div class="history-link" onclick="tdlGoToHistory()">
-          <i class="bi bi-clock-history"></i>
-          <span>完了した履歴を見る</span>
-          <span id="tdl-completed-count" class="history-count"></span>
-        </div>
+      <div id="tdl-extensionRequestsList">
+        <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">読み込み中...</div>
+      </div>
+    </div>
+
+    <!-- スタッフ用: 自分の延長申請状況 -->
+    <div id="tdl-myExtensionRequestsSection" class="tasks-container my-extension-requests-section">
+      <div class="section-title" style="display: flex; align-items: center; gap: 8px;">
+        <i class="bi bi-hourglass-split" style="color: #6366f1;"></i>
+        あなたの延長申請
+        <span id="tdl-myExtensionRequestsCount" style="background: #6366f1; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;">0</span>
+      </div>
+      <div id="tdl-myExtensionRequestsList">
+        <div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">読み込み中...</div>
       </div>
     </div>
   </div>
@@ -931,6 +960,7 @@
         });
         container.innerHTML = html;
         document.getElementById('tdl-extensionRequestsCount').textContent = snapshot.size;
+        tdlUpdateExtensionTabBadge(snapshot.size);
       } catch (error) {
         console.error('延長申請読み込みエラー:', error);
       }
@@ -945,7 +975,11 @@
         var countEl = document.getElementById('tdl-myExtensionRequestsCount');
         if (!section || !container || !countEl) return;
 
-        if (snapshot.empty) { section.style.display = 'none'; return; }
+        if (snapshot.empty) {
+          container.innerHTML = '<div style="text-align: center; color: #9ca3af; font-size: 13px; padding: 20px;">延長申請はありません</div>';
+          countEl.textContent = '0';
+          return;
+        }
 
         var html = '';
         var pendingCount = 0;
@@ -960,11 +994,9 @@
         });
         container.innerHTML = html;
         countEl.textContent = pendingCount > 0 ? pendingCount : snapshot.size;
-        section.style.display = 'block';
+        if (!_tdl_isAdmin && pendingCount > 0) { tdlUpdateExtensionTabBadge(pendingCount); }
       } catch (error) {
         console.error('自分の延長申請読み込みエラー:', error);
-        var sec = document.getElementById('tdl-myExtensionRequestsSection');
-        if (sec) sec.style.display = 'none';
       }
     }
 
@@ -1208,6 +1240,33 @@
         console.error('❌ [Task] 却下エラー:', error);
         alert('却下処理に失敗しました');
       }
+    }
+
+    // ============================================
+    // タブ切替
+    // ============================================
+
+    function tdlSwitchTab(tabName) {
+      var root = document.getElementById('spa-page-todo-list');
+      if (!root) return;
+      root.querySelectorAll('.material-tab').forEach(function(tab) {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+      });
+      root.querySelectorAll('.tdl-tab-content').forEach(function(content) {
+        content.classList.remove('active');
+      });
+      var target = document.getElementById('tdl-tab-' + tabName);
+      if (target) target.classList.add('active');
+
+      if (tabName === 'extensions') {
+        tdlLoadExtensionRequests();
+        tdlLoadMyExtensionRequests();
+      }
+    }
+
+    function tdlUpdateExtensionTabBadge(count) {
+      var badge = document.getElementById('tdl-extensionTabBadge');
+      if (badge) badge.textContent = count > 0 ? count : '';
     }
 
     // ============================================
