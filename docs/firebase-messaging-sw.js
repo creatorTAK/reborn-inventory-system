@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v362';  // v362: データ更新後のキャッシュクリアで一覧即時反映
+const CACHE_VERSION = 'v363';  // v363: 販売記録モーダルのボタン幅いっぱい
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
