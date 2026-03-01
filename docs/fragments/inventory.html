@@ -1123,7 +1123,7 @@
         var productData = snapshot.docs[0].data();
 
         await db.collection('products').doc(productDocId).update({
-          status: '販売済', saleDate: salesData.salesDate, saleAmount: salesData.salesAmount,
+          status: '販売済み', saleDate: salesData.salesDate, saleAmount: salesData.salesAmount,
           salePlatform: salesData.salesPlatform, shippingMethod1: salesData.shippingMethod1,
           shippingMethod2: salesData.shippingMethod2, shippingFee: salesData.shippingFee,
           packagingMaterials: salesData.packagingMaterials, packagingCostTotal: salesData.packagingCostTotal,
@@ -1295,7 +1295,7 @@
           registered: products.filter(function(p) { return p.status === '登録済み'; }).length,
           preparingListing: products.filter(function(p) { return p.status === '出品準備中'; }).length,
           listed: products.filter(function(p) { return p.status === '出品中'; }).length,
-          sold: products.filter(function(p) { return p.status === '販売済み'; }).length,
+          sold: products.filter(function(p) { return p.status === '販売済み' || p.status === '販売済'; }).length,
           withdrawn: products.filter(function(p) { return p.status === '取り下げ'; }).length
         },
         timestamp: Date.now()
@@ -1315,7 +1315,7 @@
 
     // ===== Utility =====
     function invGetStatusClass(status) {
-      var m = { '登録済み': 'bg-secondary', '出品準備中': 'bg-info', '出品中': 'bg-primary', '販売済み': 'bg-success', '取り下げ': 'bg-warning' };
+      var m = { '登録済み': 'bg-secondary', '出品準備中': 'bg-info', '出品中': 'bg-primary', '販売済み': 'bg-success', '販売済': 'bg-success', '取り下げ': 'bg-warning' };
       return m[status] || 'bg-secondary';
     }
     function invFormatCurrency(value) {
@@ -1526,7 +1526,7 @@
     // ===== Apply filters =====
     function invApplyFiltersAndDisplay(products, params) {
       var filtered = products;
-      if (params.statuses && params.statuses.length > 0) filtered = filtered.filter(function(p) { return params.statuses.indexOf(p.status) !== -1; });
+      if (params.statuses && params.statuses.length > 0) filtered = filtered.filter(function(p) { var s = p.status === '販売済' ? '販売済み' : p.status; return params.statuses.indexOf(s) !== -1; });
       if (params.mgmtSearchText) { var ml = params.mgmtSearchText.toLowerCase(); filtered = filtered.filter(function(p) { return p.managementNumber && p.managementNumber.toLowerCase().startsWith(ml); }); }
       if (params.searchText) { var sl = params.searchText.toLowerCase(); filtered = filtered.filter(function(p) { return (p.productName && p.productName.toLowerCase().indexOf(sl) !== -1) || (p.brand && p.brand.toLowerCase().indexOf(sl) !== -1); }); }
       if (params.brand) filtered = filtered.filter(function(p) { return p.brand === params.brand; });
@@ -1721,7 +1721,7 @@
       document.getElementById('invFilterSize').value = '';
       document.getElementById('invFilterColor').value = '';
 
-      var statusMap = { '登録済み': 'invStatus1', '出品準備中': 'invStatus2', '出品中': 'invStatus3', '販売済み': 'invStatus4', '取り下げ': 'invStatus5' };
+      var statusMap = { '登録済み': 'invStatus1', '出品準備中': 'invStatus2', '出品中': 'invStatus3', '販売済み': 'invStatus4', '販売済': 'invStatus4', '取り下げ': 'invStatus5' };
       if (status === 'all') {
         document.querySelectorAll('#spa-page-inventory input[type="checkbox"][id^="invStatus"]').forEach(function(cb) { cb.checked = true; });
       } else {
@@ -1895,7 +1895,7 @@
 
     function invDisplayProductDetail(product) {
       var container = document.getElementById('invProductDetailBody');
-      var isEditable = (product.status !== '販売済み');
+      var isEditable = (product.status !== '販売済み' && product.status !== '販売済');
 
       // Images
       var imagesToDisplay = (product.images && product.images.length > 0) ? product.images : [product.imageUrl1, product.imageUrl2, product.imageUrl3].filter(function(url) { return url; });
@@ -2273,7 +2273,7 @@
       if (!invCurrentProduct) { invShowError('商品データが見つかりません'); return; }
       var newStatus = document.getElementById('invProductStatus').value;
       var oldStatus = invCurrentProduct.status;
-      var isEditable = (oldStatus !== '販売済み');
+      var isEditable = (oldStatus !== '販売済み' && oldStatus !== '販売済');
       var changedFields = [];
       if (isEditable) {
         var fieldMappings = [
