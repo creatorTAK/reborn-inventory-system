@@ -2419,13 +2419,18 @@
     function invPopulateSalesChannels() {
       var select = document.getElementById('invSalesPlatform');
       select.innerHTML = '<option value="">選択してください</option>';
+      var seenPlatforms = {};
       invSalesChannelsMaster.forEach(function(channel) {
         if (channel.active !== false) {
+          var pid = channel.platformId || channel.name;
+          if (seenPlatforms[pid]) return;
+          seenPlatforms[pid] = true;
+          var cleanName = channel.name.replace(/（[^）]*）$/, '');
           var option = document.createElement('option');
-          option.value = channel.name;
-          option.dataset.platformId = channel.platformId;
+          option.value = cleanName;
+          option.dataset.platformId = pid;
           option.dataset.feeType = channel.feeType || 'simple';
-          option.textContent = channel.name;
+          option.textContent = cleanName;
           select.appendChild(option);
         }
       });
@@ -2435,7 +2440,8 @@
       var select = document.getElementById('invSalesPlatform');
       var container = document.getElementById('invFeeTypeInputContainer');
       var platformName = select.value;
-      var channelData = invSalesChannelsMaster.find(function(c) { return c.name === platformName; });
+      var selectedPid = select.selectedOptions[0] ? select.selectedOptions[0].dataset.platformId : '';
+      var channelData = invSalesChannelsMaster.find(function(c) { return (c.platformId || c.name) === selectedPid; }) || invSalesChannelsMaster.find(function(c) { return c.name.replace(/（[^）]*）$/, '') === platformName; });
       if (!channelData || !platformName) { container.style.display = 'none'; invCurrentSelectedFeeRate = null; invUpdateProfitCalculation(); return; }
       var feeType = channelData.feeType || 'simple';
       switch (feeType) {
@@ -2583,12 +2589,13 @@
       finalProfitElement.className = finalProfit >= 0 ? 'text-end text-success fw-bold' : 'text-end text-danger fw-bold';
     }
     function invGetPlatformFeeRate(platform, salesAmount) {
+      var findChannel = function(name) { return invSalesChannelsMaster.find(function(c) { return c.name === name || c.name.replace(/（[^）]*）$/, '') === name; }); };
       if (invCurrentSelectedFeeRate !== null) {
-        var channelData = invSalesChannelsMaster.find(function(c) { return c.name === platform; });
+        var channelData = findChannel(platform);
         if (channelData && channelData.feeType === 'complex' && salesAmount > 0) return invParseComplexFormula(channelData.commissionFormula, salesAmount);
         return invCurrentSelectedFeeRate;
       }
-      var channelData2 = invSalesChannelsMaster.find(function(c) { return c.name === platform; });
+      var channelData2 = findChannel(platform);
       if (channelData2) {
         switch (channelData2.feeType) {
           case 'simple': return channelData2.commission || 0;
