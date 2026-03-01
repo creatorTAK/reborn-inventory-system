@@ -576,6 +576,24 @@
           await tdlCreateReApprovalTask(taskData);
         }
 
+        // 発送タスク完了時: shippingCompletedフラグセット＆発送情報未登録チェック
+        if (taskType === 'shipping_task') {
+          var relData = taskData.relatedData || {};
+          var productId = relData.productId;
+          if (productId) {
+            try {
+              var productDoc = await _tdl_db.collection('products').doc(productId).get();
+              if (productDoc.exists) {
+                await _tdl_db.collection('products').doc(productId).update({ shippingCompleted: true });
+                var pData = productDoc.data();
+                if (pData.shippingConfirmed === false) {
+                  alert('⚠️ 発送情報がまだ登録されていません。\n在庫管理画面から発送完了を記録してください。\n（発送方法・梱包資材・送料の入力が必要です）');
+                }
+              }
+            } catch (e) { console.warn('[tdl] shippingCompleted更新エラー:', e); }
+          }
+        }
+
         await taskRef.update({ completed: true, completedAt: new Date().toISOString() });
         console.log('✅ [Task] タスク完了:', taskId);
         alert('タスクを完了しました');

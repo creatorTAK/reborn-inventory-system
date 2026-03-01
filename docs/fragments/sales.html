@@ -552,6 +552,7 @@
             <div class="sal-summary-value" id="sal-summary-profitRate">-</div>
           </div>
         </div>
+        <div id="sal-provisional-note" class="text-warning small mt-2" style="display:none;"></div>
 
         <div class="sal-sales-table-container">
           <div class="table-responsive">
@@ -672,6 +673,7 @@
               <div class="sal-summary-value" id="sal-analysis-count">-</div>
             </div>
           </div>
+          <div id="sal-analysis-provisional-note" class="text-warning small mt-2" style="display:none;"></div>
         </div>
 
         <!-- 在庫KPIサマリー -->
@@ -1325,7 +1327,8 @@
               listingDate: data.listing && data.listing.date || data.listingDate || '',
               salesPrice: parseFloat(data.saleAmount || 0),
               cancelReason: data.cancelReason || '',
-              cancelCost: parseFloat(data.cancelCost || 0)
+              cancelCost: parseFloat(data.cancelCost || 0),
+              shippingConfirmed: data.shippingConfirmed !== false
             });
           });
 
@@ -1464,7 +1467,7 @@
           '<td style="white-space: nowrap;">' + salEscapeHtml(item.productName) + '</td>' +
           '<td>' + (item.salePlatform || '-') + '</td>' +
           '<td class="text-end">' + salFormatCurrency(item.saleAmount) + '</td>' +
-          '<td class="text-end ' + (item.finalProfit >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatCurrency(item.finalProfit) + '</td>' +
+          '<td class="text-end ' + (item.finalProfit >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatCurrency(item.finalProfit) + (item.shippingConfirmed === false ? ' <span class="badge bg-warning text-dark" style="font-size:0.65em;">暫定</span>' : '') + '</td>' +
           '<td class="text-end ' + (item.profitRate >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatPercent(item.profitRate) + '</td>' +
           '<td>' + paymentBadge + '</td>' +
           '</tr>';
@@ -1588,6 +1591,18 @@
       document.getElementById('sal-summary-sales').textContent = salFormatCurrency(totalSales);
       document.getElementById('sal-summary-profit').textContent = salFormatCurrency(totalProfit);
       document.getElementById('sal-summary-profitRate').textContent = salFormatPercent(avgProfitRate);
+
+      // 暫定利益注記
+      var provisionalCount = activeData.filter(function(item) { return item.shippingConfirmed === false; }).length;
+      var noteEl = document.getElementById('sal-provisional-note');
+      if (noteEl) {
+        if (provisionalCount > 0) {
+          noteEl.style.display = 'block';
+          noteEl.textContent = '※' + provisionalCount + '件の暫定利益を含みます（送料・梱包費未確定）';
+        } else {
+          noteEl.style.display = 'none';
+        }
+      }
     }
 
     // ============================================
@@ -2173,6 +2188,18 @@
       document.getElementById('sal-analysis-profit').textContent = salFormatCurrency(totalProfit);
       document.getElementById('sal-analysis-profit-rate').textContent = salFormatPercent(profitRate);
       document.getElementById('sal-analysis-count').textContent = data.length + '件';
+
+      // 暫定利益注記
+      var provisionalCount = data.filter(function(item) { return item.shippingConfirmed === false; }).length;
+      var analysisNote = document.getElementById('sal-analysis-provisional-note');
+      if (analysisNote) {
+        if (provisionalCount > 0) {
+          analysisNote.style.display = 'block';
+          analysisNote.textContent = '※' + provisionalCount + '件の暫定利益を含みます（送料・梱包費未確定）';
+        } else {
+          analysisNote.style.display = 'none';
+        }
+      }
 
       salRenderInventoryKPI();
       salRenderPerformanceMetrics(data);
