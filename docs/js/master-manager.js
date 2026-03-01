@@ -10013,7 +10013,7 @@ async function sendStockAlertPushNotification(materialName, currentStock, thresh
         data: {
           type: 'stock_alert',
           roomId: 'room_inventory_alert',
-          url: '/inventory_history.html'
+          url: '/packaging.html'
         }
       })
     });
@@ -10080,7 +10080,7 @@ async function createStockAlertTask(materialId, materialName, currentStock, thre
         createdAt: new Date().toISOString(),
         completed: false,
         priority: currentStock <= 0 ? 'high' : 'medium',
-        link: '/inventory_history.html',
+        link: '/packaging.html',
         relatedData: {
           materialId,
           materialName,

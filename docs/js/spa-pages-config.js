@@ -186,11 +186,11 @@ const FURIRA_PAGES = {
   },
 
   // === Phase 6: 最終ページ（GAS→Firestore移行完了） ===
-  inventory_history: {
+  packaging: {
     type: 'fragment',
-    fragmentUrl: '/fragments/inventory_history.html',
-    init: 'initInventoryHistoryPage',
-    destroy: 'destroyInventoryHistoryPage',
+    fragmentUrl: '/fragments/packaging.html',
+    init: 'initPackagingPage',
+    destroy: 'destroyPackagingPage',
     bottomNav: null
   }
 };
