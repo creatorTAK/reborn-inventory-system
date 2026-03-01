@@ -1846,9 +1846,9 @@
     }
 
     // ===== マスタデータキャッシュ =====
-    var invMasterCache = { suppliers: null, salesChannels: null };
+    var invMasterCache = { suppliers: null, salesChannels: null, sizes: null };
     async function invLoadMasterOptions() {
-      if (invMasterCache.suppliers && invMasterCache.salesChannels) return;
+      if (invMasterCache.suppliers && invMasterCache.salesChannels && invMasterCache.sizes) return;
       try {
         var db = window.db;
         var supSnap = await db.collection('suppliers').orderBy('name', 'asc').get();
@@ -1867,7 +1867,10 @@
           var clean = n.replace(/（[^）]*）$/, '');
           invMasterCache.salesChannels.push(clean);
         });
-      } catch (e) { console.warn('マスタ取得エラー:', e); invMasterCache.suppliers = invMasterCache.suppliers || []; invMasterCache.salesChannels = invMasterCache.salesChannels || []; }
+        var moSnap = await db.collection('masterOptions').where('fieldName', '==', 'サイズ').limit(1).get();
+        invMasterCache.sizes = [];
+        moSnap.forEach(function(doc) { var d = doc.data(); if (d.items) invMasterCache.sizes = d.items; });
+      } catch (e) { console.warn('マスタ取得エラー:', e); invMasterCache.suppliers = invMasterCache.suppliers || []; invMasterCache.salesChannels = invMasterCache.salesChannels || []; invMasterCache.sizes = invMasterCache.sizes || []; }
     }
 
     // ===== View product detail =====
@@ -2002,10 +2005,16 @@
         + '<div class="col-6"><label class="form-label fw-bold small mb-0">ステータス</label>' + statusSelectHtml + '</div>'
         + '<div class="col-6"><label class="form-label fw-bold small">担当者</label>' + createField(product.person, 'invProductPerson') + '</div>'
         + '<div class="col-12"><h6 class="border-bottom pb-2 mt-2"><i class="bi bi-tag me-1"></i>商品情報 ' + (isEditable ? '<span class="badge bg-success small">編集可能</span>' : '') + '</h6></div>'
-        + '<div class="col-12"><label class="form-label fw-bold small">ブランド</label>' + createField(product.brand, 'invProductBrand') + '</div>'
+        + '<div class="col-12"><label class="form-label fw-bold small">ブランド</label>' + createField(product.brand, 'invProductBrand') + (product.brandKana ? '<span style="font-size: 12px; color: #6b7280; margin-left: 4px;">(' + product.brandKana + ')</span>' : '') + '</div>'
         + '<div class="col-12"><label class="form-label fw-bold small">商品名(タイトル)</label><div style="position: relative;">' + (isEditable ? '<textarea class="form-control form-control-sm" id="invProductName" rows="2" style="padding-right: 36px;">' + (product.productName || '') + '</textarea><div id="invProductNameField" style="display:none;">' + (product.productName || '') + '</div>' : '<div class="form-control-plaintext" id="invProductNameField" style="word-break: break-all; white-space: normal; padding-right: 36px;">' + (product.productName || '-') + '</div>') + '<button type="button" onclick="invCopyText(\'invProductNameField\', this)" class="inv-copy-btn" title="コピー"><i class="bi bi-copy"></i></button></div></div>'
         + '<div class="col-12"><label class="form-label fw-bold small">カテゴリー</label><div class="form-control-plaintext" style="font-size: 13px; line-height: 1.4;">' + catHierarchy + '</div></div>'
-        + '<div class="col-6"><label class="form-label fw-bold small">サイズ</label>' + createField(product.size, 'invProductSize') + '</div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">サイズ</label>' + (function() {
+          if (!isEditable) return '<div class="form-control-plaintext">' + (product.size || '-') + '</div>';
+          var html = '<select class="form-select form-select-sm" id="invProductSize"><option value="">--選択--</option>';
+          (invMasterCache.sizes || []).forEach(function(s) { html += '<option value="' + s + '"' + (s === product.size ? ' selected' : '') + '>' + s + '</option>'; });
+          html += '</select>';
+          return html;
+        })() + '</div>'
         + '<div class="col-6"><label class="form-label fw-bold small">商品の状態</label>' + conditionSelectHtml + '</div>'
         + '<div class="col-6"><label class="form-label fw-bold small">ランク</label><div class="form-control-plaintext" id="invRankDisplay">' + rankDisplay + '</div></div>'
         + '<div class="col-12"><label class="form-label fw-bold small" onclick="invToggleDescription()" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">商品の説明 <span id="invDescToggleIcon" style="font-size: 12px; color: #6b7280;">&#9660; 全文表示</span></label>'
