@@ -2006,25 +2006,43 @@
         + '<div class="col-12"><label class="form-label fw-bold small">商品名(タイトル)</label><div style="position: relative;">' + (isEditable ? '<textarea class="form-control form-control-sm" id="invProductName" rows="2" style="padding-right: 36px;">' + (product.productName || '') + '</textarea><div id="invProductNameField" style="display:none;">' + (product.productName || '') + '</div>' : '<div class="form-control-plaintext" id="invProductNameField" style="word-break: break-all; white-space: normal; padding-right: 36px;">' + (product.productName || '-') + '</div>') + '<button type="button" onclick="invCopyText(\'invProductNameField\', this)" class="inv-copy-btn" title="コピー"><i class="bi bi-copy"></i></button></div></div>'
         + '<div class="col-12"><label class="form-label fw-bold small">カテゴリー</label><div class="form-control-plaintext" style="font-size: 13px; line-height: 1.4;">' + catHierarchy + '</div></div>'
         + '<div class="col-6"><label class="form-label fw-bold small">サイズ</label>' + createField(product.size, 'invProductSize') + '</div>'
+        + '<div class="col-6"><label class="form-label fw-bold small">サイズ(表記)</label>' + createField(product.sizeActual, 'invProductSizeActual') + '</div>'
         + '<div class="col-6"><label class="form-label fw-bold small">商品の状態</label>' + conditionSelectHtml + '</div>'
         + '<div class="col-6"><label class="form-label fw-bold small">ランク</label><div class="form-control-plaintext" id="invRankDisplay">' + rankDisplay + '</div></div>'
         + (function() {
           var ms = product.measurements || {};
-          var mFields = [
+          var topsFields = [
             { key: 'shoulderWidth', label: '肩幅' },
             { key: 'chestWidth', label: '身幅' },
             { key: 'sleeveLength', label: '袖丈' },
-            { key: 'length', label: '着丈' },
+            { key: 'length', label: '着丈' }
+          ];
+          var bottomsFields = [
             { key: 'waist', label: 'ウエスト' },
             { key: 'hip', label: 'ヒップ' },
             { key: 'rise', label: '股上' },
             { key: 'inseam', label: '股下' }
           ];
-          var hasAny = mFields.some(function(f) { return ms[f.key]; });
-          if (!hasAny && !isEditable) return '';
-          var html = '<div class="col-12"><label class="form-label fw-bold small" onclick="invToggleMeasurements()" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">サイズ(詳細) <span id="invMeasToggleIcon" style="font-size: 12px; color: #6b7280;">&#9654; 展開</span></label>';
-          html += '<div id="invMeasurementsContainer" style="display: none;"><div class="row g-2">';
-          mFields.forEach(function(f) {
+          var topsCats = ['Tシャツ','シャツ','ニット','セーター','パーカー','スウェット','ジャケット','ブレザー','カーディガン','ベスト','タンクトップ','キャミソール','ブラウス','チュニック','ワンピース','コート','ダウンジャケット','アウター','ジャンパー'];
+          var bottomsCats = ['パンツ','ジーンズ','デニム','チノパン','スラックス','ショートパンツ','ハーフパンツ','レギンス','スパッツ','ジョガーパンツ','カーゴパンツ','スカート','ミニスカート','マキシスカート','プリーツスカート'];
+          var setCats = ['スーツ','セットアップ','パジャマ','ルームウェア','ジャージ','トラックスーツ','スポーツウェア','作業着','つなぎ'];
+          var sub = product.categoryMinor || '';
+          var showTops = topsCats.some(function(c) { return sub.indexOf(c) >= 0; });
+          var showBottoms = bottomsCats.some(function(c) { return sub.indexOf(c) >= 0; });
+          var isSet = setCats.some(function(c) { return sub.indexOf(c) >= 0; });
+          if (isSet) { showTops = true; showBottoms = true; }
+          var visibleFields = [];
+          if (showTops) visibleFields = visibleFields.concat(topsFields);
+          if (showBottoms) visibleFields = visibleFields.concat(bottomsFields);
+          if (visibleFields.length === 0) {
+            var allFields = topsFields.concat(bottomsFields);
+            var hasAny = allFields.some(function(f) { return ms[f.key]; });
+            if (hasAny) visibleFields = allFields;
+          }
+          if (visibleFields.length === 0) return '';
+          var html = '<div class="col-12"><label class="form-label fw-bold small">サイズ(詳細)</label>';
+          html += '<div class="row g-2">';
+          visibleFields.forEach(function(f) {
             var val = ms[f.key] || '';
             if (isEditable) {
               html += '<div class="col-3"><label class="form-label small mb-0" style="font-size: 11px;">' + f.label + '</label><div style="display:flex;align-items:center;gap:2px;"><input type="number" class="form-control form-control-sm" id="invMeas_' + f.key + '" value="' + val + '" style="font-size: 12px;" step="0.5"><span style="font-size: 11px; color: #6b7280;">cm</span></div></div>';
@@ -2032,7 +2050,7 @@
               html += '<div class="col-3"><label class="form-label small mb-0" style="font-size: 11px;">' + f.label + '</label><div class="form-control-plaintext" style="font-size: 12px;">' + (val ? val + ' cm' : '-') + '</div></div>';
             }
           });
-          html += '</div></div></div>';
+          html += '</div></div>';
           return html;
         })()
         + '<div class="col-12"><label class="form-label fw-bold small" onclick="invToggleDescription()" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">商品の説明 <span id="invDescToggleIcon" style="font-size: 12px; color: #6b7280;">&#9660; 全文表示</span></label>'
@@ -2123,15 +2141,6 @@
         setTimeout(function() { toast.style.opacity = '1'; toast.style.transform = 'translateX(-50%) translateY(0)'; }, 10);
         setTimeout(function() { toast.style.opacity = '0'; toast.style.transform = 'translateX(-50%) translateY(20px)'; setTimeout(function() { toast.remove(); }, 300); }, 1500);
       });
-    };
-
-    window.invToggleMeasurements = function() {
-      var cnt = document.getElementById('invMeasurementsContainer');
-      var icon = document.getElementById('invMeasToggleIcon');
-      if (!cnt) return;
-      var isHidden = cnt.style.display === 'none';
-      cnt.style.display = isHidden ? 'block' : 'none';
-      if (icon) icon.innerHTML = isHidden ? '&#9660; 閉じる' : '&#9654; 展開';
     };
 
     window.invToggleDescription = function() {
@@ -2283,6 +2292,7 @@
           { id: 'invProductBrand', apiName: 'ブランド', oldValue: invCurrentProduct.brand },
           { id: 'invProductName', apiName: '商品名', oldValue: invCurrentProduct.productName },
           { id: 'invProductSize', apiName: 'サイズ', oldValue: invCurrentProduct.size },
+          { id: 'invProductSizeActual', apiName: 'サイズ(表記)', oldValue: invCurrentProduct.sizeActual },
           { id: 'invProductDescription', apiName: '商品説明', oldValue: invCurrentProduct.productDescription },
           { id: 'invProductPerson', apiName: '担当者', oldValue: invCurrentProduct.person },
           { id: 'invProductCondition', apiName: '商品の状態', oldValue: invCurrentProduct.condition },
@@ -2342,7 +2352,7 @@
         if (statusChanged) { updateData.status = newStatus; }
 
         // フィールド名マッピング（UI apiName → Firestoreフィールド）
-        var fieldMapping = { 'ブランド': 'brand', '商品名': 'productName', 'サイズ': 'size', '商品説明': 'description', '担当者': 'person', '商品の状態': 'condition', '仕入先': 'supplier', '出品先': 'listingDestination', '販売タイプ': 'salesType', '仕入日': 'purchaseDate', '出品日': 'listingDate', '仕入金額': 'purchaseAmount', '出品金額': 'listingAmount', 'ランク': 'rank' };
+        var fieldMapping = { 'ブランド': 'brand', '商品名': 'productName', 'サイズ': 'size.display', 'サイズ(表記)': 'size.actual', '商品説明': 'description', '担当者': 'person', '商品の状態': 'condition', '仕入先': 'supplier', '出品先': 'listingDestination', '販売タイプ': 'salesType', '仕入日': 'purchaseDate', '出品日': 'listingDate', '仕入金額': 'purchaseAmount', '出品金額': 'listingAmount', 'ランク': 'rank' };
         var dateFields = ['仕入日', '出品日'];
         changedFields.forEach(function(change) {
           var firestoreField = fieldMapping[change.field] || change.field;

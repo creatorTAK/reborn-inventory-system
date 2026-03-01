@@ -299,6 +299,7 @@ async function getProductListFromFirestore(filters = {}) {
         person: data.person || data.assignedTo || '',
         // size: オブジェクト {display, actual} または文字列に対応
         size: data.size?.display || (typeof data.size === 'string' ? data.size : ''),
+        sizeActual: data.size?.actual || '',
         // color/material: attributes内または旧フラット構造に対応
         color: data.attributes?.color || data.color || '',
         material: data.attributes?.material || data.material || '',
@@ -411,6 +412,7 @@ async function getProductByManagementNumber(managementNumber) {
         person: data.person || data.assignedTo || '',
         // size: オブジェクト {display, actual} または文字列に対応
         size: data.size?.display || (typeof data.size === 'string' ? data.size : ''),
+        sizeActual: data.size?.actual || '',
         // color/material: attributes内または旧フラット構造に対応
         color: data.attributes?.color || data.color || '',
         material: data.attributes?.material || data.material || '',
