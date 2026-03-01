@@ -156,39 +156,35 @@ window.initMasterManager = function() {
 
   console.log('✅ [Master Manager] master-config.js 読み込み確認完了');
 
-  // URLパラメータから初期カテゴリを取得
-  const urlParams = new URLSearchParams(window.location.search);
-  const urlCategory = urlParams.get('category');
+  // SPA環境ではinitMasterManagementPageが適切なloadMasterを呼ぶのでスキップ
+  if (!window._mstSpaMode) {
+    // URLパラメータから初期カテゴリを取得（非SPA/iframe環境用）
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCategory = urlParams.get('category');
 
-  // カテゴリに応じて不要なアコーディオンを削除（メニュー重複解消）
-  if (urlCategory === 'business') {
-    // 業務関連マスタのみ表示 → 商品関連アコーディオンを削除
-    const productAccordionItem = document.querySelector('[data-bs-target="#productMasterCollapse"]')?.closest('.accordion-item');
-    if (productAccordionItem) {
-      productAccordionItem.remove();
-      console.log('✅ [Master Manager] 商品関連アコーディオン削除（業務関連モード）');
+    // カテゴリに応じて不要なアコーディオンを削除（メニュー重複解消）
+    if (urlCategory === 'business') {
+      const productAccordionItem = document.querySelector('[data-bs-target="#productMasterCollapse"]')?.closest('.accordion-item');
+      if (productAccordionItem) {
+        productAccordionItem.remove();
+      }
+      const businessCollapse = document.getElementById('businessMasterCollapse');
+      const businessButton = document.querySelector('[data-bs-target="#businessMasterCollapse"]');
+      if (businessCollapse && businessButton) {
+        businessCollapse.classList.add('show');
+        businessButton.classList.remove('collapsed');
+        businessButton.setAttribute('aria-expanded', 'true');
+      }
+      loadMaster('business', 'shipping');
+    } else {
+      const businessAccordionItem = document.querySelector('[data-bs-target="#businessMasterCollapse"]')?.closest('.accordion-item');
+      if (businessAccordionItem) {
+        businessAccordionItem.remove();
+      }
+      loadMaster('product', 'brand');
     }
-
-    // 業務関連を開く
-    const businessCollapse = document.getElementById('businessMasterCollapse');
-    const businessButton = document.querySelector('[data-bs-target="#businessMasterCollapse"]');
-    if (businessCollapse && businessButton) {
-      businessCollapse.classList.add('show');
-      businessButton.classList.remove('collapsed');
-      businessButton.setAttribute('aria-expanded', 'true');
-    }
-
-    loadMaster('business', 'shipping');
   } else {
-    // 商品関連マスタのみ表示 → 業務関連アコーディオンを削除
-    const businessAccordionItem = document.querySelector('[data-bs-target="#businessMasterCollapse"]')?.closest('.accordion-item');
-    if (businessAccordionItem) {
-      businessAccordionItem.remove();
-      console.log('✅ [Master Manager] 業務関連アコーディオン削除（商品関連モード）');
-    }
-
-    // 初回はブランドを表示（検索専用モード）
-    loadMaster('product', 'brand');
+    console.log('✅ [Master Manager] SPA mode - loadMaster skipped (handled by initMasterManagementPage)');
   }
 
   // イベントリスナー設定
