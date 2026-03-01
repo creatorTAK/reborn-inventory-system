@@ -1059,14 +1059,16 @@
       var methods = [];
       snapshot.forEach(function(docSnap) {
         var data = docSnap.data();
+        var platform = data.platform || null;
+        var categoryName = data.category || docSnap.id;
         if (data.items && Array.isArray(data.items)) {
-          // カテゴリ別ドキュメント形式: {items: [{detail, price}, ...]}
+          // カテゴリ別ドキュメント形式: {items: [{detail, price}, ...], platform, category}
           data.items.forEach(function(item) {
-            methods.push({ method1: docSnap.id, method2: item.detail, fee: item.price });
+            methods.push({ method1: categoryName, method2: item.detail, fee: item.price, platform: platform });
           });
         } else {
           // 個別ドキュメント形式: {category, detail, price}
-          methods.push({ method1: data.category, method2: data.detail, fee: data.price });
+          methods.push({ method1: categoryName, method2: data.detail, fee: data.price, platform: platform });
         }
       });
       methods.sort(function(a, b) { return (a.method1 || '').localeCompare(b.method1 || '', 'ja'); });
@@ -2442,6 +2444,8 @@
       var platformName = select.value;
       var selectedPid = select.selectedOptions[0] ? select.selectedOptions[0].dataset.platformId : '';
       var channelData = invSalesChannelsMaster.find(function(c) { return (c.platformId || c.name) === selectedPid; }) || invSalesChannelsMaster.find(function(c) { return c.name.replace(/（[^）]*）$/, '') === platformName; });
+      // 発送方法を販売先に連動してフィルタ
+      invPopulateShippingMethod1(selectedPid || null);
       if (!channelData || !platformName) { container.style.display = 'none'; invCurrentSelectedFeeRate = null; invUpdateProfitCalculation(); return; }
       var feeType = channelData.feeType || 'simple';
       switch (feeType) {
@@ -2494,17 +2498,45 @@
       return totalPercent;
     }
 
-    function invPopulateShippingMethod1() {
+    // プラットフォームグループ（同一グループ内は同じ発送方法を共有）
+    var INV_PLATFORM_GROUPS = {
+      'mercari': ['mercari', 'mercari-shops'],
+      'mercari-shops': ['mercari', 'mercari-shops'],
+      'yahoo-fleamarket': ['yahoo-fleamarket', 'yahoo-auction'],
+      'yahoo-auction': ['yahoo-fleamarket', 'yahoo-auction']
+    };
+
+    function invGetFilteredShippingMethods(platformId) {
+      if (!platformId) return invShippingMethodMaster;
+      var groupMembers = INV_PLATFORM_GROUPS[platformId] || [platformId];
+      return invShippingMethodMaster.filter(function(item) {
+        return !item.platform || groupMembers.indexOf(item.platform) !== -1;
+      });
+    }
+
+    function invPopulateShippingMethod1(platformId) {
       var select = document.getElementById('invShippingMethod1');
-      var cats = []; invShippingMethodMaster.forEach(function(item) { if (cats.indexOf(item.method1) === -1) cats.push(item.method1); });
+      var select2 = document.getElementById('invShippingMethod2');
+      var filtered = invGetFilteredShippingMethods(platformId);
+      var cats = [];
+      filtered.forEach(function(item) { if (cats.indexOf(item.method1) === -1) cats.push(item.method1); });
       select.innerHTML = '<option value="">選択してください</option>';
       cats.forEach(function(category) { var opt = document.createElement('option'); opt.value = category; opt.textContent = category; select.appendChild(opt); });
+      // method2もリセット
+      select2.disabled = true;
+      select2.innerHTML = '<option value="">まず発送方法を選択してください</option>';
+      document.getElementById('invShippingFee').value = '';
+      invUpdateProfitCalculation();
     }
     function invOnShippingMethod1Change() {
       var method1 = document.getElementById('invShippingMethod1').value;
       var select2 = document.getElementById('invShippingMethod2');
       if (!method1) { select2.disabled = true; select2.innerHTML = '<option value="">まず発送方法を選択してください</option>'; document.getElementById('invShippingFee').value = ''; invUpdateProfitCalculation(); return; }
-      var options = invShippingMethodMaster.filter(function(item) { return item.method1 === method1; });
+      // 現在の販売先でフィルタしたデータからmethod2を取得
+      var platformSelect = document.getElementById('invSalesPlatform');
+      var currentPid = platformSelect.selectedOptions[0] ? platformSelect.selectedOptions[0].dataset.platformId : null;
+      var filtered = invGetFilteredShippingMethods(currentPid);
+      var options = filtered.filter(function(item) { return item.method1 === method1; });
       select2.disabled = false;
       select2.innerHTML = '<option value="">選択してください</option>';
       options.forEach(function(item) { var opt = document.createElement('option'); opt.value = item.method2; opt.dataset.fee = item.fee; opt.textContent = item.method2; select2.appendChild(opt); });
