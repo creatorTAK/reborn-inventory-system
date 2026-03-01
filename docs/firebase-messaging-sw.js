@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v356';  // v356: サイズ詳細カテゴリ別表示+サイズ表記追加
+const CACHE_VERSION = 'v357';  // v357: サイズ表記をサイズ詳細セクション内に移動
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
