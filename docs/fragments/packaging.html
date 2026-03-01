@@ -447,6 +447,93 @@
       color: #dc2626;
       font-weight: 600;
     }
+    #spa-page-packaging .preset-card {
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border-left: 4px solid #8b5cf6;
+    }
+    #spa-page-packaging .preset-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    #spa-page-packaging .preset-card-name {
+      font-weight: 600;
+      font-size: 15px;
+      color: #212529;
+    }
+    #spa-page-packaging .preset-card-actions {
+      display: flex;
+      gap: 6px;
+    }
+    #spa-page-packaging .preset-card-body {
+      font-size: 13px;
+      color: #6b7280;
+    }
+    #spa-page-packaging .preset-material-tag {
+      display: inline-block;
+      background: #f3f4f6;
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin: 2px 4px 2px 0;
+      font-size: 12px;
+      color: #374151;
+    }
+    #spa-page-packaging .preset-modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #spa-page-packaging .preset-modal-content {
+      background: white;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 480px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 20px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    }
+    #spa-page-packaging .preset-modal-content h5 {
+      margin: 0 0 16px;
+      font-weight: 600;
+    }
+    #spa-page-packaging .preset-material-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    #spa-page-packaging .preset-material-check:last-child {
+      border-bottom: none;
+    }
+    #spa-page-packaging .preset-material-check label {
+      flex: 1;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #spa-page-packaging .preset-material-check input[type="number"] {
+      width: 70px;
+      text-align: center;
+      font-size: 14px;
+      padding: 4px 6px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+    }
+    #spa-page-packaging .preset-card-meta {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 6px;
+    }
   </style>
 
   <!-- Loading Overlay -->
@@ -493,6 +580,10 @@
     <button class="material-tab" data-tab="orders" onclick="ihSwitchTab('orders')">
       <i class="bi bi-cart-plus"></i>
       発注
+    </button>
+    <button class="material-tab" data-tab="presets" onclick="ihSwitchTab('presets')">
+      <i class="bi bi-collection"></i>
+      プリセット
     </button>
   </div>
 
@@ -659,6 +750,21 @@
       <div id="ih-ordersList"></div>
     </div>
   </div>
+
+  <!-- プリセットタブ -->
+  <div class="ih-tab-content" id="ih-tab-presets">
+    <div class="container-fluid">
+      <div style="padding: 12px 0;">
+        <button class="btn btn-primary w-100" onclick="ihShowPresetCreateModal()">
+          <i class="bi bi-plus-lg me-1"></i>新規プリセット作成
+        </button>
+      </div>
+      <div id="ih-presetList"></div>
+    </div>
+  </div>
+
+  <!-- プリセット作成/編集モーダル -->
+  <div id="ih-presetEditModal" style="display: none;"></div>
 
   <!-- 入庫モーダル -->
   <div class="modal fade" id="ih-stockInModal" tabindex="-1">
@@ -1027,6 +1133,8 @@
         ihLoadStockList();
       } else if (tabName === 'orders') {
         ihLoadOrdersList();
+      } else if (tabName === 'presets') {
+        ihLoadPresetList();
       }
     }
 
@@ -2198,6 +2306,200 @@
       ihLoadStockList();
     }
 
+    // ========================================
+    // Preset Management (ih_ prefix)
+    // ========================================
+    async function ihLoadPresetList() {
+      var container = document.getElementById('ih-presetList');
+      if (!container) return;
+      container.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div> 読み込み中...</div>';
+      try {
+        var db = ihGetDb();
+        var snapshot = await db.collection('packagingPresets').orderBy('name').get();
+        if (snapshot.empty) {
+          container.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-collection" style="font-size:2rem;display:block;margin-bottom:8px;"></i>プリセットがまだ登録されていません</div>';
+          return;
+        }
+        // 資材名マップ作成
+        var materialMap = {};
+        ih_allMaterials.forEach(function(m) { materialMap[m.id] = m.name; });
+        var html = '';
+        snapshot.forEach(function(docSnap) {
+          var data = docSnap.data();
+          var presetId = docSnap.id;
+          var materials = data.materials || [];
+          var tagsHtml = '';
+          materials.forEach(function(m) {
+            var name = materialMap[m.materialId] || m.materialId;
+            tagsHtml += '<span class="preset-material-tag">' + ihEscapeHtml(name) + ' ×' + (m.quantity || 1) + '</span>';
+          });
+          if (!tagsHtml) tagsHtml = '<span class="text-muted" style="font-size:12px;">資材未設定</span>';
+          var metaHtml = '';
+          if (data.createdBy) metaHtml += '作成: ' + ihEscapeHtml(data.createdBy);
+          if (data.updatedAt) {
+            var updDate = data.updatedAt.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt);
+            metaHtml += ' | 更新: ' + ihFormatDateTime(updDate);
+          } else if (data.createdAt) {
+            var crDate = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+            metaHtml += ' | ' + ihFormatDateTime(crDate);
+          }
+          html += '<div class="preset-card">'
+            + '<div class="preset-card-header">'
+            + '<span class="preset-card-name"><i class="bi bi-collection me-1" style="color:#8b5cf6;"></i>' + ihEscapeHtml(data.name || '名称なし') + '</span>'
+            + '<div class="preset-card-actions">'
+            + '<button class="btn btn-outline-primary btn-sm" onclick="ihShowPresetEditModal(\'' + presetId + '\')" title="編集"><i class="bi bi-pencil"></i></button>'
+            + '<button class="btn btn-outline-danger btn-sm" onclick="ihDeletePreset(\'' + presetId + '\', \'' + ihEscapeHtml((data.name || '').replace(/'/g, "\\'")) + '\')" title="削除"><i class="bi bi-trash"></i></button>'
+            + '</div></div>'
+            + '<div class="preset-card-body">' + tagsHtml + '</div>'
+            + (metaHtml ? '<div class="preset-card-meta">' + metaHtml + '</div>' : '')
+            + '</div>';
+        });
+        container.innerHTML = html;
+      } catch (e) {
+        console.error('[ih] loadPresetList error:', e);
+        container.innerHTML = '<div class="text-center text-danger py-4">読み込みエラー: ' + ihEscapeHtml(e.message) + '</div>';
+      }
+    }
+
+    function ihBuildPresetModalHtml(title, presetName, selectedMaterials) {
+      var materialsHtml = '';
+      ih_allMaterials.forEach(function(m) {
+        var sel = selectedMaterials[m.id];
+        var checked = sel ? 'checked' : '';
+        var qty = sel ? sel.quantity : 1;
+        materialsHtml += '<div class="preset-material-check">'
+          + '<input type="checkbox" id="ih-pm-' + m.id + '" ' + checked + ' onchange="ihTogglePresetQty(this, \'' + m.id + '\')">'
+          + '<label for="ih-pm-' + m.id + '">' + ihEscapeHtml(m.name) + '</label>'
+          + '<input type="number" id="ih-pq-' + m.id + '" value="' + qty + '" min="1" style="' + (sel ? '' : 'display:none;') + '">'
+          + '</div>';
+      });
+      if (!ih_allMaterials.length) {
+        materialsHtml = '<div class="text-center text-muted py-3">資材が登録されていません</div>';
+      }
+      return '<div class="preset-modal-overlay" onclick="ihClosePresetModal(event)">'
+        + '<div class="preset-modal-content" onclick="event.stopPropagation()">'
+        + '<h5><i class="bi bi-collection me-1"></i>' + title + '</h5>'
+        + '<div class="mb-3">'
+        + '<label class="form-label fw-bold">プリセット名</label>'
+        + '<input type="text" class="form-control" id="ih-presetNameInput" value="' + ihEscapeHtml(presetName) + '" placeholder="例: 小型軽量セット" style="font-size:16px;">'
+        + '</div>'
+        + '<div class="mb-3">'
+        + '<label class="form-label fw-bold">資材を選択</label>'
+        + '<div style="max-height:300px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:8px;padding:8px;">'
+        + materialsHtml
+        + '</div></div>'
+        + '<div class="d-flex gap-2">'
+        + '<button class="btn btn-secondary flex-fill" onclick="ihClosePresetModal()">キャンセル</button>'
+        + '<button class="btn btn-primary flex-fill" id="ih-presetSaveBtn">保存</button>'
+        + '</div></div></div>';
+    }
+
+    function ihTogglePresetQty(checkbox, materialId) {
+      var qtyInput = document.getElementById('ih-pq-' + materialId);
+      if (qtyInput) qtyInput.style.display = checkbox.checked ? '' : 'none';
+    }
+
+    function ihClosePresetModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      var modal = document.getElementById('ih-presetEditModal');
+      if (modal) { modal.style.display = 'none'; modal.innerHTML = ''; }
+    }
+
+    function ihShowPresetCreateModal() {
+      var modal = document.getElementById('ih-presetEditModal');
+      if (!modal) return;
+      modal.innerHTML = ihBuildPresetModalHtml('新規プリセット作成', '', {});
+      modal.style.display = 'block';
+      var saveBtn = document.getElementById('ih-presetSaveBtn');
+      if (saveBtn) saveBtn.onclick = function() { ihSavePreset(null); };
+    }
+
+    async function ihShowPresetEditModal(presetId) {
+      var modal = document.getElementById('ih-presetEditModal');
+      if (!modal) return;
+      try {
+        var db = ihGetDb();
+        var docSnap = await db.collection('packagingPresets').doc(presetId).get();
+        if (!docSnap.exists) { alert('プリセットが見つかりません'); return; }
+        var data = docSnap.data();
+        var selectedMaterials = {};
+        (data.materials || []).forEach(function(m) {
+          selectedMaterials[m.materialId] = { quantity: m.quantity || 1 };
+        });
+        modal.innerHTML = ihBuildPresetModalHtml('プリセット編集', data.name || '', selectedMaterials);
+        modal.style.display = 'block';
+        var saveBtn = document.getElementById('ih-presetSaveBtn');
+        if (saveBtn) saveBtn.onclick = function() { ihSavePreset(presetId); };
+      } catch (e) {
+        console.error('[ih] showPresetEditModal error:', e);
+        alert('プリセットの読み込みに失敗しました');
+      }
+    }
+
+    async function ihSavePreset(presetId) {
+      var nameInput = document.getElementById('ih-presetNameInput');
+      var name = nameInput ? nameInput.value.trim() : '';
+      if (!name) { alert('プリセット名を入力してください'); return; }
+      var materials = [];
+      ih_allMaterials.forEach(function(m) {
+        var cb = document.getElementById('ih-pm-' + m.id);
+        var qi = document.getElementById('ih-pq-' + m.id);
+        if (cb && cb.checked) {
+          var qty = qi ? parseInt(qi.value, 10) : 1;
+          if (isNaN(qty) || qty < 1) qty = 1;
+          materials.push({ materialId: m.id, quantity: qty });
+        }
+      });
+      if (materials.length === 0) { alert('少なくとも1つの資材を選択してください'); return; }
+      var saveBtn = document.getElementById('ih-presetSaveBtn');
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '保存中...'; }
+      try {
+        var db = ihGetDb();
+        var userName = localStorage.getItem('reborn_user_name') || '不明';
+        if (presetId) {
+          await db.collection('packagingPresets').doc(presetId).update({
+            name: name,
+            materials: materials,
+            updatedAt: ihGetFirebaseTimestamp()
+          });
+        } else {
+          await db.collection('packagingPresets').add({
+            name: name,
+            materials: materials,
+            createdBy: userName,
+            createdAt: ihGetFirebaseTimestamp()
+          });
+        }
+        ihClosePresetModal();
+        ihLoadPresetList();
+        if (typeof showToast === 'function') showToast('プリセットを保存しました');
+      } catch (e) {
+        console.error('[ih] savePreset error:', e);
+        alert('保存に失敗しました: ' + e.message);
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '保存'; }
+      }
+    }
+
+    async function ihDeletePreset(presetId, name) {
+      if (!confirm('プリセット「' + name + '」を削除しますか？')) return;
+      try {
+        var db = ihGetDb();
+        await db.collection('packagingPresets').doc(presetId).delete();
+        ihLoadPresetList();
+        if (typeof showToast === 'function') showToast('プリセットを削除しました');
+      } catch (e) {
+        console.error('[ih] deletePreset error:', e);
+        alert('削除に失敗しました: ' + e.message);
+      }
+    }
+
+    // グローバル参照（onclick用）
+    window.ihShowPresetCreateModal = ihShowPresetCreateModal;
+    window.ihShowPresetEditModal = ihShowPresetEditModal;
+    window.ihDeletePreset = ihDeletePreset;
+    window.ihTogglePresetQty = ihTogglePresetQty;
+    window.ihClosePresetModal = ihClosePresetModal;
+
     function destroyPackagingPage() {
       console.log('[ih] destroyPackagingPage called');
       _ih_eventListeners.forEach(function(item) {
@@ -2208,6 +2510,10 @@
         document.removeEventListener('click', _ih_dropdownClickHandler);
         _ih_dropdownClickHandler = null;
       }
+      // プリセットモーダルをクリーンアップ
+      var presetModal = document.getElementById('ih-presetEditModal');
+      if (presetModal) presetModal.style.display = 'none';
+      presetModal && (presetModal.innerHTML = '');
       ['ih-stockInModal', 'ih-stockAdjustmentModal', 'ih-orderModal', 'ih-receiveModal', 'ih-transferModal', 'ih-thresholdSettingsModal'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) {
