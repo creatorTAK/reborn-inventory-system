@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v354';  // v354: 仕入先・出品先マッピング修正+ドロップダウン化
+const CACHE_VERSION = 'v355';  // v355: 出品先プラットフォーム名整理+salesType保存+サイズ詳細追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）

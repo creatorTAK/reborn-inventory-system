@@ -1438,12 +1438,17 @@ window.continueProductRegistration = function() {
         console.log('✅ 仕入先選択肢を設定:', suppliers.length + '件');
       }
 
-      // 出品先を取得
-      const channelsSnap = await window.db.collection('salesChannels').orderBy('name', 'asc').get();
+      // 出品先を取得（platformIdで重複排除、プラン名を除去）
+      const channelsSnap = await window.db.collection('salesChannels').orderBy('order', 'asc').get();
       const channels = [];
+      const seenPlatforms = {};
       channelsSnap.forEach(doc => {
         const data = doc.data();
-        if (data.name) channels.push(data.name);
+        if (!data.name) return;
+        const pid = data.platformId || data.name;
+        if (seenPlatforms[pid]) return;
+        seenPlatforms[pid] = true;
+        channels.push(data.name.replace(/（[^）]*）$/, ''));
       });
       if (channels.length > 0) {
         fillSel('出品先', channels);
@@ -10303,7 +10308,8 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
     listing: {
       date: formData['出品日'] ? new Date(formData['出品日']) : null,
       destination: formData['出品先'] || '',
-      amount: formData['出品金額'] ? Number(formData['出品金額']) : 0
+      amount: formData['出品金額'] ? Number(formData['出品金額']) : 0,
+      salesType: formData['salesType'] || 'fixed'
     },
 
     // 配送設定
@@ -10445,6 +10451,9 @@ async function saveProductToFirestore(formData) {
         formData['unitPurchasePrice'] = window.currentSkuInfo.unitPrice;
       }
     }
+
+    // 販売タイプを取得してformDataに設定
+    formData['salesType'] = getSalesType();
 
     // Firestoreドキュメント作成
     const doc = convertFormToFirestoreDoc(formData, productId, userEmail, userName);
