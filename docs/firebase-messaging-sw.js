@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v361';  // v361: 文字数カウンターのリアルタイム更新
+const CACHE_VERSION = 'v362';  // v362: データ更新後のキャッシュクリアで一覧即時反映
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
