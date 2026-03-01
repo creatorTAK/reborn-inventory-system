@@ -121,17 +121,23 @@
       background: #f9fafb;
     }
 
-    /* 売掛ステータスバッジ */
+    /* 取引ステータスバッジ */
     #spa-page-sales .sal-status-badge {
       display: inline-block;
       padding: 4px 8px;
       border-radius: 4px;
       font-size: 0.75rem;
       font-weight: 500;
+      cursor: pointer;
+      user-select: none;
     }
+    #spa-page-sales .sal-status-badge:hover { opacity: 0.8; }
     #spa-page-sales .sal-status-paid { background: #d1fae5; color: #065f46; }
     #spa-page-sales .sal-status-unpaid { background: #fee2e2; color: #991b1b; }
     #spa-page-sales .sal-status-partial { background: #fef3c7; color: #92400e; }
+    #spa-page-sales .sal-status-cancelled { background: #f3f4f6; color: #6b7280; }
+    #spa-page-sales .sal-row-cancelled { opacity: 0.5; }
+    #spa-page-sales .sal-row-cancelled td { text-decoration: line-through; }
 
     /* ローディング */
     #spa-page-sales .sal-loading-overlay {
@@ -376,37 +382,6 @@
     #spa-page-sales .sal-tab-pane { display: none; }
     #spa-page-sales .sal-tab-pane.active { display: block; }
 
-    /* 売掛・入金サブタブ */
-    #spa-page-sales .sal-ar-sub-tabs {
-      display: flex;
-      gap: 8px;
-    }
-    #spa-page-sales .sal-ar-sub-tab {
-      flex: 1;
-      padding: 10px 8px;
-      border: 2px solid #e5e7eb;
-      border-radius: 8px;
-      background: white;
-      cursor: pointer;
-      text-align: center;
-      font-size: 0.85rem;
-      font-weight: 500;
-      color: #6b7280;
-      transition: all 0.2s;
-    }
-    #spa-page-sales .sal-ar-sub-tab:hover {
-      border-color: #40B4E5;
-      color: #1d4ed8;
-    }
-    #spa-page-sales .sal-ar-sub-tab.active {
-      border-color: #40B4E5;
-      background: #eff6ff;
-      color: #1d4ed8;
-    }
-    #spa-page-sales .sal-ar-sub-tab i {
-      margin-right: 4px;
-    }
-
     /* モーダル */
     #spa-page-sales .sal-modal-overlay {
       position: fixed;
@@ -507,7 +482,7 @@
       <i class="bi bi-currency-yen"></i> 売上一覧
     </button>
     <button class="sal-material-tab" data-tab="sal-ar-content" onclick="salSwitchTab('sal-ar-content')">
-      <i class="bi bi-clipboard-check"></i> 売掛・入金
+      <i class="bi bi-arrow-repeat"></i> 取引状況
     </button>
     <button class="sal-material-tab" data-tab="sal-analysis-content" onclick="salSwitchTab('sal-analysis-content')">
       <i class="bi bi-graph-up"></i> 売上分析
@@ -589,7 +564,7 @@
                   <th>販売先</th>
                   <th class="text-end">売上</th>
                   <th class="text-end">利益</th>
-                  <th>入金</th>
+                  <th>取引</th>
                 </tr>
               </thead>
               <tbody id="sal-salesTableBody">
@@ -602,94 +577,43 @@
         </div>
       </div>
 
-      <!-- 売掛管理タブ -->
-      <!-- 売掛・入金タブ（売掛管理 + 入金管理を統合） -->
+      <!-- 取引状況タブ -->
       <div class="sal-tab-pane" id="sal-ar-content">
-        <!-- サブセクション切替 -->
-        <div class="sal-ar-sub-tabs mb-3">
-          <button class="sal-ar-sub-tab active" onclick="salSwitchArSub('receivable', this)">
-            <i class="bi bi-clipboard-check"></i> 売掛管理
-          </button>
-          <button class="sal-ar-sub-tab" onclick="salSwitchArSub('schedule', this)">
-            <i class="bi bi-calendar-check"></i> 入金管理
-          </button>
-        </div>
-
-        <!-- 売掛管理セクション -->
-        <div class="sal-ar-section" id="sal-ar-receivable">
-          <div class="sal-summary-grid">
-            <div class="sal-summary-card">
-              <div class="sal-summary-label">売掛残高</div>
-              <div class="sal-summary-value negative" id="sal-receivable-balance">-</div>
-            </div>
-            <div class="sal-summary-card">
-              <div class="sal-summary-label">未入金件数</div>
-              <div class="sal-summary-value" id="sal-receivable-count">-</div>
-            </div>
-            <div class="sal-summary-card">
-              <div class="sal-summary-label">今月入金予定</div>
-              <div class="sal-summary-value" id="sal-receivable-expected">-</div>
-            </div>
+        <div class="sal-summary-grid">
+          <div class="sal-summary-card">
+            <div class="sal-summary-label">取引中 合計</div>
+            <div class="sal-summary-value negative" id="sal-receivable-balance">-</div>
           </div>
-
-          <div class="alert alert-danger mb-3" id="sal-overdueAlert" style="display: none;">
-            <i class="bi bi-exclamation-triangle-fill"></i>
-            <strong>滞留債権アラート:</strong> <span id="sal-overdueAlertText"></span>
-          </div>
-
-          <div class="sal-sales-table-container">
-            <div class="table-responsive">
-              <table class="sal-sales-table">
-                <thead>
-                  <tr>
-                    <th>販売日</th>
-                    <th>管理番号</th>
-                    <th>販売先</th>
-                    <th class="text-end">売上金額</th>
-                    <th>経過日数</th>
-                    <th>ステータス</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody id="sal-receivableTableBody">
-                  <tr>
-                    <td colspan="7" class="text-center text-muted py-4">データを読み込んでいます...</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+          <div class="sal-summary-card">
+            <div class="sal-summary-label">取引中</div>
+            <div class="sal-summary-value" id="sal-receivable-count">-</div>
           </div>
         </div>
 
-        <!-- 入金管理セクション -->
-        <div class="sal-ar-section" id="sal-ar-schedule" style="display: none;">
-          <h6 class="mb-3"><i class="bi bi-shop"></i> 販売先別売掛残高</h6>
-          <div class="sal-summary-grid mb-4" id="sal-platformBalanceGrid"></div>
+        <div class="alert alert-danger mb-3" id="sal-overdueAlert" style="display: none;">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <strong>滞留アラート:</strong> <span id="sal-overdueAlertText"></span>
+        </div>
 
-          <h6 class="mb-3"><i class="bi bi-calendar3"></i> 入金予定スケジュール</h6>
-          <div class="alert alert-info small mb-3">
-            <i class="bi bi-info-circle"></i> 入金予定日は販売先ごとの一般的な入金サイクルに基づく推定です。
-            メルカリ/ラクマは即日〜3日、その他は売上から約14日後を目安としています。
-          </div>
-          <div class="sal-sales-table-container">
-            <div class="table-responsive">
-              <table class="sal-sales-table">
-                <thead>
-                  <tr>
-                    <th>入金予定日</th>
-                    <th>販売先</th>
-                    <th>件数</th>
-                    <th class="text-end">入金予定額</th>
-                    <th>状態</th>
-                  </tr>
-                </thead>
-                <tbody id="sal-scheduleTableBody">
-                  <tr>
-                    <td colspan="5" class="text-center text-muted py-4">データを読み込んでいます...</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+        <div class="sal-sales-table-container">
+          <div class="table-responsive">
+            <table class="sal-sales-table">
+              <thead>
+                <tr>
+                  <th>販売日</th>
+                  <th>管理番号</th>
+                  <th>販売先</th>
+                  <th class="text-end">売上金額</th>
+                  <th>経過日数</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="sal-receivableTableBody">
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -966,38 +890,34 @@
     </div>
   </div>
 
-  <!-- 入金記録モーダル -->
-  <div class="sal-modal-overlay" id="sal-paymentModalOverlay">
+  <!-- キャンセルモーダル -->
+  <div class="sal-modal-overlay" id="sal-cancelModalOverlay">
     <div class="sal-modal-dialog">
       <div class="sal-modal-header">
-        <h5 class="sal-modal-title">入金記録</h5>
-        <button type="button" class="sal-modal-close" onclick="salCloseModal('sal-paymentModalOverlay')">&times;</button>
+        <h5 class="sal-modal-title">取引キャンセル</h5>
+        <button type="button" class="sal-modal-close" onclick="salCloseModal('sal-cancelModalOverlay')">&times;</button>
       </div>
       <div class="sal-modal-body">
         <div class="mb-3">
           <label class="form-label">管理番号</label>
-          <input type="text" class="form-control" id="sal-paymentManagementNumber" readonly>
+          <input type="text" class="form-control" id="sal-cancelManagementNumber" readonly>
         </div>
         <div class="mb-3">
-          <label class="form-label">売上金額</label>
-          <input type="text" class="form-control" id="sal-paymentSalesAmount" readonly>
+          <label class="form-label">キャンセル理由</label>
+          <input type="text" class="form-control" id="sal-cancelReason" placeholder="例: 購入者都合、商品不良、配送破損等">
         </div>
         <div class="mb-3">
-          <label class="form-label">入金日</label>
-          <input type="date" class="form-control" id="sal-paymentDate">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">入金額</label>
-          <input type="number" class="form-control" id="sal-paymentAmount" placeholder="入金額を入力">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">備考</label>
-          <textarea class="form-control" id="sal-paymentNote" rows="2" placeholder="振込手数料など"></textarea>
+          <label class="form-label">発生費用（任意）</label>
+          <div class="input-group">
+            <span class="input-group-text">&#165;</span>
+            <input type="number" class="form-control" id="sal-cancelCost" placeholder="例: 返送料 800" min="0">
+          </div>
+          <div class="form-text">返送料など発生した費用があれば入力</div>
         </div>
       </div>
       <div class="sal-modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="salCloseModal('sal-paymentModalOverlay')">キャンセル</button>
-        <button type="button" class="btn btn-primary" onclick="salSavePayment()">入金を記録</button>
+        <button type="button" class="btn btn-secondary" onclick="salCloseModal('sal-cancelModalOverlay')">閉じる</button>
+        <button type="button" class="btn btn-danger" onclick="salSaveCancellation()">キャンセルを記録</button>
       </div>
     </div>
   </div>
@@ -1039,7 +959,7 @@
           </div>
         </div>
         <div class="mb-3">
-          <label class="form-label fw-bold text-primary"><i class="bi bi-currency-yen"></i> 売上・入金データ</label>
+          <label class="form-label fw-bold text-primary"><i class="bi bi-currency-yen"></i> 売上・取引データ</label>
           <div class="form-check">
             <input class="form-check-input" type="checkbox" id="sal-exportSalesDetail" checked>
             <label class="form-check-label" for="sal-exportSalesDetail">
@@ -1049,13 +969,13 @@
           <div class="form-check">
             <input class="form-check-input" type="checkbox" id="sal-exportReceivable">
             <label class="form-check-label" for="sal-exportReceivable">
-              売掛金一覧 <small class="text-muted">（未入金の売上）</small>
+              取引中一覧 <small class="text-muted">（未完了の取引）</small>
             </label>
           </div>
           <div class="form-check">
             <input class="form-check-input" type="checkbox" id="sal-exportPaymentHistory">
             <label class="form-check-label" for="sal-exportPaymentHistory">
-              入金履歴 <small class="text-muted">（入金済みの記録）</small>
+              取引完了一覧 <small class="text-muted">（完了済みの取引）</small>
             </label>
           </div>
           <div class="form-check">
@@ -1220,7 +1140,7 @@
     // ============================================
 
     var _sal_currentSalesData = [];
-    var _sal_selectedProductForPayment = null;
+    var _sal_selectedProductForCancel = null;
     var _sal_currentPeriodPreset = 'month';
     var _sal_currentInvoiceData = null;
     var _sal_monthlyChart = null;
@@ -1342,16 +1262,7 @@
       }
     }
 
-    // 売掛・入金タブ内のサブセクション切替
-    function salSwitchArSub(section, btnEl) {
-      var container = document.getElementById('spa-page-sales');
-      if (!container) return;
-      container.querySelectorAll('.sal-ar-section').forEach(function(el) { el.style.display = 'none'; });
-      container.querySelectorAll('.sal-ar-sub-tab').forEach(function(el) { el.classList.remove('active'); });
-      var target = document.getElementById('sal-ar-' + section);
-      if (target) target.style.display = '';
-      if (btnEl) btnEl.classList.add('active');
-    }
+    // (salSwitchArSub removed - sub-tabs no longer needed)
 
     // ============================================
     // Firebase API (using parent globals)
@@ -1405,7 +1316,9 @@
               condition: data.condition,
               size: data.size,
               listingDate: data.listing && data.listing.date || data.listingDate || '',
-              salesPrice: parseFloat(data.saleAmount || 0)
+              salesPrice: parseFloat(data.saleAmount || 0),
+              cancelReason: data.cancelReason || '',
+              cancelCost: parseFloat(data.cancelCost || 0)
             });
           });
 
@@ -1423,13 +1336,13 @@
       var serverTimestamp = window.firestoreServerTimestamp;
 
       var productRef = docFn(db, 'products', productId);
-      return updateDoc(productRef, {
+      var updateFields = {
         paymentStatus: paymentData.status,
-        paymentDate: paymentData.date,
-        paymentAmount: paymentData.amount,
-        paymentNote: paymentData.note,
         updatedAt: serverTimestamp()
-      });
+      };
+      if (paymentData.cancelReason !== undefined) updateFields.cancelReason = paymentData.cancelReason;
+      if (paymentData.cancelCost !== undefined) updateFields.cancelCost = paymentData.cancelCost;
+      return updateDoc(productRef, updateFields);
     }
 
     // ============================================
@@ -1535,8 +1448,10 @@
 
       var html = '';
       _sal_currentSalesData.forEach(function(item) {
-        var paymentBadge = salGetPaymentBadge(item.paymentStatus);
-        html += '<tr>' +
+        var paymentBadge = salGetPaymentBadge(item.paymentStatus, item.id);
+        var isCancelled = item.paymentStatus === 'cancelled';
+        var rowClass = isCancelled ? 'sal-row-cancelled' : '';
+        html += '<tr class="' + rowClass + '">' +
           '<td>' + (item.saleDate || '-') + '</td>' +
           '<td>' + item.managementNumber + '</td>' +
           '<td style="white-space: nowrap;">' + salEscapeHtml(item.productName) + '</td>' +
@@ -1549,27 +1464,111 @@
       tbody.innerHTML = html;
     }
 
-    function salGetPaymentBadge(status) {
+    function salGetPaymentBadge(status, productId) {
+      if (productId) {
+        switch (status) {
+          case 'paid':
+            return '<span class="sal-status-badge sal-status-paid" onclick="salOnBadgeClick(\'' + productId + '\', \'paid\')">取引完了</span>';
+          case 'cancelled':
+            return '<span class="sal-status-badge sal-status-cancelled" onclick="salOnBadgeClick(\'' + productId + '\', \'cancelled\')">キャンセル</span>';
+          case 'partial':
+          default:
+            return '<span class="sal-status-badge sal-status-unpaid" onclick="salOnBadgeClick(\'' + productId + '\', \'unpaid\')">取引中</span>';
+        }
+      }
       switch (status) {
-        case 'paid': return '<span class="sal-status-badge sal-status-paid">入金済</span>';
-        case 'partial': return '<span class="sal-status-badge sal-status-partial">一部入金</span>';
-        default: return '<span class="sal-status-badge sal-status-unpaid">未入金</span>';
+        case 'paid': return '<span class="sal-status-badge sal-status-paid">取引完了</span>';
+        case 'cancelled': return '<span class="sal-status-badge sal-status-cancelled">キャンセル</span>';
+        case 'partial':
+        default: return '<span class="sal-status-badge sal-status-unpaid">取引中</span>';
       }
     }
 
     function salGetPaymentStatusText(status) {
       switch (status) {
-        case 'paid': return '入金済';
-        case 'partial': return '一部入金';
-        default: return '未入金';
+        case 'paid': return '取引完了';
+        case 'cancelled': return 'キャンセル';
+        case 'partial':
+        default: return '取引中';
       }
     }
 
+    // バッジタップ時の処理
+    function salOnBadgeClick(productId, currentStatus) {
+      if (currentStatus === 'unpaid' || currentStatus === 'partial') {
+        // 取引中 → 選択肢: 取引完了 or キャンセル
+        var choice = prompt('操作を選択してください:\n1 = 取引完了\n2 = キャンセル\n\n番号を入力:');
+        if (choice === '1') {
+          salCompleteTransaction(productId);
+        } else if (choice === '2') {
+          salOpenCancelModal(productId);
+        }
+      } else if (currentStatus === 'paid' || currentStatus === 'cancelled') {
+        // 取引完了/キャンセル → 取引中に戻す
+        salRevertTransaction(productId);
+      }
+    }
+
+    // 取引完了（ワンタップ）
+    function salCompleteTransaction(productId) {
+      if (!confirm('取引完了にしますか？')) return;
+      salShowLoading();
+      salUpdatePaymentStatus(productId, { status: 'paid' }).then(function() {
+        salLoadSalesData();
+      }).catch(function(error) {
+        console.error('[Sal SPA] 取引完了エラー:', error);
+        alert('更新に失敗しました: ' + error.message);
+      }).finally(function() { salHideLoading(); });
+    }
+
+    // 取引中に戻す（ワンタップ）
+    function salRevertTransaction(productId) {
+      if (!confirm('取引中に戻しますか？')) return;
+      salShowLoading();
+      salUpdatePaymentStatus(productId, { status: 'unpaid', cancelReason: '', cancelCost: 0 }).then(function() {
+        salLoadSalesData();
+      }).catch(function(error) {
+        console.error('[Sal SPA] 取引戻しエラー:', error);
+        alert('更新に失敗しました: ' + error.message);
+      }).finally(function() { salHideLoading(); });
+    }
+
+    // キャンセルモーダルを開く
+    function salOpenCancelModal(productId) {
+      var item = _sal_currentSalesData.find(function(d) { return d.id === productId; });
+      _sal_selectedProductForCancel = { id: productId, managementNumber: item ? item.managementNumber : '' };
+      document.getElementById('sal-cancelManagementNumber').value = _sal_selectedProductForCancel.managementNumber;
+      document.getElementById('sal-cancelReason').value = '';
+      document.getElementById('sal-cancelCost').value = '';
+      salOpenModal('sal-cancelModalOverlay');
+    }
+
+    // キャンセル保存
+    function salSaveCancellation() {
+      if (!_sal_selectedProductForCancel) return;
+      var reason = document.getElementById('sal-cancelReason').value.trim();
+      if (!reason) { alert('キャンセル理由を入力してください'); return; }
+      var cost = parseFloat(document.getElementById('sal-cancelCost').value) || 0;
+
+      salShowLoading();
+      salUpdatePaymentStatus(_sal_selectedProductForCancel.id, {
+        status: 'cancelled', cancelReason: reason, cancelCost: cost
+      }).then(function() {
+        salCloseModal('sal-cancelModalOverlay');
+        alert('キャンセルを記録しました');
+        salLoadSalesData();
+      }).catch(function(error) {
+        console.error('[Sal SPA] キャンセル記録エラー:', error);
+        alert('キャンセルの記録に失敗しました: ' + error.message);
+      }).finally(function() { salHideLoading(); });
+    }
+
     function salUpdateSummary() {
-      var count = _sal_currentSalesData.length;
-      var totalSales = _sal_currentSalesData.reduce(function(sum, item) { return sum + item.saleAmount; }, 0);
-      var totalProfit = _sal_currentSalesData.reduce(function(sum, item) { return sum + item.finalProfit; }, 0);
-      var avgProfitRate = count > 0 ? _sal_currentSalesData.reduce(function(sum, item) { return sum + item.profitRate; }, 0) / count : 0;
+      var activeData = _sal_currentSalesData.filter(function(item) { return item.paymentStatus !== 'cancelled'; });
+      var count = activeData.length;
+      var totalSales = activeData.reduce(function(sum, item) { return sum + item.saleAmount; }, 0);
+      var totalProfit = activeData.reduce(function(sum, item) { return sum + item.finalProfit; }, 0);
+      var avgProfitRate = count > 0 ? activeData.reduce(function(sum, item) { return sum + item.profitRate; }, 0) / count : 0;
 
       document.getElementById('sal-summary-count').textContent = count + '件';
       document.getElementById('sal-summary-sales').textContent = salFormatCurrency(totalSales);
@@ -1584,10 +1583,13 @@
       var tbody = document.getElementById('sal-receivableTableBody');
       if (!tbody) return;
 
-      var unpaidItems = _sal_currentSalesData.filter(function(item) { return item.paymentStatus !== 'paid'; });
+      // 取引中の商品 = unpaid または partial（cancelledとpaidは除外）
+      var unpaidItems = _sal_currentSalesData.filter(function(item) {
+        return item.paymentStatus !== 'paid' && item.paymentStatus !== 'cancelled';
+      });
 
       if (unpaidItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">未入金の売上はありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">取引中の商品はありません</td></tr>';
         salUpdateReceivableSummary(0, 0);
         var alertDiv = document.getElementById('sal-overdueAlert');
         if (alertDiv) alertDiv.style.display = 'none';
@@ -1601,13 +1603,11 @@
       var OVERDUE_DAYS = 14;
 
       unpaidItems.forEach(function(item) {
-        var paymentBadge = salGetPaymentBadge(item.paymentStatus);
-        var unpaidAmount = item.saleAmount - (item.paymentAmount || 0);
-        totalUnpaid += unpaidAmount;
+        totalUnpaid += item.saleAmount;
 
         var daysPassed = item.saleDate ? Math.floor((new Date() - new Date(item.saleDate)) / (1000 * 60 * 60 * 24)) : 0;
         var isOverdue = daysPassed >= OVERDUE_DAYS;
-        if (isOverdue) { overdueCount++; overdueAmount += unpaidAmount; }
+        if (isOverdue) { overdueCount++; overdueAmount += item.saleAmount; }
 
         var daysClass = isOverdue ? 'text-danger fw-bold' : (daysPassed >= 7 ? 'text-warning' : '');
 
@@ -1617,8 +1617,7 @@
           '<td>' + (item.salePlatform || '-') + '</td>' +
           '<td class="text-end">' + salFormatCurrency(item.saleAmount) + '</td>' +
           '<td class="' + daysClass + '">' + daysPassed + '日</td>' +
-          '<td>' + paymentBadge + '</td>' +
-          '<td><button class="btn btn-sm btn-outline-primary" onclick="salOpenPaymentModal(\'' + item.id + '\', \'' + item.managementNumber + '\', ' + item.saleAmount + ')">入金記録</button></td>' +
+          '<td><button class="btn btn-sm btn-success" onclick="salCompleteTransaction(\'' + item.id + '\')"><i class="bi bi-check-lg"></i> 取引完了</button></td>' +
           '</tr>';
       });
 
@@ -1633,124 +1632,14 @@
       } else {
         alertDiv.style.display = 'none';
       }
-
-      salRenderScheduleTab(unpaidItems);
     }
 
     function salUpdateReceivableSummary(totalUnpaid, count) {
       document.getElementById('sal-receivable-balance').textContent = salFormatCurrency(totalUnpaid);
       document.getElementById('sal-receivable-count').textContent = count + '件';
-      document.getElementById('sal-receivable-expected').textContent = salFormatCurrency(totalUnpaid);
     }
 
-    // ============================================
-    // Schedule tab
-    // ============================================
-    function salRenderScheduleTab(unpaidItems) {
-      var platformBalances = {};
-      unpaidItems.forEach(function(item) {
-        var platform = item.salePlatform || '未設定';
-        if (!platformBalances[platform]) { platformBalances[platform] = { count: 0, amount: 0 }; }
-        platformBalances[platform].count++;
-        platformBalances[platform].amount += item.saleAmount - (item.paymentAmount || 0);
-      });
-
-      var grid = document.getElementById('sal-platformBalanceGrid');
-      if (Object.keys(platformBalances).length === 0) {
-        grid.innerHTML = '<div class="col-12 text-center text-muted">未入金の売上はありません</div>';
-      } else {
-        var ghtml = '';
-        Object.keys(platformBalances).sort().forEach(function(platform) {
-          var b = platformBalances[platform];
-          ghtml += '<div class="sal-summary-card"><div class="sal-summary-label">' + platform + '</div>' +
-            '<div class="sal-summary-value">' + salFormatCurrency(b.amount) + '</div>' +
-            '<div class="small text-muted">' + b.count + '件</div></div>';
-        });
-        grid.innerHTML = ghtml;
-      }
-
-      var scheduleMap = {};
-      unpaidItems.forEach(function(item) {
-        var platform = item.salePlatform || '未設定';
-        var saleDate = item.saleDate ? new Date(item.saleDate) : new Date();
-        var expectedDays = 14;
-        if (platform.indexOf('メルカリ') >= 0 || platform.indexOf('ラクマ') >= 0) { expectedDays = 3; }
-        else if (platform.indexOf('Yahoo') >= 0) { expectedDays = 7; }
-
-        var expectedDate = new Date(saleDate);
-        expectedDate.setDate(expectedDate.getDate() + expectedDays);
-        var expectedDateStr = salFormatDateLocal(expectedDate);
-
-        var key = expectedDateStr + '_' + platform;
-        if (!scheduleMap[key]) { scheduleMap[key] = { date: expectedDateStr, platform: platform, count: 0, amount: 0 }; }
-        scheduleMap[key].count++;
-        scheduleMap[key].amount += item.saleAmount - (item.paymentAmount || 0);
-      });
-
-      var tbody = document.getElementById('sal-scheduleTableBody');
-      if (Object.keys(scheduleMap).length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">入金予定はありません</td></tr>';
-        return;
-      }
-
-      var today = salGetJSTToday();
-      var shtml = '';
-      Object.values(scheduleMap).sort(function(a, b) { return a.date.localeCompare(b.date); }).forEach(function(schedule) {
-        var isOverdue = schedule.date < today;
-        var statusBadge = isOverdue
-          ? '<span class="sal-status-badge sal-status-unpaid">期日超過</span>'
-          : '<span class="sal-status-badge sal-status-paid">予定</span>';
-        shtml += '<tr class="' + (isOverdue ? 'table-warning' : '') + '">' +
-          '<td>' + schedule.date + '</td>' +
-          '<td>' + schedule.platform + '</td>' +
-          '<td>' + schedule.count + '件</td>' +
-          '<td class="text-end">' + salFormatCurrency(schedule.amount) + '</td>' +
-          '<td>' + statusBadge + '</td></tr>';
-      });
-      tbody.innerHTML = shtml;
-    }
-
-    // ============================================
-    // Payment modal
-    // ============================================
-    function salOpenPaymentModal(productId, managementNumber, saleAmount) {
-      _sal_selectedProductForPayment = { id: productId, managementNumber: managementNumber, saleAmount: saleAmount };
-      document.getElementById('sal-paymentManagementNumber').value = managementNumber;
-      document.getElementById('sal-paymentSalesAmount').value = salFormatCurrency(saleAmount);
-      document.getElementById('sal-paymentAmount').value = Math.round(saleAmount);
-      document.getElementById('sal-paymentNote').value = '';
-      salOpenModal('sal-paymentModalOverlay');
-    }
-
-    function salSavePayment() {
-      if (!_sal_selectedProductForPayment) return;
-
-      var paymentDate = document.getElementById('sal-paymentDate').value;
-      var paymentAmount = parseFloat(document.getElementById('sal-paymentAmount').value) || 0;
-      var paymentNote = document.getElementById('sal-paymentNote').value;
-
-      if (!paymentDate) { alert('入金日を入力してください'); return; }
-      if (paymentAmount <= 0) { alert('入金額を入力してください'); return; }
-
-      salShowLoading();
-
-      var status = 'unpaid';
-      if (paymentAmount >= _sal_selectedProductForPayment.saleAmount) { status = 'paid'; }
-      else if (paymentAmount > 0) { status = 'partial'; }
-
-      salUpdatePaymentStatus(_sal_selectedProductForPayment.id, {
-        status: status, date: paymentDate, amount: paymentAmount, note: paymentNote
-      }).then(function() {
-        salCloseModal('sal-paymentModalOverlay');
-        alert('入金を記録しました');
-        salLoadSalesData();
-      }).catch(function(error) {
-        console.error('[Sal SPA] 入金記録エラー:', error);
-        alert('入金の記録に失敗しました: ' + error.message);
-      }).finally(function() {
-        salHideLoading();
-      });
-    }
+    // (Payment modal removed - replaced by badge tap workflow and cancel modal)
 
     // ============================================
     // Settings dropdown
@@ -1834,29 +1723,28 @@
 
         if (includeSalesDetail) {
           csvContent += '【売上明細】\n';
-          csvContent += '販売日,管理番号,商品名,販売先,売上金額,原価,利益,利益率,入金ステータス,入金日,入金額\n';
+          csvContent += '販売日,管理番号,商品名,販売先,売上金額,原価,利益,利益率,取引ステータス\n';
           filteredData.forEach(function(item) {
             csvContent += [
               item.saleDate || '', item.managementNumber || '',
               '"' + (item.productName || '').replace(/"/g, '""') + '"',
               item.salePlatform || '', item.saleAmount || 0, item.purchaseAmount || 0,
               item.finalProfit || 0, (item.profitRate || 0).toFixed(1) + '%',
-              salGetPaymentStatusText(item.paymentStatus), item.paymentDate || '', item.paymentAmount || 0
+              salGetPaymentStatusText(item.paymentStatus)
             ].join(',') + '\n';
           });
           csvContent += '\n';
         }
 
         if (includeReceivable) {
-          var receivables = filteredData.filter(function(item) { return item.paymentStatus !== 'paid'; });
-          csvContent += '【売掛金一覧】\n';
-          csvContent += '販売日,管理番号,販売先,売上金額,入金済額,未入金額,経過日数\n';
+          var receivables = filteredData.filter(function(item) { return item.paymentStatus !== 'paid' && item.paymentStatus !== 'cancelled'; });
+          csvContent += '【取引中一覧】\n';
+          csvContent += '販売日,管理番号,販売先,売上金額,経過日数\n';
           receivables.forEach(function(item) {
-            var unpaidAmount = item.saleAmount - (item.paymentAmount || 0);
             var daysPassed = item.saleDate ? Math.floor((new Date() - new Date(item.saleDate)) / (1000 * 60 * 60 * 24)) : 0;
             csvContent += [
               item.saleDate || '', item.managementNumber || '', item.salePlatform || '',
-              item.saleAmount || 0, item.paymentAmount || 0, unpaidAmount, daysPassed + '日'
+              item.saleAmount || 0, daysPassed + '日'
             ].join(',') + '\n';
           });
           csvContent += '\n';
@@ -1877,7 +1765,7 @@
           });
 
           csvContent += '【月別集計（確定申告用）】\n';
-          csvContent += '年月,販売件数,売上高,売上原価,売上総利益,利益率,入金済額,売掛残高\n';
+          csvContent += '年月,販売件数,売上高,売上原価,売上総利益,利益率,取引完了額,取引中残高\n';
 
           var totalCount = 0, totalSales = 0, totalCost = 0, totalProfit = 0, totalReceived = 0;
           Object.keys(monthlySummary).sort().forEach(function(month) {
@@ -1892,15 +1780,14 @@
         }
 
         if (includePaymentHistory) {
-          var paidItems = filteredData.filter(function(item) { return item.paymentStatus === 'paid' || item.paymentAmount > 0; });
-          csvContent += '【入金履歴】\n';
-          csvContent += '入金日,管理番号,商品名,販売先,売上金額,入金額,入金ステータス\n';
-          paidItems.forEach(function(item) {
+          var completedItems = filteredData.filter(function(item) { return item.paymentStatus === 'paid'; });
+          csvContent += '【取引完了一覧】\n';
+          csvContent += '販売日,管理番号,商品名,販売先,売上金額\n';
+          completedItems.forEach(function(item) {
             csvContent += [
-              item.paymentDate || item.saleDate || '', item.managementNumber || '',
+              item.saleDate || '', item.managementNumber || '',
               '"' + (item.productName || '').replace(/"/g, '""') + '"',
-              item.salePlatform || '', item.saleAmount || 0,
-              item.paymentAmount || item.saleAmount || 0, salGetPaymentStatusText(item.paymentStatus)
+              item.salePlatform || '', item.saleAmount || 0
             ].join(',') + '\n';
           });
           csvContent += '\n';
@@ -2710,10 +2597,6 @@
       Promise.all(loadPromises).then(function() {
         console.log('[Sal SPA] External scripts loaded');
 
-        // Set payment date default
-        var paymentDateEl = document.getElementById('sal-paymentDate');
-        if (paymentDateEl) paymentDateEl.value = salGetJSTToday();
-
         // Initialize analysis period presets
         salInitAnalysisPeriodPresets();
 
@@ -2722,8 +2605,6 @@
       }).catch(function(err) {
         console.error('[Sal SPA] Script loading error:', err);
         // Initialize anyway
-        var paymentDateEl = document.getElementById('sal-paymentDate');
-        if (paymentDateEl) paymentDateEl.value = salGetJSTToday();
         salInitAnalysisPeriodPresets();
         salOnSalesPeriodChange();
       });
@@ -2756,7 +2637,7 @@
 
       // Reset state
       _sal_currentSalesData = [];
-      _sal_selectedProductForPayment = null;
+      _sal_selectedProductForCancel = null;
       _sal_currentPeriodPreset = 'month';
       _sal_currentInvoiceData = null;
       _sal_allSalesDataForAnalysis = [];
