@@ -1919,6 +1919,30 @@
           .where('materialId', '==', materialId).where('locationId', '==', locationId).where('status', '==', 'active').get();
         var totalStock = lotsSnapshot.docs.reduce(function(sum, doc) { return sum + (doc.data().remainingQty || 0); }, 0);
         await db.collection('packagingMaterials').doc(materialId).update({ currentStock: totalStock, updatedAt: ihGetFirebaseTimestamp() });
+        // 会計自動連動: 購入金額がある場合は経費を自動登録
+        if (price > 0) {
+          try {
+            var today = new Date();
+            var jstOffset = 9 * 60 * 60 * 1000;
+            var jstDate = new Date(today.getTime() + jstOffset);
+            var expenseDate = jstDate.toISOString().slice(0, 10);
+            var fiscalYear = parseInt(expenseDate.slice(0, 4));
+            var expenseDb = window.firebaseDB;
+            var expensesRef = window.firestoreCollection(expenseDb, 'expenses');
+            await window.firestoreAddDoc(expensesRef, {
+              date: expenseDate,
+              category: '荷造運賃',
+              amount: price,
+              note: '資材入庫: ' + materialName + ' x ' + quantity,
+              fiscalYear: fiscalYear,
+              createdBy: localStorage.getItem('reborn_user_name') || '',
+              createdAt: window.firestoreServerTimestamp()
+            });
+            console.log('[ih] 経費自動登録: 荷造運賃 ¥' + price);
+          } catch (expError) {
+            console.error('[ih] 経費自動登録エラー（入庫自体は成功）:', expError);
+          }
+        }
         ihHideLoading();
         alert('入庫を登録しました（単価: ¥' + unitPrice + '、担当: ' + location.name + '）');
         ihLoadStockList();
