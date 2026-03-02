@@ -4462,41 +4462,52 @@
         // 梱包資材の出庫処理（在庫管理連動）
         if (salesData.packagingMaterials && salesData.packagingMaterials.length > 0) {
           console.log('📦 [Stock Out] 梱包資材出庫処理開始');
-          for (const material of salesData.packagingMaterials) {
-            if (material.materialId) {
+          try {
+            const { query: fsQuery, where: fsWhere, getDocs: fsGetDocs, writeBatch } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+            // ユーザーの場所IDを取得
+            let _outLocationId = '';
+            const _userEmail = localStorage.getItem('reborn_user_email');
+            if (_userEmail) {
+              const _locQuery = fsQuery(collection(db, 'packagingLocations'), fsWhere('assignedUserEmail', '==', _userEmail), fsWhere('type', '==', 'user_home'));
+              const _locSnap = await fsGetDocs(_locQuery);
+              if (!_locSnap.empty) _outLocationId = _locSnap.docs[0].id;
+            }
+            const _outCreatedBy = window.currentUser?.name || 'unknown';
+            const batch = writeBatch(db);
+            for (const material of salesData.packagingMaterials) {
+              if (!material.materialId) continue;
+              const txnRef = doc(collection(db, 'packagingTransactions'));
+              batch.set(txnRef, {
+                materialId: material.materialId, materialName: material.productName || '', locationId: _outLocationId,
+                type: '出庫', quantity: -1, reason: '販売出庫', relatedSaleId: productDocId,
+                note: `発送完了: ${salesData.managementNumber}`,
+                createdBy: _outCreatedBy, createdAt: serverTimestamp()
+              });
+            }
+            await batch.commit();
+            // batch後に在庫数をロットベースで再計算
+            for (const material of salesData.packagingMaterials) {
+              if (!material.materialId) continue;
               try {
-                // 出庫トランザクション作成
-                const transactionData = {
-                  materialId: material.materialId,
-                  type: 'out',
-                  quantity: 1,  // 販売時は1個ずつ使用
-                  reason: 'sale',
-                  relatedSaleId: productDocId,
-                  notes: `販売: ${salesData.managementNumber}`,
-                  createdBy: window.currentUser?.name || 'unknown',
-                  createdAt: serverTimestamp()
-                };
-                await addDoc(collection(db, 'packagingTransactions'), transactionData);
-
-                // 在庫数を更新
+                const lotsQuery = fsQuery(collection(db, 'packagingLots'), fsWhere('materialId', '==', material.materialId), fsWhere('status', '==', 'active'));
+                const lotsSnap = await fsGetDocs(lotsQuery);
+                let totalStock = 0;
+                lotsSnap.forEach(d => { totalStock += (d.data().remainingQty || 0); });
+                await updateDoc(doc(db, 'packagingMaterials', material.materialId), { currentStock: totalStock, updatedAt: serverTimestamp() });
+                console.log(`📦 [Stock Out] ${material.productName}: 在庫 → ${totalStock}`);
+              } catch (calcErr) {
                 const materialRef = doc(db, 'packagingMaterials', material.materialId);
                 const materialDoc = await getDoc(materialRef);
                 if (materialDoc.exists()) {
-                  const currentStock = materialDoc.data()?.currentStock || 0;
-                  const newStock = Math.max(0, currentStock - 1);
-                  await updateDoc(materialRef, {
-                    currentStock: newStock,
-                    updatedAt: serverTimestamp()
-                  });
-                  console.log(`📦 [Stock Out] ${material.productName}: ${currentStock} → ${newStock}`);
+                  const curStock = materialDoc.data()?.currentStock || 0;
+                  await updateDoc(materialRef, { currentStock: Math.max(0, curStock - 1), updatedAt: serverTimestamp() });
                 }
-              } catch (stockError) {
-                console.warn('📦 [Stock Out] 出庫処理エラー:', material.productName, stockError);
-                // 出庫エラーでも販売処理は継続
               }
             }
+            console.log('📦 [Stock Out] 梱包資材出庫処理完了');
+          } catch (stockError) {
+            console.warn('📦 [Stock Out] 出庫処理エラー:', stockError);
           }
-          console.log('📦 [Stock Out] 梱包資材出庫処理完了');
         }
 
         // 担当者に発送タスクを追加
