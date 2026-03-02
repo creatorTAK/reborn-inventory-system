@@ -614,10 +614,6 @@
       <i class="bi bi-arrow-left-right"></i>
       入出庫履歴
     </button>
-    <button class="material-tab" data-tab="orders" onclick="ihSwitchTab('orders')">
-      <i class="bi bi-cart-plus"></i>
-      発注
-    </button>
     <button class="material-tab" data-tab="presets" onclick="ihSwitchTab('presets')">
       <i class="bi bi-collection"></i>
       プリセット
@@ -760,30 +756,6 @@
     </div>
   </div>
 
-  <!-- 発注タブ -->
-  <div class="ih-tab-content" id="ih-tab-orders">
-    <div class="container-fluid">
-      <div class="filter-section" style="margin-top: 12px;">
-        <div class="row g-2 mb-2">
-          <div class="col-6">
-            <select class="form-select form-select-sm" id="ih-orderStatusFilter">
-              <option value="">全ステータス</option>
-              <option value="ordered" selected>発注中</option>
-              <option value="received">入荷済み</option>
-              <option value="cancelled">キャンセル</option>
-            </select>
-          </div>
-          <div class="col-6">
-            <button class="btn btn-primary btn-sm w-100" onclick="ihShowOrderModalMaterial()">
-              <i class="bi bi-cart-plus"></i> 新規発注
-            </button>
-          </div>
-        </div>
-      </div>
-      <div id="ih-ordersList"></div>
-    </div>
-  </div>
-
   <!-- プリセットタブ -->
   <div class="ih-tab-content" id="ih-tab-presets">
     <div class="container-fluid">
@@ -798,6 +770,7 @@
 
   <!-- プリセット作成/編集モーダル -->
   <div id="ih-presetEditModal" style="display: none;"></div>
+
 
   <!-- 入庫モーダル -->
   <div class="modal fade" id="ih-stockInModal" tabindex="-1">
@@ -894,77 +867,6 @@
     </div>
   </div>
 
-  <!-- 発注モーダル -->
-  <div class="modal fade" id="ih-orderModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-cart-plus"></i> 発注登録</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label">資材選択</label>
-            <select class="form-select" id="ih-orderMaterial" style="font-size:16px;">
-              <option value="">選択してください</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">発注数量</label>
-            <input type="number" class="form-control" id="ih-orderQuantity" min="1" style="font-size:16px;">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">発注先</label>
-            <input type="text" class="form-control" id="ih-orderSupplier" style="font-size:16px;">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">備考</label>
-            <input type="text" class="form-control" id="ih-orderNote" style="font-size:16px;">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-          <button type="button" class="btn btn-primary" onclick="ihProcessOrderMaterial()">発注登録</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 入荷処理モーダル -->
-  <div class="modal fade" id="ih-receiveModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-check-circle"></i> 入荷処理</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label">資材名</label>
-            <input type="text" class="form-control" id="ih-receiveMaterialName" readonly style="font-size:16px;">
-            <input type="hidden" id="ih-receiveOrderId">
-            <input type="hidden" id="ih-receiveMaterialId">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">発注数量</label>
-            <input type="number" class="form-control" id="ih-receiveOrderedQuantity" readonly style="font-size:16px;">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">実際の入荷数量</label>
-            <input type="number" class="form-control" id="ih-receiveActualQuantity" min="1" style="font-size:16px;">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">購入価格（税込）</label>
-            <input type="number" class="form-control" id="ih-receivePrice" min="0" style="font-size:16px;">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-          <button type="button" class="btn btn-success" onclick="ihProcessReceiveOrderMaterial()">入荷完了</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- 配布モーダル（管理者用） -->
   <div class="modal fade" id="ih-transferModal" tabindex="-1">
@@ -1105,7 +1007,6 @@
     var ih_currentPage = 1;
     var IH_ITEMS_PER_PAGE = 10;
     var ih_currentTab = 'stock';
-    var ih_allOrders = [];
     var _ih_currentLocation = null;
     var _ih_eventListeners = [];
 
@@ -1230,8 +1131,6 @@
       });
       if (tabName === 'stock') {
         ihLoadStockList();
-      } else if (tabName === 'orders') {
-        ihLoadOrdersList();
       } else if (tabName === 'presets') {
         ihLoadPresetList();
       }
@@ -1920,7 +1819,6 @@
           (threshold > 0 ? '<span class="text-muted small ms-2">(発注点: ' + threshold + ')</span>' : '') +
           '</div><div class="stock-actions">' +
           '<button class="btn btn-sm btn-outline-success" onclick="ihShowStockInModalMaterial(\'' + item.id + '\')"><i class="bi bi-plus"></i></button>' +
-          '<button class="btn btn-sm btn-outline-primary" onclick="ihShowOrderModalMaterial(\'' + item.id + '\')"><i class="bi bi-cart-plus"></i></button>' +
           '</div></div></div>';
       }).join('');
     }
@@ -2463,224 +2361,6 @@
       }
     }
 
-    // ========================================
-    // Orders Tab
-    // ========================================
-    async function ihLoadOrdersList() {
-      var container = document.getElementById('ih-ordersList');
-      if (!container) return;
-      container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
-      try {
-        var db = ihGetDb();
-        if (!db) { container.innerHTML = '<div class="text-center text-danger py-4">Firestoreに接続できません</div>'; return; }
-        var snapshot = await db.collection('packagingOrders').orderBy('orderedAt', 'desc').limit(50).get();
-        ih_allOrders = snapshot.docs.map(function(doc) {
-          var d = doc.data();
-          return { id: doc.id, ...d, orderedAt: d.orderedAt?.toDate?.() || d.orderedAt };
-        });
-        ihRenderOrdersList();
-      } catch (error) {
-        console.error('[ih] 発注一覧取得エラー:', error);
-        container.innerHTML = '<div class="text-center text-danger py-4">エラー: ' + error.message + '</div>';
-      }
-    }
-
-    function ihRenderOrdersList() {
-      var container = document.getElementById('ih-ordersList');
-      if (!container) return;
-      var statusFilter = document.getElementById('ih-orderStatusFilter').value;
-      var filtered = ih_allOrders;
-      if (statusFilter) filtered = filtered.filter(function(o) { return o.status === statusFilter; });
-      if (filtered.length === 0) { container.innerHTML = '<div class="text-center text-muted py-4">該当する発注がありません</div>'; return; }
-      container.innerHTML = filtered.map(function(order) {
-        var statusBadge = order.status === 'ordered' ? '<span class="badge bg-warning">発注中</span>'
-          : order.status === 'received' ? '<span class="badge bg-success">入荷済み</span>'
-          : order.status === 'cancelled' ? '<span class="badge bg-secondary">キャンセル</span>'
-          : '<span class="badge bg-light text-dark">' + ihEscapeHtml(order.status) + '</span>';
-        var cardClass = order.status === 'ordered' ? 'order-pending' : order.status === 'received' ? 'order-received' : '';
-        return '<div class="order-card ' + cardClass + '"><div class="order-card-header"><span class="order-card-date">' + ihFormatDateTime(order.orderedAt || order.createdAt) + '</span>' + statusBadge + '</div><div class="order-card-body"><div><div class="order-material">' + ihEscapeHtml(order.materialName) + '</div>' + (order.supplier ? '<div class="text-muted small">' + ihEscapeHtml(order.supplier) + '</div>' : '') + '</div><div class="order-quantity">' + order.quantity + '個</div></div>' +
-          (order.status === 'ordered' ? '<div class="mt-2 d-flex gap-2 justify-content-end"><button class="btn btn-sm btn-success" onclick="ihShowReceiveModal(\'' + order.id + '\')"><i class="bi bi-check"></i> 入荷</button><button class="btn btn-sm btn-outline-secondary" onclick="ihCancelOrderMaterial(\'' + order.id + '\')">キャンセル</button></div>' : '') +
-          '</div>';
-      }).join('');
-    }
-
-    // ========================================
-    // Order Modal
-    // ========================================
-    async function ihShowOrderModalMaterial(materialId) {
-      if (ih_allMaterials.length === 0) {
-        try {
-          var db = ihGetDb();
-          var snapshot = await db.collection('packagingMaterials').get();
-          ih_allMaterials = snapshot.docs.map(function(doc) { return { id: doc.id, ...doc.data() }; });
-        } catch (error) { console.error('[ih] 資材データ取得エラー:', error); }
-      }
-      ihPopulateOrderMaterialSelect(materialId);
-    }
-
-    function ihPopulateOrderMaterialSelect(materialId) {
-      var select = document.getElementById('ih-orderMaterial');
-      select.innerHTML = '<option value="">選択してください</option>' +
-        ih_allMaterials.map(function(m) { return '<option value="' + m.id + '" ' + (m.id === materialId ? 'selected' : '') + '>' + ihEscapeHtml(m.productName || m.name) + '</option>'; }).join('');
-      if (materialId) {
-        var material = ih_allMaterials.find(function(m) { return m.id === materialId; });
-        if (material && material.supplier) document.getElementById('ih-orderSupplier').value = material.supplier;
-      }
-      document.getElementById('ih-orderQuantity').value = '';
-      document.getElementById('ih-orderNote').value = '';
-      ihShowModal('ih-orderModal');
-    }
-
-    async function ihProcessOrderMaterial() {
-      var materialId = document.getElementById('ih-orderMaterial').value;
-      var quantity = parseInt(document.getElementById('ih-orderQuantity').value) || 0;
-      var supplier = document.getElementById('ih-orderSupplier').value;
-      var note = document.getElementById('ih-orderNote').value;
-      if (!materialId) { alert('資材を選択してください'); return; }
-      if (quantity <= 0) { alert('数量を入力してください'); return; }
-      var material = ih_allMaterials.find(function(m) { return m.id === materialId; });
-      var materialName = material ? (material.productName || material.name) : '';
-      ihShowLoading();
-      bootstrap.Modal.getInstance(document.getElementById('ih-orderModal'))?.hide();
-      try {
-        var db = ihGetDb();
-        await db.collection('packagingOrders').add({
-          materialId: materialId, materialName: materialName, quantity: quantity, supplier: supplier,
-          note: note, status: 'ordered', orderedAt: ihGetFirebaseTimestamp(),
-          createdBy: localStorage.getItem('reborn_user_name') || 'unknown'
-        });
-        ihHideLoading();
-        alert('発注を登録しました');
-        ihLoadOrdersList();
-      } catch (error) {
-        ihHideLoading();
-        console.error('[ih] 発注登録エラー:', error);
-        alert('発注登録に失敗しました: ' + error.message);
-      }
-    }
-
-    // ========================================
-    // Receive Modal
-    // ========================================
-    function ihShowReceiveModal(orderId) {
-      var order = ih_allOrders.find(function(o) { return o.id === orderId; });
-      if (!order) { alert('発注が見つかりません'); return; }
-      document.getElementById('ih-receiveOrderId').value = orderId;
-      document.getElementById('ih-receiveMaterialId').value = order.materialId;
-      document.getElementById('ih-receiveMaterialName').value = order.materialName;
-      document.getElementById('ih-receiveOrderedQuantity').value = order.quantity;
-      document.getElementById('ih-receiveActualQuantity').value = order.quantity;
-      document.getElementById('ih-receivePrice').value = '';
-      ihShowModal('ih-receiveModal');
-    }
-
-    async function ihProcessReceiveOrderMaterial() {
-      var orderId = document.getElementById('ih-receiveOrderId').value;
-      var materialId = document.getElementById('ih-receiveMaterialId').value;
-      var materialName = document.getElementById('ih-receiveMaterialName').value;
-      var actualQuantity = parseInt(document.getElementById('ih-receiveActualQuantity').value) || 0;
-      var price = parseFloat(document.getElementById('ih-receivePrice').value) || 0;
-      if (actualQuantity <= 0) { alert('入荷数量を入力してください'); return; }
-      ihShowLoading();
-      bootstrap.Modal.getInstance(document.getElementById('ih-receiveModal'))?.hide();
-      try {
-        var db = ihGetDb();
-        await db.collection('packagingOrders').doc(orderId).update({ status: 'received', receivedAt: ihGetFirebaseTimestamp() });
-        await db.collection('packagingTransactions').add({
-          materialId: materialId, materialName: materialName, type: '入庫', quantity: actualQuantity,
-          purchasePrice: price, unitCost: price > 0 && actualQuantity > 0 ? price / actualQuantity : 0,
-          reason: '発注入荷', orderId: orderId,
-          createdBy: localStorage.getItem('reborn_user_name') || 'unknown', createdAt: ihGetFirebaseTimestamp()
-        });
-        var materialRef = db.collection('packagingMaterials').doc(materialId);
-        var materialDoc = await materialRef.get();
-        var currentStock = materialDoc.exists ? (materialDoc.data().currentStock || 0) : 0;
-        await materialRef.update({ currentStock: currentStock + actualQuantity, updatedAt: ihGetFirebaseTimestamp() });
-        await ihCompleteStockReplenishmentTasks(materialId, materialName, actualQuantity);
-        await ihSendMaterialArrivalNotification(materialName, actualQuantity);
-        ihHideLoading();
-        alert('入荷処理が完了しました');
-        ihLoadOrdersList();
-        if (ih_currentTab === 'stock') ihLoadStockList();
-      } catch (error) {
-        ihHideLoading();
-        console.error('[ih] 入荷処理エラー:', error);
-        alert('入荷処理に失敗しました: ' + error.message);
-      }
-    }
-
-    async function ihCompleteStockReplenishmentTasks(materialId, materialName, quantity) {
-      try {
-        var db = ihGetDb();
-        var usersSnapshot = await db.collection('users').where('status', '==', 'active').get();
-        for (var i = 0; i < usersSnapshot.docs.length; i++) {
-          var userDoc = usersSnapshot.docs[i];
-          var user = userDoc.data();
-          if (user.permission !== 'owner' && user.permission !== 'admin') continue;
-          var tasksSnapshot = await db.collection('userTasks').doc(user.email).collection('tasks')
-            .where('type', '==', 'stock_replenishment').where('completed', '==', false).get();
-          for (var j = 0; j < tasksSnapshot.docs.length; j++) {
-            var taskDoc = tasksSnapshot.docs[j];
-            var task = taskDoc.data();
-            if (task.relatedData?.materialId === materialId) {
-              await db.collection('userTasks').doc(user.email).collection('tasks').doc(taskDoc.id).update({
-                completed: true, completedAt: new Date().toISOString(), completedReason: '入荷完了: ' + quantity + '個'
-              });
-            }
-          }
-        }
-      } catch (error) { console.error('[ih] タスク完了処理エラー:', error); }
-    }
-
-    async function ihSendMaterialArrivalNotification(materialName, quantity) {
-      try {
-        var db = ihGetDb();
-        var roomId = 'room_inventory_alert';
-        var messageText = '✅ 入荷完了\n📦 ' + materialName + '\n入荷数量: ' + quantity + '個\n補充完了しました！';
-        await db.collection('messages').add({
-          roomId: roomId, text: messageText, userName: 'システム', userEmail: 'system@reborn-inventory.com',
-          createdAt: ihGetFirebaseTimestamp(), isSystemMessage: true
-        });
-        await db.collection('rooms').doc(roomId).update({
-          lastMessage: messageText.split('\n')[0], lastMessageAt: ihGetFirebaseTimestamp(), lastMessageBy: 'システム'
-        });
-        var usersSnapshot = await db.collection('users').where('status', '==', 'active').get();
-        var allTokens = [];
-        usersSnapshot.docs.forEach(function(doc) {
-          var user = doc.data();
-          if (user.activeDevices && Array.isArray(user.activeDevices)) {
-            user.activeDevices.forEach(function(device) { if (device.fcmToken) allTokens.push(device.fcmToken); });
-          }
-          if (user.fcmToken) allTokens.push(user.fcmToken);
-        });
-        if (allTokens.length > 0) {
-          var FCM_WORKER_URL = 'https://reborn-fcm-worker.antigravity-llc.workers.dev';
-          await fetch(FCM_WORKER_URL + '/send', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tokens: allTokens, title: '✅ 資材入荷: ' + materialName,
-              body: quantity + '個入荷しました', data: { type: 'material_arrival', roomId: 'room_inventory_alert' }
-            })
-          });
-        }
-      } catch (error) { console.error('[ih] 入荷通知エラー:', error); }
-    }
-
-    async function ihCancelOrderMaterial(orderId) {
-      if (!confirm('この発注をキャンセルしますか？')) return;
-      ihShowLoading();
-      try {
-        var db = ihGetDb();
-        await db.collection('packagingOrders').doc(orderId).update({ status: 'cancelled' });
-        ihHideLoading();
-        alert('発注をキャンセルしました');
-        ihLoadOrdersList();
-      } catch (error) {
-        ihHideLoading();
-        console.error('[ih] 発注キャンセルエラー:', error);
-        alert('キャンセルに失敗しました: ' + error.message);
-      }
-    }
 
     // ========================================
     // Lifecycle: Init & Destroy
@@ -2711,7 +2391,6 @@
       ihAddListener(document.getElementById('ih-btnReset'), 'click', ihResetFilters);
       // 場所選択はカスタムドロップダウンのihSelectLocDropdownItemで処理
       ihAddListener(document.getElementById('ih-showLowStockOnly'), 'change', function() { ihRenderStockList(ih_allMaterials); });
-      ihAddListener(document.getElementById('ih-orderStatusFilter'), 'change', function() { ihRenderOrdersList(); });
 
       ihLoadStockList();
     }
@@ -2730,7 +2409,6 @@
           container.innerHTML = '<div class="text-center text-muted py-4"><i class="bi bi-collection" style="font-size:2rem;display:block;margin-bottom:8px;"></i>プリセットがまだ登録されていません</div>';
           return;
         }
-        // 資材名マップ作成
         var materialMap = {};
         ih_allMaterials.forEach(function(m) { materialMap[m.id] = m.name; });
         var html = '';
@@ -2771,8 +2449,7 @@
       }
     }
 
-    // プリセットモーダル内の選択状態を保持
-    var _ih_presetSelected = {}; // { materialId: quantity, ... }
+    var _ih_presetSelected = {};
 
     function ihGetPresetCategories() {
       var cats = [];
@@ -2820,7 +2497,7 @@
       }
       var filtered = ih_allMaterials.filter(function(m) { return m.category === category; });
       if (!filtered.length) {
-        area.innerHTML = '<div class="text-center text-muted py-3" style="font-size:13px;">この カテゴリに資材がありません</div>';
+        area.innerHTML = '<div class="text-center text-muted py-3" style="font-size:13px;">このカテゴリに資材がありません</div>';
         return;
       }
       var html = '';
@@ -2860,7 +2537,6 @@
 
     function ihPresetRemoveFromSummary(materialId) {
       delete _ih_presetSelected[materialId];
-      // チェックボックスが表示中ならOFF
       var cb = document.getElementById('ih-pm-' + materialId);
       if (cb) { cb.checked = false; var qi = document.getElementById('ih-pq-' + materialId); if (qi) qi.style.display = 'none'; }
       ihPresetRenderSummary();
@@ -2870,10 +2546,7 @@
       var container = document.getElementById('ih-presetSelectedSummary');
       if (!container) return;
       var keys = Object.keys(_ih_presetSelected);
-      if (!keys.length) {
-        container.innerHTML = '';
-        return;
-      }
+      if (!keys.length) { container.innerHTML = ''; return; }
       var materialMap = {};
       ih_allMaterials.forEach(function(m) { materialMap[m.id] = m.name; });
       var html = '<div class="preset-selected-summary">'
@@ -2948,18 +2621,9 @@
         var db = ihGetDb();
         var userName = localStorage.getItem('reborn_user_name') || '不明';
         if (presetId) {
-          await db.collection('packagingPresets').doc(presetId).update({
-            name: name,
-            materials: materials,
-            updatedAt: ihGetFirebaseTimestamp()
-          });
+          await db.collection('packagingPresets').doc(presetId).update({ name: name, materials: materials, updatedAt: ihGetFirebaseTimestamp() });
         } else {
-          await db.collection('packagingPresets').add({
-            name: name,
-            materials: materials,
-            createdBy: userName,
-            createdAt: ihGetFirebaseTimestamp()
-          });
+          await db.collection('packagingPresets').add({ name: name, materials: materials, createdBy: userName, createdAt: ihGetFirebaseTimestamp() });
         }
         ihClosePresetModal();
         ihLoadPresetList();
@@ -2984,7 +2648,6 @@
       }
     }
 
-    // グローバル参照（onclick用）
     window.ihShowPresetCreateModal = ihShowPresetCreateModal;
     window.ihShowPresetEditModal = ihShowPresetEditModal;
     window.ihDeletePreset = ihDeletePreset;
@@ -3008,7 +2671,7 @@
       var presetModal = document.getElementById('ih-presetEditModal');
       if (presetModal) presetModal.style.display = 'none';
       presetModal && (presetModal.innerHTML = '');
-      ['ih-stockInModal', 'ih-stockAdjustmentModal', 'ih-orderModal', 'ih-receiveModal', 'ih-transferModal', 'ih-thresholdSettingsModal'].forEach(function(id) {
+      ['ih-stockInModal', 'ih-stockAdjustmentModal', 'ih-transferModal', 'ih-thresholdSettingsModal'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) {
           var instance = bootstrap.Modal.getInstance(el);
@@ -3025,7 +2688,6 @@
       ih_selectedLocationId = null;
       ih_currentPage = 1;
       ih_currentTab = 'stock';
-      ih_allOrders = [];
       _ih_currentLocation = null;
     }
   </script>
