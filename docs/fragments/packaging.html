@@ -1017,6 +1017,16 @@
               <option value="">選択してください</option>
             </select>
           </div>
+          <!-- ユーザーアイコン＋名前表示 -->
+          <div id="ih-settingsUserProfile" style="display: none;" class="d-flex align-items-center mb-3 p-2 bg-light rounded">
+            <div id="ih-settingsUserIcon" style="width:48px; height:48px; border-radius:50%; overflow:hidden; background:#dee2e6; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <i class="bi bi-person-fill" style="font-size:24px; color:#6c757d;"></i>
+            </div>
+            <div class="ms-3">
+              <div id="ih-settingsUserName" class="fw-bold"></div>
+              <small id="ih-settingsUserEmail" class="text-muted"></small>
+            </div>
+          </div>
           <div id="ih-settingsTabContainer" style="display: none;">
             <!-- タブナビゲーション -->
             <ul class="nav nav-tabs mb-3" role="tablist">
@@ -2092,21 +2102,66 @@
       var locationId = document.getElementById('ih-thresholdLocationSelect').value;
       var tabContainer = document.getElementById('ih-settingsTabContainer');
       var noSelection = document.getElementById('ih-thresholdNoLocationSelected');
-      if (!locationId) { tabContainer.style.display = 'none'; noSelection.style.display = 'block'; return; }
+      var profileEl = document.getElementById('ih-settingsUserProfile');
+      if (!locationId) {
+        tabContainer.style.display = 'none';
+        noSelection.style.display = 'block';
+        if (profileEl) profileEl.style.display = 'none';
+        return;
+      }
       tabContainer.style.display = 'block';
       noSelection.style.display = 'none';
-      // ローディング表示
       document.getElementById('ih-managedMaterialList').textContent = '読み込み中...';
       document.getElementById('ih-thresholdMaterialList').textContent = '読み込み中...';
       try {
         var db = ihGetDb();
         var locationDoc = await db.collection('packagingLocations').doc(locationId).get();
         _ih_settingsLocData = locationDoc.exists ? locationDoc.data() : {};
+        // ユーザーアイコン表示
+        ihShowSettingsUserProfile(_ih_settingsLocData, db);
         ihRenderManagedTab();
         ihRenderThresholdTab();
       } catch (error) {
         console.error('[ih] 設定読み込みエラー:', error);
         document.getElementById('ih-managedMaterialList').textContent = 'エラー: ' + error.message;
+      }
+    }
+
+    async function ihShowSettingsUserProfile(locData, db) {
+      var profileEl = document.getElementById('ih-settingsUserProfile');
+      var iconEl = document.getElementById('ih-settingsUserIcon');
+      var nameEl = document.getElementById('ih-settingsUserName');
+      var emailEl = document.getElementById('ih-settingsUserEmail');
+      if (!profileEl) return;
+      var userName = locData.assignedUserName || locData.name || '';
+      var userEmail = locData.assignedUserEmail || '';
+      nameEl.textContent = userName;
+      emailEl.textContent = userEmail;
+      // デフォルトアイコンに戻す
+      iconEl.textContent = '';
+      var defaultIcon = document.createElement('i');
+      defaultIcon.className = 'bi bi-person-fill';
+      defaultIcon.style.cssText = 'font-size:24px; color:#6c757d;';
+      iconEl.appendChild(defaultIcon);
+      profileEl.style.display = 'flex';
+      // usersコレクションからアイコンURL取得
+      if (userEmail && db) {
+        try {
+          var userDoc = await db.collection('users').doc(userEmail).get();
+          if (userDoc.exists) {
+            var iconUrl = userDoc.data().userIconUrl;
+            if (iconUrl) {
+              iconEl.textContent = '';
+              var img = document.createElement('img');
+              img.src = iconUrl;
+              img.alt = userName;
+              img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+              iconEl.appendChild(img);
+            }
+          }
+        } catch (e) {
+          console.warn('[ih] ユーザーアイコン取得エラー:', e);
+        }
       }
     }
 
