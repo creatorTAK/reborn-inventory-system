@@ -232,38 +232,36 @@ function createNotificationData(productData) {
  * 対象ユーザー取得（登録者以外の全ユーザー）
  * Collection Group Queryでdevicesサブコレクションから取得
  */
-async function getTargetUsers(excludeUser) {
+async function getTargetUsers(excludeEmail) {
   try {
-    // Collection Group Queryで全デバイスを取得（activeフィルタはアプリ側で実施）
-    const devicesSnapshot = await db.collectionGroup('devices').get();
+    // activeDevicesコレクションから取得（collectionGroup全件スキャンを回避）
+    const activeDevicesSnapshot = await db.collection('activeDevices').get();
 
-    console.log(`🔍 [getTargetUsers] 全デバイス数: ${devicesSnapshot.size}`);
+    console.log(`🔍 [getTargetUsers] activeDevices件数: ${activeDevicesSnapshot.size}`);
 
-    const userMap = new Map(); // 重複排除用（key: userEmail, value: userName）
+    const targetUsers = [];
 
-    devicesSnapshot.forEach(deviceDoc => {
-      const deviceData = deviceDoc.data();
-      const userName = deviceData.userName;
-      const userEmail = deviceData.userEmail;
-      const isActive = deviceData.active;
+    activeDevicesSnapshot.forEach(doc => {
+      const data = doc.data();
+      const userEmail = doc.id;
+      const userName = data.userName || '';
+      const tokens = Array.isArray(data.fcmTokens) ? data.fcmTokens.filter(Boolean) : [];
 
-      console.log(`🔍 [getTargetUsers] デバイス: ${deviceDoc.id}, userName: ${userName}, active: ${isActive}, email: ${userEmail}`);
-
-      // アクティブなデバイスのみ対象
-      if (isActive && userName && userEmail && userName !== excludeUser && userName !== 'システム') {
-        userMap.set(userEmail, userName);
-        console.log(`✅ [getTargetUsers] 追加: ${userName} (${userEmail})`);
-      } else {
-        console.log(`⏭️ [getTargetUsers] スキップ: ${userName} (active: ${isActive}, excludeUser: ${excludeUser})`);
+      // 除外ユーザーとシステムをスキップ、トークンなしもスキップ
+      if (userEmail === excludeEmail || userName === 'システム' || tokens.length === 0) {
+        return;
       }
+
+      targetUsers.push({
+        userName,
+        userEmail,
+        fcmTokens: tokens,
+        notificationEnabled: data.notificationEnabled !== false,
+        notificationSound: data.notificationSound !== false
+      });
     });
 
-    const targetUsers = Array.from(userMap.entries()).map(([userEmail, userName]) => ({
-      userName,
-      userEmail
-    }));
-    console.log(`📊 [getTargetUsers] 対象ユーザー（重複排除後）: ${targetUsers.length}人`);
-
+    console.log(`📊 [getTargetUsers] 対象ユーザー: ${targetUsers.length}人`);
     return targetUsers;
   } catch (error) {
     console.error('❌ [getTargetUsers] エラー:', error);
@@ -363,53 +361,15 @@ async function sendFCMNotifications(notificationData, targetUsers) {
 
     console.log(`🔔 [sendFCMNotifications] FCM送信開始: ${targetUsers.length}人`);
 
-    // ユーザーごとのアクティブデバイスからFCMトークンを取得
-    const tokensPromises = targetUsers.map(async (user) => {
-      try {
-        const { userName, userEmail } = user;
-        console.log(`🔍 [sendFCMNotifications] デバイストークン取得試行: users/${userEmail}/devices (${userName})`);
-
-        // devicesサブコレクションからアクティブなデバイスを取得
-        const devicesSnapshot = await Promise.race([
-          db.collection('users').doc(userEmail).collection('devices')
-            .where('active', '==', true)
-            .get(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error(`Firestore devices query timeout for ${userEmail}`)), 5000))
-        ]);
-
-        console.log(`✅ [sendFCMNotifications] デバイスクエリ完了: users/${userEmail}/devices (${devicesSnapshot.size}件)`);
-
-        if (devicesSnapshot.empty) {
-          console.log(`⚠️ [sendFCMNotifications] アクティブデバイスなし: ${userName} (${userEmail})`);
-          return [];
-        }
-
-        // すべてのアクティブデバイスのトークンを取得
-        const userTokens = [];
-        devicesSnapshot.forEach(deviceDoc => {
-          const deviceData = deviceDoc.data();
-          const fcmToken = deviceData?.fcmToken;
-          const permissionId = deviceData?.permissionId || 'staff';
-          const permissionDisplay = deviceData?.permissionDisplay || 'スタッフ';
-
-          if (fcmToken) {
-            console.log(`✅ [sendFCMNotifications] トークン取得成功: ${userName} (${permissionDisplay}) → ${fcmToken.substring(0, 20)}...`);
-            userTokens.push({ userName, token: fcmToken, permissionId, permissionDisplay });
-          } else {
-            console.log(`⚠️ [sendFCMNotifications] トークンなし: ${userName} device=${deviceDoc.id}`);
-          }
+    // getTargetUsersで取得済みのfcmTokensを直接使用（個別デバイスクエリを排除）
+    const tokens = [];
+    targetUsers.forEach(user => {
+      if (user.fcmTokens && user.fcmTokens.length > 0) {
+        user.fcmTokens.forEach(token => {
+          tokens.push(token);
         });
-
-        return userTokens;
-      } catch (error) {
-        console.error(`❌ [sendFCMNotifications] ユーザー${user.userName} (${user.userEmail})のデバイス取得エラー:`, error);
-        return [];
       }
     });
-
-    // flat()で配列を平坦化（各ユーザーが複数デバイスを持つため）
-    const tokensData = (await Promise.all(tokensPromises)).flat().filter(data => data && data.token);
-    const tokens = tokensData.map(data => data.token);
 
     if (tokens.length === 0) {
       console.log('⏭️ [sendFCMNotifications] FCMトークンなし、スキップ');
@@ -621,20 +581,21 @@ exports.onChatMessageCreated = onDocumentCreated('rooms/{roomId}/messages/{messa
       console.log('📧 [onChatMessageCreated] memberEmails から取得:', memberEmails);
     } else {
       // memberEmails フィールドがない場合（旧データ、全体チャット等）
-      console.log('📧 [onChatMessageCreated] users コレクションから取得（低速）');
-      const usersSnapshot = await db.collection('users').get();
+      // activeDevicesから取得（全usersスキャンを回避）
+      console.log('📧 [onChatMessageCreated] activeDevices から取得');
+      const activeDevicesSnapshot = await db.collection('activeDevices').get();
 
-      usersSnapshot.forEach(userDoc => {
-        const userData = userDoc.data();
-        if (targetMembers.includes(userData.userName)) {
+      activeDevicesSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.userName && targetMembers.includes(data.userName)) {
           memberEmails.push({
-            userName: userData.userName,
-            userEmail: userDoc.id
+            userName: data.userName,
+            userEmail: doc.id
           });
         }
       });
 
-      console.log('📧 [onChatMessageCreated] users スキャン完了:', memberEmails);
+      console.log('📧 [onChatMessageCreated] activeDevices スキャン完了:', memberEmails);
     }
 
     // 🚫 ブロックチェック: 送信者をブロックしているユーザーには通知しない（LINE風）
@@ -2124,23 +2085,7 @@ exports.dailyInventoryAgingCheck = onSchedule({
   const startTime = Date.now();
 
   try {
-    // 滞留設定を取得（閾値やタスク担当者設定）
-    const agingSettingsDoc = await db.collection('settings').doc('inventoryAging').get();
-    const agingSettings = agingSettingsDoc.exists ? agingSettingsDoc.data() : {};
-
-    // 報酬設定を取得
-    const compensationSettingsDoc = await db.collection('settings').doc('compensation').get();
-    const compensationSettings = compensationSettingsDoc.exists ? compensationSettingsDoc.data() : {};
-
-    // デフォルト設定
-    const warningDays = agingSettings.warningDays || 14;
-    const actionDays = agingSettings.actionDays || 30;
-    const assigneeType = agingSettings.assigneeType || 'registrant'; // 'registrant' or 'fixed'
-    const fixedAssignee = agingSettings.fixedAssignee || null;
-    // 報酬額は報酬設定から取得
-    const compensationAmount = compensationSettings.taskRates?.editing || 50;
-
-    console.log(`📋 [設定] 警告: ${warningDays}日, 対策: ${actionDays}日, 担当: ${assigneeType}, 報酬: ¥${compensationAmount}`);
+    const ACTION_DAYS = 30;
 
     // 出品中の商品を取得
     const productsSnapshot = await db.collection('products')
@@ -2152,15 +2097,13 @@ exports.dailyInventoryAgingCheck = onSchedule({
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    let warningTasksCreated = 0;
-    let actionTasksCreated = 0;
-
-    // 通知対象ユーザーを収集（ユーザーごとのアラート数を集計）
-    const userAlerts = {}; // { email: { actionCount: 0, warningCount: 0, userName: '' } }
-
+    // 30日超過の商品を検出
+    const agingProducts = [];
     for (const productDoc of productsSnapshot.docs) {
       const product = productDoc.data();
-      const productId = productDoc.id;
+
+      // 既に通知済みならスキップ
+      if (product.agingNotifiedAt) continue;
 
       // 出品日を取得
       let listingDate = null;
@@ -2171,190 +2114,108 @@ exports.dailyInventoryAgingCheck = onSchedule({
       } else if (product.createdAt) {
         listingDate = product.createdAt.toDate ? product.createdAt.toDate() : new Date(product.createdAt);
       }
-
-      if (!listingDate || isNaN(listingDate.getTime())) {
-        console.log(`⏭️ [${product.managementNumber}] 出品日不明 - スキップ`);
-        continue;
-      }
+      if (!listingDate || isNaN(listingDate.getTime())) continue;
 
       listingDate.setHours(0, 0, 0, 0);
-      const diffTime = now - listingDate;
-      const agingDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      const agingDays = Math.floor((now - listingDate) / (1000 * 60 * 60 * 24));
+      if (agingDays <= ACTION_DAYS) continue;
 
-      // タスク担当者を決定
-      let assigneeEmail = null;
-      if (assigneeType === 'fixed' && fixedAssignee) {
-        assigneeEmail = fixedAssignee;
-      } else {
-        // 商品登録者を担当者にする
-        assigneeEmail = product.userEmail || product.registrantEmail || null;
-      }
-
-      if (!assigneeEmail) {
-        console.log(`⏭️ [${product.managementNumber}] 担当者不明 - スキップ`);
-        continue;
-      }
-
-      // 既存タスクをチェック（重複作成防止）
-      const existingTasksSnapshot = await db.collection('userTasks')
-        .doc(assigneeEmail)
-        .collection('tasks')
-        .where('productId', '==', productId)
-        .where('taskType', 'in', ['inventory_warning', 'inventory_action'])
-        .where('completed', '==', false)
-        .get();
-
-      const existingWarning = existingTasksSnapshot.docs.find(d => d.data().taskType === 'inventory_warning');
-      const existingAction = existingTasksSnapshot.docs.find(d => d.data().taskType === 'inventory_action');
-
-      // 30日以上: 対策タスク
-      if (agingDays >= actionDays && !existingAction) {
-        const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + 3); // 3日以内に対応
-
-        await db.collection('userTasks')
-          .doc(assigneeEmail)
-          .collection('tasks')
-          .add({
-            title: `【要対策】${product.productName || product.managementNumber} - ${agingDays}日滞留`,
-            taskType: 'inventory_action',
-            productId: productId,
-            managementNumber: product.managementNumber,
-            productName: product.productName || '',
-            agingDays: agingDays,
-            completed: false,
-            createdAt: FieldValue.serverTimestamp(),
-            dueDate: dueDate,
-            compensation: compensationAmount,
-            compensationType: 'editing',
-            priority: 'high',
-            link: `/product.html?edit=${productId}`
-          });
-
-        actionTasksCreated++;
-        console.log(`🔴 [${product.managementNumber}] 対策タスク作成 (${agingDays}日)`);
-
-        // 通知対象に追加
-        if (!userAlerts[assigneeEmail]) {
-          // ユーザー名を取得
-          const userDoc = await db.collection('users').doc(assigneeEmail).get();
-          const userName = userDoc.exists ? (userDoc.data().displayName || userDoc.data().name || assigneeEmail.split('@')[0]) : assigneeEmail.split('@')[0];
-          userAlerts[assigneeEmail] = { actionCount: 0, warningCount: 0, userName };
-        }
-        userAlerts[assigneeEmail].actionCount++;
-
-        // 警告タスクがあれば完了にする
-        if (existingWarning) {
-          await db.collection('userTasks')
-            .doc(assigneeEmail)
-            .collection('tasks')
-            .doc(existingWarning.id)
-            .update({
-              completed: true,
-              completedAt: FieldValue.serverTimestamp(),
-              completedReason: '対策タスクに昇格'
-            });
-        }
-      }
-      // 14日以上30日未満: 警告タスク
-      else if (agingDays >= warningDays && agingDays < actionDays && !existingWarning) {
-        await db.collection('userTasks')
-          .doc(assigneeEmail)
-          .collection('tasks')
-          .add({
-            title: `【要確認】${product.productName || product.managementNumber} - ${agingDays}日滞留`,
-            taskType: 'inventory_warning',
-            productId: productId,
-            managementNumber: product.managementNumber,
-            productName: product.productName || '',
-            agingDays: agingDays,
-            completed: false,
-            createdAt: FieldValue.serverTimestamp(),
-            dueDate: null, // 警告は期限なし
-            compensation: 0,
-            priority: 'medium',
-            link: `/product.html?edit=${productId}`
-          });
-
-        warningTasksCreated++;
-        console.log(`🟡 [${product.managementNumber}] 警告タスク作成 (${agingDays}日)`);
-
-        // 通知対象に追加
-        if (!userAlerts[assigneeEmail]) {
-          const userDoc = await db.collection('users').doc(assigneeEmail).get();
-          const userName = userDoc.exists ? (userDoc.data().displayName || userDoc.data().name || assigneeEmail.split('@')[0]) : assigneeEmail.split('@')[0];
-          userAlerts[assigneeEmail] = { actionCount: 0, warningCount: 0, userName };
-        }
-        userAlerts[assigneeEmail].warningCount++;
-      }
+      agingProducts.push({ productDoc, product, agingDays });
     }
 
-    // 📢 プッシュ通知を送信（アラートがあるユーザーのみ）
-    const usersToNotify = Object.entries(userAlerts).filter(([_, data]) => data.actionCount > 0 || data.warningCount > 0);
+    console.log(`📊 [dailyInventoryAgingCheck] 30日超過（未通知）: ${agingProducts.length}件`);
 
-    if (usersToNotify.length > 0) {
-      console.log(`🔔 [dailyInventoryAgingCheck] 通知送信開始: ${usersToNotify.length}人`);
+    if (agingProducts.length === 0) {
+      const duration = Date.now() - startTime;
+      console.log(`✅ [dailyInventoryAgingCheck] 完了: 対象なし (${duration}ms)`);
+      return { success: true, notified: 0 };
+    }
 
-      for (const [userEmail, alertData] of usersToNotify) {
-        try {
-          // ユーザーのデバイストークンを取得
-          const devicesSnapshot = await db.collection('users').doc(userEmail).collection('devices')
-            .where('active', '==', true)
-            .get();
+    // 管理者を特定（permissionId == 'owner'）
+    const usersSnapshot = await db.collection('users')
+      .where('permissionId', '==', 'owner')
+      .get();
 
-          if (devicesSnapshot.empty) {
-            console.log(`⏭️ [${userEmail}] アクティブデバイスなし - スキップ`);
-            continue;
-          }
+    const adminEmails = [];
+    usersSnapshot.forEach(doc => adminEmails.push(doc.id));
 
-          // 通知内容を作成
-          let title = '📦 滞留在庫アラート';
-          let body = '';
+    if (adminEmails.length === 0) {
+      console.log('⚠️ [dailyInventoryAgingCheck] 管理者が見つかりません');
+      return { success: true, notified: 0 };
+    }
 
-          if (alertData.actionCount > 0 && alertData.warningCount > 0) {
-            body = `要対策: ${alertData.actionCount}件、要確認: ${alertData.warningCount}件の滞留商品があります`;
-          } else if (alertData.actionCount > 0) {
-            body = `${alertData.actionCount}件の商品が30日以上滞留しています。値下げ等の対策をご検討ください`;
-          } else {
-            body = `${alertData.warningCount}件の商品が14日以上滞留しています`;
-          }
+    console.log(`👤 [dailyInventoryAgingCheck] 管理者: ${adminEmails.join(', ')}`);
 
-          // FCM送信
-          const tokens = [];
-          devicesSnapshot.forEach(doc => {
-            const token = doc.data().fcmToken;
-            if (token) tokens.push(token);
+    // 各商品について管理者に通知 + agingNotifiedAt を書き込み
+    let notifiedCount = 0;
+
+    for (const { productDoc, product, agingDays } of agingProducts) {
+      const managementNumber = product.managementNumber || productDoc.id;
+      const productName = product.productName || '名称なし';
+
+      // 商品ドキュメントに通知済みフラグを書き込み
+      await db.collection('products').doc(productDoc.id).update({
+        agingNotifiedAt: FieldValue.serverTimestamp()
+      });
+
+      // 各管理者にpersonalAnnouncements通知
+      for (const adminEmail of adminEmails) {
+        await db.collection('users')
+          .doc(adminEmail)
+          .collection('personalAnnouncements')
+          .add({
+            title: `📦 滞留商品: ${managementNumber}`,
+            body: `「${productName}」が${agingDays}日間出品中です。在庫管理画面で確認してください。`,
+            priority: 'warning',
+            createdAt: FieldValue.serverTimestamp(),
+            productId: productDoc.id,
+            managementNumber: managementNumber
           });
+      }
 
-          if (tokens.length > 0) {
-            const message = {
-              notification: { title, body },
-              data: {
-                type: 'inventory_aging',
-                actionCount: String(alertData.actionCount),
-                warningCount: String(alertData.warningCount),
-                url: '/todo_list.html'
-              },
-              tokens: tokens
-            };
+      notifiedCount++;
+      console.log(`📦 [${managementNumber}] 管理者通知送信 (${agingDays}日)`);
+    }
 
-            const response = await messaging.sendEachForMulticast(message);
-            console.log(`✅ [${userEmail}] 通知送信: 成功${response.successCount}件, 失敗${response.failureCount}件`);
-          }
+    // 管理者にプッシュ通知（まとめて1通）
+    if (notifiedCount > 0) {
+      for (const adminEmail of adminEmails) {
+        try {
+          const activeDeviceDoc = await db.collection('activeDevices').doc(adminEmail).get();
+          if (!activeDeviceDoc.exists) continue;
+
+          const tokens = Array.isArray(activeDeviceDoc.data().fcmTokens)
+            ? activeDeviceDoc.data().fcmTokens.filter(Boolean) : [];
+          if (tokens.length === 0) continue;
+
+          const message = {
+            notification: {
+              title: '📦 滞留商品アラート',
+              body: `${notifiedCount}件の商品が30日以上滞留しています。在庫管理画面で確認してください。`
+            },
+            data: {
+              type: 'inventory_aging',
+              count: String(notifiedCount),
+              url: '/inventory.html'
+            },
+            tokens: tokens
+          };
+
+          const response = await messaging.sendEachForMulticast(message);
+          console.log(`✅ [${adminEmail}] プッシュ通知: 成功${response.successCount}件, 失敗${response.failureCount}件`);
         } catch (notifyError) {
-          console.error(`❌ [${userEmail}] 通知送信エラー:`, notifyError.message);
+          console.error(`❌ [${adminEmail}] プッシュ通知エラー:`, notifyError.message);
         }
       }
     }
 
     const duration = Date.now() - startTime;
-    console.log(`✅ [dailyInventoryAgingCheck] 完了: 警告${warningTasksCreated}件, 対策${actionTasksCreated}件, 通知${usersToNotify.length}件 (${duration}ms)`);
+    console.log(`✅ [dailyInventoryAgingCheck] 完了: 通知${notifiedCount}件, 管理者${adminEmails.length}人 (${duration}ms)`);
 
     return {
       success: true,
-      warningTasksCreated,
-      actionTasksCreated,
-      notificationsSent: usersToNotify.length
+      notified: notifiedCount,
+      admins: adminEmails.length
     };
 
   } catch (error) {

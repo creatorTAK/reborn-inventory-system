@@ -501,6 +501,19 @@
     #spa-page-inventory .inv-aging-badge.yellow { background: #fef3c7; color: #92400e; }
     #spa-page-inventory .inv-aging-badge.orange { background: #ffedd5; color: #9a3412; }
     #spa-page-inventory .inv-aging-badge.red { background: #fee2e2; color: #991b1b; }
+    /* Aging over30 clickable row */
+    #spa-page-inventory .inv-aging-row.clickable { cursor: pointer; }
+    #spa-page-inventory .inv-aging-row.clickable:active { background: #f3f4f6; border-radius: 6px; }
+    #spa-page-inventory .inv-aging-row.clickable .inv-aging-count { color: #ef4444; text-decoration: underline; }
+    /* Aging modal */
+    #invAgingModal .aging-item { padding: 12px 0; border-bottom: 1px solid #e5e7eb; }
+    #invAgingModal .aging-item:last-child { border-bottom: none; }
+    #invAgingModal .aging-item-header { display: flex; justify-content: space-between; align-items: center; }
+    #invAgingModal .aging-item-name { font-weight: 600; font-size: 14px; }
+    #invAgingModal .aging-item-days { color: #ef4444; font-weight: 600; font-size: 14px; }
+    #invAgingModal .aging-item-sub { color: #6b7280; font-size: 12px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center; }
+    #invAgingModal .btn-aging-action { font-size: 12px; padding: 3px 10px; }
+    #invAgingModal .aging-done-badge { font-size: 12px; color: #10b981; font-weight: 600; }
     /* Settings dropdown */
     #spa-page-inventory .inv-sub-header {
       display: flex;
@@ -924,10 +937,25 @@
             <div class="inv-aging-bar-container"><div class="inv-aging-bar orange" id="invAgingBar30" style="width: 0%;"></div></div>
             <div class="inv-aging-count" id="invAgingCount30">0件</div>
           </div>
-          <div class="inv-aging-row">
+          <div class="inv-aging-row clickable" id="invAgingRowOver30" onclick="invShowAgingModal()">
             <div class="inv-aging-label"><span class="inv-aging-dot red"></span><span>30日超過</span></div>
             <div class="inv-aging-bar-container"><div class="inv-aging-bar red" id="invAgingBarOver30" style="width: 0%;"></div></div>
             <div class="inv-aging-count" id="invAgingCountOver30">0件</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 30日超過モーダル -->
+    <div class="modal fade" id="invAgingModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h6 class="modal-title fw-bold">30日超過の滞留商品（<span id="invAgingModalCount">0</span>件）</h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="invAgingModalBody">
+            <div class="text-center text-muted py-3">読み込み中...</div>
           </div>
         </div>
       </div>
@@ -1054,6 +1082,7 @@
     var INV_CACHE_DURATION_MS = 300000;
     var invCurrentFilters = {};
     var invCurrentSort = { sortBy: 'registeredAt', sortOrder: 'desc' };
+    var invAgingOver30Products = [];
     var invCurrentProduct = null;
     var invShippingMethodMaster = [];
     var invPackagingMaterialsMaster = [];
@@ -1495,6 +1524,7 @@
       document.getElementById('invAgingCount30').textContent = categories.within30.length + '件';
       document.getElementById('invAgingBarOver30').style.width = (categories.over30.length / total * 100).toFixed(1) + '%';
       document.getElementById('invAgingCountOver30').textContent = categories.over30.length + '件';
+      invAgingOver30Products = categories.over30;
       agingSection.style.display = 'block';
     }
 
@@ -1512,6 +1542,118 @@
       else if (diffDays > 14) colorClass = 'orange';
       else if (diffDays > 7) colorClass = 'yellow';
       return { days: diffDays, colorClass: colorClass };
+    }
+
+    // ===== Aging Modal =====
+    async function invShowAgingModal() {
+      if (invAgingOver30Products.length === 0) return;
+      var modal = new bootstrap.Modal(document.getElementById('invAgingModal'));
+      document.getElementById('invAgingModalCount').textContent = invAgingOver30Products.length;
+      document.getElementById('invAgingModalBody').innerHTML = '<div class="text-center text-muted py-3">読み込み中...</div>';
+      modal.show();
+
+      var isAdmin = false;
+      var permId = localStorage.getItem('reborn_user_permission_id');
+      if (permId === 'owner' || permId === 'admin') isAdmin = true;
+
+      // 報酬設定を取得
+      var compensationAmount = 50;
+      try {
+        var compDoc = await db.collection('settings').doc('compensation').get();
+        if (compDoc.exists && compDoc.data().taskRates && compDoc.data().taskRates.editing) {
+          compensationAmount = compDoc.data().taskRates.editing;
+        }
+      } catch (e) { console.warn('報酬設定取得失敗:', e); }
+
+      // 各商品の既存タスクを確認
+      var html = '';
+      for (var i = 0; i < invAgingOver30Products.length; i++) {
+        var product = invAgingOver30Products[i];
+        var agingInfo = invCalculateAgingDays(product);
+        var days = agingInfo.days >= 0 ? agingInfo.days : '?';
+        var registrantEmail = product.userEmail || product.registrantEmail || '';
+        var registrantName = product.registrantName || product.userName || registrantEmail.split('@')[0] || '不明';
+        var productId = product.id || product.docId || '';
+
+        // 既存の未完了 inventory_action タスクをチェック
+        var hasExistingTask = false;
+        if (registrantEmail && productId) {
+          try {
+            var taskSnap = await db.collection('userTasks').doc(registrantEmail).collection('tasks')
+              .where('taskType', '==', 'inventory_action')
+              .where('productId', '==', productId)
+              .where('completed', '==', false)
+              .get();
+            if (!taskSnap.empty) hasExistingTask = true;
+          } catch (e) { console.warn('タスク確認失敗:', e); }
+        }
+
+        html += '<div class="aging-item">';
+        html += '<div class="aging-item-header">';
+        html += '<span class="aging-item-name">' + (product.managementNumber || '') + ' ' + (product.productName || '名称なし') + '</span>';
+        html += '<span class="aging-item-days">' + days + '日</span>';
+        html += '</div>';
+        html += '<div class="aging-item-sub">';
+        html += '<span>登録者: ' + registrantName + '</span>';
+
+        if (isAdmin) {
+          if (hasExistingTask) {
+            html += '<span class="aging-done-badge">&#10003; 指示済み</span>';
+          } else {
+            html += '<button class="btn btn-outline-danger btn-aging-action" onclick="invSendAgingAction(\'' + productId + '\', \'' + registrantEmail + '\', ' + compensationAmount + ', this)">対策指示を出す</button>';
+          }
+        }
+
+        html += '</div>';
+        html += '</div>';
+      }
+
+      document.getElementById('invAgingModalBody').innerHTML = html;
+    }
+
+    async function invSendAgingAction(productId, registrantEmail, compensation, btnEl) {
+      if (!productId || !registrantEmail) { alert('商品情報が不足しています'); return; }
+      btnEl.disabled = true;
+      btnEl.textContent = '送信中...';
+
+      try {
+        // 商品情報を取得
+        var productDoc = await db.collection('products').doc(productId).get();
+        if (!productDoc.exists) { alert('商品が見つかりません'); btnEl.disabled = false; btnEl.textContent = '対策指示を出す'; return; }
+        var product = productDoc.data();
+
+        var dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 7);
+
+        await db.collection('userTasks')
+          .doc(registrantEmail)
+          .collection('tasks')
+          .add({
+            title: '【要対策】' + (product.productName || product.managementNumber) + ' - 滞留商品',
+            taskType: 'inventory_action',
+            productId: productId,
+            managementNumber: product.managementNumber || '',
+            productName: product.productName || '',
+            completed: false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            dueDate: dueDate,
+            compensation: compensation,
+            compensationType: 'editing',
+            priority: 'high',
+            link: '/product.html?edit=' + productId
+          });
+
+        // ボタンを「指示済み」に変更
+        var badge = document.createElement('span');
+        badge.className = 'aging-done-badge';
+        badge.innerHTML = '&#10003; 指示済み';
+        btnEl.parentNode.replaceChild(badge, btnEl);
+      } catch (e) {
+        console.error('対策指示エラー:', e);
+        alert('タスク作成に失敗しました');
+        btnEl.disabled = false;
+        btnEl.textContent = '対策指示を出す';
+      }
     }
 
     // ===== Filter params =====
