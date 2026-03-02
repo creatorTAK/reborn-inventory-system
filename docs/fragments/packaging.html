@@ -809,6 +809,12 @@
         </div>
         <div class="modal-body">
           <div class="mb-3">
+            <label class="form-label">カテゴリ</label>
+            <select class="form-select" id="ih-stockInCategory" style="font-size:16px;" onchange="ihFilterMaterialsByCategory('ih-stockInCategory','ih-stockInMaterial')">
+              <option value="">全カテゴリ</option>
+            </select>
+          </div>
+          <div class="mb-3">
             <label class="form-label">資材選択</label>
             <select class="form-select" id="ih-stockInMaterial" style="font-size:16px;">
               <option value="">選択してください</option>
@@ -849,6 +855,12 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">カテゴリ</label>
+            <select class="form-select" id="ih-adjustCategory" style="font-size:16px;" onchange="ihFilterMaterialsByCategory('ih-adjustCategory','ih-adjustMaterial','stock')">
+              <option value="">全カテゴリ</option>
+            </select>
+          </div>
           <div class="mb-3">
             <label class="form-label">資材選択</label>
             <select class="form-select" id="ih-adjustMaterial" style="font-size:16px;">
@@ -972,6 +984,12 @@
             <label class="form-label">配布先</label>
             <select class="form-select" id="ih-transferToLocation" style="font-size:16px;">
               <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">カテゴリ</label>
+            <select class="form-select" id="ih-transferCategory" style="font-size:16px;" onchange="ihFilterMaterialsByCategory('ih-transferCategory','ih-transferMaterial','transferStock')">
+              <option value="">全カテゴリ</option>
             </select>
           </div>
           <div class="mb-3">
@@ -1919,12 +1937,49 @@
     }
 
     // ========================================
+    // Category-Material Linked Dropdown
+    // ========================================
+    function ihPopulateCategorySelect(selectId) {
+      var select = document.getElementById(selectId);
+      if (!select) return;
+      var categories = [];
+      var seen = {};
+      ih_allMaterials.forEach(function(m) {
+        if (m.category && !seen[m.category]) { seen[m.category] = true; categories.push(m.category); }
+      });
+      select.innerHTML = '<option value="">全カテゴリ</option>' +
+        categories.map(function(cat) { return '<option value="' + ihEscapeHtml(cat) + '">' + ihEscapeHtml(cat) + '</option>'; }).join('');
+    }
+
+    function ihFilterMaterialsByCategory(categorySelectId, materialSelectId, mode) {
+      var category = document.getElementById(categorySelectId).value;
+      var materials = ih_allMaterials;
+      if (category) materials = materials.filter(function(m) { return m.category === category; });
+      if (mode === 'transferStock') materials = materials.filter(function(m) { return m.currentStock > 0; });
+      var select = document.getElementById(materialSelectId);
+      select.innerHTML = '<option value="">選択してください</option>' +
+        materials.map(function(m) {
+          var label = ihEscapeHtml(m.productName || m.name);
+          if (mode === 'stock') label += ' (現在庫: ' + (m.currentStock || 0) + ')';
+          if (mode === 'transferStock') label += ' (在庫: ' + m.currentStock + ')';
+          return '<option value="' + m.id + '" data-stock="' + (m.currentStock || 0) + '">' + label + '</option>';
+        }).join('');
+      select.value = '';
+    }
+
+    // ========================================
     // Stock In Modal
     // ========================================
     function ihShowStockInModalMaterial(materialId) {
-      var select = document.getElementById('ih-stockInMaterial');
-      select.innerHTML = '<option value="">選択してください</option>' +
-        ih_allMaterials.map(function(m) { return '<option value="' + m.id + '" ' + (m.id === materialId ? 'selected' : '') + '>' + ihEscapeHtml(m.productName || m.name) + '</option>'; }).join('');
+      ihPopulateCategorySelect('ih-stockInCategory');
+      var preselectedMat = materialId ? ih_allMaterials.find(function(m) { return m.id === materialId; }) : null;
+      if (preselectedMat && preselectedMat.category) {
+        document.getElementById('ih-stockInCategory').value = preselectedMat.category;
+      } else {
+        document.getElementById('ih-stockInCategory').value = '';
+      }
+      ihFilterMaterialsByCategory('ih-stockInCategory', 'ih-stockInMaterial');
+      if (materialId) document.getElementById('ih-stockInMaterial').value = materialId;
       document.getElementById('ih-stockInQuantity').value = '';
       document.getElementById('ih-stockInPrice').value = '';
       document.getElementById('ih-stockInSupplier').value = '';
@@ -1980,9 +2035,15 @@
     // Stock Adjustment Modal
     // ========================================
     function ihShowStockAdjustmentModal(materialId) {
-      var select = document.getElementById('ih-adjustMaterial');
-      select.innerHTML = '<option value="">選択してください</option>' +
-        ih_allMaterials.map(function(m) { return '<option value="' + m.id + '" ' + (m.id === materialId ? 'selected' : '') + '>' + ihEscapeHtml(m.productName || m.name) + ' (現在庫: ' + (m.currentStock || 0) + ')</option>'; }).join('');
+      ihPopulateCategorySelect('ih-adjustCategory');
+      var preselectedMat = materialId ? ih_allMaterials.find(function(m) { return m.id === materialId; }) : null;
+      if (preselectedMat && preselectedMat.category) {
+        document.getElementById('ih-adjustCategory').value = preselectedMat.category;
+      } else {
+        document.getElementById('ih-adjustCategory').value = '';
+      }
+      ihFilterMaterialsByCategory('ih-adjustCategory', 'ih-adjustMaterial', 'stock');
+      if (materialId) document.getElementById('ih-adjustMaterial').value = materialId;
       document.getElementById('ih-adjustQuantity').value = '';
       document.getElementById('ih-adjustReason').value = 'damaged';
       document.getElementById('ih-adjustNote').value = '';
@@ -2060,16 +2121,13 @@
           var typeLabel = loc.type === 'user_home' ? '👤' : loc.type === 'warehouse' ? '🏭' : '🏢';
           return '<option value="' + loc.id + '">' + typeLabel + ' ' + ihEscapeHtml(loc.name) + '</option>';
         }).join('');
-      var materialSelect = document.getElementById('ih-transferMaterial');
-      var materialsWithStock = ih_allMaterials.filter(function(m) { return m.currentStock > 0; });
-      materialSelect.innerHTML = '<option value="">選択してください</option>' +
-        materialsWithStock.map(function(m) {
-          return '<option value="' + m.id + '" data-stock="' + m.currentStock + '">' + ihEscapeHtml(m.productName || m.name) + ' (在庫: ' + m.currentStock + ')</option>';
-        }).join('');
+      ihPopulateCategorySelect('ih-transferCategory');
+      document.getElementById('ih-transferCategory').value = '';
+      ihFilterMaterialsByCategory('ih-transferCategory', 'ih-transferMaterial', 'transferStock');
       document.getElementById('ih-transferQuantity').value = '';
       document.getElementById('ih-transferNote').value = '';
       document.getElementById('ih-transferAvailableStock').textContent = '現在庫: -';
-      materialSelect.onchange = function() {
+      document.getElementById('ih-transferMaterial').onchange = function() {
         var option = this.options[this.selectedIndex];
         var stock = option.dataset.stock || '-';
         document.getElementById('ih-transferAvailableStock').textContent = '現在庫: ' + stock;
