@@ -1639,12 +1639,12 @@
         var locationAlerts = [];
         ih_allLocations.forEach(function(loc) {
           var managed = loc.managedMaterials || null;
-          if (!managed || managed.length === 0) return; // 管理対象未設定の場所はスキップ
+          var hasManaged = managed && managed.length > 0;
           var locStock = stockByLocation[loc.id] || {};
           var locThresholds = loc.materialThresholds || {};
           var alertCount = 0;
           materials.forEach(function(m) {
-            if (managed.indexOf(m.id) === -1) return; // 管理対象外はスキップ
+            if (hasManaged && managed.indexOf(m.id) === -1) return; // 管理対象外はスキップ
             var stock = locStock[m.id] || 0;
             var threshold = (locThresholds[m.id] !== undefined && locThresholds[m.id] > 0) ? locThresholds[m.id] : (m.stockAlertThreshold || 0);
             if (stock <= 0 || (threshold > 0 && stock <= threshold)) alertCount++;
@@ -1715,29 +1715,12 @@
         var materialsSnapshot = await db.collection('packagingMaterials').get();
         var allMats = materialsSnapshot.docs.map(function(doc) { return { id: doc.id, ...doc.data() }; });
 
-        // managedMaterialsが設定されている場合のみフィルタ
+        // managedMaterialsが設定されている場合のみフィルタ（未設定=全資材表示で後方互換）
         var materials;
         if (managedMaterials && managedMaterials.length > 0) {
           materials = allMats.filter(function(m) { return managedMaterials.indexOf(m.id) !== -1; });
         } else {
-          // 未設定 or 空配列 = 管理対象資材が未設定
-          container.textContent = '';
-          var msgDiv = document.createElement('div');
-          msgDiv.className = 'text-center text-muted py-4';
-          var icon = document.createElement('i');
-          icon.className = 'bi bi-info-circle';
-          icon.style.fontSize = '2rem';
-          var p = document.createElement('p');
-          p.className = 'mt-2';
-          p.textContent = '管理対象資材が未設定です';
-          var small = document.createElement('small');
-          small.textContent = '管理者が「資材管理設定」から対象資材を設定してください';
-          msgDiv.appendChild(icon);
-          msgDiv.appendChild(p);
-          msgDiv.appendChild(small);
-          container.appendChild(msgDiv);
-          ih_allMaterials = allMats;
-          return;
+          materials = allMats;
         }
 
         var lotsSnapshot = await db.collection('packagingLots')
