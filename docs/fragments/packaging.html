@@ -1994,6 +1994,7 @@
           .where('status', '==', 'active').orderBy('purchaseDate', 'desc').get();
         var remaining = quantity;
         var adjusted = [];
+        var batch = db.batch();
         for (var i = 0; i < lotsSnapshot.docs.length; i++) {
           if (remaining <= 0) break;
           var doc = lotsSnapshot.docs[i];
@@ -2001,20 +2002,24 @@
           var toAdjust = Math.min(remaining, lot.remainingQty);
           var newRemainingQty = lot.remainingQty - toAdjust;
           var newStatus = newRemainingQty <= 0 ? 'depleted' : 'active';
-          await db.collection('packagingLots').doc(doc.id).update({ remainingQty: newRemainingQty, status: newStatus, updatedAt: ihGetFirebaseTimestamp() });
+          batch.update(db.collection('packagingLots').doc(doc.id), { remainingQty: newRemainingQty, status: newStatus, updatedAt: ihGetFirebaseTimestamp() });
           adjusted.push({ lotId: doc.id, quantity: toAdjust, unitPrice: lot.unitPrice });
           remaining -= toAdjust;
         }
         var reasonLabels = { damaged: '破損', lost: '紛失', discarded: '廃棄', other: 'その他' };
-        await db.collection('packagingTransactions').add({
+        var txnRef = db.collection('packagingTransactions').doc();
+        batch.set(txnRef, {
           materialId: materialId, materialName: materialName, locationId: locationId, type: '調整',
           quantity: -quantity, reason: reasonLabels[reason] || reason, adjustedLots: adjusted, note: note,
           createdBy: localStorage.getItem('reborn_user_name') || 'unknown', createdAt: ihGetFirebaseTimestamp()
         });
-        var updatedLotsSnapshot = await db.collection('packagingLots')
-          .where('materialId', '==', materialId).where('locationId', '==', locationId).where('status', '==', 'active').get();
-        var totalStock = updatedLotsSnapshot.docs.reduce(function(sum, doc) { return sum + (doc.data().remainingQty || 0); }, 0);
-        await db.collection('packagingMaterials').doc(materialId).update({ currentStock: totalStock, updatedAt: ihGetFirebaseTimestamp() });
+        // 調整後の在庫を計算（ロットスナップショットから算出）
+        var totalStock = 0;
+        lotsSnapshot.docs.forEach(function(d) { totalStock += (d.data().remainingQty || 0); });
+        totalStock -= quantity;
+        if (totalStock < 0) totalStock = 0;
+        batch.update(db.collection('packagingMaterials').doc(materialId), { currentStock: totalStock, updatedAt: ihGetFirebaseTimestamp() });
+        await batch.commit();
         if (window.checkMaterialStockAlert) {
           await window.checkMaterialStockAlert(materialId, totalStock, locationId, location.name);
         }
@@ -2082,6 +2087,7 @@
         var remaining = quantity;
         var consumedLots = [];
         var totalCost = 0;
+        var batch = db.batch();
         for (var i = 0; i < lotsSnapshot.docs.length; i++) {
           if (remaining <= 0) break;
           var doc = lotsSnapshot.docs[i];
@@ -2089,7 +2095,7 @@
           var toConsume = Math.min(remaining, lot.remainingQty);
           var newRemainingQty = lot.remainingQty - toConsume;
           var newStatus = newRemainingQty <= 0 ? 'depleted' : 'active';
-          await db.collection('packagingLots').doc(doc.id).update({ remainingQty: newRemainingQty, status: newStatus, updatedAt: ihGetFirebaseTimestamp() });
+          batch.update(db.collection('packagingLots').doc(doc.id), { remainingQty: newRemainingQty, status: newStatus, updatedAt: ihGetFirebaseTimestamp() });
           consumedLots.push({ lotId: doc.id, quantity: toConsume, unitPrice: lot.unitPrice });
           totalCost += toConsume * (lot.unitPrice || 0);
           remaining -= toConsume;
@@ -2097,23 +2103,28 @@
         if (remaining > 0) throw new Error('在庫不足: ' + remaining + '個配布できませんでした');
         var avgUnitPrice = quantity > 0 ? Math.round(totalCost / quantity) : 0;
         var fromLocName = document.getElementById('ih-transferFromLocation').value;
-        var newLotRef = await db.collection('packagingLots').add({
+        var newLotRef = db.collection('packagingLots').doc();
+        batch.set(newLotRef, {
           materialId: materialId, locationId: toLocationId, quantity: quantity, remainingQty: quantity,
           unitPrice: avgUnitPrice, purchaseDate: ihGetFirebaseTimestamp(), supplier: '配布元: ' + fromLocName,
           notes: note || '配布による入庫', status: 'active',
           createdBy: localStorage.getItem('reborn_user_name') || 'unknown',
           createdAt: ihGetFirebaseTimestamp(), updatedAt: ihGetFirebaseTimestamp()
         });
-        await db.collection('packagingTransactions').add({
+        var txnOutRef = db.collection('packagingTransactions').doc();
+        batch.set(txnOutRef, {
           materialId: materialId, materialName: materialName, locationId: fromLocationId, type: '配布出',
           quantity: -quantity, toLocationId: toLocationId, toLocationName: toLocationName, consumedLots: consumedLots,
           note: note, createdBy: localStorage.getItem('reborn_user_name') || 'unknown', createdAt: ihGetFirebaseTimestamp()
         });
-        await db.collection('packagingTransactions').add({
+        var txnInRef = db.collection('packagingTransactions').doc();
+        batch.set(txnInRef, {
           materialId: materialId, materialName: materialName, locationId: toLocationId, type: '配布入',
           quantity: quantity, fromLocationId: fromLocationId, fromLocationName: fromLocName, lotId: newLotRef.id,
           note: note, createdBy: localStorage.getItem('reborn_user_name') || 'unknown', createdAt: ihGetFirebaseTimestamp()
         });
+        await batch.commit();
+        // batch後に在庫を再計算してアラートチェック
         var fromLotsSnapshot = await db.collection('packagingLots')
           .where('materialId', '==', materialId).where('locationId', '==', fromLocationId).where('status', '==', 'active').get();
         var fromTotalStock = fromLotsSnapshot.docs.reduce(function(sum, doc) { return sum + (doc.data().remainingQty || 0); }, 0);
