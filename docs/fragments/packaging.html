@@ -1007,7 +1007,7 @@
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-sliders"></i> ユーザー別閾値設定</h5>
+          <h5 class="modal-title"><i class="bi bi-sliders"></i> ユーザー別 資材管理設定</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
@@ -1020,11 +1020,20 @@
           </div>
           <hr>
           <div id="ih-thresholdSettingsContainer" style="display: none;">
-            <h6 class="mb-3"><i class="bi bi-box-seam"></i> 資材別閾値設定</h6>
+            <h6 class="mb-3"><i class="bi bi-box-seam"></i> 管理対象資材 & 閾値設定</h6>
             <p class="small text-muted mb-3">
-              閾値を設定すると、そのユーザーの在庫が閾値以下になった時にアラートが発生します。<br>
+              <i class="bi bi-check2-square"></i> チェックした資材がこの場所の管理対象になります（在庫表示・アラート対象）。<br>
+              閾値を設定すると、在庫が閾値以下になった時にアラートが発生します。<br>
               <strong>0 または空欄</strong>: グローバル閾値を使用（資材マスタの設定値）
             </p>
+            <div class="d-flex gap-2 mb-3">
+              <button type="button" class="btn btn-outline-primary btn-sm" onclick="ihToggleAllManagedMaterials(true)">
+                <i class="bi bi-check-all"></i> 全選択
+              </button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="ihToggleAllManagedMaterials(false)">
+                <i class="bi bi-x-lg"></i> 全解除
+              </button>
+            </div>
             <div id="ih-thresholdMaterialList"></div>
           </div>
           <div id="ih-thresholdNoLocationSelected" class="text-center text-muted py-4">
@@ -1629,11 +1638,15 @@
         });
         var locationAlerts = [];
         ih_allLocations.forEach(function(loc) {
+          var managed = loc.managedMaterials || null;
+          if (!managed || managed.length === 0) return; // 管理対象未設定の場所はスキップ
           var locStock = stockByLocation[loc.id] || {};
+          var locThresholds = loc.materialThresholds || {};
           var alertCount = 0;
           materials.forEach(function(m) {
+            if (managed.indexOf(m.id) === -1) return; // 管理対象外はスキップ
             var stock = locStock[m.id] || 0;
-            var threshold = m.stockAlertThreshold || 0;
+            var threshold = (locThresholds[m.id] !== undefined && locThresholds[m.id] > 0) ? locThresholds[m.id] : (m.stockAlertThreshold || 0);
             if (stock <= 0 || (threshold > 0 && stock <= threshold)) alertCount++;
           });
           if (alertCount > 0) locationAlerts.push({ id: loc.id, name: loc.name, type: loc.type, alertCount: alertCount });
@@ -1677,11 +1690,12 @@
           container.innerHTML = '<div class="text-center text-danger py-4">Firestoreに接続できません</div>';
           return;
         }
-        var locationId, locationName;
+        var locationId, locationName, locationData;
         if (ih_selectedLocationId && ihIsAdmin()) {
           var selectedLoc = ih_allLocations.find(function(l) { return l.id === ih_selectedLocationId; });
           locationId = ih_selectedLocationId;
           locationName = selectedLoc ? selectedLoc.name : '不明な場所';
+          locationData = selectedLoc || {};
         } else {
           var location = await ihGetCurrentUserLocation();
           if (!location) {
@@ -1690,12 +1704,42 @@
           }
           locationId = location.id;
           locationName = location.name;
+          locationData = location;
         }
         var locationNameEl = document.getElementById('ih-currentLocationName');
         if (locationNameEl) locationNameEl.textContent = locationName;
 
+        // 管理対象資材フィルタ
+        var managedMaterials = locationData.managedMaterials || null;
+
         var materialsSnapshot = await db.collection('packagingMaterials').get();
-        var materials = materialsSnapshot.docs.map(function(doc) { return { id: doc.id, ...doc.data() }; });
+        var allMats = materialsSnapshot.docs.map(function(doc) { return { id: doc.id, ...doc.data() }; });
+
+        // managedMaterialsが設定されている場合のみフィルタ
+        var materials;
+        if (managedMaterials && managedMaterials.length > 0) {
+          materials = allMats.filter(function(m) { return managedMaterials.indexOf(m.id) !== -1; });
+        } else {
+          // 未設定 or 空配列 = 管理対象資材が未設定
+          container.textContent = '';
+          var msgDiv = document.createElement('div');
+          msgDiv.className = 'text-center text-muted py-4';
+          var icon = document.createElement('i');
+          icon.className = 'bi bi-info-circle';
+          icon.style.fontSize = '2rem';
+          var p = document.createElement('p');
+          p.className = 'mt-2';
+          p.textContent = '管理対象資材が未設定です';
+          var small = document.createElement('small');
+          small.textContent = '管理者が「資材管理設定」から対象資材を設定してください';
+          msgDiv.appendChild(icon);
+          msgDiv.appendChild(p);
+          msgDiv.appendChild(small);
+          container.appendChild(msgDiv);
+          ih_allMaterials = allMats;
+          return;
+        }
+
         var lotsSnapshot = await db.collection('packagingLots')
           .where('locationId', '==', locationId)
           .where('status', '==', 'active')
@@ -2041,21 +2085,104 @@
       try {
         var db = ihGetDb();
         var locationDoc = await db.collection('packagingLocations').doc(locationId).get();
-        var materialThresholds = locationDoc.exists ? (locationDoc.data().materialThresholds || {}) : {};
-        var html = '<div class="list-group">';
+        var locData = locationDoc.exists ? locationDoc.data() : {};
+        var materialThresholds = locData.materialThresholds || {};
+        var managedMaterials = locData.managedMaterials || null;
+        // Build list using DOM for safety
+        var listDiv = document.createElement('div');
+        listDiv.className = 'list-group';
         ih_allMaterials.forEach(function(material) {
           var materialId = material.id;
           var materialName = material.productName || material.name || '不明な資材';
           var globalThreshold = material.stockAlertThreshold || 0;
           var localThreshold = materialThresholds[materialId] !== undefined ? materialThresholds[materialId] : '';
-          html += '<div class="list-group-item d-flex justify-content-between align-items-center"><div class="me-3 flex-grow-1"><div class="fw-bold">' + ihEscapeHtml(materialName) + '</div><small class="text-muted">グローバル閾値: ' + (globalThreshold > 0 ? globalThreshold + '個' : '未設定') + '</small></div><div class="d-flex align-items-center" style="min-width: 120px;"><input type="number" class="form-control form-control-sm text-end" id="ih-threshold_' + materialId + '" value="' + localThreshold + '" min="0" placeholder="' + (globalThreshold || '0') + '" style="width: 80px; font-size: 16px;"><span class="ms-1 text-muted small">個</span></div></div>';
+          var isManaged = managedMaterials ? managedMaterials.indexOf(materialId) !== -1 : false;
+          var rowDisabled = !isManaged;
+
+          var row = document.createElement('div');
+          row.className = 'list-group-item d-flex justify-content-between align-items-center';
+          row.id = 'ih-thresholdRow_' + materialId;
+          if (rowDisabled) row.style.opacity = '0.45';
+
+          var checkDiv = document.createElement('div');
+          checkDiv.className = 'form-check me-2';
+          checkDiv.style.minWidth = '28px';
+          var cb = document.createElement('input');
+          cb.className = 'form-check-input';
+          cb.type = 'checkbox';
+          cb.id = 'ih-managed_' + materialId;
+          cb.checked = isManaged;
+          cb.setAttribute('onchange', "ihToggleManagedThresholdRow('" + materialId + "')");
+          checkDiv.appendChild(cb);
+
+          var infoDiv = document.createElement('div');
+          infoDiv.className = 'me-3 flex-grow-1';
+          var nameDiv = document.createElement('div');
+          nameDiv.className = 'fw-bold';
+          nameDiv.textContent = materialName;
+          var threshInfo = document.createElement('small');
+          threshInfo.className = 'text-muted';
+          threshInfo.textContent = 'グローバル閾値: ' + (globalThreshold > 0 ? globalThreshold + '個' : '未設定');
+          infoDiv.appendChild(nameDiv);
+          infoDiv.appendChild(threshInfo);
+
+          var inputDiv = document.createElement('div');
+          inputDiv.className = 'd-flex align-items-center';
+          inputDiv.style.minWidth = '120px';
+          var numInput = document.createElement('input');
+          numInput.type = 'number';
+          numInput.className = 'form-control form-control-sm text-end';
+          numInput.id = 'ih-threshold_' + materialId;
+          numInput.value = localThreshold;
+          numInput.min = '0';
+          numInput.placeholder = String(globalThreshold || '0');
+          numInput.style.cssText = 'width: 80px; font-size: 16px;';
+          if (rowDisabled) numInput.disabled = true;
+          var unitSpan = document.createElement('span');
+          unitSpan.className = 'ms-1 text-muted small';
+          unitSpan.textContent = '個';
+          inputDiv.appendChild(numInput);
+          inputDiv.appendChild(unitSpan);
+
+          row.appendChild(checkDiv);
+          row.appendChild(infoDiv);
+          row.appendChild(inputDiv);
+          listDiv.appendChild(row);
         });
-        html += '</div>';
-        materialList.innerHTML = html;
+        materialList.textContent = '';
+        materialList.appendChild(listDiv);
       } catch (error) {
         console.error('[ih] 閾値読み込みエラー:', error);
-        materialList.innerHTML = '<div class="text-danger text-center py-3">エラー: ' + error.message + '</div>';
+        materialList.textContent = '';
+        var errDiv = document.createElement('div');
+        errDiv.className = 'text-danger text-center py-3';
+        errDiv.textContent = 'エラー: ' + error.message;
+        materialList.appendChild(errDiv);
       }
+    }
+
+    function ihToggleManagedThresholdRow(materialId) {
+      var cb = document.getElementById('ih-managed_' + materialId);
+      var row = document.getElementById('ih-thresholdRow_' + materialId);
+      var input = document.getElementById('ih-threshold_' + materialId);
+      if (!cb || !row) return;
+      if (cb.checked) {
+        row.style.opacity = '1';
+        if (input) input.disabled = false;
+      } else {
+        row.style.opacity = '0.45';
+        if (input) input.disabled = true;
+      }
+    }
+
+    function ihToggleAllManagedMaterials(checked) {
+      ih_allMaterials.forEach(function(material) {
+        var cb = document.getElementById('ih-managed_' + material.id);
+        if (cb) {
+          cb.checked = checked;
+          ihToggleManagedThresholdRow(material.id);
+        }
+      });
     }
 
     async function ihSaveLocationThresholds() {
@@ -2063,7 +2190,12 @@
       if (!locationId) { alert('ユーザー（場所）を選択してください'); return; }
       var db = ihGetDb();
       var materialThresholds = {};
+      var managedMaterials = [];
       ih_allMaterials.forEach(function(material) {
+        var cb = document.getElementById('ih-managed_' + material.id);
+        if (cb && cb.checked) {
+          managedMaterials.push(material.id);
+        }
         var input = document.getElementById('ih-threshold_' + material.id);
         if (input) {
           var value = parseInt(input.value) || 0;
@@ -2072,11 +2204,20 @@
       });
       ihShowLoading();
       try {
-        await db.collection('packagingLocations').doc(locationId).update({ materialThresholds: materialThresholds, updatedAt: ihGetFirebaseTimestamp() });
+        await db.collection('packagingLocations').doc(locationId).update({
+          materialThresholds: materialThresholds,
+          managedMaterials: managedMaterials,
+          updatedAt: ihGetFirebaseTimestamp()
+        });
+        // ih_allLocationsのキャッシュも更新
+        var loc = ih_allLocations.find(function(l) { return l.id === locationId; });
+        if (loc) {
+          loc.materialThresholds = materialThresholds;
+          loc.managedMaterials = managedMaterials;
+        }
         ihHideLoading();
         var locationName = document.getElementById('ih-thresholdLocationSelect').selectedOptions[0].text;
-        var count = Object.keys(materialThresholds).length;
-        alert('閾値設定を保存しました\n場所: ' + locationName + '\n設定数: ' + count + '件');
+        alert('資材管理設定を保存しました\n場所: ' + locationName + '\n管理対象: ' + managedMaterials.length + '件');
       } catch (error) {
         ihHideLoading();
         console.error('[ih] 閾値保存エラー:', error);

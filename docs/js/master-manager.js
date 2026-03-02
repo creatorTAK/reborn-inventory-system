@@ -10132,6 +10132,13 @@ async function checkMaterialStockAlert(materialId, newStock, locationId = null, 
         const location = locationDoc.data();
         resolvedLocationName = resolvedLocationName || location.name || '';
 
+        // 管理対象資材チェック: managedMaterialsに含まれない場合はアラートスキップ
+        const managedMaterials = location.managedMaterials || null;
+        if (managedMaterials && managedMaterials.indexOf(materialId) === -1) {
+          console.log(`⏭️ [Stock Alert] 管理対象外のためスキップ: ${resolvedLocationName} → ${materialId}`);
+          return;
+        }
+
         // 場所ごとの資材閾値を取得
         const materialThresholds = location.materialThresholds || {};
         if (materialThresholds[materialId] !== undefined && materialThresholds[materialId] > 0) {

@@ -399,25 +399,45 @@
         } catch (e) { /* ignore */ }
       }
 
-      // 資材不足バッジ（管理者のみ）
+      // 資材不足バッジ（管理者のみ・場所別管理対象資材でフィルタ）
       var permId = localStorage.getItem('reborn_user_permission_id');
       var isAdmin = (permId === 'owner' || permId === 'admin');
       if (isAdmin) {
         try {
           var materialsSnap = await db.collection('packagingMaterials').get();
           var lotsSnap = await db.collection('packagingLots').where('status', '==', 'active').get();
-          var stockMap = {};
+          var locationsSnap = await db.collection('packagingLocations').where('isActive', '==', true).get();
+
+          // 場所ごとの在庫マップ
+          var stockByLoc = {};
           lotsSnap.forEach(function(doc) {
             var lot = doc.data();
-            if (lot.materialId) stockMap[lot.materialId] = (stockMap[lot.materialId] || 0) + (lot.remainingQty || 0);
+            var locId = lot.locationId || 'unknown';
+            if (!stockByLoc[locId]) stockByLoc[locId] = {};
+            if (lot.materialId) stockByLoc[locId][lot.materialId] = (stockByLoc[locId][lot.materialId] || 0) + (lot.remainingQty || 0);
           });
+
+          // 資材マスタマップ
+          var materialMap = {};
+          materialsSnap.forEach(function(doc) { materialMap[doc.id] = doc.data(); });
+
+          // 場所ごとに管理対象資材のアラートをカウント
           var pkgAlertCount = 0;
-          materialsSnap.forEach(function(doc) {
-            var m = doc.data();
-            var stock = stockMap[doc.id] || 0;
-            var threshold = m.stockAlertThreshold || 0;
-            if (stock <= 0 || (threshold > 0 && stock <= threshold)) pkgAlertCount++;
+          locationsSnap.forEach(function(doc) {
+            var loc = doc.data();
+            var managed = loc.managedMaterials || null;
+            if (!managed || managed.length === 0) return;
+            var locStock = stockByLoc[doc.id] || {};
+            var locThresholds = loc.materialThresholds || {};
+            managed.forEach(function(matId) {
+              var mat = materialMap[matId];
+              if (!mat) return;
+              var stock = locStock[matId] || 0;
+              var threshold = (locThresholds[matId] !== undefined && locThresholds[matId] > 0) ? locThresholds[matId] : (mat.stockAlertThreshold || 0);
+              if (stock <= 0 || (threshold > 0 && stock <= threshold)) pkgAlertCount++;
+            });
           });
+
           var pkgBadge = document.getElementById('mh-menu-packaging-badge');
           if (pkgBadge) {
             if (pkgAlertCount > 0) {
