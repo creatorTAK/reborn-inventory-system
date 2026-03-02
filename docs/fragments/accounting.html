@@ -757,7 +757,7 @@
         <div class="acct-pl-row" style="padding-left:16px;">
           <span class="acct-pl-label">期首商品棚卸高</span>
           <span class="acct-pl-amount">
-            <input type="number" id="acct-br-opening-inventory" placeholder="0" style="width:100px;padding:4px 8px;font-size:14px;text-align:right;border:1px solid #d1d5db;border-radius:4px;" onchange="acctSaveOpeningInventory();acctUpdateBlueReturnSection()">
+            <input type="number" id="acct-br-opening-inventory" placeholder="0" style="width:100px;padding:4px 8px;font-size:14px;text-align:right;border:1px solid #d1d5db;border-radius:4px;" onchange="acctSaveOpeningInventory().then(function(){acctUpdateBlueReturnSection()})">
           </span>
         </div>
         <div class="acct-pl-row" style="padding-left:16px;">
@@ -899,6 +899,8 @@
     var _acctCurrentYear = new Date().getFullYear();
     var _acctCurrentIncome = 0;
     var _acctSelectedDeduction = 650000;
+
+    function acctIsSold(p) { return p.status === '販売済み' || p.status === '販売済'; }
 
     function acctGetJSTToday() {
       var now = new Date();
@@ -1178,7 +1180,7 @@
         acctUpdateOverview(startDate, endDate);
         acctUpdateTaxSimulation();
         acctUpdateExpenseTab();
-        acctUpdateExportTab(startDate, endDate);
+        await acctUpdateExportTab(startDate, endDate);
 
       } catch (error) {
         console.error('データ読み込みエラー:', error);
@@ -1197,7 +1199,7 @@
       var end = year + '-12-31';
       var sold = products.filter(function(p) {
         var sd = p.saleDate || '';
-        return p.status === '\u8CA9\u58F2\u6E08' && sd >= start && sd <= end;
+        return acctIsSold(p) && sd >= start && sd <= end;
       });
       var sales = sold.reduce(function(sum, p) { return sum + (parseFloat(p.saleAmount) || 0); }, 0);
       var cost = sold.reduce(function(sum, p) { return sum + (parseFloat((p.purchase && p.purchase.amount) || p.purchaseAmount) || 0); }, 0);
@@ -1207,7 +1209,7 @@
     function acctUpdateOverview(startDate, endDate) {
       var soldProducts = _acctCurrentProducts.filter(function(p) {
         var saleDate = p.saleDate || '';
-        return p.status === '\u8CA9\u58F2\u6E08' && saleDate >= startDate && saleDate <= endDate;
+        return acctIsSold(p) && saleDate >= startDate && saleDate <= endDate;
       });
 
       var totalSales = soldProducts.reduce(function(sum, p) { return sum + (parseFloat(p.saleAmount) || 0); }, 0);
@@ -1401,9 +1403,9 @@
       }
     }
 
-    function acctUpdateExportTab(startDate, endDate) {
+    async function acctUpdateExportTab(startDate, endDate) {
       acctUpdateJournalPreview(startDate, endDate);
-      acctLoadOpeningInventory();
+      await acctLoadOpeningInventory();
       acctUpdateBlueReturnSection();
       acctUpdateEtaxPreview();
     }
@@ -1425,7 +1427,7 @@
       // 販売仕訳: 借方=売掛金, 貸方=売上
       var sold = _acctCurrentProducts.filter(function(p) {
         var sd = p.saleDate || '';
-        return p.status === '\u8CA9\u58F2\u6E08' && sd >= startDate && sd <= endDate;
+        return acctIsSold(p) && sd >= startDate && sd <= endDate;
       });
       sold.forEach(function(p) {
         var amt = parseFloat(p.saleAmount) || 0;
@@ -1547,30 +1549,47 @@
     // 機能B: 青色申告決算書
     // ============================================
 
+    var _acctOpeningInventoryCache = {};
+
     function acctGetOpeningInventoryValue() {
-      var key = 'reborn_opening_inventory_' + _acctCurrentYear;
-      return parseFloat(localStorage.getItem(key)) || 0;
+      return _acctOpeningInventoryCache[_acctCurrentYear] || 0;
     }
 
-    function acctSaveOpeningInventory() {
+    async function acctSaveOpeningInventory() {
       var input = document.getElementById('acct-br-opening-inventory');
       if (!input) return;
-      var key = 'reborn_opening_inventory_' + _acctCurrentYear;
       var val = parseFloat(input.value) || 0;
-      localStorage.setItem(key, val);
+      _acctOpeningInventoryCache[_acctCurrentYear] = val;
+      var db = firebase.firestore();
+      await db.collection('accountingSettings').doc(String(_acctCurrentYear)).set({ openingInventory: val }, { merge: true });
     }
 
-    function acctLoadOpeningInventory() {
+    async function acctLoadOpeningInventory() {
       var input = document.getElementById('acct-br-opening-inventory');
       if (!input) return;
-      var val = acctGetOpeningInventoryValue();
+      var db = firebase.firestore();
+      var doc = await db.collection('accountingSettings').doc(String(_acctCurrentYear)).get();
+      var val = 0;
+      if (doc.exists && doc.data().openingInventory != null) {
+        val = parseFloat(doc.data().openingInventory) || 0;
+      } else {
+        // localStorage→Firestore自動移行
+        var lsKey = 'reborn_opening_inventory_' + _acctCurrentYear;
+        var lsVal = parseFloat(localStorage.getItem(lsKey)) || 0;
+        if (lsVal > 0) {
+          val = lsVal;
+          await db.collection('accountingSettings').doc(String(_acctCurrentYear)).set({ openingInventory: val }, { merge: true });
+          localStorage.removeItem(lsKey);
+        }
+      }
+      _acctOpeningInventoryCache[_acctCurrentYear] = val;
       input.value = val > 0 ? val : '';
     }
 
     function acctCalcClosingInventory() {
       // 期末棚卸高 = 未販売品の仕入額合計
       return _acctCurrentProducts.filter(function(p) {
-        return p.status !== '\u8CA9\u58F2\u6E08';
+        return !acctIsSold(p);
       }).reduce(function(sum, p) {
         return sum + acctGetPurchaseAmount(p);
       }, 0);
@@ -1583,7 +1602,7 @@
       // 売上
       var sold = _acctCurrentProducts.filter(function(p) {
         var sd = p.saleDate || '';
-        return p.status === '\u8CA9\u58F2\u6E08' && sd >= startDate && sd <= endDate;
+        return acctIsSold(p) && sd >= startDate && sd <= endDate;
       });
       var totalSales = sold.reduce(function(sum, p) { return sum + (parseFloat(p.saleAmount) || 0); }, 0);
 
@@ -1669,7 +1688,7 @@
 
       _acctCurrentProducts.forEach(function(p) {
         // 売上
-        if (p.status === '\u8CA9\u58F2\u6E08') {
+        if (acctIsSold(p)) {
           var sd = p.saleDate || '';
           if (sd >= startDate && sd <= endDate) {
             var sMonth = parseInt(sd.substring(5, 7));
@@ -1724,7 +1743,7 @@
     function acctGeneratePLCSV(startDate, endDate) {
       var sold = _acctCurrentProducts.filter(function(p) {
         var sd = p.saleDate || '';
-        return p.status === '\u8CA9\u58F2\u6E08' && sd >= startDate && sd <= endDate;
+        return acctIsSold(p) && sd >= startDate && sd <= endDate;
       });
       var totalSales = sold.reduce(function(s, p) { return s + (parseFloat(p.saleAmount) || 0); }, 0);
       var purchased = _acctCurrentProducts.filter(function(p) {
@@ -1770,7 +1789,7 @@
       for (var m = 1; m <= 12; m++) { monthlySales[m] = 0; monthlyPurchase[m] = 0; }
 
       _acctCurrentProducts.forEach(function(p) {
-        if (p.status === '\u8CA9\u58F2\u6E08') {
+        if (acctIsSold(p)) {
           var sd = p.saleDate || '';
           if (sd >= startDate && sd <= endDate) {
             monthlySales[parseInt(sd.substring(5, 7))] += parseFloat(p.saleAmount) || 0;
@@ -1828,7 +1847,7 @@
 
       var sold = _acctCurrentProducts.filter(function(p) {
         var sd = p.saleDate || '';
-        return p.status === '\u8CA9\u58F2\u6E08' && sd >= startDate && sd <= endDate;
+        return acctIsSold(p) && sd >= startDate && sd <= endDate;
       });
       var totalSales = sold.reduce(function(s, p) { return s + (parseFloat(p.saleAmount) || 0); }, 0);
       var openingInv = acctGetOpeningInventoryValue();
@@ -1895,7 +1914,7 @@
     function acctGenerateEtaxPLCSV(startDate, endDate) {
       var sold = _acctCurrentProducts.filter(function(p) {
         var sd = p.saleDate || '';
-        return p.status === '\u8CA9\u58F2\u6E08' && sd >= startDate && sd <= endDate;
+        return acctIsSold(p) && sd >= startDate && sd <= endDate;
       });
       var totalSales = sold.reduce(function(s, p) { return s + (parseFloat(p.saleAmount) || 0); }, 0);
       var openingInv = acctGetOpeningInventoryValue();
@@ -1944,7 +1963,7 @@
       for (var m = 1; m <= 12; m++) { monthlySales[m] = 0; monthlyPurchase[m] = 0; }
 
       _acctCurrentProducts.forEach(function(p) {
-        if (p.status === '\u8CA9\u58F2\u6E08') {
+        if (acctIsSold(p)) {
           var sd = p.saleDate || '';
           if (sd >= startDate && sd <= endDate) {
             monthlySales[parseInt(sd.substring(5, 7))] += parseFloat(p.saleAmount) || 0;
@@ -2057,7 +2076,7 @@
     function acctGenerateSalesLedger(startDate, endDate) {
       var csv = '\u58F2\u4E0A\u5E33\uFF08' + _acctCurrentYear + '\u5E74\uFF09\n\n\u65E5\u4ED8,\u7BA1\u7406\u756A\u53F7,\u5546\u54C1\u540D,\u8CA9\u58F2\u5148,\u58F2\u4E0A\u91D1\u984D\n';
       var sold = _acctCurrentProducts.filter(function(p) {
-        return p.status === '\u8CA9\u58F2\u6E08' && (p.saleDate || '') >= startDate && (p.saleDate || '') <= endDate;
+        return acctIsSold(p) && (p.saleDate || '') >= startDate && (p.saleDate || '') <= endDate;
       }).sort(function(a, b) { return (a.saleDate || '').localeCompare(b.saleDate || ''); });
       var total = 0;
       sold.forEach(function(p) {
