@@ -631,9 +631,12 @@
         <div class="row g-2 mb-2" id="ih-adminLocationRow" style="display: none;">
           <div class="col-12">
             <label class="form-label small mb-1"><i class="bi bi-geo-alt"></i> 場所選択（管理者）</label>
-            <select class="form-select form-select-sm" id="ih-adminLocationFilter">
-              <option value="">読み込み中...</option>
-            </select>
+            <div id="ih-locDropdown" class="position-relative">
+              <div id="ih-locDropdownToggle" class="form-select form-select-sm d-flex align-items-center" style="cursor:pointer; min-height:34px;" onclick="ihToggleLocDropdown()">
+                <span id="ih-locDropdownLabel" class="text-muted">読み込み中...</span>
+              </div>
+              <div id="ih-locDropdownMenu" class="position-absolute w-100 bg-white border rounded-bottom shadow-sm" style="display:none; z-index:1060; max-height:240px; overflow-y:auto; top:100%; left:0;"></div>
+            </div>
           </div>
         </div>
         <div class="row g-2 mb-2">
@@ -1635,17 +1638,110 @@
           .orderBy('name')
           .get();
         ih_allLocations = snapshot.docs.map(function(doc) { return { id: doc.id, ...doc.data() }; });
-        var select = document.getElementById('ih-adminLocationFilter');
-        if (select) {
-          select.innerHTML = '<option value="">自分の場所</option>' +
-            ih_allLocations.map(function(loc) {
-              var typeLabel = loc.type === 'user_home' ? '👤' : loc.type === 'warehouse' ? '🏭' : '🏢';
-              return '<option value="' + loc.id + '">' + typeLabel + ' ' + ihEscapeHtml(loc.name) + '</option>';
-            }).join('');
-        }
+        await ihBuildLocDropdownMenu();
       } catch (error) {
         console.error('[ih] 場所一覧取得エラー:', error);
       }
+    }
+
+    async function ihBuildLocDropdownMenu() {
+      var menu = document.getElementById('ih-locDropdownMenu');
+      if (!menu) return;
+      menu.textContent = '';
+      var db = ihGetDb();
+      // ユーザーアイコンを取得（キャッシュ活用）
+      if (db) {
+        var emails = ih_allLocations.map(function(l) { return l.assignedUserEmail; }).filter(Boolean);
+        var uncached = emails.filter(function(e) { return _ih_userIconCache[e] === undefined; });
+        if (uncached.length > 0) {
+          try {
+            for (var i = 0; i < uncached.length; i++) {
+              var userDoc = await db.collection('users').doc(uncached[i]).get();
+              _ih_userIconCache[uncached[i]] = (userDoc.exists && userDoc.data().userIconUrl) || '';
+            }
+          } catch (e) { console.warn('[ih] アイコン取得エラー:', e); }
+        }
+      }
+      // 自分のメールアドレスを取得
+      var myEmail = localStorage.getItem('reborn_user_email') || '';
+      var myLoc = ih_allLocations.find(function(l) { return l.assignedUserEmail === myEmail; });
+      ih_allLocations.forEach(function(loc) {
+        var item = document.createElement('div');
+        item.className = 'd-flex align-items-center px-3 py-2';
+        item.style.cssText = 'cursor:pointer; border-bottom:1px solid #f0f0f0;';
+        item.onmouseenter = function() { item.style.background = '#f0f4ff'; };
+        item.onmouseleave = function() { item.style.background = ''; };
+        var iconWrap = document.createElement('div');
+        iconWrap.style.cssText = 'width:28px; height:28px; border-radius:50%; overflow:hidden; background:#dee2e6; display:flex; align-items:center; justify-content:center; flex-shrink:0;';
+        var iconUrl = _ih_userIconCache[loc.assignedUserEmail] || '';
+        if (iconUrl) {
+          var img = document.createElement('img');
+          img.src = iconUrl;
+          img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+          iconWrap.appendChild(img);
+        } else {
+          var fallback = document.createElement('i');
+          fallback.className = 'bi bi-person-fill';
+          fallback.style.cssText = 'font-size:14px; color:#6c757d;';
+          iconWrap.appendChild(fallback);
+        }
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'ms-2';
+        nameSpan.textContent = loc.name;
+        item.appendChild(iconWrap);
+        item.appendChild(nameSpan);
+        item.onclick = function() { ihSelectLocDropdownItem(loc.id, loc.name, iconUrl); };
+        menu.appendChild(item);
+      });
+      // デフォルトで自分の場所を選択
+      if (myLoc) {
+        var myIconUrl = _ih_userIconCache[myLoc.assignedUserEmail] || '';
+        ihSelectLocDropdownItem(myLoc.id, myLoc.name, myIconUrl);
+      }
+    }
+
+    function ihToggleLocDropdown() {
+      var menu = document.getElementById('ih-locDropdownMenu');
+      var isOpen = menu.style.display !== 'none';
+      menu.style.display = isOpen ? 'none' : 'block';
+      if (!isOpen) {
+        setTimeout(function() {
+          document.addEventListener('click', ihCloseLocDropdownOutside, { once: true });
+        }, 0);
+      }
+    }
+    function ihCloseLocDropdownOutside(e) {
+      var dropdown = document.getElementById('ih-locDropdown');
+      if (dropdown && !dropdown.contains(e.target)) {
+        document.getElementById('ih-locDropdownMenu').style.display = 'none';
+      }
+    }
+
+    function ihSelectLocDropdownItem(locationId, locationName, iconUrl) {
+      ih_selectedLocationId = locationId;
+      var toggle = document.getElementById('ih-locDropdownToggle');
+      var label = document.getElementById('ih-locDropdownLabel');
+      var existingIcon = toggle.querySelector('.ih-loc-toggle-icon');
+      if (existingIcon) existingIcon.remove();
+      var iconWrap = document.createElement('div');
+      iconWrap.className = 'ih-loc-toggle-icon';
+      iconWrap.style.cssText = 'width:24px; height:24px; border-radius:50%; overflow:hidden; background:#dee2e6; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-right:8px;';
+      if (iconUrl) {
+        var img = document.createElement('img');
+        img.src = iconUrl;
+        img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+        iconWrap.appendChild(img);
+      } else {
+        var fb = document.createElement('i');
+        fb.className = 'bi bi-person-fill';
+        fb.style.cssText = 'font-size:12px; color:#6c757d;';
+        iconWrap.appendChild(fb);
+      }
+      toggle.insertBefore(iconWrap, label);
+      label.textContent = locationName;
+      label.className = '';
+      document.getElementById('ih-locDropdownMenu').style.display = 'none';
+      ihLoadStockList();
     }
 
     async function ihLoadAllLocationsAlertSummary() {
@@ -1698,11 +1794,10 @@
     }
 
     function ihSelectLocation(locationId) {
-      var select = document.getElementById('ih-adminLocationFilter');
-      if (select) {
-        select.value = locationId;
-        ih_selectedLocationId = locationId;
-        ihLoadStockList();
+      var loc = ih_allLocations.find(function(l) { return l.id === locationId; });
+      if (loc) {
+        var iconUrl = _ih_userIconCache[loc.assignedUserEmail] || '';
+        ihSelectLocDropdownItem(loc.id, loc.name, iconUrl);
       }
     }
 
@@ -2577,10 +2672,7 @@
       ihAddListener(document.getElementById('ih-filterMonth'), 'change', ihUpdatePeriodFromYearMonth);
       ihAddListener(document.getElementById('ih-btnSearch'), 'click', ihLoadHistoryData);
       ihAddListener(document.getElementById('ih-btnReset'), 'click', ihResetFilters);
-      ihAddListener(document.getElementById('ih-adminLocationFilter'), 'change', function() {
-        ih_selectedLocationId = this.value || null;
-        ihLoadStockList();
-      });
+      // 場所選択はカスタムドロップダウンのihSelectLocDropdownItemで処理
       ihAddListener(document.getElementById('ih-stockCategoryFilter'), 'change', function() { ihRenderStockList(ih_allMaterials); });
       ihAddListener(document.getElementById('ih-showLowStockOnly'), 'change', function() { ihRenderStockList(ih_allMaterials); });
       ihAddListener(document.getElementById('ih-orderStatusFilter'), 'change', function() { ihRenderOrdersList(); });
