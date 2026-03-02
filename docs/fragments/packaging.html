@@ -630,7 +630,7 @@
       <div class="filter-section" style="margin-top: 12px;">
         <div class="row g-2 mb-2" id="ih-adminLocationRow" style="display: none;">
           <div class="col-12">
-            <label class="form-label small mb-1"><i class="bi bi-geo-alt"></i> 場所選択（管理者）</label>
+            <label class="form-label small mb-1"><i class="bi bi-person"></i> 担当者選択</label>
             <div id="ih-locDropdown" class="position-relative">
               <div id="ih-locDropdownToggle" class="form-select form-select-sm d-flex align-items-center" style="cursor:pointer; min-height:34px;" onclick="ihToggleLocDropdown()">
                 <span id="ih-locDropdownLabel" class="text-muted">読み込み中...</span>
@@ -964,7 +964,7 @@
         </div>
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label">配布元（自分の場所）</label>
+            <label class="form-label">配布元（自分）</label>
             <input type="text" class="form-control" id="ih-transferFromLocation" readonly style="font-size:16px; background-color: #f8f9fa;">
             <input type="hidden" id="ih-transferFromLocationId">
           </div>
@@ -1008,7 +1008,7 @@
         </div>
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label fw-bold">ユーザー（場所）を選択</label>
+            <label class="form-label fw-bold">担当者を選択</label>
             <!-- カスタムドロップダウン（アイコン付き） -->
             <div id="ih-userDropdown" class="position-relative">
               <div id="ih-userDropdownToggle" class="form-select d-flex align-items-center" style="font-size:16px; cursor:pointer; min-height:42px;" onclick="ihToggleUserDropdown()">
@@ -1038,7 +1038,7 @@
               <!-- 管理対象資材タブ -->
               <div class="tab-pane fade show active" id="ih-pane-managed" role="tabpanel">
                 <p class="small text-muted mb-2">
-                  チェックした資材がこの場所の管理対象になります（在庫表示・アラート対象）。<br>
+                  チェックした資材がこの担当者の管理対象になります（在庫表示・アラート対象）。<br>
                   <strong>未設定の場合</strong>は全資材が対象です。
                 </p>
                 <div class="d-flex gap-2 mb-3">
@@ -1063,7 +1063,7 @@
           </div>
           <div id="ih-thresholdNoLocationSelected" class="text-center text-muted py-4">
             <i class="bi bi-arrow-up-circle" style="font-size: 2rem;"></i>
-            <p class="mt-2">ユーザー（場所）を選択してください</p>
+            <p class="mt-2">担当者を選択してください</p>
           </div>
         </div>
         <div class="modal-footer">
@@ -1787,7 +1787,7 @@
         }
         container.style.display = 'block';
         var typeIcon = function(type) { return type === 'user_home' ? '👤' : type === 'warehouse' ? '🏭' : '🏢'; };
-        container.innerHTML = '<div class="alert-summary"><div class="alert-summary-title"><i class="bi bi-exclamation-triangle-fill"></i> 全場所の在庫アラート</div>' +
+        container.innerHTML = '<div class="alert-summary"><div class="alert-summary-title"><i class="bi bi-exclamation-triangle-fill"></i> 全担当者の在庫アラート</div>' +
           locationAlerts.map(function(loc) {
             return '<div class="alert-summary-item" onclick="ihSelectLocation(\'' + loc.id + '\')" style="cursor: pointer;"><span class="alert-summary-location">' + typeIcon(loc.type) + ' ' + ihEscapeHtml(loc.name) + '</span><span class="alert-summary-count">' + loc.alertCount + '件</span></div>';
           }).join('') + '</div>';
@@ -1822,12 +1822,12 @@
         if (ih_selectedLocationId && ihIsAdmin()) {
           var selectedLoc = ih_allLocations.find(function(l) { return l.id === ih_selectedLocationId; });
           locationId = ih_selectedLocationId;
-          locationName = selectedLoc ? selectedLoc.name : '不明な場所';
+          locationName = selectedLoc ? selectedLoc.name : '不明な担当者';
           locationData = selectedLoc || {};
         } else {
           var location = await ihGetCurrentUserLocation();
           if (!location) {
-            container.innerHTML = '<div class="text-center text-danger py-4">場所の取得に失敗しました</div>';
+            container.innerHTML = '<div class="text-center text-danger py-4">担当者の取得に失敗しました</div>';
             return;
           }
           locationId = location.id;
@@ -1948,7 +1948,7 @@
       try {
         var db = ihGetDb();
         var location = await ihGetCurrentUserLocation();
-        if (!location) throw new Error('場所の取得に失敗しました');
+        if (!location) throw new Error('担当者の取得に失敗しました');
         var locationId = location.id;
         var lotRef = await db.collection('packagingLots').add({
           materialId: materialId, locationId: locationId, quantity: quantity, remainingQty: quantity,
@@ -1967,7 +1967,7 @@
         var totalStock = lotsSnapshot.docs.reduce(function(sum, doc) { return sum + (doc.data().remainingQty || 0); }, 0);
         await db.collection('packagingMaterials').doc(materialId).update({ currentStock: totalStock, updatedAt: ihGetFirebaseTimestamp() });
         ihHideLoading();
-        alert('入庫を登録しました（単価: ¥' + unitPrice + '、場所: ' + location.name + '）');
+        alert('入庫を登録しました（単価: ¥' + unitPrice + '、担当: ' + location.name + '）');
         ihLoadStockList();
       } catch (error) {
         ihHideLoading();
@@ -2004,7 +2004,7 @@
       try {
         var db = ihGetDb();
         var location = await ihGetCurrentUserLocation();
-        if (!location) throw new Error('場所の取得に失敗しました');
+        if (!location) throw new Error('担当者の取得に失敗しました');
         var locationId = location.id;
         var lotsSnapshot = await db.collection('packagingLots')
           .where('materialId', '==', materialId).where('locationId', '==', locationId)
@@ -2036,7 +2036,7 @@
           await window.checkMaterialStockAlert(materialId, totalStock, locationId, location.name);
         }
         ihHideLoading();
-        alert('在庫を調整しました（-' + quantity + '、場所: ' + location.name + '）');
+        alert('在庫を調整しました（-' + quantity + '、担当: ' + location.name + '）');
         ihLoadStockList();
       } catch (error) {
         ihHideLoading();
@@ -2051,7 +2051,7 @@
     async function ihShowTransferModal() {
       if (!ihIsAdmin()) { alert('管理者権限が必要です'); return; }
       var myLocation = await ihGetCurrentUserLocation();
-      if (!myLocation) { alert('場所の取得に失敗しました'); return; }
+      if (!myLocation) { alert('担当者の取得に失敗しました'); return; }
       document.getElementById('ih-transferFromLocation').value = myLocation.name;
       document.getElementById('ih-transferFromLocationId').value = myLocation.id;
       var toSelect = document.getElementById('ih-transferToLocation');
@@ -2370,7 +2370,7 @@
 
     async function ihSaveLocationSettings() {
       var locationId = document.getElementById('ih-thresholdLocationSelect').value;
-      if (!locationId) { alert('ユーザー（場所）を選択してください'); return; }
+      if (!locationId) { alert('担当者を選択してください'); return; }
       var db = ihGetDb();
       var managedMaterials = [];
       var materialThresholds = {};
@@ -2397,7 +2397,7 @@
         }
         ihHideLoading();
         var locationName = document.getElementById('ih-thresholdLocationSelect').selectedOptions[0].text;
-        alert('保存しました\n場所: ' + locationName + '\n管理対象: ' + managedMaterials.length + '件\n個別閾値: ' + Object.keys(materialThresholds).length + '件');
+        alert('保存しました\n担当者: ' + locationName + '\n管理対象: ' + managedMaterials.length + '件\n個別閾値: ' + Object.keys(materialThresholds).length + '件');
       } catch (error) {
         ihHideLoading();
         console.error('[ih] 設定保存エラー:', error);
