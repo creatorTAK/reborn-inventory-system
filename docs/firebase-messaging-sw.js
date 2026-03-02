@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v369';  // v369: 確定申告・棚卸タブをmaterial-tabsパターンに統一
+const CACHE_VERSION = 'v370';  // v370: 画像軽量化・タスク一覧タイムアウト対策
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）

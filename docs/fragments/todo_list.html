@@ -364,7 +364,14 @@
 
       try {
         var tasksRef = _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks');
-        var snapshot = await tasksRef.orderBy('createdAt', 'desc').get();
+
+        // タイムアウト付きクエリ（10秒）
+        var snapshot = await Promise.race([
+          tasksRef.orderBy('createdAt', 'desc').get(),
+          new Promise(function(_, reject) {
+            setTimeout(function() { reject(new Error('TIMEOUT')); }, 10000);
+          })
+        ]);
 
         var pendingTasks = [];
         var completedTasks = [];
@@ -431,7 +438,15 @@
 
       } catch (error) {
         console.error('タスク読み込みエラー:', error);
-        document.getElementById('tdl-loading').innerHTML = '<i class="bi bi-exclamation-circle"></i> 読み込みエラー';
+        if (error.message === 'TIMEOUT') {
+          document.getElementById('tdl-loading').innerHTML =
+            '<i class="bi bi-exclamation-circle"></i> 読み込みに時間がかかっています<br>' +
+            '<button onclick="tdlLoadTasks()" style="margin-top:8px;padding:6px 16px;border-radius:8px;border:none;background:#3b82f6;color:white;cursor:pointer;">' +
+            '<i class="bi bi-arrow-clockwise"></i> 再試行</button>';
+        } else {
+          document.getElementById('tdl-loading').innerHTML =
+            '<i class="bi bi-exclamation-circle"></i> 読み込みエラー';
+        }
       }
     }
 
