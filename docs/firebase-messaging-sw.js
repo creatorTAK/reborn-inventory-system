@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v373';  // v373: 商品詳細の販売情報を管理者のみ表示に制限
+const CACHE_VERSION = 'v374';  // v374: 会計に作業報酬（外注工賃）を経費反映
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）

@@ -536,6 +536,10 @@
             <span class="acct-pl-label">＝ 売上総利益（粗利）</span>
             <span class="acct-pl-amount positive" id="acct-pl-gross">-</span>
           </div>
+          <div class="acct-pl-row" id="acct-pl-comp-row" style="display:none;">
+            <span class="acct-pl-label" style="padding-left:12px;">うち 外注工賃（作業報酬）</span>
+            <span class="acct-pl-amount" id="acct-pl-comp">-</span>
+          </div>
           <div class="acct-pl-row">
             <span class="acct-pl-label">&#x25B3; 経費合計</span>
             <span class="acct-pl-amount" id="acct-pl-expense">-</span>
@@ -891,6 +895,7 @@
 
     var _acctCurrentProducts = [];
     var _acctCurrentExpenses = [];
+    var _acctCurrentCompensation = 0;
     var _acctCurrentYear = new Date().getFullYear();
     var _acctCurrentIncome = 0;
     var _acctSelectedDeduction = 650000;
@@ -970,6 +975,24 @@
         expenses.push({ id: docSnap.id, ...docSnap.data() });
       });
       return expenses;
+    }
+
+    async function acctGetCompensationTotal(fiscalYear) {
+      var db = window.firebaseDB;
+      var ref = window.firestoreCollection(db, 'compensationRecords');
+      var startYM = fiscalYear + '-01';
+      var endYM = fiscalYear + '-12';
+      var q = window.firestoreQuery(
+        ref,
+        window.firestoreWhere('yearMonth', '>=', startYM),
+        window.firestoreWhere('yearMonth', '<=', endYM)
+      );
+      var snapshot = await window.firestoreGetDocs(q);
+      var total = 0;
+      snapshot.forEach(function(docSnap) {
+        total += parseFloat(docSnap.data().totalAmount) || 0;
+      });
+      return total;
     }
 
     // 経費追加（Firestoreへ）
@@ -1150,6 +1173,7 @@
 
         _acctCurrentProducts = await acctGetProducts();
         _acctCurrentExpenses = await acctGetExpenses(_acctCurrentYear);
+        _acctCurrentCompensation = await acctGetCompensationTotal(_acctCurrentYear);
 
         acctUpdateOverview(startDate, endDate);
         acctUpdateTaxSimulation();
@@ -1189,7 +1213,8 @@
       var totalSales = soldProducts.reduce(function(sum, p) { return sum + (parseFloat(p.saleAmount) || 0); }, 0);
       var totalCost = soldProducts.reduce(function(sum, p) { return sum + (parseFloat((p.purchase && p.purchase.amount) || p.purchaseAmount) || 0); }, 0);
       var grossProfit = totalSales - totalCost;
-      var totalExpense = _acctCurrentExpenses.reduce(function(sum, e) { return sum + (parseFloat(e.amount) || 0); }, 0);
+      var expenseOnly = _acctCurrentExpenses.reduce(function(sum, e) { return sum + (parseFloat(e.amount) || 0); }, 0);
+      var totalExpense = expenseOnly + _acctCurrentCompensation;
       var income = grossProfit - totalExpense;
 
       _acctCurrentIncome = income;
@@ -1227,6 +1252,15 @@
       el = document.getElementById('acct-pl-sales'); if (el) el.textContent = acctFormatCurrency(totalSales);
       el = document.getElementById('acct-pl-cost'); if (el) el.textContent = acctFormatCurrency(totalCost);
       el = document.getElementById('acct-pl-gross'); if (el) el.textContent = acctFormatCurrency(grossProfit);
+      var compRow = document.getElementById('acct-pl-comp-row');
+      if (compRow) {
+        if (_acctCurrentCompensation > 0) {
+          compRow.style.display = '';
+          document.getElementById('acct-pl-comp').textContent = acctFormatCurrency(_acctCurrentCompensation);
+        } else {
+          compRow.style.display = 'none';
+        }
+      }
       el = document.getElementById('acct-pl-expense'); if (el) el.textContent = acctFormatCurrency(totalExpense);
       el = document.getElementById('acct-pl-income');
       if (el) {
@@ -1577,6 +1611,11 @@
         expenseByCategory[cat] = (expenseByCategory[cat] || 0) + amt;
         totalExpense += amt;
       });
+      // 作業報酬を外注工賃として加算
+      if (_acctCurrentCompensation > 0) {
+        expenseByCategory['\u5916\u6CE8\u5DE5\u8CC3'] = (expenseByCategory['\u5916\u6CE8\u5DE5\u8CC3'] || 0) + _acctCurrentCompensation;
+        totalExpense += _acctCurrentCompensation;
+      }
 
       var income = grossProfit - totalExpense;
 
