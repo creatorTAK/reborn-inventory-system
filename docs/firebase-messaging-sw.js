@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v374';  // v374: 会計に作業報酬（外注工賃）を経費反映
+const CACHE_VERSION = 'v375';  // v375: アプリバッジに資材不足カウント追加（管理者のみ）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -410,14 +410,14 @@ self.addEventListener('message', (event) => {
   // アプリが開かれたときに、IndexedDBのカウントをFirestoreベースの正しい値に同期
   if (data.type === 'SYNC_BADGE_COUNT') {
     console.log('[SW v160] Received SYNC_BADGE_COUNT:', data);
-    syncBadgeCounts(data.chatCount || 0, data.todoCount || 0);
+    syncBadgeCounts(data.chatCount || 0, data.todoCount || 0, data.packagingCount || 0);
   }
 });
 
 // ================================================================================
 // バッジカウント同期処理（クライアントの正しい値に合わせる）
 // ================================================================================
-async function syncBadgeCounts(chatCount, todoCount) {
+async function syncBadgeCounts(chatCount, todoCount, packagingCount) {
   try {
     // RebornBadgeDB（チャット用）をchatCountに設定
     await setBadgeInDB('RebornBadgeDB', chatCount);
@@ -426,7 +426,7 @@ async function syncBadgeCounts(chatCount, todoCount) {
     await setBadgeInDB('SystemNotificationDB', todoCount);
 
     // ★ アプリバッジも正しい値に更新（重要！）
-    const totalCount = chatCount + todoCount;
+    const totalCount = chatCount + todoCount + (packagingCount || 0);
     if (navigator.setAppBadge) {
       if (totalCount > 0) {
         await navigator.setAppBadge(totalCount);
@@ -437,7 +437,7 @@ async function syncBadgeCounts(chatCount, todoCount) {
       }
     }
 
-    console.log('[SW v160] Badge counts synced: chat=' + chatCount + ', todo=' + todoCount);
+    console.log('[SW v160] Badge counts synced: chat=' + chatCount + ', todo=' + todoCount + ', packaging=' + (packagingCount || 0));
   } catch (err) {
     console.error('[SW v160] Error syncing badge counts:', err);
   }

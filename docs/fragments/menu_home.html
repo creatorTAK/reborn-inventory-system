@@ -229,7 +229,7 @@
       a.id = def.id;
       a.setAttribute('tabindex', '-1');
       a.onclick = (function(p) { return function() { navigateToPage(p); return false; }; })(def.page);
-      a.innerHTML = '<div class="menu-item-content"><span class="menu-item-icon"><img src="/images/menu-icons/' + def.icon + '" alt=""></span><span>' + def.label + '</span></div>';
+      a.innerHTML = '<div class="menu-item-content"><span class="menu-item-icon"><img src="/images/menu-icons/' + def.icon + '" alt=""></span><span>' + def.label + '</span></div><span class="menu-item-badge" id="' + def.id + '-badge"></span>';
       frag.appendChild(a);
     }
 
@@ -397,6 +397,44 @@
             totalUnread += (unreadData && unreadData.unreadCount) || 0;
           }
         } catch (e) { /* ignore */ }
+      }
+
+      // 資材不足バッジ（管理者のみ）
+      var permId = localStorage.getItem('reborn_user_permission_id');
+      var isAdmin = (permId === 'owner' || permId === 'admin');
+      if (isAdmin) {
+        try {
+          var materialsSnap = await db.collection('packagingMaterials').get();
+          var lotsSnap = await db.collection('packagingLots').where('status', '==', 'active').get();
+          var stockMap = {};
+          lotsSnap.forEach(function(doc) {
+            var lot = doc.data();
+            if (lot.materialId) stockMap[lot.materialId] = (stockMap[lot.materialId] || 0) + (lot.remainingQty || 0);
+          });
+          var pkgAlertCount = 0;
+          materialsSnap.forEach(function(doc) {
+            var m = doc.data();
+            var stock = stockMap[doc.id] || 0;
+            var threshold = m.stockAlertThreshold || 0;
+            if (stock <= 0 || (threshold > 0 && stock <= threshold)) pkgAlertCount++;
+          });
+          var pkgBadge = document.getElementById('mh-menu-packaging-badge');
+          if (pkgBadge) {
+            if (pkgAlertCount > 0) {
+              pkgBadge.textContent = pkgAlertCount;
+              pkgBadge.classList.add('active');
+            } else {
+              pkgBadge.textContent = '';
+              pkgBadge.classList.remove('active');
+            }
+          }
+          // index.htmlのアプリバッジに反映
+          if (typeof window.updatePackagingBadge === 'function') {
+            window.updatePackagingBadge(pkgAlertCount);
+          }
+        } catch (e) {
+          console.error('[SPA menu_home] 資材バッジエラー:', e);
+        }
       }
 
     } catch (error) {
