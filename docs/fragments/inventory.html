@@ -3206,25 +3206,50 @@
 
         // 梱包資材の出庫処理
         if (data.packagingMaterials && data.packagingMaterials.length > 0) {
-          for (var mi = 0; mi < data.packagingMaterials.length; mi++) {
-            var material = data.packagingMaterials[mi];
-            if (material.materialId) {
+          try {
+            // ユーザーの場所IDを取得（packagingLocationsから）
+            var _outLocationId = '';
+            var _outUserEmail = localStorage.getItem('reborn_user_email');
+            if (_outUserEmail) {
+              var _locSnap = await db.collection('packagingLocations')
+                .where('assignedUserEmail', '==', _outUserEmail).where('type', '==', 'user_home').limit(1).get();
+              if (!_locSnap.empty) _outLocationId = _locSnap.docs[0].id;
+            }
+            var _outBatch = db.batch();
+            var _outCreatedBy = (window.currentUser && window.currentUser.name) || 'unknown';
+            for (var mi = 0; mi < data.packagingMaterials.length; mi++) {
+              var material = data.packagingMaterials[mi];
+              if (!material.materialId) continue;
+              // トランザクション記録（スキーマ統一）
+              var _txnRef = db.collection('packagingTransactions').doc();
+              _outBatch.set(_txnRef, {
+                materialId: material.materialId, materialName: material.productName || '', locationId: _outLocationId,
+                type: '出庫', quantity: -1, reason: '販売出庫', relatedSaleId: productDocId,
+                note: '発送完了: ' + data.managementNumber,
+                createdBy: _outCreatedBy, createdAt: serverTs()
+              });
+            }
+            await _outBatch.commit();
+            // batch後に在庫数を再計算
+            for (var mi2 = 0; mi2 < data.packagingMaterials.length; mi2++) {
+              var mat2 = data.packagingMaterials[mi2];
+              if (!mat2.materialId) continue;
               try {
-                await db.collection('packagingTransactions').add({
-                  materialId: material.materialId, type: 'out', quantity: 1, reason: 'sale',
-                  relatedSaleId: productDocId, notes: '発送完了: ' + data.managementNumber,
-                  createdBy: (window.currentUser && window.currentUser.name) || 'unknown', createdAt: serverTs()
-                });
-                var materialDoc = await db.collection('packagingMaterials').doc(material.materialId).get();
+                var _lotsSnap = await db.collection('packagingLots')
+                  .where('materialId', '==', mat2.materialId).where('status', '==', 'active').get();
+                var _totalStock = _lotsSnap.docs.reduce(function(sum, d) { return sum + (d.data().remainingQty || 0); }, 0);
+                await db.collection('packagingMaterials').doc(mat2.materialId).update({ currentStock: _totalStock, updatedAt: serverTs() });
+              } catch (stockCalcErr) {
+                // ロットがない場合はcurrentStockを直接-1
+                var materialDoc = await db.collection('packagingMaterials').doc(mat2.materialId).get();
                 if (materialDoc.exists) {
-                  var currentStock = (materialDoc.data() && materialDoc.data().currentStock) || 0;
-                  var newStock = Math.max(0, currentStock - 1);
-                  await db.collection('packagingMaterials').doc(material.materialId).update({ currentStock: newStock, updatedAt: serverTs() });
+                  var curStock = (materialDoc.data() && materialDoc.data().currentStock) || 0;
+                  await db.collection('packagingMaterials').doc(mat2.materialId).update({ currentStock: Math.max(0, curStock - 1), updatedAt: serverTs() });
                 }
-              } catch (stockError) {
-                console.warn('[inv] 出庫処理エラー:', material.productName, stockError);
               }
             }
+          } catch (stockError) {
+            console.warn('[inv] 出庫処理エラー:', stockError);
           }
         }
 
