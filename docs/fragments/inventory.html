@@ -514,6 +514,9 @@
     #invAgingModal .aging-item-sub { color: #6b7280; font-size: 12px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center; }
     #invAgingModal .btn-aging-action { font-size: 12px; padding: 3px 10px; }
     #invAgingModal .aging-done-badge { font-size: 12px; color: #10b981; font-weight: 600; }
+    #invAgingModal .aging-instruction-form { margin-top: 8px; }
+    #invAgingModal .aging-instruction-form textarea { font-size: 13px; resize: none; }
+    #invAgingModal .aging-instruction-form .btn-group-sm { margin-top: 6px; display: flex; gap: 6px; justify-content: flex-end; }
     /* Settings dropdown */
     #spa-page-inventory .inv-sub-header {
       display: flex;
@@ -1600,10 +1603,17 @@
           if (hasExistingTask) {
             html += '<span class="aging-done-badge">&#10003; 指示済み</span>';
           } else {
-            html += '<button class="btn btn-outline-danger btn-aging-action" onclick="invSendAgingAction(\'' + productId + '\', \'' + registrantEmail + '\', ' + compensationAmount + ', this)">対策指示を出す</button>';
+            html += '<button class="btn btn-outline-danger btn-aging-action" onclick="invShowInstructionForm(this, \'' + productId + '\', \'' + registrantEmail + '\', ' + compensationAmount + ')">対策指示を出す</button>';
           }
         }
 
+        html += '</div>';
+        html += '<div class="aging-instruction-form" id="invInstrForm_' + productId + '" style="display:none;">';
+        html += '<textarea class="form-control" rows="2" placeholder="具体的な指示を入力（例: 価格を20%下げて再出品）" id="invInstrText_' + productId + '"></textarea>';
+        html += '<div class="btn-group-sm">';
+        html += '<button class="btn btn-sm btn-secondary" onclick="invCancelInstruction(\'' + productId + '\')">キャンセル</button>';
+        html += '<button class="btn btn-sm btn-danger" onclick="invSendAgingAction(\'' + productId + '\', \'' + registrantEmail + '\', ' + compensationAmount + ', this)">送信</button>';
+        html += '</div>';
         html += '</div>';
         html += '</div>';
       }
@@ -1611,15 +1621,33 @@
       document.getElementById('invAgingModalBody').innerHTML = html;
     }
 
+    function invShowInstructionForm(btnEl, productId, registrantEmail, compensation) {
+      btnEl.style.display = 'none';
+      var form = document.getElementById('invInstrForm_' + productId);
+      if (form) { form.style.display = 'block'; form.querySelector('textarea').focus(); }
+    }
+
+    function invCancelInstruction(productId) {
+      var form = document.getElementById('invInstrForm_' + productId);
+      if (form) { form.style.display = 'none'; form.querySelector('textarea').value = ''; }
+      // ボタンを再表示
+      var item = form.closest('.aging-item');
+      var btn = item.querySelector('.btn-aging-action');
+      if (btn) btn.style.display = '';
+    }
+
     async function invSendAgingAction(productId, registrantEmail, compensation, btnEl) {
       if (!productId || !registrantEmail) { alert('商品情報が不足しています'); return; }
+
+      var instruction = (document.getElementById('invInstrText_' + productId)?.value || '').trim();
+      if (!instruction) { alert('具体的な指示内容を入力してください'); return; }
+
       btnEl.disabled = true;
       btnEl.textContent = '送信中...';
 
       try {
-        // 商品情報を取得
         var productDoc = await db.collection('products').doc(productId).get();
-        if (!productDoc.exists) { alert('商品が見つかりません'); btnEl.disabled = false; btnEl.textContent = '対策指示を出す'; return; }
+        if (!productDoc.exists) { alert('商品が見つかりません'); btnEl.disabled = false; btnEl.textContent = '送信'; return; }
         var product = productDoc.data();
 
         var dueDate = new Date();
@@ -1630,6 +1658,7 @@
           .collection('tasks')
           .add({
             title: '【要対策】' + (product.productName || product.managementNumber) + ' - 滞留商品',
+            description: instruction,
             taskType: 'inventory_action',
             productId: productId,
             managementNumber: product.managementNumber || '',
@@ -1643,16 +1672,22 @@
             link: '/product.html?edit=' + productId
           });
 
-        // ボタンを「指示済み」に変更
+        // フォームを「指示済み」に置き換え
+        var formEl = document.getElementById('invInstrForm_' + productId);
+        var itemEl = formEl.closest('.aging-item');
+        var subEl = itemEl.querySelector('.aging-item-sub');
+        var existingBtn = subEl.querySelector('.btn-aging-action');
+        if (existingBtn) existingBtn.remove();
         var badge = document.createElement('span');
         badge.className = 'aging-done-badge';
         badge.innerHTML = '&#10003; 指示済み';
-        btnEl.parentNode.replaceChild(badge, btnEl);
+        subEl.appendChild(badge);
+        formEl.style.display = 'none';
       } catch (e) {
         console.error('対策指示エラー:', e);
         alert('タスク作成に失敗しました');
         btnEl.disabled = false;
-        btnEl.textContent = '対策指示を出す';
+        btnEl.textContent = '送信';
       }
     }
 
