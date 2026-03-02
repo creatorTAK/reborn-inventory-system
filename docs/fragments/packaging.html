@@ -1013,19 +1013,15 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label fw-bold">ユーザー（場所）を選択</label>
-            <select class="form-select" id="ih-thresholdLocationSelect" style="font-size:16px;" onchange="ihLoadLocationSettings()">
-              <option value="">選択してください</option>
-            </select>
-          </div>
-          <!-- ユーザーアイコン＋名前表示 -->
-          <div id="ih-settingsUserProfile" style="display: none;" class="d-flex align-items-center mb-3 p-2 bg-light rounded">
-            <div id="ih-settingsUserIcon" style="width:48px; height:48px; border-radius:50%; overflow:hidden; background:#dee2e6; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-              <i class="bi bi-person-fill" style="font-size:24px; color:#6c757d;"></i>
+            <!-- カスタムドロップダウン（アイコン付き） -->
+            <div id="ih-userDropdown" class="position-relative">
+              <div id="ih-userDropdownToggle" class="form-select d-flex align-items-center" style="font-size:16px; cursor:pointer; min-height:42px;" onclick="ihToggleUserDropdown()">
+                <span id="ih-userDropdownLabel" class="text-muted">選択してください</span>
+              </div>
+              <div id="ih-userDropdownMenu" class="position-absolute w-100 bg-white border rounded-bottom shadow-sm" style="display:none; z-index:1060; max-height:240px; overflow-y:auto; top:100%; left:0;">
+              </div>
             </div>
-            <div class="ms-3">
-              <div id="ih-settingsUserName" class="fw-bold"></div>
-              <small id="ih-settingsUserEmail" class="text-muted"></small>
-            </div>
+            <input type="hidden" id="ih-thresholdLocationSelect" value="">
           </div>
           <div id="ih-settingsTabContainer" style="display: none;">
             <!-- タブナビゲーション -->
@@ -2078,19 +2074,25 @@
     // ========================================
     var _ih_settingsLocData = {}; // モーダル内で共有する場所データ
 
+    var _ih_userIconCache = {}; // { email: iconUrl }
+
     async function ihShowThresholdSettingsModal() {
       if (!ihIsAdmin()) { alert('管理者権限が必要です'); return; }
-      var locationSelect = document.getElementById('ih-thresholdLocationSelect');
-      locationSelect.innerHTML = '<option value="">選択してください</option>' +
-        ih_allLocations.filter(function(loc) { return loc.type === 'user_home'; })
-          .map(function(loc) { return '<option value="' + loc.id + '">👤 ' + ihEscapeHtml(loc.name) + '</option>'; }).join('');
+      // リセット
+      document.getElementById('ih-thresholdLocationSelect').value = '';
       document.getElementById('ih-settingsTabContainer').style.display = 'none';
       document.getElementById('ih-thresholdNoLocationSelected').style.display = 'block';
       document.getElementById('ih-managedMaterialList').textContent = '';
       document.getElementById('ih-thresholdMaterialList').textContent = '';
       _ih_settingsLocData = {};
+      // ドロップダウンラベルをリセット
+      var labelEl = document.getElementById('ih-userDropdownLabel');
+      labelEl.textContent = '選択してください';
+      labelEl.className = 'text-muted';
+      document.getElementById('ih-userDropdownMenu').style.display = 'none';
+      // ユーザーアイコンを一括取得してドロップダウンメニュー構築
+      await ihBuildUserDropdownMenu();
       var modalEl = document.getElementById('ih-thresholdSettingsModal');
-      // SPA fragment内のモーダルはbody直下に移動しないとバックドロップに隠れる
       if (modalEl.parentElement !== document.body) {
         document.body.appendChild(modalEl);
       }
@@ -2098,15 +2100,96 @@
       modal.show();
     }
 
+    async function ihBuildUserDropdownMenu() {
+      var menu = document.getElementById('ih-userDropdownMenu');
+      menu.textContent = '';
+      var userLocs = ih_allLocations.filter(function(loc) { return loc.type === 'user_home'; });
+      // ユーザーアイコンを一括取得
+      var db = ihGetDb();
+      if (db) {
+        var emails = userLocs.map(function(loc) { return loc.assignedUserEmail; }).filter(Boolean);
+        var uncached = emails.filter(function(e) { return _ih_userIconCache[e] === undefined; });
+        if (uncached.length > 0) {
+          try {
+            for (var i = 0; i < uncached.length; i++) {
+              var userDoc = await db.collection('users').doc(uncached[i]).get();
+              _ih_userIconCache[uncached[i]] = (userDoc.exists && userDoc.data().userIconUrl) || '';
+            }
+          } catch (e) { console.warn('[ih] アイコン取得エラー:', e); }
+        }
+      }
+      userLocs.forEach(function(loc) {
+        var item = document.createElement('div');
+        item.className = 'd-flex align-items-center px-3 py-2';
+        item.style.cssText = 'cursor:pointer; border-bottom:1px solid #f0f0f0;';
+        item.onmouseenter = function() { item.style.background = '#f0f4ff'; };
+        item.onmouseleave = function() { item.style.background = ''; };
+        var iconWrap = document.createElement('div');
+        iconWrap.style.cssText = 'width:32px; height:32px; border-radius:50%; overflow:hidden; background:#dee2e6; display:flex; align-items:center; justify-content:center; flex-shrink:0;';
+        var iconUrl = _ih_userIconCache[loc.assignedUserEmail] || '';
+        if (iconUrl) {
+          var img = document.createElement('img');
+          img.src = iconUrl;
+          img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+          iconWrap.appendChild(img);
+        } else {
+          var fallback = document.createElement('i');
+          fallback.className = 'bi bi-person-fill';
+          fallback.style.cssText = 'font-size:16px; color:#6c757d;';
+          iconWrap.appendChild(fallback);
+        }
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'ms-2';
+        nameSpan.textContent = loc.name;
+        item.appendChild(iconWrap);
+        item.appendChild(nameSpan);
+        item.onclick = function() { ihSelectUserDropdownItem(loc.id, loc.name, iconUrl); };
+        menu.appendChild(item);
+      });
+    }
+
+    function ihToggleUserDropdown() {
+      var menu = document.getElementById('ih-userDropdownMenu');
+      menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function ihSelectUserDropdownItem(locationId, locationName, iconUrl) {
+      document.getElementById('ih-thresholdLocationSelect').value = locationId;
+      // トグルラベルを更新（アイコン+名前）
+      var toggle = document.getElementById('ih-userDropdownToggle');
+      var label = document.getElementById('ih-userDropdownLabel');
+      // 既存のアイコン要素があれば除去
+      var existingIcon = toggle.querySelector('.ih-toggle-icon');
+      if (existingIcon) existingIcon.remove();
+      var iconWrap = document.createElement('div');
+      iconWrap.className = 'ih-toggle-icon';
+      iconWrap.style.cssText = 'width:28px; height:28px; border-radius:50%; overflow:hidden; background:#dee2e6; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-right:8px;';
+      if (iconUrl) {
+        var img = document.createElement('img');
+        img.src = iconUrl;
+        img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+        iconWrap.appendChild(img);
+      } else {
+        var fallback = document.createElement('i');
+        fallback.className = 'bi bi-person-fill';
+        fallback.style.cssText = 'font-size:14px; color:#6c757d;';
+        iconWrap.appendChild(fallback);
+      }
+      toggle.insertBefore(iconWrap, label);
+      label.textContent = locationName;
+      label.className = '';
+      // メニュー閉じて読み込み
+      document.getElementById('ih-userDropdownMenu').style.display = 'none';
+      ihLoadLocationSettings();
+    }
+
     async function ihLoadLocationSettings() {
       var locationId = document.getElementById('ih-thresholdLocationSelect').value;
       var tabContainer = document.getElementById('ih-settingsTabContainer');
       var noSelection = document.getElementById('ih-thresholdNoLocationSelected');
-      var profileEl = document.getElementById('ih-settingsUserProfile');
       if (!locationId) {
         tabContainer.style.display = 'none';
         noSelection.style.display = 'block';
-        if (profileEl) profileEl.style.display = 'none';
         return;
       }
       tabContainer.style.display = 'block';
@@ -2117,51 +2200,11 @@
         var db = ihGetDb();
         var locationDoc = await db.collection('packagingLocations').doc(locationId).get();
         _ih_settingsLocData = locationDoc.exists ? locationDoc.data() : {};
-        // ユーザーアイコン表示
-        ihShowSettingsUserProfile(_ih_settingsLocData, db);
         ihRenderManagedTab();
         ihRenderThresholdTab();
       } catch (error) {
         console.error('[ih] 設定読み込みエラー:', error);
         document.getElementById('ih-managedMaterialList').textContent = 'エラー: ' + error.message;
-      }
-    }
-
-    async function ihShowSettingsUserProfile(locData, db) {
-      var profileEl = document.getElementById('ih-settingsUserProfile');
-      var iconEl = document.getElementById('ih-settingsUserIcon');
-      var nameEl = document.getElementById('ih-settingsUserName');
-      var emailEl = document.getElementById('ih-settingsUserEmail');
-      if (!profileEl) return;
-      var userName = locData.assignedUserName || locData.name || '';
-      var userEmail = locData.assignedUserEmail || '';
-      nameEl.textContent = userName;
-      emailEl.textContent = userEmail;
-      // デフォルトアイコンに戻す
-      iconEl.textContent = '';
-      var defaultIcon = document.createElement('i');
-      defaultIcon.className = 'bi bi-person-fill';
-      defaultIcon.style.cssText = 'font-size:24px; color:#6c757d;';
-      iconEl.appendChild(defaultIcon);
-      profileEl.style.display = 'flex';
-      // usersコレクションからアイコンURL取得
-      if (userEmail && db) {
-        try {
-          var userDoc = await db.collection('users').doc(userEmail).get();
-          if (userDoc.exists) {
-            var iconUrl = userDoc.data().userIconUrl;
-            if (iconUrl) {
-              iconEl.textContent = '';
-              var img = document.createElement('img');
-              img.src = iconUrl;
-              img.alt = userName;
-              img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
-              iconEl.appendChild(img);
-            }
-          }
-        } catch (e) {
-          console.warn('[ih] ユーザーアイコン取得エラー:', e);
-        }
       }
     }
 
