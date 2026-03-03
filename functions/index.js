@@ -1594,9 +1594,12 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       return null;
     }
 
-    // 報酬カウント対象外フラグをチェック
+    // 報酬カウント対象外チェック（フラグ or 管理者権限）
     const staffUserDoc = await db.collection('users').doc(staffEmail).get();
-    if (staffUserDoc.exists && staffUserDoc.data().excludeFromCompensation === true) {
+    const staffData = staffUserDoc.exists ? staffUserDoc.data() : {};
+    const isExcluded = staffData.excludeFromCompensation === true ||
+      staffData.permissionId === 'owner' || staffData.permissionId === 'admin';
+    if (isExcluded) {
       console.log('⏭️ [onTaskCompleted] 報酬カウント対象外ユーザー:', staffEmail);
       // 報酬はスキップするが、検品ステータス更新は実行する
       if (taskType === 'inspection_task') {

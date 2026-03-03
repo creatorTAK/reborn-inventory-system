@@ -886,10 +886,10 @@
       var rates = _compCompensationSettings.taskRates || { listing: 100, shipping: 100, photography: 50, inspection: 30 };
       var totalTasks = 0, totalAmount = 0;
       var taskBreakdown = {
-        listing: { count: 0, rate: rates.listing, amount: 0 },
-        shipping: { count: 0, rate: rates.shipping, amount: 0 },
-        photography: { count: 0, rate: rates.photography, amount: 0 },
-        inspection: { count: 0, rate: rates.inspection, amount: 0 }
+        listing: { count: 0, amount: 0 },
+        shipping: { count: 0, amount: 0 },
+        photography: { count: 0, amount: 0 },
+        inspection: { count: 0, amount: 0 }
       };
 
       _compCurrentRecords.forEach(function(r) {
@@ -916,7 +916,8 @@
       Object.entries(taskBreakdown).forEach(function(entry) {
         var task = entry[0], data = entry[1];
         if (data.count > 0) {
-          breakdownHtml += '<tr><td>' + taskNames[task] + '</td><td class="text-end">' + data.count + '\u4EF6</td><td class="text-end">' + compFormatCurrency(data.rate) + '</td><td class="text-end fw-bold">' + compFormatCurrency(data.amount) + '</td></tr>';
+          var avgRate = data.count > 0 ? Math.round(data.amount / data.count) : 0;
+          breakdownHtml += '<tr><td>' + taskNames[task] + '</td><td class="text-end">' + data.count + '\u4EF6</td><td class="text-end">' + compFormatCurrency(avgRate) + '</td><td class="text-end fw-bold">' + compFormatCurrency(data.amount) + '</td></tr>';
         }
       });
 
@@ -926,10 +927,29 @@
         breakdownHtml += '<tr style="background:#f9fafb;font-weight:600;"><td>\u5408\u8A08</td><td class="text-end">' + totalTasks + '\u4EF6</td><td class="text-end">-</td><td class="text-end">' + compFormatCurrency(totalAmount) + '</td></tr>';
       }
       el = document.getElementById('comp-taskBreakdownBody'); if (el) el.innerHTML = breakdownHtml;
+
+      // 月別推移
+      var monthlyData = {};
+      _compCurrentRecords.forEach(function(r) {
+        var dateStr = r.completedAt || r.recordedAt;
+        if (!dateStr) return;
+        var d = typeof dateStr === 'string' ? new Date(dateStr) : (dateStr.toDate ? dateStr.toDate() : new Date(dateStr));
+        var key = d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0');
+        if (!monthlyData[key]) monthlyData[key] = { count: 0, amount: 0 };
+        monthlyData[key].count++;
+        monthlyData[key].amount += r.unitPrice || 0;
+      });
+      var monthKeys = Object.keys(monthlyData).sort();
+      var trendHtml = '';
+      monthKeys.forEach(function(key) {
+        var m = monthlyData[key];
+        trendHtml += '<tr><td>' + key + '</td><td class="text-end">' + m.count + '\u4EF6</td><td class="text-end">' + compFormatCurrency(m.amount) + '</td></tr>';
+      });
+      if (!trendHtml) trendHtml = '<tr><td colspan="3" class="text-center text-muted py-4">データがありません</td></tr>';
+      el = document.getElementById('comp-monthlyTrendBody'); if (el) el.innerHTML = trendHtml;
     }
 
-    function compRenderStaffList() {
-      var rates = _compCompensationSettings.taskRates || { listing: 100, shipping: 100, photography: 50, inspection: 30 };
+    async function compRenderStaffList() {
       var staffList = document.getElementById('comp-staffList');
       if (!staffList) return;
 
@@ -938,12 +958,29 @@
         return;
       }
 
+      // ユーザーのphotoURL取得
+      var staffPhotoMap = {};
+      try {
+        var emails = Object.values(_compCurrentStaffStats).map(function(s) { return s.email; }).filter(Boolean);
+        for (var i = 0; i < emails.length; i++) {
+          var userDoc = await window.firestoreGetDoc(window.firestoreDoc(window.firebaseDB, 'users', emails[i]));
+          if (userDoc.exists()) {
+            var ud = userDoc.data();
+            staffPhotoMap[emails[i]] = ud.userIconUrl || ud.photoURL || ud.iconUrl || '';
+          }
+        }
+      } catch (e) { console.warn('[Comp] ユーザー画像取得エラー:', e); }
+
       var html = '';
       Object.entries(_compCurrentStaffStats).forEach(function(entry) {
         var staffName = entry[0], stats = entry[1];
         var totalTasks = stats.listing + stats.shipping + stats.photography + stats.inspection;
-        var totalAmount = (stats.listing * rates.listing) + (stats.shipping * rates.shipping) + (stats.photography * rates.photography) + (stats.inspection * rates.inspection);
-        html += '<div class="comp-staff-card"><div class="comp-staff-avatar">&#x1F464;</div><div class="comp-staff-info"><div class="comp-staff-name">' + staffName + '</div><div class="comp-staff-role">\u51FA\u54C1: ' + stats.listing + '\u4EF6 / \u767A\u9001: ' + stats.shipping + '\u4EF6</div></div><div class="comp-staff-stats"><div class="comp-staff-amount">' + compFormatCurrency(totalAmount) + '</div><div class="comp-staff-tasks">' + totalTasks + '\u4EF6\u306E\u30BF\u30B9\u30AF</div></div></div>';
+        var totalAmount = stats.totalAmount || 0;
+        var photoURL = staffPhotoMap[stats.email] || '';
+        var avatarHtml = photoURL
+          ? '<img src="' + photoURL + '" style="width:48px;height:48px;border-radius:50%;object-fit:cover;" onerror="this.outerHTML=\'<div class=comp-staff-avatar><i class=bi bi-person style=font-size:20px;color:#9ca3af></i></div>\'">'
+          : '<div class="comp-staff-avatar"><i class="bi bi-person" style="font-size:20px;color:#9ca3af;"></i></div>';
+        html += '<div class="comp-staff-card">' + avatarHtml + '<div class="comp-staff-info"><div class="comp-staff-name">' + staffName + '</div><div class="comp-staff-role">\u51FA\u54C1: ' + stats.listing + '\u4EF6 / \u767A\u9001: ' + stats.shipping + '\u4EF6</div></div><div class="comp-staff-stats"><div class="comp-staff-amount">' + compFormatCurrency(totalAmount) + '</div><div class="comp-staff-tasks">' + totalTasks + '\u4EF6\u306E\u30BF\u30B9\u30AF</div></div></div>';
       });
       staffList.innerHTML = html;
     }
@@ -1000,11 +1037,10 @@
         staffNames.forEach(function(name) { paymentStaff.innerHTML += '<option value="' + name + '">' + name + '</option>'; });
 
         paymentStaff.onchange = function() {
-          var rates = _compCompensationSettings.taskRates || { listing: 100, shipping: 100, photography: 50, inspection: 30 };
           var stats = _compCurrentStaffStats[this.value];
           var amountEl = document.getElementById('comp-paymentAmount');
           if (stats && amountEl) {
-            amountEl.value = (stats.listing * rates.listing) + (stats.shipping * rates.shipping) + (stats.photography * rates.photography) + (stats.inspection * rates.inspection);
+            amountEl.value = stats.totalAmount || 0;
           } else if (amountEl) {
             amountEl.value = 0;
           }
