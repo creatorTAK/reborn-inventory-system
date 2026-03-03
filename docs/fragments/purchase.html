@@ -3550,6 +3550,27 @@
       }
     }
 
+    function purInitEntryAccessories(itemId) {
+      var container = document.getElementById('pur-entry-accessories-' + itemId);
+      if (!container || !_pur_entryMasterOptions.accessories) return;
+      var html = '';
+      _pur_entryMasterOptions.accessories.forEach(function(acc) {
+        html += '<label class="pur-accessory-checkbox"><input type="checkbox" value="' + purEscapeHtml(acc) + '" onchange="purUpdateEntryAccessoryCheckbox(this,\'' + itemId + '\')"> ' + purEscapeHtml(acc) + '</label>';
+      });
+      html += '<label class="pur-accessory-checkbox"><input type="checkbox" value="その他" onchange="purUpdateEntryAccessoryCheckbox(this,\'' + itemId + '\')"> その他</label>';
+      container.innerHTML = html;
+    }
+
+    function purUpdateEntryAccessoryCheckbox(checkbox, itemId) {
+      var label = checkbox.closest('.pur-accessory-checkbox');
+      if (checkbox.checked) label.classList.add('checked');
+      else label.classList.remove('checked');
+      if (checkbox.value === 'その他') {
+        var otherContainer = document.getElementById('pur-entry-accessory-other-container-' + itemId);
+        if (otherContainer) otherContainer.style.display = checkbox.checked ? 'block' : 'none';
+      }
+    }
+
     function purSetEntryMode(mode) {
       _pur_currentEntryMode = mode;
       document.getElementById('pur-entryModeIndividual').classList.toggle('active', mode === 'individual');
@@ -3664,14 +3685,59 @@
         '<div><label class="form-label">サイズ</label><select class="form-select" id="pur-entry-size-' + itemId + '">' + sizeOptions + '</select></div>' +
         '<div><label class="form-label">商品の状態</label><select class="form-select" id="pur-entry-condition-' + itemId + '">' + condOptions + '</select></div>' +
         '<div class="pur-brand-field"><label class="form-label">ブランド</label><input type="text" class="form-control" id="pur-entry-brand-' + itemId + '" autocomplete="off" placeholder="入力すると候補が表示されます"><div class="pur-suggest" id="pur-suggest-brand-' + itemId + '" hidden></div><input type="hidden" id="pur-entry-brandKana-' + itemId + '"></div>' +
+        '<div><label class="form-label">付属品</label>' +
+        '<div class="pur-accessories-checkboxes" id="pur-entry-accessories-' + itemId + '"></div>' +
+        '<div id="pur-entry-accessory-other-container-' + itemId + '" style="display:none;margin-top:8px;">' +
+        '<input type="text" class="form-control" id="pur-entry-accessory-other-' + itemId + '" placeholder="その他の付属品" style="font-size:0.85rem;"></div></div>' +
         '<div><label class="form-label">メモ</label><input type="text" class="form-control" id="pur-entry-memo-' + itemId + '" placeholder="備考"></div>' +
-        '</div></div></div>';
+        '</div>' +
+        '<div class="pur-damage-marker-section">' +
+        '<div class="pur-damage-marker-header">' +
+        '<div class="pur-title"><i class="bi bi-pencil-square"></i><span>傷・汚れマーキング</span></div>' +
+        '<button type="button" class="pur-damage-marker-toggle" onclick="purToggleDamageMarker(\'' + itemId + '\')">' +
+        '<span id="pur-damage-marker-toggle-text-' + itemId + '">開く</span></button></div>' +
+        '<div class="pur-damage-marker-canvas-container" id="pur-damage-marker-container-' + itemId + '">' +
+        '<div id="pur-damage-marker-no-category-' + itemId + '" class="pur-damage-marker-no-category">' +
+        '<i class="bi bi-info-circle"></i><span>小分類を選択すると画像が表示されます</span></div>' +
+        '<div class="pur-damage-marker-side-toggle" id="pur-damage-marker-side-toggle-' + itemId + '" style="display:none;">' +
+        '<button type="button" class="pur-side-toggle-btn active" id="pur-side-front-btn-' + itemId + '" onclick="purSwitchDamageMarkerSide(\'' + itemId + '\',\'front\')">' +
+        '<i class="bi bi-front"></i> 表 <span class="pur-side-saved-badge" id="pur-front-saved-badge-' + itemId + '" style="display:none;">&#9679;</span></button>' +
+        '<button type="button" class="pur-side-toggle-btn" id="pur-side-back-btn-' + itemId + '" onclick="purSwitchDamageMarkerSide(\'' + itemId + '\',\'back\')">' +
+        '<i class="bi bi-back"></i> 裏 <span class="pur-side-saved-badge" id="pur-back-saved-badge-' + itemId + '" style="display:none;">&#9679;</span></button></div>' +
+        '<div class="pur-damage-marker-canvas-wrapper" id="pur-damage-marker-wrapper-' + itemId + '" style="display:none;">' +
+        '<canvas id="pur-damage-marker-canvas-' + itemId + '" class="pur-damage-marker-canvas" width="300" height="300"></canvas></div>' +
+        '<div class="pur-damage-marker-tools" id="pur-damage-marker-tools-' + itemId + '" style="display:none;">' +
+        '<button type="button" class="pur-damage-marker-tool active" data-tool="circle" onclick="purSetDamageMarkerTool(\'' + itemId + '\',\'circle\')" title="丸"><i class="bi bi-circle"></i></button>' +
+        '<button type="button" class="pur-damage-marker-tool" data-tool="text" onclick="purSetDamageMarkerTool(\'' + itemId + '\',\'text\')" title="テキスト"><i class="bi bi-fonts"></i></button>' +
+        '<button type="button" class="pur-damage-marker-tool" data-tool="pen" onclick="purSetDamageMarkerTool(\'' + itemId + '\',\'pen\')" title="ペン"><i class="bi bi-pencil"></i></button>' +
+        '<div class="pur-damage-marker-colors">' +
+        '<button type="button" class="pur-damage-marker-color red active" onclick="purSetDamageMarkerColor(\'' + itemId + '\',\'#ef4444\')"></button>' +
+        '<button type="button" class="pur-damage-marker-color blue" onclick="purSetDamageMarkerColor(\'' + itemId + '\',\'#3b82f6\')"></button>' +
+        '<button type="button" class="pur-damage-marker-color black" onclick="purSetDamageMarkerColor(\'' + itemId + '\',\'#1f2937\')"></button></div></div>' +
+        '<div id="pur-damage-marker-note-' + itemId + '" style="display:none;margin-top:8px;">' +
+        '<textarea id="pur-damage-marker-note-text-' + itemId + '" placeholder="補足説明（例：左袖に汚れあり）" rows="2" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:6px;font-size:16px;resize:none;"></textarea></div>' +
+        '<div class="pur-damage-marker-actions" id="pur-damage-marker-actions-' + itemId + '" style="display:none;">' +
+        '<button type="button" class="pur-damage-marker-btn" onclick="purClearDamageMarker(\'' + itemId + '\')">クリア</button>' +
+        '<button type="button" class="pur-damage-marker-btn" onclick="purUndoDamageMarker(\'' + itemId + '\')" title="元に戻す"><i class="bi bi-arrow-counterclockwise"></i></button>' +
+        '<button type="button" class="pur-damage-marker-btn" onclick="purRedoDamageMarker(\'' + itemId + '\')" title="やり直す"><i class="bi bi-arrow-clockwise"></i></button>' +
+        '<button type="button" class="pur-damage-marker-btn primary" onclick="purSaveDamageMarker(\'' + itemId + '\')">保存</button></div>' +
+        '<div class="pur-damage-marker-object-controls" id="pur-damage-marker-object-controls-' + itemId + '" style="display:none;">' +
+        '<span class="pur-object-controls-label">選択中:</span>' +
+        '<button type="button" class="pur-damage-marker-btn" onclick="purShrinkSelectedObject(\'' + itemId + '\')"><i class="bi bi-dash-circle"></i> 縮小</button>' +
+        '<button type="button" class="pur-damage-marker-btn" onclick="purEnlargeSelectedObject(\'' + itemId + '\')"><i class="bi bi-plus-circle"></i> 拡大</button>' +
+        '<button type="button" class="pur-damage-marker-btn danger" onclick="purDeleteSelectedObject(\'' + itemId + '\')"><i class="bi bi-eraser-fill"></i> 削除</button></div>' +
+        '<div class="pur-damage-marker-preview" id="pur-damage-marker-preview-' + itemId + '" style="display:none;">' +
+        '<img id="pur-damage-marker-preview-img-' + itemId + '" src="" alt="保存済みマーキング"><div class="pur-damage-marker-preview-label">保存済み</div></div>' +
+        '</div></div></div></div>';
 
       container.appendChild(itemEl);
 
       // カテゴリL0初期化
       var l0Values = purUniqKeepOrder(_pur_entryCategoryRows.map(function(r) { return r['\u7279\u5927\u5206\u985e']; }));
       purFillSelectSafe(document.getElementById('pur-entry-cat-l0-' + itemId), l0Values);
+
+      // 付属品チェックボックス初期化
+      purInitEntryAccessories(itemId);
 
       // ブランドサジェスト初期化
       if (window.algoliaBrandModulesLoaded) purAttachEntryBrandSuggest(itemId);
@@ -3984,9 +4050,38 @@
         if (!ass) errors.push('発送先');
         if (a <= 0) errors.push('仕入金額');
         if (errors.length > 0) { item._errors = errors; item._itemIndex = idx + 1; }
+        // 検品データ収集
+        var catL0 = (document.getElementById('pur-entry-cat-l0-' + item.id) || {}).value || '';
+        var catL1 = (document.getElementById('pur-entry-cat-l1-' + item.id) || {}).value || '';
+        var catL2 = (document.getElementById('pur-entry-cat-l2-' + item.id) || {}).value || '';
+        var catL3 = (document.getElementById('pur-entry-cat-l3-' + item.id) || {}).value || '';
+        var catL4 = (document.getElementById('pur-entry-cat-l4-' + item.id) || {}).value || '';
+        var catL5 = (document.getElementById('pur-entry-cat-l5-' + item.id) || {}).value || '';
+        var catItem = (document.getElementById('pur-entry-cat-item-' + item.id) || {}).value || '';
+        var category = (catL0 || catL1 || catL2 || catL3) ? {
+          superCategory: catL0, major: catL1, middle: catL2, small: catL3, fine: catL4, fine2: catL5, itemName: catItem
+        } : null;
+        var size = (document.getElementById('pur-entry-size-' + item.id) || {}).value || '';
+        var condition = (document.getElementById('pur-entry-condition-' + item.id) || {}).value || '';
+        var brand = (document.getElementById('pur-entry-brand-' + item.id) || {}).value || '';
+        var brandKana = (document.getElementById('pur-entry-brandKana-' + item.id) || {}).value || '';
+        var accCheckboxes = document.querySelectorAll('#pur-entry-accessories-' + item.id + ' input[type="checkbox"]:checked');
+        var accessories = [];
+        accCheckboxes.forEach(function(cb) { accessories.push(cb.value); });
+        var accOther = (document.getElementById('pur-entry-accessory-other-' + item.id) || {}).value || '';
+        if (accOther && accessories.indexOf('その他') !== -1) accessories.push(accOther);
+        // 傷マーキングデータ
+        var dmItem = _pur_entryItems.find(function(ei) { return ei.id === item.id; });
+        var damageMarkerFront = dmItem ? dmItem.damageMarkerFront : null;
+        var damageMarkerBack = dmItem ? dmItem.damageMarkerBack : null;
         validItems.push({
           purchaseDate: d, supplier: s, assignee: ass, amount: a,
           memo: (document.getElementById('pur-entry-memo-' + item.id) || {}).value || '',
+          category: category, size: size, condition: condition, brand: brand, brandKana: brandKana,
+          accessories: accessories,
+          damageMarkerImage: damageMarkerFront ? damageMarkerFront.image : null,
+          damageMarkerType: damageMarkerFront ? 'front' : null,
+          damageMarkerNote: damageMarkerFront ? damageMarkerFront.note : null,
           _errors: item._errors, _itemIndex: item._itemIndex
         });
       });
@@ -5683,13 +5778,13 @@
       var state = purGetCurrentItemState(itemId); if (!state) return;
       state.tool = tool;
       if (state.selectedObject !== null) { state.selectedObject = null; purHideItemObjectControls(itemId); purRenderDamageMarker(itemId); }
-      document.querySelectorAll('#pur-damage-marker-tools-' + itemId + ' .damage-marker-tool').forEach(function(btn) { btn.classList.toggle('active', btn.getAttribute('data-tool') === tool); });
+      document.querySelectorAll('#pur-damage-marker-tools-' + itemId + ' .pur-damage-marker-tool').forEach(function(btn) { btn.classList.toggle('active', btn.getAttribute('data-tool') === tool); });
     }
     function purSetDamageMarkerColor(itemId, color) {
       var state = purGetCurrentItemState(itemId); if (!state) return;
       state.color = color;
       if (state.selectedObject !== null) { state.objects[state.selectedObject].color = color; purSaveItemMarkerHistory(itemId); purRenderDamageMarker(itemId); }
-      document.querySelectorAll('#pur-damage-marker-tools-' + itemId + ' .damage-marker-color').forEach(function(btn) {
+      document.querySelectorAll('#pur-damage-marker-tools-' + itemId + ' .pur-damage-marker-color').forEach(function(btn) {
         var bc = btn.classList.contains('red') ? '#ef4444' : btn.classList.contains('blue') ? '#3b82f6' : '#1f2937';
         btn.classList.toggle('active', bc === color);
       });
