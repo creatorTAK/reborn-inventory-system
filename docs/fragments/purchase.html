@@ -6429,7 +6429,7 @@
       var debounceTimer = null;
       input.addEventListener('input', function(e) {
         var query = e.target.value.trim();
-        if (query.length < 1) { panel.hidden = true; panel.style.display = 'none'; return; }
+        if (query.length < 2) { panel.hidden = true; panel.style.display = 'none'; return; }
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(function() {
           var convertedQuery = purHiraganaToKatakana(query);
@@ -6441,8 +6441,12 @@
             else panel.classList.remove('suggest-above');
             panel.innerHTML = '';
             hits.forEach(function(hit) {
-              var div = document.createElement('div'); div.className = 'sug-item brand-item';
-              div.innerHTML = '<div class="brand-english">' + purEscapeHtml(hit.name || '') + '</div><div class="brand-kana">' + purEscapeHtml(hit.nameKana || '') + '</div>';
+              var div = document.createElement('div'); div.className = 'pur-sug-item brand-item';
+              div.innerHTML = '<div class="pur-brand-english">' + purEscapeHtml(hit.name || '') + '</div><div class="pur-brand-kana">' + purEscapeHtml(hit.nameKana || '') + '</div>';
+              div.addEventListener('mousemove', function() {
+                Array.from(panel.querySelectorAll('.pur-sug-item')).forEach(function(x) { x.classList.remove('active'); });
+                div.classList.add('active');
+              });
               div.addEventListener('mousedown', function(ev) { ev.preventDefault(); });
               div.addEventListener('click', function() {
                 input.value = hit.name || hit.nameKana || '';
@@ -6454,6 +6458,10 @@
             panel.hidden = false; panel.style.display = 'block';
           }).catch(function(error) { console.error('[Pur] Algolia検索エラー:', error); });
         }, 150);
+      });
+      input.addEventListener('focus', function() {
+        var query = this.value.trim();
+        if (query.length >= 2 && panel.innerHTML) { panel.hidden = false; panel.style.display = 'block'; }
       });
       input.addEventListener('blur', function() { setTimeout(function() { panel.hidden = true; panel.style.display = 'none'; }, 200); });
     }
@@ -6470,7 +6478,7 @@
       var debounceTimer = null;
       input.addEventListener('input', function(e) {
         var query = e.target.value.trim();
-        if (query.length < 1) { panel.hidden = true; panel.style.display = 'none'; return; }
+        if (query.length < 2) { panel.hidden = true; panel.style.display = 'none'; return; }
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(function() {
           var convertedQuery = purHiraganaToKatakana(query);
@@ -6482,14 +6490,19 @@
             else panel.classList.remove('suggest-above');
             panel.innerHTML = '';
             hits.forEach(function(brand) {
-              var div = document.createElement('div'); div.className = 'sug-item brand-item';
-              div.innerHTML = '<div class="brand-english">' + purEscapeHtml(brand.name || '') + '</div><div class="brand-kana">' + purEscapeHtml(brand.nameKana || '') + '</div>';
+              var div = document.createElement('div'); div.className = 'pur-sug-item brand-item';
+              div.innerHTML = '<div class="pur-brand-english">' + purEscapeHtml(brand.name || '') + '</div><div class="pur-brand-kana">' + purEscapeHtml(brand.nameKana || '') + '</div>';
+              div.addEventListener('mousemove', function() {
+                Array.from(panel.querySelectorAll('.pur-sug-item')).forEach(function(x) { x.classList.remove('active'); });
+                div.classList.add('active');
+              });
               div.addEventListener('mousedown', function(ev) { ev.preventDefault(); });
               div.addEventListener('click', function() {
                 input.value = brand.name || brand.nameKana || '';
                 var kanaInput = document.getElementById('pur-entry-brandKana-' + itemId);
                 if (kanaInput) kanaInput.value = brand.nameKana || '';
                 panel.hidden = true; panel.style.display = 'none'; input.blur();
+                purUpdateEntryItem(itemId);
               });
               panel.appendChild(div);
             });
@@ -6497,8 +6510,11 @@
           }).catch(function(error) { console.error('[Pur] ブランド検索エラー:', error); });
         }, 300);
       });
+      input.addEventListener('focus', function() {
+        var query = this.value.trim();
+        if (query.length >= 2 && panel.innerHTML) { panel.hidden = false; panel.style.display = 'block'; }
+      });
       input.addEventListener('blur', function() { setTimeout(function() { panel.hidden = true; panel.style.display = 'none'; }, 200); });
-      console.log('[Pur] ブランドサジェストアタッチ完了: ' + itemId);
     }
 
     // ============================================
