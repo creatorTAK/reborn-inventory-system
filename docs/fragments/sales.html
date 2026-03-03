@@ -804,7 +804,13 @@
 
         <!-- 商品ランキング -->
         <div class="sal-sales-table-container">
-          <h6 class="mb-3"><i class="bi bi-star"></i> 売上TOP商品</h6>
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h6 class="mb-0"><i class="bi bi-star"></i> TOP商品</h6>
+            <select class="form-select form-select-sm" style="width:auto;" id="sal-productRankingSort" onchange="salResortProductRanking()">
+              <option value="sales">売上順</option>
+              <option value="profit">利益順</option>
+            </select>
+          </div>
           <div class="table-responsive">
             <table class="sal-sales-table">
               <thead>
@@ -2464,11 +2470,32 @@
 
     var _sal_productRankingAll = [];
     var _sal_productRankingShowAll = false;
+    var _sal_productRankingRawData = [];
+
+    function salResortProductRanking() {
+      _sal_productRankingShowAll = false;
+      var sortKey = (document.getElementById('sal-productRankingSort') || {}).value || 'sales';
+      var field = sortKey === 'profit' ? 'finalProfit' : 'saleAmount';
+      _sal_productRankingAll = _sal_productRankingRawData.slice()
+        .sort(function(a, b) { return (b[field] || 0) - (a[field] || 0); });
+
+      var moreBtn = document.getElementById('sal-productRankingMore');
+      if (moreBtn) moreBtn.style.display = _sal_productRankingAll.length > 10 ? '' : 'none';
+      var text = document.getElementById('sal-productRankingMoreText');
+      if (text) text.textContent = 'もっと見る（全' + _sal_productRankingAll.length + '件）';
+      var icon = document.getElementById('sal-productRankingMoreIcon');
+      if (icon) icon.className = 'bi bi-chevron-down';
+
+      salRenderProductRankingRows(_sal_productRankingAll.slice(0, 10));
+    }
 
     function salRenderProductRanking(data) {
       _sal_productRankingShowAll = false;
-      _sal_productRankingAll = data.slice().filter(function(item) { return item.saleAmount > 0; })
-        .sort(function(a, b) { return (b.saleAmount || 0) - (a.saleAmount || 0); });
+      _sal_productRankingRawData = data.slice().filter(function(item) { return item.saleAmount > 0; });
+      var sortKey = (document.getElementById('sal-productRankingSort') || {}).value || 'sales';
+      var field = sortKey === 'profit' ? 'finalProfit' : 'saleAmount';
+      _sal_productRankingAll = _sal_productRankingRawData.slice()
+        .sort(function(a, b) { return (b[field] || 0) - (a[field] || 0); });
 
       var moreBtn = document.getElementById('sal-productRankingMore');
       if (moreBtn) moreBtn.style.display = _sal_productRankingAll.length > 10 ? '' : 'none';
