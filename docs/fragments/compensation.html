@@ -855,8 +855,28 @@
         var month = document.getElementById('comp-periodMonth').value;
 
         _compCompensationSettings = compGetCompensationSettings();
-        _compCurrentRecords = await compGetCompensationRecords(year, month);
-        console.log('[Comp SPA] 報酬記録取得:', _compCurrentRecords.length, '件');
+        var allRecords = await compGetCompensationRecords(year, month);
+
+        // 管理者(owner/admin)のレコードを除外
+        var staffEmails = [];
+        allRecords.forEach(function(r) {
+          var email = r.staffEmail;
+          if (email && staffEmails.indexOf(email) === -1) staffEmails.push(email);
+        });
+        var excludeEmails = {};
+        for (var i = 0; i < staffEmails.length; i++) {
+          try {
+            var uDoc = await window.firestoreGetDoc(window.firestoreDoc(window.firebaseDB, 'users', staffEmails[i]));
+            if (uDoc.exists()) {
+              var ud = uDoc.data();
+              if (ud.permissionId === 'owner' || ud.permissionId === 'admin' || ud.excludeFromCompensation === true) {
+                excludeEmails[staffEmails[i]] = true;
+              }
+            }
+          } catch (e) {}
+        }
+        _compCurrentRecords = allRecords.filter(function(r) { return !excludeEmails[r.staffEmail]; });
+        console.log('[Comp SPA] 報酬記録取得:', allRecords.length, '件（管理者除外後:', _compCurrentRecords.length, '件）');
 
         _compCurrentStaffStats = compCalculateStaffStatsFromRecords(_compCurrentRecords);
         _compCurrentPayments = await compGetPaymentRecords(year);
