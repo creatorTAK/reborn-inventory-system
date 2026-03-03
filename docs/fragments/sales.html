@@ -809,6 +809,8 @@
             <select class="form-select form-select-sm" style="width:auto;" id="sal-productRankingSort" onchange="salResortProductRanking()">
               <option value="sales">売上順</option>
               <option value="profit">利益順</option>
+              <option value="profitRate">利益率順</option>
+              <option value="turnover">回転率順</option>
             </select>
           </div>
           <div class="table-responsive">
@@ -2472,12 +2474,27 @@
     var _sal_productRankingShowAll = false;
     var _sal_productRankingRawData = [];
 
+    function salCalcDaysToSell(item) {
+      if (!item.listingDate || !item.saleDate) return 9999;
+      var days = Math.floor((new Date(item.saleDate) - new Date(item.listingDate)) / (1000 * 60 * 60 * 24));
+      return days >= 0 ? days : 9999;
+    }
+
+    function salSortProductRankingData(dataArr, sortKey) {
+      return dataArr.slice().sort(function(a, b) {
+        switch (sortKey) {
+          case 'profit': return (b.finalProfit || 0) - (a.finalProfit || 0);
+          case 'profitRate': return (b.profitRate || 0) - (a.profitRate || 0);
+          case 'turnover': return salCalcDaysToSell(a) - salCalcDaysToSell(b);
+          default: return (b.saleAmount || 0) - (a.saleAmount || 0);
+        }
+      });
+    }
+
     function salResortProductRanking() {
       _sal_productRankingShowAll = false;
       var sortKey = (document.getElementById('sal-productRankingSort') || {}).value || 'sales';
-      var field = sortKey === 'profit' ? 'finalProfit' : 'saleAmount';
-      _sal_productRankingAll = _sal_productRankingRawData.slice()
-        .sort(function(a, b) { return (b[field] || 0) - (a[field] || 0); });
+      _sal_productRankingAll = salSortProductRankingData(_sal_productRankingRawData, sortKey);
 
       var moreBtn = document.getElementById('sal-productRankingMore');
       if (moreBtn) moreBtn.style.display = _sal_productRankingAll.length > 10 ? '' : 'none';
@@ -2493,9 +2510,7 @@
       _sal_productRankingShowAll = false;
       _sal_productRankingRawData = data.slice().filter(function(item) { return item.saleAmount > 0; });
       var sortKey = (document.getElementById('sal-productRankingSort') || {}).value || 'sales';
-      var field = sortKey === 'profit' ? 'finalProfit' : 'saleAmount';
-      _sal_productRankingAll = _sal_productRankingRawData.slice()
-        .sort(function(a, b) { return (b[field] || 0) - (a[field] || 0); });
+      _sal_productRankingAll = salSortProductRankingData(_sal_productRankingRawData, sortKey);
 
       var moreBtn = document.getElementById('sal-productRankingMore');
       if (moreBtn) moreBtn.style.display = _sal_productRankingAll.length > 10 ? '' : 'none';
@@ -2521,11 +2536,23 @@
     function salRenderProductRankingRows(sorted) {
       var tbody = document.getElementById('sal-productRankingBody');
       var chartWrap = document.getElementById('sal-productChartWrap');
+      var sortKey = (document.getElementById('sal-productRankingSort') || {}).value || 'sales';
+      var isTurnover = sortKey === 'turnover';
+      var isProfitRate = sortKey === 'profitRate';
+      var colCount = isTurnover ? 6 : (isProfitRate ? 6 : 5);
+
       if (sorted.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">データがありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="' + colCount + '" class="text-center text-muted py-3">データがありません</td></tr>';
         if (_sal_productChart) { _sal_productChart.destroy(); _sal_productChart = null; }
         if (chartWrap) chartWrap.style.display = 'none';
         return;
+      }
+
+      // Update table header
+      var thead = tbody.parentElement.querySelector('thead tr');
+      if (thead) {
+        var extraTh = isTurnover ? '<th class="text-end">日数</th>' : (isProfitRate ? '<th class="text-end">利益率</th>' : '');
+        thead.innerHTML = '<th>#</th><th colspan="2">商品</th><th class="text-end">売上</th><th class="text-end">利益</th>' + extraTh;
       }
 
       // Build product lookup for images
@@ -2541,11 +2568,18 @@
           ? '<img src="' + imgUrl + '" style="width:32px;height:32px;object-fit:cover;border-radius:4px;vertical-align:middle;" loading="lazy">'
           : '<span style="display:inline-block;width:32px;height:32px;background:#e5e7eb;border-radius:4px;vertical-align:middle;"></span>';
         var mgtNo = item.managementNumber ? '<br><small class="text-muted">' + salEscapeHtml(item.managementNumber) + '</small>' : '';
+        var extraTd = '';
+        if (isTurnover) {
+          var days = salCalcDaysToSell(item);
+          extraTd = '<td class="text-end">' + (days < 9999 ? days + '日' : '-') + '</td>';
+        } else if (isProfitRate) {
+          extraTd = '<td class="text-end">' + (item.profitRate || 0).toFixed(1) + '%</td>';
+        }
         html += '<tr><td>' + (index + 1) + '</td>' +
           '<td style="width:40px;">' + imgHtml + '</td>' +
           '<td><span style="font-size:13px;">' + salEscapeHtml(item.productName || '-') + '</span>' + mgtNo + '</td>' +
           '<td class="text-end">' + salFormatCurrency(item.saleAmount) + '</td>' +
-          '<td class="text-end ' + (item.finalProfit >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatCurrency(item.finalProfit) + '</td></tr>';
+          '<td class="text-end ' + (item.finalProfit >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatCurrency(item.finalProfit) + '</td>' + extraTd + '</tr>';
       });
       tbody.innerHTML = html;
 
@@ -2556,23 +2590,35 @@
       if (!canvas || typeof Chart === 'undefined') return;
       if (chartWrap) { chartWrap.style.display = 'block'; chartWrap.style.height = Math.max(150, chartData.length * 36 + 40) + 'px'; }
       var labels = chartData.map(function(_, i) { return '#' + (i + 1); });
+
+      var datasets, xScale, tooltipLabel;
+      if (isTurnover) {
+        datasets = [{ label: '販売日数', data: chartData.map(function(item) { var d = salCalcDaysToSell(item); return d < 9999 ? d : 0; }), backgroundColor: 'rgba(245, 158, 11, 0.7)', borderColor: 'rgba(245, 158, 11, 1)', borderWidth: 1 }];
+        xScale = { beginAtZero: true, ticks: { callback: function(v) { return v + '日'; } } };
+        tooltipLabel = function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x + '日'; };
+      } else if (isProfitRate) {
+        datasets = [{ label: '利益率', data: chartData.map(function(item) { return item.profitRate || 0; }), backgroundColor: 'rgba(139, 92, 246, 0.7)', borderColor: 'rgba(139, 92, 246, 1)', borderWidth: 1 }];
+        xScale = { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; } } };
+        tooltipLabel = function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + '%'; };
+      } else {
+        datasets = [
+          { label: '売上', data: chartData.map(function(item) { return item.saleAmount || 0; }), backgroundColor: 'rgba(59, 130, 246, 0.7)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 1 },
+          { label: '利益', data: chartData.map(function(item) { return item.finalProfit || 0; }), backgroundColor: 'rgba(16, 185, 129, 0.7)', borderColor: 'rgba(16, 185, 129, 1)', borderWidth: 1 }
+        ];
+        xScale = { beginAtZero: true, ticks: { callback: function(v) { return '¥' + v.toLocaleString(); } } };
+        tooltipLabel = function(ctx) { return ctx.dataset.label + ': ¥' + ctx.parsed.x.toLocaleString(); };
+      }
+
       _sal_productChart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [
-            { label: '売上', data: chartData.map(function(item) { return item.saleAmount || 0; }), backgroundColor: 'rgba(59, 130, 246, 0.7)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 1 },
-            { label: '利益', data: chartData.map(function(item) { return item.finalProfit || 0; }), backgroundColor: 'rgba(16, 185, 129, 0.7)', borderColor: 'rgba(16, 185, 129, 1)', borderWidth: 1 }
-          ]
-        },
+        data: { labels: labels, datasets: datasets },
         options: {
           indexAxis: 'y', responsive: true, maintainAspectRatio: false,
           plugins: {
             legend: { position: 'top' },
-            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ¥' + ctx.parsed.x.toLocaleString(); },
-              title: function(ctx) { var i = ctx[0].dataIndex; return (chartData[i].productName || '-'); } } }
+            tooltip: { callbacks: { label: tooltipLabel, title: function(ctx) { var i = ctx[0].dataIndex; return (chartData[i].productName || '-'); } } }
           },
-          scales: { x: { beginAtZero: true, ticks: { callback: function(v) { return '¥' + v.toLocaleString(); } } } }
+          scales: { x: xScale }
         }
       });
     }
