@@ -6045,7 +6045,10 @@
     function purClearBatchDamageMarker() {
       var state = purGetCurrentBatchState(); if (!state) return;
       if (!confirm('描いた内容をすべて消去しますか？')) return;
-      state.objects = []; state.selectedObject = null; purHideBatchObjectControls(); purSaveBatchMarkerHistory(); purRenderBatchDamageMarker();
+      state.objects = []; state.selectedObject = null;
+      var noteEl = document.getElementById('pur-batch-damage-marker-note-text');
+      if (noteEl) noteEl.value = '';
+      purHideBatchObjectControls(); purSaveBatchMarkerHistory(); purRenderBatchDamageMarker();
     }
     function purUndoBatchDamageMarker() {
       var state = purGetCurrentBatchState(); if (!state || state.historyIndex <= 0) return;
@@ -6097,7 +6100,17 @@
     }
     function purDeleteBatchSelectedObject() {
       var state = purGetCurrentBatchState(); if (!state || state.selectedObject === null) return;
+      var deletedObj = state.objects[state.selectedObject];
       state.objects.splice(state.selectedObject, 1); state.selectedObject = null;
+      // 円マーカー削除時、対応する番号をノートから除去
+      if (deletedObj && deletedObj.type === 'circle' && deletedObj.number) {
+        var noteEl = document.getElementById('pur-batch-damage-marker-note-text');
+        if (noteEl) {
+          var cn = purGetCircledNumber(deletedObj.number);
+          var lines = noteEl.value.split('\n').filter(function(line) { return line.trim().indexOf(cn) !== 0; });
+          noteEl.value = lines.join('\n').trim();
+        }
+      }
       purHideBatchObjectControls(); purSaveBatchMarkerHistory(); purRenderBatchDamageMarker();
     }
 
@@ -6346,7 +6359,10 @@
     function purClearDamageMarker(itemId) {
       var state = purGetCurrentItemState(itemId); if (!state) return;
       if (!confirm('描いた内容をすべて消去しますか？')) return;
-      state.objects = []; state.selectedObject = null; purHideItemObjectControls(itemId); purSaveItemMarkerHistory(itemId); purRenderDamageMarker(itemId);
+      state.objects = []; state.selectedObject = null;
+      var noteEl = document.getElementById('pur-damage-marker-note-text-' + itemId);
+      if (noteEl) noteEl.value = '';
+      purHideItemObjectControls(itemId); purSaveItemMarkerHistory(itemId); purRenderDamageMarker(itemId);
     }
     function purUndoDamageMarker(itemId) {
       var state = purGetCurrentItemState(itemId); if (!state || state.historyIndex <= 0) return;
@@ -6374,7 +6390,17 @@
     }
     function purDeleteSelectedObject(itemId) {
       var state = purGetCurrentItemState(itemId); if (!state || state.selectedObject === null) return;
+      var deletedObj = state.objects[state.selectedObject];
       state.objects.splice(state.selectedObject, 1); state.selectedObject = null;
+      // 円マーカー削除時、対応する番号をノートから除去
+      if (deletedObj && deletedObj.type === 'circle' && deletedObj.number) {
+        var noteEl = document.getElementById('pur-damage-marker-note-text-' + itemId);
+        if (noteEl) {
+          var cn = purGetCircledNumber(deletedObj.number);
+          var lines = noteEl.value.split('\n').filter(function(line) { return line.trim().indexOf(cn) !== 0; });
+          noteEl.value = lines.join('\n').trim();
+        }
+      }
       purHideItemObjectControls(itemId); purSaveItemMarkerHistory(itemId); purRenderDamageMarker(itemId);
     }
     function purSaveDamageMarker(itemId) {
