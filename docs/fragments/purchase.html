@@ -3758,7 +3758,7 @@
     // ============================================
     // Individual entry items
     // ============================================
-    function purAddEntryItem(skipScroll) {
+    function purAddEntryItem(skipScroll, skipDefaults) {
       var itemId = 'item-' + _pur_entryItemNextId++;
       var defDate = (document.getElementById('pur-defaultPurchaseDate') ? document.getElementById('pur-defaultPurchaseDate').value : '') || purGetJSTToday();
       var defSupplier = document.getElementById('pur-defaultSupplier') ? document.getElementById('pur-defaultSupplier').value : '';
@@ -3867,8 +3867,8 @@
       // ブランドサジェスト初期化
       if (window.algoliaBrandModulesLoaded) purAttachEntryBrandSuggest(itemId);
 
-      // デフォルト検品情報を適用
-      purApplyDefaultInspectionToItem(itemId);
+      // デフォルト検品情報を適用（復元時はスキップ）
+      if (!skipDefaults) purApplyDefaultInspectionToItem(itemId);
 
       purCollapseAllEntryItems();
       itemEl.classList.remove('collapsed');
@@ -5188,8 +5188,10 @@
     }
 
     function purManualSaveEntryDraft() {
-      // 全アイテムのDOM値をJS変数に同期してから保存
+      // 全アイテムのDOM値をJS変数に同期してから保存（touchedは変えない）
+      _pur_applyingDefaults = true;
       _pur_entryItems.forEach(function(item) { purUpdateEntryItem(item.id); });
+      _pur_applyingDefaults = false;
       purSaveEntryDraft(true);
       // フィードバック表示
       var btn = event && event.currentTarget;
@@ -5284,20 +5286,20 @@
       var container = document.getElementById('pur-entryItemsContainer');
       if (container) container.innerHTML = '';
       draft.items.forEach(function(savedItem) {
-        purAddEntryItem(true);
+        purAddEntryItem(true, true);
         var item = _pur_entryItems[_pur_entryItems.length - 1];
         var newId = item.id;
         Object.keys(savedItem).forEach(function(key) { if (key !== 'id') item[key] = savedItem[key]; });
         item.id = newId;
         // 仕入4項目のDOM反映
         var dateEl = document.getElementById('pur-entry-purchaseDate-' + newId);
-        if (dateEl && item.purchaseDate) dateEl.value = item.purchaseDate;
+        if (dateEl) dateEl.value = item.purchaseDate || '';
         var amtEl = document.getElementById('pur-entry-amount-' + newId);
-        if (amtEl && item.amount) amtEl.value = item.amount;
+        if (amtEl) amtEl.value = item.amount || '';
         var supEl = document.getElementById('pur-entry-supplier-' + newId);
-        if (supEl && item.supplier) supEl.value = item.supplier;
+        if (supEl) supEl.value = item.supplier || '';
         var assEl = document.getElementById('pur-entry-assignee-' + newId);
-        if (assEl && item.assignee) assEl.value = item.assignee;
+        if (assEl) assEl.value = item.assignee || '';
         // カテゴリカスケード復元
         if (item.catL0) {
           var catL0El = document.getElementById('pur-entry-cat-l0-' + newId);
@@ -5323,32 +5325,22 @@
           var catL5El = document.getElementById('pur-entry-cat-l5-' + newId);
           if (catL5El) { catL5El.value = item.catL5; purOnEntryCatL5Changed(newId); }
         }
+        purRefreshEntryItems(newId);
         if (item.catItem) {
           var catItemEl = document.getElementById('pur-entry-cat-item-' + newId);
           if (catItemEl) catItemEl.value = item.catItem;
         }
         // サイズ・状態・ブランド・メモのDOM反映
-        if (item.size) {
-          var sizeEl = document.getElementById('pur-entry-size-' + newId);
-          if (sizeEl) sizeEl.value = item.size;
-        }
-        if (item.condition) {
-          var condEl = document.getElementById('pur-entry-condition-' + newId);
-          if (condEl) condEl.value = item.condition;
-          purOnEntryConditionChanged(newId);
-        }
-        if (item.brand) {
-          var brandEl = document.getElementById('pur-entry-brand-' + newId);
-          if (brandEl) brandEl.value = item.brand;
-        }
-        if (item.brandKana) {
-          var brandKanaEl = document.getElementById('pur-entry-brandKana-' + newId);
-          if (brandKanaEl) brandKanaEl.value = item.brandKana;
-        }
-        if (item.memo) {
-          var memoEl = document.getElementById('pur-entry-memo-' + newId);
-          if (memoEl) memoEl.value = item.memo;
-        }
+        var sizeEl = document.getElementById('pur-entry-size-' + newId);
+        if (sizeEl) sizeEl.value = item.size || '';
+        var condEl = document.getElementById('pur-entry-condition-' + newId);
+        if (condEl) { condEl.value = item.condition || ''; purOnEntryConditionChanged(newId); }
+        var brandEl = document.getElementById('pur-entry-brand-' + newId);
+        if (brandEl) brandEl.value = item.brand || '';
+        var brandKanaEl = document.getElementById('pur-entry-brandKana-' + newId);
+        if (brandKanaEl) brandKanaEl.value = item.brandKana || '';
+        var memoEl = document.getElementById('pur-entry-memo-' + newId);
+        if (memoEl) memoEl.value = item.memo || '';
         // 付属品チェックボックスの復元
         if (item.accessories && item.accessories.length > 0) {
           var accContainer = document.getElementById('pur-entry-accessories-' + newId);
@@ -5360,10 +5352,8 @@
             if (item.accessories.indexOf('その他') >= 0) {
               var otherContainer = document.getElementById('pur-entry-accessory-other-container-' + newId);
               if (otherContainer) otherContainer.style.display = 'block';
-              if (item.accessoryOther) {
-                var otherInput = document.getElementById('pur-entry-accessory-other-' + newId);
-                if (otherInput) otherInput.value = item.accessoryOther;
-              }
+              var otherInput = document.getElementById('pur-entry-accessory-other-' + newId);
+              if (otherInput) otherInput.value = item.accessoryOther || '';
             }
           }
         }
