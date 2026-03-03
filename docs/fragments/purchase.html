@@ -1770,6 +1770,14 @@
               <div class="pur-suggest" id="pur-suggest-default-brand" hidden></div>
               <input type="hidden" id="pur-defaultBrandKana">
             </div>
+            <div class="mt-2">
+              <label class="form-label">付属品</label>
+              <div class="pur-accessories-checkboxes" id="pur-default-accessories"></div>
+            </div>
+            <div class="mt-2">
+              <label class="form-label">メモ</label>
+              <input type="text" class="form-control" id="pur-defaultMemo" placeholder="備考" onchange="purApplyDefaultCategoryToAllItems()">
+            </div>
           </div>
         </div>
 
@@ -3638,6 +3646,35 @@
       }
       // ブランドサジェスト
       if (window.algoliaBrandModulesLoaded) purAttachDefaultBrandSuggest();
+      // デフォルト付属品チェックボックス
+      purInitDefaultAccessories();
+    }
+
+    function purInitDefaultAccessories() {
+      var container = document.getElementById('pur-default-accessories');
+      if (!container) return;
+      var list = purGetAccessoriesList();
+      var html = '';
+      list.forEach(function(acc) {
+        html += '<label class="pur-accessory-checkbox"><input type="checkbox" value="' + purEscapeHtml(acc) + '" onchange="purUpdateDefaultAccessoryCheckbox(this)"> ' + purEscapeHtml(acc) + '</label>';
+      });
+      html += '<label class="pur-accessory-checkbox"><input type="checkbox" value="その他" onchange="purUpdateDefaultAccessoryCheckbox(this)"> その他</label>';
+      container.innerHTML = html;
+    }
+
+    function purUpdateDefaultAccessoryCheckbox(checkbox) {
+      var label = checkbox.closest('.pur-accessory-checkbox');
+      if (checkbox.checked) label.classList.add('checked');
+      else label.classList.remove('checked');
+      purApplyDefaultCategoryToAllItems();
+    }
+
+    function purGetDefaultAccessories() {
+      var container = document.getElementById('pur-default-accessories');
+      if (!container) return [];
+      var checked = [];
+      container.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) { checked.push(cb.value); });
+      return checked;
     }
 
     var _pur_defaultAccessories = ['箱', '保存袋', '保証書', 'ギャランティカード', 'タグ'];
@@ -4200,6 +4237,8 @@
       var defCondition = (document.getElementById('pur-defaultCondition') || {}).value || '';
       var defBrand = (document.getElementById('pur-defaultBrand') || {}).value || '';
       var defBrandKana = (document.getElementById('pur-defaultBrandKana') || {}).value || '';
+      var defAccessories = purGetDefaultAccessories();
+      var defMemo = (document.getElementById('pur-defaultMemo') || {}).value || '';
 
       _pur_applyingDefaults = true;
       _pur_entryItems.forEach(function(item) {
@@ -4230,6 +4269,20 @@
           // ブランド
           if (defBrand) { var b = document.getElementById('pur-entry-brand-' + id); if (b) b.value = defBrand; }
           if (defBrandKana) { var bk = document.getElementById('pur-entry-brandKana-' + id); if (bk) bk.value = defBrandKana; }
+          // 付属品
+          if (defAccessories.length > 0) {
+            var accContainer = document.getElementById('pur-entry-accessories-' + id);
+            if (accContainer) {
+              accContainer.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+                var shouldCheck = defAccessories.indexOf(cb.value) >= 0;
+                cb.checked = shouldCheck;
+                var lbl = cb.closest('.pur-accessory-checkbox');
+                if (lbl) { if (shouldCheck) lbl.classList.add('checked'); else lbl.classList.remove('checked'); }
+              });
+            }
+          }
+          // メモ
+          if (defMemo) { var m = document.getElementById('pur-entry-memo-' + id); if (m) m.value = defMemo; }
           purUpdateEntryItem(id);
         } catch(e) { console.error('[purApplyDefaultCategoryToAllItems] item=' + item.id, e); }
       });
@@ -4306,7 +4359,26 @@
           var el = document.getElementById('pur-entry-brandKana-' + itemId);
           if (el) el.value = defBrandKana;
         }
-        // 8. DOM値をJS配列に同期
+        // 8. 付属品
+        var defAccessories = purGetDefaultAccessories();
+        if (defAccessories.length > 0) {
+          var accContainer = document.getElementById('pur-entry-accessories-' + itemId);
+          if (accContainer) {
+            accContainer.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+              var shouldCheck = defAccessories.indexOf(cb.value) >= 0;
+              cb.checked = shouldCheck;
+              var lbl = cb.closest('.pur-accessory-checkbox');
+              if (lbl) { if (shouldCheck) lbl.classList.add('checked'); else lbl.classList.remove('checked'); }
+            });
+          }
+        }
+        // 9. メモ
+        var defMemo = (document.getElementById('pur-defaultMemo') || {}).value || '';
+        if (defMemo) {
+          var el = document.getElementById('pur-entry-memo-' + itemId);
+          if (el) el.value = defMemo;
+        }
+        // 10. DOM値をJS配列に同期
         purUpdateEntryItem(itemId);
       } catch(e) {
         console.error('[purApplyDefaultInspectionToItem] エラー:', e);
