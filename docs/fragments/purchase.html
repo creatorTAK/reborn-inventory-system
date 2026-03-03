@@ -2617,6 +2617,7 @@
     var _pur_entryAssigneesData = [];
     var _pur_currentEntryMode = 'individual';
     var _pur_entryItems = [];
+    var _pur_applyingDefaults = false;
     var _pur_entryCategoryRows = [];
     var _pur_entryMasterOptions = {};
     var _pur_entryGeneratedQRData = [];
@@ -3927,6 +3928,7 @@
         if (otherInput && checked.indexOf('その他') >= 0) item.accessoryOther = otherInput.value;
         else item.accessoryOther = '';
       }
+      if (!_pur_applyingDefaults) item.touched = true;
       purUpdateEntryItemSummary(itemId);
       purUpdateEntryTotal();
       purSaveEntryDraft();
@@ -3986,7 +3988,7 @@
       var total = 0, count = 0, completed = 0;
       _pur_entryItems.forEach(function(i) {
         total += i.amount || 0; count++;
-        if (i.purchaseDate && i.supplier && i.assignee && i.amount && i.catL0) completed++;
+        if (i.touched && i.purchaseDate && i.supplier && i.assignee && i.amount && i.catL0) completed++;
       });
       var valEl = document.getElementById('pur-entryTotalValue');
       var cntEl = document.getElementById('pur-entryTotalCount');
@@ -4004,7 +4006,7 @@
     }
 
     function purScrollToNextIncomplete() {
-      var item = _pur_entryItems.find(function(i) { return !(i.purchaseDate && i.supplier && i.assignee && i.amount && i.catL0); });
+      var item = _pur_entryItems.find(function(i) { return !(i.touched && i.purchaseDate && i.supplier && i.assignee && i.amount && i.catL0); });
       if (!item) return;
       var el = document.getElementById('pur-entry-item-' + item.id);
       if (!el) return;
@@ -4243,7 +4245,9 @@
           var elBrandKana = document.getElementById('pur-entry-brandKana-' + id);
           if (elBrandKana) elBrandKana.value = defBrandKana;
         }
+        _pur_applyingDefaults = true;
         purUpdateEntryItem(id);
+        _pur_applyingDefaults = false;
       });
     }
 
@@ -4305,6 +4309,10 @@
         var elBrandKana = document.getElementById('pur-entry-brandKana-' + itemId);
         if (elBrandKana) elBrandKana.value = defBrandKana;
       }
+      // DOM値をJS配列に同期（touchedは付けない）
+      _pur_applyingDefaults = true;
+      purUpdateEntryItem(itemId);
+      _pur_applyingDefaults = false;
     }
 
     // Batch category cascade
