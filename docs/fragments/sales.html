@@ -1458,7 +1458,7 @@
 
       var html = '';
       _sal_currentSalesData.forEach(function(item) {
-        var paymentBadge = salGetPaymentBadge(item.paymentStatus, item.id);
+        var paymentBadge = salGetPaymentBadge(item.paymentStatus);
         var isCancelled = item.paymentStatus === 'cancelled';
         var rowClass = isCancelled ? 'sal-row-cancelled' : '';
         html += '<tr class="' + rowClass + '">' +
@@ -1475,18 +1475,7 @@
       tbody.innerHTML = html;
     }
 
-    function salGetPaymentBadge(status, productId) {
-      if (productId) {
-        switch (status) {
-          case 'paid':
-            return '<span class="sal-status-badge sal-status-paid" onclick="salOnBadgeClick(\'' + productId + '\', \'paid\')">取引完了</span>';
-          case 'cancelled':
-            return '<span class="sal-status-badge sal-status-cancelled" onclick="salOnBadgeClick(\'' + productId + '\', \'cancelled\')">キャンセル</span>';
-          case 'partial':
-          default:
-            return '<span class="sal-status-badge sal-status-unpaid" onclick="salOnBadgeClick(\'' + productId + '\', \'unpaid\')">取引中</span>';
-        }
-      }
+    function salGetPaymentBadge(status) {
       switch (status) {
         case 'paid': return '<span class="sal-status-badge sal-status-paid">取引完了</span>';
         case 'cancelled': return '<span class="sal-status-badge sal-status-cancelled">キャンセル</span>';
@@ -1504,22 +1493,6 @@
       }
     }
 
-    // バッジタップ時の処理
-    function salOnBadgeClick(productId, currentStatus) {
-      if (currentStatus === 'unpaid' || currentStatus === 'partial') {
-        // 取引中 → 選択肢: 取引完了 or キャンセル
-        var choice = prompt('操作を選択してください:\n1 = 取引完了\n2 = キャンセル\n\n番号を入力:');
-        if (choice === '1') {
-          salCompleteTransaction(productId);
-        } else if (choice === '2') {
-          salOpenCancelModal(productId);
-        }
-      } else if (currentStatus === 'paid' || currentStatus === 'cancelled') {
-        // 取引完了/キャンセル → 取引中に戻す
-        salRevertTransaction(productId);
-      }
-    }
-
     // 取引完了（ワンタップ）
     function salCompleteTransaction(productId) {
       if (!confirm('取引完了にしますか？')) return;
@@ -1528,18 +1501,6 @@
         salLoadSalesData();
       }).catch(function(error) {
         console.error('[Sal SPA] 取引完了エラー:', error);
-        alert('更新に失敗しました: ' + error.message);
-      }).finally(function() { salHideLoading(); });
-    }
-
-    // 取引中に戻す（ワンタップ）
-    function salRevertTransaction(productId) {
-      if (!confirm('取引中に戻しますか？')) return;
-      salShowLoading();
-      salUpdatePaymentStatus(productId, { status: 'unpaid', cancelReason: '', cancelCost: 0 }).then(function() {
-        salLoadSalesData();
-      }).catch(function(error) {
-        console.error('[Sal SPA] 取引戻しエラー:', error);
         alert('更新に失敗しました: ' + error.message);
       }).finally(function() { salHideLoading(); });
     }
