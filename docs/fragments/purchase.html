@@ -1713,6 +1713,40 @@
               <input type="number" class="form-control" id="pur-defaultAmount" min="0" placeholder="0" onchange="purApplyDefaultToAllItems('amount')">
             </div>
           </div>
+          <div class="pur-inspection-section mt-2">
+            <div class="pur-inspection-section-header" onclick="var f=this.nextElementSibling;f.style.display=f.style.display==='none'?'grid':'none';">
+              <i class="bi bi-clipboard-check"></i><span>検品デフォルト</span><small class="text-muted ms-1" style="font-weight:400;font-size:0.7rem;">（変更すると全商品に反映）</small><i class="bi bi-chevron-down pur-toggle-icon"></i>
+            </div>
+            <div class="pur-inspection-fields" style="display:none;">
+              <div class="pur-inspection-category-selects">
+                <label class="form-label">カテゴリー</label>
+                <select class="form-select" id="pur-default-cat-l0" onchange="purOnDefaultCatL0Changed()"><option value="">--選択してください--</option></select>
+                <select class="form-select" id="pur-default-cat-l1" onchange="purOnDefaultCatL1Changed()" disabled><option value="">--選択してください--</option></select>
+                <select class="form-select" id="pur-default-cat-l2" onchange="purOnDefaultCatL2Changed()" disabled><option value="">--選択してください--</option></select>
+                <select class="form-select" id="pur-default-cat-l3" onchange="purOnDefaultCatL3Changed()" disabled><option value="">--選択してください--</option></select>
+                <select class="form-select" id="pur-default-cat-l4" onchange="purOnDefaultCatL4Changed()" disabled style="display:none;"><option value="">--選択してください--</option></select>
+                <select class="form-select" id="pur-default-cat-l5" onchange="purOnDefaultCatL5Changed()" disabled style="display:none;"><option value="">--選択してください--</option></select>
+              </div>
+              <div class="pur-inspection-category-selects">
+                <label class="form-label">アイテム名</label>
+                <select class="form-select" id="pur-default-cat-item" disabled><option value="">--選択してください--</option></select>
+              </div>
+              <div>
+                <label class="form-label">サイズ</label>
+                <select class="form-select" id="pur-defaultSize"><option value="">--選択--</option></select>
+              </div>
+              <div>
+                <label class="form-label">商品の状態</label>
+                <select class="form-select" id="pur-defaultCondition"><option value="">--選択--</option></select>
+              </div>
+              <div class="pur-brand-field">
+                <label class="form-label">ブランド</label>
+                <input type="text" class="form-control" id="pur-defaultBrand" autocomplete="off" placeholder="入力すると候補が表示されます">
+                <div class="pur-suggest" id="pur-suggest-default-brand" hidden></div>
+                <input type="hidden" id="pur-defaultBrandKana">
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="mb-3">
@@ -3509,6 +3543,8 @@
       purInitBatchSizeCondition();
       // 付属品
       purInitBatchAccessories();
+      // デフォルト検品ドロップダウン初期化
+      purInitDefaultInspectionDropdowns();
       // 個別入力商品のプルダウンも更新
       purUpdateAllEntryItemSuppliers();
       purUpdateAllEntryItemAssignees();
@@ -3529,6 +3565,36 @@
       if (conditionSelect && _pur_entryMasterOptions.conditions) {
         purFillSelectSafe(conditionSelect, _pur_entryMasterOptions.conditions);
       }
+    }
+
+    function purInitDefaultInspectionDropdowns() {
+      // カテゴリL0
+      var l0Values = purUniqKeepOrder(_pur_entryCategoryRows.map(function(r) { return r['\u7279\u5927\u5206\u985e']; }));
+      purFillSelectSafe(document.getElementById('pur-default-cat-l0'), l0Values);
+      // サイズ
+      var defSizeSelect = document.getElementById('pur-defaultSize');
+      if (defSizeSelect && _pur_entryMasterOptions.sizes) {
+        var current = defSizeSelect.value;
+        defSizeSelect.innerHTML = '<option value="">--選択--</option>';
+        _pur_entryMasterOptions.sizes.forEach(function(s) {
+          var opt = document.createElement('option'); opt.value = s; opt.textContent = s;
+          defSizeSelect.appendChild(opt);
+        });
+        if (current) defSizeSelect.value = current;
+      }
+      // 商品の状態
+      var defCondSelect = document.getElementById('pur-defaultCondition');
+      if (defCondSelect && _pur_entryMasterOptions.conditions) {
+        var currentCond = defCondSelect.value;
+        defCondSelect.innerHTML = '<option value="">--選択--</option>';
+        _pur_entryMasterOptions.conditions.forEach(function(c) {
+          var opt = document.createElement('option'); opt.value = c; opt.textContent = c;
+          defCondSelect.appendChild(opt);
+        });
+        if (currentCond) defCondSelect.value = currentCond;
+      }
+      // ブランドサジェスト
+      if (window.algoliaBrandModulesLoaded) purAttachDefaultBrandSuggest();
     }
 
     function purInitBatchAccessories() {
@@ -3744,6 +3810,9 @@
       // ブランドサジェスト初期化
       if (window.algoliaBrandModulesLoaded) purAttachEntryBrandSuggest(itemId);
 
+      // デフォルト検品情報を適用
+      purApplyDefaultInspectionToItem(itemId);
+
       purCollapseAllEntryItems();
       itemEl.classList.remove('collapsed');
       itemEl.classList.add('expanded');
@@ -3914,6 +3983,215 @@
       if (l5) filtered = filtered.filter(function(r) { return r['\u7d30\u5206\u985e2'] === l5.trim(); });
       var items = purUniqKeepOrder(filtered.map(function(r) { return r['\u30a2\u30a4\u30c6\u30e0\u540d']; }));
       purFillSelectSafe(document.getElementById('pur-entry-cat-item-' + itemId), items);
+    }
+
+    // Default inspection cascade (for individual entry defaults)
+    function purOnDefaultCatL0Changed() {
+      var v = document.getElementById('pur-default-cat-l0').value.trim();
+      ['l1','l2','l3','l4','l5'].forEach(function(s) { purResetEntrySelect('pur-default-cat-' + s); });
+      purResetEntrySelect('pur-default-cat-item', false);
+      if (!v) { purApplyDefaultCategoryToAllItems(); return; }
+      var l1s = purUniqKeepOrder(_pur_entryCategoryRows.filter(function(r) { return r['\u7279\u5927\u5206\u985e']===v; }).map(function(r) { return r['\u5927\u5206\u985e']; }));
+      purFillSelectSafe(document.getElementById('pur-default-cat-l1'), l1s);
+      purApplyDefaultCategoryToAllItems();
+    }
+    function purOnDefaultCatL1Changed() {
+      var l0 = document.getElementById('pur-default-cat-l0').value.trim();
+      var v = document.getElementById('pur-default-cat-l1').value.trim();
+      ['l2','l3','l4','l5'].forEach(function(s) { purResetEntrySelect('pur-default-cat-' + s); });
+      purResetEntrySelect('pur-default-cat-item', false);
+      if (!v) { purApplyDefaultCategoryToAllItems(); return; }
+      var l2s = purUniqKeepOrder(_pur_entryCategoryRows.filter(function(r) { return r['\u7279\u5927\u5206\u985e']===l0 && r['\u5927\u5206\u985e']===v; }).map(function(r) { return r['\u4e2d\u5206\u985e']; }));
+      purFillSelectSafe(document.getElementById('pur-default-cat-l2'), l2s);
+      purApplyDefaultCategoryToAllItems();
+    }
+    function purOnDefaultCatL2Changed() {
+      var l0 = document.getElementById('pur-default-cat-l0').value.trim();
+      var l1 = document.getElementById('pur-default-cat-l1').value.trim();
+      var v = document.getElementById('pur-default-cat-l2').value.trim();
+      ['l3','l4','l5'].forEach(function(s) { purResetEntrySelect('pur-default-cat-' + s); });
+      purResetEntrySelect('pur-default-cat-item', false);
+      if (!v) { purApplyDefaultCategoryToAllItems(); return; }
+      var l3s = purUniqKeepOrder(_pur_entryCategoryRows.filter(function(r) { return r['\u7279\u5927\u5206\u985e']===l0 && r['\u5927\u5206\u985e']===l1 && r['\u4e2d\u5206\u985e']===v; }).map(function(r) { return r['\u5c0f\u5206\u985e']; }));
+      purFillSelectSafe(document.getElementById('pur-default-cat-l3'), l3s);
+      purApplyDefaultCategoryToAllItems();
+    }
+    function purOnDefaultCatL3Changed() {
+      var l0 = document.getElementById('pur-default-cat-l0').value.trim();
+      var l1 = document.getElementById('pur-default-cat-l1').value.trim();
+      var l2 = document.getElementById('pur-default-cat-l2').value.trim();
+      var v = document.getElementById('pur-default-cat-l3').value.trim();
+      ['l4','l5'].forEach(function(s) { purResetEntrySelect('pur-default-cat-' + s); });
+      purResetEntrySelect('pur-default-cat-item', false);
+      if (!v) { purRefreshDefaultItems(); purApplyDefaultCategoryToAllItems(); return; }
+      var fines = purUniqKeepOrder(_pur_entryCategoryRows.filter(function(r) { return r['\u7279\u5927\u5206\u985e']===l0 && r['\u5927\u5206\u985e']===l1 && r['\u4e2d\u5206\u985e']===l2 && r['\u5c0f\u5206\u985e']===v; }).map(function(r) { return r['\u7d30\u5206\u985e']; }));
+      var l4El = document.getElementById('pur-default-cat-l4');
+      purFillSelectSafe(l4El, fines);
+      if (fines.length > 0 && l4El) l4El.style.display = '';
+      else { if (l4El) l4El.style.display = 'none'; purRefreshDefaultItems(); }
+      purApplyDefaultCategoryToAllItems();
+    }
+    function purOnDefaultCatL4Changed() {
+      purResetEntrySelect('pur-default-cat-l5');
+      purResetEntrySelect('pur-default-cat-item', false);
+      var l0 = document.getElementById('pur-default-cat-l0').value.trim();
+      var l1 = document.getElementById('pur-default-cat-l1').value.trim();
+      var l2 = document.getElementById('pur-default-cat-l2').value.trim();
+      var l3 = document.getElementById('pur-default-cat-l3').value.trim();
+      var v = document.getElementById('pur-default-cat-l4').value.trim();
+      if (!v) { purRefreshDefaultItems(); purApplyDefaultCategoryToAllItems(); return; }
+      var fine2s = purUniqKeepOrder(_pur_entryCategoryRows.filter(function(r) { return r['\u7279\u5927\u5206\u985e']===l0 && r['\u5927\u5206\u985e']===l1 && r['\u4e2d\u5206\u985e']===l2 && r['\u5c0f\u5206\u985e']===l3 && r['\u7d30\u5206\u985e']===v; }).map(function(r) { return r['\u7d30\u5206\u985e2']; }));
+      var l5El = document.getElementById('pur-default-cat-l5');
+      purFillSelectSafe(l5El, fine2s);
+      if (fine2s.length > 0 && l5El) l5El.style.display = '';
+      else { if (l5El) l5El.style.display = 'none'; purRefreshDefaultItems(); }
+      purApplyDefaultCategoryToAllItems();
+    }
+    function purOnDefaultCatL5Changed() {
+      purResetEntrySelect('pur-default-cat-item', false);
+      purRefreshDefaultItems();
+      purApplyDefaultCategoryToAllItems();
+    }
+    function purRefreshDefaultItems() {
+      var l1 = (document.getElementById('pur-default-cat-l1') || {}).value || '';
+      var l2 = (document.getElementById('pur-default-cat-l2') || {}).value || '';
+      var l3 = (document.getElementById('pur-default-cat-l3') || {}).value || '';
+      var l4 = (document.getElementById('pur-default-cat-l4') || {}).value || '';
+      var l5 = (document.getElementById('pur-default-cat-l5') || {}).value || '';
+      var filtered = _pur_entryCategoryRows;
+      if (l1) filtered = filtered.filter(function(r) { return r['\u5927\u5206\u985e']===l1.trim(); });
+      if (l2) filtered = filtered.filter(function(r) { return r['\u4e2d\u5206\u985e']===l2.trim(); });
+      if (l3) filtered = filtered.filter(function(r) { return r['\u5c0f\u5206\u985e']===l3.trim(); });
+      if (l4) filtered = filtered.filter(function(r) { return r['\u7d30\u5206\u985e']===l4.trim(); });
+      if (l5) filtered = filtered.filter(function(r) { return r['\u7d30\u5206\u985e2']===l5.trim(); });
+      var items = purUniqKeepOrder(filtered.map(function(r) { return r['\u30a2\u30a4\u30c6\u30e0\u540d']; }));
+      purFillSelectSafe(document.getElementById('pur-default-cat-item'), items);
+    }
+
+    function purApplyDefaultCategoryToAllItems() {
+      var defLevels = ['l0','l1','l2','l3','l4','l5'].map(function(l) {
+        return (document.getElementById('pur-default-cat-' + l) || {}).value || '';
+      });
+      var defItem = (document.getElementById('pur-default-cat-item') || {}).value || '';
+      var defSize = (document.getElementById('pur-defaultSize') || {}).value || '';
+      var defCondition = (document.getElementById('pur-defaultCondition') || {}).value || '';
+      var defBrand = (document.getElementById('pur-defaultBrand') || {}).value || '';
+      var defBrandKana = (document.getElementById('pur-defaultBrandKana') || {}).value || '';
+
+      _pur_entryItems.forEach(function(item) {
+        var id = item.id;
+        // L0
+        if (defLevels[0]) {
+          var el0 = document.getElementById('pur-entry-cat-l0-' + id);
+          if (el0) { el0.value = defLevels[0]; purOnEntryCatL0Changed(id); }
+        }
+        // L1
+        if (defLevels[1]) {
+          var el1 = document.getElementById('pur-entry-cat-l1-' + id);
+          if (el1) { el1.value = defLevels[1]; purOnEntryCatL1Changed(id); }
+        }
+        // L2
+        if (defLevels[2]) {
+          var el2 = document.getElementById('pur-entry-cat-l2-' + id);
+          if (el2) { el2.value = defLevels[2]; purOnEntryCatL2Changed(id); }
+        }
+        // L3
+        if (defLevels[3]) {
+          var el3 = document.getElementById('pur-entry-cat-l3-' + id);
+          if (el3) { el3.value = defLevels[3]; purOnEntryCatL3Changed(id); }
+        }
+        // L4
+        if (defLevels[4]) {
+          var el4 = document.getElementById('pur-entry-cat-l4-' + id);
+          if (el4) { el4.value = defLevels[4]; purOnEntryCatL4Changed(id); }
+        }
+        // L5
+        if (defLevels[5]) {
+          var el5 = document.getElementById('pur-entry-cat-l5-' + id);
+          if (el5) { el5.value = defLevels[5]; purOnEntryCatL5Changed(id); }
+        }
+        // Item name
+        if (defItem) {
+          var elItem = document.getElementById('pur-entry-cat-item-' + id);
+          if (elItem) elItem.value = defItem;
+        }
+        // Size
+        if (defSize) {
+          var elSize = document.getElementById('pur-entry-size-' + id);
+          if (elSize) elSize.value = defSize;
+        }
+        // Condition
+        if (defCondition) {
+          var elCond = document.getElementById('pur-entry-condition-' + id);
+          if (elCond) elCond.value = defCondition;
+        }
+        // Brand
+        if (defBrand) {
+          var elBrand = document.getElementById('pur-entry-brand-' + id);
+          if (elBrand) elBrand.value = defBrand;
+        }
+        if (defBrandKana) {
+          var elBrandKana = document.getElementById('pur-entry-brandKana-' + id);
+          if (elBrandKana) elBrandKana.value = defBrandKana;
+        }
+      });
+    }
+
+    function purApplyDefaultInspectionToItem(itemId) {
+      var defLevels = ['l0','l1','l2','l3','l4','l5'].map(function(l) {
+        return (document.getElementById('pur-default-cat-' + l) || {}).value || '';
+      });
+      var defItem = (document.getElementById('pur-default-cat-item') || {}).value || '';
+      var defSize = (document.getElementById('pur-defaultSize') || {}).value || '';
+      var defCondition = (document.getElementById('pur-defaultCondition') || {}).value || '';
+      var defBrand = (document.getElementById('pur-defaultBrand') || {}).value || '';
+      var defBrandKana = (document.getElementById('pur-defaultBrandKana') || {}).value || '';
+      // Category cascade
+      if (defLevels[0]) {
+        var el0 = document.getElementById('pur-entry-cat-l0-' + itemId);
+        if (el0) { el0.value = defLevels[0]; purOnEntryCatL0Changed(itemId); }
+      }
+      if (defLevels[1]) {
+        var el1 = document.getElementById('pur-entry-cat-l1-' + itemId);
+        if (el1) { el1.value = defLevels[1]; purOnEntryCatL1Changed(itemId); }
+      }
+      if (defLevels[2]) {
+        var el2 = document.getElementById('pur-entry-cat-l2-' + itemId);
+        if (el2) { el2.value = defLevels[2]; purOnEntryCatL2Changed(itemId); }
+      }
+      if (defLevels[3]) {
+        var el3 = document.getElementById('pur-entry-cat-l3-' + itemId);
+        if (el3) { el3.value = defLevels[3]; purOnEntryCatL3Changed(itemId); }
+      }
+      if (defLevels[4]) {
+        var el4 = document.getElementById('pur-entry-cat-l4-' + itemId);
+        if (el4) { el4.value = defLevels[4]; purOnEntryCatL4Changed(itemId); }
+      }
+      if (defLevels[5]) {
+        var el5 = document.getElementById('pur-entry-cat-l5-' + itemId);
+        if (el5) { el5.value = defLevels[5]; purOnEntryCatL5Changed(itemId); }
+      }
+      if (defItem) {
+        var elItem = document.getElementById('pur-entry-cat-item-' + itemId);
+        if (elItem) elItem.value = defItem;
+      }
+      // Size, condition, brand
+      if (defSize) {
+        var elSize = document.getElementById('pur-entry-size-' + itemId);
+        if (elSize) elSize.value = defSize;
+      }
+      if (defCondition) {
+        var elCond = document.getElementById('pur-entry-condition-' + itemId);
+        if (elCond) elCond.value = defCondition;
+      }
+      if (defBrand) {
+        var elBrand = document.getElementById('pur-entry-brand-' + itemId);
+        if (elBrand) elBrand.value = defBrand;
+      }
+      if (defBrandKana) {
+        var elBrandKana = document.getElementById('pur-entry-brandKana-' + itemId);
+        if (elBrandKana) elBrandKana.value = defBrandKana;
+      }
     }
 
     // Batch category cascade
@@ -5867,6 +6145,7 @@
         window.algoliaBrandModulesLoaded = true;
         console.log('[Pur] Algoliaブランド検索モジュール読み込み完了');
         purAttachBatchBrandSuggest();
+        purAttachDefaultBrandSuggest();
       }).catch(function(error) {
         console.error('[Pur] Algoliaモジュール読み込みエラー:', error);
       });
@@ -5912,6 +6191,47 @@
       });
       input.addEventListener('blur', function() { setTimeout(function() { panel.hidden = true; panel.style.display = 'none'; }, 200); });
       console.log('[Pur] 一括入力ブランドサジェスト初期化完了');
+    }
+
+    function purAttachDefaultBrandSuggest() {
+      var input = document.getElementById('pur-defaultBrand');
+      var panel = document.getElementById('pur-suggest-default-brand');
+      if (!input || !panel) return;
+      if (typeof window.algoliasearch === 'undefined') return;
+      var searchClient;
+      try { searchClient = window.algoliasearch(_pur_ALGOLIA_APP_ID, _pur_ALGOLIA_SEARCH_KEY); }
+      catch(error) { return; }
+      var index = searchClient.initIndex(_pur_ALGOLIA_INDEX_NAME);
+      var debounceTimer = null;
+      input.addEventListener('input', function(e) {
+        var query = e.target.value.trim();
+        if (query.length < 1) { panel.hidden = true; panel.style.display = 'none'; return; }
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() {
+          var convertedQuery = purHiraganaToKatakana(query);
+          index.search(convertedQuery, { hitsPerPage: 15, attributesToRetrieve: ['id', 'name', 'nameKana', 'usageCount'] }).then(function(result) {
+            var hits = result.hits;
+            if (hits.length === 0) { panel.hidden = true; panel.style.display = 'none'; return; }
+            var inputRect = input.getBoundingClientRect();
+            if (inputRect.top > window.innerHeight * 0.5) panel.classList.add('suggest-above');
+            else panel.classList.remove('suggest-above');
+            panel.innerHTML = '';
+            hits.forEach(function(hit) {
+              var div = document.createElement('div'); div.className = 'sug-item brand-item';
+              div.innerHTML = '<div class="brand-english">' + purEscapeHtml(hit.name || '') + '</div><div class="brand-kana">' + purEscapeHtml(hit.nameKana || '') + '</div>';
+              div.addEventListener('mousedown', function(ev) { ev.preventDefault(); });
+              div.addEventListener('click', function() {
+                input.value = hit.name || hit.nameKana || '';
+                var kanaEl = document.getElementById('pur-defaultBrandKana'); if (kanaEl) kanaEl.value = hit.nameKana || '';
+                panel.hidden = true; panel.style.display = 'none'; input.blur();
+              });
+              panel.appendChild(div);
+            });
+            panel.hidden = false; panel.style.display = 'block';
+          }).catch(function(error) { console.error('[Pur] Algolia検索エラー:', error); });
+        }, 150);
+      });
+      input.addEventListener('blur', function() { setTimeout(function() { panel.hidden = true; panel.style.display = 'none'; }, 200); });
     }
 
     function purAttachEntryBrandSuggest(itemId) {
