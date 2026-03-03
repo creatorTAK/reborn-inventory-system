@@ -4177,6 +4177,22 @@
       purFillSelectSafe(document.getElementById('pur-default-cat-item'), items);
     }
 
+    // selectのoptions＋値をコピーする共通ヘルパー（innerHTML不使用・createElement方式）
+    function purCopySelectState(srcSel, dstSel) {
+      if (!srcSel || !dstSel) return;
+      // 選択肢をクリアしてcreateElementで再構築
+      while (dstSel.options.length > 0) dstSel.remove(0);
+      for (var i = 0; i < srcSel.options.length; i++) {
+        var opt = document.createElement('option');
+        opt.value = srcSel.options[i].value;
+        opt.textContent = srcSel.options[i].textContent;
+        dstSel.appendChild(opt);
+      }
+      dstSel.selectedIndex = srcSel.selectedIndex;
+      dstSel.disabled = srcSel.disabled;
+      dstSel.style.display = srcSel.style.display;
+    }
+
     function purApplyDefaultCategoryToAllItems() {
       var defL3 = (document.getElementById('pur-default-cat-l3') || {}).value || '';
       var defL4 = (document.getElementById('pur-default-cat-l4') || {}).value || '';
@@ -4185,80 +4201,118 @@
       var defBrand = (document.getElementById('pur-defaultBrand') || {}).value || '';
       var defBrandKana = (document.getElementById('pur-defaultBrandKana') || {}).value || '';
 
+      _pur_applyingDefaults = true;
       _pur_entryItems.forEach(function(item) {
-        var id = item.id;
-        // デフォルトselectの選択肢と値を直接コピー（カスケード不使用）
-        var catLevels = ['l0','l1','l2','l3','l4','l5'];
-        catLevels.forEach(function(level) {
-          var defSel = document.getElementById('pur-default-cat-' + level);
-          var entrySel = document.getElementById('pur-entry-cat-' + level + '-' + id);
-          if (defSel && entrySel) {
-            entrySel.innerHTML = defSel.innerHTML;
-            entrySel.value = defSel.value;
-            entrySel.disabled = defSel.disabled;
-            entrySel.style.display = defSel.style.display;
+        try {
+          var id = item.id;
+          // カテゴリL0-L5: createElement方式でコピー
+          ['l0','l1','l2','l3','l4','l5'].forEach(function(level) {
+            purCopySelectState(
+              document.getElementById('pur-default-cat-' + level),
+              document.getElementById('pur-entry-cat-' + level + '-' + id)
+            );
+          });
+          // アイテム名: createElement方式でコピー
+          purCopySelectState(
+            document.getElementById('pur-default-cat-item'),
+            document.getElementById('pur-entry-cat-item-' + id)
+          );
+          // 傷マーキング
+          if (defL3) purLoadDamageMarkerBySubcategory(id, defL3, defL4 || undefined);
+          // サイズ
+          if (defSize) { var s = document.getElementById('pur-entry-size-' + id); if (s) s.value = defSize; }
+          // 商品の状態（purOnEntryConditionChangedを直接呼ばず傷セクション表示を制御）
+          if (defCondition) {
+            var c = document.getElementById('pur-entry-condition-' + id); if (c) c.value = defCondition;
+            var sec = document.getElementById('pur-damage-marker-section-' + id);
+            if (sec) sec.style.display = (defCondition && _pur_conditionsNoDamage.indexOf(defCondition) === -1) ? '' : 'none';
           }
-        });
-        var defItemSel = document.getElementById('pur-default-cat-item');
-        var entryItemSel = document.getElementById('pur-entry-cat-item-' + id);
-        if (defItemSel && entryItemSel) {
-          entryItemSel.innerHTML = defItemSel.innerHTML;
-          entryItemSel.value = defItemSel.value;
-          entryItemSel.disabled = defItemSel.disabled;
-        }
-        if (defL3) purLoadDamageMarkerBySubcategory(id, defL3, defL4 || undefined);
-        if (defSize) { var s = document.getElementById('pur-entry-size-' + id); if (s) s.value = defSize; }
-        if (defCondition) { var c = document.getElementById('pur-entry-condition-' + id); if (c) c.value = defCondition; purOnEntryConditionChanged(id); }
-        if (defBrand) { var b = document.getElementById('pur-entry-brand-' + id); if (b) b.value = defBrand; }
-        if (defBrandKana) { var bk = document.getElementById('pur-entry-brandKana-' + id); if (bk) bk.value = defBrandKana; }
-        _pur_applyingDefaults = true;
-        purUpdateEntryItem(id);
-        _pur_applyingDefaults = false;
+          // ブランド
+          if (defBrand) { var b = document.getElementById('pur-entry-brand-' + id); if (b) b.value = defBrand; }
+          if (defBrandKana) { var bk = document.getElementById('pur-entry-brandKana-' + id); if (bk) bk.value = defBrandKana; }
+          purUpdateEntryItem(id);
+        } catch(e) { console.error('[purApplyDefaultCategoryToAllItems] item=' + item.id, e); }
       });
+      _pur_applyingDefaults = false;
     }
 
     function purApplyDefaultInspectionToItem(itemId) {
-      // カスケード関数を使わず、デフォルトselectの選択肢と値を直接コピー
-      var catLevels = ['l0','l1','l2','l3','l4','l5'];
-      catLevels.forEach(function(level) {
-        var defSel = document.getElementById('pur-default-cat-' + level);
-        var entrySel = document.getElementById('pur-entry-cat-' + level + '-' + itemId);
-        if (defSel && entrySel) {
-          entrySel.innerHTML = defSel.innerHTML;
-          entrySel.value = defSel.value;
-          entrySel.disabled = defSel.disabled;
-          entrySel.style.display = defSel.style.display;
-        }
-      });
-      // アイテム名select
-      var defItemSel = document.getElementById('pur-default-cat-item');
-      var entryItemSel = document.getElementById('pur-entry-cat-item-' + itemId);
-      console.log('[DEBUG] defItemSel exists:', !!defItemSel, 'value:', defItemSel ? defItemSel.value : 'N/A', 'options:', defItemSel ? defItemSel.options.length : 0);
-      console.log('[DEBUG] entryItemSel exists:', !!entryItemSel);
-      if (defItemSel && entryItemSel) {
-        entryItemSel.innerHTML = defItemSel.innerHTML;
-        entryItemSel.value = defItemSel.value;
-        entryItemSel.disabled = defItemSel.disabled;
-        console.log('[DEBUG] AFTER copy - entryItemSel value:', entryItemSel.value, 'options:', entryItemSel.options.length);
-      }
-      // 傷マーキング画像ロード（L3=小分類に基づく）
-      var defL3 = (document.getElementById('pur-default-cat-l3') || {}).value || '';
-      var defL4 = (document.getElementById('pur-default-cat-l4') || {}).value || '';
-      if (defL3) purLoadDamageMarkerBySubcategory(itemId, defL3, defL4 || undefined);
-      // サイズ・状態・ブランド
-      var defSize = (document.getElementById('pur-defaultSize') || {}).value || '';
-      var defCondition = (document.getElementById('pur-defaultCondition') || {}).value || '';
-      var defBrand = (document.getElementById('pur-defaultBrand') || {}).value || '';
-      var defBrandKana = (document.getElementById('pur-defaultBrandKana') || {}).value || '';
-      if (defSize) { var s = document.getElementById('pur-entry-size-' + itemId); if (s) s.value = defSize; }
-      if (defCondition) { var c = document.getElementById('pur-entry-condition-' + itemId); if (c) c.value = defCondition; purOnEntryConditionChanged(itemId); }
-      console.log('[DEBUG] defBrand:', defBrand, 'defSize:', defSize, 'defCondition:', defCondition);
-      if (defBrand) { var b = document.getElementById('pur-entry-brand-' + itemId); if (b) b.value = defBrand; console.log('[DEBUG] brand set to:', b.value); }
-      if (defBrandKana) { var bk = document.getElementById('pur-entry-brandKana-' + itemId); if (bk) bk.value = defBrandKana; }
-      // DOM値をJS配列に同期（touchedは付けない）
       _pur_applyingDefaults = true;
-      purUpdateEntryItem(itemId);
-      _pur_applyingDefaults = false;
+      try {
+        // 1. デフォルト値を全て読み取り
+        var defL0 = (document.getElementById('pur-default-cat-l0') || {}).value || '';
+        var defL1 = (document.getElementById('pur-default-cat-l1') || {}).value || '';
+        var defL2 = (document.getElementById('pur-default-cat-l2') || {}).value || '';
+        var defL3 = (document.getElementById('pur-default-cat-l3') || {}).value || '';
+        var defL4 = (document.getElementById('pur-default-cat-l4') || {}).value || '';
+        var defL5 = (document.getElementById('pur-default-cat-l5') || {}).value || '';
+        var defItem = (document.getElementById('pur-default-cat-item') || {}).value || '';
+        var defSize = (document.getElementById('pur-defaultSize') || {}).value || '';
+        var defCondition = (document.getElementById('pur-defaultCondition') || {}).value || '';
+        var defBrand = (document.getElementById('pur-defaultBrand') || {}).value || '';
+        var defBrandKana = (document.getElementById('pur-defaultBrandKana') || {}).value || '';
+
+        // 2. カテゴリをカスケード関数で設定（createElement/appendChildで選択肢構築）
+        if (defL0) {
+          var el = document.getElementById('pur-entry-cat-l0-' + itemId);
+          if (el) { el.value = defL0; purOnEntryCatL0Changed(itemId); }
+        }
+        if (defL1) {
+          var el = document.getElementById('pur-entry-cat-l1-' + itemId);
+          if (el) { el.value = defL1; purOnEntryCatL1Changed(itemId); }
+        }
+        if (defL2) {
+          var el = document.getElementById('pur-entry-cat-l2-' + itemId);
+          if (el) { el.value = defL2; purOnEntryCatL2Changed(itemId); }
+        }
+        if (defL3) {
+          var el = document.getElementById('pur-entry-cat-l3-' + itemId);
+          if (el) { el.value = defL3; purOnEntryCatL3Changed(itemId); }
+        }
+        if (defL4) {
+          var el = document.getElementById('pur-entry-cat-l4-' + itemId);
+          if (el && !el.disabled) { el.value = defL4; purOnEntryCatL4Changed(itemId); }
+        }
+        if (defL5) {
+          var el = document.getElementById('pur-entry-cat-l5-' + itemId);
+          if (el && !el.disabled) { el.value = defL5; purOnEntryCatL5Changed(itemId); }
+        }
+        // 3. アイテム名（カスケード経路に関わらず必ず選択肢を再構築）
+        purRefreshEntryItems(itemId);
+        if (defItem) {
+          var el = document.getElementById('pur-entry-cat-item-' + itemId);
+          if (el) el.value = defItem;
+        }
+        // 4. 傷マーキング画像ロード
+        if (defL3) purLoadDamageMarkerBySubcategory(itemId, defL3, defL4 || undefined);
+        // 5. サイズ
+        if (defSize) {
+          var el = document.getElementById('pur-entry-size-' + itemId);
+          if (el) el.value = defSize;
+        }
+        // 6. 商品の状態（purOnEntryConditionChangedを呼ばず直接制御）
+        if (defCondition) {
+          var el = document.getElementById('pur-entry-condition-' + itemId);
+          if (el) el.value = defCondition;
+          var sec = document.getElementById('pur-damage-marker-section-' + itemId);
+          if (sec) sec.style.display = (defCondition && _pur_conditionsNoDamage.indexOf(defCondition) === -1) ? '' : 'none';
+        }
+        // 7. ブランド
+        if (defBrand) {
+          var el = document.getElementById('pur-entry-brand-' + itemId);
+          if (el) el.value = defBrand;
+        }
+        if (defBrandKana) {
+          var el = document.getElementById('pur-entry-brandKana-' + itemId);
+          if (el) el.value = defBrandKana;
+        }
+        // 8. DOM値をJS配列に同期
+        purUpdateEntryItem(itemId);
+      } catch(e) {
+        console.error('[purApplyDefaultInspectionToItem] エラー:', e);
+      } finally {
+        _pur_applyingDefaults = false;
+      }
     }
 
     // Batch category cascade
