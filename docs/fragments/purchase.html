@@ -6503,6 +6503,15 @@
       catch(error) { return; }
       var index = searchClient.initIndex(_pur_ALGOLIA_INDEX_NAME);
       var debounceTimer = null;
+      var selecting = false;
+      function selectBrand(hit) {
+        if (selecting) return;
+        selecting = true;
+        input.value = hit.name || hit.nameKana || '';
+        var kanaEl = document.getElementById('pur-defaultBrandKana'); if (kanaEl) kanaEl.value = hit.nameKana || '';
+        panel.hidden = true; panel.style.display = 'none'; input.blur();
+        setTimeout(function() { selecting = false; }, 100);
+      }
       input.addEventListener('input', function(e) {
         var query = e.target.value.trim();
         if (query.length < 2) { panel.hidden = true; panel.style.display = 'none'; return; }
@@ -6523,12 +6532,10 @@
                 Array.from(panel.querySelectorAll('.pur-sug-item')).forEach(function(x) { x.classList.remove('active'); });
                 div.classList.add('active');
               });
+              div.addEventListener('touchstart', function(ev) { ev.preventDefault(); }, { passive: false });
+              div.addEventListener('touchend', function(ev) { ev.preventDefault(); selectBrand(hit); });
               div.addEventListener('mousedown', function(ev) { ev.preventDefault(); });
-              div.addEventListener('click', function() {
-                input.value = hit.name || hit.nameKana || '';
-                var kanaEl = document.getElementById('pur-defaultBrandKana'); if (kanaEl) kanaEl.value = hit.nameKana || '';
-                panel.hidden = true; panel.style.display = 'none'; input.blur();
-              });
+              div.addEventListener('click', function() { selectBrand(hit); });
               panel.appendChild(div);
             });
             panel.hidden = false; panel.style.display = 'block';
@@ -6539,7 +6546,7 @@
         var query = this.value.trim();
         if (query.length >= 2 && panel.innerHTML) { panel.hidden = false; panel.style.display = 'block'; }
       });
-      input.addEventListener('blur', function() { setTimeout(function() { panel.hidden = true; panel.style.display = 'none'; }, 200); });
+      input.addEventListener('blur', function() { setTimeout(function() { if (!selecting) { panel.hidden = true; panel.style.display = 'none'; } }, 300); });
     }
 
     function purAttachEntryBrandSuggest(itemId) {
@@ -6552,6 +6559,17 @@
       catch(error) { console.error('[Pur] Algoliaクライアント初期化エラー:', error); return; }
       var index = searchClient.initIndex(_pur_ALGOLIA_INDEX_NAME);
       var debounceTimer = null;
+      var selecting = false;
+      function selectBrand(brand) {
+        if (selecting) return;
+        selecting = true;
+        input.value = brand.name || brand.nameKana || '';
+        var kanaInput = document.getElementById('pur-entry-brandKana-' + itemId);
+        if (kanaInput) kanaInput.value = brand.nameKana || '';
+        panel.hidden = true; panel.style.display = 'none'; input.blur();
+        purUpdateEntryItem(itemId);
+        setTimeout(function() { selecting = false; }, 100);
+      }
       input.addEventListener('input', function(e) {
         var query = e.target.value.trim();
         if (query.length < 2) { panel.hidden = true; panel.style.display = 'none'; return; }
@@ -6572,14 +6590,10 @@
                 Array.from(panel.querySelectorAll('.pur-sug-item')).forEach(function(x) { x.classList.remove('active'); });
                 div.classList.add('active');
               });
+              div.addEventListener('touchstart', function(ev) { ev.preventDefault(); }, { passive: false });
+              div.addEventListener('touchend', function(ev) { ev.preventDefault(); selectBrand(brand); });
               div.addEventListener('mousedown', function(ev) { ev.preventDefault(); });
-              div.addEventListener('click', function() {
-                input.value = brand.name || brand.nameKana || '';
-                var kanaInput = document.getElementById('pur-entry-brandKana-' + itemId);
-                if (kanaInput) kanaInput.value = brand.nameKana || '';
-                panel.hidden = true; panel.style.display = 'none'; input.blur();
-                purUpdateEntryItem(itemId);
-              });
+              div.addEventListener('click', function() { selectBrand(brand); });
               panel.appendChild(div);
             });
             panel.hidden = false; panel.style.display = 'block';
@@ -6590,7 +6604,7 @@
         var query = this.value.trim();
         if (query.length >= 2 && panel.innerHTML) { panel.hidden = false; panel.style.display = 'block'; }
       });
-      input.addEventListener('blur', function() { setTimeout(function() { panel.hidden = true; panel.style.display = 'none'; }, 200); });
+      input.addEventListener('blur', function() { setTimeout(function() { if (!selecting) { panel.hidden = true; panel.style.display = 'none'; } }, 300); });
     }
 
     // ============================================
