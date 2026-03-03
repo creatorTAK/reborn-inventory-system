@@ -1753,7 +1753,11 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label fw-bold">商品リスト</label>
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <label class="form-label fw-bold mb-0">商品リスト</label>
+            <span id="pur-entryProgressBadge" class="badge bg-secondary" style="font-size:0.75rem;display:none;"></span>
+            <button type="button" id="pur-entryGoToIncomplete" class="btn btn-link btn-sm p-0" style="font-size:0.75rem;display:none;" onclick="purScrollToNextIncomplete()">未入力へ ▼</button>
+          </div>
           <div id="pur-entryItemsContainer">
             <div class="text-center text-muted py-3">
               <i class="bi bi-hourglass-split"></i> 読み込み中...
@@ -3823,6 +3827,7 @@
       if (!skipScroll) itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       purUpdateEntryItemNumbers();
       purUpdateEntryTotal();
+      purSaveEntryDraft();
     }
 
     function purCollapseAllEntryItems() {
@@ -3848,8 +3853,34 @@
       if (amtEl) item.amount = parseInt(amtEl.value) || 0;
       if (supEl) item.supplier = supEl.value;
       if (assEl) item.assignee = assEl.value;
+      // 検品情報をJS変数に同期
+      ['catL0','catL1','catL2','catL3','catL4','catL5'].forEach(function(key, idx) {
+        var el = document.getElementById('pur-entry-cat-l' + idx + '-' + itemId);
+        item[key] = el ? el.value : '';
+      });
+      var catItemEl = document.getElementById('pur-entry-cat-item-' + itemId);
+      item.catItem = catItemEl ? catItemEl.value : '';
+      var sizeEl = document.getElementById('pur-entry-size-' + itemId);
+      item.size = sizeEl ? sizeEl.value : '';
+      var condEl = document.getElementById('pur-entry-condition-' + itemId);
+      item.condition = condEl ? condEl.value : '';
+      var brandEl = document.getElementById('pur-entry-brand-' + itemId);
+      item.brand = brandEl ? brandEl.value : '';
+      var brandKanaEl = document.getElementById('pur-entry-brandKana-' + itemId);
+      item.brandKana = brandKanaEl ? brandKanaEl.value : '';
+      var memoEl = document.getElementById('pur-entry-memo-' + itemId);
+      item.memo = memoEl ? memoEl.value : '';
+      var accContainer = document.getElementById('pur-entry-accessories-' + itemId);
+      if (accContainer) {
+        var checked = []; accContainer.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) { checked.push(cb.value); });
+        item.accessories = checked;
+        var otherInput = document.getElementById('pur-entry-accessory-other-' + itemId);
+        if (otherInput && checked.indexOf('その他') >= 0) item.accessoryOther = otherInput.value;
+        else item.accessoryOther = '';
+      }
       purUpdateEntryItemSummary(itemId);
       purUpdateEntryTotal();
+      purSaveEntryDraft();
     }
 
     function purUpdateEntryItemSummary(itemId) {
@@ -3891,6 +3922,7 @@
       if (el) el.remove();
       purUpdateEntryItemNumbers();
       purUpdateEntryTotal();
+      purSaveEntryDraft();
     }
 
     function purUpdateEntryItemNumbers() {
@@ -3901,12 +3933,34 @@
     }
 
     function purUpdateEntryTotal() {
-      var total = 0, count = 0;
-      _pur_entryItems.forEach(function(i) { total += i.amount || 0; count++; });
+      var total = 0, count = 0, completed = 0;
+      _pur_entryItems.forEach(function(i) {
+        total += i.amount || 0; count++;
+        if (i.purchaseDate && i.supplier && i.assignee && i.amount) completed++;
+      });
       var valEl = document.getElementById('pur-entryTotalValue');
       var cntEl = document.getElementById('pur-entryTotalCount');
       if (valEl) valEl.textContent = purFormatCurrency(total);
       if (cntEl) cntEl.textContent = count + '点';
+      // 進捗表示更新
+      var badge = document.getElementById('pur-entryProgressBadge');
+      var goBtn = document.getElementById('pur-entryGoToIncomplete');
+      if (badge && count > 0) {
+        badge.textContent = completed + '/' + count + ' 入力済み';
+        badge.className = 'badge ' + (completed === count ? 'bg-success' : 'bg-secondary');
+        badge.style.display = '';
+      } else if (badge) { badge.style.display = 'none'; }
+      if (goBtn) goBtn.style.display = (count > 0 && completed < count) ? '' : 'none';
+    }
+
+    function purScrollToNextIncomplete() {
+      var item = _pur_entryItems.find(function(i) { return !(i.purchaseDate && i.supplier && i.assignee && i.amount); });
+      if (!item) return;
+      var el = document.getElementById('pur-entry-item-' + item.id);
+      if (!el) return;
+      purCollapseAllEntryItems();
+      el.classList.remove('collapsed'); el.classList.add('expanded');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     // ============================================
@@ -4137,6 +4191,7 @@
           var elBrandKana = document.getElementById('pur-entry-brandKana-' + id);
           if (elBrandKana) elBrandKana.value = defBrandKana;
         }
+        purUpdateEntryItem(id);
       });
     }
 
@@ -4911,6 +4966,7 @@
       _pur_entryItems = [];
       _pur_entryGeneratedQRData = [];
       _pur_entryItemNextId = 1;
+      purClearEntryDraft();
       document.getElementById('pur-entryAfterActions').style.display = 'none';
       document.getElementById('pur-qrEntryPreview').style.display = 'none';
       document.getElementById('pur-dispatchNotificationArea').style.display = 'none';
@@ -5027,7 +5083,7 @@
       var doSave = function() {
         if (_pur_entryItems.length === 0) { purClearEntryDraft(); return; }
         var hasValidData = _pur_entryItems.some(function(item) {
-          return (item.category && (item.category.major || item.category.superCategory)) || (item.brand && item.brand.trim() !== '');
+          return item.catL0 || (item.brand && item.brand.trim() !== '') || item.supplier || item.amount;
         });
         if (!hasValidData) { purClearEntryDraft(); return; }
         var draft = {
@@ -5036,8 +5092,19 @@
           defaults: {
             purchaseDate: (document.getElementById('pur-defaultPurchaseDate') || {}).value || '',
             supplier: (document.getElementById('pur-defaultSupplier') || {}).value || '',
-            assignee: (document.getElementById('pur-defaultAssignee') || {}).value || '',
-            amount: (document.getElementById('pur-defaultAmount') || {}).value || ''
+            assignee: (document.getElementById('pur-entryAssigneeIndividual') || {}).value || '',
+            amount: (document.getElementById('pur-defaultAmount') || {}).value || '',
+            catL0: (document.getElementById('pur-default-cat-l0') || {}).value || '',
+            catL1: (document.getElementById('pur-default-cat-l1') || {}).value || '',
+            catL2: (document.getElementById('pur-default-cat-l2') || {}).value || '',
+            catL3: (document.getElementById('pur-default-cat-l3') || {}).value || '',
+            catL4: (document.getElementById('pur-default-cat-l4') || {}).value || '',
+            catL5: (document.getElementById('pur-default-cat-l5') || {}).value || '',
+            catItem: (document.getElementById('pur-default-cat-item') || {}).value || '',
+            size: (document.getElementById('pur-defaultSize') || {}).value || '',
+            condition: (document.getElementById('pur-defaultCondition') || {}).value || '',
+            brand: (document.getElementById('pur-defaultBrand') || {}).value || '',
+            brandKana: (document.getElementById('pur-defaultBrandKana') || {}).value || ''
           }
         };
         try {
@@ -5062,13 +5129,60 @@
     function purRestoreEntryDraft(draft) {
       if (!draft || !draft.items || draft.items.length === 0) return;
       console.log('[purchase] 下書きから復元開始');
+      // デフォルト仕入情報の復元
       if (draft.defaults) {
-        var fields = { 'pur-defaultPurchaseDate': 'purchaseDate', 'pur-defaultSupplier': 'supplier', 'pur-defaultAssignee': 'assignee', 'pur-defaultAmount': 'amount' };
-        Object.keys(fields).forEach(function(id) {
+        var simpleFields = { 'pur-defaultPurchaseDate': 'purchaseDate', 'pur-defaultSupplier': 'supplier', 'pur-entryAssigneeIndividual': 'assignee', 'pur-defaultAmount': 'amount' };
+        Object.keys(simpleFields).forEach(function(id) {
           var el = document.getElementById(id);
-          if (el && draft.defaults[fields[id]]) el.value = draft.defaults[fields[id]];
+          if (el && draft.defaults[simpleFields[id]]) el.value = draft.defaults[simpleFields[id]];
         });
+        // デフォルト検品設定のカスケード復元
+        if (draft.defaults.catL0) {
+          var el0 = document.getElementById('pur-default-cat-l0');
+          if (el0) { el0.value = draft.defaults.catL0; purOnDefaultCatL0Changed(); }
+        }
+        if (draft.defaults.catL1) {
+          var el1 = document.getElementById('pur-default-cat-l1');
+          if (el1) { el1.value = draft.defaults.catL1; purOnDefaultCatL1Changed(); }
+        }
+        if (draft.defaults.catL2) {
+          var el2 = document.getElementById('pur-default-cat-l2');
+          if (el2) { el2.value = draft.defaults.catL2; purOnDefaultCatL2Changed(); }
+        }
+        if (draft.defaults.catL3) {
+          var el3 = document.getElementById('pur-default-cat-l3');
+          if (el3) { el3.value = draft.defaults.catL3; purOnDefaultCatL3Changed(); }
+        }
+        if (draft.defaults.catL4) {
+          var el4 = document.getElementById('pur-default-cat-l4');
+          if (el4) { el4.value = draft.defaults.catL4; purOnDefaultCatL4Changed(); }
+        }
+        if (draft.defaults.catL5) {
+          var el5 = document.getElementById('pur-default-cat-l5');
+          if (el5) { el5.value = draft.defaults.catL5; purOnDefaultCatL5Changed(); }
+        }
+        if (draft.defaults.catItem) {
+          var elItem = document.getElementById('pur-default-cat-item');
+          if (elItem) elItem.value = draft.defaults.catItem;
+        }
+        if (draft.defaults.size) {
+          var elSize = document.getElementById('pur-defaultSize');
+          if (elSize) elSize.value = draft.defaults.size;
+        }
+        if (draft.defaults.condition) {
+          var elCond = document.getElementById('pur-defaultCondition');
+          if (elCond) elCond.value = draft.defaults.condition;
+        }
+        if (draft.defaults.brand) {
+          var elBrand = document.getElementById('pur-defaultBrand');
+          if (elBrand) elBrand.value = draft.defaults.brand;
+        }
+        if (draft.defaults.brandKana) {
+          var elBrandKana = document.getElementById('pur-defaultBrandKana');
+          if (elBrandKana) elBrandKana.value = draft.defaults.brandKana;
+        }
       }
+      // アイテム復元
       _pur_entryItems = [];
       var container = document.getElementById('pur-entryItemsContainer');
       if (container) container.innerHTML = '';
@@ -5078,7 +5192,86 @@
         var newId = item.id;
         Object.keys(savedItem).forEach(function(key) { if (key !== 'id') item[key] = savedItem[key]; });
         item.id = newId;
+        // 仕入4項目のDOM反映
+        var dateEl = document.getElementById('pur-entry-purchaseDate-' + newId);
+        if (dateEl && item.purchaseDate) dateEl.value = item.purchaseDate;
+        var amtEl = document.getElementById('pur-entry-amount-' + newId);
+        if (amtEl && item.amount) amtEl.value = item.amount;
+        var supEl = document.getElementById('pur-entry-supplier-' + newId);
+        if (supEl && item.supplier) supEl.value = item.supplier;
+        var assEl = document.getElementById('pur-entry-assignee-' + newId);
+        if (assEl && item.assignee) assEl.value = item.assignee;
+        // カテゴリカスケード復元
+        if (item.catL0) {
+          var catL0El = document.getElementById('pur-entry-cat-l0-' + newId);
+          if (catL0El) { catL0El.value = item.catL0; purOnEntryCatL0Changed(newId); }
+        }
+        if (item.catL1) {
+          var catL1El = document.getElementById('pur-entry-cat-l1-' + newId);
+          if (catL1El) { catL1El.value = item.catL1; purOnEntryCatL1Changed(newId); }
+        }
+        if (item.catL2) {
+          var catL2El = document.getElementById('pur-entry-cat-l2-' + newId);
+          if (catL2El) { catL2El.value = item.catL2; purOnEntryCatL2Changed(newId); }
+        }
+        if (item.catL3) {
+          var catL3El = document.getElementById('pur-entry-cat-l3-' + newId);
+          if (catL3El) { catL3El.value = item.catL3; purOnEntryCatL3Changed(newId); }
+        }
+        if (item.catL4) {
+          var catL4El = document.getElementById('pur-entry-cat-l4-' + newId);
+          if (catL4El) { catL4El.value = item.catL4; purOnEntryCatL4Changed(newId); }
+        }
+        if (item.catL5) {
+          var catL5El = document.getElementById('pur-entry-cat-l5-' + newId);
+          if (catL5El) { catL5El.value = item.catL5; purOnEntryCatL5Changed(newId); }
+        }
+        if (item.catItem) {
+          var catItemEl = document.getElementById('pur-entry-cat-item-' + newId);
+          if (catItemEl) catItemEl.value = item.catItem;
+        }
+        // サイズ・状態・ブランド・メモのDOM反映
+        if (item.size) {
+          var sizeEl = document.getElementById('pur-entry-size-' + newId);
+          if (sizeEl) sizeEl.value = item.size;
+        }
+        if (item.condition) {
+          var condEl = document.getElementById('pur-entry-condition-' + newId);
+          if (condEl) condEl.value = item.condition;
+        }
+        if (item.brand) {
+          var brandEl = document.getElementById('pur-entry-brand-' + newId);
+          if (brandEl) brandEl.value = item.brand;
+        }
+        if (item.brandKana) {
+          var brandKanaEl = document.getElementById('pur-entry-brandKana-' + newId);
+          if (brandKanaEl) brandKanaEl.value = item.brandKana;
+        }
+        if (item.memo) {
+          var memoEl = document.getElementById('pur-entry-memo-' + newId);
+          if (memoEl) memoEl.value = item.memo;
+        }
+        // 付属品チェックボックスの復元
+        if (item.accessories && item.accessories.length > 0) {
+          var accContainer = document.getElementById('pur-entry-accessories-' + newId);
+          if (accContainer) {
+            item.accessories.forEach(function(accVal) {
+              var cb = accContainer.querySelector('input[value="' + accVal + '"]');
+              if (cb) { cb.checked = true; var lbl = cb.closest('.pur-accessory-checkbox'); if (lbl) lbl.classList.add('checked'); }
+            });
+            if (item.accessories.indexOf('その他') >= 0) {
+              var otherContainer = document.getElementById('pur-entry-accessory-other-container-' + newId);
+              if (otherContainer) otherContainer.style.display = 'block';
+              if (item.accessoryOther) {
+                var otherInput = document.getElementById('pur-entry-accessory-other-' + newId);
+                if (otherInput) otherInput.value = item.accessoryOther;
+              }
+            }
+          }
+        }
+        purUpdateEntryItemSummary(newId);
       });
+      purUpdateEntryTotal();
       console.log('[purchase] 下書きから復元完了:', draft.items.length, '件');
     }
 
