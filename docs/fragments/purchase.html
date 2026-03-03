@@ -5129,7 +5129,16 @@
         if (!hasValidData) { purClearEntryDraft(); return; }
         var draft = {
           savedAt: new Date().toISOString(),
-          items: _pur_entryItems.map(function(item) { return Object.assign({}, item); }),
+          items: _pur_entryItems.map(function(item) {
+            var copy = Object.assign({}, item);
+            // base64画像はlocalStorage容量を超えるため除外、objectsデータのみ保持
+            ['damageMarkerFront', 'damageMarkerBack'].forEach(function(key) {
+              if (copy[key] && copy[key].image) {
+                copy[key] = { subcategory: copy[key].subcategory || '', fineCategory: copy[key].fineCategory || '', objects: copy[key].objects || [], note: copy[key].note || '' };
+              }
+            });
+            return copy;
+          }),
           defaults: {
             purchaseDate: (document.getElementById('pur-defaultPurchaseDate') || {}).value || '',
             supplier: (document.getElementById('pur-defaultSupplier') || {}).value || '',
@@ -5308,6 +5317,24 @@
                 var otherInput = document.getElementById('pur-entry-accessory-other-' + newId);
                 if (otherInput) otherInput.value = item.accessoryOther;
               }
+            }
+          }
+        }
+        // 傷・汚れマーキングの復元
+        var hasDamageMarker = item.damageMarkerFront || item.damageMarkerBack;
+        if (hasDamageMarker) {
+          // 傷マーキングセクションを表示（条件によるdisplay:noneを解除）
+          var dmSection = document.getElementById('pur-damage-marker-section-' + newId);
+          if (dmSection) dmSection.style.display = '';
+          // objects配列がある場合、マーカー状態を再構築してcanvasに再描画
+          var marker = item.damageMarkerFront || item.damageMarkerBack;
+          if (marker && marker.objects && marker.objects.length > 0) {
+            // プレビューに「復元済み」を表示
+            var previewContainer = document.getElementById('pur-damage-marker-preview-' + newId);
+            var previewLabel = previewContainer ? previewContainer.querySelector('.pur-damage-marker-preview-label') : null;
+            if (previewContainer && previewLabel) {
+              previewLabel.textContent = '下書きから復元済み（' + marker.objects.length + '個のマーク）';
+              previewContainer.style.display = 'block';
             }
           }
         }
