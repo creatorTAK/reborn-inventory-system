@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v375';  // v375: アプリバッジに資材不足カウント追加（管理者のみ）
+const CACHE_VERSION = 'v376';  // v376: PackagingBadgeDBをIndexedDBに永続化してSW単独でも資材不足バッジ維持
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -122,16 +122,17 @@ function readBadgeCount(dbName) {
   })).catch(() => 0);
 }
 
-// 両DB（チャット+タスク）の合算でアプリバッジを更新
+// 全DB（チャット+タスク+資材不足）の合算でアプリバッジを更新
 async function updateCombinedAppBadge() {
   try {
     const chatCount = await readBadgeCount('RebornBadgeDB');
     const todoCount = await readBadgeCount('SystemNotificationDB');
-    const totalCount = chatCount + todoCount;
+    const packagingCount = await readBadgeCount('PackagingBadgeDB');
+    const totalCount = chatCount + todoCount + packagingCount;
     if (navigator.setAppBadge) {
       if (totalCount > 0) {
         await navigator.setAppBadge(totalCount);
-        console.log(`[Badge] ✅ setAppBadge(${totalCount}) チャット:${chatCount} + タスク:${todoCount}`);
+        console.log(`[Badge] ✅ setAppBadge(${totalCount}) チャット:${chatCount} + タスク:${todoCount} + 資材:${packagingCount}`);
       } else {
         await navigator.clearAppBadge();
         console.log('[Badge] アプリバッジクリア');
@@ -425,6 +426,9 @@ async function syncBadgeCounts(chatCount, todoCount, packagingCount) {
     // SystemNotificationDB（やることリスト用）をtodoCountに設定
     await setBadgeInDB('SystemNotificationDB', todoCount);
 
+    // PackagingBadgeDB（資材不足用）をpackagingCountに設定
+    await setBadgeInDB('PackagingBadgeDB', packagingCount || 0);
+
     // ★ アプリバッジも正しい値に更新（重要！）
     const totalCount = chatCount + todoCount + (packagingCount || 0);
     if (navigator.setAppBadge) {
@@ -480,6 +484,9 @@ async function clearAllBadges() {
 
     // 3. IndexedDB のカウントをリセット（SystemNotificationDB）
     await resetBadgeInDB('SystemNotificationDB');
+
+    // 4. IndexedDB のカウントをリセット（PackagingBadgeDB）
+    await resetBadgeInDB('PackagingBadgeDB');
 
     console.log('[SW v160] All badges cleared successfully');
   } catch (err) {
