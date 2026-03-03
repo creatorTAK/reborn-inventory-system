@@ -1536,11 +1536,12 @@
     }
 
     function salUpdateSummary() {
-      var activeData = _sal_currentSalesData.filter(function(item) { return item.paymentStatus !== 'cancelled'; });
-      var count = activeData.length;
-      var totalSales = activeData.reduce(function(sum, item) { return sum + item.saleAmount; }, 0);
-      var totalProfit = activeData.reduce(function(sum, item) { return sum + item.finalProfit; }, 0);
-      var avgProfitRate = count > 0 ? activeData.reduce(function(sum, item) { return sum + item.profitRate; }, 0) / count : 0;
+      var paidData = _sal_currentSalesData.filter(function(item) { return item.paymentStatus === 'paid'; });
+      var pendingData = _sal_currentSalesData.filter(function(item) { return item.paymentStatus !== 'paid' && item.paymentStatus !== 'cancelled'; });
+      var count = paidData.length;
+      var totalSales = paidData.reduce(function(sum, item) { return sum + item.saleAmount; }, 0);
+      var totalProfit = paidData.reduce(function(sum, item) { return sum + item.finalProfit; }, 0);
+      var avgProfitRate = count > 0 ? paidData.reduce(function(sum, item) { return sum + item.profitRate; }, 0) / count : 0;
 
       // キャンセル発生費用を利益から差し引き
       var totalCancelCost = _sal_currentSalesData.reduce(function(sum, item) {
@@ -1553,13 +1554,21 @@
       document.getElementById('sal-summary-profit').textContent = salFormatCurrency(totalProfit);
       document.getElementById('sal-summary-profitRate').textContent = salFormatPercent(avgProfitRate);
 
-      // 暫定利益注記
-      var provisionalCount = activeData.filter(function(item) { return item.shippingConfirmed === false; }).length;
+      // 取引中注記
       var noteEl = document.getElementById('sal-provisional-note');
       if (noteEl) {
+        var notes = [];
+        if (pendingData.length > 0) {
+          var pendingAmount = pendingData.reduce(function(sum, item) { return sum + item.saleAmount; }, 0);
+          notes.push('取引中 ' + pendingData.length + '件（' + salFormatCurrency(pendingAmount) + '）は含まれていません');
+        }
+        var provisionalCount = paidData.filter(function(item) { return item.shippingConfirmed === false; }).length;
         if (provisionalCount > 0) {
+          notes.push(provisionalCount + '件の暫定利益を含みます（送料・梱包費未確定）');
+        }
+        if (notes.length > 0) {
           noteEl.style.display = 'block';
-          noteEl.textContent = '※' + provisionalCount + '件の暫定利益を含みます（送料・梱包費未確定）';
+          noteEl.textContent = '※' + notes.join('　');
         } else {
           noteEl.style.display = 'none';
         }
@@ -2127,7 +2136,7 @@
     function salGetFilteredSalesData() {
       var range = salCalculateAnalysisDateRange(_sal_analysisPeriodPreset);
       return _sal_allSalesDataForAnalysis.filter(function(item) {
-        if (item.paymentStatus === 'cancelled') return false;
+        if (item.paymentStatus !== 'paid') return false;
         if (_sal_analysisPeriodPreset === 'all') return true;
         var saleDate = item.saleDate || '';
         if (!saleDate) return false;
