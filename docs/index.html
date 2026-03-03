@@ -1411,12 +1411,12 @@
         <span class="bottom-nav-badge" id="bottom-nav-chat-badge">0</span>
       </button>
 
-      <!-- カメラ（商品登録） -->
-      <button class="bottom-nav-item camera-btn" data-page="product" onclick="bottomNavNavigate('product')" title="商品登録">
+      <!-- スキャンハブ -->
+      <button class="bottom-nav-item camera-btn" onclick="openScanHub()" title="スキャン">
         <div class="camera-circle">
-          <i class="bi bi-camera"></i>
+          <i class="bi bi-qr-code-scan"></i>
         </div>
-        <span>登録</span>
+        <span>スキャン</span>
       </button>
 
       <!-- タスク -->
@@ -1433,12 +1433,41 @@
         <span>マイページ</span>
       </button>
     </nav>
+
+    <!-- スキャンハブ ボトムシート -->
+    <div id="scanHub-backdrop" onclick="closeScanHub()" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:10000;opacity:0;transition:opacity 0.3s ease;"></div>
+    <div id="scanHub-sheet" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:10001;background:#fff;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom, 0));transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.32,0.72,0,1);">
+      <div style="width:36px;height:4px;background:#D1D5DB;border-radius:2px;margin:0 auto 16px;"></div>
+      <div style="font-size:15px;font-weight:700;color:#374151;text-align:center;margin-bottom:16px;">QRスキャン</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button onclick="scanHubSelect('product')" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border:none;background:#F0F9FF;border-radius:12px;text-align:left;cursor:pointer;transition:background 0.15s;">
+          <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#40B4E5,#1E8FBF);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="bi bi-box-seam" style="font-size:20px;color:#fff;"></i>
+          </div>
+          <div><div style="font-size:15px;font-weight:600;color:#1F2937;">商品登録</div><div style="font-size:12px;color:#6B7280;margin-top:2px;">QRを読み取って商品を登録</div></div>
+        </button>
+        <button onclick="scanHubSelect('purchase')" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border:none;background:#F0FDF9;border-radius:12px;text-align:left;cursor:pointer;transition:background 0.15s;">
+          <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#4ECDC4,#44A08D);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="bi bi-clipboard-check" style="font-size:20px;color:#fff;"></i>
+          </div>
+          <div><div style="font-size:15px;font-weight:600;color:#1F2937;">仕入確認</div><div style="font-size:12px;color:#6B7280;margin-top:2px;">QRで仕入済み商品を確認</div></div>
+        </button>
+        <button onclick="scanHubSelect('stocktaking')" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border:none;background:#FFFBEB;border-radius:12px;text-align:left;cursor:pointer;transition:background 0.15s;">
+          <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#F59E0B,#D97706);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="bi bi-list-check" style="font-size:20px;color:#fff;"></i>
+          </div>
+          <div><div style="font-size:15px;font-weight:600;color:#1F2937;">棚卸スキャン</div><div style="font-size:12px;color:#6B7280;margin-top:2px;">QRで在庫を棚卸チェック</div></div>
+        </button>
+      </div>
+      <button onclick="closeScanHub()" style="display:block;width:100%;margin-top:12px;padding:14px;border:none;background:#F3F4F6;border-radius:12px;font-size:15px;font-weight:600;color:#6B7280;cursor:pointer;">キャンセル</button>
+    </div>
+
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0303ad</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0303ae</div>
     <script>
     // PWAバージョンチェック（タスクキル復帰 + バックグラウンド復帰）
     (function(){
-      var LOCAL_VER = 'v0303ad';
+      var LOCAL_VER = 'v0303ae';
       var lastCheck = 0;
 
       function _versionCheck() {
@@ -6529,6 +6558,35 @@
 
     // 現在アクティブなボトムナビページを追跡
     let currentBottomNavPage = 'home';
+
+    // スキャンハブ関数
+    function openScanHub() {
+      var backdrop = document.getElementById('scanHub-backdrop');
+      var sheet = document.getElementById('scanHub-sheet');
+      backdrop.style.display = 'block';
+      sheet.style.display = 'block';
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          backdrop.style.opacity = '1';
+          sheet.style.transform = 'translateY(0)';
+        });
+      });
+    }
+    function closeScanHub() {
+      var backdrop = document.getElementById('scanHub-backdrop');
+      var sheet = document.getElementById('scanHub-sheet');
+      backdrop.style.opacity = '0';
+      sheet.style.transform = 'translateY(100%)';
+      setTimeout(function() {
+        backdrop.style.display = 'none';
+        sheet.style.display = 'none';
+      }, 350);
+    }
+    function scanHubSelect(type) {
+      closeScanHub();
+      sessionStorage.setItem('scanHub_autoOpen', type);
+      setTimeout(function() { navigateToPage(type === 'product' ? 'product' : type === 'purchase' ? 'purchase' : 'stocktaking'); }, 100);
+    }
 
     // ボトムナビ ナビゲーション関数
     function bottomNavNavigate(page) {
