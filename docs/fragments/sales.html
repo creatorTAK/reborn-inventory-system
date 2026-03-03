@@ -802,23 +802,28 @@
 
         <!-- 商品ランキング -->
         <div class="sal-sales-table-container">
-          <h6 class="mb-3"><i class="bi bi-star"></i> 売上TOP10商品</h6>
+          <h6 class="mb-3"><i class="bi bi-star"></i> 売上TOP商品</h6>
           <div class="table-responsive">
             <table class="sal-sales-table">
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>商品名</th>
+                  <th colspan="2">商品</th>
                   <th class="text-end">売上</th>
                   <th class="text-end">利益</th>
                 </tr>
               </thead>
               <tbody id="sal-productRankingBody">
                 <tr>
-                  <td colspan="4" class="text-center text-muted py-3">データを読み込んでいます...</td>
+                  <td colspan="5" class="text-center text-muted py-3">データを読み込んでいます...</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div class="text-center mt-2" id="sal-productRankingMore" style="display:none;">
+            <button class="btn btn-sm btn-outline-secondary" onclick="salToggleProductRankingAll()">
+              <i class="bi bi-chevron-down" id="sal-productRankingMoreIcon"></i> <span id="sal-productRankingMoreText">もっと見る</span>
+            </button>
           </div>
           <div style="position: relative; margin-top: 12px;" id="sal-productChartWrap">
             <canvas id="sal-productChart"></canvas>
@@ -2446,47 +2451,93 @@
       });
     }
 
+    var _sal_productRankingAll = [];
+    var _sal_productRankingShowAll = false;
+
     function salRenderProductRanking(data) {
-      var sorted = data.slice().filter(function(item) { return item.saleAmount > 0; })
-        .sort(function(a, b) { return (b.saleAmount || 0) - (a.saleAmount || 0); }).slice(0, 10);
+      _sal_productRankingShowAll = false;
+      _sal_productRankingAll = data.slice().filter(function(item) { return item.saleAmount > 0; })
+        .sort(function(a, b) { return (b.saleAmount || 0) - (a.saleAmount || 0); });
+
+      var moreBtn = document.getElementById('sal-productRankingMore');
+      if (moreBtn) moreBtn.style.display = _sal_productRankingAll.length > 10 ? '' : 'none';
+
+      salRenderProductRankingRows(_sal_productRankingAll.slice(0, 10));
+    }
+
+    function salToggleProductRankingAll() {
+      _sal_productRankingShowAll = !_sal_productRankingShowAll;
+      var text = document.getElementById('sal-productRankingMoreText');
+      var icon = document.getElementById('sal-productRankingMoreIcon');
+      if (_sal_productRankingShowAll) {
+        salRenderProductRankingRows(_sal_productRankingAll);
+        if (text) text.textContent = '折りたたむ';
+        if (icon) icon.className = 'bi bi-chevron-up';
+      } else {
+        salRenderProductRankingRows(_sal_productRankingAll.slice(0, 10));
+        if (text) text.textContent = 'もっと見る（全' + _sal_productRankingAll.length + '件）';
+        if (icon) icon.className = 'bi bi-chevron-down';
+      }
+    }
+
+    function salRenderProductRankingRows(sorted) {
       var tbody = document.getElementById('sal-productRankingBody');
       var chartWrap = document.getElementById('sal-productChartWrap');
       if (sorted.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">データがありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">データがありません</td></tr>';
         if (_sal_productChart) { _sal_productChart.destroy(); _sal_productChart = null; }
         if (chartWrap) chartWrap.style.display = 'none';
         return;
       }
+
+      // Build product lookup for images
+      var productMap = {};
+      _sal_allProductsForAnalysis.forEach(function(p) { productMap[p.id] = p; });
+
       var html = '';
       sorted.forEach(function(item, index) {
+        var product = productMap[item.id] || {};
+        var imgUrl = product.imageUrl1 || (product.images && product.images[0]) || '';
+        var imgHtml = imgUrl
+          ? '<img src="' + imgUrl + '" style="width:32px;height:32px;object-fit:cover;border-radius:4px;vertical-align:middle;" loading="lazy">'
+          : '<span style="display:inline-block;width:32px;height:32px;background:#e5e7eb;border-radius:4px;vertical-align:middle;"></span>';
+        var mgtNo = item.managementNumber ? '<br><small class="text-muted">' + salEscapeHtml(item.managementNumber) + '</small>' : '';
         html += '<tr><td>' + (index + 1) + '</td>' +
-          '<td style="white-space: nowrap;">' + salEscapeHtml(item.productName || '-') + '</td>' +
+          '<td style="width:40px;">' + imgHtml + '</td>' +
+          '<td><span style="font-size:13px;">' + salEscapeHtml(item.productName || '-') + '</span>' + mgtNo + '</td>' +
           '<td class="text-end">' + salFormatCurrency(item.saleAmount) + '</td>' +
           '<td class="text-end ' + (item.finalProfit >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatCurrency(item.finalProfit) + '</td></tr>';
       });
       tbody.innerHTML = html;
 
-      // Horizontal bar chart
+      // Horizontal bar chart (top 10 only)
+      var chartData = sorted.slice(0, 10);
       if (_sal_productChart) { _sal_productChart.destroy(); _sal_productChart = null; }
       var canvas = document.getElementById('sal-productChart');
       if (!canvas || typeof Chart === 'undefined') return;
-      if (chartWrap) { chartWrap.style.display = 'block'; chartWrap.style.height = Math.max(150, sorted.length * 32 + 40) + 'px'; }
-      var labels = sorted.map(function(item) {
+      if (chartWrap) { chartWrap.style.display = 'block'; chartWrap.style.height = Math.max(150, chartData.length * 36 + 40) + 'px'; }
+      var labels = chartData.map(function(item) {
+        var no = item.managementNumber || '';
         var name = item.productName || '-';
-        return name.length > 15 ? name.substring(0, 15) + '…' : name;
+        if (no) return no;
+        return name.length > 12 ? name.substring(0, 12) + '…' : name;
       });
       _sal_productChart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {
           labels: labels,
           datasets: [
-            { label: '売上', data: sorted.map(function(item) { return item.saleAmount || 0; }), backgroundColor: 'rgba(59, 130, 246, 0.7)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 1 },
-            { label: '利益', data: sorted.map(function(item) { return item.finalProfit || 0; }), backgroundColor: 'rgba(16, 185, 129, 0.7)', borderColor: 'rgba(16, 185, 129, 1)', borderWidth: 1 }
+            { label: '売上', data: chartData.map(function(item) { return item.saleAmount || 0; }), backgroundColor: 'rgba(59, 130, 246, 0.7)', borderColor: 'rgba(59, 130, 246, 1)', borderWidth: 1 },
+            { label: '利益', data: chartData.map(function(item) { return item.finalProfit || 0; }), backgroundColor: 'rgba(16, 185, 129, 0.7)', borderColor: 'rgba(16, 185, 129, 1)', borderWidth: 1 }
           ]
         },
         options: {
           indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ¥' + ctx.parsed.x.toLocaleString(); } } } },
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ¥' + ctx.parsed.x.toLocaleString(); },
+              title: function(ctx) { var i = ctx[0].dataIndex; return (chartData[i].productName || '-'); } } }
+          },
           scales: { x: { beginAtZero: true, ticks: { callback: function(v) { return '¥' + v.toLocaleString(); } } } }
         }
       });
@@ -2876,6 +2927,8 @@
       _sal_currentPerformanceData = [];
       _sal_performanceDataLoaded = false;
       _sal_perfPeriodPreset = 'all';
+      _sal_productRankingAll = [];
+      _sal_productRankingShowAll = false;
     }
   </script>
 </div>
