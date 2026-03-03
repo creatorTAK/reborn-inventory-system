@@ -2075,9 +2075,11 @@ exports.dailyTaskReminder = onSchedule({
 
 /**
  * 滞留商品チェック（毎日9時実行）
- * - 出品中の商品をチェック
- * - 14日以上: 警告タスク作成
- * - 30日以上: 対策タスク作成（報酬付き）
+ * - 出品中の商品を4段階でチェック
+ * - 30日超過: 注意（管理者に通知）
+ * - 60日超過: 要対策（再通知）
+ * - 90日超過: 危険（再通知）
+ * - 管理者が判断して担当者に指示を出すフロー
  */
 exports.dailyInventoryAgingCheck = onSchedule({
   schedule: '0 0 * * *', // UTC 0:00 = JST 9:00
@@ -2088,7 +2090,11 @@ exports.dailyInventoryAgingCheck = onSchedule({
   const startTime = Date.now();
 
   try {
-    const ACTION_DAYS = 30;
+    const AGING_LEVELS = [
+      { days: 90, level: 3, label: '危険', priority: 'critical', emoji: '🔴' },
+      { days: 60, level: 2, label: '要対策', priority: 'high', emoji: '🟠' },
+      { days: 30, level: 1, label: '注意', priority: 'warning', emoji: '🟡' }
+    ];
 
     // 出品中の商品を取得
     const productsSnapshot = await db.collection('products')
@@ -2100,13 +2106,11 @@ exports.dailyInventoryAgingCheck = onSchedule({
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    // 30日超過の商品を検出
+    // 段階が上がった商品を検出
     const agingProducts = [];
     for (const productDoc of productsSnapshot.docs) {
       const product = productDoc.data();
-
-      // 既に通知済みならスキップ
-      if (product.agingNotifiedAt) continue;
+      const currentLevel = product.agingNotifiedLevel || 0;
 
       // 出品日を取得
       let listingDate = null;
@@ -2121,12 +2125,21 @@ exports.dailyInventoryAgingCheck = onSchedule({
 
       listingDate.setHours(0, 0, 0, 0);
       const agingDays = Math.floor((now - listingDate) / (1000 * 60 * 60 * 24));
-      if (agingDays <= ACTION_DAYS) continue;
 
-      agingProducts.push({ productDoc, product, agingDays });
+      // 該当する最も高い段階を判定
+      let newLevel = 0;
+      let levelInfo = null;
+      for (const lv of AGING_LEVELS) {
+        if (agingDays > lv.days) { newLevel = lv.level; levelInfo = lv; break; }
+      }
+
+      // 段階が上がった場合のみ通知
+      if (newLevel > currentLevel) {
+        agingProducts.push({ productDoc, product, agingDays, newLevel, levelInfo });
+      }
     }
 
-    console.log(`📊 [dailyInventoryAgingCheck] 30日超過（未通知）: ${agingProducts.length}件`);
+    console.log(`📊 [dailyInventoryAgingCheck] 段階アップ対象: ${agingProducts.length}件`);
 
     if (agingProducts.length === 0) {
       const duration = Date.now() - startTime;
@@ -2149,16 +2162,18 @@ exports.dailyInventoryAgingCheck = onSchedule({
 
     console.log(`👤 [dailyInventoryAgingCheck] 管理者: ${adminEmails.join(', ')}`);
 
-    // 各商品について管理者に通知 + agingNotifiedAt を書き込み
+    // 各商品について管理者に通知 + agingNotifiedLevel を更新
     let notifiedCount = 0;
+    const summaryByLevel = { 1: 0, 2: 0, 3: 0 };
 
-    for (const { productDoc, product, agingDays } of agingProducts) {
+    for (const { productDoc, product, agingDays, newLevel, levelInfo } of agingProducts) {
       const managementNumber = product.managementNumber || productDoc.id;
       const productName = product.productName || '名称なし';
 
-      // 商品ドキュメントに通知済みフラグを書き込み
+      // 商品ドキュメントに通知段階を書き込み
       await db.collection('products').doc(productDoc.id).update({
-        agingNotifiedAt: FieldValue.serverTimestamp()
+        agingNotifiedAt: FieldValue.serverTimestamp(),
+        agingNotifiedLevel: newLevel
       });
 
       // 各管理者にpersonalAnnouncements通知
@@ -2167,21 +2182,30 @@ exports.dailyInventoryAgingCheck = onSchedule({
           .doc(adminEmail)
           .collection('personalAnnouncements')
           .add({
-            title: `📦 滞留商品: ${managementNumber}`,
-            body: `「${productName}」が${agingDays}日間出品中です。在庫管理画面で確認してください。`,
-            priority: 'warning',
+            title: `${levelInfo.emoji} 滞留${levelInfo.label}: ${managementNumber}`,
+            body: `「${productName}」が${agingDays}日間出品中です。${newLevel >= 2 ? '値下げ・再出品等の対策を検討してください。' : '在庫管理画面で確認してください。'}`,
+            priority: levelInfo.priority,
             createdAt: FieldValue.serverTimestamp(),
             productId: productDoc.id,
-            managementNumber: managementNumber
+            managementNumber: managementNumber,
+            agingLevel: newLevel,
+            agingDays: agingDays
           });
       }
 
+      summaryByLevel[newLevel]++;
       notifiedCount++;
-      console.log(`📦 [${managementNumber}] 管理者通知送信 (${agingDays}日)`);
+      console.log(`${levelInfo.emoji} [${managementNumber}] ${levelInfo.label} (${agingDays}日, Lv${newLevel})`);
     }
 
     // 管理者にプッシュ通知（まとめて1通）
     if (notifiedCount > 0) {
+      const parts = [];
+      if (summaryByLevel[3] > 0) parts.push(`危険${summaryByLevel[3]}件`);
+      if (summaryByLevel[2] > 0) parts.push(`要対策${summaryByLevel[2]}件`);
+      if (summaryByLevel[1] > 0) parts.push(`注意${summaryByLevel[1]}件`);
+      const summaryText = parts.join('・');
+
       for (const adminEmail of adminEmails) {
         try {
           const activeDeviceDoc = await db.collection('activeDevices').doc(adminEmail).get();
@@ -2194,7 +2218,7 @@ exports.dailyInventoryAgingCheck = onSchedule({
           const message = {
             notification: {
               title: '📦 滞留商品アラート',
-              body: `${notifiedCount}件の商品が30日以上滞留しています。在庫管理画面で確認してください。`
+              body: `${summaryText}（計${notifiedCount}件）`
             },
             data: {
               type: 'inventory_aging',
@@ -2218,7 +2242,8 @@ exports.dailyInventoryAgingCheck = onSchedule({
     return {
       success: true,
       notified: notifiedCount,
-      admins: adminEmails.length
+      admins: adminEmails.length,
+      byLevel: summaryByLevel
     };
 
   } catch (error) {
@@ -2261,6 +2286,15 @@ exports.onProductUpdatedForAgingTask = onDocumentUpdated('products/{productId}',
   console.log(`  - ステータス変更: ${statusChanged}`);
   console.log(`  - 価格変更: ${priceChanged}`);
   console.log(`  - 説明変更: ${descriptionChanged}`);
+
+  // 出品中から別ステータスに変わった場合、滞留通知レベルをリセット
+  if (statusChanged && afterData.status !== '出品中' && (beforeData.agingNotifiedLevel || beforeData.agingNotifiedAt)) {
+    await db.collection('products').doc(productId).update({
+      agingNotifiedAt: FieldValue.delete(),
+      agingNotifiedLevel: FieldValue.delete()
+    });
+    console.log(`🔄 [${afterData.managementNumber}] 滞留通知レベルをリセット`);
+  }
 
   try {
     // 担当者を特定
