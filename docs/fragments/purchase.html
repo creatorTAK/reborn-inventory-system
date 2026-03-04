@@ -1323,6 +1323,21 @@
       margin-right: 4px;
     }
 
+    /* ケバブメニュー */
+    #spa-page-purchase .pur-kebab-wrap { position: relative; display: inline-block; }
+    #spa-page-purchase .pur-kebab-menu {
+      display: none; position: absolute; right: 0; top: 100%; z-index: 100;
+      background: white; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      min-width: 150px; overflow: hidden;
+    }
+    #spa-page-purchase .pur-kebab-menu.active { display: block; }
+    #spa-page-purchase .pur-kebab-item {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      padding: 10px 14px; border: none; background: none;
+      font-size: 0.85rem; text-align: left; white-space: nowrap; cursor: pointer;
+    }
+    #spa-page-purchase .pur-kebab-item:hover { background: #f3f4f6; }
+
     /* モーダルオーバーレイ */
     #spa-page-purchase .pur-modal-overlay {
       display: none;
@@ -2197,7 +2212,7 @@
           <i class="bi bi-info-circle"></i> 発送済みの仕入バッチの商品登録進捗を確認できます。
         </div>
 
-        <div class="row g-2 mb-3 align-items-center">
+        <div class="row g-2 mb-3">
           <div class="col-auto">
             <select class="form-select form-select-sm" id="pur-dispatchStatusFilter" onchange="purFilterDispatchProgress()">
               <option value="all">すべて</option>
@@ -2207,9 +2222,6 @@
               <option value="registering">登録中</option>
               <option value="completed">完了</option>
             </select>
-          </div>
-          <div class="col-auto">
-            <a href="javascript:void(0)" class="text-muted small" onclick="purOpenAlertSettings()" style="text-decoration:none;"><i class="bi bi-bell"></i> アラート設定</a>
           </div>
         </div>
 
@@ -2840,6 +2852,19 @@
       var el = document.getElementById(id);
       if (el) el.classList.remove('active');
     }
+
+    function purToggleKebab(btn) {
+      var menu = btn.nextElementSibling;
+      var wasActive = menu.classList.contains('active');
+      purCloseKebab();
+      if (!wasActive) menu.classList.add('active');
+    }
+    function purCloseKebab() {
+      document.querySelectorAll('#spa-page-purchase .pur-kebab-menu.active').forEach(function(m) { m.classList.remove('active'); });
+    }
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.pur-kebab-wrap')) purCloseKebab();
+    });
 
     // ============================================
     // Tab switching (custom, no Bootstrap)
@@ -5214,15 +5239,17 @@
         var progressBar = '<div class="progress" style="min-width:80px;height:18px;"><div class="progress-bar bg-success" style="width:' + progress + '%"></div></div><small>' + progress + '%</small>';
         var inspBadge = purStatusBadge(d.inspectionStatus || 'not_assigned', _pur_inspectionStatusMap, _pur_inspectionBadgeClass);
         var statusBadge = purStatusBadge(d.status, _pur_statusMap, _pur_statusBadgeClass);
-        var actionHtml = '';
+        var menuItems = '';
         if (d.status === 'pending') {
-          actionHtml = '<button class="btn btn-sm btn-outline-primary me-1 px-2 py-1" style="font-size:0.75rem;" onclick="purSendDispatchFromProgress(\'' + d.id + '\')" title="発送通知"><i class="bi bi-send"></i></button>' +
-            '<button class="btn btn-sm btn-outline-success px-2 py-1" style="font-size:0.75rem;" onclick="purHandleSelfProcess(\'' + d.id + '\')" title="自分で処理"><i class="bi bi-person-check"></i></button>';
+          menuItems += '<button class="pur-kebab-item" onclick="purSendDispatchFromProgress(\'' + d.id + '\'); purCloseKebab();"><i class="bi bi-send text-primary"></i> 発送通知</button>';
+          menuItems += '<button class="pur-kebab-item" onclick="purHandleSelfProcess(\'' + d.id + '\'); purCloseKebab();"><i class="bi bi-person-check text-success"></i> 自分で処理</button>';
         } else if (d.status === 'completed') {
-          actionHtml = '<span class="badge bg-success">完了</span>';
-        } else {
-          actionHtml = '-';
+          menuItems += '<span class="pur-kebab-item text-muted" style="cursor:default;"><i class="bi bi-check-circle text-success"></i> 完了</span>';
         }
+        menuItems += '<button class="pur-kebab-item" onclick="purOpenAlertSettings(); purCloseKebab();"><i class="bi bi-bell text-warning"></i> アラート設定</button>';
+        var actionHtml = '<div class="pur-kebab-wrap">' +
+          '<button class="btn btn-sm btn-light px-2 py-0" onclick="purToggleKebab(this)" style="font-size:1rem;line-height:1;"><i class="bi bi-three-dots-vertical"></i></button>' +
+          '<div class="pur-kebab-menu">' + menuItems + '</div></div>';
         html += '<tr><td>' + (d.purchaseDate||'-') + '</td><td>' + (d.supplier||'-') + '</td><td>' + (d.itemCount||0) + '</td><td>' + (d.assignee||'-') + '</td><td>' + (d.inspectionAssignee||'-') + '</td><td>' + inspBadge + '</td><td>' + statusBadge + '</td><td>' + progressBar + '</td><td>' + actionHtml + '</td></tr>';
       });
       tbody.innerHTML = html;
