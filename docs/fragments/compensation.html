@@ -573,6 +573,7 @@
       </div>
 
       <div class="comp-card-section">
+        <div id="comp-detailControls"></div>
         <div class="table-responsive">
           <table class="comp-data-table">
             <thead>
@@ -590,6 +591,7 @@
             </tbody>
           </table>
         </div>
+        <div id="comp-detailPagination" class="tbl-pager-container"></div>
       </div>
     </div>
 
@@ -624,6 +626,7 @@
 
       <div class="comp-card-section">
         <h6><i class="bi bi-clock-history"></i> 支払履歴</h6>
+        <div id="comp-paymentControls"></div>
         <div class="table-responsive">
           <table class="comp-data-table">
             <thead>
@@ -640,6 +643,7 @@
             </tbody>
           </table>
         </div>
+        <div id="comp-paymentPagination" class="tbl-pager-container"></div>
       </div>
     </div>
   </div>
@@ -652,6 +656,8 @@
     var _compCurrentRecords = [];
     var _compCurrentPayments = [];
     var _compCurrentStaffStats = {};
+    var _comp_detailPaginator = null;
+    var _comp_paymentPaginator = null;
     var _compCompensationSettings = {};
 
     function compShowLoading() { var el = document.getElementById('comp-loadingOverlay'); if (el) el.style.display = 'flex'; }
@@ -1023,39 +1029,59 @@
 
     function compRenderDetail() {
       var taskNames = { listing: '\u5546\u54C1\u51FA\u54C1', shipping: '\u68B1\u5305\u30FB\u767A\u9001', photography: '\u5546\u54C1\u64AE\u5F71', inspection: '\u691C\u54C1\u4F5C\u696D', listing_approval: '\u51FA\u54C1\u78BA\u8A8D', shipping_task: '\u68B1\u5305\u30FB\u767A\u9001' };
-      var html = '';
-      var sorted = [].concat(_compCurrentRecords).sort(function(a, b) {
-        return new Date(b.completedAt || b.recordedAt || 0) - new Date(a.completedAt || a.recordedAt || 0);
+      // Apply filters
+      var fStaff = (document.getElementById('comp-filterStaff') || {}).value || '';
+      var fTask = (document.getElementById('comp-filterTask') || {}).value || '';
+      var fStatus = (document.getElementById('comp-filterStatus') || {}).value || '';
+      var filtered = _compCurrentRecords.filter(function(r) {
+        if (fStaff && r.staffName !== fStaff) return false;
+        if (fTask && (r.taskTypeKey || r.taskType || 'listing') !== fTask) return false;
+        if (fStatus === 'unpaid' && r.paidAt) return false;
+        if (fStatus === 'paid' && !r.paidAt) return false;
+        return true;
       });
-
-      sorted.forEach(function(r) {
-        var dateStr = r.completedAt || r.recordedAt;
-        var displayDate = dateStr ? new Date(dateStr).toLocaleDateString('ja-JP') : '-';
-        var staffName = r.staffName || '\u4E0D\u660E';
-        var taskType = r.taskTypeKey || r.taskType || 'listing';
-        var taskName = taskNames[taskType] || r.description || '\u30BF\u30B9\u30AF';
-        var productInfo = r.managementNumber || '-';
-        var amount = r.unitPrice || 0;
-        var isPaid = r.paidAt ? true : false;
-        html += '<tr><td>' + displayDate + '</td><td>' + staffName + '</td><td>' + taskName + '</td><td>' + productInfo + '</td><td class="text-end">' + compFormatCurrency(amount) + '</td><td><span class="comp-status-badge ' + (isPaid ? 'paid' : 'unpaid') + '">' + (isPaid ? '\u652F\u6255\u6E08' : '\u672A\u6255\u3044') + '</span></td></tr>';
+      // Pre-compute sortable fields
+      filtered.forEach(function(r) {
+        r._dateSort = r.completedAt || r.recordedAt || '';
+        r._amount = r.unitPrice || 0;
+        r._staffName = r.staffName || '';
+        r._taskType = r.taskTypeKey || r.taskType || 'listing';
       });
-
-      if (!html) html = '<tr><td colspan="6" class="text-center text-muted py-4">データがありません</td></tr>';
-      var el = document.getElementById('comp-detailBody'); if (el) el.innerHTML = html;
+      if (!_comp_detailPaginator) {
+        _comp_detailPaginator = new TablePaginator({
+          prefix: 'comp-detail', tbodyId: 'comp-detailBody', controlsId: 'comp-detailControls', paginationId: 'comp-detailPagination',
+          defaultPerPage: 20, emptyColspan: 6, emptyMessage: 'データがありません',
+          sortOptions: [{ key: '_dateSort', label: '日付' }, { key: '_staffName', label: '担当者' }, { key: '_amount', label: '金額' }, { key: '_taskType', label: 'タスク種類' }],
+          defaultSortKey: '_dateSort', defaultSortDir: 'desc',
+          renderRow: function(r) {
+            var dateStr = r.completedAt || r.recordedAt;
+            var displayDate = dateStr ? new Date(dateStr).toLocaleDateString('ja-JP') : '-';
+            var staffName = r.staffName || '\u4E0D\u660E';
+            var taskType = r.taskTypeKey || r.taskType || 'listing';
+            var taskName = taskNames[taskType] || r.description || '\u30BF\u30B9\u30AF';
+            var productInfo = r.managementNumber || '-';
+            var amount = r.unitPrice || 0;
+            var isPaid = r.paidAt ? true : false;
+            return '<tr><td>' + displayDate + '</td><td>' + staffName + '</td><td>' + taskName + '</td><td>' + productInfo + '</td><td class="text-end">' + compFormatCurrency(amount) + '</td><td><span class="comp-status-badge ' + (isPaid ? 'paid' : 'unpaid') + '">' + (isPaid ? '\u652F\u6255\u6E08' : '\u672A\u6255\u3044') + '</span></td></tr>';
+          }
+        });
+      }
+      _comp_detailPaginator.render(filtered);
     }
 
     function compRenderPaymentHistory() {
-      var tbody = document.getElementById('comp-paymentHistoryBody');
-      if (!tbody) return;
-      if (_compCurrentPayments.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">支払履歴がありません</td></tr>';
-        return;
+      if (!_comp_paymentPaginator) {
+        _comp_paymentPaginator = new TablePaginator({
+          prefix: 'comp-payment', tbodyId: 'comp-paymentHistoryBody', controlsId: 'comp-paymentControls', paginationId: 'comp-paymentPagination',
+          defaultPerPage: 20, emptyColspan: 5, emptyMessage: '支払履歴がありません',
+          sortOptions: [{ key: 'paymentDate', label: '支払日' }, { key: 'amount', label: '支払額' }, { key: 'staffName', label: '担当者' }],
+          defaultSortKey: 'paymentDate', defaultSortDir: 'desc',
+          renderRow: function(payment) {
+            return '<tr><td>' + compFormatDate(payment.paymentDate) + '</td><td>' + (payment.staffName || '-') + '</td><td class="text-end fw-bold">' + compFormatCurrency(payment.amount) + '</td><td>' + (payment.taskCount || '-') + '\u4EF6</td><td>' + (payment.memo || '-') + '</td></tr>';
+          }
+        });
       }
-      var html = '';
-      _compCurrentPayments.forEach(function(payment) {
-        html += '<tr><td>' + compFormatDate(payment.paymentDate) + '</td><td>' + (payment.staffName || '-') + '</td><td class="text-end fw-bold">' + compFormatCurrency(payment.amount) + '</td><td>' + (payment.taskCount || '-') + '\u4EF6</td><td>' + (payment.memo || '-') + '</td></tr>';
-      });
-      tbody.innerHTML = html;
+      _comp_paymentPaginator.render(_compCurrentPayments);
     }
 
     function compPopulateStaffSelects() {
@@ -1084,7 +1110,7 @@
       }
     }
 
-    function compFilterRecords() { compRenderDetail(); }
+    function compFilterRecords() { if (_comp_detailPaginator) _comp_detailPaginator.resetPage(); compRenderDetail(); }
 
     function compResetFilters() {
       var el;
@@ -1133,6 +1159,9 @@
 
     function destroyCompensationPage() {
       console.log('[Comp SPA] destroyCompensationPage called');
+      // Destroy paginators
+      if (_comp_detailPaginator) { _comp_detailPaginator.destroy(); _comp_detailPaginator = null; }
+      if (_comp_paymentPaginator) { _comp_paymentPaginator.destroy(); _comp_paymentPaginator = null; }
       // ドキュメントレベルのリスナーを解除
       if (_compDropdownClickHandler) {
         document.removeEventListener('click', _compDropdownClickHandler);

@@ -2076,6 +2076,7 @@
         </div>
       </div>
 
+      <div id="pur-purchaseControls"></div>
       <div class="pur-data-table-container">
         <div class="table-responsive">
           <table class="pur-data-table">
@@ -2097,6 +2098,7 @@
           </table>
         </div>
       </div>
+      <div id="pur-purchasePagination" class="tbl-pager-container"></div>
     </div>
 
     <!-- 仕入分析タブ -->
@@ -2221,6 +2223,7 @@
         </div>
 
         <h6 class="mb-2 mt-3"><i class="bi bi-list-ul"></i> 滞留商品リスト</h6>
+        <div id="pur-stagnantControls"></div>
         <div class="pur-data-table-container">
           <div class="table-responsive">
             <table class="pur-data-table">
@@ -2238,6 +2241,7 @@
             </table>
           </div>
         </div>
+        <div id="pur-stagnantPagination" class="tbl-pager-container"></div>
       </div>
 
       <div class="pur-analysis-sub-content" id="pur-analysis-sub-budget">
@@ -2318,6 +2322,7 @@
           </div>
         </div>
 
+        <div id="pur-dispatchControls"></div>
         <div class="pur-data-table-container">
           <div class="table-responsive">
             <table class="pur-data-table">
@@ -2342,6 +2347,7 @@
             </table>
           </div>
         </div>
+        <div id="pur-dispatchPagination" class="tbl-pager-container"></div>
       </div>
 
       <!-- 検品依頼セクション -->
@@ -2367,6 +2373,7 @@
           </div>
         </div>
 
+        <div id="pur-inspectionControls"></div>
         <div class="pur-data-table-container">
           <div class="table-responsive">
             <table class="pur-data-table">
@@ -2390,6 +2397,7 @@
             </table>
           </div>
         </div>
+        <div id="pur-inspectionPagination" class="tbl-pager-container"></div>
       </div>
     </div>
   </div>
@@ -2610,6 +2618,10 @@
       'not_assigned': 'bg-secondary', 'pending': 'bg-secondary', 'in_progress': 'bg-warning text-dark', 'completed': 'bg-success'
     };
     var _pur_inspectionRequestsData = [];
+    var _pur_purchasePaginator = null;
+    var _pur_stagnantPaginator = null;
+    var _pur_dispatchPaginator = null;
+    var _pur_inspectionPaginator = null;
     var _pur_damageMarkerState = new Map();
     var _pur_batchDamageMarkerState = {
       currentSide: 'front',
@@ -3116,20 +3128,21 @@
     }
 
     function purRenderPurchaseTable() {
-      var tbody = document.getElementById('pur-purchaseTableBody');
-      if (!tbody) return;
-      if (_pur_currentPurchaseData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">該当する仕入データがありません</td></tr>';
-        return;
+      if (!_pur_purchasePaginator) {
+        _pur_purchasePaginator = new TablePaginator({
+          prefix: 'pur-purchase', tbodyId: 'pur-purchaseTableBody', controlsId: 'pur-purchaseControls', paginationId: 'pur-purchasePagination',
+          defaultPerPage: 20, emptyColspan: 6, emptyMessage: '該当する仕入データがありません',
+          sortOptions: [{ key: 'purchaseDate', label: '仕入日' }, { key: 'purchaseAmount', label: '金額' }, { key: 'supplier', label: '仕入先' }],
+          defaultSortKey: 'purchaseDate', defaultSortDir: 'desc',
+          renderRow: function(item) {
+            return '<tr><td>' + (item.purchaseDate || '-') + '</td><td>' + item.managementNumber + '</td>' +
+              '<td>' + item.productName + '</td>' +
+              '<td>' + (item.supplier || '-') + '</td><td class="text-end">' + purFormatCurrency(item.purchaseAmount) + '</td>' +
+              '<td>' + purGetPaymentBadge(item.purchasePaymentStatus) + '</td></tr>';
+          }
+        });
       }
-      var html = '';
-      _pur_currentPurchaseData.forEach(function(item) {
-        html += '<tr><td>' + (item.purchaseDate || '-') + '</td><td>' + item.managementNumber + '</td>' +
-          '<td>' + item.productName + '</td>' +
-          '<td>' + (item.supplier || '-') + '</td><td class="text-end">' + purFormatCurrency(item.purchaseAmount) + '</td>' +
-          '<td>' + purGetPaymentBadge(item.purchasePaymentStatus) + '</td></tr>';
-      });
-      tbody.innerHTML = html;
+      _pur_purchasePaginator.render(_pur_currentPurchaseData);
     }
 
     function purGetPaymentBadge(status) {
@@ -3468,20 +3481,21 @@
         var stagnantItems = [];
         unsold.forEach(function(i) {
           var age = _purCalcDays(i.purchaseDate, todayStr);
-          if (age >= 30) stagnantItems.push({ item: i, age: age });
+          if (age >= 30) stagnantItems.push({ purchaseDate: i.purchaseDate, managementNumber: i.managementNumber, productName: i.productName, supplier: i.supplier, purchaseAmount: i.purchaseAmount, age: age });
         });
-        stagnantItems.sort(function(a, b) { return b.age - a.age; });
-        var slBody = document.getElementById('pur-stagnantListBody');
-        if (slBody) {
-          var slHtml = '';
-          stagnantItems.forEach(function(si) {
-            var i = si.item;
-            var ageColor = si.age >= 90 ? '#ef4444' : si.age >= 60 ? '#f97316' : '#f59e0b';
-            slHtml += '<tr><td>' + (i.purchaseDate || '-') + '</td><td>' + i.managementNumber + '</td><td>' + (i.productName || '-') + '</td><td>' + (i.supplier || '-') + '</td><td class="text-end">' + purFormatCurrency(i.purchaseAmount) + '</td><td class="text-end" style="color:' + ageColor + ';font-weight:600;">' + si.age + '日</td></tr>';
+        if (!_pur_stagnantPaginator) {
+          _pur_stagnantPaginator = new TablePaginator({
+            prefix: 'pur-stagnant', tbodyId: 'pur-stagnantListBody', controlsId: 'pur-stagnantControls', paginationId: 'pur-stagnantPagination',
+            defaultPerPage: 20, emptyColspan: 6, emptyMessage: '30日超の滞留在庫はありません',
+            sortOptions: [{ key: 'age', label: '滞留日数' }, { key: 'purchaseAmount', label: '仕入額' }, { key: 'purchaseDate', label: '仕入日' }],
+            defaultSortKey: 'age', defaultSortDir: 'desc',
+            renderRow: function(si) {
+              var ageColor = si.age >= 90 ? '#ef4444' : si.age >= 60 ? '#f97316' : '#f59e0b';
+              return '<tr><td>' + (si.purchaseDate || '-') + '</td><td>' + si.managementNumber + '</td><td>' + (si.productName || '-') + '</td><td>' + (si.supplier || '-') + '</td><td class="text-end">' + purFormatCurrency(si.purchaseAmount) + '</td><td class="text-end" style="color:' + ageColor + ';font-weight:600;">' + si.age + '日</td></tr>';
+            }
           });
-          if (!slHtml) slHtml = '<tr><td colspan="6" class="text-center text-muted py-4">30日超の滞留在庫はありません</td></tr>';
-          slBody.innerHTML = slHtml;
         }
+        _pur_stagnantPaginator.render(stagnantItems);
       };
 
       if (_pur_analysisCache && (now - _pur_analysisCacheTime < 300000)) {
@@ -5242,32 +5256,34 @@
     }
 
     function purRenderDispatchProgress() {
-      var tbody = document.getElementById('pur-dispatchProgressBody');
-      if (!tbody) return;
       var filter = document.getElementById('pur-dispatchStatusFilter').value;
       var filtered = filter === 'all' ? _pur_dispatchProgressData : _pur_dispatchProgressData.filter(function(d) { return d.status === filter; });
-      if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">該当するデータがありません</td></tr>'; return; }
-      var html = '';
-      filtered.forEach(function(d) {
-        var progress = d.itemCount > 0 ? Math.round((d.registeredCount || 0) / d.itemCount * 100) : 0;
-        var progressBar = '<div class="progress" style="min-width:80px;height:18px;"><div class="progress-bar bg-success" style="width:' + progress + '%"></div></div><small>' + progress + '%</small>';
-        var inspBadge = purStatusBadge(d.inspectionStatus || 'not_assigned', _pur_inspectionStatusMap, _pur_inspectionBadgeClass);
-        var statusBadge = purStatusBadge(d.status, _pur_statusMap, _pur_statusBadgeClass);
-        var menuItems = '';
-        if (d.status === 'pending') {
-          menuItems += '<button class="pur-kebab-item" onclick="purSendDispatchFromProgress(\'' + d.id + '\'); purCloseKebab();"><i class="bi bi-send text-primary"></i> 発送通知</button>';
-          menuItems += '<button class="pur-kebab-item" onclick="purHandleSelfProcess(\'' + d.id + '\'); purCloseKebab();"><i class="bi bi-person-check text-success"></i> 自分で処理</button>';
-        } else if (d.status === 'completed') {
-          menuItems += '<span class="pur-kebab-item text-muted" style="cursor:default;"><i class="bi bi-check-circle text-success"></i> 完了</span>';
-        }
-        var actionHtml = '<div class="pur-kebab-wrap">' +
-          '<button class="btn btn-sm btn-light px-2 py-0" onclick="purToggleKebab(this)" style="font-size:1rem;line-height:1;"><i class="bi bi-three-dots-vertical"></i></button>' +
-          '<div class="pur-kebab-menu">' + menuItems + '</div></div>';
-        html += '<tr><td>' + (d.purchaseDate||'-') + '</td><td>' + (d.supplier||'-') + '</td><td>' + (d.itemCount||0) + '</td><td>' + (d.assignee||'-') + '</td><td>' + (d.inspectionAssignee||'-') + '</td><td>' + inspBadge + '</td><td>' + statusBadge + '</td><td>' + progressBar + '</td><td>' + actionHtml + '</td></tr>';
-      });
-      tbody.innerHTML = html;
+      if (!_pur_dispatchPaginator) {
+        _pur_dispatchPaginator = new TablePaginator({
+          prefix: 'pur-dispatch', tbodyId: 'pur-dispatchProgressBody', controlsId: 'pur-dispatchControls', paginationId: 'pur-dispatchPagination',
+          defaultPerPage: 20, emptyColspan: 9, emptyMessage: '該当するデータがありません',
+          sortOptions: [{ key: 'purchaseDate', label: '仕入日' }, { key: 'supplier', label: '仕入先' }, { key: 'status', label: 'ステータス' }],
+          defaultSortKey: 'purchaseDate', defaultSortDir: 'desc',
+          renderRow: function(d) {
+            var progress = d.itemCount > 0 ? Math.round((d.registeredCount || 0) / d.itemCount * 100) : 0;
+            var progressBar = '<div class="progress" style="min-width:80px;height:18px;"><div class="progress-bar bg-success" style="width:' + progress + '%"></div></div><small>' + progress + '%</small>';
+            var inspBadge = purStatusBadge(d.inspectionStatus || 'not_assigned', _pur_inspectionStatusMap, _pur_inspectionBadgeClass);
+            var statusBadge = purStatusBadge(d.status, _pur_statusMap, _pur_statusBadgeClass);
+            var menuItems = '';
+            if (d.status === 'pending') {
+              menuItems += '<button class="pur-kebab-item" onclick="purSendDispatchFromProgress(\'' + d.id + '\'); purCloseKebab();"><i class="bi bi-send text-primary"></i> 発送通知</button>';
+              menuItems += '<button class="pur-kebab-item" onclick="purHandleSelfProcess(\'' + d.id + '\'); purCloseKebab();"><i class="bi bi-person-check text-success"></i> 自分で処理</button>';
+            } else if (d.status === 'completed') {
+              menuItems += '<span class="pur-kebab-item text-muted" style="cursor:default;"><i class="bi bi-check-circle text-success"></i> 完了</span>';
+            }
+            var actionHtml = '<div class="pur-kebab-wrap"><button class="btn btn-sm btn-light px-2 py-0" onclick="purToggleKebab(this)" style="font-size:1rem;line-height:1;"><i class="bi bi-three-dots-vertical"></i></button><div class="pur-kebab-menu">' + menuItems + '</div></div>';
+            return '<tr><td>' + (d.purchaseDate||'-') + '</td><td>' + (d.supplier||'-') + '</td><td>' + (d.itemCount||0) + '</td><td>' + (d.assignee||'-') + '</td><td>' + (d.inspectionAssignee||'-') + '</td><td>' + inspBadge + '</td><td>' + statusBadge + '</td><td>' + progressBar + '</td><td>' + actionHtml + '</td></tr>';
+          }
+        });
+      }
+      _pur_dispatchPaginator.render(filtered);
     }
-    function purFilterDispatchProgress() { purRenderDispatchProgress(); }
+    function purFilterDispatchProgress() { if (_pur_dispatchPaginator) _pur_dispatchPaginator.resetPage(); purRenderDispatchProgress(); }
 
     // ============================================
     // Inspection requests
@@ -5284,20 +5300,25 @@
     }
 
     function purRenderInspectionRequests() {
-      var tbody = document.getElementById('pur-inspectionRequestBody');
-      if (!tbody) return;
       var filter = document.getElementById('pur-inspectionRequestStatusFilter').value;
       var filtered = filter === 'all' ? _pur_inspectionRequestsData : _pur_inspectionRequestsData.filter(function(d) { return d.status === filter; });
-      if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">該当するデータがありません</td></tr>'; return; }
-      var html = '';
-      filtered.forEach(function(d) {
-        var progress = d.expectedCount > 0 ? Math.round((d.registeredCount||0) / d.expectedCount * 100) : 0;
-        var createdAt = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toISOString().slice(0,10) : '-';
-        html += '<tr><td>' + createdAt + '</td><td>' + (d.supplier||'-') + '</td><td>' + (d.expectedCount||0) + '</td><td>' + (d.assigneeName||'-') + '</td><td>' + (d.dueDate||'-') + '</td><td>' + progress + '%</td><td>' + (d.status||'-') + '</td><td>' + (d.status !== 'completed' ? '<button class="btn btn-sm btn-outline-danger" onclick="purCancelInspectionRequest(\'' + d.id + '\')">キャンセル</button>' : '-') + '</td></tr>';
-      });
-      tbody.innerHTML = html;
+      // Pre-process createdAt for sorting
+      filtered.forEach(function(d) { if (!d._createdAtStr) d._createdAtStr = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toISOString().slice(0,10) : '-'; });
+      if (!_pur_inspectionPaginator) {
+        _pur_inspectionPaginator = new TablePaginator({
+          prefix: 'pur-inspection', tbodyId: 'pur-inspectionRequestBody', controlsId: 'pur-inspectionControls', paginationId: 'pur-inspectionPagination',
+          defaultPerPage: 20, emptyColspan: 8, emptyMessage: '該当するデータがありません',
+          sortOptions: [{ key: '_createdAtStr', label: '依頼日' }, { key: 'dueDate', label: '期限' }, { key: 'status', label: 'ステータス' }],
+          defaultSortKey: '_createdAtStr', defaultSortDir: 'desc',
+          renderRow: function(d) {
+            var progress = d.expectedCount > 0 ? Math.round((d.registeredCount||0) / d.expectedCount * 100) : 0;
+            return '<tr><td>' + d._createdAtStr + '</td><td>' + (d.supplier||'-') + '</td><td>' + (d.expectedCount||0) + '</td><td>' + (d.assigneeName||'-') + '</td><td>' + (d.dueDate||'-') + '</td><td>' + progress + '%</td><td>' + (d.status||'-') + '</td><td>' + (d.status !== 'completed' ? '<button class="btn btn-sm btn-outline-danger" onclick="purCancelInspectionRequest(\'' + d.id + '\')">キャンセル</button>' : '-') + '</td></tr>';
+          }
+        });
+      }
+      _pur_inspectionPaginator.render(filtered);
     }
-    function purFilterInspectionRequests() { purRenderInspectionRequests(); }
+    function purFilterInspectionRequests() { if (_pur_inspectionPaginator) _pur_inspectionPaginator.resetPage(); purRenderInspectionRequests(); }
 
     function purShowCreateInspectionRequestModal() { purOpenModal('pur-createInspectionRequestModal'); }
 
@@ -7076,6 +7097,12 @@
         clearTimeout(_pur_saveDraftTimer);
         _pur_saveDraftTimer = null;
       }
+
+      // Destroy paginators
+      if (_pur_purchasePaginator) { _pur_purchasePaginator.destroy(); _pur_purchasePaginator = null; }
+      if (_pur_stagnantPaginator) { _pur_stagnantPaginator.destroy(); _pur_stagnantPaginator = null; }
+      if (_pur_dispatchPaginator) { _pur_dispatchPaginator.destroy(); _pur_dispatchPaginator = null; }
+      if (_pur_inspectionPaginator) { _pur_inspectionPaginator.destroy(); _pur_inspectionPaginator = null; }
 
       // Reset state
       _pur_currentPurchaseData = [];

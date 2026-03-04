@@ -554,6 +554,7 @@
         </div>
         <div id="sal-provisional-note" class="text-warning small mt-2" style="display:none;"></div>
 
+        <div id="sal-salesControls"></div>
         <div class="sal-sales-table-container">
           <div class="table-responsive">
             <table class="sal-sales-table">
@@ -578,6 +579,7 @@
             </table>
           </div>
         </div>
+        <div id="sal-salesPagination" class="tbl-pager-container"></div>
       </div>
 
       <!-- 取引状況タブ -->
@@ -602,6 +604,7 @@
           <strong>滞留アラート:</strong> <span id="sal-overdueAlertText"></span>
         </div>
 
+        <div id="sal-receivableControls"></div>
         <div class="sal-sales-table-container">
           <div class="table-responsive">
             <table class="sal-sales-table">
@@ -626,6 +629,7 @@
             </table>
           </div>
         </div>
+        <div id="sal-receivablePagination" class="tbl-pager-container"></div>
       </div>
 
       <!-- 分析タブ -->
@@ -1187,6 +1191,8 @@
     // ============================================
 
     var _sal_currentSalesData = [];
+    var _sal_salesPaginator = null;
+    var _sal_receivablePaginator = null;
     var _sal_selectedProductForCancel = null;
     var _sal_currentPeriodPreset = 'month';
     var _sal_currentInvoiceData = null;
@@ -1510,32 +1516,31 @@
     }
 
     function salRenderSalesTable() {
-      var tbody = document.getElementById('sal-salesTableBody');
-      if (!tbody) return;
-
-      if (_sal_currentSalesData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">該当する売上データがありません</td></tr>';
-        return;
+      if (!_sal_salesPaginator) {
+        _sal_salesPaginator = new TablePaginator({
+          prefix: 'sal-sales', tbodyId: 'sal-salesTableBody', controlsId: 'sal-salesControls', paginationId: 'sal-salesPagination',
+          defaultPerPage: 20, emptyColspan: 9, emptyMessage: '該当する売上データがありません',
+          sortOptions: [{ key: 'saleDate', label: '販売日' }, { key: 'saleAmount', label: '売上金額' }, { key: 'finalProfit', label: '利益' }, { key: 'profitRate', label: '利益率' }],
+          defaultSortKey: 'saleDate', defaultSortDir: 'desc',
+          renderRow: function(item) {
+            var paymentBadge = salGetPaymentBadge(item.paymentStatus);
+            var isCancelled = item.paymentStatus === 'cancelled';
+            var rowClass = isCancelled ? 'sal-row-cancelled' : '';
+            return '<tr class="' + rowClass + '">' +
+              '<td>' + salShortDate(item.saleDate) + '</td>' +
+              '<td>' + salThumb(item.imageUrl) + '</td>' +
+              '<td>' + item.managementNumber + '</td>' +
+              '<td style="white-space: nowrap;">' + salEscapeHtml(item.productName) + '</td>' +
+              '<td>' + (item.salePlatform || '-') + '</td>' +
+              '<td class="text-end">' + salFormatCurrency(item.saleAmount) + '</td>' +
+              '<td class="text-end ' + (item.finalProfit >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatCurrency(item.finalProfit) + (item.shippingConfirmed === false ? ' <span class="badge bg-warning text-dark" style="font-size:0.65em;">暫定</span>' : '') + '</td>' +
+              '<td class="text-end ' + (item.profitRate >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatPercent(item.profitRate) + '</td>' +
+              '<td>' + paymentBadge + '</td>' +
+              '</tr>';
+          }
+        });
       }
-
-      var html = '';
-      _sal_currentSalesData.forEach(function(item) {
-        var paymentBadge = salGetPaymentBadge(item.paymentStatus);
-        var isCancelled = item.paymentStatus === 'cancelled';
-        var rowClass = isCancelled ? 'sal-row-cancelled' : '';
-        html += '<tr class="' + rowClass + '">' +
-          '<td>' + salShortDate(item.saleDate) + '</td>' +
-          '<td>' + salThumb(item.imageUrl) + '</td>' +
-          '<td>' + item.managementNumber + '</td>' +
-          '<td style="white-space: nowrap;">' + salEscapeHtml(item.productName) + '</td>' +
-          '<td>' + (item.salePlatform || '-') + '</td>' +
-          '<td class="text-end">' + salFormatCurrency(item.saleAmount) + '</td>' +
-          '<td class="text-end ' + (item.finalProfit >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatCurrency(item.finalProfit) + (item.shippingConfirmed === false ? ' <span class="badge bg-warning text-dark" style="font-size:0.65em;">暫定</span>' : '') + '</td>' +
-          '<td class="text-end ' + (item.profitRate >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatPercent(item.profitRate) + '</td>' +
-          '<td>' + paymentBadge + '</td>' +
-          '</tr>';
-      });
-      tbody.innerHTML = html;
+      _sal_salesPaginator.render(_sal_currentSalesData);
     }
 
     function salGetPaymentBadge(status) {
@@ -1646,66 +1651,56 @@
     // Receivable tab
     // ============================================
     function salRenderReceivableTable() {
-      var tbody = document.getElementById('sal-receivableTableBody');
-      if (!tbody) return;
-
       // 取引中の商品 = unpaid または partial（cancelledとpaidは除外）
+      var OVERDUE_DAYS = 14;
       var unpaidItems = _sal_currentSalesData.filter(function(item) {
         return item.paymentStatus !== 'paid' && item.paymentStatus !== 'cancelled';
       });
-
-      if (unpaidItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">取引中の商品はありません</td></tr>';
-        salUpdateReceivableSummary(0, 0, 0);
-        var alertDiv = document.getElementById('sal-overdueAlert');
-        if (alertDiv) alertDiv.style.display = 'none';
-        return;
-      }
-
-      var html = '';
-      var totalSales = 0;
-      var totalProfit = 0;
-      var overdueCount = 0;
-      var overdueAmount = 0;
-      var OVERDUE_DAYS = 14;
-
+      // Pre-compute daysPassed for sorting/display
       unpaidItems.forEach(function(item) {
-        totalSales += item.saleAmount;
-        totalProfit += item.finalProfit;
-
-        var daysPassed = item.saleDate ? Math.floor((new Date() - new Date(item.saleDate)) / (1000 * 60 * 60 * 24)) : 0;
-        var isOverdue = daysPassed >= OVERDUE_DAYS;
-        if (isOverdue) { overdueCount++; overdueAmount += item.saleAmount; }
-
-        var daysClass = isOverdue ? 'text-danger fw-bold' : (daysPassed >= 7 ? 'text-warning' : '');
-
-        html += '<tr class="' + (isOverdue ? 'table-danger' : '') + '">' +
-          '<td>' + salShortDate(item.saleDate) + '</td>' +
-          '<td>' + salThumb(item.imageUrl) + '</td>' +
-          '<td>' + item.managementNumber + '</td>' +
-          '<td style="white-space:nowrap;">' + salEscapeHtml(item.productName) + '</td>' +
-          '<td>' + (item.salePlatform || '-') + '</td>' +
-          '<td class="text-end">' + salFormatCurrency(item.saleAmount) + '</td>' +
-          '<td class="text-end ' + (item.finalProfit >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatCurrency(item.finalProfit) + '</td>' +
-          '<td class="' + daysClass + '">' + daysPassed + '日</td>' +
-          '<td style="white-space:nowrap;">' +
-            '<span class="sal-status-badge sal-status-paid" style="cursor:pointer;" onclick="salCompleteTransaction(\'' + item.id + '\')">完了</span> ' +
-            '<span class="sal-status-badge sal-status-cancelled" style="cursor:pointer;" onclick="salOpenCancelModal(\'' + item.id + '\')">キャンセル</span>' +
-          '</td>' +
-          '</tr>';
+        item._daysPassed = item.saleDate ? Math.floor((new Date() - new Date(item.saleDate)) / (1000 * 60 * 60 * 24)) : 0;
       });
 
-      tbody.innerHTML = html;
+      // Summary from ALL unpaid items
+      var totalSales = 0, totalProfit = 0, overdueCount = 0, overdueAmount = 0;
+      unpaidItems.forEach(function(item) {
+        totalSales += item.saleAmount; totalProfit += item.finalProfit;
+        if (item._daysPassed >= OVERDUE_DAYS) { overdueCount++; overdueAmount += item.saleAmount; }
+      });
       salUpdateReceivableSummary(totalSales, unpaidItems.length, totalProfit);
-
       var alertDiv = document.getElementById('sal-overdueAlert');
       if (overdueCount > 0) {
         document.getElementById('sal-overdueAlertText').textContent =
           overdueCount + '件（' + salFormatCurrency(overdueAmount) + '）が' + OVERDUE_DAYS + '日以上経過しています。早急に確認してください。';
         alertDiv.style.display = 'block';
-      } else {
-        alertDiv.style.display = 'none';
+      } else if (alertDiv) { alertDiv.style.display = 'none'; }
+
+      if (!_sal_receivablePaginator) {
+        _sal_receivablePaginator = new TablePaginator({
+          prefix: 'sal-receivable', tbodyId: 'sal-receivableTableBody', controlsId: 'sal-receivableControls', paginationId: 'sal-receivablePagination',
+          defaultPerPage: 20, emptyColspan: 9, emptyMessage: '取引中の商品はありません',
+          sortOptions: [{ key: 'saleDate', label: '販売日' }, { key: 'saleAmount', label: '売上金額' }, { key: '_daysPassed', label: '経過日数' }],
+          defaultSortKey: 'saleDate', defaultSortDir: 'desc',
+          renderRow: function(item) {
+            var isOverdue = item._daysPassed >= 14;
+            var daysClass = isOverdue ? 'text-danger fw-bold' : (item._daysPassed >= 7 ? 'text-warning' : '');
+            return '<tr class="' + (isOverdue ? 'table-danger' : '') + '">' +
+              '<td>' + salShortDate(item.saleDate) + '</td>' +
+              '<td>' + salThumb(item.imageUrl) + '</td>' +
+              '<td>' + item.managementNumber + '</td>' +
+              '<td style="white-space:nowrap;">' + salEscapeHtml(item.productName) + '</td>' +
+              '<td>' + (item.salePlatform || '-') + '</td>' +
+              '<td class="text-end">' + salFormatCurrency(item.saleAmount) + '</td>' +
+              '<td class="text-end ' + (item.finalProfit >= 0 ? 'text-success' : 'text-danger') + '">' + salFormatCurrency(item.finalProfit) + '</td>' +
+              '<td class="' + daysClass + '">' + item._daysPassed + '日</td>' +
+              '<td style="white-space:nowrap;">' +
+                '<span class="sal-status-badge sal-status-paid" style="cursor:pointer;" onclick="salCompleteTransaction(\'' + item.id + '\')">完了</span> ' +
+                '<span class="sal-status-badge sal-status-cancelled" style="cursor:pointer;" onclick="salOpenCancelModal(\'' + item.id + '\')">キャンセル</span>' +
+              '</td></tr>';
+          }
+        });
       }
+      _sal_receivablePaginator.render(unpaidItems);
     }
 
     function salUpdateReceivableSummary(totalSales, count, totalProfit) {
@@ -2984,6 +2979,10 @@
 
     function destroySalesPage() {
       console.log('[Sal SPA] destroySalesPage called');
+
+      // Destroy paginators
+      if (_sal_salesPaginator) { _sal_salesPaginator.destroy(); _sal_salesPaginator = null; }
+      if (_sal_receivablePaginator) { _sal_receivablePaginator.destroy(); _sal_receivablePaginator = null; }
 
       // Destroy Chart.js instances
       [_sal_monthlyChart, _sal_platformChart, _sal_productChart, _sal_perfChart].forEach(function(c) { if (c) c.destroy(); });

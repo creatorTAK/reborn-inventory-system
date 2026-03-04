@@ -663,6 +663,7 @@
 
       <div class="acct-card-section">
         <h6><i class="bi bi-list-ul"></i> 経費明細</h6>
+        <div id="acct-expenseControls"></div>
         <div class="table-responsive">
           <table class="acct-data-table">
             <thead>
@@ -679,6 +680,7 @@
             </tbody>
           </table>
         </div>
+        <div id="acct-expensePagination" class="tbl-pager-container"></div>
       </div>
     </div>
 
@@ -895,6 +897,7 @@
 
     var _acctCurrentProducts = [];
     var _acctCurrentExpenses = [];
+    var _acct_expensePaginator = null;
     var _acctCurrentCompensation = 0;
     var _acctCurrentYear = new Date().getFullYear();
     var _acctCurrentIncome = 0;
@@ -1389,18 +1392,20 @@
         }
       }
 
-      var tbody = document.getElementById('acct-expenseListBody');
-      if (tbody) {
-        if (_acctCurrentExpenses.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">経費データがありません</td></tr>';
-        } else {
-          var html = '';
-          _acctCurrentExpenses.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); }).forEach(function(e) {
-            html += '<tr><td>' + (e.date || '-') + '</td><td>' + (e.category || '-') + '</td><td>' + (e.note || '-') + '</td><td class="text-end">' + acctFormatCurrency(e.amount) + '</td><td><button class="acct-btn-outline-danger" onclick="acctDeleteExpense(\'' + e.id + '\')"><i class="bi bi-trash"></i></button></td></tr>';
-          });
-          tbody.innerHTML = html;
-        }
+      // Pre-compute numeric amount for sorting
+      _acctCurrentExpenses.forEach(function(e) { e._numAmount = parseFloat(e.amount) || 0; });
+      if (!_acct_expensePaginator) {
+        _acct_expensePaginator = new TablePaginator({
+          prefix: 'acct-expense', tbodyId: 'acct-expenseListBody', controlsId: 'acct-expenseControls', paginationId: 'acct-expensePagination',
+          defaultPerPage: 20, emptyColspan: 5, emptyMessage: '経費データがありません',
+          sortOptions: [{ key: 'date', label: '日付' }, { key: '_numAmount', label: '金額' }, { key: 'category', label: '勘定科目' }],
+          defaultSortKey: 'date', defaultSortDir: 'desc',
+          renderRow: function(e) {
+            return '<tr><td>' + (e.date || '-') + '</td><td>' + (e.category || '-') + '</td><td>' + (e.note || '-') + '</td><td class="text-end">' + acctFormatCurrency(e.amount) + '</td><td><button class="acct-btn-outline-danger" onclick="acctDeleteExpense(\'' + e.id + '\')"><i class="bi bi-trash"></i></button></td></tr>';
+          }
+        });
       }
+      _acct_expensePaginator.render(_acctCurrentExpenses);
     }
 
     async function acctUpdateExportTab(startDate, endDate) {
@@ -2127,6 +2132,7 @@
 
     function destroyAccountingPage() {
       console.log('[Acct SPA] destroyAccountingPage called');
+      if (_acct_expensePaginator) { _acct_expensePaginator.destroy(); _acct_expensePaginator = null; }
       _acctCurrentProducts = [];
       _acctCurrentExpenses = [];
       _acctCurrentYear = new Date().getFullYear();

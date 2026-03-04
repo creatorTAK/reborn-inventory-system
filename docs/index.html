@@ -946,7 +946,97 @@
     input, select, textarea {
       font-size: 16px !important;
     }
+
+    /* 共通テーブルページネーション */
+    .tbl-pager-controls{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;font-size:0.85rem;}
+    .tbl-pager-controls select{padding:4px 8px;border:1px solid #dee2e6;border-radius:4px;font-size:0.8rem;background:#fff;}
+    .tbl-pager-container{display:flex;justify-content:center;margin-top:16px;padding-bottom:16px;}
+    .tbl-pager-nav{display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:nowrap;}
+    .tbl-pager-btn{min-width:36px;height:36px;padding:0 8px;border:1px solid #dee2e6;background:#fff;border-radius:6px;font-size:13px;color:#0d6efd;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;}
+    .tbl-pager-btn:hover{background:#e9ecef;}
+    .tbl-pager-btn.active{background:#0d6efd;color:#fff;border-color:#0d6efd;font-weight:bold;}
+    .tbl-pager-btn.disabled{color:#6c757d;pointer-events:none;background:#f8f9fa;}
+    .tbl-pager-dots{padding:0 0.25rem;color:#6c757d;}
+    .tbl-pager-info{font-size:0.8rem;color:#6c757d;}
   </style>
+
+  <!-- 共通テーブルページネーション -->
+  <script>
+  window.TablePaginator=function(c){this.cfg=c;this.currentPage=1;this.perPage=c.defaultPerPage||20;this.sortKey=c.defaultSortKey||(c.sortOptions&&c.sortOptions[0]?c.sortOptions[0].key:'');this.sortDir=c.defaultSortDir||'desc';this._data=[];this._initControls();};
+  TablePaginator.prototype.render=function(data){
+    this._data=data||[];
+    var sorted=this._sort(this._data);
+    var total=sorted.length;
+    var totalPages=Math.ceil(total/this.perPage);
+    if(this.currentPage>totalPages)this.currentPage=totalPages||1;
+    var start=(this.currentPage-1)*this.perPage;
+    var pageData=sorted.slice(start,start+this.perPage);
+    var tbody=document.getElementById(this.cfg.tbodyId);
+    if(!tbody)return sorted;
+    if(pageData.length===0){
+      tbody.innerHTML='<tr><td colspan="'+(this.cfg.emptyColspan||6)+'" class="text-center text-muted py-4">'+(this.cfg.emptyMessage||'データがありません')+'</td></tr>';
+    }else{
+      var html='';var rf=this.cfg.renderRow;
+      pageData.forEach(function(item){html+=rf(item);});
+      tbody.innerHTML=html;
+    }
+    this._renderPagination(totalPages);
+    this._updateInfo(total);
+    return sorted;
+  };
+  TablePaginator.prototype.refresh=function(){this.render(this._data);};
+  TablePaginator.prototype.resetPage=function(){this.currentPage=1;};
+  TablePaginator.prototype.getFilteredData=function(){return this._data;};
+  TablePaginator.prototype._initControls=function(){
+    var el=document.getElementById(this.cfg.controlsId);if(!el)return;
+    var self=this;var h='<div class="tbl-pager-controls">';
+    h+='<select id="'+this.cfg.prefix+'-perPage">';
+    [10,20,50].forEach(function(n){h+='<option value="'+n+'"'+(n===self.perPage?' selected':'')+'>'+n+'件</option>';});
+    h+='</select>';
+    if(this.cfg.sortOptions&&this.cfg.sortOptions.length){
+      h+=' <select id="'+this.cfg.prefix+'-sortKey">';
+      this.cfg.sortOptions.forEach(function(o){h+='<option value="'+o.key+'"'+(o.key===self.sortKey?' selected':'')+'>'+o.label+'</option>';});
+      h+='</select>';
+      h+=' <button id="'+this.cfg.prefix+'-sortDir" class="tbl-pager-btn" style="min-width:auto;height:auto;padding:2px 6px;">'+(this.sortDir==='desc'?'↓':'↑')+'</button>';
+    }
+    h+='<span id="'+this.cfg.prefix+'-info" class="tbl-pager-info"></span></div>';
+    el.innerHTML=h;
+    var pp=document.getElementById(this.cfg.prefix+'-perPage');
+    if(pp)pp.addEventListener('change',function(){self.perPage=parseInt(this.value);self.currentPage=1;self.refresh();});
+    var sk=document.getElementById(this.cfg.prefix+'-sortKey');
+    if(sk)sk.addEventListener('change',function(){self.sortKey=this.value;self.currentPage=1;self.refresh();});
+    var sd=document.getElementById(this.cfg.prefix+'-sortDir');
+    if(sd)sd.addEventListener('click',function(){self.sortDir=self.sortDir==='desc'?'asc':'desc';this.textContent=self.sortDir==='desc'?'↓':'↑';self.currentPage=1;self.refresh();});
+  };
+  TablePaginator.prototype._renderPagination=function(totalPages){
+    var ct=document.getElementById(this.cfg.paginationId);if(!ct)return;
+    if(totalPages<=1){ct.innerHTML='';return;}
+    var cp=this.currentPage,self=this;
+    var h='<div class="tbl-pager-nav">';
+    h+='<a class="tbl-pager-btn'+(cp<=1?' disabled':'')+'" data-page="'+(cp-1)+'">&lt;</a>';
+    var sp=Math.max(1,cp-1),ep=Math.min(totalPages,cp+1);
+    if(sp>1){h+='<a class="tbl-pager-btn" data-page="1">1</a>';if(sp>2)h+='<span class="tbl-pager-dots">…</span>';}
+    for(var p=sp;p<=ep;p++){h+='<a class="tbl-pager-btn'+(p===cp?' active':'')+'" data-page="'+p+'">'+p+'</a>';}
+    if(ep<totalPages){if(ep<totalPages-1)h+='<span class="tbl-pager-dots">…</span>';h+='<a class="tbl-pager-btn" data-page="'+totalPages+'">'+totalPages+'</a>';}
+    h+='<a class="tbl-pager-btn'+(cp>=totalPages?' disabled':'')+'" data-page="'+(cp+1)+'">&gt;</a></div>';
+    ct.innerHTML=h;
+    ct.onclick=function(e){var b=e.target.closest('[data-page]');if(!b||b.classList.contains('disabled')||b.classList.contains('active'))return;e.preventDefault();self.currentPage=parseInt(b.getAttribute('data-page'));self.refresh();};
+  };
+  TablePaginator.prototype._updateInfo=function(total){var el=document.getElementById(this.cfg.prefix+'-info');if(el)el.textContent='全'+total+'件';};
+  TablePaginator.prototype._sort=function(data){
+    if(!this.sortKey||!data.length)return data.slice();
+    var key=this.sortKey,dir=this.sortDir==='asc'?1:-1;
+    return data.slice().sort(function(a,b){
+      var va=a[key],vb=b[key];if(va==null)va='';if(vb==null)vb='';
+      if(typeof va==='number'&&typeof vb==='number')return(va-vb)*dir;
+      return String(va).localeCompare(String(vb),'ja')*dir;
+    });
+  };
+  TablePaginator.prototype.destroy=function(){
+    var c=document.getElementById(this.cfg.controlsId);if(c)c.innerHTML='';
+    var p=document.getElementById(this.cfg.paginationId);if(p)p.innerHTML='';
+  };
+  </script>
 </head>
 <body>
   <!-- ホーム画面に追加を促す画面（ブラウザで開いた場合） -->
@@ -1463,11 +1553,11 @@
     </div>
 
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0303cg</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0304a</div>
     <script>
     // PWAバージョンチェック（タスクキル復帰 + バックグラウンド復帰）
     (function(){
-      var LOCAL_VER = 'v0303cg';
+      var LOCAL_VER = 'v0304a';
       var lastCheck = 0;
 
       function _versionCheck() {
