@@ -10333,8 +10333,8 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
     variations: formData['variations'] || {}, // バリエーション情報 { size, color, etc }
     stockQuantity: formData['stockQuantity'] || 1, // 在庫数量（1点物は常に1）
 
-    // ステータス管理
-    status: formData['ステータス'] || '登録済み',
+    // ステータス管理（現状メルカリのみ・API不可のため登録=出品中。API連携時はトリガー差し替え）
+    status: formData['ステータス'] || '出品中',
 
     // 担当者
     assignedTo: formData['担当者'] || userName,
