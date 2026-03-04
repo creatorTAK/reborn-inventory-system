@@ -1951,6 +1951,31 @@
               </button>
             </div>
           </div>
+
+          <div class="cfg-card" style="margin-top: 16px;">
+            <div class="cfg-card-title"><i class="bi bi-bell"></i> 商品残数アラート</div>
+            <div class="cfg-card-desc">スタッフの手持ち商品が少なくなった際に管理者へ通知する閾値を設定します</div>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">残数閾値（点）</label>
+                <input type="number" id="cfg-dispatchAlertThreshold" class="form-control" min="1" value="10" placeholder="残りこの点数以下でアラート">
+                <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">残数がこの値以下になったら管理者に通知します</div>
+              </div>
+              <div>
+                <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">残割合閾値（%）</label>
+                <input type="number" id="cfg-dispatchAlertThresholdPercent" class="form-control" min="1" max="100" value="20" placeholder="残りこの割合以下でアラート">
+                <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">残割合がこの値以下になったら管理者に通知します</div>
+              </div>
+              <div style="background: #eff6ff; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #1e40af;">
+                <i class="bi bi-info-circle"></i> どちらか一方の条件を満たした時点でアラートが発火します。1バッチにつき1回のみ通知されます。
+              </div>
+            </div>
+            <div style="margin-top: 14px; text-align: right;">
+              <button type="button" onclick="cfgSaveDispatchAlertSettings()" style="padding: 8px 20px; background: #40B4E5; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                <i class="bi bi-check-circle"></i> 保存
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- プラットフォーム設定 -->
@@ -3032,6 +3057,9 @@
 
         // Load basic settings (user profile, notifications)
         await cfgLoadBasicSettings();
+
+        // Load dispatch alert settings
+        await cfgLoadDispatchAlertSettings();
 
         // Init user icon file handler
         cfgInitUserIconHandler();
@@ -7078,6 +7106,36 @@
       alert('仕入・出品デフォルト設定をクリアしました。\n変更を保存するには「設定を保存」ボタンをクリックしてください。');
     }
     window.cfgClearProcureListingDefaults = cfgClearProcureListingDefaults;
+
+    async function cfgLoadDispatchAlertSettings() {
+      try {
+        var doc = await window.db.collection('settings').doc('dispatchAlerts').get();
+        if (doc.exists) {
+          var data = doc.data();
+          var el1 = document.getElementById('cfg-dispatchAlertThreshold');
+          var el2 = document.getElementById('cfg-dispatchAlertThresholdPercent');
+          if (el1) el1.value = data.defaultThreshold || 10;
+          if (el2) el2.value = data.defaultThresholdPercent || 20;
+        }
+      } catch (e) { console.warn('[config] dispatch alert settings load error:', e); }
+    }
+
+    async function cfgSaveDispatchAlertSettings() {
+      var threshold = parseInt(document.getElementById('cfg-dispatchAlertThreshold').value) || 10;
+      var thresholdPercent = parseInt(document.getElementById('cfg-dispatchAlertThresholdPercent').value) || 20;
+      try {
+        await window.db.collection('settings').doc('dispatchAlerts').set({
+          defaultThreshold: threshold,
+          defaultThresholdPercent: thresholdPercent,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        alert('残数アラート設定を保存しました');
+      } catch (e) {
+        console.error('[config] dispatch alert settings save error:', e);
+        alert('保存に失敗しました: ' + e.message);
+      }
+    }
+    window.cfgSaveDispatchAlertSettings = cfgSaveDispatchAlertSettings;
 
     function cfgClearConditionButtons() {
       if (!confirm('商品状態ボタン設定をすべてクリアしますか？\n\n全カテゴリのカスタムボタンが削除されます。')) return;
