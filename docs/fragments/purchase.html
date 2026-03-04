@@ -2236,6 +2236,7 @@
               <thead>
                 <tr>
                   <th>仕入日</th>
+                  <th></th>
                   <th>管理番号</th>
                   <th>商品名</th>
                   <th>仕入先</th>
@@ -2707,6 +2708,10 @@
       if (amount === null || amount === undefined || isNaN(amount)) return '-';
       return '\u00a5' + Math.round(amount).toLocaleString();
     }
+    function purThumb(url) {
+      return url ? '<img src="' + url + '" style="width:28px;height:28px;object-fit:cover;border-radius:3px;vertical-align:middle;" loading="lazy">' : '<span style="display:inline-block;width:28px;height:28px;background:#e5e7eb;border-radius:3px;vertical-align:middle;"></span>';
+    }
+    function purShortDate(d) { return d ? String(d).slice(0, 10) : '-'; }
     function purGetJSTToday() {
       var now = new Date();
       var jst = new Date(now.getTime() + (9 * 60 + now.getTimezoneOffset()) * 60000);
@@ -2888,7 +2893,8 @@
             saleDate: (function(d) { return d && typeof d !== 'string' && d.toDate ? d.toDate().toISOString().slice(0, 10) : (d || ''); })(data.saleDate),
             status: data.status || '',
             listingDate: (function(d) { return d && typeof d !== 'string' && d.toDate ? d.toDate().toISOString().slice(0, 10) : (d || ''); })((data.listing && data.listing.date) || ''),
-            finalProfit: parseFloat(data.finalProfit || 0)
+            finalProfit: parseFloat(data.finalProfit || 0),
+            imageUrl: data.imageUrl1 || (Array.isArray(data.images) ? data.images[0] : (data.images && data.images.imageUrls && data.images.imageUrls[0])) || ''
           });
         });
         purchaseList.sort(function(a, b) { return (b.purchaseDate || '').localeCompare(a.purchaseDate || ''); });
@@ -3490,17 +3496,17 @@
         var stagnantItems = [];
         unsold.forEach(function(i) {
           var age = _purCalcDays(i.purchaseDate, todayStr);
-          if (age >= 30) stagnantItems.push({ purchaseDate: i.purchaseDate, managementNumber: i.managementNumber, productName: i.productName, supplier: i.supplier, purchaseAmount: i.purchaseAmount, age: age });
+          if (age >= 30) stagnantItems.push({ purchaseDate: i.purchaseDate, managementNumber: i.managementNumber, productName: i.productName, supplier: i.supplier, purchaseAmount: i.purchaseAmount, imageUrl: i.imageUrl, age: age });
         });
         if (!_pur_stagnantPaginator) {
           _pur_stagnantPaginator = new TablePaginator({
             prefix: 'pur-stagnant', tbodyId: 'pur-stagnantListBody', controlsId: 'pur-stagnantControls', paginationId: 'pur-stagnantPagination',
-            defaultPerPage: 20, emptyColspan: 6, emptyMessage: '30日超の滞留在庫はありません',
+            defaultPerPage: 20, emptyColspan: 7, emptyMessage: '30日超の滞留在庫はありません',
             sortOptions: [{ key: 'age', label: '滞留日数' }, { key: 'purchaseAmount', label: '仕入額' }, { key: 'purchaseDate', label: '仕入日' }],
             defaultSortKey: 'age', defaultSortDir: 'desc',
             renderRow: function(si) {
               var ageColor = si.age >= 90 ? '#ef4444' : si.age >= 60 ? '#f97316' : '#f59e0b';
-              return '<tr><td>' + (si.purchaseDate || '-') + '</td><td>' + si.managementNumber + '</td><td>' + (si.productName || '-') + '</td><td>' + (si.supplier || '-') + '</td><td class="text-end">' + purFormatCurrency(si.purchaseAmount) + '</td><td class="text-end" style="color:' + ageColor + ';font-weight:600;">' + si.age + '日</td></tr>';
+              return '<tr><td>' + purShortDate(si.purchaseDate) + '</td><td>' + purThumb(si.imageUrl) + '</td><td>' + si.managementNumber + '</td><td>' + (si.productName || '-') + '</td><td>' + (si.supplier || '-') + '</td><td class="text-end">' + purFormatCurrency(si.purchaseAmount) + '</td><td class="text-end" style="color:' + ageColor + ';font-weight:600;">' + si.age + '日</td></tr>';
             }
           });
         }
