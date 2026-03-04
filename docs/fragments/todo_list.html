@@ -320,25 +320,6 @@
     </div>
   </div>
 
-  <!-- 却下理由入力モーダル -->
-  <div id="tdl-rejectModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; padding: 20px;">
-    <div style="background: white; border-radius: 16px; width: 100%; max-width: 400px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
-      <div style="padding: 20px; border-bottom: 1px solid #e5e7eb;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #1f2937;">却下理由</h3>
-          <button onclick="tdlCloseRejectModal()" style="background: none; border: none; font-size: 24px; color: #9ca3af; cursor: pointer; padding: 0; line-height: 1;">&times;</button>
-        </div>
-      </div>
-      <div style="padding: 20px;">
-        <p style="margin: 0 0 12px 0; font-size: 14px; color: #6b7280;">修正が必要な理由を入力してください。担当者に通知されます。</p>
-        <textarea id="tdl-rejectReason" placeholder="例: 画像が暗いので撮り直してください" style="width: 100%; height: 120px; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 16px; resize: none; box-sizing: border-box;"></textarea>
-      </div>
-      <div style="padding: 16px 20px; background: #f9fafb; display: flex; gap: 12px;">
-        <button onclick="tdlCloseRejectModal()" style="flex: 1; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; background: white; font-size: 14px; font-weight: 500; color: #374151; cursor: pointer;">キャンセル</button>
-        <button onclick="tdlSubmitReject()" style="flex: 1; padding: 12px; border: none; border-radius: 8px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); font-size: 14px; font-weight: 500; color: white; cursor: pointer;">却下する</button>
-      </div>
-    </div>
-  </div>
 
   <script>
     // ============================================
@@ -350,8 +331,6 @@
     var _tdl_allPendingTasks = [];
     var _tdl_pendingReceivingTask = null;
     var _tdl_pendingExtensionTask = null;
-    var _tdl_rejectingTaskId = null;
-    var _tdl_rejectingTaskType = null;
     var _tdl_isAdmin = false;
 
     // タスク一覧を読み込み
@@ -463,7 +442,7 @@
         iconHtml = tdlGetTypeIcon(task.type);
       }
 
-      var completableTaskTypes = ['listing_approval', 'shipping_task', 'revision_request', 'inspection_task'];
+      var completableTaskTypes = ['shipping_task', 'inspection_task'];
       var showCompleteButton = completableTaskTypes.indexOf(task.type) !== -1;
 
       // 期限表示
@@ -517,12 +496,7 @@
         actionButtons += '<div class="task-action" onclick="tdlHandleTaskClick(\'' + task.id + '\', \'' + task.link + '\', \'' + (task.linkTab || '') + '\', \'' + productIdParam + '\')"><i class="bi bi-arrow-right-circle"></i> 対応する</div>';
       }
       if (showCompleteButton) {
-        if (task.type === 'listing_approval') {
-          actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 承認</div>';
-          actionButtons += '<div class="task-action reject-btn" onclick="tdlOpenRejectModal(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); margin-left: 8px;"><i class="bi bi-x-circle"></i> 却下</div>';
-        } else if (task.type === 'revision_request') {
-          actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 修正完了</div>';
-        } else if (task.type === 'shipping_task') {
+        if (task.type === 'shipping_task') {
           actionButtons += '<div class="task-action complete-btn" onclick="tdlShippingCompleteAction(\'' + task.id + '\')" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); margin-left: 8px;"><i class="bi bi-truck"></i> 発送完了</div>';
         } else {
           actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 完了</div>';
@@ -587,7 +561,7 @@
 
     // タスクを完了にする
     async function tdlCompleteTask(taskId, taskType) {
-      var rewardTaskTypes = ['listing_approval', 'shipping_task', 'product_registration_task', 'inspection_task'];
+      var rewardTaskTypes = ['shipping_task', 'product_registration_task', 'inspection_task'];
 
       if (taskType === 'receiving_task') {
         try {
@@ -604,9 +578,7 @@
       }
 
       var confirmMsg;
-      if (taskType === 'revision_request') {
-        confirmMsg = '修正を完了しますか？\n（管理者に再承認タスクが送信されます）';
-      } else if (rewardTaskTypes.indexOf(taskType) !== -1) {
+      if (rewardTaskTypes.indexOf(taskType) !== -1) {
         confirmMsg = 'このタスクを完了にしますか？\n（報酬が自動記録されます）';
       } else {
         confirmMsg = 'このタスクを完了にしますか？';
@@ -619,10 +591,6 @@
         var taskDoc = await taskRef.get();
         if (!taskDoc.exists) { alert('タスクが見つかりません'); return; }
         var taskData = taskDoc.data();
-
-        if (taskType === 'revision_request') {
-          await tdlCreateReApprovalTask(taskData);
-        }
 
         // 発送タスク完了時: shippingCompletedフラグセット＆発送情報未登録チェック
         if (taskType === 'shipping_task') {
@@ -649,40 +617,6 @@
       } catch (error) {
         console.error('❌ [Task] タスク完了エラー:', error);
         alert('タスクの完了に失敗しました');
-      }
-    }
-
-    // 再承認タスクを作成
-    async function tdlCreateReApprovalTask(revisionTaskData) {
-      var relatedData = revisionTaskData.relatedData || {};
-      var productId = relatedData.productId;
-      var managementNumber = relatedData.managementNumber;
-      var rejectedBy = relatedData.rejectedBy;
-
-      if (!rejectedBy) { console.warn('⚠️ 再承認タスク作成スキップ: 却下者情報なし'); return; }
-
-      try {
-        var staffName = 'スタッフ';
-        if (productId) {
-          var productDoc = await _tdl_db.collection('products').doc(productId).get();
-          if (productDoc.exists) { staffName = productDoc.data().registrant || staffName; }
-        }
-
-        var reApprovalTaskRef = _tdl_db.collection('userTasks').doc(rejectedBy).collection('tasks').doc();
-        await reApprovalTaskRef.set({
-          type: 'listing_approval',
-          title: '再確認: ' + (managementNumber || '商品'),
-          description: staffName + 'さんが修正を完了しました。再度確認してください。',
-          createdAt: new Date().toISOString(),
-          completed: false,
-          priority: 'high',
-          link: productId ? 'inventory' : null,
-          relatedData: { productId: productId, managementNumber: managementNumber, staffEmail: _tdl_userEmail, staffName: staffName, isReApproval: true }
-        });
-        console.log('✅ [Task] 再承認タスク作成:', rejectedBy);
-      } catch (error) {
-        console.error('❌ [Task] 再承認タスク作成エラー:', error);
-        throw error;
       }
     }
 
@@ -1211,61 +1145,6 @@
     // 却下機能
     // ========================================
 
-    function tdlOpenRejectModal(taskId, taskType) {
-      _tdl_rejectingTaskId = taskId;
-      _tdl_rejectingTaskType = taskType;
-      document.getElementById('tdl-rejectReason').value = '';
-      document.getElementById('tdl-rejectModal').style.display = 'flex';
-    }
-
-    function tdlCloseRejectModal() {
-      _tdl_rejectingTaskId = null;
-      _tdl_rejectingTaskType = null;
-      document.getElementById('tdl-rejectModal').style.display = 'none';
-    }
-
-    async function tdlSubmitReject() {
-      var reason = document.getElementById('tdl-rejectReason').value.trim();
-      if (!reason) { alert('却下理由を入力してください'); return; }
-      if (!_tdl_rejectingTaskId) { alert('タスクが選択されていません'); return; }
-
-      try {
-        var taskRef = _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(_tdl_rejectingTaskId);
-        var taskDoc = await taskRef.get();
-        if (!taskDoc.exists) { alert('タスクが見つかりません'); return; }
-
-        var taskData = taskDoc.data();
-        var staffEmail = (taskData.relatedData && taskData.relatedData.staffEmail) || (taskData.relatedData && taskData.relatedData.createdByEmail);
-        var staffName = (taskData.relatedData && taskData.relatedData.staffName) || (taskData.relatedData && taskData.relatedData.createdBy) || '担当者';
-        var productId = taskData.relatedData && taskData.relatedData.productId;
-        var managementNumber = taskData.relatedData && taskData.relatedData.managementNumber;
-
-        if (!staffEmail) { alert('担当者の情報が見つかりません'); return; }
-
-        await taskRef.update({ rejected: true, rejectedAt: new Date().toISOString(), rejectedBy: _tdl_userEmail, rejectReason: reason, completed: false });
-
-        var revisionTaskRef = _tdl_db.collection('userTasks').doc(staffEmail).collection('tasks').doc();
-        await revisionTaskRef.set({
-          type: 'revision_request',
-          title: '修正依頼: ' + (taskData.title || '出品確認'),
-          description: '【却下理由】\n' + reason,
-          createdAt: new Date().toISOString(),
-          completed: false,
-          priority: 'high',
-          link: productId ? 'inventory' : null,
-          relatedData: { originalTaskId: _tdl_rejectingTaskId, originalTaskType: _tdl_rejectingTaskType, productId: productId, managementNumber: managementNumber, rejectedBy: _tdl_userEmail, rejectReason: reason }
-        });
-
-        console.log('✅ [Task] タスク却下完了:', _tdl_rejectingTaskId);
-        tdlCloseRejectModal();
-        alert(staffName + 'さんに修正依頼を送信しました');
-        tdlLoadTasks();
-      } catch (error) {
-        console.error('❌ [Task] 却下エラー:', error);
-        alert('却下処理に失敗しました');
-      }
-    }
-
     // ============================================
     // タブ切替
     // ============================================
@@ -1304,8 +1183,6 @@
       _tdl_allPendingTasks = [];
       _tdl_pendingReceivingTask = null;
       _tdl_pendingExtensionTask = null;
-      _tdl_rejectingTaskId = null;
-      _tdl_rejectingTaskType = null;
       _tdl_isAdmin = false;
 
       document.addEventListener('click', _tdlDropdownClickHandler);
@@ -1323,8 +1200,6 @@
       _tdl_allPendingTasks = [];
       _tdl_pendingReceivingTask = null;
       _tdl_pendingExtensionTask = null;
-      _tdl_rejectingTaskId = null;
-      _tdl_rejectingTaskType = null;
       _tdl_isAdmin = false;
     }
   </script>

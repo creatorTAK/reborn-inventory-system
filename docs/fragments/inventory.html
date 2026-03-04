@@ -2554,13 +2554,6 @@
     function invCompleteProductUpdate(statusChanged, newStatus, oldStatus) {
       invHideLoading();
       alert('商品情報を更新しました');
-      if (statusChanged && newStatus === '出品中' && oldStatus !== '出品中') {
-        invAddListingApprovalTask(invCurrentProduct);
-      }
-      // ステータス変更時、該当商品のlisting_approvalタスクを自動完了
-      if (statusChanged && oldStatus === '出品中' && invCurrentProduct) {
-        invAutoCompleteTask('listing_approval', invCurrentProduct.id || invCurrentProduct.productId);
-      }
       var modalElement = document.getElementById('invProductDetailModal');
       var modal = bootstrap.Modal.getInstance(modalElement);
       if (modal) modal.hide();
@@ -2569,23 +2562,6 @@
       invLoadDashboardAndSearch();
     }
 
-    async function invAddListingApprovalTask(product) {
-      try {
-        var staffName = product.createdBy || localStorage.getItem('reborn_user_name') || '不明';
-        var productId = product.id || product.productId;
-        var taskData = {
-          type: 'listing_approval', title: '出品確認',
-          description: staffName + 'さんが商品を出品しました。\n管理番号: ' + product.managementNumber + '\n確認してOKなら完了にしてください。',
-          link: 'inventory',
-          relatedData: { productId: productId, managementNumber: product.managementNumber, staffName: staffName, listingAmount: product.listingAmount || 0 }
-        };
-        if (typeof addTaskToOwners === 'function') {
-          addTaskToOwners(taskData);
-        } else if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: 'addTaskToOwners', taskData: taskData }, '*');
-        }
-      } catch (error) { console.error('[inv] タスク追加エラー:', error); }
-    }
 
     function invAutoCompleteTask(taskType, productId, targetEmail) {
       if (!window.db || !productId) return;
