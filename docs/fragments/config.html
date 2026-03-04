@@ -6395,6 +6395,9 @@
         // 承認メール送信
         try { await cfgSendApprovalEmail(userId, userName); } catch (e) { console.error('[Approve] メール送信エラー:', e); }
 
+        // 管理者とのDMルームを自動作成
+        try { await cfgCreateAdminDirectChats(userId, userName); } catch (e) { console.error('[Approve] DM作成エラー:', e); }
+
         cfgCloseUserDetailModal();
         alert('ユーザーを承認しました');
         cfgLoadUserManagement();
@@ -6452,6 +6455,29 @@
       });
 
       console.log('[Approve] ✅ ウェルカム通知・タスク作成完了:', userEmail);
+    }
+
+    async function cfgCreateAdminDirectChats(approvedUserEmail, approvedUserName) {
+      var sanitize = function(email) { return email.replace(/@/g, '_at_').replace(/\./g, '_'); };
+      var ownersSnapshot = await window.db.collection('users').where('permissionId', '==', 'owner').get();
+      if (ownersSnapshot.empty) { console.log('[Approve] owner権限ユーザーなし、DMスキップ'); return; }
+      for (var i = 0; i < ownersSnapshot.docs.length; i++) {
+        var ownerData = ownersSnapshot.docs[i].data();
+        var ownerEmail = ownerData.userEmail || ownersSnapshot.docs[i].id;
+        var ownerName = ownerData.userName || ownerEmail.split('@')[0];
+        var emails = [sanitize(ownerEmail), sanitize(approvedUserEmail)].sort();
+        var roomId = 'dm_' + emails[0] + '_' + emails[1];
+        var roomDoc = await window.db.collection('rooms').doc(roomId).get();
+        if (roomDoc.exists) { console.log('[Approve] DM既存スキップ:', roomId); continue; }
+        await window.db.collection('rooms').doc(roomId).set({
+          name: '', type: 'direct', icon: '👤',
+          members: [ownerName, approvedUserName],
+          memberEmails: [ownerEmail, approvedUserEmail],
+          createdBy: 'システム',
+          lastMessage: '', lastMessageAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        console.log('[Approve] ✅ DM作成完了:', roomId);
+      }
     }
 
     async function cfgRejectUser(userId) {
