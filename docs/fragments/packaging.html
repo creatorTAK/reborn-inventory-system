@@ -1678,7 +1678,7 @@
             var threshold = (locThresholds[m.id] !== undefined && locThresholds[m.id] > 0) ? locThresholds[m.id] : (m.stockAlertThreshold || 0);
             if (stock <= 0 || (threshold > 0 && stock <= threshold)) alertCount++;
           });
-          if (alertCount > 0) locationAlerts.push({ id: loc.id, name: loc.name, type: loc.type, alertCount: alertCount });
+          if (alertCount > 0) locationAlerts.push({ id: loc.id, name: loc.name, type: loc.type, email: loc.assignedUserEmail || '', alertCount: alertCount });
         });
         if (locationAlerts.length === 0) {
           container.innerHTML = '';
@@ -1686,10 +1686,15 @@
           return;
         }
         container.style.display = 'block';
-        var typeIcon = function(type) { return type === 'user_home' ? '👤' : type === 'warehouse' ? '🏭' : '🏢'; };
+        var locIcon = function(loc) {
+          if (loc.type === 'user_home' && loc.email && _ih_userIconCache[loc.email]) {
+            return '<img src="' + ihEscapeHtml(_ih_userIconCache[loc.email]) + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;">';
+          }
+          return loc.type === 'user_home' ? '👤' : loc.type === 'warehouse' ? '🏭' : '🏢';
+        };
         container.innerHTML = '<div class="alert-summary"><div class="alert-summary-title"><i class="bi bi-exclamation-triangle-fill"></i> 全担当者の在庫アラート</div>' +
           locationAlerts.map(function(loc) {
-            return '<div class="alert-summary-item" onclick="ihSelectLocation(\'' + loc.id + '\')" style="cursor: pointer;"><span class="alert-summary-location">' + typeIcon(loc.type) + ' ' + ihEscapeHtml(loc.name) + '</span><span class="alert-summary-count">' + loc.alertCount + '件</span></div>';
+            return '<div class="alert-summary-item" onclick="ihSelectLocation(\'' + loc.id + '\')" style="cursor: pointer;"><span class="alert-summary-location">' + locIcon(loc) + ' ' + ihEscapeHtml(loc.name) + '</span><span class="alert-summary-count">' + loc.alertCount + '件</span></div>';
           }).join('') + '</div>';
         // 管理者で特定担当者未選択の場合、全担当者の合計アラートをバッジに反映
         if (!ih_selectedLocationId) {
