@@ -5625,6 +5625,15 @@
         var batchDoc = await db.collection('purchaseBatches').doc(batchId).get();
         if (!batchDoc.exists) { alert('バッチが見つかりません'); return; }
         var batch = batchDoc.data();
+
+        // assigneeUserId がない古いデータはassignee名から検索して補完
+        if (!batch.assigneeUserId && batch.assignee) {
+          var usersSnap = await db.collection('users').where('displayName', '==', batch.assignee).limit(1).get();
+          if (!usersSnap.empty) {
+            batch.assigneeUserId = usersSnap.docs[0].id;
+            await db.collection('purchaseBatches').doc(batchId).update({ assigneeUserId: batch.assigneeUserId });
+          }
+        }
         if (!batch.assigneeUserId) { alert('発送先（担当者）が設定されていません'); return; }
 
         _pur_dispatchTargetBatchId = batchId;
