@@ -3544,6 +3544,37 @@
       if (tabName === 'analytics') purRenderAnalysis();
     }
 
+    function purCreateBudgetTask(month, carryOverBudget) {
+      window.db.collection('users').where('permissionId', '==', 'owner').get().then(function(snap) {
+        var promises = [];
+        snap.forEach(function(userDoc) {
+          var email = userDoc.data().userEmail || userDoc.id;
+          var desc = month + ' の仕入予算を確認・設定してください。';
+          if (carryOverBudget > 0) {
+            desc += '\n前月から ¥' + carryOverBudget.toLocaleString() + ' を自動引き継ぎ済みです。';
+          }
+          desc += '\n\n仕入管理 → 仕入分析 → 予算管理 から設定できます。';
+          promises.push(window.db.collection('userTasks').doc(email).collection('tasks').doc().set({
+            type: 'budget_setting',
+            title: '仕入予算を設定: ' + month,
+            description: desc,
+            createdAt: new Date().toISOString(),
+            completed: false,
+            priority: 'high',
+            link: '/purchase.html'
+          }));
+        });
+        var updateObj = {};
+        updateObj['budgetTasksSent.' + month] = true;
+        promises.push(window.db.collection('settings').doc('purchaseBudget').set(updateObj, { merge: true }));
+        return Promise.all(promises);
+      }).then(function() {
+        console.log('[Budget] 予算設定タスク発行完了:', month);
+      }).catch(function(err) {
+        console.error('[Budget] 予算設定タスク発行エラー:', err);
+      });
+    }
+
     function purSendBudgetAlert(month, pct, actual, budget) {
       var docRef = window.db.collection('settings').doc('purchaseBudget');
       docRef.get().then(function(doc) {
@@ -3692,7 +3723,8 @@
         var currentBudget = budgets[currentMonth] || 0;
         var currentActual = monthlyActual[currentMonth] || 0;
 
-        // 当月予算未設定の場合、直近月の予算を自動引き継ぎ
+        // 当月予算未設定の場合、直近月の予算を自動引き継ぎ + 管理者タスク発行
+        var budgetTasksSent = (doc.exists && doc.data().budgetTasksSent) ? doc.data().budgetTasksSent : {};
         if (!currentBudget) {
           var sortedMonths = Object.keys(budgets).filter(function(m) { return m < currentMonth && budgets[m] > 0; }).sort();
           if (sortedMonths.length > 0) {
@@ -3700,6 +3732,10 @@
             budgets[currentMonth] = currentBudget;
             var docRef = window.db.collection('settings').doc('purchaseBudget');
             docRef.set({ budgets: budgets }, { merge: true });
+          }
+          // 管理者に予算設定タスクを発行（月1回のみ）
+          if (!budgetTasksSent[currentMonth]) {
+            purCreateBudgetTask(currentMonth, currentBudget);
           }
         }
 
