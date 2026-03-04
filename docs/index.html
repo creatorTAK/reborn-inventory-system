@@ -1553,11 +1553,11 @@
     </div>
 
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0304ab</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0304ac</div>
     <script>
     // PWAバージョンチェック（タスクキル復帰 + バックグラウンド復帰）
     (function(){
-      var LOCAL_VER = 'v0304ab';
+      var LOCAL_VER = 'v0304ac';
       var lastCheck = 0;
 
       function _versionCheck() {
@@ -2308,6 +2308,36 @@
     // 注: compensationは権限設定で制御するためここには含めない
     const ALWAYS_OWNER_ONLY_MENUS = [];
 
+    // 🔧 高速起動: localStorageキャッシュからメニュー制御（Firestoreを待たない）
+    function applyPermissionFromCache() {
+      try {
+        var permissionId = localStorage.getItem('reborn_user_permission_id') || localStorage.getItem('reborn_user_permission');
+        if (!permissionId || permissionId === 'owner') return; // ownerは全表示
+
+        // 管理者専用メニューを非表示
+        for (var i = 0; i < ALWAYS_OWNER_ONLY_MENUS.length; i++) {
+          var elementId = DRAWER_MENU_ID_MAP[ALWAYS_OWNER_ONLY_MENUS[i]];
+          var element = document.getElementById(elementId);
+          if (element) element.style.display = 'none';
+        }
+
+        // キャッシュ済みメニュー権限を適用
+        var cachedMenuPerm = localStorage.getItem('reborn_cached_menu_permissions');
+        if (cachedMenuPerm) {
+          var menuPermissions = JSON.parse(cachedMenuPerm);
+          for (var menuId in DRAWER_MENU_ID_MAP) {
+            var el = document.getElementById(DRAWER_MENU_ID_MAP[menuId]);
+            if (!el) continue;
+            var menuPerm = menuPermissions[menuId];
+            var isVisible = menuPerm
+              ? (!menuPerm.visibleTo || menuPerm.visibleTo.includes(permissionId))
+              : (DEFAULT_OWNER_ONLY_MENUS.indexOf(menuId) === -1);
+            if (!isVisible) el.style.display = 'none';
+          }
+        }
+      } catch (e) { console.warn('[PermCache] キャッシュ適用エラー:', e); }
+    }
+
     async function checkUserPermissionForSidebar() {
       try {
         const userEmail = localStorage.getItem('reborn_user_email');
@@ -2364,6 +2394,8 @@
         // v580: ドキュメント無しでもdefaultOwnerOnly適用
         const menuPermissions = menuPermDoc.exists ? menuPermDoc.data() : {};
         console.log('[index.html] 📋 メニュー権限設定:', menuPermissions);
+        // キャッシュに保存（次回起動時の高速表示用）
+        try { localStorage.setItem('reborn_cached_menu_permissions', JSON.stringify(menuPermissions)); } catch (e) {}
 
         // 3. 各メニューの表示/非表示を制御
         let hiddenCount = 0;
@@ -2438,7 +2470,7 @@
       loadUserIcon();
 
       // アプリ再インストール時のFirestoreアイコンクリア
-      await clearFirestoreUserIconIfNeeded();
+      clearFirestoreUserIconIfNeeded().catch(function(e) { console.warn('[Icon] クリアチェックエラー:', e); });
 
       // ===== PWA判定ロジック =====
       // ブラウザで開いている場合はインストールプロンプトを表示
@@ -2504,11 +2536,12 @@
         // 権限選択肢のプリロード（表示前に準備）
         loadAndRenderPermissions();
       } else {
-        // セットアップ完了済み → FCMトークンをチェック（Phase 2: NOTIF-003）
-        await checkAndUpdateFCMToken();
+        // 🔧 高速起動: キャッシュ済み権限で先にメニュー制御（Firestoreを待たない）
+        applyPermissionFromCache();
 
-        // 権限チェックしてサイドバーメニューを制御（PERM-001）
-        await checkUserPermissionForSidebar();
+        // セットアップ完了済み → FCMトークンチェック・権限チェックをバックグラウンドで実行
+        checkAndUpdateFCMToken().catch(function(e) { console.warn('[FCM] バックグラウンドチェックエラー:', e); });
+        checkUserPermissionForSidebar().catch(function(e) { console.warn('[Perm] バックグラウンドチェックエラー:', e); });
 
         // オンライン状態を更新（UI-017: ユーザー管理オンライン表示）
         updateLastActiveAt();
