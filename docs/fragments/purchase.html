@@ -3649,6 +3649,17 @@
         var currentBudget = budgets[currentMonth] || 0;
         var currentActual = monthlyActual[currentMonth] || 0;
 
+        // 当月予算未設定の場合、直近月の予算を自動引き継ぎ
+        if (!currentBudget) {
+          var sortedMonths = Object.keys(budgets).filter(function(m) { return m < currentMonth && budgets[m] > 0; }).sort();
+          if (sortedMonths.length > 0) {
+            currentBudget = budgets[sortedMonths[sortedMonths.length - 1]];
+            budgets[currentMonth] = currentBudget;
+            var docRef = window.db.collection('settings').doc('purchaseBudget');
+            docRef.set({ budgets: budgets }, { merge: true });
+          }
+        }
+
         if (currentBudget > 0) {
           var pct = (currentActual / currentBudget * 100).toFixed(1);
           var barClass = parseFloat(pct) >= 100 ? 'danger' : parseFloat(pct) >= alertThreshold ? 'warning' : 'safe';
