@@ -1585,6 +1585,15 @@
       // 自分のメールアドレスを取得
       var myEmail = localStorage.getItem('reborn_user_email') || '';
       var myLoc = ih_allLocations.find(function(l) { return l.assignedUserEmail === myEmail; });
+      // 「全員」オプションを先頭に追加
+      var allItem = document.createElement('div');
+      allItem.className = 'px-3 py-2';
+      allItem.style.cssText = 'cursor:pointer; border-bottom:1px solid #f0f0f0; font-weight:600;';
+      allItem.onmouseenter = function() { allItem.style.background = '#f0f4ff'; };
+      allItem.onmouseleave = function() { allItem.style.background = ''; };
+      allItem.textContent = '全員';
+      allItem.onclick = function() { ihSelectAllLocations(); };
+      menu.appendChild(allItem);
       ih_allLocations.forEach(function(loc) {
         var item = document.createElement('div');
         item.className = 'px-3 py-2';
@@ -1596,10 +1605,8 @@
         item.onclick = function() { ihSelectLocDropdownItem(loc.id, loc.name); };
         menu.appendChild(item);
       });
-      // デフォルトで自分の場所を選択
-      if (myLoc) {
-        ihSelectLocDropdownItem(myLoc.id, myLoc.name);
-      }
+      // デフォルトで「全員」を選択
+      ihSelectAllLocations();
     }
 
     function ihToggleLocDropdown() {
@@ -1628,6 +1635,16 @@
       label.textContent = locationName;
       label.className = '';
       document.getElementById('ih-locDropdownMenu').style.display = 'none';
+      ihLoadStockList();
+    }
+
+    function ihSelectAllLocations() {
+      ih_selectedLocationId = null;
+      var label = document.getElementById('ih-locDropdownLabel');
+      if (label) { label.textContent = '全員'; label.className = ''; }
+      document.getElementById('ih-locDropdownMenu').style.display = 'none';
+      // 全員選択時はサマリーを表示し、バッジは全担当者合計
+      ihLoadAllLocationsAlertSummary();
       ihLoadStockList();
     }
 
@@ -1674,6 +1691,12 @@
           locationAlerts.map(function(loc) {
             return '<div class="alert-summary-item" onclick="ihSelectLocation(\'' + loc.id + '\')" style="cursor: pointer;"><span class="alert-summary-location">' + typeIcon(loc.type) + ' ' + ihEscapeHtml(loc.name) + '</span><span class="alert-summary-count">' + loc.alertCount + '件</span></div>';
           }).join('') + '</div>';
+        // 管理者で特定担当者未選択の場合、全担当者の合計アラートをバッジに反映
+        if (!ih_selectedLocationId) {
+          var totalAlerts = locationAlerts.reduce(function(sum, loc) { return sum + loc.alertCount; }, 0);
+          var badge = document.getElementById('ih-stockAlertBadge');
+          if (badge) badge.textContent = totalAlerts > 0 ? totalAlerts : '';
+        }
       } catch (error) {
         console.error('[ih] 全場所アラートサマリー取得エラー:', error);
         container.innerHTML = '';
@@ -1701,12 +1724,13 @@
           return;
         }
         var locationId, locationName, locationData;
+        var isAllMode = !ih_selectedLocationId && ihIsAdmin();
         if (ih_selectedLocationId && ihIsAdmin()) {
           var selectedLoc = ih_allLocations.find(function(l) { return l.id === ih_selectedLocationId; });
           locationId = ih_selectedLocationId;
           locationName = selectedLoc ? selectedLoc.name : '不明な担当者';
           locationData = selectedLoc || {};
-        } else {
+        } else if (!isAllMode) {
           var location = await ihGetCurrentUserLocation();
           if (!location) {
             container.innerHTML = '<div class="text-center text-danger py-4">担当者の取得に失敗しました</div>';
@@ -1717,13 +1741,29 @@
           locationData = location;
         }
         var locationNameEl = document.getElementById('ih-currentLocationName');
-        if (locationNameEl) locationNameEl.textContent = locationName;
-
-        // 管理対象資材フィルタ
-        var managedMaterials = locationData.managedMaterials || null;
+        if (locationNameEl) locationNameEl.textContent = isAllMode ? '全員' : locationName;
 
         var materialsSnapshot = await db.collection('packagingMaterials').get();
         var allMats = materialsSnapshot.docs.map(function(doc) { return { id: doc.id, ...doc.data() }; });
+
+        // 全員モード: 全ロケーションの在庫を集計
+        if (isAllMode) {
+          var lotsSnapshot = await db.collection('packagingLots').where('status', '==', 'active').get();
+          var stockByMaterial = {};
+          lotsSnapshot.docs.forEach(function(doc) {
+            var lot = doc.data();
+            if (!stockByMaterial[lot.materialId]) stockByMaterial[lot.materialId] = 0;
+            stockByMaterial[lot.materialId] += lot.remainingQty || 0;
+          });
+          ih_allMaterials = allMats.map(function(m) {
+            return { ...m, currentStock: stockByMaterial[m.id] || 0 };
+          });
+          ihRenderStockList(ih_allMaterials);
+          return;
+        }
+
+        // 管理対象資材フィルタ
+        var managedMaterials = locationData.managedMaterials || null;
 
         // managedMaterialsが設定されている場合のみフィルタ（未設定=全資材表示で後方互換）
         var materials;
@@ -1760,7 +1800,10 @@
       var showLowOnly = document.getElementById('ih-showLowStockOnly').checked;
       var filtered = materials;
       if (showLowOnly) filtered = filtered.filter(function(m) { return (m.currentStock || 0) <= (m.stockAlertThreshold || 0); });
-      ihUpdateAlertBadge(materials);
+      // 全員モード時はihLoadAllLocationsAlertSummaryでバッジ設定するのでスキップ
+      if (ih_selectedLocationId || !ihIsAdmin()) {
+        ihUpdateAlertBadge(materials);
+      }
       if (filtered.length === 0) {
         container.innerHTML = '<div class="text-center text-muted py-4">該当する資材がありません</div>';
         return;
@@ -1782,9 +1825,9 @@
           '<div class="stock-card-header"><span class="stock-card-name">' + ihEscapeHtml(item.productName || item.name) + alertIcon + '</span><span class="stock-card-category">' + ihEscapeHtml(item.category || '') + '</span></div>' +
           '<div class="stock-card-body"><div><span class="stock-count ' + countClass + '">' + stock + '</span><span class="text-muted small">個</span>' +
           (threshold > 0 ? '<span class="text-muted small ms-2">(発注点: ' + threshold + ')</span>' : '') +
-          '</div><div class="stock-actions">' +
-          '<button class="btn btn-sm btn-outline-success" onclick="ihShowStockInModalMaterial(\'' + item.id + '\')"><i class="bi bi-plus"></i></button>' +
-          '</div></div></div>';
+          '</div>' + (ih_selectedLocationId || !ihIsAdmin() ?
+          '<div class="stock-actions"><button class="btn btn-sm btn-outline-success" onclick="ihShowStockInModalMaterial(\'' + item.id + '\')"><i class="bi bi-plus"></i></button></div>' : '') +
+          '</div></div>';
       }).join('');
     }
 
