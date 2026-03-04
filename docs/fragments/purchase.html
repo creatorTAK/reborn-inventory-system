@@ -2223,11 +2223,12 @@
                   <th>検品</th>
                   <th>ステータス</th>
                   <th>登録進捗</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody id="pur-dispatchProgressBody">
                 <tr>
-                  <td colspan="8" class="text-center text-muted py-4">データを読み込み中...</td>
+                  <td colspan="9" class="text-center text-muted py-4">データを読み込み中...</td>
                 </tr>
               </tbody>
             </table>
@@ -2627,6 +2628,20 @@
     var _pur_qrCheckHistory = [];
     var _pur_MAX_HISTORY = 10;
     var _pur_dispatchProgressData = [];
+    var _pur_statusMap = {
+      'pending': '未発送', 'shipped': '発送済', 'received': '受取済',
+      'registering': '登録中', 'completed': '完了'
+    };
+    var _pur_statusBadgeClass = {
+      'pending': 'bg-secondary', 'shipped': 'bg-primary', 'received': 'bg-info',
+      'registering': 'bg-warning text-dark', 'completed': 'bg-success'
+    };
+    var _pur_inspectionStatusMap = {
+      'not_assigned': '未割当', 'pending': '未着手', 'in_progress': '作業中', 'completed': '完了'
+    };
+    var _pur_inspectionBadgeClass = {
+      'not_assigned': 'bg-secondary', 'pending': 'bg-secondary', 'in_progress': 'bg-warning text-dark', 'completed': 'bg-success'
+    };
     var _pur_inspectionRequestsData = [];
     var _pur_damageMarkerState = new Map();
     var _pur_batchDamageMarkerState = {
@@ -4611,8 +4626,14 @@
       document.getElementById('pur-entryAfterActions').style.display = 'block';
       document.getElementById('pur-entryPurchaseId').textContent = batchId;
       document.getElementById('pur-entryAssigneeName').textContent = assigneeName;
-      if (assigneeData && assigneeData.userId) {
-        document.getElementById('pur-dispatchNotificationArea').style.display = 'block';
+      var area = document.getElementById('pur-dispatchNotificationArea');
+      if (area && assigneeData && assigneeData.userId) {
+        area.dataset.batchId = batchId;
+        area.dataset.assigneeUserId = assigneeData.userId;
+        area.dataset.assigneeName = assigneeName;
+        area.dataset.itemCount = _pur_entryItems.length;
+        area.dataset.supplier = (document.getElementById('pur-entrySupplierIndividual') || {}).value || '';
+        area.style.display = '';
       }
     }
 
@@ -5107,15 +5128,21 @@
     // ============================================
     // Dispatch progress
     // ============================================
+    function purStatusBadge(status, map, classMap) {
+      var label = (map && map[status]) || status || '-';
+      var cls = (classMap && classMap[status]) || 'bg-secondary';
+      return '<span class="badge ' + cls + '">' + label + '</span>';
+    }
+
     function purLoadDispatchProgress() {
       var tbody = document.getElementById('pur-dispatchProgressBody');
       if (!tbody) return;
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">読み込み中...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">読み込み中...</td></tr>';
       window.db.collection('purchaseBatches').orderBy('createdAt', 'desc').limit(50).get().then(function(snap) {
         _pur_dispatchProgressData = [];
         snap.forEach(function(doc) { _pur_dispatchProgressData.push(Object.assign({ id: doc.id }, doc.data())); });
         purRenderDispatchProgress();
-      }).catch(function(err) { tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">読み込みに失敗しました</td></tr>'; });
+      }).catch(function(err) { tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">読み込みに失敗しました</td></tr>'; });
     }
 
     function purRenderDispatchProgress() {
@@ -5123,11 +5150,22 @@
       if (!tbody) return;
       var filter = document.getElementById('pur-dispatchStatusFilter').value;
       var filtered = filter === 'all' ? _pur_dispatchProgressData : _pur_dispatchProgressData.filter(function(d) { return d.status === filter; });
-      if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">該当するデータがありません</td></tr>'; return; }
+      if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">該当するデータがありません</td></tr>'; return; }
       var html = '';
       filtered.forEach(function(d) {
         var progress = d.itemCount > 0 ? Math.round((d.registeredCount || 0) / d.itemCount * 100) : 0;
-        html += '<tr><td>' + (d.purchaseDate||'-') + '</td><td>' + (d.supplier||'-') + '</td><td>' + (d.itemCount||0) + '</td><td>' + (d.assignee||'-') + '</td><td>' + (d.inspectionAssignee||'-') + '</td><td>' + (d.inspectionStatus||'-') + '</td><td>' + (d.status||'-') + '</td><td>' + progress + '%</td></tr>';
+        var progressBar = '<div class="progress" style="min-width:80px;height:18px;"><div class="progress-bar bg-success" style="width:' + progress + '%"></div></div><small>' + progress + '%</small>';
+        var inspBadge = purStatusBadge(d.inspectionStatus || 'not_assigned', _pur_inspectionStatusMap, _pur_inspectionBadgeClass);
+        var statusBadge = purStatusBadge(d.status, _pur_statusMap, _pur_statusBadgeClass);
+        var actionHtml = '';
+        if (d.status === 'pending') {
+          actionHtml = '<button class="btn btn-sm btn-outline-primary" onclick="purSendDispatchFromProgress(\'' + d.id + '\')"><i class="bi bi-send"></i> 発送通知</button>';
+        } else if (d.status === 'completed') {
+          actionHtml = '<span class="badge bg-success">完了</span>';
+        } else {
+          actionHtml = '-';
+        }
+        html += '<tr><td>' + (d.purchaseDate||'-') + '</td><td>' + (d.supplier||'-') + '</td><td>' + (d.itemCount||0) + '</td><td>' + (d.assignee||'-') + '</td><td>' + (d.inspectionAssignee||'-') + '</td><td>' + inspBadge + '</td><td>' + statusBadge + '</td><td>' + progressBar + '</td><td>' + actionHtml + '</td></tr>';
       });
       tbody.innerHTML = html;
     }
@@ -5507,6 +5545,41 @@
         console.error('[purchase] 発送通知エラー:', error);
         alert('発送通知の送信に失敗しました: ' + error.message);
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-send"></i> 発送通知を送信'; }
+      }
+    }
+
+    async function purSendDispatchFromProgress(batchId) {
+      if (!confirm('この仕入バッチの発送通知を送信しますか？')) return;
+      try {
+        var db = window.db;
+        var batchDoc = await db.collection('purchaseBatches').doc(batchId).get();
+        if (!batchDoc.exists) { alert('バッチが見つかりません'); return; }
+        var batch = batchDoc.data();
+        var assigneeUserId = batch.assigneeUserId;
+        if (!assigneeUserId) { alert('発送先（担当者）が設定されていません'); return; }
+
+        var taskId = 'task-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+        var taskData = {
+          type: 'receiving_task',
+          title: '仕入商品の受取（' + (batch.itemCount || 0) + '点）',
+          description: (batch.supplier || '') + 'から' + (batch.itemCount || 0) + '点の商品が発送されました。商品を受け取ったらこのタスクを完了にしてください。',
+          link: 'purchase',
+          relatedData: { batchId: batchId, itemCount: batch.itemCount || 0, supplier: batch.supplier || '', assigneeName: batch.assignee || '' },
+          createdAt: new Date().toISOString(),
+          completed: false,
+          read: false
+        };
+        await db.collection('userTasks').doc(assigneeUserId).collection('tasks').doc(taskId).set(taskData);
+        await db.collection('purchaseBatches').doc(batchId).update({
+          status: 'shipped',
+          shippedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          dispatchTaskId: taskId
+        });
+        alert('発送通知を送信しました');
+        purLoadDispatchProgress();
+      } catch (error) {
+        console.error('[purchase] 発送通知エラー:', error);
+        alert('発送通知の送信に失敗しました: ' + error.message);
       }
     }
 

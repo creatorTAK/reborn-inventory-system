@@ -152,7 +152,14 @@ async function updateRegistrationCountdown(purchaseSlotId) {
       updatedAt: new Date().toISOString()
     };
 
-    // 4. 残数0の場合はステータスを完了に
+    // 4a. 最初の商品登録時にステータスを registering に遷移
+    if (newRegistered === 1 && batchData.status !== 'registering' && batchData.status !== 'completed') {
+      batchUpdate.status = 'registering';
+      batchUpdate.registeringStartedAt = new Date().toISOString();
+      console.log('📝 [updateRegistrationCountdown] ステータス→registering:', batchId);
+    }
+
+    // 4b. 残数0の場合はステータスを完了に
     if (newRemaining === 0) {
       batchUpdate.status = 'completed';
       console.log('🎉 [updateRegistrationCountdown] 全商品登録完了!', batchId);
