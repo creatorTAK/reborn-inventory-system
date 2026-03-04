@@ -3072,6 +3072,22 @@
           }).catch(function(err) { console.error('検品タスク作成エラー:', err); });
         }
 
+        // 発送リマインダータスク作成（管理者自身へ）
+        var currentUserEmail = firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
+        if (currentUserEmail) {
+          window.db.collection('userTasks').doc(currentUserEmail).collection('tasks').doc().set({
+            type: 'dispatch_reminder',
+            title: '📦 発送通知を送信: ' + batchData.supplier + ' (' + batchData.itemCount + '点) → ' + (batchData.assignee || '未設定'),
+            description: batchData.supplier + 'から仕入れた' + batchData.itemCount + '点の商品を' + (batchData.assignee || '担当者未設定') + 'に発送通知してください。',
+            link: 'purchase',
+            linkTab: 'dispatch-progress',
+            relatedData: { batchId: batchId, supplier: batchData.supplier, itemCount: batchData.itemCount, assignee: batchData.assignee || '' },
+            createdAt: new Date().toISOString(),
+            completed: false,
+            read: false
+          }).catch(function(err) { console.error('発送リマインダータスク作成エラー:', err); });
+        }
+
         // スロット保存
         var slotsPromise = Promise.resolve();
         var slots = [];
@@ -5660,6 +5676,20 @@
         if (dueDate) batchUpdate.dueDate = dueDate;
         await db.collection('purchaseBatches').doc(batchId).update(batchUpdate);
 
+        // 発送リマインダータスクを自動完了
+        var currentUserEmail = firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
+        if (currentUserEmail) {
+          db.collection('userTasks').doc(currentUserEmail).collection('tasks')
+            .where('type', '==', 'dispatch_reminder')
+            .where('relatedData.batchId', '==', batchId)
+            .where('completed', '==', false)
+            .get().then(function(snap) {
+              snap.forEach(function(doc) {
+                doc.ref.update({ completed: true, completedAt: new Date().toISOString() });
+              });
+            }).catch(function() {});
+        }
+
         purCloseModal('pur-dispatchModal');
         _pur_dispatchTargetBatchId = null;
         alert('発送通知を送信しました');
@@ -6964,6 +6994,13 @@
         if (scanHubTarget === 'purchase') {
           sessionStorage.removeItem('scanHub_autoOpen');
           setTimeout(function() { purOpenQRCheckScanner(); }, 500);
+        }
+
+        // タスクリストからの進捗管理タブ直行
+        var pendingTab = sessionStorage.getItem('pendingTab');
+        if (pendingTab === 'dispatch-progress') {
+          sessionStorage.removeItem('pendingTab');
+          setTimeout(function() { purSwitchTab('pur-progress-content'); purLoadProgressData(); }, 300);
         }
 
       }).catch(function(err) {
