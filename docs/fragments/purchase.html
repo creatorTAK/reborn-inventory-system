@@ -2306,7 +2306,7 @@
       </div>
     </div>
 
-    <!-- 進捗管理タブ（発送進捗 + 検品依頼を統合） -->
+    <!-- 進捗管理タブ（発送進捗 + 商品登録進捗を統合） -->
     <div class="pur-tab-content" id="pur-progress-content">
       <!-- サブセクション切替 -->
       <div class="pur-progress-sub-tabs mb-3">
@@ -2314,7 +2314,7 @@
           <i class="bi bi-truck"></i> 発送進捗
         </button>
         <button class="pur-progress-sub-tab" onclick="purSwitchProgressSub('inspection', this)">
-          <i class="bi bi-clipboard-check"></i> 検品依頼
+          <i class="bi bi-clipboard-check"></i> 商品登録進捗
         </button>
       </div>
 
@@ -2365,15 +2365,15 @@
         <div id="pur-dispatchPagination" class="tbl-pager-container"></div>
       </div>
 
-      <!-- 検品依頼セクション -->
+      <!-- 商品登録進捗セクション -->
       <div class="pur-progress-section" id="pur-progress-inspection" style="display: none;">
         <div class="alert alert-info small mb-3">
-          <i class="bi bi-info-circle"></i> 検品作業の依頼を作成・管理します。担当者にタスクとして割り当てられます。
+          <i class="bi bi-info-circle"></i> 商品登録の進捗を管理します。担当者にタスクとして割り当てられます。
         </div>
 
         <div class="mb-3">
           <button class="btn btn-warning" onclick="purShowCreateInspectionRequestModal()">
-            <i class="bi bi-plus-circle"></i> 新規検品依頼
+            <i class="bi bi-plus-circle"></i> 新規商品登録進捗
           </button>
         </div>
 
@@ -2494,11 +2494,11 @@
     </div>
   </div>
 
-  <!-- 検品依頼作成モーダル -->
+  <!-- 商品登録進捗作成モーダル -->
   <div class="pur-modal-overlay" id="pur-createInspectionRequestModal">
     <div class="pur-modal-dialog">
       <div class="pur-modal-header" style="background: #f59e0b; color: white;">
-        <h5>新規検品依頼</h5>
+        <h5>新規商品登録進捗</h5>
         <button class="pur-modal-close" style="color: white;" onclick="purCloseModal('pur-createInspectionRequestModal')">&times;</button>
       </div>
       <div class="pur-modal-body">
@@ -3008,29 +3008,6 @@
         inspectionStatus: batchData.inspectionAssignee ? 'pending' : 'not_assigned',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }).then(function() {
-        // 検品タスク作成
-        if (batchData.inspectionAssigneeEmail) {
-          var staffEmail = batchData.inspectionAssigneeEmail;
-          window.db.collection('userTasks').doc(staffEmail).collection('tasks').doc().set({
-            type: 'inspection_task',
-            title: '\u691c\u54c1\u4f5c\u696d: ' + batchData.supplier + ' (' + batchData.itemCount + '\u70b9)',
-            description: '\u4ed5\u5165\u5148: ' + batchData.supplier + '\n\u4ed5\u5165\u65e5: ' + batchData.purchaseDate + '\n\u70b9\u6570: ' + batchData.itemCount + '\u70b9',
-            createdAt: new Date().toISOString(),
-            completed: false,
-            priority: 'normal',
-            link: 'purchase',
-            linkTab: 'dispatch-progress',
-            relatedData: {
-              batchId: batchId,
-              supplier: batchData.supplier,
-              itemCount: batchData.itemCount,
-              purchaseDate: batchData.purchaseDate,
-              staffEmail: staffEmail,
-              staffName: batchData.inspectionAssignee
-            }
-          }).catch(function(err) { console.error('検品タスク作成エラー:', err); });
-        }
-
         // 発送リマインダータスク作成（管理者自身へ）
         var currentUserEmail = firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
         if (currentUserEmail) {
@@ -3086,7 +3063,7 @@
 
         return slotsPromise.then(function() {
           console.log('[Pur] バッチ保存完了:', batchId, 'スロット:', slots.length);
-          // 検品依頼更新
+          // 商品登録進捗更新
           purUpdateInspectionRequestProgress(batchData.supplier, batchData.itemCount).catch(function() {});
           return { batchId: batchId, slots: slots };
         });
@@ -5582,13 +5559,13 @@
         createdBy: firebase.auth().currentUser ? firebase.auth().currentUser.email : 'unknown'
       }).then(function() {
         purCloseModal('pur-createInspectionRequestModal');
-        alert('検品依頼を作成しました');
+        alert('商品登録進捗を作成しました');
         purLoadInspectionRequests();
       }).catch(function(err) { alert('作成に失敗しました: ' + err.message); });
     }
 
     function purCancelInspectionRequest(requestId) {
-      if (!confirm('この検品依頼をキャンセルしますか？')) return;
+      if (!confirm('この商品登録進捗をキャンセルしますか？')) return;
       window.db.collection('inspectionRequests').doc(requestId).update({
         status: 'cancelled', updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }).then(function() { alert('キャンセルしました'); purLoadInspectionRequests(); });
