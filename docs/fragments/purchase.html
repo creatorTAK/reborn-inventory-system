@@ -5159,7 +5159,8 @@
         var statusBadge = purStatusBadge(d.status, _pur_statusMap, _pur_statusBadgeClass);
         var actionHtml = '';
         if (d.status === 'pending') {
-          actionHtml = '<button class="btn btn-sm btn-outline-primary" onclick="purSendDispatchFromProgress(\'' + d.id + '\')"><i class="bi bi-send"></i> 発送通知</button>';
+          actionHtml = '<button class="btn btn-sm btn-outline-primary me-1" onclick="purSendDispatchFromProgress(\'' + d.id + '\')"><i class="bi bi-send"></i> 発送通知</button>' +
+            '<button class="btn btn-sm btn-outline-success" onclick="purHandleSelfProcess(\'' + d.id + '\')"><i class="bi bi-person-check"></i> 自分で処理</button>';
         } else if (d.status === 'completed') {
           actionHtml = '<span class="badge bg-success">完了</span>';
         } else {
@@ -5580,6 +5581,22 @@
       } catch (error) {
         console.error('[purchase] 発送通知エラー:', error);
         alert('発送通知の送信に失敗しました: ' + error.message);
+      }
+    }
+
+    async function purHandleSelfProcess(batchId) {
+      if (!confirm('この仕入バッチを自分で処理しますか？（発送をスキップして受取済にします）')) return;
+      try {
+        await window.db.collection('purchaseBatches').doc(batchId).update({
+          status: 'received',
+          receivedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          selfProcessed: true
+        });
+        alert('受取済に更新しました。商品登録を開始できます。');
+        purLoadDispatchProgress();
+      } catch (error) {
+        console.error('[purchase] 自分で処理エラー:', error);
+        alert('更新に失敗しました: ' + error.message);
       }
     }
 
