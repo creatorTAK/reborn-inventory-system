@@ -1957,17 +1957,26 @@
             <div class="cfg-card-desc">スタッフの手持ち商品が少なくなった際に管理者へ通知する閾値を設定します</div>
             <div style="display: flex; flex-direction: column; gap: 12px;">
               <div>
-                <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">残数閾値（点）</label>
-                <input type="number" id="cfg-dispatchAlertThreshold" class="form-control" min="1" value="10" placeholder="残りこの点数以下でアラート">
+                <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px;">アラート条件</label>
+                <div style="display: flex; gap: 8px;">
+                  <label onclick="cfgToggleAlertMode('count')" style="flex: 1; padding: 10px; border: 2px solid #40B4E5; border-radius: 8px; text-align: center; cursor: pointer; font-size: 13px; font-weight: 600; color: #374151; background: #f0f9ff;" id="cfg-alertModeCount">
+                    <input type="radio" name="cfg-alertMode" value="count" checked style="display:none;"> 残数（点）
+                  </label>
+                  <label onclick="cfgToggleAlertMode('percent')" style="flex: 1; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px; text-align: center; cursor: pointer; font-size: 13px; font-weight: 600; color: #9ca3af; background: white;" id="cfg-alertModePercent">
+                    <input type="radio" name="cfg-alertMode" value="percent" style="display:none;"> 残割合（%）
+                  </label>
+                </div>
+              </div>
+              <div id="cfg-alertCountField">
+                <input type="number" id="cfg-dispatchAlertThreshold" class="form-control" min="1" value="10" placeholder="例: 10">
                 <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">残数がこの値以下になったら管理者に通知します</div>
               </div>
-              <div>
-                <label style="display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px;">残割合閾値（%）</label>
-                <input type="number" id="cfg-dispatchAlertThresholdPercent" class="form-control" min="1" max="100" value="20" placeholder="残りこの割合以下でアラート">
+              <div id="cfg-alertPercentField" style="display:none;">
+                <input type="number" id="cfg-dispatchAlertThresholdPercent" class="form-control" min="1" max="100" value="20" placeholder="例: 20">
                 <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">残割合がこの値以下になったら管理者に通知します</div>
               </div>
               <div style="background: #eff6ff; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #1e40af;">
-                <i class="bi bi-info-circle"></i> どちらか一方の条件を満たした時点でアラートが発火します。1バッチにつき1回のみ通知されます。
+                <i class="bi bi-info-circle"></i> 1バッチにつき1回のみ通知されます。
               </div>
             </div>
           </div>
@@ -7105,6 +7114,25 @@
     }
     window.cfgClearProcureListingDefaults = cfgClearProcureListingDefaults;
 
+    function cfgToggleAlertMode(mode) {
+      var countLabel = document.getElementById('cfg-alertModeCount');
+      var percentLabel = document.getElementById('cfg-alertModePercent');
+      var countField = document.getElementById('cfg-alertCountField');
+      var percentField = document.getElementById('cfg-alertPercentField');
+      if (mode === 'count') {
+        countLabel.style.borderColor = '#40B4E5'; countLabel.style.background = '#f0f9ff'; countLabel.style.color = '#374151';
+        percentLabel.style.borderColor = '#e5e7eb'; percentLabel.style.background = 'white'; percentLabel.style.color = '#9ca3af';
+        countField.style.display = ''; percentField.style.display = 'none';
+        countLabel.querySelector('input').checked = true;
+      } else {
+        percentLabel.style.borderColor = '#40B4E5'; percentLabel.style.background = '#f0f9ff'; percentLabel.style.color = '#374151';
+        countLabel.style.borderColor = '#e5e7eb'; countLabel.style.background = 'white'; countLabel.style.color = '#9ca3af';
+        percentField.style.display = ''; countField.style.display = 'none';
+        percentLabel.querySelector('input').checked = true;
+      }
+    }
+    window.cfgToggleAlertMode = cfgToggleAlertMode;
+
     async function cfgLoadDispatchAlertSettings() {
       try {
         var doc = await window.db.collection('settings').doc('dispatchAlerts').get();
@@ -7114,6 +7142,8 @@
           var el2 = document.getElementById('cfg-dispatchAlertThresholdPercent');
           if (el1) el1.value = data.defaultThreshold || 10;
           if (el2) el2.value = data.defaultThresholdPercent || 20;
+          if (data.alertMode === 'percent') cfgToggleAlertMode('percent');
+          else cfgToggleAlertMode('count');
         }
       } catch (e) { console.warn('[config] dispatch alert settings load error:', e); }
     }
@@ -7122,12 +7152,13 @@
       var el1 = document.getElementById('cfg-dispatchAlertThreshold');
       var el2 = document.getElementById('cfg-dispatchAlertThresholdPercent');
       if (!el1 || !el2) return;
-      var threshold = parseInt(el1.value) || 10;
-      var thresholdPercent = parseInt(el2.value) || 20;
+      var mode = document.querySelector('input[name="cfg-alertMode"]:checked');
+      var alertMode = (mode && mode.value === 'percent') ? 'percent' : 'count';
       try {
         await window.db.collection('settings').doc('dispatchAlerts').set({
-          defaultThreshold: threshold,
-          defaultThresholdPercent: thresholdPercent,
+          alertMode: alertMode,
+          defaultThreshold: parseInt(el1.value) || 10,
+          defaultThresholdPercent: parseInt(el2.value) || 20,
           updatedAt: new Date().toISOString()
         }, { merge: true });
         if (!silent) alert('残数アラート設定を保存しました');

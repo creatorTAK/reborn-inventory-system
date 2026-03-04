@@ -172,11 +172,14 @@ async function updateRegistrationCountdown(purchaseSlotId) {
       try {
         const settingsDoc = await db.collection('settings').doc('dispatchAlerts').get();
         const settings = settingsDoc.exists ? settingsDoc.data() : {};
+        const alertMode = settings.alertMode || 'count';
         const thresholdCount = settings.defaultThreshold || 10;
         const thresholdPercent = settings.defaultThresholdPercent || 20;
         const percentRemaining = Math.round(newRemaining / totalCount * 100);
 
-        const shouldAlert = newRemaining <= thresholdCount || percentRemaining <= thresholdPercent;
+        const shouldAlert = alertMode === 'percent'
+          ? percentRemaining <= thresholdPercent
+          : newRemaining <= thresholdCount;
 
         if (shouldAlert) {
           console.log(`⚠️ [updateRegistrationCountdown] 残数アラート発火: 残${newRemaining}点 (${percentRemaining}%)`);
