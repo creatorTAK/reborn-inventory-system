@@ -3111,6 +3111,22 @@
             registeredCount: newCount,
             status: isCompleted ? 'completed' : 'in_progress',
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }).then(function() {
+            if (isCompleted) {
+              // inspection_taskタスクを自動完了
+              window.db.collection('userTasks').doc(currentUserEmail).collection('tasks')
+                .where('type', '==', 'inspection_task')
+                .where('completed', '==', false)
+                .get().then(function(snap) {
+                  snap.forEach(function(taskDoc) {
+                    var rd = taskDoc.data().relatedData || {};
+                    if (rd.supplier === supplier) {
+                      taskDoc.ref.update({ completed: true, completedAt: new Date().toISOString() });
+                      console.log('[Inspection] タスク自動完了:', taskDoc.id);
+                    }
+                  });
+                });
+            }
           });
         });
     }
