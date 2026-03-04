@@ -2197,7 +2197,7 @@
           <i class="bi bi-info-circle"></i> 発送済みの仕入バッチの商品登録進捗を確認できます。
         </div>
 
-        <div class="row g-2 mb-3">
+        <div class="row g-2 mb-3 align-items-center">
           <div class="col-auto">
             <select class="form-select form-select-sm" id="pur-dispatchStatusFilter" onchange="purFilterDispatchProgress()">
               <option value="all">すべて</option>
@@ -2207,6 +2207,9 @@
               <option value="registering">登録中</option>
               <option value="completed">完了</option>
             </select>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-sm btn-outline-warning" onclick="purOpenAlertSettings()"><i class="bi bi-bell"></i> アラート設定</button>
           </div>
         </div>
 
@@ -2564,6 +2567,60 @@
         <button type="button" class="btn btn-secondary" onclick="purCloseModal('pur-createInspectionRequestModal')">キャンセル</button>
         <button type="button" class="btn btn-warning" onclick="purCreateInspectionRequest()">
           <i class="bi bi-check-circle"></i> 依頼を作成
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 発送通知モーダル -->
+  <div class="pur-modal-overlay" id="pur-dispatchModal">
+    <div class="pur-modal-dialog">
+      <div class="pur-modal-header">
+        <h5><i class="bi bi-send"></i> 発送通知</h5>
+        <button class="pur-modal-close" onclick="purCloseModal('pur-dispatchModal')">&times;</button>
+      </div>
+      <div class="pur-modal-body">
+        <p id="pur-dispatchModalInfo"></p>
+        <div class="mb-3">
+          <label class="form-label">受取期限</label>
+          <input type="date" class="form-control" id="pur-dispatchDueDate">
+        </div>
+      </div>
+      <div class="pur-modal-footer">
+        <button class="btn btn-secondary" onclick="purCloseModal('pur-dispatchModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="purConfirmDispatch()">
+          <i class="bi bi-send"></i> 送信
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- アラート設定モーダル -->
+  <div class="pur-modal-overlay" id="pur-alertSettingsModal">
+    <div class="pur-modal-dialog">
+      <div class="pur-modal-header">
+        <h5><i class="bi bi-bell"></i> 残数アラート設定</h5>
+        <button class="pur-modal-close" onclick="purCloseModal('pur-alertSettingsModal')">&times;</button>
+      </div>
+      <div class="pur-modal-body">
+        <div class="mb-3">
+          <label class="form-label">残数閾値（点）</label>
+          <input type="number" class="form-control" id="pur-alertThresholdCount" min="1" value="10" placeholder="残りこの点数以下でアラート">
+          <div class="form-text">残数がこの値以下になったら通知します</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">残割合閾値（%）</label>
+          <input type="number" class="form-control" id="pur-alertThresholdPercent" min="1" max="100" value="20" placeholder="残りこの割合以下でアラート">
+          <div class="form-text">残割合がこの値以下になったら通知します</div>
+        </div>
+        <div class="alert alert-info mb-0">
+          <small><i class="bi bi-info-circle"></i> どちらか一方の条件を満たした時点でアラートが発火します。1バッチにつき1回のみ通知されます。</small>
+        </div>
+      </div>
+      <div class="pur-modal-footer">
+        <button class="btn btn-secondary" onclick="purCloseModal('pur-alertSettingsModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="purSaveAlertSettings()">
+          <i class="bi bi-check-circle"></i> 保存
         </button>
       </div>
     </div>
@@ -5549,15 +5606,42 @@
       }
     }
 
+    var _pur_dispatchTargetBatchId = null;
+
     async function purSendDispatchFromProgress(batchId) {
-      if (!confirm('この仕入バッチの発送通知を送信しますか？')) return;
+      try {
+        var db = window.db;
+        var batchDoc = await db.collection('purchaseBatches').doc(batchId).get();
+        if (!batchDoc.exists) { alert('バッチが見つかりません'); return; }
+        var batch = batchDoc.data();
+        if (!batch.assigneeUserId) { alert('発送先（担当者）が設定されていません'); return; }
+
+        _pur_dispatchTargetBatchId = batchId;
+        var info = (batch.supplier || '-') + ' / ' + (batch.assignee || '-') + ' / ' + (batch.itemCount || 0) + '点';
+        document.getElementById('pur-dispatchModalInfo').textContent = info;
+
+        // デフォルト期限: 3日後
+        var dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 3);
+        document.getElementById('pur-dispatchDueDate').value = dueDate.toISOString().split('T')[0];
+
+        purOpenModal('pur-dispatchModal');
+      } catch (error) {
+        console.error('[purchase] 発送通知エラー:', error);
+        alert('バッチ情報の取得に失敗しました: ' + error.message);
+      }
+    }
+
+    async function purConfirmDispatch() {
+      var batchId = _pur_dispatchTargetBatchId;
+      if (!batchId) return;
       try {
         var db = window.db;
         var batchDoc = await db.collection('purchaseBatches').doc(batchId).get();
         if (!batchDoc.exists) { alert('バッチが見つかりません'); return; }
         var batch = batchDoc.data();
         var assigneeUserId = batch.assigneeUserId;
-        if (!assigneeUserId) { alert('発送先（担当者）が設定されていません'); return; }
+        var dueDate = document.getElementById('pur-dispatchDueDate').value || null;
 
         var taskId = 'task-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
         var taskData = {
@@ -5570,12 +5654,19 @@
           completed: false,
           read: false
         };
+        if (dueDate) taskData.dueDate = dueDate;
+
         await db.collection('userTasks').doc(assigneeUserId).collection('tasks').doc(taskId).set(taskData);
-        await db.collection('purchaseBatches').doc(batchId).update({
+        var batchUpdate = {
           status: 'shipped',
           shippedAt: firebase.firestore.FieldValue.serverTimestamp(),
           dispatchTaskId: taskId
-        });
+        };
+        if (dueDate) batchUpdate.dueDate = dueDate;
+        await db.collection('purchaseBatches').doc(batchId).update(batchUpdate);
+
+        purCloseModal('pur-dispatchModal');
+        _pur_dispatchTargetBatchId = null;
         alert('発送通知を送信しました');
         purLoadDispatchProgress();
       } catch (error) {
@@ -5597,6 +5688,41 @@
       } catch (error) {
         console.error('[purchase] 自分で処理エラー:', error);
         alert('更新に失敗しました: ' + error.message);
+      }
+    }
+
+    // ============================================
+    // Alert Settings
+    // ============================================
+    async function purOpenAlertSettings() {
+      try {
+        var doc = await window.db.collection('settings').doc('dispatchAlerts').get();
+        if (doc.exists) {
+          var data = doc.data();
+          document.getElementById('pur-alertThresholdCount').value = data.defaultThreshold || 10;
+          document.getElementById('pur-alertThresholdPercent').value = data.defaultThresholdPercent || 20;
+        }
+        purOpenModal('pur-alertSettingsModal');
+      } catch (error) {
+        console.error('[purchase] アラート設定読込エラー:', error);
+        purOpenModal('pur-alertSettingsModal');
+      }
+    }
+
+    async function purSaveAlertSettings() {
+      var threshold = parseInt(document.getElementById('pur-alertThresholdCount').value) || 10;
+      var thresholdPercent = parseInt(document.getElementById('pur-alertThresholdPercent').value) || 20;
+      try {
+        await window.db.collection('settings').doc('dispatchAlerts').set({
+          defaultThreshold: threshold,
+          defaultThresholdPercent: thresholdPercent,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        purCloseModal('pur-alertSettingsModal');
+        alert('アラート設定を保存しました');
+      } catch (error) {
+        console.error('[purchase] アラート設定保存エラー:', error);
+        alert('保存に失敗しました: ' + error.message);
       }
     }
 

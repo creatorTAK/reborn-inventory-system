@@ -167,7 +167,86 @@ async function updateRegistrationCountdown(purchaseSlotId) {
 
     await batchRef.update(batchUpdate);
 
-    // 5. 商品登録タスクのタイトルを更新（残数表示）
+    // 5. 残数アラート判定
+    if (newRemaining > 0 && !batchData.lowStockAlerted) {
+      try {
+        const settingsDoc = await db.collection('settings').doc('dispatchAlerts').get();
+        const settings = settingsDoc.exists ? settingsDoc.data() : {};
+        const thresholdCount = settings.defaultThreshold || 10;
+        const thresholdPercent = settings.defaultThresholdPercent || 20;
+        const percentRemaining = Math.round(newRemaining / totalCount * 100);
+
+        const shouldAlert = newRemaining <= thresholdCount || percentRemaining <= thresholdPercent;
+
+        if (shouldAlert) {
+          console.log(`⚠️ [updateRegistrationCountdown] 残数アラート発火: 残${newRemaining}点 (${percentRemaining}%)`);
+
+          // a. lowStockAlertedフラグを設定
+          await batchRef.update({ lowStockAlerted: true });
+
+          const assigneeName = batchData.assignee || '不明';
+
+          // b. 管理者を特定（permissionId == 'owner'）
+          const usersSnapshot = await db.collection('users')
+            .where('permissionId', '==', 'owner')
+            .get();
+
+          const adminIds = [];
+          usersSnapshot.forEach(doc => adminIds.push(doc.id));
+
+          if (adminIds.length > 0) {
+            // c. 管理者にタスク自動作成
+            for (const adminId of adminIds) {
+              const alertTaskId = 'task-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+              await db.collection('userTasks').doc(adminId).collection('tasks').doc(alertTaskId).set({
+                type: 'restock_alert',
+                title: '📦 商品残数アラート: ' + assigneeName + '（残り' + newRemaining + '点）',
+                description: assigneeName + 'の手持ち商品が残り' + newRemaining + '/' + totalCount + '点です。新しい商品の発送を検討してください。',
+                link: 'purchase',
+                relatedData: { batchId: batchId, assigneeName: assigneeName, remainingCount: newRemaining, totalCount: totalCount },
+                createdAt: new Date().toISOString(),
+                completed: false,
+                read: false
+              });
+            }
+
+            // d. FCMプッシュ通知を管理者に送信
+            for (const adminId of adminIds) {
+              try {
+                const activeDeviceDoc = await db.collection('activeDevices').doc(adminId).get();
+                if (!activeDeviceDoc.exists) continue;
+                const tokens = Array.isArray(activeDeviceDoc.data().fcmTokens)
+                  ? activeDeviceDoc.data().fcmTokens.filter(Boolean) : [];
+                if (tokens.length === 0) continue;
+
+                const alertMessage = {
+                  notification: {
+                    title: '📦 商品残数アラート',
+                    body: assigneeName + 'の手持ち商品が残り' + newRemaining + '/' + totalCount + '点です'
+                  },
+                  data: {
+                    type: 'restock_alert',
+                    batchId: batchId,
+                    url: '/purchase.html'
+                  },
+                  tokens: tokens
+                };
+                const response = await messaging.sendEachForMulticast(alertMessage);
+                console.log(`✅ [updateRegistrationCountdown] アラートFCM送信: 成功${response.successCount}件`);
+              } catch (notifyError) {
+                console.error(`❌ [updateRegistrationCountdown] アラートFCM送信エラー:`, notifyError.message);
+              }
+            }
+
+            console.log(`✅ [updateRegistrationCountdown] アラート通知完了: 管理者${adminIds.length}人`);
+          }
+        }
+      } catch (alertError) {
+        console.error('❌ [updateRegistrationCountdown] アラート判定エラー:', alertError.message);
+      }
+    }
+
+    // 6. 商品登録タスクのタイトルを更新（残数表示）
     const taskId = batchData.registrationTaskId;
     if (taskId) {
       const assigneeUserId = batchData.assigneeUserId;
