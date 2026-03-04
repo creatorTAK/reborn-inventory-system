@@ -3108,7 +3108,48 @@
       document.getElementById('invSaveShippingComplete').addEventListener('click', invSaveShippingCompleteAction);
     }
 
-    function invSaveShippingCompleteAction() {
+    async function invCheckPackagingStock(packagingMaterials) {
+      try {
+        var db = window.db;
+        // ユーザーのlocationIdを取得
+        var userEmail = localStorage.getItem('reborn_user_email');
+        var locationId = '';
+        if (userEmail) {
+          var locSnap = await db.collection('packagingLocations')
+            .where('assignedUserEmail', '==', userEmail).where('type', '==', 'user_home').limit(1).get();
+          if (!locSnap.empty) locationId = locSnap.docs[0].id;
+        }
+        if (!locationId) return { ok: false, shortages: [{ name: '（ロケーション未設定）', required: 0, available: 0 }] };
+        // 同一materialIdを集約
+        var grouped = {};
+        for (var i = 0; i < packagingMaterials.length; i++) {
+          var m = packagingMaterials[i];
+          if (!m.materialId) continue;
+          grouped[m.materialId] = (grouped[m.materialId] || 0) + 1;
+        }
+        var shortages = [];
+        var materialIds = Object.keys(grouped);
+        for (var j = 0; j < materialIds.length; j++) {
+          var matId = materialIds[j];
+          var required = grouped[matId];
+          var lotsSnap = await db.collection('packagingLots')
+            .where('materialId', '==', matId).where('locationId', '==', locationId)
+            .where('status', '==', 'active').get();
+          var available = lotsSnap.docs.reduce(function(sum, d) { return sum + (d.data().remainingQty || 0); }, 0);
+          if (available < required) {
+            var name = packagingMaterials.find(function(pm) { return pm.materialId === matId; }).productName || matId;
+            shortages.push({ name: name, required: required, available: available });
+          }
+        }
+        if (shortages.length > 0) return { ok: false, shortages: shortages };
+        return { ok: true, locationId: locationId };
+      } catch (e) {
+        console.warn('[inv] 在庫チェックエラー:', e);
+        return { ok: false, error: e };
+      }
+    }
+
+    async function invSaveShippingCompleteAction() {
       var shippingMethod1 = document.getElementById('invShipMethod1').value;
       var shippingMethod2 = document.getElementById('invShipMethod2').value;
       var shippingFee = parseFloat(document.getElementById('invShipFee').value) || 0;
@@ -3123,17 +3164,31 @@
         packagingMaterials.push({ materialId: selectedOption.dataset.materialId || '', productName: select.value, unitCost: parseFloat(selectedOption.dataset.cost) });
       }
 
+      // 資材在庫チェック
+      if (packagingMaterials.length > 0) {
+        var stockResult = await invCheckPackagingStock(packagingMaterials);
+        if (stockResult.error) {
+          if (!confirm('資材在庫の確認中にエラーが発生しました。在庫チェックをスキップして続行しますか？')) return;
+        } else if (!stockResult.ok) {
+          var shortageMsg = stockResult.shortages.map(function(s) { return s.name + '（必要: ' + s.required + ' / 在庫: ' + s.available + '）'; }).join('\n');
+          alert('以下の資材の在庫が不足しています:\n\n' + shortageMsg);
+          return;
+        }
+      }
+
       var packagingCostTotal = invUpdateShipPkgCostTotal();
       var provProfit = (invShipCurrentProduct.provisionalProfit || invShipCurrentProduct.finalProfit) || 0;
       var finalProfit = provProfit - shippingFee - packagingCostTotal;
       var salesAmount = invShipCurrentProduct.saleAmount || 0;
       var profitRate = salesAmount > 0 ? (finalProfit / salesAmount) * 100 : 0;
 
+      var userLocationId = (packagingMaterials.length > 0 && stockResult && stockResult.locationId) ? stockResult.locationId : '';
       var data = {
         managementNumber: invShipCurrentProduct.managementNumber,
         shippingMethod1: shippingMethod1, shippingMethod2: shippingMethod2, shippingFee: shippingFee,
         packagingMaterials: packagingMaterials, packagingCostTotal: packagingCostTotal,
-        finalProfit: Math.round(finalProfit), profitRate: profitRate
+        finalProfit: Math.round(finalProfit), profitRate: profitRate,
+        userLocationId: userLocationId
       };
 
       if (!confirm('発送完了を保存しますか？\n\n管理番号: ' + invShipCurrentProduct.managementNumber + '\n発送方法: ' + shippingMethod1 + ' / ' + shippingMethod2 + '\n送料: \u00a5' + shippingFee.toLocaleString() + '\n最終利益: \u00a5' + Math.round(finalProfit).toLocaleString())) return;
@@ -3195,48 +3250,75 @@
           updatedAt: serverTs()
         });
 
-        // 梱包資材の出庫処理
+        // 梱包資材の出庫処理（FIFOロット消費）
         if (data.packagingMaterials && data.packagingMaterials.length > 0) {
           try {
-            // ユーザーの場所IDを取得（packagingLocationsから）
-            var _outLocationId = '';
-            var _outUserEmail = localStorage.getItem('reborn_user_email');
-            if (_outUserEmail) {
-              var _locSnap = await db.collection('packagingLocations')
-                .where('assignedUserEmail', '==', _outUserEmail).where('type', '==', 'user_home').limit(1).get();
-              if (!_locSnap.empty) _outLocationId = _locSnap.docs[0].id;
+            // ユーザーのlocationIdを取得（事前チェック済みの場合はdata.userLocationIdを使用）
+            var _outLocationId = data.userLocationId || '';
+            if (!_outLocationId) {
+              var _outUserEmail = localStorage.getItem('reborn_user_email');
+              if (_outUserEmail) {
+                var _locSnap = await db.collection('packagingLocations')
+                  .where('assignedUserEmail', '==', _outUserEmail).where('type', '==', 'user_home').limit(1).get();
+                if (!_locSnap.empty) _outLocationId = _locSnap.docs[0].id;
+              }
+            }
+            var _outCreatedBy = (window.currentUser && window.currentUser.name) || 'unknown';
+            // 同一materialIdを集約
+            var _grouped = {};
+            for (var mi = 0; mi < data.packagingMaterials.length; mi++) {
+              var _mat = data.packagingMaterials[mi];
+              if (!_mat.materialId) continue;
+              if (!_grouped[_mat.materialId]) _grouped[_mat.materialId] = { name: _mat.productName || '', qty: 0 };
+              _grouped[_mat.materialId].qty += 1;
             }
             var _outBatch = db.batch();
-            var _outCreatedBy = (window.currentUser && window.currentUser.name) || 'unknown';
-            for (var mi = 0; mi < data.packagingMaterials.length; mi++) {
-              var material = data.packagingMaterials[mi];
-              if (!material.materialId) continue;
-              // トランザクション記録（スキーマ統一）
+            var _materialIds = Object.keys(_grouped);
+            for (var gi = 0; gi < _materialIds.length; gi++) {
+              var _matId = _materialIds[gi];
+              var _matInfo = _grouped[_matId];
+              var _required = _matInfo.qty;
+              // FIFOでロット消費
+              var _lotsSnap = await db.collection('packagingLots')
+                .where('materialId', '==', _matId).where('locationId', '==', _outLocationId)
+                .where('status', '==', 'active').orderBy('purchaseDate', 'asc').get();
+              var _remaining = _required;
+              var _consumedLots = [];
+              for (var li = 0; li < _lotsSnap.docs.length; li++) {
+                if (_remaining <= 0) break;
+                var _lotDoc = _lotsSnap.docs[li];
+                var _lot = _lotDoc.data();
+                var _toConsume = Math.min(_remaining, _lot.remainingQty);
+                var _newRemQty = _lot.remainingQty - _toConsume;
+                var _newStatus = _newRemQty <= 0 ? 'depleted' : 'active';
+                _outBatch.update(db.collection('packagingLots').doc(_lotDoc.id), { remainingQty: _newRemQty, status: _newStatus, updatedAt: serverTs() });
+                _consumedLots.push({ lotId: _lotDoc.id, quantity: _toConsume, unitPrice: _lot.unitPrice });
+                _remaining -= _toConsume;
+              }
+              // トランザクション記録
               var _txnRef = db.collection('packagingTransactions').doc();
               _outBatch.set(_txnRef, {
-                materialId: material.materialId, materialName: material.productName || '', locationId: _outLocationId,
-                type: '出庫', quantity: -1, reason: '販売出庫', relatedSaleId: productDocId,
+                materialId: _matId, materialName: _matInfo.name, locationId: _outLocationId,
+                type: '出庫', quantity: -_required, reason: '販売出庫', relatedSaleId: productDocId,
+                consumedLots: _consumedLots,
                 note: '発送完了: ' + data.managementNumber,
                 createdBy: _outCreatedBy, createdAt: serverTs()
               });
             }
             await _outBatch.commit();
-            // batch後に在庫数を再計算
-            for (var mi2 = 0; mi2 < data.packagingMaterials.length; mi2++) {
-              var mat2 = data.packagingMaterials[mi2];
-              if (!mat2.materialId) continue;
+            // batch後にlocationIdスコープで在庫数を再計算
+            for (var ri = 0; ri < _materialIds.length; ri++) {
+              var _recalcId = _materialIds[ri];
               try {
-                var _lotsSnap = await db.collection('packagingLots')
-                  .where('materialId', '==', mat2.materialId).where('status', '==', 'active').get();
-                var _totalStock = _lotsSnap.docs.reduce(function(sum, d) { return sum + (d.data().remainingQty || 0); }, 0);
-                await db.collection('packagingMaterials').doc(mat2.materialId).update({ currentStock: _totalStock, updatedAt: serverTs() });
-              } catch (stockCalcErr) {
-                // ロットがない場合はcurrentStockを直接-1
-                var materialDoc = await db.collection('packagingMaterials').doc(mat2.materialId).get();
-                if (materialDoc.exists) {
-                  var curStock = (materialDoc.data() && materialDoc.data().currentStock) || 0;
-                  await db.collection('packagingMaterials').doc(mat2.materialId).update({ currentStock: Math.max(0, curStock - 1), updatedAt: serverTs() });
+                var _recalcSnap = await db.collection('packagingLots')
+                  .where('materialId', '==', _recalcId).where('locationId', '==', _outLocationId).where('status', '==', 'active').get();
+                var _totalStock = _recalcSnap.docs.reduce(function(sum, d) { return sum + (d.data().remainingQty || 0); }, 0);
+                await db.collection('packagingMaterials').doc(_recalcId).update({ currentStock: _totalStock, updatedAt: serverTs() });
+                if (window.checkMaterialStockAlert) {
+                  await window.checkMaterialStockAlert(_recalcId, _totalStock, _outLocationId);
                 }
+              } catch (stockCalcErr) {
+                console.warn('[inv] 在庫再計算エラー:', _recalcId, stockCalcErr);
               }
             }
           } catch (stockError) {
