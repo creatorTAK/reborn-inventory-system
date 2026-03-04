@@ -1970,11 +1970,6 @@
                 <i class="bi bi-info-circle"></i> どちらか一方の条件を満たした時点でアラートが発火します。1バッチにつき1回のみ通知されます。
               </div>
             </div>
-            <div style="margin-top: 14px; text-align: right;">
-              <button type="button" onclick="cfgSaveDispatchAlertSettings()" style="padding: 8px 20px; background: #40B4E5; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                <i class="bi bi-check-circle"></i> 保存
-              </button>
-            </div>
           </div>
         </div>
 
@@ -3260,7 +3255,10 @@
         // 6. 基本設定（ユーザー名・通知）を保存
         await cfgSaveBasicSettings(true);
 
-        // 7. 設定変更を通知（postMessage + BroadcastChannel）
+        // 7. 残数アラート設定を保存
+        await cfgSaveDispatchAlertSettings(true);
+
+        // 8. 設定変更を通知（postMessage + BroadcastChannel）
         cfgNotifyConfigChange();
 
         alert('設定を保存しました');
@@ -7120,22 +7118,24 @@
       } catch (e) { console.warn('[config] dispatch alert settings load error:', e); }
     }
 
-    async function cfgSaveDispatchAlertSettings() {
-      var threshold = parseInt(document.getElementById('cfg-dispatchAlertThreshold').value) || 10;
-      var thresholdPercent = parseInt(document.getElementById('cfg-dispatchAlertThresholdPercent').value) || 20;
+    async function cfgSaveDispatchAlertSettings(silent) {
+      var el1 = document.getElementById('cfg-dispatchAlertThreshold');
+      var el2 = document.getElementById('cfg-dispatchAlertThresholdPercent');
+      if (!el1 || !el2) return;
+      var threshold = parseInt(el1.value) || 10;
+      var thresholdPercent = parseInt(el2.value) || 20;
       try {
         await window.db.collection('settings').doc('dispatchAlerts').set({
           defaultThreshold: threshold,
           defaultThresholdPercent: thresholdPercent,
           updatedAt: new Date().toISOString()
         }, { merge: true });
-        alert('残数アラート設定を保存しました');
+        if (!silent) alert('残数アラート設定を保存しました');
       } catch (e) {
         console.error('[config] dispatch alert settings save error:', e);
-        alert('保存に失敗しました: ' + e.message);
+        if (!silent) alert('保存に失敗しました: ' + e.message);
       }
     }
-    window.cfgSaveDispatchAlertSettings = cfgSaveDispatchAlertSettings;
 
     function cfgClearConditionButtons() {
       if (!confirm('商品状態ボタン設定をすべてクリアしますか？\n\n全カテゴリのカスタムボタンが削除されます。')) return;
