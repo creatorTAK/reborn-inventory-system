@@ -354,7 +354,7 @@ async function createStocktakingTasks(period, staffProgress) {
       createdAt: new Date().toISOString(),
       completed: false,
       priority: 'high',
-      link: '/stocktaking.html',
+      link: 'stocktaking',
       relatedData: {
         periodId: period.id,
         periodName: period.name,

@@ -1238,7 +1238,7 @@
         var taskData = {
           type: 'shipping_task', title: '梱包・発送',
           description: '商品が売れました！梱包して発送してください。\n管理番号: ' + salesData.managementNumber,
-          link: '/product.html?edit=' + productDocId,
+          link: 'inventory',
           relatedData: {
             productId: productDocId, managementNumber: salesData.managementNumber,
             staffName: staffName, staffEmail: staffEmail,
@@ -1660,7 +1660,8 @@
             compensation: compensation,
             compensationType: 'editing',
             priority: 'high',
-            link: '/product.html?edit=' + productId
+            link: 'inventory',
+            relatedData: { productId: productId }
           });
 
         // フォームを「指示済み」に置き換え
@@ -2575,7 +2576,7 @@
         var taskData = {
           type: 'listing_approval', title: '出品確認',
           description: staffName + 'さんが商品を出品しました。\n管理番号: ' + product.managementNumber + '\n確認してOKなら完了にしてください。',
-          link: '/product.html?edit=' + productId,
+          link: 'inventory',
           relatedData: { productId: productId, managementNumber: product.managementNumber, staffName: staffName, listingAmount: product.listingAmount || 0 }
         };
         if (typeof addTaskToOwners === 'function') {
@@ -3369,6 +3370,18 @@
         if (typeof window.FirestoreApi !== 'undefined' && window.FirestoreApi.getProductList) {
           invLoadDashboard();
           invInitFilterDropdowns();
+          // タスク画面から商品詳細へ遷移してきた場合
+          var pendingProductId = sessionStorage.getItem('pendingProductId');
+          if (pendingProductId) {
+            sessionStorage.removeItem('pendingProductId');
+            setTimeout(function() {
+              window.db.collection('products').doc(pendingProductId).get().then(function(doc) {
+                if (doc.exists && doc.data().managementNumber) {
+                  invViewProduct(doc.data().managementNumber);
+                }
+              }).catch(function(err) { console.error('[inv] pendingProductId読込エラー:', err); });
+            }, 500);
+          }
           // タスク画面から発送完了アクションで遷移してきた場合、モーダルを自動起動
           if (window._pendingShippingComplete) {
             var pending = window._pendingShippingComplete;
