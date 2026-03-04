@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v376';  // v376: PackagingBadgeDBをIndexedDBに永続化してSW単独でも資材不足バッジ維持
+const CACHE_VERSION = 'v377';  // v377: budget_alert通知タイプをtypePageMapに追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -350,7 +350,8 @@ self.addEventListener('push', (event) => {
         'incoming_call': 'chat', 'INCOMING_CALL': 'chat',
         'system': 'todo-list', 'pending_user': 'todo-list',
         'task_request': 'todo-list', 'task_completion': 'todo-list',
-        'extension_request': 'todo-list'
+        'extension_request': 'todo-list',
+        'budget_alert': 'announce'
       };
       const pendingPage = typePageMap[notificationType] || '';
       if (pendingPage) {
@@ -581,7 +582,8 @@ self.addEventListener('notificationclick', (event) => {
       'pending_user': 'todo-list',
       'task_request': 'todo-list',
       'task_completion': 'todo-list',
-      'extension_request': 'todo-list'
+      'extension_request': 'todo-list',
+      'budget_alert': 'announce'
     };
     targetPage = typePageMap[data.type] || '';
   }

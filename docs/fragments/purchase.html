@@ -3575,6 +3575,31 @@
       });
     }
 
+    function purCompleteBudgetTask(month) {
+      var userEmail = firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
+      if (!userEmail) return;
+      window.db.collection('userTasks').doc(userEmail).collection('tasks')
+        .where('type', '==', 'budget_setting')
+        .where('completed', '==', false)
+        .get().then(function(snap) {
+          var promises = [];
+          snap.forEach(function(taskDoc) {
+            var title = taskDoc.data().title || '';
+            if (title.indexOf(month) !== -1) {
+              promises.push(taskDoc.ref.update({
+                completed: true,
+                completedAt: new Date().toISOString()
+              }));
+            }
+          });
+          return Promise.all(promises);
+        }).then(function() {
+          console.log('[Budget] 予算設定タスク自動完了:', month);
+        }).catch(function(err) {
+          console.error('[Budget] タスク自動完了エラー:', err);
+        });
+    }
+
     function purSendBudgetAlert(month, pct, actual, budget) {
       var docRef = window.db.collection('settings').doc('purchaseBudget');
       docRef.get().then(function(doc) {
@@ -3624,6 +3649,8 @@
         return docRef.set({ budgets: budgets, alertThreshold: alertThreshold }, { merge: true });
       }).then(function() {
         alert('予算を保存しました');
+        // budget_settingタスクを自動完了
+        purCompleteBudgetTask(month);
         // 保存後、当月実績が閾値超えかチェック
         return purGetPurchaseData('', '').then(function(allData) {
           var today = new Date();
