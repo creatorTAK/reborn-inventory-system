@@ -1253,13 +1253,36 @@
     #spa-page-purchase .pur-analysis-sub-tab.active { background:white; color:#f59e0b; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
     #spa-page-purchase .pur-analysis-sub-content { display:none; }
     #spa-page-purchase .pur-analysis-sub-content.active { display:block; }
-    /* 予算プログレスバー */
+    /* 予算・進捗バー共通 */
     #spa-page-purchase .pur-budget-progress { background:#f3f4f6; border-radius:8px; padding:16px; margin-bottom:16px; }
-    #spa-page-purchase .pur-budget-bar-bg { background:#e5e7eb; border-radius:4px; height:24px; overflow:hidden; }
-    #spa-page-purchase .pur-budget-bar { height:100%; border-radius:4px; transition:width 0.5s; }
-    #spa-page-purchase .pur-budget-bar.safe { background:#22c55e; }
-    #spa-page-purchase .pur-budget-bar.warning { background:#f59e0b; }
-    #spa-page-purchase .pur-budget-bar.danger { background:#ef4444; }
+    #spa-page-purchase .pur-budget-bar-bg, #spa-page-purchase .pur-bar-bg { background:#e5e7eb; border-radius:4px; height:24px; overflow:hidden; }
+    #spa-page-purchase .pur-budget-bar, #spa-page-purchase .pur-bar { height:100%; border-radius:4px; transition:width 0.5s; }
+    #spa-page-purchase .pur-budget-bar.safe, #spa-page-purchase .pur-bar.safe { background:#22c55e; }
+    #spa-page-purchase .pur-budget-bar.warning, #spa-page-purchase .pur-bar.warning { background:#f59e0b; }
+    #spa-page-purchase .pur-budget-bar.danger, #spa-page-purchase .pur-bar.danger { background:#ef4444; }
+    /* ランキングタブ切替 */
+    #spa-page-purchase .pur-rank-tabs { display:flex; gap:4px; margin-bottom:8px; }
+    #spa-page-purchase .pur-rank-tab { padding:4px 12px; border:1px solid #e5e7eb; background:white; border-radius:16px; font-size:12px; color:#6b7280; cursor:pointer; transition:all 0.2s; }
+    #spa-page-purchase .pur-rank-tab.active { background:#f59e0b; color:white; border-color:#f59e0b; }
+    /* 回転率分布バー */
+    #spa-page-purchase .pur-dist-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px; }
+    #spa-page-purchase .pur-dist-label { width:60px; text-align:right; color:#6b7280; flex-shrink:0; }
+    #spa-page-purchase .pur-dist-bar-bg { flex:1; background:#e5e7eb; border-radius:4px; height:18px; overflow:hidden; }
+    #spa-page-purchase .pur-dist-bar { height:100%; border-radius:4px; transition:width 0.5s; min-width:2px; }
+    #spa-page-purchase .pur-dist-val { width:50px; text-align:right; font-weight:500; flex-shrink:0; }
+    /* スコアカード */
+    #spa-page-purchase .pur-score-badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; }
+    #spa-page-purchase .pur-score-s { background:#dcfce7; color:#166534; }
+    #spa-page-purchase .pur-score-a { background:#dbeafe; color:#1e40af; }
+    #spa-page-purchase .pur-score-b { background:#fef3c7; color:#92400e; }
+    #spa-page-purchase .pur-score-c { background:#fee2e2; color:#991b1b; }
+    /* 滞留アラートカード */
+    #spa-page-purchase .pur-stagnant-card { border-radius:8px; padding:12px 16px; text-align:center; }
+    #spa-page-purchase .pur-stagnant-card.caution { background:#fffbeb; border:1px solid #fde68a; }
+    #spa-page-purchase .pur-stagnant-card.warn { background:#fff7ed; border:1px solid #fed7aa; }
+    #spa-page-purchase .pur-stagnant-card.critical { background:#fef2f2; border:1px solid #fecaca; }
+    #spa-page-purchase .pur-stagnant-val { font-size:20px; font-weight:700; }
+    #spa-page-purchase .pur-stagnant-sub { font-size:11px; color:#6b7280; }
 
     /* タブコンテンツ */
     #spa-page-purchase .pur-tab-content {
@@ -2082,11 +2105,15 @@
         <button class="pur-analysis-sub-tab active" onclick="purSwitchAnalysisSubTab(this, 'analytics')">
           <i class="bi bi-bar-chart"></i> 分析
         </button>
+        <button class="pur-analysis-sub-tab" onclick="purSwitchAnalysisSubTab(this, 'stagnant')">
+          <i class="bi bi-exclamation-triangle"></i> 滞留
+        </button>
         <button class="pur-analysis-sub-tab" onclick="purSwitchAnalysisSubTab(this, 'budget')">
           <i class="bi bi-piggy-bank"></i> 予算
         </button>
       </div>
 
+      <!-- 分析サブタブ -->
       <div class="pur-analysis-sub-content active" id="pur-analysis-sub-analytics">
         <div class="pur-summary-grid">
           <div class="pur-summary-card">
@@ -2098,11 +2125,43 @@
             <div class="pur-summary-value" id="pur-analysis-monthCount">-</div>
           </div>
           <div class="pur-summary-card">
-            <div class="pur-summary-label">平均単価</div>
-            <div class="pur-summary-value" id="pur-analysis-monthAvg">-</div>
+            <div class="pur-summary-label">仕入ROI</div>
+            <div class="pur-summary-value" id="pur-analysis-roi">-</div>
+          </div>
+          <div class="pur-summary-card">
+            <div class="pur-summary-label">平均回転日数</div>
+            <div class="pur-summary-value" id="pur-analysis-avgDays">-</div>
           </div>
         </div>
 
+        <!-- 仕入先スコアカード -->
+        <h6 class="mb-2 mt-3"><i class="bi bi-trophy"></i> 仕入先スコアカード</h6>
+        <div class="pur-data-table-container">
+          <div class="table-responsive">
+            <table class="pur-data-table">
+              <thead>
+                <tr>
+                  <th>仕入先</th>
+                  <th class="text-center">スコア</th>
+                  <th class="text-end">仕入額</th>
+                  <th class="text-end">件数</th>
+                  <th class="text-end">利益率</th>
+                  <th class="text-end">回転日数</th>
+                  <th class="text-end">滞留率</th>
+                </tr>
+              </thead>
+              <tbody id="pur-scorecardBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 仕入効率（リードタイム分布） -->
+        <h6 class="mb-2 mt-3"><i class="bi bi-speedometer2"></i> 仕入効率（仕入→販売 リードタイム）</h6>
+        <div class="pur-budget-progress" id="pur-leadtimeDistArea">
+          <div class="text-center text-muted small">データを読み込んでいます...</div>
+        </div>
+
+        <!-- 月別推移 -->
         <h6 class="mb-2 mt-3"><i class="bi bi-graph-up"></i> 月別推移（過去6ヶ月）</h6>
         <div class="pur-data-table-container">
           <div class="table-responsive">
@@ -2112,7 +2171,8 @@
                   <th>年月</th>
                   <th class="text-end">仕入額</th>
                   <th class="text-end">件数</th>
-                  <th class="text-end">平均単価</th>
+                  <th class="text-end">利益率</th>
+                  <th class="text-end">回転日数</th>
                   <th class="text-end">前月比</th>
                 </tr>
               </thead>
@@ -2120,22 +2180,61 @@
             </table>
           </div>
         </div>
+      </div>
 
-        <h6 class="mb-2 mt-3"><i class="bi bi-shop"></i> 仕入先別分析</h6>
+      <!-- 滞留サブタブ -->
+      <div class="pur-analysis-sub-content" id="pur-analysis-sub-stagnant">
+        <div class="pur-summary-grid">
+          <div class="pur-stagnant-card caution">
+            <div class="pur-summary-label">30日超</div>
+            <div class="pur-stagnant-val" id="pur-stag-30-count">-</div>
+            <div class="pur-stagnant-sub" id="pur-stag-30-amount"></div>
+          </div>
+          <div class="pur-stagnant-card warn">
+            <div class="pur-summary-label">60日超</div>
+            <div class="pur-stagnant-val" id="pur-stag-60-count">-</div>
+            <div class="pur-stagnant-sub" id="pur-stag-60-amount"></div>
+          </div>
+          <div class="pur-stagnant-card critical">
+            <div class="pur-summary-label">90日超</div>
+            <div class="pur-stagnant-val" id="pur-stag-90-count">-</div>
+            <div class="pur-stagnant-sub" id="pur-stag-90-amount"></div>
+          </div>
+        </div>
+
+        <h6 class="mb-2 mt-3"><i class="bi bi-shop"></i> 仕入先別滞留率</h6>
         <div class="pur-data-table-container">
           <div class="table-responsive">
             <table class="pur-data-table">
               <thead>
                 <tr>
                   <th>仕入先</th>
-                  <th class="text-end">仕入額</th>
-                  <th class="text-end">件数</th>
-                  <th class="text-end">平均単価</th>
-                  <th class="text-end">売上額</th>
-                  <th class="text-end">利益率</th>
+                  <th class="text-end">在庫数</th>
+                  <th class="text-end">滞留数</th>
+                  <th class="text-end">滞留率</th>
+                  <th class="text-end">ロック金額</th>
                 </tr>
               </thead>
-              <tbody id="pur-analysisSupplierBody"></tbody>
+              <tbody id="pur-stagnantSupplierBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <h6 class="mb-2 mt-3"><i class="bi bi-list-ul"></i> 滞留商品リスト</h6>
+        <div class="pur-data-table-container">
+          <div class="table-responsive">
+            <table class="pur-data-table">
+              <thead>
+                <tr>
+                  <th>仕入日</th>
+                  <th>管理番号</th>
+                  <th>商品名</th>
+                  <th>仕入先</th>
+                  <th class="text-end">仕入額</th>
+                  <th class="text-end">滞留日数</th>
+                </tr>
+              </thead>
+              <tbody id="pur-stagnantListBody"></tbody>
             </table>
           </div>
         </div>
@@ -2766,7 +2865,9 @@
             purchasePaymentMethod: data.purchasePaymentMethod || '',
             saleAmount: parseFloat(data.saleAmount || 0),
             saleDate: data.saleDate || '',
-            status: data.status || ''
+            status: data.status || '',
+            listingDate: (data.listing && data.listing.date) || '',
+            finalProfit: parseFloat(data.finalProfit || 0)
           });
         });
         purchaseList.sort(function(a, b) { return (b.purchaseDate || '').localeCompare(a.purchaseDate || ''); });
@@ -3138,33 +3239,149 @@
       }).then(function() { purHideLoading(); });
     }
 
+    function _purCalcDays(dateA, dateB) {
+      if (!dateA || !dateB) return -1;
+      return Math.floor((new Date(dateB) - new Date(dateA)) / 86400000);
+    }
+
     function _purRenderAnalysisFromData(data) {
       var today = new Date();
+      var todayStr = purGetJSTToday();
       var currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
 
-      // サマリーカード（今月）
+      // === サマリーカード ===
       var monthItems = data.filter(function(i) { return (i.purchaseDate || '').slice(0, 7) === currentMonth; });
       var monthTotal = monthItems.reduce(function(s, i) { return s + i.purchaseAmount; }, 0);
       var monthCount = monthItems.length;
-      var monthAvg = monthCount > 0 ? monthTotal / monthCount : 0;
+
+      // 全体ROI計算
+      var soldItems = data.filter(function(i) { return i.saleAmount > 0; });
+      var totalCost = soldItems.reduce(function(s, i) { return s + i.purchaseAmount; }, 0);
+      var totalProfit = soldItems.reduce(function(s, i) { return s + i.finalProfit; }, 0);
+      var roi = totalCost > 0 ? (totalProfit / totalCost * 100) : 0;
+
+      // 平均回転日数（仕入→販売）
+      var turnoverDays = [];
+      soldItems.forEach(function(i) {
+        var d = _purCalcDays(i.purchaseDate, i.saleDate);
+        if (d >= 0) turnoverDays.push(d);
+      });
+      var avgDays = turnoverDays.length > 0 ? Math.round(turnoverDays.reduce(function(s, d) { return s + d; }, 0) / turnoverDays.length) : 0;
+
       var el;
       el = document.getElementById('pur-analysis-monthTotal'); if (el) el.textContent = purFormatCurrency(monthTotal);
       el = document.getElementById('pur-analysis-monthCount'); if (el) el.textContent = monthCount + '件';
-      el = document.getElementById('pur-analysis-monthAvg'); if (el) el.textContent = purFormatCurrency(monthAvg);
+      el = document.getElementById('pur-analysis-roi'); if (el) { el.textContent = roi > 0 ? roi.toFixed(1) + '%' : '-'; el.style.color = roi >= 30 ? '#22c55e' : roi > 0 ? '#f59e0b' : ''; }
+      el = document.getElementById('pur-analysis-avgDays'); if (el) { el.textContent = avgDays > 0 ? avgDays + '日' : '-'; el.style.color = avgDays <= 14 ? '#22c55e' : avgDays <= 30 ? '#f59e0b' : avgDays > 0 ? '#ef4444' : ''; }
 
-      // 月別推移（過去6ヶ月）
+      // === 仕入先スコアカード ===
+      var supData = {};
+      data.forEach(function(i) {
+        var s = i.supplier || '未設定';
+        if (!supData[s]) supData[s] = { total: 0, count: 0, soldSale: 0, soldCost: 0, soldProfit: 0, soldDays: [], unsoldCount: 0, stagnantCount: 0 };
+        var sd = supData[s];
+        sd.total += i.purchaseAmount;
+        sd.count++;
+        if (i.saleAmount > 0) {
+          sd.soldSale += i.saleAmount;
+          sd.soldCost += i.purchaseAmount;
+          sd.soldProfit += i.finalProfit;
+          var days = _purCalcDays(i.purchaseDate, i.saleDate);
+          if (days >= 0) sd.soldDays.push(days);
+        } else if (i.status !== '販売済') {
+          sd.unsoldCount++;
+          var age = _purCalcDays(i.purchaseDate, todayStr);
+          if (age >= 30) sd.stagnantCount++;
+        }
+      });
+
+      var scBody = document.getElementById('pur-scorecardBody');
+      if (scBody) {
+        var scored = [];
+        Object.keys(supData).forEach(function(s) {
+          var v = supData[s];
+          var profitRate = v.soldSale > 0 ? (v.soldProfit / v.soldSale * 100) : 0;
+          var avgTurnover = v.soldDays.length > 0 ? Math.round(v.soldDays.reduce(function(a, b) { return a + b; }, 0) / v.soldDays.length) : 999;
+          var stockCount = v.unsoldCount;
+          var stagnantRate = stockCount > 0 ? (v.stagnantCount / stockCount * 100) : 0;
+          // スコア: 利益率(0-100を40点満点) + 回転速度(40点満点) + 低滞留(20点満点)
+          var profitScore = Math.min(profitRate, 100) * 0.4;
+          var speedScore = Math.max(0, (60 - Math.min(avgTurnover, 60)) / 60) * 40;
+          var stagnantScore = Math.max(0, (100 - stagnantRate)) * 0.2;
+          var totalScore = profitScore + speedScore + stagnantScore;
+          scored.push({ name: s, score: totalScore, total: v.total, count: v.count, profitRate: profitRate, avgDays: avgTurnover, stagnantRate: stagnantRate });
+        });
+        scored.sort(function(a, b) { return b.score - a.score; });
+
+        var scHtml = '';
+        scored.forEach(function(v) {
+          var grade, cls;
+          if (v.score >= 70) { grade = 'S'; cls = 'pur-score-s'; }
+          else if (v.score >= 50) { grade = 'A'; cls = 'pur-score-a'; }
+          else if (v.score >= 30) { grade = 'B'; cls = 'pur-score-b'; }
+          else { grade = 'C'; cls = 'pur-score-c'; }
+          var prStr = v.profitRate > 0 ? v.profitRate.toFixed(1) + '%' : '-';
+          var dStr = v.avgDays < 999 ? v.avgDays + '日' : '-';
+          var srStr = v.stagnantRate > 0 ? v.stagnantRate.toFixed(0) + '%' : '0%';
+          scHtml += '<tr><td>' + v.name + '</td><td class="text-center"><span class="pur-score-badge ' + cls + '">' + grade + '</span></td><td class="text-end">' + purFormatCurrency(v.total) + '</td><td class="text-end">' + v.count + '件</td><td class="text-end">' + prStr + '</td><td class="text-end">' + dStr + '</td><td class="text-end">' + srStr + '</td></tr>';
+        });
+        if (!scHtml) scHtml = '<tr><td colspan="7" class="text-center text-muted py-4">データがありません</td></tr>';
+        scBody.innerHTML = scHtml;
+      }
+
+      // === リードタイム分布 ===
+      var distArea = document.getElementById('pur-leadtimeDistArea');
+      if (distArea) {
+        var bins = [
+          { label: '0-7日', min: 0, max: 7, count: 0, color: '#22c55e' },
+          { label: '8-14日', min: 8, max: 14, count: 0, color: '#84cc16' },
+          { label: '15-30日', min: 15, max: 30, count: 0, color: '#f59e0b' },
+          { label: '31-60日', min: 31, max: 60, count: 0, color: '#f97316' },
+          { label: '60日超', min: 61, max: 99999, count: 0, color: '#ef4444' }
+        ];
+        turnoverDays.forEach(function(d) {
+          for (var bi = 0; bi < bins.length; bi++) {
+            if (d >= bins[bi].min && d <= bins[bi].max) { bins[bi].count++; break; }
+          }
+        });
+        var maxCount = Math.max.apply(null, bins.map(function(b) { return b.count; }));
+        if (maxCount === 0) maxCount = 1;
+        var distHtml = '<div class="small text-muted mb-2">販売済み ' + turnoverDays.length + '件の仕入→販売リードタイム分布</div>';
+        bins.forEach(function(b) {
+          var pct = (b.count / maxCount * 100).toFixed(0);
+          distHtml += '<div class="pur-dist-row"><div class="pur-dist-label">' + b.label + '</div><div class="pur-dist-bar-bg"><div class="pur-dist-bar" style="width:' + pct + '%;background:' + b.color + ';"></div></div><div class="pur-dist-val">' + b.count + '件</div></div>';
+        });
+        if (turnoverDays.length > 0) {
+          var sorted = turnoverDays.slice().sort(function(a, b) { return a - b; });
+          var median = sorted[Math.floor(sorted.length / 2)];
+          distHtml += '<div class="mt-2 small"><span class="text-muted">平均:</span> <strong>' + avgDays + '日</strong> <span class="text-muted ms-2">中央値:</span> <strong>' + median + '日</strong></div>';
+        } else {
+          distHtml = '<div class="text-center text-muted small">販売実績がありません</div>';
+        }
+        distArea.innerHTML = distHtml;
+      }
+
+      // === 月別推移（利益率・回転日数付き） ===
       var months = [];
       for (var mi = 5; mi >= 0; mi--) {
-        var d = new Date(today.getFullYear(), today.getMonth() - mi, 1);
-        months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+        var md = new Date(today.getFullYear(), today.getMonth() - mi, 1);
+        months.push(md.getFullYear() + '-' + String(md.getMonth() + 1).padStart(2, '0'));
       }
       var monthlyData = {};
-      months.forEach(function(m) { monthlyData[m] = { total: 0, count: 0 }; });
+      months.forEach(function(m) { monthlyData[m] = { total: 0, count: 0, soldSale: 0, soldCost: 0, soldProfit: 0, soldDays: [] }; });
       data.forEach(function(i) {
-        var m = (i.purchaseDate || '').slice(0, 7);
-        if (monthlyData[m]) {
-          monthlyData[m].total += i.purchaseAmount;
-          monthlyData[m].count++;
+        var pm = (i.purchaseDate || '').slice(0, 7);
+        if (monthlyData[pm]) {
+          monthlyData[pm].total += i.purchaseAmount;
+          monthlyData[pm].count++;
+        }
+        // 販売月ではなく仕入月に利益を紐付け
+        if (i.saleAmount > 0 && monthlyData[pm]) {
+          monthlyData[pm].soldSale += i.saleAmount;
+          monthlyData[pm].soldCost += i.purchaseAmount;
+          monthlyData[pm].soldProfit += i.finalProfit;
+          var dd = _purCalcDays(i.purchaseDate, i.saleDate);
+          if (dd >= 0) monthlyData[pm].soldDays.push(dd);
         }
       });
       var mtbody = document.getElementById('pur-analysisMonthlyBody');
@@ -3172,44 +3389,107 @@
         var mhtml = '';
         var prevTotal = 0;
         months.forEach(function(m, idx) {
-          var md = monthlyData[m];
-          var avg = md.count > 0 ? md.total / md.count : 0;
+          var mv = monthlyData[m];
+          var mProfitRate = mv.soldSale > 0 ? ((mv.soldProfit / mv.soldSale) * 100).toFixed(1) + '%' : '-';
+          var mAvgDays = mv.soldDays.length > 0 ? Math.round(mv.soldDays.reduce(function(a, b) { return a + b; }, 0) / mv.soldDays.length) + '日' : '-';
           var changeHtml = '-';
           if (idx > 0 && prevTotal > 0) {
-            var pct = ((md.total - prevTotal) / prevTotal * 100).toFixed(1);
-            if (md.total > prevTotal) changeHtml = '<span style="color:#22c55e;">\u2191' + pct + '%</span>';
-            else if (md.total < prevTotal) changeHtml = '<span style="color:#ef4444;">\u2193' + Math.abs(pct) + '%</span>';
+            var pct = ((mv.total - prevTotal) / prevTotal * 100).toFixed(1);
+            if (mv.total > prevTotal) changeHtml = '<span style="color:#22c55e;">\u2191' + pct + '%</span>';
+            else if (mv.total < prevTotal) changeHtml = '<span style="color:#ef4444;">\u2193' + Math.abs(pct) + '%</span>';
             else changeHtml = '<span style="color:#6b7280;">\u2192 0%</span>';
           }
-          mhtml += '<tr><td>' + m + '</td><td class="text-end">' + purFormatCurrency(md.total) + '</td><td class="text-end">' + md.count + '件</td><td class="text-end">' + purFormatCurrency(avg) + '</td><td class="text-end">' + changeHtml + '</td></tr>';
-          prevTotal = md.total;
+          mhtml += '<tr><td>' + m + '</td><td class="text-end">' + purFormatCurrency(mv.total) + '</td><td class="text-end">' + mv.count + '件</td><td class="text-end">' + mProfitRate + '</td><td class="text-end">' + mAvgDays + '</td><td class="text-end">' + changeHtml + '</td></tr>';
+          prevTotal = mv.total;
         });
         mtbody.innerHTML = mhtml;
       }
+    }
 
-      // 仕入先別分析
-      var suppliers = {};
-      data.forEach(function(i) {
-        var s = i.supplier || '未設定';
-        if (!suppliers[s]) suppliers[s] = { total: 0, count: 0, saleTotal: 0, soldCost: 0 };
-        suppliers[s].total += i.purchaseAmount;
-        suppliers[s].count++;
-        if (i.status === 'sold' && i.saleAmount > 0) {
-          suppliers[s].saleTotal += i.saleAmount;
-          suppliers[s].soldCost += i.purchaseAmount;
-        }
-      });
-      var stbody = document.getElementById('pur-analysisSupplierBody');
-      if (stbody) {
-        var shtml = '';
-        Object.keys(suppliers).sort(function(a, b) { return suppliers[b].total - suppliers[a].total; }).forEach(function(s) {
-          var v = suppliers[s];
-          var avg = v.count > 0 ? v.total / v.count : 0;
-          var profitRate = v.saleTotal > 0 ? ((v.saleTotal - v.soldCost) / v.saleTotal * 100).toFixed(1) + '%' : '-';
-          shtml += '<tr><td>' + s + '</td><td class="text-end">' + purFormatCurrency(v.total) + '</td><td class="text-end">' + v.count + '件</td><td class="text-end">' + purFormatCurrency(avg) + '</td><td class="text-end">' + purFormatCurrency(v.saleTotal) + '</td><td class="text-end">' + profitRate + '</td></tr>';
+    // === 滞留分析 ===
+    function purRenderStagnantAnalysis() {
+      var now = Date.now();
+      var renderFn = function(data) {
+        var todayStr = purGetJSTToday();
+        var unsold = data.filter(function(i) { return !i.saleAmount && i.status !== '販売済'; });
+
+        // サマリー集計
+        var stag30 = { count: 0, amount: 0 }, stag60 = { count: 0, amount: 0 }, stag90 = { count: 0, amount: 0 };
+        unsold.forEach(function(i) {
+          var age = _purCalcDays(i.purchaseDate, todayStr);
+          if (age >= 90) { stag90.count++; stag90.amount += i.purchaseAmount; stag60.count++; stag60.amount += i.purchaseAmount; stag30.count++; stag30.amount += i.purchaseAmount; }
+          else if (age >= 60) { stag60.count++; stag60.amount += i.purchaseAmount; stag30.count++; stag30.amount += i.purchaseAmount; }
+          else if (age >= 30) { stag30.count++; stag30.amount += i.purchaseAmount; }
         });
-        if (!shtml) shtml = '<tr><td colspan="6" class="text-center text-muted py-4">データがありません</td></tr>';
-        stbody.innerHTML = shtml;
+
+        var el;
+        el = document.getElementById('pur-stag-30-count'); if (el) el.textContent = stag30.count + '件';
+        el = document.getElementById('pur-stag-30-amount'); if (el) el.textContent = purFormatCurrency(stag30.amount);
+        el = document.getElementById('pur-stag-60-count'); if (el) el.textContent = stag60.count + '件';
+        el = document.getElementById('pur-stag-60-amount'); if (el) el.textContent = purFormatCurrency(stag60.amount);
+        el = document.getElementById('pur-stag-90-count'); if (el) el.textContent = stag90.count + '件';
+        el = document.getElementById('pur-stag-90-amount'); if (el) el.textContent = purFormatCurrency(stag90.amount);
+
+        // 仕入先別滞留率
+        var supStag = {};
+        unsold.forEach(function(i) {
+          var s = i.supplier || '未設定';
+          if (!supStag[s]) supStag[s] = { stockCount: 0, stagnantCount: 0, lockAmount: 0 };
+          supStag[s].stockCount++;
+          var age = _purCalcDays(i.purchaseDate, todayStr);
+          if (age >= 30) {
+            supStag[s].stagnantCount++;
+            supStag[s].lockAmount += i.purchaseAmount;
+          }
+        });
+        var ssBody = document.getElementById('pur-stagnantSupplierBody');
+        if (ssBody) {
+          var ssArr = [];
+          Object.keys(supStag).forEach(function(s) {
+            var v = supStag[s];
+            v.name = s;
+            v.rate = v.stockCount > 0 ? (v.stagnantCount / v.stockCount * 100) : 0;
+            ssArr.push(v);
+          });
+          ssArr.sort(function(a, b) { return b.rate - a.rate; });
+          var ssHtml = '';
+          ssArr.forEach(function(v) {
+            var rateColor = v.rate >= 50 ? '#ef4444' : v.rate >= 30 ? '#f59e0b' : '#22c55e';
+            ssHtml += '<tr><td>' + v.name + '</td><td class="text-end">' + v.stockCount + '件</td><td class="text-end">' + v.stagnantCount + '件</td><td class="text-end" style="color:' + rateColor + ';font-weight:600;">' + v.rate.toFixed(0) + '%</td><td class="text-end">' + purFormatCurrency(v.lockAmount) + '</td></tr>';
+          });
+          if (!ssHtml) ssHtml = '<tr><td colspan="5" class="text-center text-muted py-4">在庫がありません</td></tr>';
+          ssBody.innerHTML = ssHtml;
+        }
+
+        // 滞留商品リスト（30日超、滞留日数順）
+        var stagnantItems = [];
+        unsold.forEach(function(i) {
+          var age = _purCalcDays(i.purchaseDate, todayStr);
+          if (age >= 30) stagnantItems.push({ item: i, age: age });
+        });
+        stagnantItems.sort(function(a, b) { return b.age - a.age; });
+        var slBody = document.getElementById('pur-stagnantListBody');
+        if (slBody) {
+          var slHtml = '';
+          stagnantItems.forEach(function(si) {
+            var i = si.item;
+            var ageColor = si.age >= 90 ? '#ef4444' : si.age >= 60 ? '#f97316' : '#f59e0b';
+            slHtml += '<tr><td>' + (i.purchaseDate || '-') + '</td><td>' + i.managementNumber + '</td><td>' + (i.productName || '-') + '</td><td>' + (i.supplier || '-') + '</td><td class="text-end">' + purFormatCurrency(i.purchaseAmount) + '</td><td class="text-end" style="color:' + ageColor + ';font-weight:600;">' + si.age + '日</td></tr>';
+          });
+          if (!slHtml) slHtml = '<tr><td colspan="6" class="text-center text-muted py-4">30日超の滞留在庫はありません</td></tr>';
+          slBody.innerHTML = slHtml;
+        }
+      };
+
+      if (_pur_analysisCache && (now - _pur_analysisCacheTime < 300000)) {
+        renderFn(_pur_analysisCache);
+      } else {
+        purShowLoading();
+        purGetPurchaseData('', '').then(function(data) {
+          _pur_analysisCache = data;
+          _pur_analysisCacheTime = Date.now();
+          renderFn(data);
+        }).catch(function(err) { console.error('滞留分析エラー:', err); }).then(function() { purHideLoading(); });
       }
     }
 
@@ -3220,6 +3500,8 @@
       var el = document.getElementById('pur-analysis-sub-' + tabName);
       if (el) el.classList.add('active');
       if (tabName === 'budget') purLoadBudgetSettings();
+      if (tabName === 'stagnant') purRenderStagnantAnalysis();
+      if (tabName === 'analytics') purRenderAnalysis();
     }
 
     function purSaveBudgetSettings() {
