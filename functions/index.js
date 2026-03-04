@@ -2780,16 +2780,6 @@ exports.calculateRakumaFeeRate = onSchedule({
 
     const notificationBody = `集計期間: ${month}月26日〜${month + 1}月25日\n販売回数: ${salesCount}回, 販売金額: ¥${salesAmount.toLocaleString()}\n適用開始: ${effectiveFrom}`;
 
-    // システム通知ルームに投稿
-    const systemRoomRef = db.collection('rooms').doc('system-notifications');
-    await systemRoomRef.collection('messages').add({
-      content: `${notificationTitle}\n\n${notificationBody}`,
-      sender: 'システム',
-      senderEmail: 'system@reborn.local',
-      createdAt: FieldValue.serverTimestamp(),
-      type: 'system'
-    });
-
     // 管理者にプッシュ通知
     const adminsSnapshot = await db.collection('users')
       .where('role', 'in', ['オーナー', '管理者'])
@@ -2884,18 +2874,6 @@ exports.applyRakumaFeeRate = onSchedule({
     });
 
     console.log(`✅ [applyRakumaFeeRate] 手数料率適用: ${currentRate}% → ${nextMonthRate}%`);
-
-    // 変更があった場合のみ通知
-    if (currentRate !== nextMonthRate) {
-      const systemRoomRef = db.collection('rooms').doc('system-notifications');
-      await systemRoomRef.collection('messages').add({
-        content: `✅ ラクマ手数料率が本日から ${nextMonthRate}% に変更されました（前月: ${currentRate}%）`,
-        sender: 'システム',
-        senderEmail: 'system@reborn.local',
-        createdAt: FieldValue.serverTimestamp(),
-        type: 'system'
-      });
-    }
 
     const duration = Date.now() - startTime;
     console.log(`✅ [applyRakumaFeeRate] 完了 (${duration}ms)`);
