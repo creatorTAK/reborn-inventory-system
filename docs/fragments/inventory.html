@@ -2567,6 +2567,10 @@
       if (statusChanged && newStatus === '出品中' && oldStatus !== '出品中') {
         invAddListingApprovalTask(invCurrentProduct);
       }
+      // ステータス変更時、該当商品のlisting_approvalタスクを自動完了
+      if (statusChanged && oldStatus === '出品中' && invCurrentProduct) {
+        invAutoCompleteTask('listing_approval', invCurrentProduct.id || invCurrentProduct.productId);
+      }
       var modalElement = document.getElementById('invProductDetailModal');
       var modal = bootstrap.Modal.getInstance(modalElement);
       if (modal) modal.hide();
@@ -2591,6 +2595,27 @@
           window.parent.postMessage({ type: 'addTaskToOwners', taskData: taskData }, '*');
         }
       } catch (error) { console.error('[inv] タスク追加エラー:', error); }
+    }
+
+    function invAutoCompleteTask(taskType, productId, targetEmail) {
+      if (!window.db || !productId) return;
+      var emails = [localStorage.getItem('reborn_user_email')];
+      if (targetEmail && emails.indexOf(targetEmail) === -1) emails.push(targetEmail);
+      emails.forEach(function(email) {
+        if (!email) return;
+        window.db.collection('userTasks').doc(email).collection('tasks')
+          .where('type', '==', taskType)
+          .where('completed', '==', false)
+          .get().then(function(snap) {
+            snap.forEach(function(taskDoc) {
+              var rd = taskDoc.data().relatedData || {};
+              if (rd.productId === productId) {
+                taskDoc.ref.update({ completed: true, completedAt: new Date().toISOString() });
+                console.log('[inv] タスク自動完了:', taskType, taskDoc.id, email);
+              }
+            });
+          }).catch(function(err) { console.error('[inv] タスク自動完了エラー:', err); });
+      });
     }
 
     // ===== Sales record modal =====
@@ -3174,6 +3199,9 @@
               console.log('[inv] タスク自動完了:', pending.taskId);
             } catch(e) { console.warn('[inv] タスク自動完了エラー:', e); }
             window._pendingShippingComplete = null;
+          } else if (invShipCurrentProduct) {
+            // タスク画面以外から発送完了した場合も、shipping_taskを自動完了
+            invAutoCompleteTask('shipping_task', invShipCurrentProduct.id || invShipCurrentProduct.productId);
           }
           setTimeout(function() { alert('発送完了を保存しました'); invLoadDashboardAndSearch(false); }, 100);
         } else {

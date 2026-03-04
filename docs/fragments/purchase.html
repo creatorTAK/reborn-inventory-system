@@ -3616,6 +3616,23 @@
         });
     }
 
+    function purAutoCompleteTaskByBatchId(taskType, batchId) {
+      var userEmail = firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
+      if (!userEmail || !batchId) return;
+      window.db.collection('userTasks').doc(userEmail).collection('tasks')
+        .where('type', '==', taskType)
+        .where('completed', '==', false)
+        .get().then(function(snap) {
+          snap.forEach(function(taskDoc) {
+            var rd = taskDoc.data().relatedData || {};
+            if (rd.batchId === batchId) {
+              taskDoc.ref.update({ completed: true, completedAt: new Date().toISOString() });
+              console.log('[purchase] タスク自動完了:', taskType, taskDoc.id);
+            }
+          });
+        }).catch(function(err) { console.error('[purchase] タスク自動完了エラー:', err); });
+    }
+
     function purSendBudgetAlert(month, pct, actual, budget) {
       var docRef = window.db.collection('settings').doc('purchaseBudget');
       docRef.get().then(function(doc) {
@@ -5983,6 +6000,8 @@
           receivedAt: firebase.firestore.FieldValue.serverTimestamp(),
           selfProcessed: true
         });
+        // receiving_taskを自動完了
+        purAutoCompleteTaskByBatchId('receiving_task', batchId);
         alert('受取済に更新しました。商品登録を開始できます。');
         purLoadDispatchProgress();
       } catch (error) {

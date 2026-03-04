@@ -10538,6 +10538,22 @@ async function saveProductToFirestore(formData) {
       }
     }
 
+    // revision_requestタスクを自動完了（商品修正保存時）
+    try {
+      var _email = userEmail || localStorage.getItem('reborn_user_email');
+      if (_email && productId) {
+        var _taskSnap = await window.db.collection('userTasks').doc(_email).collection('tasks')
+          .where('type', '==', 'revision_request').where('completed', '==', false).get();
+        _taskSnap.forEach(function(td) {
+          var rd = td.data().relatedData || {};
+          if (rd.productId === productId) {
+            td.ref.update({ completed: true, completedAt: new Date().toISOString() });
+            console.log('[product] revision_requestタスク自動完了:', td.id);
+          }
+        });
+      }
+    } catch (_e) { console.warn('[product] revision_request自動完了エラー:', _e); }
+
     // 成功レスポンス
     return {
       success: true,
