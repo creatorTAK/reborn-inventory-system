@@ -8641,9 +8641,8 @@ async function checkAndTriggerStockAlert(materialId, materialName, currentStock,
     const alertDocRef = await window.db.collection('stockAlerts').add(alertRecord);
     console.log(`📝 [Stock Alert] アラート記録作成: ${alertDocRef.id}`);
 
-    // 並列実行: チャットメッセージ、プッシュ通知、タスク作成
+    // 並列実行: プッシュ通知、タスク作成
     await Promise.all([
-      sendStockAlertChatMessage(materialName, currentStock, threshold, locationName, purchaseUrl, supplier),
       sendStockAlertPushNotification(materialName, currentStock, threshold, locationName),
       createStockAlertTask(materialId, materialName, currentStock, threshold, locationName, purchaseUrl, supplier)
     ]);
@@ -8652,46 +8651,6 @@ async function checkAndTriggerStockAlert(materialId, materialName, currentStock,
 
   } catch (error) {
     console.error('❌ [Stock Alert] アラート処理エラー:', error);
-  }
-}
-
-/**
- * 在庫アラートチャットにメッセージを送信
- */
-async function sendStockAlertChatMessage(materialName, currentStock, threshold, locationName = '', purchaseUrl = '', supplier = '') {
-  try {
-    const roomId = 'room_inventory_alert';
-    const locationInfo = locationName ? ` (${locationName})` : '';
-    const urgency = currentStock <= 0 ? '🚨 在庫切れ' : '⚠️ 在庫不足';
-    const supplierInfo = supplier ? `\n発注先: ${supplier}` : '';
-    const purchaseInfo = purchaseUrl ? `\n📎 購入リンク: ${purchaseUrl}` : '';
-
-    const messageText = `${urgency}${locationInfo}
-📦 ${materialName}
-現在庫: ${currentStock}個 / 発注点: ${threshold}個${supplierInfo}${purchaseInfo}
-補充をお願いします。`;
-
-    // メッセージをFirestoreに追加
-    await window.db.collection('messages').add({
-      roomId: roomId,
-      text: messageText,
-      userName: 'システム',
-      userEmail: 'system@reborn-inventory.com',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      isSystemMessage: true
-    });
-
-    // roomsコレクションのlastMessageを更新
-    await window.db.collection('rooms').doc(roomId).update({
-      lastMessage: messageText.split('\n')[0], // 最初の行のみ
-      lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
-      lastMessageBy: 'システム'
-    });
-
-    console.log(`💬 [Stock Alert] チャットメッセージ送信完了: ${roomId}`);
-
-  } catch (error) {
-    console.error('❌ [Stock Alert] チャットメッセージ送信エラー:', error);
   }
 }
 
