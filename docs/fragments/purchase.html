@@ -1246,43 +1246,20 @@
       width: 20px;
       text-align: center;
     }
-    /* サブタブ（買掛管理内） */
-    #spa-page-purchase .pur-payable-sub-tabs {
-      display: flex;
-      gap: 4px;
-      background: #f3f4f6;
-      padding: 4px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-    }
-    #spa-page-purchase .pur-payable-sub-tab {
-      flex: 1;
-      padding: 8px 12px;
-      border: none;
-      background: transparent;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
-      color: #6b7280;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-align: center;
-    }
-    #spa-page-purchase .pur-payable-sub-tab:hover {
-      color: #374151;
-      background: rgba(255,255,255,0.5);
-    }
-    #spa-page-purchase .pur-payable-sub-tab.active {
-      background: white;
-      color: #f59e0b;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    #spa-page-purchase .pur-payable-sub-content {
-      display: none;
-    }
-    #spa-page-purchase .pur-payable-sub-content.active {
-      display: block;
-    }
+    /* サブタブ（仕入分析内） */
+    #spa-page-purchase .pur-analysis-sub-tabs { display:flex; gap:4px; background:#f3f4f6; padding:4px; border-radius:8px; margin-bottom:16px; }
+    #spa-page-purchase .pur-analysis-sub-tab { flex:1; padding:8px 12px; border:none; background:transparent; border-radius:6px; font-size:13px; font-weight:500; color:#6b7280; cursor:pointer; transition:all 0.2s; text-align:center; }
+    #spa-page-purchase .pur-analysis-sub-tab:hover { color:#374151; background:rgba(255,255,255,0.5); }
+    #spa-page-purchase .pur-analysis-sub-tab.active { background:white; color:#f59e0b; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+    #spa-page-purchase .pur-analysis-sub-content { display:none; }
+    #spa-page-purchase .pur-analysis-sub-content.active { display:block; }
+    /* 予算プログレスバー */
+    #spa-page-purchase .pur-budget-progress { background:#f3f4f6; border-radius:8px; padding:16px; margin-bottom:16px; }
+    #spa-page-purchase .pur-budget-bar-bg { background:#e5e7eb; border-radius:4px; height:24px; overflow:hidden; }
+    #spa-page-purchase .pur-budget-bar { height:100%; border-radius:4px; transition:width 0.5s; }
+    #spa-page-purchase .pur-budget-bar.safe { background:#22c55e; }
+    #spa-page-purchase .pur-budget-bar.warning { background:#f59e0b; }
+    #spa-page-purchase .pur-budget-bar.danger { background:#ef4444; }
 
     /* タブコンテンツ */
     #spa-page-purchase .pur-tab-content {
@@ -1493,8 +1470,8 @@
     <button class="pur-material-tab" data-tab="pur-purchase-content" onclick="purSwitchTab('pur-purchase-content')">
       <i class="bi bi-list-ul"></i> 仕入一覧
     </button>
-    <button class="pur-material-tab" data-tab="pur-payable-content" onclick="purSwitchTab('pur-payable-content')">
-      <i class="bi bi-credit-card"></i> 買掛管理
+    <button class="pur-material-tab" data-tab="pur-analysis-content" onclick="purSwitchTab('pur-analysis-content'); purRenderAnalysis();">
+      <i class="bi bi-graph-up"></i> 仕入分析
     </button>
     <button class="pur-material-tab" data-tab="pur-progress-content" onclick="purSwitchTab('pur-progress-content'); purLoadProgressData();">
       <i class="bi bi-clipboard-check"></i> 進捗管理
@@ -2099,95 +2076,112 @@
       </div>
     </div>
 
-    <!-- 買掛管理タブ -->
-    <div class="pur-tab-content" id="pur-payable-content">
-      <div class="pur-summary-grid">
-        <div class="pur-summary-card">
-          <div class="pur-summary-label">買掛残高</div>
-          <div class="pur-summary-value danger" id="pur-payable-balance">-</div>
-        </div>
-        <div class="pur-summary-card">
-          <div class="pur-summary-label">未払件数</div>
-          <div class="pur-summary-value" id="pur-payable-count">-</div>
-        </div>
-        <div class="pur-summary-card">
-          <div class="pur-summary-label">今月支払予定</div>
-          <div class="pur-summary-value warning" id="pur-payable-expected">-</div>
-        </div>
-      </div>
-
-      <div class="alert alert-warning mb-3" id="pur-overduePayableAlert" style="display: none;">
-        <i class="bi bi-exclamation-triangle-fill"></i>
-        <strong>支払遅延アラート:</strong> <span id="pur-overduePayableText"></span>
-      </div>
-
-      <div class="pur-payable-sub-tabs">
-        <button class="pur-payable-sub-tab active" onclick="purSwitchPayableSubTab(this, 'list')">
-          <i class="bi bi-list-ul"></i> 一覧
+    <!-- 仕入分析タブ -->
+    <div class="pur-tab-content" id="pur-analysis-content">
+      <div class="pur-analysis-sub-tabs">
+        <button class="pur-analysis-sub-tab active" onclick="purSwitchAnalysisSubTab(this, 'analytics')">
+          <i class="bi bi-bar-chart"></i> 分析
         </button>
-        <button class="pur-payable-sub-tab" onclick="purSwitchPayableSubTab(this, 'supplier')">
-          <i class="bi bi-shop"></i> 仕入先別
-        </button>
-        <button class="pur-payable-sub-tab" onclick="purSwitchPayableSubTab(this, 'schedule')">
-          <i class="bi bi-calendar3"></i> 支払予定
+        <button class="pur-analysis-sub-tab" onclick="purSwitchAnalysisSubTab(this, 'budget')">
+          <i class="bi bi-piggy-bank"></i> 予算
         </button>
       </div>
 
-      <div class="pur-payable-sub-content active" id="pur-payable-sub-list">
+      <div class="pur-analysis-sub-content active" id="pur-analysis-sub-analytics">
+        <div class="pur-summary-grid">
+          <div class="pur-summary-card">
+            <div class="pur-summary-label">今月仕入額</div>
+            <div class="pur-summary-value" id="pur-analysis-monthTotal">-</div>
+          </div>
+          <div class="pur-summary-card">
+            <div class="pur-summary-label">今月件数</div>
+            <div class="pur-summary-value" id="pur-analysis-monthCount">-</div>
+          </div>
+          <div class="pur-summary-card">
+            <div class="pur-summary-label">平均単価</div>
+            <div class="pur-summary-value" id="pur-analysis-monthAvg">-</div>
+          </div>
+        </div>
+
+        <h6 class="mb-2 mt-3"><i class="bi bi-graph-up"></i> 月別推移（過去6ヶ月）</h6>
         <div class="pur-data-table-container">
           <div class="table-responsive">
             <table class="pur-data-table">
               <thead>
                 <tr>
-                  <th>仕入日</th>
-                  <th>管理番号</th>
-                  <th>仕入先</th>
-                  <th class="text-end">仕入金額</th>
-                  <th>ステータス</th>
-                  <th>操作</th>
+                  <th>年月</th>
+                  <th class="text-end">仕入額</th>
+                  <th class="text-end">件数</th>
+                  <th class="text-end">平均単価</th>
+                  <th class="text-end">前月比</th>
                 </tr>
               </thead>
-              <tbody id="pur-payableTableBody">
+              <tbody id="pur-analysisMonthlyBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <h6 class="mb-2 mt-3"><i class="bi bi-shop"></i> 仕入先別分析</h6>
+        <div class="pur-data-table-container">
+          <div class="table-responsive">
+            <table class="pur-data-table">
+              <thead>
                 <tr>
-                  <td colspan="6" class="text-center text-muted py-4">データを読み込んでいます...</td>
+                  <th>仕入先</th>
+                  <th class="text-end">仕入額</th>
+                  <th class="text-end">件数</th>
+                  <th class="text-end">平均単価</th>
+                  <th class="text-end">売上額</th>
+                  <th class="text-end">利益率</th>
                 </tr>
-              </tbody>
+              </thead>
+              <tbody id="pur-analysisSupplierBody"></tbody>
             </table>
           </div>
         </div>
       </div>
 
-      <div class="pur-payable-sub-content" id="pur-payable-sub-supplier">
-        <div id="pur-supplierGroups">
-          <div class="text-center text-muted py-4">データを読み込んでいます...</div>
+      <div class="pur-analysis-sub-content" id="pur-analysis-sub-budget">
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-body">
+            <h6><i class="bi bi-piggy-bank"></i> 月次予算設定</h6>
+            <div class="row g-3 align-items-end">
+              <div class="col-auto">
+                <label class="form-label">対象月</label>
+                <input type="month" class="form-control" id="pur-budgetMonth">
+              </div>
+              <div class="col-auto">
+                <label class="form-label">予算額</label>
+                <div class="input-group">
+                  <span class="input-group-text">¥</span>
+                  <input type="number" class="form-control" id="pur-budgetAmount" placeholder="0" min="0">
+                </div>
+              </div>
+              <div class="col-auto">
+                <button class="btn btn-warning" onclick="purSaveBudgetSettings()">
+                  <i class="bi bi-check-lg"></i> 保存
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="pur-payable-sub-content" id="pur-payable-sub-schedule">
-        <h6 class="mb-3"><i class="bi bi-shop"></i> 仕入先別買掛残高</h6>
-        <div class="pur-summary-grid mb-4" id="pur-supplierBalanceGrid"></div>
+        <div id="pur-budgetProgressArea"></div>
 
-        <h6 class="mb-3"><i class="bi bi-calendar3"></i> 支払予定スケジュール</h6>
-        <div class="alert alert-info small mb-3">
-          <i class="bi bi-info-circle"></i> 支払予定日は仕入日から30日後を目安としています。
-        </div>
+        <h6 class="mb-2 mt-3"><i class="bi bi-calendar3"></i> 月別予算実績</h6>
         <div class="pur-data-table-container">
           <div class="table-responsive">
             <table class="pur-data-table">
               <thead>
                 <tr>
-                  <th>支払予定日</th>
-                  <th>仕入先</th>
-                  <th>件数</th>
-                  <th class="text-end">支払予定額</th>
-                  <th>状態</th>
+                  <th>年月</th>
+                  <th class="text-end">予算</th>
+                  <th class="text-end">実績</th>
+                  <th class="text-end">差額</th>
+                  <th>進捗</th>
                 </tr>
               </thead>
-              <tbody id="pur-paymentScheduleBody">
-                <tr>
-                  <td colspan="5" class="text-center text-muted py-4">データを読み込んでいます...</td>
-                </tr>
-              </tbody>
+              <tbody id="pur-budgetTableBody"></tbody>
             </table>
           </div>
         </div>
@@ -2301,56 +2295,6 @@
     </div>
   </div>
 
-  <!-- 支払記録モーダル -->
-  <div class="pur-modal-overlay" id="pur-paymentModal">
-    <div class="pur-modal-dialog">
-      <div class="pur-modal-header">
-        <h5>支払記録</h5>
-        <button class="pur-modal-close" onclick="purCloseModal('pur-paymentModal')">&times;</button>
-      </div>
-      <div class="pur-modal-body">
-        <div class="mb-3">
-          <label class="form-label">管理番号</label>
-          <input type="text" class="form-control" id="pur-paymentManagementNumber" readonly>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">仕入先</label>
-          <input type="text" class="form-control" id="pur-paymentSupplier" readonly>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">仕入金額</label>
-          <input type="text" class="form-control" id="pur-paymentPurchaseAmount" readonly>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">支払日</label>
-          <input type="date" class="form-control" id="pur-paymentDate">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">支払額</label>
-          <input type="number" class="form-control" id="pur-paymentAmount" placeholder="支払額を入力">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">支払方法</label>
-          <select class="form-select" id="pur-paymentMethod">
-            <option value="現金">現金</option>
-            <option value="銀行振込">銀行振込</option>
-            <option value="クレジットカード">クレジットカード</option>
-            <option value="電子マネー">電子マネー</option>
-            <option value="その他">その他</option>
-          </select>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">備考</label>
-          <textarea class="form-control" id="pur-paymentNote" rows="2" placeholder="振込手数料など"></textarea>
-        </div>
-      </div>
-      <div class="pur-modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="purCloseModal('pur-paymentModal')">キャンセル</button>
-        <button type="button" class="btn btn-warning" onclick="purSavePayment()">支払を記録</button>
-      </div>
-    </div>
-  </div>
-
   <!-- 帳簿出力モーダル -->
   <div class="pur-modal-overlay" id="pur-exportModal">
     <div class="pur-modal-dialog">
@@ -2394,10 +2338,6 @@
             <label class="form-check-label" for="pur-exportPurchaseDetail">仕入明細</label>
           </div>
           <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="pur-exportPayable" checked>
-            <label class="form-check-label" for="pur-exportPayable">買掛金一覧</label>
-          </div>
-          <div class="form-check">
             <input class="form-check-input" type="checkbox" id="pur-exportSupplierSummary" checked>
             <label class="form-check-label" for="pur-exportSupplierSummary">仕入先別集計</label>
           </div>
@@ -2414,116 +2354,6 @@
         <button type="button" class="btn btn-secondary" onclick="purCloseModal('pur-exportModal')">キャンセル</button>
         <button type="button" class="btn btn-warning" onclick="purExportData()">
           <i class="bi bi-download"></i> ダウンロード
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 支払通知書発行モーダル -->
-  <div class="pur-modal-overlay" id="pur-paymentNoticeModal">
-    <div class="pur-modal-dialog modal-lg">
-      <div class="pur-modal-header" style="background: #f59e0b; color: white;">
-        <h5>支払通知書発行</h5>
-        <button class="pur-modal-close" style="color: white;" onclick="purCloseModal('pur-paymentNoticeModal')">&times;</button>
-      </div>
-      <div class="pur-modal-body">
-        <div class="row g-3 mb-3">
-          <div class="col-md-6">
-            <label class="form-label fw-bold">支払先（仕入先）</label>
-            <input type="text" class="form-control" id="pur-paymentNoticeSupplier" placeholder="支払先名を入力">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label fw-bold">支払日</label>
-            <input type="date" class="form-control" id="pur-paymentNoticeDate">
-          </div>
-        </div>
-        <div class="row g-3 mb-3">
-          <div class="col-md-6">
-            <label class="form-label fw-bold">通知番号</label>
-            <input type="text" class="form-control" id="pur-paymentNoticeNumber" placeholder="自動生成">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label fw-bold">支払方法</label>
-            <select class="form-select" id="pur-paymentNoticeMethod">
-              <option value="振込">銀行振込</option>
-              <option value="現金">現金</option>
-              <option value="クレジット">クレジットカード</option>
-              <option value="その他">その他</option>
-            </select>
-          </div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label fw-bold">支払明細</label>
-          <div class="table-responsive">
-            <table class="table table-sm table-bordered" id="pur-paymentNoticeItemsTable">
-              <thead class="table-light">
-                <tr>
-                  <th>仕入日</th>
-                  <th>内容</th>
-                  <th class="text-end" style="width: 120px;">金額</th>
-                  <th style="width: 40px;"></th>
-                </tr>
-              </thead>
-              <tbody id="pur-paymentNoticeItemsBody"></tbody>
-              <tfoot>
-                <tr>
-                  <td colspan="4">
-                    <button type="button" class="btn btn-sm btn-outline-warning" onclick="purAddPaymentNoticeItem()">
-                      <i class="bi bi-plus"></i> 行を追加
-                    </button>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-        <div class="row g-3 mb-3">
-          <div class="col-md-6">
-            <label class="form-label">小計</label>
-            <div class="input-group">
-              <span class="input-group-text">¥</span>
-              <input type="text" class="form-control text-end" id="pur-paymentNoticeSubtotal" readonly>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label fw-bold">支払合計</label>
-            <div class="input-group">
-              <span class="input-group-text">¥</span>
-              <input type="text" class="form-control text-end fw-bold" id="pur-paymentNoticeTotal" readonly>
-            </div>
-          </div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">備考</label>
-          <textarea class="form-control" id="pur-paymentNoticeNote" rows="2" placeholder="振込先口座情報など"></textarea>
-        </div>
-      </div>
-      <div class="pur-modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="purCloseModal('pur-paymentNoticeModal')">キャンセル</button>
-        <button type="button" class="btn btn-outline-warning" onclick="purPreviewPaymentNotice()">
-          <i class="bi bi-eye"></i> プレビュー
-        </button>
-        <button type="button" class="btn btn-warning" onclick="purDownloadPaymentNoticePDF()">
-          <i class="bi bi-download"></i> PDF出力
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 支払通知書プレビューモーダル -->
-  <div class="pur-modal-overlay" id="pur-paymentNoticePreviewModal">
-    <div class="pur-modal-dialog modal-lg">
-      <div class="pur-modal-header" style="background: #f59e0b; color: white;">
-        <h5>支払通知書プレビュー</h5>
-        <button class="pur-modal-close" style="color: white;" onclick="purCloseModal('pur-paymentNoticePreviewModal')">&times;</button>
-      </div>
-      <div class="pur-modal-body" style="padding: 0;">
-        <div id="pur-paymentNoticePreviewContent" style="background: white; padding: 40px;"></div>
-      </div>
-      <div class="pur-modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="purCloseModal('pur-paymentNoticePreviewModal')">閉じる</button>
-        <button type="button" class="btn btn-warning" onclick="purDownloadPaymentNoticePDF()">
-          <i class="bi bi-download"></i> PDF出力
         </button>
       </div>
     </div>
@@ -2933,23 +2763,15 @@
             purchasePaymentStatus: data.purchasePaymentStatus || 'unpaid',
             purchasePaymentDate: data.purchasePaymentDate || '',
             purchasePaymentAmount: parseFloat(data.purchasePaymentAmount || 0),
-            purchasePaymentMethod: data.purchasePaymentMethod || ''
+            purchasePaymentMethod: data.purchasePaymentMethod || '',
+            saleAmount: parseFloat(data.saleAmount || 0),
+            saleDate: data.saleDate || '',
+            status: data.status || ''
           });
         });
         purchaseList.sort(function(a, b) { return (b.purchaseDate || '').localeCompare(a.purchaseDate || ''); });
         console.log('[Pur] 取得完了:', purchaseList.length + '件');
         return purchaseList;
-      });
-    }
-
-    function purUpdatePurchasePaymentStatus(productId, paymentData) {
-      return window.db.collection('products').doc(productId).update({
-        purchasePaymentStatus: paymentData.status,
-        purchasePaymentDate: paymentData.date,
-        purchasePaymentAmount: paymentData.amount,
-        purchasePaymentMethod: paymentData.method,
-        purchasePaymentNote: paymentData.note,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
 
@@ -3181,9 +3003,9 @@
       return purGetPurchaseData(yearMonth, supplier).then(function(data) {
         _pur_currentPurchaseData = data;
         purRenderPurchaseTable();
-        purRenderPayableTable();
-        purRenderSupplierGroups();
         purUpdateSummary();
+        var analysisTab = document.getElementById('pur-analysis-content');
+        if (analysisTab && analysisTab.classList.contains('active')) purRenderAnalysis();
       }).catch(function(error) {
         console.error('仕入データ読み込みエラー:', error);
       }).then(function() { purHideLoading(); });
@@ -3204,128 +3026,6 @@
           '<td>' + purGetPaymentBadge(item.purchasePaymentStatus) + '</td></tr>';
       });
       tbody.innerHTML = html;
-    }
-
-    function purRenderPayableTable() {
-      var tbody = document.getElementById('pur-payableTableBody');
-      if (!tbody) return;
-      var unpaidItems = _pur_currentPurchaseData.filter(function(item) { return item.purchasePaymentStatus !== 'paid'; });
-      if (unpaidItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">未払いの仕入はありません</td></tr>';
-        purUpdatePayableSummary(0, 0);
-        var alertDiv = document.getElementById('pur-overduePayableAlert');
-        if (alertDiv) alertDiv.style.display = 'none';
-        purRenderPaymentScheduleTab([]);
-        return;
-      }
-      var html = '';
-      var totalUnpaid = 0, overdueCount = 0, overdueAmount = 0;
-      var OVERDUE_DAYS = 30;
-      unpaidItems.forEach(function(item) {
-        var unpaidAmount = item.purchaseAmount - (item.purchasePaymentAmount || 0);
-        totalUnpaid += unpaidAmount;
-        var daysPassed = item.purchaseDate ? Math.floor((new Date() - new Date(item.purchaseDate)) / (1000*60*60*24)) : 0;
-        var isOverdue = daysPassed >= OVERDUE_DAYS;
-        if (isOverdue) { overdueCount++; overdueAmount += unpaidAmount; }
-        html += '<tr class="' + (isOverdue ? 'table-warning' : '') + '">' +
-          '<td>' + (item.purchaseDate || '-') + '</td><td>' + item.managementNumber + '</td>' +
-          '<td>' + (item.supplier || '-') + '</td><td class="text-end">' + purFormatCurrency(item.purchaseAmount) + '</td>' +
-          '<td>' + purGetPaymentBadge(item.purchasePaymentStatus) + '</td>' +
-          '<td><button class="btn btn-sm btn-outline-warning" onclick="purOpenPaymentModal(\'' + item.id + '\',\'' + item.managementNumber + '\',\'' + (item.supplier||'').replace(/'/g,"\\'") + '\',' + item.purchaseAmount + ')">支払記録</button></td></tr>';
-      });
-      tbody.innerHTML = html;
-      purUpdatePayableSummary(totalUnpaid, unpaidItems.length);
-      var alertDiv = document.getElementById('pur-overduePayableAlert');
-      if (overdueCount > 0) {
-        document.getElementById('pur-overduePayableText').textContent = overdueCount + '件（' + purFormatCurrency(overdueAmount) + '）が' + OVERDUE_DAYS + '日以上経過しています。';
-        if (alertDiv) alertDiv.style.display = 'block';
-      } else {
-        if (alertDiv) alertDiv.style.display = 'none';
-      }
-      purRenderPaymentScheduleTab(unpaidItems);
-    }
-
-    function purRenderPaymentScheduleTab(unpaidItems) {
-      var supplierBalances = {};
-      unpaidItems.forEach(function(item) {
-        var supplier = item.supplier || '未設定';
-        if (!supplierBalances[supplier]) supplierBalances[supplier] = { count: 0, amount: 0 };
-        supplierBalances[supplier].count++;
-        supplierBalances[supplier].amount += item.purchaseAmount - (item.purchasePaymentAmount || 0);
-      });
-      var grid = document.getElementById('pur-supplierBalanceGrid');
-      if (grid) {
-        if (Object.keys(supplierBalances).length === 0) {
-          grid.innerHTML = '<div class="col-12 text-center text-muted">未払いの仕入はありません</div>';
-        } else {
-          var h = '';
-          Object.keys(supplierBalances).sort(function(a,b){return a.localeCompare(b,'ja');}).forEach(function(s) {
-            var b = supplierBalances[s];
-            h += '<div class="pur-summary-card"><div class="pur-summary-label">' + s + '</div><div class="pur-summary-value">' + purFormatCurrency(b.amount) + '</div><div class="small text-muted">' + b.count + '件</div></div>';
-          });
-          grid.innerHTML = h;
-        }
-      }
-      // 支払予定スケジュール
-      var scheduleMap = {};
-      unpaidItems.forEach(function(item) {
-        var supplier = item.supplier || '未設定';
-        var purchaseDate = item.purchaseDate ? new Date(item.purchaseDate) : new Date();
-        var expectedDate = new Date(purchaseDate);
-        expectedDate.setDate(expectedDate.getDate() + 30);
-        var expectedDateStr = purFormatDateLocal(expectedDate);
-        var key = expectedDateStr + '_' + supplier;
-        if (!scheduleMap[key]) scheduleMap[key] = { date: expectedDateStr, supplier: supplier, count: 0, amount: 0 };
-        scheduleMap[key].count++;
-        scheduleMap[key].amount += item.purchaseAmount - (item.purchasePaymentAmount || 0);
-      });
-      var stbody = document.getElementById('pur-paymentScheduleBody');
-      if (!stbody) return;
-      if (Object.keys(scheduleMap).length === 0) {
-        stbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">支払予定はありません</td></tr>';
-        return;
-      }
-      var today = purGetJSTToday();
-      var shtml = '';
-      Object.values(scheduleMap).sort(function(a,b){return a.date.localeCompare(b.date);}).forEach(function(sc) {
-        var isOverdue = sc.date < today;
-        var badge = isOverdue ? '<span class="pur-status-badge pur-status-unpaid">期日超過</span>' : '<span class="pur-status-badge pur-status-paid">予定</span>';
-        shtml += '<tr class="' + (isOverdue ? 'table-danger' : '') + '"><td>' + sc.date + '</td><td>' + sc.supplier + '</td><td>' + sc.count + '件</td><td class="text-end">' + purFormatCurrency(sc.amount) + '</td><td>' + badge + '</td></tr>';
-      });
-      stbody.innerHTML = shtml;
-    }
-
-    function purRenderSupplierGroups() {
-      var container = document.getElementById('pur-supplierGroups');
-      if (!container) return;
-      var grouped = {};
-      _pur_currentPurchaseData.forEach(function(item) {
-        var s = item.supplier || '未設定';
-        if (!grouped[s]) grouped[s] = { items: [], totalAmount: 0, paidAmount: 0 };
-        grouped[s].items.push(item);
-        grouped[s].totalAmount += item.purchaseAmount;
-        if (item.purchasePaymentStatus === 'paid') grouped[s].paidAmount += item.purchaseAmount;
-        else grouped[s].paidAmount += item.purchasePaymentAmount || 0;
-      });
-      if (Object.keys(grouped).length === 0) {
-        container.innerHTML = '<div class="text-center text-muted py-4">該当する仕入データがありません</div>';
-        return;
-      }
-      var html = '';
-      Object.keys(grouped).sort(function(a,b){return a.localeCompare(b,'ja');}).forEach(function(supplier) {
-        var group = grouped[supplier];
-        var unpaid = group.totalAmount - group.paidAmount;
-        var groupId = 'pur-supplier-' + supplier.replace(/[^a-zA-Z0-9]/g, '_');
-        html += '<div class="pur-supplier-group"><div class="pur-supplier-header" onclick="var b=document.getElementById(\'' + groupId + '\');if(b)b.classList.toggle(\'pur-supplier-body-collapsed\');">' +
-          '<div><h6>' + supplier + '</h6><small>' + group.items.length + '件 / ' + purFormatCurrency(group.totalAmount) + '</small></div>' +
-          '<div class="text-end">' + (unpaid > 0 ? '<span class="badge bg-danger">未払: ' + purFormatCurrency(unpaid) + '</span>' : '<span class="badge bg-success">支払完了</span>') + '</div></div>' +
-          '<div class="pur-supplier-body pur-supplier-body-collapsed" id="' + groupId + '"><table class="pur-data-table"><thead><tr><th>仕入日</th><th>管理番号</th><th class="text-end">金額</th><th>支払</th></tr></thead><tbody>';
-        group.items.forEach(function(item) {
-          html += '<tr><td>' + (item.purchaseDate || '-') + '</td><td>' + item.managementNumber + '</td><td class="text-end">' + purFormatCurrency(item.purchaseAmount) + '</td><td>' + purGetPaymentBadge(item.purchasePaymentStatus) + '</td></tr>';
-        });
-        html += '</tbody></table></div></div>';
-      });
-      container.innerHTML = html;
     }
 
     function purGetPaymentBadge(status) {
@@ -3352,63 +3052,6 @@
       el = document.getElementById('pur-summary-purchaseAmount'); if (el) el.textContent = purFormatCurrency(totalAmount);
       el = document.getElementById('pur-summary-avgPurchase'); if (el) el.textContent = purFormatCurrency(avgAmount);
       el = document.getElementById('pur-summary-paidAmount'); if (el) el.textContent = purFormatCurrency(paidAmount);
-    }
-
-    function purUpdatePayableSummary(totalUnpaid, count) {
-      var el;
-      el = document.getElementById('pur-payable-balance'); if (el) el.textContent = purFormatCurrency(totalUnpaid);
-      el = document.getElementById('pur-payable-count'); if (el) el.textContent = count + '件';
-      el = document.getElementById('pur-payable-expected'); if (el) el.textContent = purFormatCurrency(totalUnpaid);
-    }
-
-    // ============================================
-    // Payment modal
-    // ============================================
-    function purOpenPaymentModal(productId, managementNumber, supplier, purchaseAmount) {
-      _pur_selectedProductForPayment = { id: productId, managementNumber: managementNumber, supplier: supplier, purchaseAmount: purchaseAmount };
-      document.getElementById('pur-paymentManagementNumber').value = managementNumber;
-      document.getElementById('pur-paymentSupplier').value = supplier || '-';
-      document.getElementById('pur-paymentPurchaseAmount').value = purFormatCurrency(purchaseAmount);
-      document.getElementById('pur-paymentAmount').value = Math.round(purchaseAmount);
-      document.getElementById('pur-paymentNote').value = '';
-      document.getElementById('pur-paymentDate').value = purGetJSTToday();
-      purOpenModal('pur-paymentModal');
-    }
-
-    function purSavePayment() {
-      if (!_pur_selectedProductForPayment) return;
-      var paymentDate = document.getElementById('pur-paymentDate').value;
-      var paymentAmount = parseFloat(document.getElementById('pur-paymentAmount').value) || 0;
-      var paymentMethod = document.getElementById('pur-paymentMethod').value;
-      var paymentNote = document.getElementById('pur-paymentNote').value;
-      if (!paymentDate) { alert('支払日を入力してください'); return; }
-      if (paymentAmount <= 0) { alert('支払額を入力してください'); return; }
-      purShowLoading();
-      var status = 'unpaid';
-      if (paymentAmount >= _pur_selectedProductForPayment.purchaseAmount) status = 'paid';
-      else if (paymentAmount > 0) status = 'partial';
-      purUpdatePurchasePaymentStatus(_pur_selectedProductForPayment.id, {
-        status: status, date: paymentDate, amount: paymentAmount, method: paymentMethod, note: paymentNote
-      }).then(function() {
-        purCloseModal('pur-paymentModal');
-        alert('支払を記録しました');
-        return purLoadPurchaseData();
-      }).catch(function(error) {
-        console.error('支払記録エラー:', error);
-        alert('支払の記録に失敗しました: ' + error.message);
-      }).then(function() { purHideLoading(); });
-    }
-
-    // ============================================
-    // Payable sub-tabs
-    // ============================================
-    function purSwitchPayableSubTab(btn, tabName) {
-      document.querySelectorAll('#spa-page-purchase .pur-payable-sub-tab').forEach(function(t) { t.classList.remove('active'); });
-      if (btn) btn.classList.add('active');
-      document.querySelectorAll('#spa-page-purchase .pur-payable-sub-content').forEach(function(c) { c.classList.remove('active'); });
-      var el = document.getElementById('pur-payable-sub-' + tabName);
-      if (el) el.classList.add('active');
-      if (tabName === 'supplier') purRenderSupplierGroups();
     }
 
     // ============================================
@@ -3446,16 +3089,6 @@
           });
           csv += '\n';
         }
-        if (document.getElementById('pur-exportPayable').checked) {
-          var payables = filtered.filter(function(i) { return i.purchasePaymentStatus !== 'paid'; });
-          csv += '【買掛金一覧】\n仕入日,管理番号,仕入先,仕入金額,支払済額,未払額,経過日数\n';
-          payables.forEach(function(i) {
-            var u = i.purchaseAmount - (i.purchasePaymentAmount||0);
-            var d = i.purchaseDate ? Math.floor((new Date()-new Date(i.purchaseDate))/(86400000)) : 0;
-            csv += [i.purchaseDate||'',i.managementNumber||'',i.supplier||'',i.purchaseAmount||0,i.purchasePaymentAmount||0,u,d+'日'].join(',') + '\n';
-          });
-          csv += '\n';
-        }
         if (document.getElementById('pur-exportSupplierSummary').checked) {
           var ss = {};
           filtered.forEach(function(i) { var s = i.supplier||'未設定'; if(!ss[s]) ss[s]={count:0,total:0,paid:0}; ss[s].count++; ss[s].total+=i.purchaseAmount||0; if(i.purchasePaymentStatus==='paid') ss[s].paid+=i.purchaseAmount; else ss[s].paid+=i.purchasePaymentAmount||0; });
@@ -3484,84 +3117,195 @@
     }
 
     // ============================================
-    // Payment notice
+    // Purchase Analysis (仕入分析)
     // ============================================
-    function purOpenPaymentNoticeModal(items) {
-      if (!items) items = [];
-      var todayStr = purGetJSTToday();
-      document.getElementById('pur-paymentNoticeDate').value = todayStr;
-      var parts = todayStr.split('-');
-      var noticeNumber = 'PAY-' + parts[0] + parts[1] + parts[2] + '-' + String(Math.floor(Math.random()*1000)).padStart(3,'0');
-      document.getElementById('pur-paymentNoticeNumber').value = noticeNumber;
-      var tbody = document.getElementById('pur-paymentNoticeItemsBody');
-      tbody.innerHTML = '';
-      if (items.length > 0) {
-        items.forEach(function(i) { purAddPaymentNoticeItemRow(i.purchaseDate||'', i.productName||'', i.purchaseAmount||0); });
-      } else {
-        purAddPaymentNoticeItemRow('', '', 0);
+    var _pur_analysisCache = null;
+    var _pur_analysisCacheTime = 0;
+
+    function purRenderAnalysis() {
+      var now = Date.now();
+      if (_pur_analysisCache && (now - _pur_analysisCacheTime < 300000)) {
+        _purRenderAnalysisFromData(_pur_analysisCache);
+        return;
       }
-      purUpdatePaymentNoticeTotals();
-      purOpenModal('pur-paymentNoticeModal');
-    }
-    function purAddPaymentNoticeItem() { purAddPaymentNoticeItemRow('', '', 0); }
-    function purAddPaymentNoticeItemRow(date, description, amount) {
-      var tbody = document.getElementById('pur-paymentNoticeItemsBody');
-      var row = document.createElement('tr');
-      row.innerHTML = '<td><input type="date" class="form-control form-control-sm" value="' + date + '" onchange="purUpdatePaymentNoticeTotals()"></td><td><input type="text" class="form-control form-control-sm" value="' + purEscapeHtml(description) + '" onchange="purUpdatePaymentNoticeTotals()"></td><td><input type="number" class="form-control form-control-sm text-end" value="' + amount + '" min="0" onchange="purUpdatePaymentNoticeTotals()"></td><td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove();purUpdatePaymentNoticeTotals();"><i class="bi bi-trash"></i></button></td>';
-      tbody.appendChild(row);
-    }
-    function purUpdatePaymentNoticeTotals() {
-      var tbody = document.getElementById('pur-paymentNoticeItemsBody');
-      var rows = tbody.querySelectorAll('tr');
-      var subtotal = 0;
-      rows.forEach(function(r) { var inp = r.querySelector('input[type="number"]'); subtotal += parseInt(inp ? inp.value : 0) || 0; });
-      document.getElementById('pur-paymentNoticeSubtotal').value = subtotal.toLocaleString();
-      document.getElementById('pur-paymentNoticeTotal').value = subtotal.toLocaleString();
-    }
-    function purGeneratePaymentNoticeHtml() {
-      var supplier = document.getElementById('pur-paymentNoticeSupplier').value || '御中';
-      var paymentDate = document.getElementById('pur-paymentNoticeDate').value;
-      var noticeNumber = document.getElementById('pur-paymentNoticeNumber').value;
-      var paymentMethod = document.getElementById('pur-paymentNoticeMethod').value;
-      var note = document.getElementById('pur-paymentNoticeNote').value;
-      var total = document.getElementById('pur-paymentNoticeTotal').value;
-      var tbody = document.getElementById('pur-paymentNoticeItemsBody');
-      var rows = tbody.querySelectorAll('tr');
-      var itemsHtml = '';
-      rows.forEach(function(r, idx) {
-        var inputs = r.querySelectorAll('input');
-        var d = inputs[0] ? inputs[0].value : '';
-        var desc = inputs[1] ? inputs[1].value : '';
-        var amt = parseInt(inputs[2] ? inputs[2].value : 0) || 0;
-        if (desc) itemsHtml += '<tr><td style="padding:8px;border:1px solid #ddd;">' + (idx+1) + '</td><td style="padding:8px;border:1px solid #ddd;">' + d + '</td><td style="padding:8px;border:1px solid #ddd;">' + desc + '</td><td style="padding:8px;border:1px solid #ddd;text-align:right;">\u00a5' + amt.toLocaleString() + '</td></tr>';
-      });
-      return '<div style="font-family:\'Helvetica Neue\',Arial,sans-serif;max-width:800px;margin:0 auto;color:#333;"><div style="text-align:center;margin-bottom:30px;"><h1 style="font-size:28px;font-weight:bold;margin:0;letter-spacing:8px;">支払通知書</h1></div><div style="display:flex;justify-content:space-between;margin-bottom:30px;"><div><p style="font-size:18px;font-weight:bold;margin:0 0 5px 0;border-bottom:2px solid #333;padding-bottom:5px;">' + supplier + '</p><p style="margin:10px 0 0 0;font-size:14px;">下記の通りお支払いいたしますのでご査収ください。</p></div><div style="text-align:right;font-size:14px;"><p style="margin:0;">発行日: ' + paymentDate + '</p><p style="margin:5px 0;">通知番号: ' + noticeNumber + '</p><p style="margin:5px 0;">支払方法: ' + paymentMethod + '</p></div></div><div style="background:#fff7ed;padding:20px;border-radius:8px;margin-bottom:30px;text-align:center;border:2px solid #f59e0b;"><p style="margin:0 0 5px 0;font-size:14px;color:#92400e;">お支払金額</p><p style="margin:0;font-size:32px;font-weight:bold;color:#b45309;">\u00a5' + total + '</p></div><table style="width:100%;border-collapse:collapse;margin-bottom:20px;"><thead><tr style="background:#fef3c7;"><th style="padding:10px;border:1px solid #ddd;text-align:center;width:40px;">No</th><th style="padding:10px;border:1px solid #ddd;text-align:center;width:100px;">仕入日</th><th style="padding:10px;border:1px solid #ddd;text-align:left;">内容</th><th style="padding:10px;border:1px solid #ddd;text-align:right;width:120px;">金額</th></tr></thead><tbody>' + itemsHtml + '</tbody></table><div style="display:flex;justify-content:flex-end;margin-bottom:30px;"><table style="border-collapse:collapse;width:250px;"><tr style="font-weight:bold;font-size:16px;border-top:2px solid #333;"><td style="padding:8px;text-align:right;">合計金額</td><td style="padding:8px;text-align:right;">\u00a5' + total + '</td></tr></table></div>' + (note ? '<div style="margin-bottom:30px;"><p style="font-weight:bold;margin:0 0 10px 0;">備考</p><div style="background:#f8f9fa;padding:15px;border-radius:4px;white-space:pre-wrap;">' + note + '</div></div>' : '') + '<div style="margin-top:40px;padding-top:20px;border-top:1px solid #ddd;text-align:right;"><p style="font-weight:bold;margin:0 0 10px 0;">発行者</p><p style="margin:0;">フリラ</p><p style="margin:5px 0 0 0;font-size:12px;color:#666;">Furira</p></div></div>';
-    }
-    function purPreviewPaymentNotice() {
-      document.getElementById('pur-paymentNoticePreviewContent').innerHTML = purGeneratePaymentNoticeHtml();
-      purCloseModal('pur-paymentNoticeModal');
-      setTimeout(function() { purOpenModal('pur-paymentNoticePreviewModal'); }, 300);
-    }
-    function purDownloadPaymentNoticePDF() {
-      if (typeof html2canvas === 'undefined' || !window.jspdf) { alert('PDFライブラリを読み込み中です。少し待ってから再度お試しください。'); return; }
       purShowLoading();
-      var content = document.getElementById('pur-paymentNoticePreviewContent');
-      content.innerHTML = purGeneratePaymentNoticeHtml();
-      content.style.display = 'block';
-      html2canvas(content, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' }).then(function(canvas) {
-        var jsPDF = window.jspdf.jsPDF;
-        var pdf = new jsPDF('p', 'mm', 'a4');
-        var imgData = canvas.toDataURL('image/png');
-        var pdfWidth = pdf.internal.pageSize.getWidth();
-        var pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        var noticeNumber = document.getElementById('pur-paymentNoticeNumber').value;
-        var supplier = document.getElementById('pur-paymentNoticeSupplier').value.replace(/\s/g, '_');
-        pdf.save('支払通知書_' + noticeNumber + '_' + supplier + '.pdf');
-        alert('PDFをダウンロードしました');
-        purCloseModal('pur-paymentNoticePreviewModal');
-        purCloseModal('pur-paymentNoticeModal');
-      }).catch(function(err) { alert('PDF出力に失敗しました: ' + err.message); }).then(function() { purHideLoading(); });
+      purGetPurchaseData('', '').then(function(data) {
+        _pur_analysisCache = data;
+        _pur_analysisCacheTime = Date.now();
+        _purRenderAnalysisFromData(data);
+      }).catch(function(err) {
+        console.error('仕入分析データ取得エラー:', err);
+      }).then(function() { purHideLoading(); });
+    }
+
+    function _purRenderAnalysisFromData(data) {
+      var today = new Date();
+      var currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+
+      // サマリーカード（今月）
+      var monthItems = data.filter(function(i) { return (i.purchaseDate || '').slice(0, 7) === currentMonth; });
+      var monthTotal = monthItems.reduce(function(s, i) { return s + i.purchaseAmount; }, 0);
+      var monthCount = monthItems.length;
+      var monthAvg = monthCount > 0 ? monthTotal / monthCount : 0;
+      var el;
+      el = document.getElementById('pur-analysis-monthTotal'); if (el) el.textContent = purFormatCurrency(monthTotal);
+      el = document.getElementById('pur-analysis-monthCount'); if (el) el.textContent = monthCount + '件';
+      el = document.getElementById('pur-analysis-monthAvg'); if (el) el.textContent = purFormatCurrency(monthAvg);
+
+      // 月別推移（過去6ヶ月）
+      var months = [];
+      for (var mi = 5; mi >= 0; mi--) {
+        var d = new Date(today.getFullYear(), today.getMonth() - mi, 1);
+        months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+      }
+      var monthlyData = {};
+      months.forEach(function(m) { monthlyData[m] = { total: 0, count: 0 }; });
+      data.forEach(function(i) {
+        var m = (i.purchaseDate || '').slice(0, 7);
+        if (monthlyData[m]) {
+          monthlyData[m].total += i.purchaseAmount;
+          monthlyData[m].count++;
+        }
+      });
+      var mtbody = document.getElementById('pur-analysisMonthlyBody');
+      if (mtbody) {
+        var mhtml = '';
+        var prevTotal = 0;
+        months.forEach(function(m, idx) {
+          var md = monthlyData[m];
+          var avg = md.count > 0 ? md.total / md.count : 0;
+          var changeHtml = '-';
+          if (idx > 0 && prevTotal > 0) {
+            var pct = ((md.total - prevTotal) / prevTotal * 100).toFixed(1);
+            if (md.total > prevTotal) changeHtml = '<span style="color:#22c55e;">\u2191' + pct + '%</span>';
+            else if (md.total < prevTotal) changeHtml = '<span style="color:#ef4444;">\u2193' + Math.abs(pct) + '%</span>';
+            else changeHtml = '<span style="color:#6b7280;">\u2192 0%</span>';
+          }
+          mhtml += '<tr><td>' + m + '</td><td class="text-end">' + purFormatCurrency(md.total) + '</td><td class="text-end">' + md.count + '件</td><td class="text-end">' + purFormatCurrency(avg) + '</td><td class="text-end">' + changeHtml + '</td></tr>';
+          prevTotal = md.total;
+        });
+        mtbody.innerHTML = mhtml;
+      }
+
+      // 仕入先別分析
+      var suppliers = {};
+      data.forEach(function(i) {
+        var s = i.supplier || '未設定';
+        if (!suppliers[s]) suppliers[s] = { total: 0, count: 0, saleTotal: 0, soldCost: 0 };
+        suppliers[s].total += i.purchaseAmount;
+        suppliers[s].count++;
+        if (i.status === 'sold' && i.saleAmount > 0) {
+          suppliers[s].saleTotal += i.saleAmount;
+          suppliers[s].soldCost += i.purchaseAmount;
+        }
+      });
+      var stbody = document.getElementById('pur-analysisSupplierBody');
+      if (stbody) {
+        var shtml = '';
+        Object.keys(suppliers).sort(function(a, b) { return suppliers[b].total - suppliers[a].total; }).forEach(function(s) {
+          var v = suppliers[s];
+          var avg = v.count > 0 ? v.total / v.count : 0;
+          var profitRate = v.saleTotal > 0 ? ((v.saleTotal - v.soldCost) / v.saleTotal * 100).toFixed(1) + '%' : '-';
+          shtml += '<tr><td>' + s + '</td><td class="text-end">' + purFormatCurrency(v.total) + '</td><td class="text-end">' + v.count + '件</td><td class="text-end">' + purFormatCurrency(avg) + '</td><td class="text-end">' + purFormatCurrency(v.saleTotal) + '</td><td class="text-end">' + profitRate + '</td></tr>';
+        });
+        if (!shtml) shtml = '<tr><td colspan="6" class="text-center text-muted py-4">データがありません</td></tr>';
+        stbody.innerHTML = shtml;
+      }
+    }
+
+    function purSwitchAnalysisSubTab(btn, tabName) {
+      document.querySelectorAll('#spa-page-purchase .pur-analysis-sub-tab').forEach(function(t) { t.classList.remove('active'); });
+      if (btn) btn.classList.add('active');
+      document.querySelectorAll('#spa-page-purchase .pur-analysis-sub-content').forEach(function(c) { c.classList.remove('active'); });
+      var el = document.getElementById('pur-analysis-sub-' + tabName);
+      if (el) el.classList.add('active');
+      if (tabName === 'budget') purLoadBudgetSettings();
+    }
+
+    function purSaveBudgetSettings() {
+      var monthInput = document.getElementById('pur-budgetMonth');
+      var amountInput = document.getElementById('pur-budgetAmount');
+      if (!monthInput || !amountInput) return;
+      var month = monthInput.value;
+      var amount = parseFloat(amountInput.value) || 0;
+      if (!month) { alert('対象月を選択してください'); return; }
+      if (amount <= 0) { alert('予算額を入力してください'); return; }
+      purShowLoading();
+      var docRef = window.db.collection('settings').doc('purchaseBudget');
+      docRef.get().then(function(doc) {
+        var budgets = (doc.exists && doc.data().budgets) ? doc.data().budgets : {};
+        budgets[month] = amount;
+        return docRef.set({ budgets: budgets }, { merge: true });
+      }).then(function() {
+        alert('予算を保存しました');
+        purLoadBudgetSettings();
+      }).catch(function(err) {
+        alert('保存に失敗しました: ' + err.message);
+      }).then(function() { purHideLoading(); });
+    }
+
+    function purLoadBudgetSettings() {
+      var progressArea = document.getElementById('pur-budgetProgressArea');
+      var tableBody = document.getElementById('pur-budgetTableBody');
+      if (!progressArea || !tableBody) return;
+
+      Promise.all([
+        window.db.collection('settings').doc('purchaseBudget').get(),
+        purGetPurchaseData('', '')
+      ]).then(function(results) {
+        var doc = results[0];
+        var allData = results[1];
+        var budgets = (doc.exists && doc.data().budgets) ? doc.data().budgets : {};
+
+        // 月ごと実績集計
+        var monthlyActual = {};
+        allData.forEach(function(i) {
+          var m = (i.purchaseDate || '').slice(0, 7);
+          if (!m) return;
+          if (!monthlyActual[m]) monthlyActual[m] = 0;
+          monthlyActual[m] += i.purchaseAmount;
+        });
+
+        // 当月予算プログレス
+        var today = new Date();
+        var currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+        var currentBudget = budgets[currentMonth] || 0;
+        var currentActual = monthlyActual[currentMonth] || 0;
+
+        if (currentBudget > 0) {
+          var pct = (currentActual / currentBudget * 100).toFixed(1);
+          var barClass = parseFloat(pct) >= 100 ? 'danger' : parseFloat(pct) >= 80 ? 'warning' : 'safe';
+          var barWidth = Math.min(parseFloat(pct), 100);
+          var diff = currentBudget - currentActual;
+          progressArea.innerHTML = '<div class="pur-budget-progress"><div class="d-flex justify-content-between mb-2"><span class="fw-bold">' + currentMonth + ' 予算進捗</span><span>' + pct + '% (' + purFormatCurrency(currentActual) + ' / ' + purFormatCurrency(currentBudget) + ')</span></div><div class="pur-budget-bar-bg"><div class="pur-budget-bar ' + barClass + '" style="width:' + barWidth + '%"></div></div><div class="mt-1 small text-muted">' + (diff >= 0 ? '残り ' + purFormatCurrency(diff) : purFormatCurrency(Math.abs(diff)) + ' 超過') + '</div></div>';
+        } else {
+          progressArea.innerHTML = '<div class="alert alert-info small"><i class="bi bi-info-circle"></i> 当月の予算が未設定です。上のフォームから設定してください。</div>';
+        }
+
+        // デフォルト月設定
+        var monthInput = document.getElementById('pur-budgetMonth');
+        if (monthInput && !monthInput.value) monthInput.value = currentMonth;
+
+        // 月別予算テーブル（直近6ヶ月）
+        var months = [];
+        for (var mi = 5; mi >= 0; mi--) {
+          var d = new Date(today.getFullYear(), today.getMonth() - mi, 1);
+          months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+        }
+        var thtml = '';
+        months.forEach(function(m) {
+          var budget = budgets[m] || 0;
+          var actual = monthlyActual[m] || 0;
+          var diff = budget - actual;
+          var pct = budget > 0 ? (actual / budget * 100).toFixed(1) : '-';
+          var barClass = budget > 0 ? (parseFloat(pct) >= 100 ? 'danger' : parseFloat(pct) >= 80 ? 'warning' : 'safe') : '';
+          var barWidth = budget > 0 ? Math.min(parseFloat(pct), 100) : 0;
+          thtml += '<tr><td>' + m + '</td><td class="text-end">' + (budget > 0 ? purFormatCurrency(budget) : '-') + '</td><td class="text-end">' + purFormatCurrency(actual) + '</td><td class="text-end">' + (budget > 0 ? (diff >= 0 ? purFormatCurrency(diff) : '<span style="color:#ef4444;">-' + purFormatCurrency(Math.abs(diff)) + '</span>') : '-') + '</td><td>' + (budget > 0 ? '<div class="pur-budget-bar-bg" style="height:16px;"><div class="pur-budget-bar ' + barClass + '" style="width:' + barWidth + '%;height:100%;"></div></div><small>' + pct + '%</small>' : '-') + '</td></tr>';
+        });
+        tableBody.innerHTML = thtml;
+      }).catch(function(err) {
+        console.error('予算データ読み込みエラー:', err);
+      });
     }
 
     // ============================================
