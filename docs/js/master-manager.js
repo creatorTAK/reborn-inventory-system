@@ -8701,7 +8701,6 @@ async function sendStockAlertPushNotification(materialName, currentStock, thresh
         body: `現在庫: ${currentStock}個 / 発注点: ${threshold}個`,
         data: {
           type: 'stock_alert',
-          roomId: 'room_inventory_alert',
           url: '/packaging.html'
         }
       })
