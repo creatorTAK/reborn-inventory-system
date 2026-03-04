@@ -435,15 +435,6 @@
       padding: 16px 20px;
       border-top: 1px solid #e5e7eb;
     }
-    /* 滞留アラートカード（仕入と統一スタイル） */
-    #spa-page-sales .sal-aging-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    #spa-page-sales .sal-aging-card { border-radius:8px; padding:12px 16px; text-align:center; }
-    #spa-page-sales .sal-aging-card.safe { background:#f0fdf4; border:1px solid #bbf7d0; }
-    #spa-page-sales .sal-aging-card.caution { background:#fffbeb; border:1px solid #fde68a; }
-    #spa-page-sales .sal-aging-card.warn { background:#fff7ed; border:1px solid #fed7aa; }
-    #spa-page-sales .sal-aging-card.critical { background:#fef2f2; border:1px solid #fecaca; }
-    #spa-page-sales .sal-aging-val { font-size:20px; font-weight:700; }
-    #spa-page-sales .sal-aging-sub { font-size:11px; color:#6b7280; }
   </style>
 
   <!-- ローディングオーバーレイ -->
@@ -737,33 +728,6 @@
               <div class="sal-summary-label">在庫回転率</div>
               <div class="sal-summary-value" id="sal-analysis-turnover">-</div>
               <div class="small text-muted">目安: 年4-6回</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 滞留在庫アラート -->
-        <div class="sal-sales-table-container mb-3">
-          <h6 class="mb-2 text-warning"><i class="bi bi-exclamation-triangle"></i> 滞留在庫アラート</h6>
-          <div class="sal-aging-grid">
-            <div class="sal-aging-card safe">
-              <div class="sal-summary-label">30日以内</div>
-              <div class="sal-aging-val" id="sal-aging-30d-count">-件</div>
-              <div class="sal-aging-sub" id="sal-aging-30d-value">&#165;-</div>
-            </div>
-            <div class="sal-aging-card caution">
-              <div class="sal-summary-label">31-60日</div>
-              <div class="sal-aging-val" id="sal-aging-60d-count">-件</div>
-              <div class="sal-aging-sub" id="sal-aging-60d-value">&#165;-</div>
-            </div>
-            <div class="sal-aging-card warn">
-              <div class="sal-summary-label">61-90日</div>
-              <div class="sal-aging-val" id="sal-aging-90d-count">-件</div>
-              <div class="sal-aging-sub" id="sal-aging-90d-value">&#165;-</div>
-            </div>
-            <div class="sal-aging-card critical">
-              <div class="sal-summary-label">91日超</div>
-              <div class="sal-aging-val" id="sal-aging-over-count">-件</div>
-              <div class="sal-aging-sub" id="sal-aging-over-value">&#165;-</div>
             </div>
           </div>
         </div>
@@ -2241,7 +2205,6 @@
 
       salRenderInventoryKPI();
       salRenderPerformanceMetrics(data);
-      salRenderAgingAlert();
       salRenderSalesChart(data);
       salRenderPlatformRanking(data);
       salRenderProductRanking(data);
@@ -2318,37 +2281,6 @@
       var turnoverEl = document.getElementById('sal-analysis-turnover');
       turnoverEl.textContent = turnoverRate.toFixed(1) + '回/年';
       turnoverEl.className = 'sal-summary-value ' + (turnoverRate >= 4 ? 'positive' : turnoverRate >= 2 ? '' : 'negative');
-    }
-
-    function salRenderAgingAlert() {
-      var products = _sal_allProductsForAnalysis;
-      var today = new Date();
-      var activeProducts = products.filter(function(p) {
-        return (p.status === 'active' || p.status === '出品中') ||
-          (p.quantity > 0 && p.status !== 'sold' && p.status !== '販売済');
-      });
-
-      var aging = { d30: { count: 0, value: 0 }, d60: { count: 0, value: 0 }, d90: { count: 0, value: 0 }, over: { count: 0, value: 0 } };
-      activeProducts.forEach(function(p) {
-        var listingDate = (p.listing && p.listing.date) || p.listingDate || (p.purchase && p.purchase.date) || p.purchaseDate || '';
-        var cost = parseFloat(p.purchasePrice) || parseFloat(p.costPrice) || 0;
-        if (!listingDate) { aging.over.count++; aging.over.value += cost; return; }
-        var listedDate = new Date(listingDate);
-        var days = Math.floor((today - listedDate) / (1000 * 60 * 60 * 24));
-        if (days <= 30) { aging.d30.count++; aging.d30.value += cost; }
-        else if (days <= 60) { aging.d60.count++; aging.d60.value += cost; }
-        else if (days <= 90) { aging.d90.count++; aging.d90.value += cost; }
-        else { aging.over.count++; aging.over.value += cost; }
-      });
-
-      document.getElementById('sal-aging-30d-count').textContent = aging.d30.count + '件';
-      document.getElementById('sal-aging-30d-value').textContent = salFormatCurrency(aging.d30.value);
-      document.getElementById('sal-aging-60d-count').textContent = aging.d60.count + '件';
-      document.getElementById('sal-aging-60d-value').textContent = salFormatCurrency(aging.d60.value);
-      document.getElementById('sal-aging-90d-count').textContent = aging.d90.count + '件';
-      document.getElementById('sal-aging-90d-value').textContent = salFormatCurrency(aging.d90.value);
-      document.getElementById('sal-aging-over-count').textContent = aging.over.count + '件';
-      document.getElementById('sal-aging-over-value').textContent = salFormatCurrency(aging.over.value);
     }
 
     function salRenderSalesChart(data) {
