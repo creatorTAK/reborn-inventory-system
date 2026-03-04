@@ -1494,11 +1494,11 @@
     <button class="pur-material-tab" data-tab="pur-purchase-content" onclick="purSwitchTab('pur-purchase-content')">
       <i class="bi bi-list-ul"></i> 仕入一覧
     </button>
-    <button class="pur-material-tab" data-tab="pur-analysis-content" onclick="purSwitchTab('pur-analysis-content'); purRenderAnalysis();">
-      <i class="bi bi-graph-up"></i> 仕入分析
-    </button>
     <button class="pur-material-tab" data-tab="pur-progress-content" onclick="purSwitchTab('pur-progress-content'); purLoadProgressData();">
       <i class="bi bi-clipboard-check"></i> 進捗管理
+    </button>
+    <button class="pur-material-tab" data-tab="pur-analysis-content" onclick="purSwitchTab('pur-analysis-content'); purRenderAnalysis();">
+      <i class="bi bi-graph-up"></i> 仕入分析
     </button>
   </div>
 
@@ -2265,6 +2265,13 @@
                 <div class="input-group">
                   <span class="input-group-text">¥</span>
                   <input type="number" class="form-control" id="pur-budgetAmount" placeholder="0" min="0">
+                </div>
+              </div>
+              <div class="col-auto">
+                <label class="form-label">アラート閾値</label>
+                <div class="input-group">
+                  <input type="number" class="form-control" id="pur-budgetAlertThreshold" min="1" max="100" value="80" placeholder="80" style="width:80px;">
+                  <span class="input-group-text">%</span>
                 </div>
               </div>
               <div class="col-auto">
@@ -3536,12 +3543,45 @@
       if (tabName === 'analytics') purRenderAnalysis();
     }
 
+    function purSendBudgetAlert(month, pct, actual, budget) {
+      var docRef = window.db.collection('settings').doc('purchaseBudget');
+      docRef.get().then(function(doc) {
+        var alertsSent = (doc.exists && doc.data().alertsSent) ? doc.data().alertsSent : {};
+        if (alertsSent[month]) return Promise.resolve();
+        return window.db.collection('users').where('permissionId', '==', 'owner').get().then(function(snap) {
+          var promises = [];
+          snap.forEach(function(userDoc) {
+            var email = userDoc.data().userEmail || userDoc.id;
+            promises.push(window.db.collection('users').doc(email).collection('personalAnnouncements').add({
+              title: '仕入予算アラート（' + month + '）',
+              body: '当月の仕入実績が予算の' + pct + '%に達しました。\n予算: ¥' + budget.toLocaleString() + ' / 実績: ¥' + actual.toLocaleString(),
+              type: 'budget_alert',
+              priority: 'high',
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            }));
+          });
+          var updateObj = {};
+          updateObj['alertsSent.' + month] = true;
+          promises.push(docRef.set(updateObj, { merge: true }));
+          return Promise.all(promises);
+        });
+      }).then(function() {
+        console.log('[Budget] アラート送信完了:', month);
+      }).catch(function(err) {
+        console.error('[Budget] アラート送信エラー:', err);
+      });
+    }
+
     function purSaveBudgetSettings() {
       var monthInput = document.getElementById('pur-budgetMonth');
       var amountInput = document.getElementById('pur-budgetAmount');
+      var thresholdInput = document.getElementById('pur-budgetAlertThreshold');
       if (!monthInput || !amountInput) return;
       var month = monthInput.value;
       var amount = parseFloat(amountInput.value) || 0;
+      var alertThreshold = parseInt(thresholdInput && thresholdInput.value) || 80;
+      if (alertThreshold < 1) alertThreshold = 1;
+      if (alertThreshold > 100) alertThreshold = 100;
       if (!month) { alert('対象月を選択してください'); return; }
       if (amount <= 0) { alert('予算額を入力してください'); return; }
       purShowLoading();
@@ -3549,9 +3589,26 @@
       docRef.get().then(function(doc) {
         var budgets = (doc.exists && doc.data().budgets) ? doc.data().budgets : {};
         budgets[month] = amount;
-        return docRef.set({ budgets: budgets }, { merge: true });
+        return docRef.set({ budgets: budgets, alertThreshold: alertThreshold }, { merge: true });
       }).then(function() {
         alert('予算を保存しました');
+        // 保存後、当月実績が閾値超えかチェック
+        return purGetPurchaseData('', '').then(function(allData) {
+          var today = new Date();
+          var currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+          if (month === currentMonth) {
+            var currentActual = 0;
+            allData.forEach(function(i) {
+              var m = (i.purchaseDate || '').slice(0, 7);
+              if (m === currentMonth) currentActual += i.purchaseAmount;
+            });
+            var pct = (currentActual / amount * 100).toFixed(1);
+            if (parseFloat(pct) >= alertThreshold) {
+              purSendBudgetAlert(currentMonth, pct, currentActual, amount);
+            }
+          }
+        });
+      }).then(function() {
         purLoadBudgetSettings();
       }).catch(function(err) {
         alert('保存に失敗しました: ' + err.message);
@@ -3570,6 +3627,12 @@
         var doc = results[0];
         var allData = results[1];
         var budgets = (doc.exists && doc.data().budgets) ? doc.data().budgets : {};
+        var alertThreshold = (doc.exists && doc.data().alertThreshold) ? doc.data().alertThreshold : 80;
+        var alertsSent = (doc.exists && doc.data().alertsSent) ? doc.data().alertsSent : {};
+
+        // フォームにalertThreshold反映
+        var thresholdInput = document.getElementById('pur-budgetAlertThreshold');
+        if (thresholdInput) thresholdInput.value = alertThreshold;
 
         // 月ごと実績集計
         var monthlyActual = {};
@@ -3588,10 +3651,15 @@
 
         if (currentBudget > 0) {
           var pct = (currentActual / currentBudget * 100).toFixed(1);
-          var barClass = parseFloat(pct) >= 100 ? 'danger' : parseFloat(pct) >= 80 ? 'warning' : 'safe';
+          var barClass = parseFloat(pct) >= 100 ? 'danger' : parseFloat(pct) >= alertThreshold ? 'warning' : 'safe';
           var barWidth = Math.min(parseFloat(pct), 100);
           var diff = currentBudget - currentActual;
           progressArea.innerHTML = '<div class="pur-budget-progress"><div class="d-flex justify-content-between mb-2"><span class="fw-bold">' + currentMonth + ' 予算進捗</span><span>' + pct + '% (' + purFormatCurrency(currentActual) + ' / ' + purFormatCurrency(currentBudget) + ')</span></div><div class="pur-budget-bar-bg"><div class="pur-budget-bar ' + barClass + '" style="width:' + barWidth + '%"></div></div><div class="mt-1 small text-muted">' + (diff >= 0 ? '残り ' + purFormatCurrency(diff) : purFormatCurrency(Math.abs(diff)) + ' 超過') + '</div></div>';
+
+          // 当月実績が閾値超え & 未通知の場合、自動アラート
+          if (parseFloat(pct) >= alertThreshold && !alertsSent[currentMonth]) {
+            purSendBudgetAlert(currentMonth, pct, currentActual, currentBudget);
+          }
         } else {
           progressArea.innerHTML = '<div class="alert alert-info small"><i class="bi bi-info-circle"></i> 当月の予算が未設定です。上のフォームから設定してください。</div>';
         }
@@ -3612,7 +3680,7 @@
           var actual = monthlyActual[m] || 0;
           var diff = budget - actual;
           var pct = budget > 0 ? (actual / budget * 100).toFixed(1) : '-';
-          var barClass = budget > 0 ? (parseFloat(pct) >= 100 ? 'danger' : parseFloat(pct) >= 80 ? 'warning' : 'safe') : '';
+          var barClass = budget > 0 ? (parseFloat(pct) >= 100 ? 'danger' : parseFloat(pct) >= alertThreshold ? 'warning' : 'safe') : '';
           var barWidth = budget > 0 ? Math.min(parseFloat(pct), 100) : 0;
           thtml += '<tr><td>' + m + '</td><td class="text-end">' + (budget > 0 ? purFormatCurrency(budget) : '-') + '</td><td class="text-end">' + purFormatCurrency(actual) + '</td><td class="text-end">' + (budget > 0 ? (diff >= 0 ? purFormatCurrency(diff) : '<span style="color:#ef4444;">-' + purFormatCurrency(Math.abs(diff)) + '</span>') : '-') + '</td><td>' + (budget > 0 ? '<div class="pur-budget-bar-bg" style="height:16px;"><div class="pur-budget-bar ' + barClass + '" style="width:' + barWidth + '%;height:100%;"></div></div><small>' + pct + '%</small>' : '-') + '</td></tr>';
         });
