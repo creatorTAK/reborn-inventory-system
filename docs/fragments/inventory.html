@@ -1574,11 +1574,13 @@
         if (registrantEmail && productId) {
           try {
             var taskSnap = await db.collection('userTasks').doc(registrantEmail).collection('tasks')
-              .where('taskType', '==', 'inventory_action')
-              .where('productId', '==', productId)
+              .where('type', '==', 'inventory_action')
               .where('completed', '==', false)
               .get();
-            if (!taskSnap.empty) hasExistingTask = true;
+            taskSnap.forEach(function(td) {
+              var rd = td.data().relatedData || {};
+              if (rd.productId === productId) hasExistingTask = true;
+            });
           } catch (e) { console.warn('タスク確認失敗:', e); }
         }
 
@@ -1648,20 +1650,15 @@
           .doc(registrantEmail)
           .collection('tasks')
           .add({
+            type: 'inventory_action',
             title: '【要対策】' + (product.productName || product.managementNumber) + ' - 滞留商品',
             description: instruction,
-            taskType: 'inventory_action',
-            productId: productId,
-            managementNumber: product.managementNumber || '',
-            productName: product.productName || '',
             completed: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             dueDate: dueDate,
-            compensation: compensation,
-            compensationType: 'editing',
             priority: 'high',
             link: 'inventory',
-            relatedData: { productId: productId }
+            relatedData: { productId: productId, managementNumber: product.managementNumber || '', productName: product.productName || '', compensation: compensation, compensationType: 'editing' }
           });
 
         // フォームを「指示済み」に置き換え
