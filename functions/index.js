@@ -67,14 +67,6 @@ exports.onProductCreated = onDocumentCreated('products/{productId}', async (even
       console.error('❌ [onProductCreated] FCM送信エラー:', error.message);
     }
 
-    // その後、並列でシステム通知ルームと未読カウント更新
-    console.log('🚀 [onProductCreated] システム通知・未読カウント更新開始');
-    await Promise.allSettled([
-      postToSystemRoom(notificationData),
-      updateUnreadCounts(targetUsers)
-    ]);
-    console.log('✅ [onProductCreated] すべての処理完了');
-
     const duration = Date.now() - startTime;
     console.log(`✅ [onProductCreated] 通知完了: ${duration}ms`);
 
@@ -359,85 +351,6 @@ async function getTargetUsers(excludeEmail) {
 }
 
 /**
- * システム通知ルームに投稿
- */
-async function postToSystemRoom(notificationData) {
-  console.log('📨 [postToSystemRoom] 関数開始');
-  try {
-    const systemRoomId = 'system';
-    const messageId = `${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-
-    console.log('🔍 [DEBUG] postToSystemRoom開始');
-    console.log('🔍 [DEBUG] messageId:', messageId);
-    console.log('🔍 [DEBUG] notificationData:', JSON.stringify(notificationData));
-
-    // システムルーム存在確認と自動作成
-    console.log('🔍 [postToSystemRoom] systemRoomRef取得開始');
-    const systemRoomRef = db.collection('rooms').doc(systemRoomId);
-
-    console.log('🔍 [postToSystemRoom] systemRoomDoc.get()開始');
-    let systemRoomDoc;
-    try {
-      systemRoomDoc = await Promise.race([
-        systemRoomRef.get(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore get() timeout')), 5000))
-      ]);
-      console.log('✅ [postToSystemRoom] systemRoomDoc.get()完了, exists:', systemRoomDoc.exists);
-    } catch (error) {
-      console.error('❌ [postToSystemRoom] systemRoomDoc.get()エラー:', error.message);
-      throw error;
-    }
-
-    if (!systemRoomDoc.exists) {
-      console.log('⚠️ [postToSystemRoom] システムルーム未作成、自動作成します');
-      console.log('🔍 [postToSystemRoom] systemRoomRef.set()開始');
-      await systemRoomRef.set({
-        id: 'system',
-        name: 'システム通知',
-        type: 'system',
-        members: [], // 全員が参加
-        createdAt: new Date(),
-        lastMessageAt: new Date(),
-        lastMessage: notificationData.content,
-        lastMessageSender: notificationData.sender
-      });
-      console.log('✅ [postToSystemRoom] システムルーム作成完了');
-    } else {
-      // 既存ルームの lastMessage を更新
-      console.log('🔍 [postToSystemRoom] systemRoomRef.update()開始');
-      await systemRoomRef.update({
-        lastMessageAt: new Date(),
-        lastMessage: notificationData.content,
-        lastMessageSender: notificationData.sender
-      });
-      console.log('✅ [postToSystemRoom] システムルーム更新完了');
-    }
-
-    const messageData = {
-      id: messageId,
-      text: notificationData.content,
-      sender: notificationData.sender,
-      userName: notificationData.userName,  // チャットUI用
-      timestamp: new Date(),
-      deleted: false,
-      type: 'system'
-    };
-
-    console.log('🔍 [DEBUG] messageData:', JSON.stringify(messageData));
-    console.log('🔍 [DEBUG] Firestore書き込み開始...');
-
-    await db.collection('rooms').doc(systemRoomId).collection('messages').doc(messageId).set(messageData);
-    console.log('✅ [postToSystemRoom] Firestore書き込み完了');
-
-    console.log('📨 [postToSystemRoom] システム通知ルーム投稿完了');
-  } catch (error) {
-    console.error('❌ [postToSystemRoom] エラー:', error);
-    console.error('❌ [postToSystemRoom] エラー詳細:', error.message);
-    console.error('❌ [postToSystemRoom] スタック:', error.stack);
-  }
-}
-
-/**
  * FCMプッシュ通知送信
  */
 async function sendFCMNotifications(notificationData, targetUsers) {
@@ -503,32 +416,6 @@ async function sendFCMNotifications(notificationData, targetUsers) {
 
   } catch (error) {
     console.error('❌ [sendFCMNotifications] エラー:', error);
-  }
-}
-
-/**
- * 未読カウント更新
- */
-async function updateUnreadCounts(targetUsers) {
-  console.log('📊 [updateUnreadCounts] 関数開始');
-  try {
-    const systemRoomId = 'system';
-    const batch = db.batch();
-
-    targetUsers.forEach(user => {
-      const { userEmail } = user;
-      console.log(`📊 [updateUnreadCounts] カウント更新: ${userEmail}`);
-      const unreadRef = db.collection('rooms').doc(systemRoomId).collection('unreadCounts').doc(userEmail);
-      batch.set(unreadRef, {
-        unreadCount: FieldValue.increment(1), // PWA側と統一: count → unreadCount
-        lastUpdated: new Date()
-      }, { merge: true });
-    });
-
-    await batch.commit();
-    console.log('📊 [updateUnreadCounts] 未読カウント更新完了');
-  } catch (error) {
-    console.error('❌ [updateUnreadCounts] エラー:', error);
   }
 }
 
