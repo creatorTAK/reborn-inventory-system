@@ -3783,7 +3783,7 @@
               <span class="goal-quick-card-amount">¥10,000</span>
             </div>
             <div class="goal-quick-card-guide">
-              出品・撮影 各80件程度 + 発送など
+              出品・撮影 各50件 + 梱包・発送 各50件程度
             </div>
             <div class="goal-quick-card-time">
               <i class="bi bi-clock"></i> 週2〜3時間程度
@@ -3795,7 +3795,7 @@
               <span class="goal-quick-card-amount">¥30,000</span>
             </div>
             <div class="goal-quick-card-guide">
-              出品・撮影 各250件程度 + 発送など
+              出品・撮影 各150件 + 梱包・発送 各150件程度
             </div>
             <div class="goal-quick-card-time">
               <i class="bi bi-clock"></i> 週5〜7時間程度
@@ -3807,7 +3807,7 @@
               <span class="goal-quick-card-amount">¥50,000</span>
             </div>
             <div class="goal-quick-card-guide">
-              出品・撮影 各400件程度 + 発送など
+              出品・撮影 各250件 + 梱包・発送 各250件程度
             </div>
             <div class="goal-quick-card-time">
               <i class="bi bi-clock"></i> 週8〜10時間程度
@@ -4768,15 +4768,20 @@
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const data = userSnap.data();
-          // 担当タスクが設定されていればそれを使用、未設定ならデフォルト（検品作業以外の5つ）
-          assignedTasks = data.assignedTasks || ['listing', 'shipping', 'photography', 'stocktaking', 'editing'];
+          // 担当タスクが設定されていればそれを使用、未設定ならデフォルト（検品作業以外の6つ）
+          assignedTasks = data.assignedTasks || ['listing', 'packaging', 'shipping', 'photography', 'stocktaking', 'editing'];
+          // 既存ユーザー互換: shippingがあればpackagingも自動追加
+          if (assignedTasks.includes('shipping') && !assignedTasks.includes('packaging')) {
+            var idx = assignedTasks.indexOf('shipping');
+            assignedTasks.splice(idx, 0, 'packaging');
+          }
         } else {
-          assignedTasks = ['listing', 'shipping', 'photography', 'stocktaking', 'editing'];
+          assignedTasks = ['listing', 'packaging', 'shipping', 'photography', 'stocktaking', 'editing'];
         }
         console.log('担当タスク:', assignedTasks);
       } catch (error) {
         console.error('担当タスク取得エラー:', error);
-        assignedTasks = ['listing', 'shipping', 'photography', 'stocktaking', 'editing'];
+        assignedTasks = ['listing', 'packaging', 'shipping', 'photography', 'stocktaking', 'editing'];
       }
     }
 
@@ -4846,7 +4851,8 @@
     // タスク定義（表示用）
     var TASK_DEFINITIONS = {
       listing: { icon: '📦', name: '商品出品', cssClass: 'listing' },
-      shipping: { icon: '🚚', name: '梱包・発送', cssClass: 'shipping' },
+      packaging: { icon: '📦', name: '梱包', cssClass: 'packaging' },
+      shipping: { icon: '🚚', name: '発送', cssClass: 'shipping' },
       photography: { icon: '📸', name: '商品撮影', cssClass: 'photography' },
       inspection: { icon: '🔍', name: '検品作業', cssClass: 'inspection' },
       stocktaking: { icon: '📋', name: '棚卸', cssClass: 'stocktaking' },
@@ -5060,7 +5066,8 @@
       // タスク種別ごとに集計
       const taskCounts = {
         listing: { count: 0, label: '商品登録', icon: '📝' },
-        shipping: { count: 0, label: '発送', icon: '📦' },
+        packaging: { count: 0, label: '梱包', icon: '📦' },
+        shipping: { count: 0, label: '発送', icon: '🚚' },
         receiving: { count: 0, label: '受取', icon: '📥' },
         inspection: { count: 0, label: '検品', icon: '🔍' },
         cleaning: { count: 0, label: 'クリーニング', icon: '🧹' },
@@ -5073,6 +5080,8 @@
         let normalizedType = type.toLowerCase();
         if (normalizedType.includes('listing') || normalizedType.includes('出品') || normalizedType.includes('商品登録')) {
           normalizedType = 'listing';
+        } else if (normalizedType.includes('packaging') || normalizedType.includes('梱包')) {
+          normalizedType = 'packaging';
         } else if (normalizedType.includes('shipping') || normalizedType.includes('発送')) {
           normalizedType = 'shipping';
         } else if (normalizedType.includes('receiving') || normalizedType.includes('受取')) {
@@ -6304,6 +6313,7 @@
       // タスク別集計オブジェクト
       const taskStats = {
         listing: { count: 0, amount: 0 },
+        packaging: { count: 0, amount: 0 },
         shipping: { count: 0, amount: 0 },
         photography: { count: 0, amount: 0 },
         inspection: { count: 0, amount: 0 },
@@ -6322,6 +6332,8 @@
         let normalizedType = null;
         if (taskType === 'listing' || taskType === 'listing_approval') {
           normalizedType = 'listing';
+        } else if (taskType === 'packaging' || taskType === 'shipping_task_packaging') {
+          normalizedType = 'packaging';
         } else if (taskType === 'shipping' || taskType === 'shipping_task') {
           normalizedType = 'shipping';
         } else if (taskType === 'photography' || taskType === 'photography_task') {
@@ -6346,6 +6358,8 @@
         // 後方互換性のため個別プロパティも維持
         listingCount: taskStats.listing.count,
         listingAmount: taskStats.listing.amount,
+        packagingCount: taskStats.packaging.count,
+        packagingAmount: taskStats.packaging.amount,
         shippingCount: taskStats.shipping.count,
         shippingAmount: taskStats.shipping.amount,
         // 新しい構造
@@ -6453,7 +6467,7 @@
 
     // 目標設定モーダルを開く
     // 目標設定対象タスク（棚卸・追加編集は除外）
-    var GOAL_ELIGIBLE_TASKS = ['listing', 'shipping', 'photography', 'inspection'];
+    var GOAL_ELIGIBLE_TASKS = ['listing', 'packaging', 'shipping', 'photography', 'inspection'];
 
     // クイック選択の状態管理
     var selectedQuickGoal = null;

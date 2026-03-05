@@ -558,7 +558,8 @@
             <select id="comp-filterTask" onchange="compFilterRecords()" style="width:100%;">
               <option value="">全タスク</option>
               <option value="listing">商品出品</option>
-              <option value="shipping">梱包・発送</option>
+              <option value="packaging">梱包</option>
+              <option value="shipping">発送</option>
               <option value="photography">商品撮影</option>
               <option value="inspection">検品作業</option>
             </select>
@@ -916,7 +917,7 @@
         var staffEmail = r.staffEmail || 'unknown';
         var staffName = r.staffName || staffEmail.split('@')[0] || '\u4E0D\u660E';
         if (!staffStats[staffName]) {
-          staffStats[staffName] = { email: staffEmail, listing: 0, shipping: 0, photography: 0, inspection: 0, totalAmount: 0, records: [] };
+          staffStats[staffName] = { email: staffEmail, listing: 0, packaging: 0, shipping: 0, photography: 0, inspection: 0, totalAmount: 0, records: [] };
         }
         var taskType = r.taskTypeKey || (r.taskType ? r.taskType.replace('_approval', '').replace('_task', '') : 'listing');
         if (staffStats[staffName][taskType] !== undefined) staffStats[staffName][taskType]++;
@@ -934,10 +935,11 @@
     }
 
     function compRenderSummary() {
-      var rates = _compCompensationSettings.taskRates || { listing: 100, shipping: 100, photography: 50, inspection: 30 };
+      var rates = _compCompensationSettings.taskRates || { listing: 100, packaging: 50, shipping: 50, photography: 50, inspection: 30 };
       var totalTasks = 0, totalAmount = 0;
       var taskBreakdown = {
         listing: { count: 0, amount: 0 },
+        packaging: { count: 0, amount: 0 },
         shipping: { count: 0, amount: 0 },
         photography: { count: 0, amount: 0 },
         inspection: { count: 0, amount: 0 }
@@ -962,7 +964,7 @@
       el = document.getElementById('comp-kpi-paid'); if (el) el.textContent = compFormatCurrency(paidAmount);
       el = document.getElementById('comp-kpi-count'); if (el) el.textContent = totalTasks + '\u4EF6';
 
-      var taskNames = { listing: '\u5546\u54C1\u51FA\u54C1', shipping: '\u68B1\u5305\u30FB\u767A\u9001', photography: '\u5546\u54C1\u64AE\u5F71', inspection: '\u691C\u54C1\u4F5C\u696D' };
+      var taskNames = { listing: '\u5546\u54C1\u51FA\u54C1', packaging: '\u68B1\u5305', shipping: '\u767A\u9001', photography: '\u5546\u54C1\u64AE\u5F71', inspection: '\u691C\u54C1\u4F5C\u696D' };
       var breakdownHtml = '';
       Object.entries(taskBreakdown).forEach(function(entry) {
         var task = entry[0], data = entry[1];
@@ -1025,19 +1027,19 @@
       var html = '';
       Object.entries(_compCurrentStaffStats).forEach(function(entry) {
         var staffName = entry[0], stats = entry[1];
-        var totalTasks = stats.listing + stats.shipping + stats.photography + stats.inspection;
+        var totalTasks = stats.listing + (stats.packaging || 0) + stats.shipping + stats.photography + stats.inspection;
         var totalAmount = stats.totalAmount || 0;
         var photoURL = staffPhotoMap[stats.email] || '';
         var avatarHtml = photoURL
           ? '<img src="' + photoURL + '" style="width:48px;height:48px;border-radius:50%;object-fit:cover;" onerror="this.outerHTML=\'<div class=comp-staff-avatar><i class=bi bi-person style=font-size:20px;color:#9ca3af></i></div>\'">'
           : '<div class="comp-staff-avatar"><i class="bi bi-person" style="font-size:20px;color:#9ca3af;"></i></div>';
-        html += '<div class="comp-staff-card">' + avatarHtml + '<div class="comp-staff-info"><div class="comp-staff-name">' + staffName + '</div><div class="comp-staff-role">\u51FA\u54C1: ' + stats.listing + '\u4EF6 / \u767A\u9001: ' + stats.shipping + '\u4EF6</div></div><div class="comp-staff-stats"><div class="comp-staff-amount">' + compFormatCurrency(totalAmount) + '</div><div class="comp-staff-tasks">' + totalTasks + '\u4EF6\u306E\u30BF\u30B9\u30AF</div></div></div>';
+        html += '<div class="comp-staff-card">' + avatarHtml + '<div class="comp-staff-info"><div class="comp-staff-name">' + staffName + '</div><div class="comp-staff-role">\u51FA\u54C1: ' + stats.listing + '\u4EF6 / \u68B1\u5305: ' + (stats.packaging || 0) + '\u4EF6 / \u767A\u9001: ' + stats.shipping + '\u4EF6</div></div><div class="comp-staff-stats"><div class="comp-staff-amount">' + compFormatCurrency(totalAmount) + '</div><div class="comp-staff-tasks">' + totalTasks + '\u4EF6\u306E\u30BF\u30B9\u30AF</div></div></div>';
       });
       staffList.innerHTML = html;
     }
 
     function compRenderDetail() {
-      var taskNames = { listing: '\u5546\u54C1\u51FA\u54C1', shipping: '\u68B1\u5305\u30FB\u767A\u9001', photography: '\u5546\u54C1\u64AE\u5F71', inspection: '\u691C\u54C1\u4F5C\u696D', listing_approval: '\u51FA\u54C1\u78BA\u8A8D', shipping_task: '\u68B1\u5305\u30FB\u767A\u9001' };
+      var taskNames = { listing: '\u5546\u54C1\u51FA\u54C1', packaging: '\u68B1\u5305', shipping: '\u767A\u9001', photography: '\u5546\u54C1\u64AE\u5F71', inspection: '\u691C\u54C1\u4F5C\u696D', listing_approval: '\u51FA\u54C1\u78BA\u8A8D', shipping_task: '\u767A\u9001', shipping_task_packaging: '\u68B1\u5305' };
       // Apply filters
       var fStaff = (document.getElementById('comp-filterStaff') || {}).value || '';
       var fTask = (document.getElementById('comp-filterTask') || {}).value || '';

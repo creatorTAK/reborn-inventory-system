@@ -1581,8 +1581,8 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       description = '出品作業報酬';
     } else if (taskType === 'shipping_task') {
       taskTypeKey = 'shipping';
-      unitPrice = settings.taskRates?.shipping || 100;
-      description = '梱包発送報酬';
+      unitPrice = settings.taskRates?.shipping || 50;
+      description = '発送報酬';
     } else if (taskType === 'inventory_action') {
       taskTypeKey = 'editing';
       // タスクに設定された報酬額を優先、なければ設定から取得
@@ -1703,6 +1703,32 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       productId: compensationRecord.productId
     });
 
+    // 📦 shipping_task の場合、梱包報酬も自動記録
+    if (taskType === 'shipping_task') {
+      try {
+        const packagingUnitPrice = settings.taskRates?.packaging || 50;
+        const packagingRecord = {
+          taskId: taskId,
+          taskType: 'shipping_task_packaging',
+          taskTypeKey: 'packaging',
+          staffEmail: staffEmail,
+          staffName: staffName,
+          unitPrice: packagingUnitPrice,
+          description: '梱包報酬',
+          productId: compensationRecord.productId,
+          managementNumber: compensationRecord.managementNumber,
+          completedAt: afterData.completedAt || now.toISOString(),
+          recordedAt: now.toISOString(),
+          yearMonth: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
+          approvedBy: userEmail
+        };
+        await db.collection('compensationRecords').add(packagingRecord);
+        console.log('✅ [onTaskCompleted] 梱包報酬も記録:', { staffName, packagingUnitPrice });
+      } catch (packError) {
+        console.error('⚠️ [onTaskCompleted] 梱包報酬記録エラー（継続）:', packError);
+      }
+    }
+
     // 📸 listing_approval の場合、商品に画像があれば撮影報酬も記録
     if (taskType === 'listing_approval' && compensationRecord.productId) {
       try {
@@ -1791,7 +1817,8 @@ function getDefaultCompensationSettings() {
   return {
     taskRates: {
       listing: 100,
-      shipping: 100,
+      shipping: 50,
+      packaging: 50,
       photography: 50,
       inspection: 30
     },
