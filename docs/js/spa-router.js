@@ -21,7 +21,7 @@ window.__SPA_ROUTER_VER = '599';
   // 一度表示したページのDOMを保持し、再訪問時は表示切替のみ
   const _pageContainers = {};
 
-  const _FRAGMENT_VERSION = '603';
+  const _FRAGMENT_VERSION = '604';
 
   let _currentSpaPage = null;
   let _isSpaActive = false;
