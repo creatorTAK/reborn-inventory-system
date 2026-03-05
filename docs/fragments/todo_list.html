@@ -116,6 +116,8 @@
     #spa-page-todo-list .material-tab i { display: block; font-size: 18px; margin-bottom: 2px; }
     #spa-page-todo-list .tab-badge { display: inline-block; background: #ef4444; color: white; font-size: 10px; min-width: 16px; height: 16px; line-height: 16px; border-radius: 8px; padding: 0 4px; margin-left: 4px; font-weight: 600; }
     #spa-page-todo-list .tab-badge:empty { display: none; }
+    #spa-page-todo-list .tab-dot { display: none; width: 7px; height: 7px; background: #ef4444; border-radius: 50%; margin-left: 3px; vertical-align: top; }
+    #spa-page-todo-list .tab-dot.visible { display: inline-block; }
     #spa-page-todo-list .tdl-tab-content { display: none; }
     #spa-page-todo-list .tdl-tab-content.active { display: block; }
   </style>
@@ -150,15 +152,15 @@
   <div class="material-tabs">
     <button class="material-tab active" data-tab="tasks" onclick="tdlSwitchTab('tasks')">
       <i class="bi bi-check2-square"></i>
-      タスク
+      タスク<span class="tab-dot" id="tdl-tasksTabDot"></span>
     </button>
     <button class="material-tab" data-tab="extensions" onclick="tdlSwitchTab('extensions')">
       <i class="bi bi-clock-history"></i>
-      延長申請<span class="tab-badge" id="tdl-extensionTabBadge"></span>
+      延長申請<span class="tab-badge" id="tdl-extensionTabBadge"></span><span class="tab-dot" id="tdl-extensionsTabDot"></span>
     </button>
     <button class="material-tab" data-tab="admin" onclick="tdlSwitchTab('admin')" id="tdl-adminTab" style="display: none;">
       <i class="bi bi-people"></i>
-      管理
+      管理<span class="tab-dot" id="tdl-adminTabDot"></span>
     </button>
   </div>
 
@@ -385,6 +387,9 @@
           document.getElementById('tdl-pending-tasks').style.display = 'block';
           document.getElementById('tdl-pending-tasks-list').innerHTML = pendingTasks.map(function(t) { return tdlRenderTask(t); }).join('');
         }
+        // タスクタブのドットバッジ
+        var tasksDot = document.getElementById('tdl-tasksTabDot');
+        if (tasksDot) tasksDot.classList.toggle('visible', pendingTasks.length > 0);
 
         // 完了タスクがある場合は履歴リンクを表示
         var recentCompletedTasks = completedTasks.filter(function(task) {
@@ -705,6 +710,8 @@
             if (adminTab) adminTab.style.display = '';
             var extSection = document.getElementById('tdl-extensionRequestsSection');
             if (extSection) extSection.style.display = 'block';
+            // 管理タブのドットバッジ用にデータを先読み
+            tdlLoadAdminTaskData();
           }
         }
       } catch (error) {
@@ -1059,6 +1066,7 @@
 
           var pending = 0, completedThisWeek = 0, overdue = 0;
           var pendingByType = {};
+          var pendingTasks = [];
           var now = new Date();
           var weekStart = new Date(now);
           weekStart.setDate(now.getDate() - now.getDay());
@@ -1074,24 +1082,36 @@
               var taskType = task.type || 'other';
               var typeLabel = tdlGetTaskTypeLabel(taskType);
               pendingByType[typeLabel] = (pendingByType[typeLabel] || 0) + 1;
+              var isOverdue = false;
               if (task.dueDate) {
                 var dd = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
-                if (dd < now) overdue++;
+                if (dd < now) { overdue++; isOverdue = true; }
               } else if (task.createdAt) {
                 var cd = task.createdAt.toDate ? task.createdAt.toDate() : new Date(task.createdAt);
-                if (cd < threeDaysAgo) overdue++;
+                if (cd < threeDaysAgo) { overdue++; isOverdue = true; }
               }
+              pendingTasks.push({
+                id: doc.id,
+                title: task.title || typeLabel,
+                type: taskType,
+                typeLabel: typeLabel,
+                icon: tdlGetTypeIcon(taskType),
+                isOverdue: isOverdue,
+                createdAt: task.createdAt
+              });
             }
           });
 
           if (pending > 0) usersWithPending++;
           overdueCount += overdue;
-          usersData.push({ email: email, name: userData.userName || userData.displayName || userData.name || email.split('@')[0], photoURL: userData.photoURL || '', pending: pending, completedThisWeek: completedThisWeek, pendingByType: pendingByType, overdue: overdue });
+          usersData.push({ email: email, name: userData.userName || userData.displayName || userData.name || email.split('@')[0], photoURL: userData.photoURL || '', pending: pending, completedThisWeek: completedThisWeek, pendingByType: pendingByType, pendingTasks: pendingTasks, overdue: overdue });
         }
 
         if (totalUsersEl) totalUsersEl.textContent = usersData.length;
         if (pendingTasksEl) pendingTasksEl.textContent = usersWithPending;
         if (overdueEl) overdueEl.textContent = overdueCount;
+        var adminDot = document.getElementById('tdl-adminTabDot');
+        if (adminDot) adminDot.classList.toggle('visible', usersWithPending > 0);
 
         usersData.sort(function(a, b) { return b.pending - a.pending; });
 
@@ -1100,17 +1120,36 @@
           return;
         }
 
-        userListEl.innerHTML = usersData.map(function(user) {
+        userListEl.innerHTML = usersData.map(function(user, idx) {
           var pendingTypeText = user.pending > 0 ? Object.entries(user.pendingByType).map(function(e) { return e[0] + ': ' + e[1]; }).join(', ') : '';
-          return '<div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: ' + (user.overdue > 0 ? '#fef2f2' : '#f9fafb') + '; border-radius: 8px; margin-bottom: 8px; ' + (user.overdue > 0 ? 'border-left: 3px solid #ef4444;' : '') + '">' +
-            '<div style="display: flex; align-items: center; gap: 12px;">' +
-            (user.photoURL ? '<img src="' + tdlEscapeHtml(user.photoURL) + '" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">' : '<div style="width: 40px; height: 40px; background: #e5e7eb; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><i class="bi bi-person" style="color: #9ca3af; font-size: 18px;"></i></div>') +
-            '<div style="font-weight: 500;">' + tdlEscapeHtml(user.name) + '</div></div>' +
-            '<div style="text-align: right;"><div style="font-size: 12px; color: #6b7280;">未完了: <span style="color: ' + (user.pending > 0 ? '#ef4444' : '#22c55e') + '; font-weight: 600;">' + user.pending + '</span>' +
-            (pendingTypeText ? '<span style="font-size: 10px; color: #9ca3af; margin-left: 4px;">(' + pendingTypeText + ')</span>' : '') + '</div>' +
-            (user.overdue > 0 ? '<div style="font-size: 11px; color: #ef4444;">⚠️ ' + user.overdue + '件が要対応</div>' : '<div style="font-size: 12px; color: #6b7280;">今週完了: <span style="color: #22c55e;">' + user.completedThisWeek + '</span></div>') +
-            (user.pending > 0 ? '<button onclick="tdlSendReminder(\'' + tdlEscapeHtml(user.email) + '\', \'' + tdlEscapeHtml(user.name) + '\')" style="margin-top: 4px; padding: 2px 8px; font-size: 11px; background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; border-radius: 4px; cursor: pointer;"><i class="bi bi-bell"></i> 通知</button>' : '') +
-            '</div></div>';
+          var detailHtml = '';
+          if (user.pendingTasks.length > 0) {
+            detailHtml = '<div id="tdl-adminDetail-' + idx + '" style="display:none; padding: 8px 12px 12px; border-top: 1px solid #e5e7eb;">' +
+              user.pendingTasks.map(function(t) {
+                return '<div style="display:flex; align-items:center; gap:8px; padding:6px 0; font-size:12px;' + (t.isOverdue ? ' color:#ef4444;' : ' color:#374151;') + '">' +
+                  '<span>' + t.icon + '</span>' +
+                  '<span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + tdlEscapeHtml(t.title) + '</span>' +
+                  '<span style="font-size:10px; padding:1px 6px; border-radius:4px; white-space:nowrap; background:' + (t.isOverdue ? '#fee2e2; color:#dc2626' : '#f3f4f6; color:#6b7280') + ';">' + t.typeLabel + '</span>' +
+                '</div>';
+              }).join('') +
+              '<div style="margin-top:8px; text-align:right;">' +
+                '<button onclick="event.stopPropagation(); tdlSendReminder(\'' + tdlEscapeHtml(user.email) + '\', \'' + tdlEscapeHtml(user.name) + '\')" style="padding:4px 12px; font-size:11px; background:#fef3c7; color:#92400e; border:1px solid #fbbf24; border-radius:6px; cursor:pointer;"><i class="bi bi-bell"></i> 通知</button>' +
+              '</div>' +
+            '</div>';
+          }
+          return '<div style="background: ' + (user.overdue > 0 ? '#fef2f2' : 'white') + '; border-radius: 10px; margin-bottom: 8px; overflow:hidden; border: 1px solid ' + (user.overdue > 0 ? '#fecaca' : '#e5e7eb') + ';">' +
+            '<div onclick="tdlToggleAdminDetail(' + idx + ')" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; cursor:pointer;">' +
+            '<div style="display: flex; align-items: center; gap: 10px;">' +
+            (user.photoURL ? '<img src="' + tdlEscapeHtml(user.photoURL) + '" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;">' : '<div style="width: 36px; height: 36px; background: #e5e7eb; border-radius: 50%; display: flex; align-items: center; justify-content: center;"><i class="bi bi-person" style="color: #9ca3af; font-size: 16px;"></i></div>') +
+            '<div><div style="font-weight: 500; font-size: 14px;">' + tdlEscapeHtml(user.name) + '</div>' +
+            (user.overdue > 0 ? '<div style="font-size: 11px; color: #ef4444;">⚠️ ' + user.overdue + '件が要対応</div>' : '') +
+            '</div></div>' +
+            '<div style="text-align: right;"><div style="font-size: 13px; color: ' + (user.pending > 0 ? '#ef4444' : '#22c55e') + '; font-weight: 600;">' + user.pending + '件</div>' +
+            '<div style="font-size: 11px; color: #9ca3af;">今週 ' + user.completedThisWeek + '件完了</div>' +
+            (user.pending > 0 ? '<i class="bi bi-chevron-down" id="tdl-adminChevron-' + idx + '" style="font-size:12px; color:#9ca3af; transition:transform 0.2s;"></i>' : '') +
+            '</div></div>' +
+            detailHtml +
+          '</div>';
         }).join('');
       } catch (error) {
         console.error('管理者タスクデータ読み込みエラー:', error);
@@ -1158,6 +1197,15 @@
     }
     window.tdlSendReminder = tdlSendReminder;
 
+    window.tdlToggleAdminDetail = function(idx) {
+      var detail = document.getElementById('tdl-adminDetail-' + idx);
+      var chevron = document.getElementById('tdl-adminChevron-' + idx);
+      if (!detail) return;
+      var isOpen = detail.style.display !== 'none';
+      detail.style.display = isOpen ? 'none' : 'block';
+      if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+    };
+
     // ========================================
     // 却下機能
     // ========================================
@@ -1190,6 +1238,8 @@
     function tdlUpdateExtensionTabBadge(count) {
       var badge = document.getElementById('tdl-extensionTabBadge');
       if (badge) badge.textContent = count > 0 ? count : '';
+      var dot = document.getElementById('tdl-extensionsTabDot');
+      if (dot) dot.classList.toggle('visible', count > 0);
     }
 
     // ============================================
