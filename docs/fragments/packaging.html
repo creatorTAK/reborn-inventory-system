@@ -636,7 +636,7 @@
           </div>
         </div>
         <div class="row g-2 mb-2">
-          <div class="col-6">
+          <div class="col-6" id="ih-stockInBtn" style="display:none;">
             <button class="btn btn-primary w-100" onclick="ihShowStockInModalMaterial()">
               <i class="bi bi-plus-circle me-1"></i> 入庫
             </button>
@@ -647,13 +647,13 @@
             </button>
           </div>
         </div>
-        <div class="row g-2 mb-2" id="ih-adminTransferRow" style="display: none;">
+        <div class="row g-2 mb-2">
           <div class="col-6">
             <button class="btn btn-success w-100" onclick="ihShowTransferModal()">
               <i class="bi bi-box-arrow-right me-1"></i> 配布
             </button>
           </div>
-          <div class="col-6">
+          <div class="col-6" id="ih-settingsBtn" style="display:none;">
             <button class="btn btn-outline-secondary w-100" onclick="ihShowThresholdSettingsModal()">
               <i class="bi bi-sliders me-1"></i> 資材設定
             </button>
@@ -781,6 +781,12 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">入庫先</label>
+            <select class="form-select" id="ih-stockInLocation" style="font-size:16px;">
+              <option value="">選択してください</option>
+            </select>
+          </div>
           <div class="mb-3">
             <label class="form-label">カテゴリ</label>
             <select class="form-select" id="ih-stockInCategory" style="font-size:16px;" onchange="ihFilterMaterialsByCategory('ih-stockInCategory','ih-stockInMaterial')">
@@ -1538,10 +1544,12 @@
       if (!ihIsAdmin()) return;
       var el1 = document.getElementById('ih-adminLocationRow');
       if (el1) el1.style.display = 'flex';
-      var el2 = document.getElementById('ih-adminTransferRow');
-      if (el2) el2.style.display = 'flex';
       var el3 = document.getElementById('ih-adminAlertSummary');
       if (el3) el3.style.display = 'block';
+      var el4 = document.getElementById('ih-stockInBtn');
+      if (el4) el4.style.display = '';
+      var el5 = document.getElementById('ih-settingsBtn');
+      if (el5) el5.style.display = '';
       await ihLoadAllLocations();
       await ihLoadAllLocationsAlertSummary();
     }
@@ -1880,6 +1888,14 @@
     // Stock In Modal
     // ========================================
     function ihShowStockInModalMaterial(materialId) {
+      // 入庫先ドロップダウンを設定
+      var locSelect = document.getElementById('ih-stockInLocation');
+      locSelect.innerHTML = '<option value="">選択してください</option>' +
+        ih_allLocations.map(function(loc) {
+          var typeLabel = loc.type === 'user_home' ? '👤' : loc.type === 'warehouse' ? '🏭' : '🏢';
+          return '<option value="' + loc.id + '">' + typeLabel + ' ' + ihEscapeHtml(loc.name) + '</option>';
+        }).join('');
+      if (ih_selectedLocationId) locSelect.value = ih_selectedLocationId;
       ihPopulateCategorySelect('ih-stockInCategory');
       var preselectedMat = materialId ? ih_allMaterials.find(function(m) { return m.id === materialId; }) : null;
       if (preselectedMat && preselectedMat.category) {
@@ -1911,9 +1927,10 @@
       bootstrap.Modal.getInstance(document.getElementById('ih-stockInModal'))?.hide();
       try {
         var db = ihGetDb();
-        var location = await ihGetCurrentUserLocation();
-        if (!location) throw new Error('担当者の取得に失敗しました');
-        var locationId = location.id;
+        var locationId = document.getElementById('ih-stockInLocation').value;
+        if (!locationId) { ihHideLoading(); alert('入庫先を選択してください'); return; }
+        var location = ih_allLocations.find(function(l) { return l.id === locationId; });
+        if (!location) throw new Error('入庫先の取得に失敗しました');
         var lotRef = await db.collection('packagingLots').add({
           materialId: materialId, locationId: locationId, quantity: quantity, remainingQty: quantity,
           unitPrice: unitPrice, purchaseDate: ihGetFirebaseTimestamp(), supplier: supplier, notes: note,
@@ -1954,6 +1971,8 @@
             console.error('[ih] 経費自動登録エラー（入庫自体は成功）:', expError);
           }
         }
+        // タスク自動完了: stock_replenishment
+        ihAutoCompleteReplenishmentTask(materialId);
         ihHideLoading();
         alert('入庫を登録しました（単価: ¥' + unitPrice + '、担当: ' + location.name + '）');
         ihLoadStockList();
@@ -1962,6 +1981,24 @@
         console.error('[ih] 入庫登録エラー:', error);
         alert('入庫登録に失敗しました: ' + error.message);
       }
+    }
+
+    function ihAutoCompleteReplenishmentTask(materialId) {
+      var userEmail = localStorage.getItem('reborn_user_email');
+      if (!userEmail || !materialId) return;
+      var db = ihGetDb();
+      db.collection('userTasks').doc(userEmail).collection('tasks')
+        .where('type', '==', 'stock_replenishment')
+        .where('completed', '==', false)
+        .get().then(function(snap) {
+          snap.forEach(function(taskDoc) {
+            var rd = taskDoc.data().relatedData || {};
+            if (rd.materialId === materialId) {
+              taskDoc.ref.update({ completed: true, completedAt: new Date().toISOString() });
+              console.log('[ih] タスク自動完了: stock_replenishment', taskDoc.id);
+            }
+          });
+        }).catch(function(err) { console.error('[ih] タスク自動完了エラー:', err); });
     }
 
     // ========================================
@@ -2048,7 +2085,6 @@
     // Transfer (Admin)
     // ========================================
     async function ihShowTransferModal() {
-      if (!ihIsAdmin()) { alert('管理者権限が必要です'); return; }
       var myLocation = await ihGetCurrentUserLocation();
       if (!myLocation) { alert('担当者の取得に失敗しました'); return; }
       document.getElementById('ih-transferFromLocation').value = myLocation.name;
