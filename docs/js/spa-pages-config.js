@@ -199,5 +199,12 @@ const FURIRA_PAGES = {
     init: 'initAdminAnnouncePage',
     destroy: 'destroyAdminAnnouncePage',
     bottomNav: null
+  },
+  'personal-info': {
+    type: 'fragment',
+    fragmentUrl: '/fragments/personal-info.html',
+    init: 'initPersonalInfoPage',
+    destroy: 'destroyPersonalInfoPage',
+    bottomNav: null
   }
 };
