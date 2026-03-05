@@ -4455,7 +4455,7 @@
         setTimeout(_mpInit, 200);
         return;
       }
-      _mpInitRetryCount = 0;
+      // Firebase globals をwindowから取得
       db = window.firebaseDB;
       storage = window.firebaseStorage;
       collection = window.firestoreCollection;
@@ -4474,21 +4474,19 @@
       ref = window.storageRef;
       uploadBytes = window.storageUploadBytes;
       getDownloadURL = window.storageGetDownloadURL;
-      // DEBUG: Firestore変数の状態を出力
-      console.log('[Mypage DEBUG] _firebaseModularReady:', window._firebaseModularReady);
-      console.log('[Mypage DEBUG] db:', typeof db, db);
-      console.log('[Mypage DEBUG] collection:', typeof collection);
-      console.log('[Mypage DEBUG] doc:', typeof doc);
-      console.log('[Mypage DEBUG] window.firebaseDB:', typeof window.firebaseDB, window.firebaseDB);
-      console.log('[Mypage DEBUG] window.firestoreCollection:', typeof window.firestoreCollection);
-      // 実際にcollection()を呼んでみる
+      // 実際のFirestore操作で検証（フラグだけでは不十分な場合の安全策）
       try {
-        var _testRef = window.firestoreCollection(window.firebaseDB, '_debug');
-        console.log('[Mypage DEBUG] collection()呼び出し成功:', _testRef);
+        collection(db, '_validate');
       } catch(e) {
-        console.error('[Mypage DEBUG] collection()呼び出し失敗:', e.message);
-        console.error('[Mypage DEBUG] window.firebaseDB constructor:', window.firebaseDB && window.firebaseDB.constructor && window.firebaseDB.constructor.name);
+        console.error('[Mypage] Firestore検証失敗、リトライ:', e.message, 'db:', typeof db, 'collection:', typeof collection);
+        if (!_mpInitRetryCount) _mpInitRetryCount = 0;
+        _mpInitRetryCount++;
+        if (_mpInitRetryCount <= 40) {
+          setTimeout(_mpInit, 200);
+          return;
+        }
       }
+      _mpInitRetryCount = 0;
       var startTime = performance.now();
 
       // ユーザー情報取得
