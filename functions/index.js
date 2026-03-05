@@ -2679,6 +2679,42 @@ exports.monthlyGoalReminder = onSchedule({
     let tasksCreated = 0;
     let notificationsSent = 0;
 
+    // 管理者向け: 売上目標設定タスクを生成
+    const businessGoalsDoc = await db.collection('settings').doc('businessGoals').get();
+    const businessGoalsData = businessGoalsDoc.exists ? businessGoalsDoc.data() : {};
+    const hasSalesGoal = businessGoalsData.goals && businessGoalsData.goals[yearMonth] > 0;
+
+    if (!hasSalesGoal) {
+      for (const userDoc of usersSnapshot.docs) {
+        const userData = userDoc.data();
+        if (userData.permissionId === 'owner') {
+          const ownerEmail = userDoc.id;
+          try {
+            const taskRef = db.collection('userTasks')
+              .doc(ownerEmail)
+              .collection('tasks')
+              .doc(`sales_goal_setting_${yearMonth}`);
+
+            await taskRef.set({
+              title: `${now.getMonth() + 1}月の売上目標を設定`,
+              description: 'マイページから今月の売上目標金額を設定してください。',
+              type: 'goal_setting',
+              category: 'goal',
+              yearMonth: yearMonth,
+              completed: false,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              link: 'mypage'
+            });
+            tasksCreated++;
+            console.log(`🎯 [monthlyGoalReminder] 管理者売上目標タスク作成: ${ownerEmail}`);
+          } catch (e) {
+            console.error(`❌ [monthlyGoalReminder] 管理者タスク作成エラー: ${e.message}`);
+          }
+        }
+      }
+    }
+
     for (const userDoc of usersSnapshot.docs) {
       const userEmail = userDoc.id;
       const userData = userDoc.data();

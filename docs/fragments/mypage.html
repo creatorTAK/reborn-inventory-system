@@ -6065,6 +6065,22 @@
         closeSalesGoalModal();
         renderAdminMyPage();
         console.log('✅ 売上目標保存:', yearMonth, amount);
+
+        // 売上目標設定タスクを自動完了
+        try {
+          const taskRef = doc(_mpdb, 'userTasks', currentUser.email, 'tasks', `sales_goal_setting_${yearMonth}`);
+          const taskSnap = await getDoc(taskRef);
+          if (taskSnap.exists() && !taskSnap.data().completed) {
+            await updateDoc(taskRef, {
+              completed: true,
+              completedAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+            console.log('✅ 売上目標設定タスクを完了');
+          }
+        } catch (taskErr) {
+          console.log('売上目標タスク更新:', taskErr.message);
+        }
       } catch (error) {
         console.error('売上目標保存エラー:', error);
         alert('保存に失敗しました');
