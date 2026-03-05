@@ -3542,18 +3542,20 @@
     function purCreateBudgetTask(month, carryOverBudget) {
       if (_purBudgetTaskSending[month]) return;
       _purBudgetTaskSending[month] = true;
+      var monthParts = month.split('-');
+      var monthLabel = monthParts[0] + '年' + parseInt(monthParts[1]) + '月';
       window.db.collection('users').where('permissionId', '==', 'owner').get().then(function(snap) {
         var promises = [];
         snap.forEach(function(userDoc) {
           var email = userDoc.data().userEmail || userDoc.id;
-          var desc = month + ' の仕入予算を確認・設定してください。';
+          var desc = monthLabel + ' の仕入予算を確認・設定してください。';
           if (carryOverBudget > 0) {
             desc += '\n前月から ¥' + carryOverBudget.toLocaleString() + ' を自動引き継ぎ済みです。';
           }
           desc += '\n\n仕入管理 → 仕入分析 → 予算管理 から設定できます。';
           promises.push(window.db.collection('userTasks').doc(email).collection('tasks').doc('budget_setting_' + month).set({
             type: 'budget_setting',
-            title: '仕入予算を設定: ' + month,
+            title: '仕入予算を設定: ' + monthLabel,
             description: desc,
             createdAt: new Date().toISOString(),
             completed: false,
