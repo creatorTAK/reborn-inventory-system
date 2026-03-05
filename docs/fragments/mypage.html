@@ -4283,7 +4283,7 @@
     }
 
     // Use parent Firebase globals（_mpInit内で代入。parse時はnull）
-    var db = null;
+    var _mpdb = null;
     var storage = null;
     var collection = null;
     var getDocs = null;
@@ -4456,7 +4456,7 @@
         return;
       }
       // Firebase globals をwindowから取得
-      db = window.firebaseDB;
+      _mpdb = window.firebaseDB;
       storage = window.firebaseStorage;
       collection = window.firestoreCollection;
       getDocs = window.firestoreGetDocs;
@@ -4474,21 +4474,7 @@
       ref = window.storageRef;
       uploadBytes = window.storageUploadBytes;
       getDownloadURL = window.storageGetDownloadURL;
-      // 実際のFirestore操作で検証（フラグだけでは不十分な場合の安全策）
-      try {
-        collection(db, '_validate');
-      } catch(e) {
-        console.error('[Mypage] Firestore検証失敗、リトライ:', e.message);
-        console.error('[Mypage] db詳細:', db, 'constructor:', db && db.constructor && db.constructor.name, 'type:', db && db.type);
-        console.error('[Mypage] window.firebaseDB === db:', window.firebaseDB === db);
-        console.error('[Mypage] window.db:', window.db, 'window.db === db:', window.db === db);
-        if (!_mpInitRetryCount) _mpInitRetryCount = 0;
-        _mpInitRetryCount++;
-        if (_mpInitRetryCount <= 40) {
-          setTimeout(_mpInit, 200);
-          return;
-        }
-      }
+      // _mpdb は window.db とは別の変数のため、compat版との衝突なし
       _mpInitRetryCount = 0;
       var startTime = performance.now();
 
@@ -4729,7 +4715,7 @@
     async function loadCompensationSettings() {
       try {
         // Firestoreから取得（優先）
-        const docRef = doc(db, 'settings', 'compensation');
+        const docRef = doc(_mpdb, 'settings', 'compensation');
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           compensationSettings = docSnap.data();
@@ -4791,7 +4777,7 @@
       try {
         const now = new Date();
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const docRef = doc(db, 'userGoals', `${currentUser.email}_${yearMonth}`);
+        const docRef = doc(_mpdb, 'userGoals', `${currentUser.email}_${yearMonth}`);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
@@ -4816,7 +4802,7 @@
     // ユーザーの担当タスクを取得
     async function loadAssignedTasks() {
       try {
-        const userRef = doc(db, 'users', currentUser.email);
+        const userRef = doc(_mpdb, 'users', currentUser.email);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const data = userSnap.data();
@@ -4837,7 +4823,7 @@
       try {
         const now = new Date();
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const goalsRef = collection(db, 'userGoals');
+        const goalsRef = collection(_mpdb, 'userGoals');
         const snapshot = await getDocs(goalsRef);
 
         allUsersRankingPrefs = {};
@@ -4859,7 +4845,7 @@
         const year = now.getFullYear();
         const month = now.getMonth() + 1;
 
-        const recordsRef = collection(db, 'compensationRecords');
+        const recordsRef = collection(_mpdb, 'compensationRecords');
         const snapshot = await getDocs(recordsRef);
 
         compensationRecords = [];
@@ -5443,7 +5429,7 @@
 
       try {
         // ビジネス目標を読み込み
-        const businessGoalRef = doc(db, 'businessGoals', yearMonth);
+        const businessGoalRef = doc(_mpdb, 'businessGoals', yearMonth);
         const businessGoalSnap = await getDoc(businessGoalRef);
         if (businessGoalSnap.exists()) {
           const data = businessGoalSnap.data();
@@ -5459,7 +5445,7 @@
         const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
         const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
 
-        const productsRef = collection(db, 'products');
+        const productsRef = collection(_mpdb, 'products');
         const snapshot = await getDocs(productsRef);
 
         let totalSales = 0;
@@ -5481,7 +5467,7 @@
         monthlySalesData = { totalSales, totalProfit, count: salesCount };
 
         // 報酬レコードを読み込み（その月のもの）
-        const compRef = collection(db, 'compensationRecords');
+        const compRef = collection(_mpdb, 'compensationRecords');
         const compSnap = await getDocs(compRef);
 
         compensationRecords = [];
@@ -5497,7 +5483,7 @@
         });
 
         // メンバー目標を読み込み
-        const usersSnap = await getDocs(query(collection(db, 'users'), where('status', '==', 'active')));
+        const usersSnap = await getDocs(query(collection(_mpdb, 'users'), where('status', '==', 'active')));
         const activeUsers = [];
         usersSnap.forEach(doc => {
           const data = doc.data();
@@ -5512,7 +5498,7 @@
 
         memberGoalsData = [];
         for (const user of activeUsers) {
-          const goalRef = doc(db, 'userGoals', `${user.email}_${yearMonth}`);
+          const goalRef = doc(_mpdb, 'userGoals', `${user.email}_${yearMonth}`);
           const goalSnap = await getDoc(goalRef);
 
           let goalAmount = 0;
@@ -5727,7 +5713,7 @@
           const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
 
           // ビジネス目標
-          const goalRef = doc(db, 'businessGoals', yearMonth);
+          const goalRef = doc(_mpdb, 'businessGoals', yearMonth);
           const goalSnap = await getDoc(goalRef);
           const goals = goalSnap.exists() ? goalSnap.data() : { salesTarget: 0, profitTarget: 0 };
 
@@ -5735,7 +5721,7 @@
           const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
           const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
 
-          const productsRef = collection(db, 'products');
+          const productsRef = collection(_mpdb, 'products');
           const productsSnap = await getDocs(productsRef);
 
           let monthSales = 0, monthProfit = 0, monthSalesCount = 0;
@@ -5751,7 +5737,7 @@
           });
 
           // 作業データ
-          const compRef = collection(db, 'compensationRecords');
+          const compRef = collection(_mpdb, 'compensationRecords');
           const compSnap = await getDocs(compRef);
 
           let monthWorkCount = 0;
@@ -6004,7 +5990,7 @@
         const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
         const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
 
-        const productsRef = collection(db, 'products');
+        const productsRef = collection(_mpdb, 'products');
         const snapshot = await getDocs(productsRef);
 
         let totalSales = 0;
@@ -6036,7 +6022,7 @@
       try {
         const now = new Date();
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const docRef = doc(db, 'businessGoals', yearMonth);
+        const docRef = doc(_mpdb, 'businessGoals', yearMonth);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
@@ -6059,7 +6045,7 @@
       try {
         const now = new Date();
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const docRef = doc(db, 'teamGoals', yearMonth);
+        const docRef = doc(_mpdb, 'teamGoals', yearMonth);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
@@ -6077,7 +6063,7 @@
     // アクティブユーザー数を取得（軽量版）
     async function loadActiveUsersCount() {
       try {
-        const usersSnap = await getDocs(query(collection(db, 'users'), where('status', '==', 'active')));
+        const usersSnap = await getDocs(query(collection(_mpdb, 'users'), where('status', '==', 'active')));
         let count = 0;
         usersSnap.forEach(() => count++);
         systemStatus.activeUsers = count;
@@ -6094,7 +6080,7 @@
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         
         // アクティブユーザーを取得
-        const usersSnap = await getDocs(query(collection(db, 'users'), where('status', '==', 'active')));
+        const usersSnap = await getDocs(query(collection(_mpdb, 'users'), where('status', '==', 'active')));
         const activeUsers = [];
         usersSnap.forEach(doc => {
           const data = doc.data();
@@ -6110,7 +6096,7 @@
         // 各ユーザーの目標を取得
         memberGoalsData = [];
         for (const user of activeUsers) {
-          const goalRef = doc(db, 'userGoals', `${user.email}_${yearMonth}`);
+          const goalRef = doc(_mpdb, 'userGoals', `${user.email}_${yearMonth}`);
           const goalSnap = await getDoc(goalRef);
           
           let goalAmount = 0;
@@ -6206,7 +6192,7 @@
 
         const now = new Date();
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const docRef = doc(db, 'teamGoals', yearMonth);
+        const docRef = doc(_mpdb, 'teamGoals', yearMonth);
 
         await setDoc(docRef, {
           yearMonth: yearMonth,
@@ -6259,7 +6245,7 @@
 
         const now = new Date();
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const docRef = doc(db, 'businessGoals', yearMonth);
+        const docRef = doc(_mpdb, 'businessGoals', yearMonth);
 
         await setDoc(docRef, {
           yearMonth: yearMonth,
@@ -6766,7 +6752,7 @@
 
         const now = new Date();
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const docRef = doc(db, 'userGoals', `${currentUser.email}_${yearMonth}`);
+        const docRef = doc(_mpdb, 'userGoals', `${currentUser.email}_${yearMonth}`);
 
         const newRankingPref = document.getElementById('mp-rankingParticipation').checked;
         await setDoc(docRef, {
@@ -6838,7 +6824,7 @@
 
         const now = new Date();
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const docRef = doc(db, 'userGoals', `${currentUser.email}_${yearMonth}`);
+        const docRef = doc(_mpdb, 'userGoals', `${currentUser.email}_${yearMonth}`);
 
         const newRankingPref = document.getElementById('mp-rankingParticipation').checked;
         await setDoc(docRef, {
@@ -6859,7 +6845,7 @@
 
         // 目標設定タスクを完了としてマーク
         try {
-          const taskRef = doc(db, 'userTasks', currentUser.email, 'tasks', `goal_setting_${yearMonth}`);
+          const taskRef = doc(_mpdb, 'userTasks', currentUser.email, 'tasks', `goal_setting_${yearMonth}`);
           const taskSnap = await getDoc(taskRef);
           if (taskSnap.exists()) {
             await updateDoc(taskRef, {
@@ -6897,7 +6883,7 @@
       contentEl.innerHTML = '<div class="history-empty"><div class="spinner-border text-primary" role="status"></div><p style="margin-top: 12px;">読み込み中...</p></div>';
 
       // Firestore参照を再取得（タイミング依存の無効参照を防止）
-      db = window.firebaseDB;
+      _mpdb = window.firebaseDB;
       collection = window.firestoreCollection;
       getDocs = window.firestoreGetDocs;
       doc = window.firestoreDoc;
@@ -6990,7 +6976,7 @@
       contentEl.innerHTML = '<div class="comp-history-empty"><div class="spinner-border text-primary" role="status"></div><p style="margin-top: 12px;">読み込み中...</p></div>';
 
       // Firestore参照を再取得
-      db = window.firebaseDB;
+      _mpdb = window.firebaseDB;
       collection = window.firestoreCollection;
       getDocs = window.firestoreGetDocs;
 
@@ -7051,7 +7037,7 @@
       const now = new Date();
 
       // 報酬レコードを全件取得
-      const recordsRef = collection(db, 'compensationRecords');
+      const recordsRef = collection(_mpdb, 'compensationRecords');
       const snapshot = await getDocs(recordsRef);
 
       const allRecords = [];
@@ -7297,7 +7283,7 @@
       const now = new Date();
 
       // 報酬データを1回だけ取得（ループ外）
-      const recordsRef = collection(db, 'compensationRecords');
+      const recordsRef = collection(_mpdb, 'compensationRecords');
       const recordsSnap = await getDocs(recordsRef);
 
       // 全レコードを配列化
@@ -7317,7 +7303,7 @@
         if (year < 2025 || (year === 2025 && month < 12)) continue;
 
         // 目標データを取得
-        const goalDocRef = doc(db, 'userGoals', `${currentUser.email}_${yearMonth}`);
+        const goalDocRef = doc(_mpdb, 'userGoals', `${currentUser.email}_${yearMonth}`);
         const goalSnap = await getDoc(goalDocRef);
 
         // その月の自分のレコードをフィルタ
@@ -7450,7 +7436,7 @@
     // お知らせを読み込む
     async function loadAnnouncements() {
       // 全体お知らせ一覧を取得
-      const announcementsRef = collection(db, 'announcements');
+      const announcementsRef = collection(_mpdb, 'announcements');
       const snapshot = await getDocs(announcementsRef);
 
       announcements = [];
@@ -7468,7 +7454,7 @@
       // 全体お知らせ既読情報を取得
       readAnnouncementIds = new Set();
       if (currentUser && currentUser.email) {
-        const readRef = collection(db, 'readAnnouncements');
+        const readRef = collection(_mpdb, 'readAnnouncements');
         const readSnapshot = await getDocs(readRef);
         readSnapshot.forEach(docSnap => {
           const data = docSnap.data();
@@ -7479,7 +7465,7 @@
 
         // 個人お知らせを取得
         try {
-          const personalRef = collection(db, 'users', currentUser.email, 'personalAnnouncements');
+          const personalRef = collection(_mpdb, 'users', currentUser.email, 'personalAnnouncements');
           const personalSnapshot = await getDocs(personalRef);
           personalAnnouncements = [];
           personalSnapshot.forEach(docSnap => {
@@ -7488,7 +7474,7 @@
 
           // 個人お知らせ既読情報を取得
           readPersonalIds = new Set();
-          const readPersonalRef = collection(db, 'users', currentUser.email, 'readPersonalAnnouncements');
+          const readPersonalRef = collection(_mpdb, 'users', currentUser.email, 'readPersonalAnnouncements');
           const readPersonalSnapshot = await getDocs(readPersonalRef);
           readPersonalSnapshot.forEach(docSnap => {
             readPersonalIds.add(docSnap.data().announcementId);
@@ -7564,7 +7550,7 @@
       // 既読にする
       if (!readAnnouncementIds.has(announcementId) && currentUser && currentUser.email) {
         try {
-          const readDocRef = doc(db, 'readAnnouncements', `${currentUser.email}_${announcementId}`);
+          const readDocRef = doc(_mpdb, 'readAnnouncements', `${currentUser.email}_${announcementId}`);
           await setDoc(readDocRef, {
             userEmail: currentUser.email,
             announcementId: announcementId,
@@ -7653,7 +7639,7 @@
     // ユーザーの背景設定を読み込む
     async function loadUserProfileBg() {
       try {
-        const userRef = doc(db, 'users', currentUser.email);
+        const userRef = doc(_mpdb, 'users', currentUser.email);
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
           const data = userSnap.data();
@@ -7877,7 +7863,7 @@
         }
 
         // Firestoreに保存（position情報も含める）
-        const userRef = doc(db, 'users', currentUser.email);
+        const userRef = doc(_mpdb, 'users', currentUser.email);
         await updateDoc(userRef, {
           profileBackground: {
             type: selectedBgType,
@@ -7963,7 +7949,7 @@
 
       try {
         // Firestoreに保存
-        const userRef = doc(db, 'users', currentUser.email);
+        const userRef = doc(_mpdb, 'users', currentUser.email);
         await updateDoc(userRef, {
           name: newUsername,
           displayName: newUsername
@@ -8011,7 +7997,7 @@
         const downloadURL = await getDownloadURL(storageRef);
 
         // Firestoreに保存
-        const userRef = doc(db, 'users', currentUser.email);
+        const userRef = doc(_mpdb, 'users', currentUser.email);
         await updateDoc(userRef, {
           photoURL: downloadURL,
           iconUrl: downloadURL
