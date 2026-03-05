@@ -256,22 +256,52 @@
       var db = window.firebaseDB;
       var collectionFn = window.firestoreCollection;
       var getDocsFn = window.firestoreGetDocs;
+      var email = _annCurrentUser.email;
 
-      var snapshot = await getDocsFn(collectionFn(db, 'users', _annCurrentUser.email, 'personalAnnouncements'));
+      // 1. personalAnnouncements を取得
+      var snapshot = await getDocsFn(collectionFn(db, 'users', email, 'personalAnnouncements'));
       _annPersonalAnnouncements = [];
       snapshot.forEach(function(docSnap) {
-        _annPersonalAnnouncements.push(Object.assign({ id: docSnap.id }, docSnap.data(), { type: 'personal' }));
+        _annPersonalAnnouncements.push(Object.assign({ id: docSnap.id }, docSnap.data(), { _source: 'personal' }));
       });
+
+      // 2. userAnnouncements も取得してマージ
+      try {
+        var uaSnapshot = await getDocsFn(collectionFn(db, 'users', email, 'userAnnouncements'));
+        uaSnapshot.forEach(function(docSnap) {
+          var data = docSnap.data();
+          _annPersonalAnnouncements.push({
+            id: docSnap.id,
+            title: data.title || '',
+            body: data.content || data.body || '',
+            priority: data.type === 'urgent_reminder' ? 'danger' : (data.type === 'compensation_statement' ? 'info' : 'info'),
+            createdAt: data.createdAt || null,
+            _source: 'userAnnouncement',
+            _read: data.read === true
+          });
+        });
+      } catch (e) {
+        console.log('[Announce SPA] userAnnouncements読み込みスキップ:', e.message);
+      }
+
+      // 日付ソート（新しい順）
       _annPersonalAnnouncements.sort(function(a, b) {
         var dateA = a.createdAt ? (typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt.toDate()) : new Date(0);
         var dateB = b.createdAt ? (typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt.toDate()) : new Date(0);
         return dateB - dateA;
       });
 
+      // 3. 既読情報を取得
       _annReadPersonalIds = new Set();
-      var readSnapshot = await getDocsFn(collectionFn(db, 'users', _annCurrentUser.email, 'readPersonalAnnouncements'));
+      var readSnapshot = await getDocsFn(collectionFn(db, 'users', email, 'readPersonalAnnouncements'));
       readSnapshot.forEach(function(docSnap) {
         _annReadPersonalIds.add(docSnap.data().announcementId);
+      });
+      // userAnnouncements の read=true も既読扱い
+      _annPersonalAnnouncements.forEach(function(a) {
+        if (a._source === 'userAnnouncement' && a._read) {
+          _annReadPersonalIds.add(a.id);
+        }
       });
     } catch (error) {
       console.error('[Announce SPA] 個人お知らせ読み込みエラー:', error);
@@ -351,7 +381,7 @@
       var priority = item.priority || 'info';
       var priorityLabel = _annGetPriorityLabel(priority);
 
-      return '<div class="announce-item ' + (isUnread ? 'unread' : '') + '" data-id="' + item.id + '" data-type="' + item.type + '">' +
+      return '<div class="announce-item ' + (isUnread ? 'unread' : '') + '" data-id="' + item.id + '" data-type="' + _annCurrentTab + '">' +
         '<div class="announce-icon"><img src="/images/furira-square-logo.png" alt="FURIRA"></div>' +
         '<div class="announce-content">' +
           '<div class="announce-title-row"><span class="announce-priority ' + priority + '">' + priorityLabel + '</span></div>' +
@@ -390,7 +420,7 @@
     document.getElementById('ann-detailPriority').textContent = priorityLabel;
     document.getElementById('ann-detailPriority').className = 'announce-priority ' + priority;
     document.getElementById('ann-detailDate').textContent = dateStr;
-    document.getElementById('ann-detailBody').textContent = item.body || '';
+    document.getElementById('ann-detailBody').textContent = item.body || item.content || '';
 
     document.getElementById('ann-listView').classList.add('hidden');
     document.getElementById('ann-detailView').classList.add('active');
@@ -398,7 +428,8 @@
 
     // 既読にする
     if (_annCurrentUser && _annCurrentUser.email) {
-      var readIds = type === 'personal' ? _annReadPersonalIds : _annReadAnnouncementIds;
+      var isPersonalTab = (type === 'personal');
+      var readIds = isPersonalTab ? _annReadPersonalIds : _annReadAnnouncementIds;
       if (!readIds.has(announcementId)) {
         try {
           var db = window.firebaseDB;
@@ -406,7 +437,13 @@
           var addDocFn = window.firestoreAddDoc;
           var TimestampFn = window.firestoreTimestamp;
 
-          if (type === 'personal') {
+          if (isPersonalTab && item._source === 'userAnnouncement') {
+            // userAnnouncements は read フィールドを更新
+            var docFn = window.firestoreDoc;
+            var updateDocFn = window.firestoreUpdateDoc;
+            await updateDocFn(docFn(db, 'users', _annCurrentUser.email, 'userAnnouncements', announcementId), { read: true });
+            _annReadPersonalIds.add(announcementId);
+          } else if (isPersonalTab) {
             await addDocFn(collectionFn(db, 'users', _annCurrentUser.email, 'readPersonalAnnouncements'), {
               announcementId: announcementId, readAt: TimestampFn.now()
             });

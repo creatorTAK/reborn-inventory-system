@@ -7478,12 +7478,37 @@
             personalAnnouncements.push({ id: docSnap.id, ...docSnap.data() });
           });
 
+          // userAnnouncements もマージ（タスクリマインダー・報酬明細等）
+          try {
+            const uaRef = collection(_mpdb, 'users', currentUser.email, 'userAnnouncements');
+            const uaSnapshot = await getDocs(uaRef);
+            uaSnapshot.forEach(docSnap => {
+              const data = docSnap.data();
+              personalAnnouncements.push({
+                id: docSnap.id,
+                title: data.title || '',
+                body: data.content || data.body || '',
+                createdAt: data.createdAt || null,
+                _source: 'userAnnouncement',
+                _read: data.read === true
+              });
+            });
+          } catch (e) {
+            console.log('[Announce] userAnnouncements読み込みスキップ:', e.message);
+          }
+
           // 個人お知らせ既読情報を取得
           readPersonalIds = new Set();
           const readPersonalRef = collection(_mpdb, 'users', currentUser.email, 'readPersonalAnnouncements');
           const readPersonalSnapshot = await getDocs(readPersonalRef);
           readPersonalSnapshot.forEach(docSnap => {
             readPersonalIds.add(docSnap.data().announcementId);
+          });
+          // userAnnouncements の read=true も既読扱い
+          personalAnnouncements.forEach(a => {
+            if (a._source === 'userAnnouncement' && a._read) {
+              readPersonalIds.add(a.id);
+            }
           });
         } catch (e) {
           console.log('[Announce] 個人お知らせ読み込みスキップ:', e.message);

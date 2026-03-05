@@ -205,7 +205,22 @@ async function updateRegistrationCountdown(purchaseSlotId) {
               });
             }
 
-            // d. FCMプッシュ通知を管理者に送信
+            // d. 管理者にお知らせ（personalAnnouncements）を作成
+            for (const adminId of adminIds) {
+              try {
+                await db.collection('users').doc(adminId).collection('personalAnnouncements').add({
+                  title: '📦 商品残数アラート: ' + assigneeName,
+                  body: assigneeName + 'の手持ち商品が残り' + newRemaining + '/' + totalCount + '点です。新しい商品の発送を検討してください。',
+                  priority: 'warning',
+                  type: 'restock_alert',
+                  createdAt: new Date().toISOString()
+                });
+              } catch (e) {
+                console.error('[updateRegistrationCountdown] お知らせ作成エラー:', e.message);
+              }
+            }
+
+            // e. FCMプッシュ通知を管理者に送信
             for (const adminId of adminIds) {
               try {
                 const activeDeviceDoc = await db.collection('activeDevices').doc(adminId).get();
@@ -2631,6 +2646,15 @@ exports.monthlyGoalReminder = onSchedule({
         });
         tasksCreated++;
 
+        // お知らせ（personalAnnouncements）を作成
+        await db.collection('users').doc(userEmail).collection('personalAnnouncements').add({
+          title: `🎯 ${now.getMonth() + 1}月の目標を設定しましょう`,
+          body: `${now.getMonth() + 1}月の目標を設定してください。マイページから簡単に設定できます。`,
+          priority: 'info',
+          type: 'goal_reminder',
+          createdAt: new Date().toISOString()
+        });
+
         // プッシュ通知を送信
         const devicesSnapshot = await db.collection('users')
           .doc(userEmail)
@@ -2780,12 +2804,26 @@ exports.calculateRakumaFeeRate = onSchedule({
 
     const notificationBody = `集計期間: ${month}月26日〜${month + 1}月25日\n販売回数: ${salesCount}回, 販売金額: ¥${salesAmount.toLocaleString()}\n適用開始: ${effectiveFrom}`;
 
-    // 管理者にプッシュ通知
+    // 管理者にお知らせ＋プッシュ通知
     const adminsSnapshot = await db.collection('users')
       .where('role', 'in', ['オーナー', '管理者'])
       .get();
 
     for (const adminDoc of adminsSnapshot.docs) {
+      // お知らせ（personalAnnouncements）を作成
+      try {
+        await db.collection('users').doc(adminDoc.id).collection('personalAnnouncements').add({
+          title: notificationTitle,
+          body: notificationBody,
+          priority: rateChanged ? 'warning' : 'info',
+          type: 'rakuma_fee_calculation',
+          createdAt: new Date().toISOString()
+        });
+      } catch (e) {
+        console.error('[calculateRakumaFeeRate] お知らせ作成エラー:', e.message);
+      }
+
+      // FCMプッシュ通知
       const devicesSnapshot = await db.collection('users')
         .doc(adminDoc.id)
         .collection('devices')
