@@ -54,18 +54,58 @@ exports.onProductCreated = onDocumentCreated('products/{productId}', async (even
     const notificationData = createNotificationData(productData);
     console.log('📋 [onProductCreated] 通知データ作成完了:', notificationData);
 
-    // 対象ユーザー取得（商品登録者以外の全ユーザー）
-    const targetUsers = await getTargetUsers(notificationData.userEmail);
-    console.log(`👥 [onProductCreated] 対象ユーザー: ${targetUsers.length}人`);
+    // 管理者のみに通知＋お知らせ
+    const adminsSnapshot = await db.collection('users')
+      .where('permissionId', '==', 'owner')
+      .get();
+    const adminEmails = [];
+    adminsSnapshot.forEach(doc => adminEmails.push(doc.id));
+    console.log(`👥 [onProductCreated] 管理者: ${adminEmails.length}人`);
 
-    // FCMプッシュ通知を最優先で送信（順次実行）
-    console.log('🚀 [onProductCreated] FCM送信開始（最優先）');
-    try {
-      await sendFCMNotifications(notificationData, targetUsers);
-      console.log('✅ [onProductCreated] FCM送信完了');
-    } catch (error) {
-      console.error('❌ [onProductCreated] FCM送信エラー:', error.message);
+    for (const adminEmail of adminEmails) {
+      if (adminEmail === notificationData.userEmail) continue; // 登録者自身は除外
+
+      // お知らせ（personalAnnouncements）を作成
+      try {
+        await db.collection('users').doc(adminEmail).collection('personalAnnouncements').add({
+          title: '✅ 商品登録完了',
+          body: `${notificationData.userName}さんが商品を登録しました\n管理番号: ${notificationData.managementNumber}\n${notificationData.productName}`,
+          priority: 'info',
+          type: 'product_registered',
+          createdAt: new Date().toISOString()
+        });
+      } catch (e) {
+        console.error('[onProductCreated] お知らせ作成エラー:', e.message);
+      }
+
+      // FCMプッシュ通知
+      try {
+        const activeDeviceDoc = await db.collection('activeDevices').doc(adminEmail).get();
+        if (activeDeviceDoc.exists) {
+          const tokens = Array.isArray(activeDeviceDoc.data().fcmTokens)
+            ? activeDeviceDoc.data().fcmTokens.filter(Boolean) : [];
+          if (tokens.length > 0) {
+            await messaging.sendEachForMulticast({
+              notification: {
+                title: notificationData.title,
+                body: `${notificationData.managementNumber} ${notificationData.productName}`
+              },
+              data: {
+                type: 'PRODUCT_REGISTERED',
+                managementNumber: notificationData.managementNumber,
+                productName: notificationData.productName,
+                userName: notificationData.userName,
+                timestamp: notificationData.timestamp
+              },
+              tokens: tokens
+            });
+          }
+        }
+      } catch (e) {
+        console.error('[onProductCreated] FCM送信エラー:', e.message);
+      }
     }
+    console.log('✅ [onProductCreated] 管理者通知完了');
 
     const duration = Date.now() - startTime;
     console.log(`✅ [onProductCreated] 通知完了: ${duration}ms`);
