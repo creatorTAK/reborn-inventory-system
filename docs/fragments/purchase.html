@@ -3009,7 +3009,7 @@
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }).then(function() {
         // 発送リマインダータスク作成（管理者自身へ）
-        var currentUserEmail = firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
+        var currentUserEmail = localStorage.getItem('reborn_user_email');
         if (currentUserEmail) {
           window.db.collection('userTasks').doc(currentUserEmail).collection('tasks').doc().set({
             type: 'dispatch_reminder',
@@ -3071,7 +3071,7 @@
     }
 
     function purUpdateInspectionRequestProgress(supplier, addedCount) {
-      var currentUserEmail = firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
+      var currentUserEmail = localStorage.getItem('reborn_user_email');
       if (!currentUserEmail) return Promise.resolve();
 
       return window.db.collection('inspectionRequests')
@@ -3551,7 +3551,7 @@
             desc += '\n前月から ¥' + carryOverBudget.toLocaleString() + ' を自動引き継ぎ済みです。';
           }
           desc += '\n\n仕入管理 → 仕入分析 → 予算管理 から設定できます。';
-          promises.push(window.db.collection('userTasks').doc(email).collection('tasks').doc().set({
+          promises.push(window.db.collection('userTasks').doc(email).collection('tasks').doc('budget_setting_' + month).set({
             type: 'budget_setting',
             title: '仕入予算を設定: ' + month,
             description: desc,
@@ -3574,7 +3574,7 @@
     }
 
     function purCompleteBudgetTask(month) {
-      var userEmail = firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
+      var userEmail = localStorage.getItem('reborn_user_email');
       if (!userEmail) return;
       window.db.collection('userTasks').doc(userEmail).collection('tasks')
         .where('type', '==', 'budget_setting')
@@ -3599,7 +3599,7 @@
     }
 
     function purAutoCompleteTaskByBatchId(taskType, batchId) {
-      var userEmail = firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
+      var userEmail = localStorage.getItem('reborn_user_email');
       if (!userEmail || !batchId) return;
       window.db.collection('userTasks').doc(userEmail).collection('tasks')
         .where('type', '==', taskType)
@@ -4808,8 +4808,7 @@
       }
       purShowLoading();
       var assigneeData = _pur_entryAssigneesData.find(function(a) { return a.name === assignee; });
-      var currentUser = firebase.auth().currentUser;
-      var currentUserEmail = currentUser ? currentUser.email : '';
+      var currentUserEmail = localStorage.getItem('reborn_user_email') || '';
       var currentUserName = _pur_entryAssigneesData.find(function(a) { return a.email === currentUserEmail; });
 
       var batchItems = [];
@@ -4905,8 +4904,7 @@
         var totalAmount = supItems.reduce(function(s, i) { return s + i.amount; }, 0);
         var assignee = supItems[0].assignee;
         var assigneeData = _pur_entryAssigneesData.find(function(a) { return a.name === assignee; });
-        var currentUser = firebase.auth().currentUser;
-        var currentUserEmail = currentUser ? currentUser.email : '';
+        var currentUserEmail = localStorage.getItem('reborn_user_email') || '';
         var currentUserName = _pur_entryAssigneesData.find(function(a) { return a.email === currentUserEmail; });
 
         batchPromise = batchPromise.then(function() {
@@ -5353,7 +5351,8 @@
         var historyId = purGenerateLabelHistoryId();
         var slotIds = _pur_entryGeneratedQRData.map(function(qr) { return qr.slotId; });
         var startPos = parseInt((document.getElementById('pur-entryStartPosition') || {}).value) || 1;
-        var currentUser = firebase.auth().currentUser;
+        var _purCurrentEmail = localStorage.getItem('reborn_user_email') || 'unknown';
+        var _purCurrentName = localStorage.getItem('reborn_user_name') || '';
         var historyData = {
           historyId: historyId,
           batchId: (document.getElementById('pur-entryPurchaseId') || {}).textContent || '',
@@ -5362,8 +5361,8 @@
           presetName: (_pur_entryLabelPresetsDefault[_pur_currentEntryPresetKey] || {}).name || _pur_currentEntryPresetKey,
           labelSettings: Object.assign({}, _pur_currentEntryLabelSettings),
           startPosition: startPos, sheetsUsed: sheetsNeeded,
-          printedBy: currentUser ? currentUser.email : 'unknown',
-          printedByName: currentUser ? (currentUser.displayName || '') : '',
+          printedBy: _purCurrentEmail,
+          printedByName: _purCurrentName,
           printedAt: firebase.firestore.FieldValue.serverTimestamp(),
           reprintCount: 0, lastReprintAt: null
         };
@@ -5556,7 +5555,7 @@
         assigneeEmail: assigneeEmail, assigneeName: assigneeName,
         dueDate: dueDate || null, note: note, status: 'pending',
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        createdBy: firebase.auth().currentUser ? firebase.auth().currentUser.email : 'unknown'
+        createdBy: localStorage.getItem('reborn_user_email') || 'unknown'
       }).then(function() {
         purCloseModal('pur-createInspectionRequestModal');
         alert('商品登録進捗を作成しました');
@@ -5953,7 +5952,7 @@
         await db.collection('purchaseBatches').doc(batchId).update(batchUpdate);
 
         // 発送リマインダータスクを自動完了
-        var currentUserEmail = firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
+        var currentUserEmail = localStorage.getItem('reborn_user_email');
         if (currentUserEmail) {
           db.collection('userTasks').doc(currentUserEmail).collection('tasks')
             .where('type', '==', 'dispatch_reminder')
