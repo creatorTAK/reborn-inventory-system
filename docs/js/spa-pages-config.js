@@ -192,5 +192,12 @@ const FURIRA_PAGES = {
     init: 'initPackagingPage',
     destroy: 'destroyPackagingPage',
     bottomNav: null
+  },
+  'admin-announce': {
+    type: 'fragment',
+    fragmentUrl: '/fragments/admin-announce.html',
+    init: 'initAdminAnnouncePage',
+    destroy: 'destroyAdminAnnouncePage',
+    bottomNav: null
   }
 };
