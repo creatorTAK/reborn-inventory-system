@@ -3697,17 +3697,6 @@
     }
   </style>
 
-  <!-- デバッグ表示（問題解決後に削除） -->
-  <div id="mp-debug-panel" style="position:fixed;top:4px;left:8px;right:8px;background:#1a1a2e;color:#0f0;font-family:monospace;font-size:10px;padding:6px;border-radius:8px;z-index:99999;max-height:120px;overflow-y:auto;opacity:0.9;" onclick="this.style.display='none'"></div>
-  <script>
-    window._mpDebug = function(msg) {
-      var p = document.getElementById('mp-debug-panel');
-      if (p) p.innerHTML += msg + '<br>';
-      console.log('[MP-DEBUG] ' + msg);
-    };
-    window._mpDebug('v0305d LOADED | ' + new Date().toLocaleTimeString());
-  </script>
-
   <!-- ローディング -->
   <div class="loading-overlay" id="mp-loadingOverlay" style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.9);display:none;align-items:center;justify-content:center;z-index:9999;">
     <div style="text-align:center;">
@@ -4232,7 +4221,7 @@
 
 
   <script>
-    if (window._mpDebug) window._mpDebug('script START');
+
     // ============================================
     // Mypage SPA Fragment
     // ============================================
@@ -4450,7 +4439,6 @@
 
     // 初期化（キャッシュ優先 + 並列実行）
     async function _mpInit() {
-      if (window._mpDebug) window._mpDebug('_mpInit called, ready:' + window._firebaseModularReady);
       // v577: ページ遷移済みなら中断（非同期Promise.then経由で呼ばれるため）
       if (typeof getCurrentSpaPage === 'function' && getCurrentSpaPage() !== 'mypage') {
         console.log('[Mypage] _mpInit中断 - 既に別ページに遷移済み');
@@ -4491,7 +4479,6 @@
       getDownloadURL = window.storageGetDownloadURL;
       // _mpdb は window.db とは別の変数のため、compat版との衝突なし
       _mpInitRetryCount = 0;
-      if (window._mpDebug) window._mpDebug('FB assigned _mpdb:' + typeof _mpdb + ' col:' + typeof collection);
       var startTime = performance.now();
 
       // ユーザー情報取得
@@ -4509,9 +4496,7 @@
       }
 
       // 1. キャッシュを確認（キャッシュがあればローディングなしで即座に表示）
-      if (window._mpDebug) window._mpDebug('user:' + currentUser.email + ' perm:' + currentUser.permissionId);
       const cached = restoreFromCache();
-      if (window._mpDebug) window._mpDebug('cache:' + (cached ? 'HIT' : 'MISS'));
       if (cached) {
         // キャッシュからデータを復元
         compensationSettings = cached.compensationSettings || {};
@@ -4572,10 +4557,8 @@
 
         // 報酬対象者かチェック
         const isEligible = await checkEligibility();
-        if (window._mpDebug) window._mpDebug('eligible:' + isEligible);
 
         if (!isEligible) {
-          if (window._mpDebug) window._mpDebug('NOT ELIGIBLE!');
           showNotEligible('報酬対象外です', 'このアカウントは報酬管理の対象外です。');
           showLoading(false);
           return;
@@ -4602,24 +4585,29 @@
         console.log('✅ [PARALLEL] 並列データ取得完了');
 
         // 画面を描画
-        if (window._mpDebug) window._mpDebug('renderMyPage calling...');
-        try { renderMyPage(); if (window._mpDebug) window._mpDebug('renderMyPage OK'); } catch(e) { if (window._mpDebug) window._mpDebug('renderMyPage ERR:' + e.message); }
-        try { checkAdminAccess(); } catch(e) { if (window._mpDebug) window._mpDebug('checkAdmin ERR:' + e.message); }
-        try { saveToCache(); } catch(e) { if (window._mpDebug) window._mpDebug('saveCache ERR:' + e.message); }
+        renderMyPage();
 
+        // 管理者メニュー表示チェック
+        checkAdminAccess();
+
+        // キャッシュに保存
+        saveToCache();
+
+        // 背景画像がある場合はBase64でキャッシュ（次回用）
         if (userProfileBg.type === 'image' && userProfileBg.value) {
           cacheBgImageAsBase64(userProfileBg.value);
         }
 
-        if (window._mpDebug) window._mpDebug('checkUrlAction...');
-        try { checkUrlAction(); } catch(e) { if (window._mpDebug) window._mpDebug('urlAction ERR:' + e.message); }
+        const duration = (performance.now() - startTime).toFixed(0);
+        console.log('✅ [FIRESTORE] マイページ初期化完了 (' + duration + 'ms)');
+
+        // URLアクションパラメータをチェック
+        checkUrlAction();
       } catch (error) {
-        if (window._mpDebug) window._mpDebug('CATCH ERR: ' + (error && error.message ? error.message : String(error)));
         console.error('初期化エラー:', error);
-        try { showNotEligible('エラーが発生しました', 'データの読み込み中にエラーが発生しました。'); } catch(e2) {}
+        showNotEligible('エラーが発生しました', 'データの読み込み中にエラーが発生しました。');
       }
 
-      if (window._mpDebug) window._mpDebug('_mpInit DONE');
       showLoading(false);
     }
 
@@ -6891,9 +6879,11 @@
 
     // 目標履歴モーダルを開く
     window.openHistoryModal = async function() {
-      if (window._mpDebug) window._mpDebug('openHistoryModal CALLED');
+      // スクロール位置をリセット（absolute配置のモーダルが見えるように）
+      var spaPage = document.querySelector('[data-spa-page="mypage"]');
+      if (spaPage) spaPage.scrollTop = 0;
+
       const backdrop = document.getElementById('mp-historyModal');
-      if (window._mpDebug) window._mpDebug('backdrop:' + (backdrop ? 'found' : 'NULL'));
       const contentEl = document.getElementById('mp-historyContent');
 
       backdrop.classList.add('active');
@@ -6907,13 +6897,10 @@
       getDoc = window.firestoreGetDoc;
 
       try {
-        if (window._mpDebug) window._mpDebug('loadGoalHistory...');
         goalHistoryData = await loadGoalHistory();
         currentHistoryIndex = 0;
         updateHistoryDisplay();
-        if (window._mpDebug) window._mpDebug('history OK, items:' + goalHistoryData.length);
       } catch (error) {
-        if (window._mpDebug) window._mpDebug('history ERR:' + (error.message || error));
         contentEl.innerHTML = '<div class="history-empty"><i class="bi bi-exclamation-circle"></i><p>履歴の読み込みに失敗しました</p><p style="font-size:11px;color:#9ca3af;margin-top:8px;">' + (error.message || error) + '</p></div>';
       }
     };
@@ -6988,6 +6975,10 @@
 
     // 報酬履歴モーダルを開く
     window.openCompensationHistoryModal = async function() {
+      // スクロール位置をリセット
+      var spaPage = document.querySelector('[data-spa-page="mypage"]');
+      if (spaPage) spaPage.scrollTop = 0;
+
       const backdrop = document.getElementById('mp-compHistoryModal');
       const contentEl = document.getElementById('mp-compHistoryContent');
 
@@ -9214,7 +9205,6 @@
 
     function initMypagePage() {
       console.log('[Mypage SPA] initMypagePage called');
-      if (window._mpDebug) window._mpDebug('initMypagePage called');
 
       // Load Sortable.js dynamically if needed
       var loadPromises = [];
