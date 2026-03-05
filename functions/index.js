@@ -2707,7 +2707,43 @@ exports.monthlyGoalReminder = onSchedule({
               link: 'mypage'
             });
             tasksCreated++;
-            console.log(`🎯 [monthlyGoalReminder] 管理者売上目標タスク作成: ${ownerEmail}`);
+
+            // お知らせを作成
+            await db.collection('users').doc(ownerEmail).collection('personalAnnouncements').add({
+              title: `🎯 ${now.getMonth() + 1}月の売上目標を設定しましょう`,
+              body: `${now.getMonth() + 1}月の売上目標を設定してください。マイページの「設定」ボタンから設定できます。`,
+              priority: 'info',
+              type: 'goal_reminder',
+              createdAt: new Date().toISOString()
+            });
+
+            // プッシュ通知を送信
+            const ownerDevices = await db.collection('users')
+              .doc(ownerEmail)
+              .collection('devices')
+              .where('fcmToken', '!=', '')
+              .get();
+
+            if (!ownerDevices.empty) {
+              const ownerTokens = ownerDevices.docs.map(d => d.data().fcmToken).filter(t => t);
+              if (ownerTokens.length > 0) {
+                try {
+                  await admin.messaging().sendEachForMulticast({
+                    notification: {
+                      title: '🎯 今月の売上目標を設定しましょう',
+                      body: `${now.getMonth() + 1}月の売上目標を設定してください。`
+                    },
+                    data: { type: 'goal_reminder', yearMonth: yearMonth, url: '/mypage.html' },
+                    tokens: ownerTokens
+                  });
+                  notificationsSent++;
+                } catch (pushErr) {
+                  console.log('管理者プッシュ通知エラー:', pushErr.message);
+                }
+              }
+            }
+
+            console.log(`🎯 [monthlyGoalReminder] 管理者売上目標タスク+通知作成: ${ownerEmail}`);
           } catch (e) {
             console.error(`❌ [monthlyGoalReminder] 管理者タスク作成エラー: ${e.message}`);
           }
