@@ -4221,6 +4221,7 @@
 
 
   <script>
+    console.log('[MP-DEBUG] ★ mypage script START');
     // ============================================
     // Mypage SPA Fragment
     // ============================================
@@ -4438,6 +4439,7 @@
 
     // 初期化（キャッシュ優先 + 並列実行）
     async function _mpInit() {
+      console.log('[MP-DEBUG] ★ _mpInit called, _firebaseModularReady:', window._firebaseModularReady);
       // v577: ページ遷移済みなら中断（非同期Promise.then経由で呼ばれるため）
       if (typeof getCurrentSpaPage === 'function' && getCurrentSpaPage() !== 'mypage') {
         console.log('[Mypage] _mpInit中断 - 既に別ページに遷移済み');
@@ -4478,6 +4480,7 @@
       getDownloadURL = window.storageGetDownloadURL;
       // _mpdb は window.db とは別の変数のため、compat版との衝突なし
       _mpInitRetryCount = 0;
+      console.log('[MP-DEBUG] ★ Firebase refs assigned, _mpdb:', typeof _mpdb, ', collection:', typeof collection);
       var startTime = performance.now();
 
       // ユーザー情報取得
@@ -4495,7 +4498,9 @@
       }
 
       // 1. キャッシュを確認（キャッシュがあればローディングなしで即座に表示）
+      console.log('[MP-DEBUG] ★ user:', currentUser.email, 'perm:', currentUser.permissionId);
       const cached = restoreFromCache();
+      console.log('[MP-DEBUG] ★ cache:', cached ? 'HIT' : 'MISS');
       if (cached) {
         // キャッシュからデータを復元
         compensationSettings = cached.compensationSettings || {};
@@ -4556,8 +4561,10 @@
 
         // 報酬対象者かチェック
         const isEligible = await checkEligibility();
+        console.log('[MP-DEBUG] ★ isEligible:', isEligible);
 
         if (!isEligible) {
+          console.log('[MP-DEBUG] ★★ NOT ELIGIBLE → showNotEligible');
           showNotEligible('報酬対象外です', 'このアカウントは報酬管理の対象外です。');
           showLoading(false);
           return;
@@ -4584,6 +4591,7 @@
         console.log('✅ [PARALLEL] 並列データ取得完了');
 
         // 画面を描画
+        console.log('[MP-DEBUG] ★ renderMyPage() calling...');
         renderMyPage();
 
         // 管理者メニュー表示チェック
@@ -4603,10 +4611,11 @@
         // URLアクションパラメータをチェック
         checkUrlAction();
       } catch (error) {
-        console.error('初期化エラー:', error);
+        console.error('[MP-DEBUG] ★★ 初期化エラー:', error);
         showNotEligible('エラーが発生しました', 'データの読み込み中にエラーが発生しました。');
       }
 
+      console.log('[MP-DEBUG] ★ _mpInit DONE');
       showLoading(false);
     }
 
