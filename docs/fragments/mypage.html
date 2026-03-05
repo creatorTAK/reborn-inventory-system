@@ -6860,7 +6860,7 @@
         updateHistoryDisplay();
       } catch (error) {
         console.error('履歴読み込みエラー:', error);
-        contentEl.innerHTML = '<div class="history-empty"><i class="bi bi-exclamation-circle"></i><p>履歴の読み込みに失敗しました</p></div>';
+        contentEl.innerHTML = '<div class="history-empty"><i class="bi bi-exclamation-circle"></i><p>履歴の読み込みに失敗しました</p><p style="font-size:11px;color:#9ca3af;margin-top:8px;">' + (error.message || error) + '</p></div>';
       }
     };
 
@@ -6946,7 +6946,7 @@
         updateCompHistoryDisplay();
       } catch (error) {
         console.error('報酬履歴読み込みエラー:', error);
-        contentEl.innerHTML = '<div class="comp-history-empty"><i class="bi bi-exclamation-circle"></i><p>履歴の読み込みに失敗しました</p></div>';
+        contentEl.innerHTML = '<div class="comp-history-empty"><i class="bi bi-exclamation-circle"></i><p>履歴の読み込みに失敗しました</p><p style="font-size:11px;color:#9ca3af;margin-top:8px;">' + (error.message || error) + '</p></div>';
       }
     };
 
@@ -7241,82 +7241,76 @@
     async function loadGoalHistory() {
       const history = [];
       const now = new Date();
-      
+
+      // 報酬データを1回だけ取得（ループ外）
+      const recordsRef = collection(db, 'compensationRecords');
+      const recordsSnap = await getDocs(recordsRef);
+
+      // 全レコードを配列化
+      const allRecords = [];
+      recordsSnap.forEach(docSnap => {
+        allRecords.push(docSnap.data());
+      });
+
       // 過去12ヶ月分を取得（当月除く）
       for (let i = 1; i <= 12; i++) {
         const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const year = targetDate.getFullYear();
         const month = targetDate.getMonth() + 1;
         const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
-        
+
+        // 2025年12月以降のみ表示
+        if (year < 2025 || (year === 2025 && month < 12)) continue;
+
         // 目標データを取得
         const goalDocRef = doc(db, 'userGoals', `${currentUser.email}_${yearMonth}`);
         const goalSnap = await getDoc(goalDocRef);
-        
-        // 報酬データを取得
-        const recordsRef = collection(db, 'compensationRecords');
-        const recordsSnap = await getDocs(recordsRef);
-        
-        let monthRecords = [];
-        recordsSnap.forEach(docSnap => {
-          const data = docSnap.data();
-          if (data.staffEmail !== currentUser.email) return;
-          
+
+        // その月の自分のレコードをフィルタ
+        const monthRecords = allRecords.filter(data => {
+          if (data.staffEmail !== currentUser.email) return false;
+          const dateStr = data.completedAt || data.recordedAt;
+          if (!dateStr) return false;
+          const date = typeof dateStr === 'string' ? new Date(dateStr) : (dateStr.toDate ? dateStr.toDate() : new Date(dateStr));
+          return date.getFullYear() === year && (date.getMonth() + 1) === month;
+        });
+
+        const goalAmount = goalSnap.exists() ? (goalSnap.data().goalAmount || 0) : 10000;
+        const stats = calculateStats(monthRecords);
+
+        // ランキングを計算（全員分・その月）
+        const allUsersMap = new Map();
+        allRecords.forEach(data => {
           const dateStr = data.completedAt || data.recordedAt;
           if (!dateStr) return;
-          
           const date = typeof dateStr === 'string' ? new Date(dateStr) : (dateStr.toDate ? dateStr.toDate() : new Date(dateStr));
           if (date.getFullYear() === year && (date.getMonth() + 1) === month) {
-            monthRecords.push(data);
+            const email = data.staffEmail || 'unknown';
+            if (!allUsersMap.has(email)) {
+              allUsersMap.set(email, { totalAmount: 0 });
+            }
+            allUsersMap.get(email).totalAmount += (data.unitPrice || 0);
           }
         });
-        
-        // 2025年12月以降であれば常に表示（データがなくても）
-        if (year > 2025 || (year === 2025 && month >= 12)) {
-          const goalAmount = goalSnap.exists() ? (goalSnap.data().goalAmount || 0) : 10000;
-          const stats = calculateStats(monthRecords);
-          
-          // ランキングを計算（全員分）
-          const allUsersMap = new Map();
-          recordsSnap.forEach(docSnap => {
-            const data = docSnap.data();
-            const dateStr = data.completedAt || data.recordedAt;
-            if (!dateStr) return;
-            
-            const date = typeof dateStr === 'string' ? new Date(dateStr) : (dateStr.toDate ? dateStr.toDate() : new Date(dateStr));
-            if (date.getFullYear() === year && (date.getMonth() + 1) === month) {
-              const email = data.staffEmail || 'unknown';
-              if (!allUsersMap.has(email)) {
-                allUsersMap.set(email, { totalAmount: 0 });
-              }
-              allUsersMap.get(email).totalAmount += (data.unitPrice || 0);
-            }
-          });
-          
-          // ランキングを生成
-          const ranking = Array.from(allUsersMap.entries())
-            .map(([email, data]) => ({ email, ...data }))
-            .sort((a, b) => b.totalAmount - a.totalAmount);
-          
-          const myRank = ranking.findIndex(r => r.email === currentUser.email) + 1;
-          
-          history.push({
-            yearMonth,
-            year,
-            month,
-            goalAmount,
-            actualAmount: stats.totalAmount,
-            listingCount: stats.listingCount,
-            listingAmount: stats.listingAmount,
-            shippingCount: stats.shippingCount,
-            shippingAmount: stats.shippingAmount,
-            taskStats: stats.taskStats,  // 全タスク統計を追加
-            rank: myRank || '-',
-            totalParticipants: ranking.length
-          });
-        }
+
+        const ranking = Array.from(allUsersMap.entries())
+          .map(([email, d]) => ({ email, ...d }))
+          .sort((a, b) => b.totalAmount - a.totalAmount);
+        const myRank = ranking.findIndex(r => r.email === currentUser.email) + 1;
+
+        history.push({
+          yearMonth, year, month, goalAmount,
+          actualAmount: stats.totalAmount,
+          listingCount: stats.listingCount,
+          listingAmount: stats.listingAmount,
+          shippingCount: stats.shippingCount,
+          shippingAmount: stats.shippingAmount,
+          taskStats: stats.taskStats,
+          rank: myRank || '-',
+          totalParticipants: ranking.length
+        });
       }
-      
+
       return history;
     }
 
