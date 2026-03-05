@@ -3697,6 +3697,17 @@
     }
   </style>
 
+  <!-- デバッグ表示（問題解決後に削除） -->
+  <div id="mp-debug-panel" style="position:fixed;bottom:60px;left:8px;right:8px;background:#1a1a2e;color:#0f0;font-family:monospace;font-size:11px;padding:8px;border-radius:8px;z-index:99999;max-height:150px;overflow-y:auto;opacity:0.95;"></div>
+  <script>
+    window._mpDebug = function(msg) {
+      var p = document.getElementById('mp-debug-panel');
+      if (p) p.innerHTML += msg + '<br>';
+      console.log('[MP-DEBUG] ' + msg);
+    };
+    window._mpDebug('v0305d LOADED | ' + new Date().toLocaleTimeString());
+  </script>
+
   <!-- ローディング -->
   <div class="loading-overlay" id="mp-loadingOverlay" style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.9);display:none;align-items:center;justify-content:center;z-index:9999;">
     <div style="text-align:center;">
@@ -4221,7 +4232,7 @@
 
 
   <script>
-    console.log('[MP-DEBUG] ★ mypage script START');
+    if (window._mpDebug) window._mpDebug('script START');
     // ============================================
     // Mypage SPA Fragment
     // ============================================
@@ -4439,7 +4450,7 @@
 
     // 初期化（キャッシュ優先 + 並列実行）
     async function _mpInit() {
-      console.log('[MP-DEBUG] ★ _mpInit called, _firebaseModularReady:', window._firebaseModularReady);
+      if (window._mpDebug) window._mpDebug('_mpInit called, ready:' + window._firebaseModularReady);
       // v577: ページ遷移済みなら中断（非同期Promise.then経由で呼ばれるため）
       if (typeof getCurrentSpaPage === 'function' && getCurrentSpaPage() !== 'mypage') {
         console.log('[Mypage] _mpInit中断 - 既に別ページに遷移済み');
@@ -4480,7 +4491,7 @@
       getDownloadURL = window.storageGetDownloadURL;
       // _mpdb は window.db とは別の変数のため、compat版との衝突なし
       _mpInitRetryCount = 0;
-      console.log('[MP-DEBUG] ★ Firebase refs assigned, _mpdb:', typeof _mpdb, ', collection:', typeof collection);
+      if (window._mpDebug) window._mpDebug('FB assigned _mpdb:' + typeof _mpdb + ' col:' + typeof collection);
       var startTime = performance.now();
 
       // ユーザー情報取得
@@ -4498,9 +4509,9 @@
       }
 
       // 1. キャッシュを確認（キャッシュがあればローディングなしで即座に表示）
-      console.log('[MP-DEBUG] ★ user:', currentUser.email, 'perm:', currentUser.permissionId);
+      if (window._mpDebug) window._mpDebug('user:' + currentUser.email + ' perm:' + currentUser.permissionId);
       const cached = restoreFromCache();
-      console.log('[MP-DEBUG] ★ cache:', cached ? 'HIT' : 'MISS');
+      if (window._mpDebug) window._mpDebug('cache:' + (cached ? 'HIT' : 'MISS'));
       if (cached) {
         // キャッシュからデータを復元
         compensationSettings = cached.compensationSettings || {};
@@ -4561,10 +4572,10 @@
 
         // 報酬対象者かチェック
         const isEligible = await checkEligibility();
-        console.log('[MP-DEBUG] ★ isEligible:', isEligible);
+        if (window._mpDebug) window._mpDebug('eligible:' + isEligible);
 
         if (!isEligible) {
-          console.log('[MP-DEBUG] ★★ NOT ELIGIBLE → showNotEligible');
+          if (window._mpDebug) window._mpDebug('NOT ELIGIBLE!');
           showNotEligible('報酬対象外です', 'このアカウントは報酬管理の対象外です。');
           showLoading(false);
           return;
@@ -4591,7 +4602,7 @@
         console.log('✅ [PARALLEL] 並列データ取得完了');
 
         // 画面を描画
-        console.log('[MP-DEBUG] ★ renderMyPage() calling...');
+        if (window._mpDebug) window._mpDebug('renderMyPage calling...');
         renderMyPage();
 
         // 管理者メニュー表示チェック
@@ -4611,11 +4622,12 @@
         // URLアクションパラメータをチェック
         checkUrlAction();
       } catch (error) {
-        console.error('[MP-DEBUG] ★★ 初期化エラー:', error);
+        if (window._mpDebug) window._mpDebug('ERROR: ' + error.message);
+        console.error('初期化エラー:', error);
         showNotEligible('エラーが発生しました', 'データの読み込み中にエラーが発生しました。');
       }
 
-      console.log('[MP-DEBUG] ★ _mpInit DONE');
+      if (window._mpDebug) window._mpDebug('_mpInit DONE');
       showLoading(false);
     }
 
@@ -9206,6 +9218,7 @@
 
     function initMypagePage() {
       console.log('[Mypage SPA] initMypagePage called');
+      if (window._mpDebug) window._mpDebug('initMypagePage called');
 
       // Load Sortable.js dynamically if needed
       var loadPromises = [];
