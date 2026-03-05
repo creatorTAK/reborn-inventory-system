@@ -5178,7 +5178,7 @@
       const teamGoal = teamGoalAmount || 0;
       const teamProgress = teamGoal > 0 ? Math.min(100, Math.round((totalAmount / teamGoal) * 100)) : 0;
 
-      // ビジネス目標（スタッフ目標合算）
+      // ビジネス目標
       const salesTarget = businessGoals.salesTarget || 0;
       const actualSales = monthlySalesData.totalSales || 0;
       const actualProfit = monthlySalesData.totalProfit || 0;
@@ -5246,11 +5246,13 @@
           </div>
         </div>
 
-        <!-- ビジネス目標（スタッフ目標合算） -->
+        <!-- ビジネス目標 -->
         <div class="business-goal-section">
           <div class="business-goal-header">
             <div class="business-goal-title">売上目標</div>
-            <span style="font-size: 11px; color: #9ca3af;">スタッフ目標の合算</span>
+            <button onclick="openSalesGoalModal()" style="background: none; border: 1px solid #d1d5db; border-radius: 6px; padding: 2px 8px; font-size: 11px; color: #6b7280; cursor: pointer; display: flex; align-items: center; gap: 3px;">
+              <i class="bi bi-pencil" style="font-size: 10px;"></i> 設定
+            </button>
           </div>
 
           <!-- 売上目標 -->
@@ -5389,16 +5391,14 @@
       showLoading(true);
 
       try {
-        // ビジネス目標を読み込み（スタッフ目標の合算）
-        const goalsRef = collection(_mpdb, 'userGoals');
-        const goalsSnapshot = await getDocs(goalsRef);
+        // ビジネス目標を読み込み（settings/businessGoals）
+        const bgDocRef = doc(_mpdb, 'settings', 'businessGoals');
+        const bgDocSnap = await getDoc(bgDocRef);
         let totalGoal = 0;
-        goalsSnapshot.forEach(docSnap => {
-          const data = docSnap.data();
-          if (data.yearMonth === yearMonth) {
-            totalGoal += data.goalAmount || 0;
-          }
-        });
+        if (bgDocSnap.exists()) {
+          const bgData = bgDocSnap.data();
+          totalGoal = (bgData.goals && bgData.goals[yearMonth]) || 0;
+        }
         businessGoals = { salesTarget: totalGoal };
 
         // 売上データを読み込み
@@ -5443,16 +5443,18 @@
         });
 
         // メンバー目標を読み込み
-        const usersSnap = await getDocs(query(collection(_mpdb, 'users'), where('status', '==', 'active')));
+        const usersSnap = await getDocs(collection(_mpdb, 'users'));
         const activeUsers = [];
         usersSnap.forEach(doc => {
           const data = doc.data();
-          if (data.permissionId !== 'owner') {
-            activeUsers.push({
-              email: doc.id,
-              name: data.userName || data.name || doc.id.split('@')[0],
-              photoURL: data.iconUrl || data.photoURL || ''
-            });
+          if (data.status === 'active' || !data.status) {
+            if (data.permissionId !== 'owner') {
+              activeUsers.push({
+                email: doc.id,
+                name: data.userName || data.name || doc.id.split('@')[0],
+                photoURL: data.iconUrl || data.photoURL || ''
+              });
+            }
           }
         });
 
@@ -5670,14 +5672,14 @@
           const month = targetDate.getMonth() + 1;
           const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
 
-          // ビジネス目標（スタッフ目標合算）
-          const userGoalsRef = collection(_mpdb, 'userGoals');
-          const userGoalsSnap = await getDocs(userGoalsRef);
+          // ビジネス目標（settings/businessGoals）
+          const bgRef = doc(_mpdb, 'settings', 'businessGoals');
+          const bgSnap = await getDoc(bgRef);
           let monthGoalTotal = 0;
-          userGoalsSnap.forEach(ds => {
-            const d = ds.data();
-            if (d.yearMonth === yearMonth) monthGoalTotal += d.goalAmount || 0;
-          });
+          if (bgSnap.exists()) {
+            const bgD = bgSnap.data();
+            monthGoalTotal = (bgD.goals && bgD.goals[yearMonth]) || 0;
+          }
           const goals = { salesTarget: monthGoalTotal };
 
           // 売上データ
@@ -5972,29 +5974,94 @@
       }
     }
 
-    // ビジネス目標を読み込み（スタッフ目標の合算から自動算出）
+    // ビジネス目標を読み込み（settings/businessGoals から）
     async function loadBusinessGoals() {
       try {
         const now = new Date();
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-        // 全userGoalsを取得して当月分を合算
-        const goalsRef = collection(_mpdb, 'userGoals');
-        const snapshot = await getDocs(goalsRef);
-        let totalGoal = 0;
-        snapshot.forEach(docSnap => {
+        const docRef = doc(_mpdb, 'settings', 'businessGoals');
+        const docSnap = await getDoc(docRef);
+        let salesTarget = 0;
+        if (docSnap.exists()) {
           const data = docSnap.data();
-          if (data.yearMonth === yearMonth) {
-            totalGoal += data.goalAmount || 0;
-          }
-        });
+          salesTarget = (data.goals && data.goals[yearMonth]) || 0;
+        }
 
-        businessGoals = { salesTarget: totalGoal };
+        businessGoals = { salesTarget };
       } catch (error) {
         console.error('ビジネス目標取得エラー:', error);
         businessGoals = { salesTarget: 0 };
       }
     }
+
+    // 売上目標設定モーダルを開く
+    window.openSalesGoalModal = async function() {
+      const now = new Date();
+      const yearMonth = adminViewMonth || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const [y, m] = yearMonth.split('-').map(Number);
+      const monthLabel = `${y}年${m}月`;
+
+      // 現在値を取得
+      const currentGoal = businessGoals.salesTarget || 0;
+
+      const spaPage = document.getElementById('spa-page');
+      if (spaPage) spaPage.scrollTop = 0;
+
+      const overlay = document.createElement('div');
+      overlay.id = 'salesGoalModal';
+      overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;min-height:100%;background:#f3f4f6;z-index:9999;padding:20px;';
+      overlay.innerHTML = `
+        <div style="max-width:400px;margin:0 auto;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+            <button onclick="closeSalesGoalModal()" style="background:none;border:none;font-size:20px;cursor:pointer;padding:4px;"><i class="bi bi-arrow-left"></i></button>
+            <h3 style="margin:0;font-size:16px;">売上目標設定</h3>
+          </div>
+          <div style="background:white;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+            <div style="font-size:14px;color:#6b7280;margin-bottom:12px;">${monthLabel}</div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;color:#374151;display:block;margin-bottom:6px;">目標金額（円）</label>
+              <input type="number" id="salesGoalInput" value="${currentGoal}" min="0" step="10000"
+                style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:16px;box-sizing:border-box;"
+                placeholder="例: 500000">
+            </div>
+            <button onclick="saveSalesGoal('${yearMonth}')" style="width:100%;padding:10px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+              保存
+            </button>
+          </div>
+        </div>
+      `;
+      document.getElementById('spa-page').appendChild(overlay);
+      document.getElementById('salesGoalInput').focus();
+    };
+
+    window.closeSalesGoalModal = function() {
+      const modal = document.getElementById('salesGoalModal');
+      if (modal) modal.remove();
+    };
+
+    window.saveSalesGoal = async function(yearMonth) {
+      const input = document.getElementById('salesGoalInput');
+      const amount = parseInt(input.value) || 0;
+
+      try {
+        const docRef = doc(_mpdb, 'settings', 'businessGoals');
+        const docSnap = await getDoc(docRef);
+        const existing = docSnap.exists() ? docSnap.data() : {};
+        const goals = existing.goals || {};
+        goals[yearMonth] = amount;
+
+        await setDoc(docRef, { goals }, { merge: true });
+
+        businessGoals = { salesTarget: amount };
+        closeSalesGoalModal();
+        renderAdminView();
+        console.log('✅ 売上目標保存:', yearMonth, amount);
+      } catch (error) {
+        console.error('売上目標保存エラー:', error);
+        alert('保存に失敗しました');
+      }
+    };
 
     // チーム目標を読み込み
     async function loadTeamGoal() {
@@ -6019,9 +6086,12 @@
     // アクティブユーザー数を取得（軽量版）
     async function loadActiveUsersCount() {
       try {
-        const usersSnap = await getDocs(query(collection(_mpdb, 'users'), where('status', '==', 'active')));
+        const usersSnap = await getDocs(collection(_mpdb, 'users'));
         let count = 0;
-        usersSnap.forEach(() => count++);
+        usersSnap.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.status === 'active' || !data.status) count++;
+        });
         systemStatus.activeUsers = count;
       } catch (error) {
         console.error('アクティブユーザー数取得エラー:', error);
@@ -6036,16 +6106,18 @@
         const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         
         // アクティブユーザーを取得
-        const usersSnap = await getDocs(query(collection(_mpdb, 'users'), where('status', '==', 'active')));
+        const usersSnap = await getDocs(collection(_mpdb, 'users'));
         const activeUsers = [];
         usersSnap.forEach(doc => {
           const data = doc.data();
-          if (data.permissionId !== 'owner') { // 管理者以外
-            activeUsers.push({
-              email: doc.id,
-              name: data.userName || data.name || doc.id.split('@')[0],
-              photoURL: data.iconUrl || data.photoURL || ''
-            });
+          if (data.status === 'active' || !data.status) {
+            if (data.permissionId !== 'owner') { // 管理者以外
+              activeUsers.push({
+                email: doc.id,
+                name: data.userName || data.name || doc.id.split('@')[0],
+                photoURL: data.iconUrl || data.photoURL || ''
+              });
+            }
           }
         });
 
