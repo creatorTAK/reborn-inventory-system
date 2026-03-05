@@ -9124,19 +9124,23 @@
       body.innerHTML = '<div style="text-align: center; padding: 40px; color: #9ca3af;"><i class="bi bi-arrow-repeat" style="animation: spin 1s linear infinite; font-size: 24px;"></i></div>';
 
       try {
+        if (!db || !currentUser || !currentUser.email) {
+          throw new Error('初期化未完了: db=' + !!db + ', user=' + !!(currentUser && currentUser.email));
+        }
+        console.log('[Notes] query start: users/' + currentUser.email + '/notes, funcs:', !!collection, !!query, !!orderBy, !!limit, !!getDocs);
         const notesRef = collection(db, 'users', currentUser.email, 'notes');
         const q = query(notesRef, orderBy('updatedAt', 'desc'), limit(50));
         const snapshot = await getDocs(q);
 
         notesList = [];
-        snapshot.forEach(doc => {
-          notesList.push({ id: doc.id, ...doc.data() });
+        snapshot.forEach(function(d) {
+          notesList.push({ id: d.id, ...d.data() });
         });
 
         renderNotesList();
       } catch (error) {
-        console.error('[Notes] 読み込みエラー:', error);
-        body.innerHTML = '<div class="notes-empty"><i class="bi bi-exclamation-circle"></i><div class="notes-empty-text">読み込みに失敗しました</div></div>';
+        console.error('[Notes] 読み込みエラー:', error, error.code, error.message);
+        body.innerHTML = '<div class="notes-empty"><i class="bi bi-exclamation-circle"></i><div class="notes-empty-text">読み込みに失敗しました<br><small style="color:#9ca3af;">' + (error.message || error) + '</small></div></div>';
       }
     }
 
