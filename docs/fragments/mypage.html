@@ -4043,10 +4043,6 @@
             <i class="bi bi-person-badge"></i>
             <span>個人情報設定</span>
           </button>
-          <button class="settings-dropdown-item" onclick="openNotificationSettingsModal()">
-            <i class="bi bi-bell"></i>
-            <span>通知設定</span>
-          </button>
           <div class="settings-dropdown-divider"></div>
           <button class="settings-dropdown-item" onclick="mpNavigateTo('help')">
             <i class="bi bi-question-circle"></i>
@@ -4621,40 +4617,6 @@
       <div class="settings-modal-footer">
         <button class="settings-cancel-btn" onclick="closePersonalInfoModal()">キャンセル</button>
         <button class="settings-save-btn" id="mp-personalInfoSaveBtn" onclick="savePersonalInfo()">保存</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 通知設定モーダル -->
-  <div class="settings-modal-backdrop" id="mp-notificationSettingsModal">
-    <div class="settings-modal">
-      <div class="settings-modal-header">
-        <span class="settings-modal-title">
-          <i class="bi bi-bell"></i> 通知設定
-        </span>
-        <button class="settings-modal-close" onclick="closeNotificationSettingsModal()">
-          <i class="bi bi-x"></i>
-        </button>
-      </div>
-      <div class="settings-modal-body">
-        <div class="settings-toggle-row">
-          <span class="settings-toggle-label">プッシュ通知</span>
-          <label class="settings-toggle">
-            <input type="checkbox" id="mp-pushNotificationToggle">
-            <span class="settings-toggle-slider"></span>
-          </label>
-        </div>
-        <div class="settings-toggle-row">
-          <span class="settings-toggle-label">通知音</span>
-          <label class="settings-toggle">
-            <input type="checkbox" id="mp-notificationSoundToggle">
-            <span class="settings-toggle-slider"></span>
-          </label>
-        </div>
-      </div>
-      <div class="settings-modal-footer">
-        <button class="settings-cancel-btn" onclick="closeNotificationSettingsModal()">キャンセル</button>
-        <button class="settings-save-btn" id="mp-notificationSaveBtn" onclick="saveNotificationSettings()">保存</button>
       </div>
     </div>
   </div>
@@ -8349,7 +8311,7 @@
     };
 
     // ========================================
-    // 個人情報設定・通知設定機能
+    // 個人情報設定機能
     // ========================================
 
     // 個人情報（発送先・口座）を保持
@@ -8663,12 +8625,6 @@
       }
     }
 
-    // 通知設定を保持
-    var notificationSettings = {
-      pushEnabled: true,
-      soundEnabled: true
-    };
-
     // 個人情報を読み込む
     async function loadPersonalInfo() {
       try {
@@ -8685,25 +8641,6 @@
         }
       } catch (error) {
         console.error('[PersonalInfo] 読み込みエラー:', error);
-      }
-    }
-
-    // 通知設定を読み込む
-    async function loadNotificationSettings() {
-      try {
-        const userRef = doc(db, 'users', currentUser.email);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          if (data.notificationSettings) {
-            notificationSettings = {
-              pushEnabled: data.notificationSettings.pushEnabled !== false,
-              soundEnabled: data.notificationSettings.soundEnabled !== false
-            };
-          }
-        }
-      } catch (error) {
-        console.error('[NotificationSettings] 読み込みエラー:', error);
       }
     }
 
@@ -8934,56 +8871,6 @@
       } catch (error) {
         console.error('[PersonalInfo] 保存エラー:', error);
         alert('個人情報の保存に失敗しました');
-      } finally {
-        saveBtn.disabled = false;
-        saveBtn.textContent = '保存';
-      }
-    };
-
-    // 通知設定モーダルを開く
-    window.openNotificationSettingsModal = async function() {
-      const dropdown = document.getElementById('mp-settingsDropdown');
-      if (dropdown) dropdown.classList.remove('active');
-
-      // 通知設定を読み込み
-      await loadNotificationSettings();
-
-      // トグルに値をセット
-      document.getElementById('mp-pushNotificationToggle').checked = notificationSettings.pushEnabled;
-      document.getElementById('mp-notificationSoundToggle').checked = notificationSettings.soundEnabled;
-
-      document.getElementById('mp-notificationSettingsModal').classList.add('active');
-    };
-
-    // 通知設定モーダルを閉じる
-    window.closeNotificationSettingsModal = function() {
-      document.getElementById('mp-notificationSettingsModal').classList.remove('active');
-    };
-
-    // 通知設定を保存
-    window.saveNotificationSettings = async function() {
-      const saveBtn = document.getElementById('mp-notificationSaveBtn');
-      saveBtn.disabled = true;
-      saveBtn.textContent = '保存中...';
-
-      try {
-        const newSettings = {
-          pushEnabled: document.getElementById('mp-pushNotificationToggle').checked,
-          soundEnabled: document.getElementById('mp-notificationSoundToggle').checked
-        };
-
-        // Firestoreに保存
-        const userRef = doc(db, 'users', currentUser.email);
-        await updateDoc(userRef, {
-          notificationSettings: newSettings
-        });
-
-        notificationSettings = newSettings;
-        closeNotificationSettingsModal();
-        console.log('[NotificationSettings] 通知設定を保存:', notificationSettings);
-      } catch (error) {
-        console.error('[NotificationSettings] 保存エラー:', error);
-        alert('通知設定の保存に失敗しました');
       } finally {
         saveBtn.disabled = false;
         saveBtn.textContent = '保存';
