@@ -1053,6 +1053,8 @@
           var userDoc = usersSnapshot.docs[i];
           var userData = userDoc.data();
           var email = userDoc.id;
+          // 管理者自身は除外
+          if (email === _tdl_userEmail) continue;
           var tasksSnapshot = await _tdl_db.collection('userTasks').doc(email).collection('tasks').orderBy('createdAt', 'desc').get();
 
           var pending = 0, completedThisWeek = 0, overdue = 0;
@@ -1119,13 +1121,35 @@
     async function tdlSendReminder(userEmail, userName) {
       if (!confirm(userName + 'さんにタスク未完了の通知を送信しますか？')) return;
       try {
-        await _tdl_db.collection('users').doc(userEmail).collection('userAnnouncements').add({
-          title: 'タスク未完了のお知らせ',
-          content: '未完了のタスクがあります。確認をお願いします。',
-          createdAt: firebase.firestore.Timestamp.now(),
-          read: false,
-          type: 'reminder'
+        // アプリ内お知らせ
+        await _tdl_db.collection('users').doc(userEmail).collection('personalAnnouncements').add({
+          title: '📋 タスク未完了のお知らせ',
+          body: '未完了のタスクがあります。確認をお願いします。',
+          priority: 'info',
+          type: 'task_reminder',
+          createdAt: new Date().toISOString()
         });
+
+        // プッシュ通知
+        try {
+          var userDoc = await _tdl_db.collection('users').doc(userEmail).get();
+          var tokens = [];
+          if (userDoc.exists && userDoc.data().fcmToken) {
+            tokens.push(userDoc.data().fcmToken);
+          }
+          var devicesSnap = await _tdl_db.collection('users').doc(userEmail).collection('devices').get();
+          devicesSnap.forEach(function(d) {
+            var t = d.data().fcmToken;
+            if (t && tokens.indexOf(t) === -1) tokens.push(t);
+          });
+          if (tokens.length > 0) {
+            await fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tokens: tokens, title: '📋 タスク未完了のお知らせ', body: '未完了のタスクがあります。確認をお願いします。', data: { type: 'task_reminder' } })
+            });
+          }
+        } catch (pushErr) { console.log('プッシュ通知送信エラー:', pushErr.message); }
+
         alert(userName + 'さんに通知を送信しました');
       } catch (error) {
         console.error('リマインダー送信エラー:', error);
