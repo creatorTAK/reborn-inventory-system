@@ -7416,11 +7416,7 @@
 
     // お知らせページを開く
     window.openAnnouncePage = function() {
-      if (window.parent && window.parent !== window) {
-        mpNavigateTo('announce');
-      } else {
-        window.location.href = '/announce.html';
-      }
+      mpNavigateTo('announce');
     };
 
     // お知らせモーダルを開く（レガシー、使用されていない）
@@ -7579,7 +7575,8 @@
     function updateAnnounceBadge() {
       const globalUnread = announcements.filter(a => !readAnnouncementIds.has(a.id)).length;
       const personalUnread = personalAnnouncements.filter(a => !readPersonalIds.has(a.id)).length;
-      const hasUnread = (globalUnread + personalUnread) > 0;
+      const totalUnread = globalUnread + personalUnread;
+      const hasUnread = totalUnread > 0;
       const dot = document.getElementById('mp-announceDot');
       if (dot) {
         if (hasUnread) {
@@ -7588,8 +7585,11 @@
           dot.classList.remove('active');
         }
       }
+      // グローバルのバッジ状態も同期（index.htmlの500msタイマーと競合防止）
+      if (typeof window.updateAnnounceUnreadCount === 'function') {
+        window.updateAnnounceUnreadCount(totalUnread);
+      }
       console.log('[Announce] 未読あり:', hasUnread, '(全体:', globalUnread, ', 個人:', personalUnread, ')');
-      // v288: お知らせは独立管理のため、親フレームへの通知は不要
     }
 
     // 初期化時にお知らせを読み込んでバッジを更新
