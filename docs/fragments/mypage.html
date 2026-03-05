@@ -4257,6 +4257,34 @@
       });
     }
 
+    // モーダル表示時の背面スクロールロック（MutationObserver）
+    var _mpScrollLockObserver = null;
+    function _mpSetupScrollLock() {
+      var container = document.getElementById('spa-page-mypage');
+      if (!container || _mpScrollLockObserver) return;
+      var page = document.querySelector('[data-spa-page="mypage"]');
+      if (!page) return;
+
+      function checkModals() {
+        // display:flex/block で表示されるbackdrop、または .active がついたbackdropを検出
+        var backdrops = container.querySelectorAll(
+          '.goal-modal-backdrop, .team-goal-modal-backdrop, .history-modal-backdrop, ' +
+          '.comp-history-modal-backdrop, .comp-detail-modal-backdrop, .announce-modal-backdrop, ' +
+          '.bg-modal-backdrop, .settings-modal-backdrop, .notes-modal-backdrop, ' +
+          '.share-modal-overlay, .loading-overlay, .popover-overlay'
+        );
+        var anyOpen = false;
+        backdrops.forEach(function(el) {
+          var s = window.getComputedStyle(el);
+          if (s.display !== 'none') anyOpen = true;
+        });
+        page.style.overflowY = anyOpen ? 'hidden' : 'auto';
+      }
+
+      _mpScrollLockObserver = new MutationObserver(checkModals);
+      _mpScrollLockObserver.observe(container, { attributes: true, attributeFilter: ['class', 'style'], subtree: true });
+    }
+
     // Use parent Firebase globals
     var db = window.firebaseDB;
     var storage = window.firebaseStorage;
@@ -9184,6 +9212,9 @@
       };
       document.addEventListener('click', _mp_dropdownClickHandler);
 
+      // モーダル表示時のスクロールロック監視を起動
+      _mpSetupScrollLock();
+
       // Wait for scripts to load, then initialize
       Promise.all(loadPromises).then(function() {
         console.log('[Mypage SPA] External scripts loaded');
@@ -9196,6 +9227,12 @@
 
     function destroyMypagePage() {
       console.log('[Mypage SPA] destroyMypagePage called');
+
+      // スクロールロック監視を解除
+      if (_mpScrollLockObserver) {
+        _mpScrollLockObserver.disconnect();
+        _mpScrollLockObserver = null;
+      }
 
       // Remove dropdown click handler
       if (_mp_dropdownClickHandler) {
