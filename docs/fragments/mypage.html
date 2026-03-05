@@ -9118,19 +9118,32 @@
       }, 300);
     };
 
+    // ノート用: グローバル変数がSPA遷移で上書きされるため、常にwindowから取得
+    function _noteDb() { return window.firebaseDB; }
+    function _noteCollection() { return window.firestoreCollection; }
+    function _noteQuery() { return window.firestoreQuery; }
+    function _noteOrderBy() { return window.firestoreOrderBy; }
+    function _noteLimit() { return window.firestoreLimit; }
+    function _noteGetDocs() { return window.firestoreGetDocs; }
+    function _noteAddDoc() { return window.firestoreAddDoc; }
+    function _noteGetDoc() { return window.firestoreGetDoc; }
+    function _noteUpdateDoc() { return window.firestoreUpdateDoc; }
+    function _noteDeleteDoc() { return window.firestoreDeleteDoc; }
+    function _noteDoc() { return window.firestoreDoc; }
+    function _noteServerTs() { return window.firestoreServerTimestamp; }
+
     // ノート一覧を読み込み
     async function loadNotes() {
       const body = document.getElementById('mp-notesModalBody');
       body.innerHTML = '<div style="text-align: center; padding: 40px; color: #9ca3af;"><i class="bi bi-arrow-repeat" style="animation: spin 1s linear infinite; font-size: 24px;"></i></div>';
 
       try {
-        if (!db || !currentUser || !currentUser.email) {
-          throw new Error('初期化未完了: db=' + !!db + ', user=' + !!(currentUser && currentUser.email));
+        if (!currentUser || !currentUser.email) {
+          throw new Error('ユーザー情報が未取得です');
         }
-        console.log('[Notes] query start: users/' + currentUser.email + '/notes, funcs:', !!collection, !!query, !!orderBy, !!limit, !!getDocs);
-        const notesRef = collection(db, 'users', currentUser.email, 'notes');
-        const q = query(notesRef, orderBy('updatedAt', 'desc'), limit(50));
-        const snapshot = await getDocs(q);
+        const notesRef = _noteCollection()(_noteDb(), 'users', currentUser.email, 'notes');
+        const q = _noteQuery()(notesRef, _noteOrderBy()('updatedAt', 'desc'), _noteLimit()(50));
+        const snapshot = await _noteGetDocs()(q);
 
         notesList = [];
         snapshot.forEach(function(d) {
@@ -9139,8 +9152,8 @@
 
         renderNotesList();
       } catch (error) {
-        console.error('[Notes] 読み込みエラー:', error, error.code, error.message);
-        body.innerHTML = '<div class="notes-empty"><i class="bi bi-exclamation-circle"></i><div class="notes-empty-text">読み込みに失敗しました<br><small style="color:#9ca3af;">' + (error.message || error) + '</small></div></div>';
+        console.error('[Notes] 読み込みエラー:', error);
+        body.innerHTML = '<div class="notes-empty"><i class="bi bi-exclamation-circle"></i><div class="notes-empty-text">読み込みに失敗しました</div></div>';
       }
     }
 
@@ -9196,13 +9209,13 @@
     // 新規ノート作成
     window.createNewNote = async function() {
       try {
-        const notesRef = collection(db, 'users', currentUser.email, 'notes');
-        const newNote = await addDoc(notesRef, {
+        const notesRef = _noteCollection()(_noteDb(), 'users', currentUser.email, 'notes');
+        const newNote = await _noteAddDoc()(notesRef, {
           title: '',
           blocks: [],
           paperType: 'grid',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+          createdAt: _noteServerTs()(),
+          updatedAt: _noteServerTs()(),
           shareId: null,
           isPublic: false
         });
@@ -9227,8 +9240,8 @@
 
       // ノートデータを読み込み
       try {
-        const noteRef = doc(db, 'users', currentUser.email, 'notes', noteId);
-        const noteSnap = await getDoc(noteRef);
+        const noteRef = _noteDoc()(_noteDb(), 'users', currentUser.email, 'notes', noteId);
+        const noteSnap = await _noteGetDoc()(noteRef);
 
         if (!noteSnap.exists()) {
           alert('ノートが見つかりません');
@@ -9920,17 +9933,17 @@
       if (!currentNoteId || !currentNoteData) return;
 
       try {
-        const noteRef = doc(db, 'users', currentUser.email, 'notes', currentNoteId);
+        const noteRef = _noteDoc()(_noteDb(), 'users', currentUser.email, 'notes', currentNoteId);
 
         // タイトル取得
         const titleInput = document.getElementById('mp-noteTitleInput');
         currentNoteData.title = titleInput ? titleInput.value : '';
 
-        await updateDoc(noteRef, {
+        await _noteUpdateDoc()(noteRef, {
           title: currentNoteData.title,
           blocks: currentNoteData.blocks || [],
           paperType: currentNoteData.paperType || 'grid',
-          updatedAt: serverTimestamp()
+          updatedAt: _noteServerTs()()
         });
 
         console.log('[Notes] 保存完了');
@@ -9998,8 +10011,8 @@
       if (!confirm('このノートを削除しますか？')) return;
 
       try {
-        const noteRef = doc(db, 'users', currentUser.email, 'notes', currentNoteId);
-        await deleteDoc(noteRef);
+        const noteRef = _noteDoc()(_noteDb(), 'users', currentUser.email, 'notes', currentNoteId);
+        await _noteDeleteDoc()(noteRef);
 
         console.log('[Notes] 削除完了:', currentNoteId);
         closeNoteEditor();
@@ -10020,18 +10033,18 @@
       if (!currentNoteData.shareId) {
         try {
           const shareId = generateUUID().substring(0, 12);
-          const noteRef = doc(db, 'users', currentUser.email, 'notes', currentNoteId);
-          await updateDoc(noteRef, {
+          const noteRef = _noteDoc()(_noteDb(), 'users', currentUser.email, 'notes', currentNoteId);
+          await _noteUpdateDoc()(noteRef, {
             shareId: shareId,
             isPublic: true
           });
 
           // noteSharesコレクションにインデックス追加
-          const shareRef = doc(db, 'noteShares', shareId);
-          await setDoc(shareRef, {
+          const shareRef = _noteDoc()(_noteDb(), 'noteShares', shareId);
+          await (window.firestoreSetDoc)(shareRef, {
             noteId: currentNoteId,
             ownerEmail: currentUser.email,
-            createdAt: serverTimestamp(),
+            createdAt: _noteServerTs()(),
             isActive: true
           });
 
@@ -10068,16 +10081,16 @@
       roomList.innerHTML = '<div class="share-loading"><i class="bi bi-arrow-repeat" style="animation: spin 1s linear infinite;"></i> 読み込み中...</div>';
 
       try {
-        const roomsRef = collection(db, 'rooms');
+        const roomsRef = _noteCollection()(_noteDb(), 'rooms');
         // membersにはユーザー名が入っている（emailではない）
         const userName = currentUser.name || currentUser.email.split('@')[0];
         console.log('[Notes] ルーム検索ユーザー名:', userName);
-        const q = query(
+        const q = _noteQuery()(
           roomsRef,
-          where('members', 'array-contains', userName),
-          limit(50)
+          (window.firestoreWhere)('members', 'array-contains', userName),
+          _noteLimit()(50)
         );
-        const snapshot = await getDocs(q);
+        const snapshot = await _noteGetDocs()(q);
         console.log('[Notes] ルーム検索結果:', snapshot.size, '件');
 
         const rooms = [];
@@ -10095,7 +10108,7 @@
         }
 
         // ユーザーアイコンを取得するためにusersコレクションを読み込み
-        const usersSnapshot = await getDocs(collection(db, 'users'));
+        const usersSnapshot = await _noteGetDocs()(_noteCollection()(_noteDb(), 'users'));
         const usersMap = {};
         usersSnapshot.forEach(doc => {
           const data = doc.data();
@@ -10196,12 +10209,12 @@
         const noteTitle = currentNoteData?.title || '無題のノート';
 
         // メッセージを送信
-        const messagesRef = collection(db, 'rooms', roomId, 'messages');
-        await addDoc(messagesRef, {
+        const messagesRef = _noteCollection()(_noteDb(), 'rooms', roomId, 'messages');
+        await _noteAddDoc()(messagesRef, {
           text: `📝 ノートを共有しました\n\n「${noteTitle}」\n${shareUrl}`,
           userName: currentUser.name,  // チャットのusersCache検索と一致させる
           userEmail: currentUser.email,
-          timestamp: serverTimestamp(),
+          timestamp: _noteServerTs()(),
           type: 'note-share',
           noteShareData: {
             shareId: currentShareId,
@@ -10212,10 +10225,10 @@
         });
 
         // ルームのlastMessage更新
-        const roomRef = doc(db, 'rooms', roomId);
-        await updateDoc(roomRef, {
+        const roomRef = _noteDoc()(_noteDb(), 'rooms', roomId);
+        await _noteUpdateDoc()(roomRef, {
           lastMessage: `📝 ${noteTitle}`,
-          lastMessageAt: serverTimestamp()
+          lastMessageAt: _noteServerTs()()
         });
 
         console.log('[Notes] ノート共有送信完了:', roomId);
