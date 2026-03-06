@@ -612,7 +612,6 @@
       try {
         var snapshot = await db.collection('products')
           .where('status', '==', '出品中')
-          .orderBy('listingDate', 'desc')
           .limit(100)
           .get();
 
@@ -624,6 +623,12 @@
             : [data.imageUrl1, data.imageUrl2, data.imageUrl3].filter(Boolean);
 
           if (images.length === 0) return; // skip products without images
+
+          var listingDate = data.listingDate;
+          var listingDateMs = 0;
+          if (listingDate) {
+            listingDateMs = listingDate.toDate ? listingDate.toDate().getTime() : new Date(listingDate).getTime();
+          }
 
           shopProducts.push({
             id: doc.id,
@@ -638,15 +643,22 @@
             categoryMiddle: data.categoryMiddle || '',
             description: data.productDescription || '',
             managementNumber: data.managementNumber || '',
-            status: data.status || ''
+            status: data.status || '',
+            listingDateMs: listingDateMs
           });
+        });
+
+        // Sort by listing date (newest first)
+        shopProducts.sort(function(a, b) {
+          return (b.listingDateMs || 0) - (a.listingDateMs || 0);
         });
 
         shopRenderProducts();
       } catch (error) {
         console.error('[Shop] Error fetching products:', error);
+        console.error('[Shop] Detail:', error.code, error.message);
         document.getElementById('shopLoading').innerHTML =
-          '<div style="color: var(--sold-red);">Failed to load products</div>';
+          '<div style="color: var(--sold-red);">Failed to load products<br><small>' + (error.message || '') + '</small></div>';
       }
     }
 
