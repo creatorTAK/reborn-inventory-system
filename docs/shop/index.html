@@ -502,6 +502,96 @@
       opacity: 1;
       visibility: visible;
     }
+
+    /* ======================================
+       SEARCH & SORT BAR
+    ====================================== */
+    .shop-search-sort {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .shop-search-wrap {
+      flex: 1;
+      position: relative;
+    }
+
+    .shop-search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-light);
+      pointer-events: none;
+    }
+
+    .shop-search-input {
+      width: 100%;
+      padding: 9px 12px 9px 36px;
+      border: 1px solid #D5D0CA;
+      border-radius: 20px;
+      background: var(--bg-card);
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .shop-search-input::placeholder {
+      color: var(--text-light);
+      font-weight: 300;
+    }
+
+    .shop-search-input:focus {
+      border-color: var(--blue-primary);
+    }
+
+    .shop-search-clear {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-light);
+      font-size: 16px;
+      cursor: pointer;
+      display: none;
+      padding: 2px 4px;
+    }
+
+    .shop-search-clear.visible { display: block; }
+
+    .shop-sort-select {
+      padding: 9px 32px 9px 12px;
+      border: 1px solid #D5D0CA;
+      border-radius: 20px;
+      background: var(--bg-card);
+      font-size: 12px;
+      font-family: inherit;
+      color: var(--text-secondary);
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239B9590' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      white-space: nowrap;
+      transition: border-color 0.2s;
+    }
+
+    .shop-sort-select:focus { border-color: var(--blue-primary); }
+
+    @media (max-width: 768px) {
+      .shop-search-sort { padding: 0 12px 4px; }
+      .shop-sort-select { padding: 8px 28px 8px 10px; font-size: 11px; }
+    }
   </style>
 </head>
 <body>
@@ -549,6 +639,22 @@
     <span class="shop-item-count" id="shopItemCount"></span>
   </div>
 
+  <!-- SEARCH & SORT -->
+  <div class="shop-search-sort">
+    <div class="shop-search-wrap">
+      <svg class="shop-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" class="shop-search-input" id="shopSearchInput" placeholder="Search by brand, item name...">
+      <button class="shop-search-clear" id="shopSearchClear" onclick="shopClearSearch()">&times;</button>
+    </div>
+    <select class="shop-sort-select" id="shopSortSelect" onchange="shopApplySort()">
+      <option value="default">Default</option>
+      <option value="newest">Newest</option>
+      <option value="price-low">Price: Low to High</option>
+      <option value="price-high">Price: High to Low</option>
+      <option value="brand">Brand A-Z</option>
+    </select>
+  </div>
+
   <!-- PRODUCT GRID -->
   <div class="shop-grid" id="shopGrid">
     <div class="shop-loading" id="shopLoading">
@@ -594,6 +700,8 @@
     // ============================================
     var shopProducts = [];
     var shopCurrentFilter = 'all';
+    var shopSearchQuery = '';
+    var shopCurrentSort = 'default';
 
     // ============================================
     // Category Mapping
@@ -656,14 +764,6 @@
           });
         });
 
-        // Sort: listed first, then sold; within each group by date desc
-        shopProducts.sort(function(a, b) {
-          var aIsSold = (a.status === '販売済み' || a.status === '販売済') ? 1 : 0;
-          var bIsSold = (b.status === '販売済み' || b.status === '販売済') ? 1 : 0;
-          if (aIsSold !== bIsSold) return aIsSold - bIsSold;
-          return (b.listingDateMs || 0) - (a.listingDateMs || 0);
-        });
-
         shopRenderProducts();
       } catch (error) {
         console.error('[Shop] Error fetching products:', error);
@@ -677,15 +777,62 @@
     // Filter Products
     // ============================================
     function shopGetFilteredProducts() {
-      if (shopCurrentFilter === 'all') return shopProducts;
+      var result = shopProducts;
 
-      var keywords = categoryFilterMap[shopCurrentFilter] || [];
-      return shopProducts.filter(function(p) {
-        var cats = (p.superCategory + ' ' + p.category + ' ' + p.categoryMiddle).toLowerCase();
-        return keywords.some(function(kw) {
-          return cats.indexOf(kw.toLowerCase()) !== -1;
+      // Category filter
+      if (shopCurrentFilter !== 'all') {
+        var keywords = categoryFilterMap[shopCurrentFilter] || [];
+        result = result.filter(function(p) {
+          var cats = (p.superCategory + ' ' + p.category + ' ' + p.categoryMiddle).toLowerCase();
+          return keywords.some(function(kw) {
+            return cats.indexOf(kw.toLowerCase()) !== -1;
+          });
         });
-      });
+      }
+
+      // Search filter
+      if (shopSearchQuery) {
+        var q = shopSearchQuery.toLowerCase();
+        result = result.filter(function(p) {
+          return (p.name.toLowerCase().indexOf(q) !== -1) ||
+                 (p.brand.toLowerCase().indexOf(q) !== -1) ||
+                 (p.category.toLowerCase().indexOf(q) !== -1) ||
+                 (p.managementNumber.toLowerCase().indexOf(q) !== -1);
+        });
+      }
+
+      // Sort
+      result = shopSortProducts(result);
+
+      return result;
+    }
+
+    function shopSortProducts(products) {
+      var sorted = products.slice();
+      switch (shopCurrentSort) {
+        case 'newest':
+          sorted.sort(function(a, b) { return (b.listingDateMs || 0) - (a.listingDateMs || 0); });
+          break;
+        case 'price-low':
+          sorted.sort(function(a, b) { return (a.price || a.saleAmount || 0) - (b.price || b.saleAmount || 0); });
+          break;
+        case 'price-high':
+          sorted.sort(function(a, b) { return (b.price || b.saleAmount || 0) - (a.price || a.saleAmount || 0); });
+          break;
+        case 'brand':
+          sorted.sort(function(a, b) { return a.brand.localeCompare(b.brand); });
+          break;
+        default:
+          // Default: listed first, then sold; within each group by date desc
+          sorted.sort(function(a, b) {
+            var aIsSold = (a.status === '販売済み' || a.status === '販売済') ? 1 : 0;
+            var bIsSold = (b.status === '販売済み' || b.status === '販売済') ? 1 : 0;
+            if (aIsSold !== bIsSold) return aIsSold - bIsSold;
+            return (b.listingDateMs || 0) - (a.listingDateMs || 0);
+          });
+          break;
+      }
+      return sorted;
     }
 
     // ============================================
@@ -738,8 +885,9 @@
     // Helpers
     // ============================================
     function shopIsNewProduct(product) {
-      // 7日以内に出品された商品を「NEW」とする
-      return true; // プロトタイプでは全てNEW表示
+      if (!product.listingDateMs) return false;
+      var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      return (Date.now() - product.listingDateMs) < sevenDaysMs;
     }
 
     function shopFormatPrice(price) {
@@ -768,6 +916,37 @@
         shopRenderProducts();
       });
     });
+
+    // ============================================
+    // Search Handler
+    // ============================================
+    (function() {
+      var searchInput = document.getElementById('shopSearchInput');
+      var clearBtn = document.getElementById('shopSearchClear');
+      var debounceTimer = null;
+
+      searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        var val = this.value;
+        clearBtn.classList.toggle('visible', val.length > 0);
+        debounceTimer = setTimeout(function() {
+          shopSearchQuery = val.trim();
+          shopRenderProducts();
+        }, 200);
+      });
+    })();
+
+    function shopClearSearch() {
+      document.getElementById('shopSearchInput').value = '';
+      document.getElementById('shopSearchClear').classList.remove('visible');
+      shopSearchQuery = '';
+      shopRenderProducts();
+    }
+
+    function shopApplySort() {
+      shopCurrentSort = document.getElementById('shopSortSelect').value;
+      shopRenderProducts();
+    }
 
     // ============================================
     // Scroll to top button
