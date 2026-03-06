@@ -611,17 +611,8 @@
     async function shopFetchProducts() {
       try {
         var snapshot = await db.collection('products')
-          .limit(100)
+          .limit(200)
           .get();
-
-        // Debug: log statuses found
-        var statusCounts = {};
-        snapshot.forEach(function(doc) {
-          var s = doc.data().status || '(empty)';
-          statusCounts[s] = (statusCounts[s] || 0) + 1;
-        });
-        console.log('[Shop] Product statuses:', statusCounts);
-        console.log('[Shop] Total products:', snapshot.size);
 
         shopProducts = [];
         snapshot.forEach(function(doc) {
@@ -630,7 +621,7 @@
             ? data.images
             : [data.imageUrl1, data.imageUrl2, data.imageUrl3].filter(Boolean);
 
-          // Include all products for debugging
+          if (images.length === 0 || !data.listingAmount) return;
 
           var listingDate = data.listingDate;
           var listingDateMs = 0;
@@ -708,7 +699,9 @@
 
         html += '<div class="shop-card" onclick="shopViewProduct(\'' + product.id + '\')">';
         html += '<div class="shop-card-img-wrap">';
-        html += '<img src="' + product.images[0] + '" alt="' + shopEscape(product.name) + '" loading="lazy">';
+        var imgSrc = (product.images.length > 0) ? product.images[0] : '';
+        if (!imgSrc) return; // skip rendering cards without images
+        html += '<img src="' + imgSrc + '" alt="' + shopEscape(product.name) + '" loading="lazy" onerror="this.parentElement.parentElement.style.display=\'none\'">';
         if (isNew && !isSold) html += '<div class="shop-badge-new">New</div>';
         if (isSold) html += '<div class="shop-badge-sold">Sold</div>';
         html += '</div>';
