@@ -614,8 +614,6 @@
           .limit(200)
           .get();
 
-        console.log('[Shop] Total docs:', snapshot.size);
-        var debugSkipped = { noStatus: 0, noImages: 0, shown: 0 };
         shopProducts = [];
         snapshot.forEach(function(doc) {
           var data = doc.data();
@@ -630,17 +628,8 @@
 
           // Only show listed + sold products with images
           var status = data.status || '';
-          if (status !== '出品中' && status !== '販売済み' && status !== '販売済') {
-            debugSkipped.noStatus++;
-            if (debugSkipped.noStatus <= 3) console.log('[Shop] Skipped status:', status, 'id:', doc.id, 'name:', data.productName);
-            return;
-          }
-          if (images.length === 0) {
-            debugSkipped.noImages++;
-            if (debugSkipped.noImages <= 3) console.log('[Shop] Skipped no images, id:', doc.id, 'name:', data.productName, 'images field:', data.images, 'imageUrl1:', data.imageUrl1);
-            return;
-          }
-          debugSkipped.shown++;
+          if (status !== '出品中' && status !== '販売済み' && status !== '販売済') return;
+          if (images.length === 0) return;
 
           var listingDate = data.listingDate;
           var listingDateMs = 0;
@@ -654,7 +643,7 @@
             brand: (typeof data.brand === 'object') ? (data.brand.name || data.brand.label || '') : (data.brand || ''),
             price: data.listingAmount || 0,
             images: images,
-            size: (typeof data.size === 'object') ? (data.size.name || data.size.label || JSON.stringify(data.size)) : (data.size || ''),
+            size: (typeof data.size === 'object' && data.size !== null) ? (data.size.display || data.size.actual || data.size.name || data.size.label || '') : (data.size || ''),
             condition: data.condition || '',
             category: data.category || '',
             superCategory: data.superCategory || '',
@@ -675,7 +664,6 @@
           return (b.listingDateMs || 0) - (a.listingDateMs || 0);
         });
 
-        console.log('[Shop] Debug summary:', debugSkipped);
         shopRenderProducts();
       } catch (error) {
         console.error('[Shop] Error fetching products:', error);
