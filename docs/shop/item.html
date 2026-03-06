@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FURIRA - 商品詳細</title>
+  <meta name="description" content="FURIRA(フリラ) - 厳選された古着・ヴィンテージアイテム">
+  <link rel="icon" href="/images/furira-square-logo.png">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Noto+Sans+JP:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-warm: #F5F2ED;
+      --bg-card: #FFFFFF;
+      --blue-primary: #4A7FB5;
+      --blue-dark: #3A6A9B;
+      --blue-light: #E8F0F8;
+      --craft-brown: #C4956A;
+      --craft-light: #E8D5C0;
+      --text-primary: #2C2C2C;
+      --text-secondary: #6B6560;
+      --text-light: #9B9590;
+      --sold-red: #B54A4A;
+      --new-green: #5B8A5A;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.10);
+      --radius: 4px;
+    }
+
+    body {
+      font-family: 'Noto Sans JP', 'Inter', sans-serif;
+      background: var(--bg-warm);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ======================================
+       HEADER (shared with index)
+    ====================================== */
+    .shop-header {
+      background: var(--bg-card);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .shop-header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+
+    .shop-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .shop-logo-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: var(--blue-primary);
+    }
+
+    .shop-logo-sub {
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--text-light);
+      text-transform: uppercase;
+      margin-top: -2px;
+    }
+
+    .shop-nav {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .shop-nav a {
+      text-decoration: none;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      transition: color 0.2s;
+    }
+
+    .shop-nav a:hover { color: var(--blue-primary); }
+
+    /* ======================================
+       BREADCRUMB
+    ====================================== */
+    .shop-breadcrumb {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 16px 20px 0;
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .shop-breadcrumb a {
+      color: var(--text-light);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .shop-breadcrumb a:hover { color: var(--blue-primary); }
+
+    .shop-breadcrumb span { margin: 0 8px; }
+
+    /* ======================================
+       PRODUCT DETAIL LAYOUT
+    ====================================== */
+    .item-container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px 20px 60px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: start;
+    }
+
+    /* ======================================
+       IMAGE GALLERY
+    ====================================== */
+    .item-gallery {
+      position: sticky;
+      top: 84px;
+    }
+
+    .item-main-image-wrap {
+      position: relative;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      cursor: zoom-in;
+      aspect-ratio: 1 / 1;
+    }
+
+    .item-main-image-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      transition: opacity 0.3s;
+    }
+
+    /* SOLD overlay on main image */
+    .item-sold-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-12deg);
+      border: 4px solid var(--sold-red);
+      color: var(--sold-red);
+      font-family: 'Playfair Display', serif;
+      font-size: 36px;
+      font-weight: 700;
+      padding: 6px 32px;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      border-radius: 4px;
+      opacity: 0.8;
+      background: rgba(255,255,255,0.7);
+      pointer-events: none;
+    }
+
+    /* Image navigation arrows */
+    .item-img-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 36px;
+      height: 36px;
+      background: rgba(255,255,255,0.85);
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s;
+      opacity: 0;
+    }
+
+    .item-main-image-wrap:hover .item-img-nav { opacity: 1; }
+    .item-img-nav:hover { background: white; color: var(--text-primary); }
+    .item-img-prev { left: 10px; }
+    .item-img-next { right: 10px; }
+
+    /* Image counter */
+    .item-img-counter {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      font-size: 11px;
+      padding: 2px 10px;
+      border-radius: 12px;
+      letter-spacing: 1px;
+    }
+
+    /* Thumbnails */
+    .item-thumbnails {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      overflow-x: auto;
+      padding: 4px 0;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .item-thumb {
+      width: 64px;
+      height: 64px;
+      flex-shrink: 0;
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color 0.2s, opacity 0.2s;
+      opacity: 0.6;
+    }
+
+    .item-thumb.active {
+      border-color: var(--blue-primary);
+      opacity: 1;
+    }
+
+    .item-thumb:hover { opacity: 1; }
+
+    .item-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* ======================================
+       PRODUCT INFO
+    ====================================== */
+    .item-info {
+      padding-top: 4px;
+    }
+
+    .item-brand {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-light);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .item-name {
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    /* Tag-style price */
+    .item-price-tag {
+      display: inline-flex;
+      align-items: center;
+      background: var(--craft-light);
+      color: var(--craft-brown);
+      padding: 8px 20px;
+      border-radius: 2px;
+      font-size: 22px;
+      font-weight: 700;
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .item-price-tag::before {
+      content: '';
+      position: absolute;
+      left: -5px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 10px;
+      height: 10px;
+      background: var(--bg-warm);
+      border-radius: 50%;
+    }
+
+    .item-price-sold {
+      text-decoration: line-through;
+      opacity: 0.5;
+    }
+
+    /* SOLD badge inline */
+    .item-sold-badge {
+      display: inline-block;
+      margin-left: 12px;
+      border: 2px solid var(--sold-red);
+      color: var(--sold-red);
+      font-family: 'Playfair Display', serif;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 2px 12px;
+      letter-spacing: 2px;
+      border-radius: 2px;
+      transform: rotate(-2deg);
+      vertical-align: middle;
+    }
+
+    /* Divider */
+    .item-divider {
+      height: 1px;
+      background: #E8E4DE;
+      margin: 20px 0;
+    }
+
+    /* Detail rows */
+    .item-details {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px 20px;
+      font-size: 13px;
+      margin-bottom: 24px;
+    }
+
+    .item-detail-label {
+      color: var(--text-light);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .item-detail-value {
+      color: var(--text-primary);
+    }
+
+    /* Condition badge */
+    .item-condition-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .condition-S { background: #E8F5E9; color: #2E7D32; }
+    .condition-A { background: #E3F2FD; color: #1565C0; }
+    .condition-B { background: #FFF8E1; color: #F57F17; }
+    .condition-C { background: #FFF3E0; color: #E65100; }
+    .condition-D { background: #FFEBEE; color: #C62828; }
+    .condition-E { background: #FFEBEE; color: #B71C1C; }
+
+    /* Description */
+    .item-description-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .item-description-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #E8E4DE;
+    }
+
+    .item-description {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.8;
+      white-space: pre-wrap;
+    }
+
+    /* Purchase button */
+    .item-purchase-btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      background: var(--blue-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      margin-top: 24px;
+    }
+
+    .item-purchase-btn:hover { background: var(--blue-dark); }
+    .item-purchase-btn:active { transform: scale(0.98); }
+
+    .item-purchase-btn:disabled {
+      background: #C5C0BA;
+      cursor: not-allowed;
+    }
+
+    .item-purchase-btn:disabled:hover { background: #C5C0BA; }
+
+    /* Back link */
+    .item-back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 16px;
+      font-size: 13px;
+      color: var(--text-light);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .item-back-link:hover { color: var(--blue-primary); }
+
+    /* ======================================
+       LIGHTBOX (image zoom)
+    ====================================== */
+    .item-lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.92);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      cursor: zoom-out;
+    }
+
+    .item-lightbox.active { display: flex; }
+
+    .item-lightbox img {
+      max-width: 90vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 2px;
+    }
+
+    .item-lightbox-close {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.7);
+      font-size: 28px;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .item-lightbox-close:hover { color: white; }
+
+    .item-lightbox-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 44px;
+      height: 44px;
+      background: rgba(255,255,255,0.15);
+      border: none;
+      border-radius: 50%;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .item-lightbox-nav:hover { background: rgba(255,255,255,0.3); }
+    .item-lightbox-prev { left: 16px; }
+    .item-lightbox-next { right: 16px; }
+
+    .item-lightbox-counter {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.6);
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+
+    /* ======================================
+       LOADING / ERROR
+    ====================================== */
+    .item-loading {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 100px 20px;
+      text-align: center;
+      color: var(--text-light);
+    }
+
+    .item-loading-spinner {
+      width: 32px;
+      height: 32px;
+      border: 2px solid #e0dbd5;
+      border-top-color: var(--blue-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ======================================
+       FOOTER
+    ====================================== */
+    .shop-footer {
+      background: var(--text-primary);
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      padding: 32px 20px;
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+
+    .shop-footer-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 3px;
+      margin-bottom: 8px;
+    }
+
+    .shop-footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 16px;
+    }
+
+    .shop-footer-links a {
+      color: rgba(255,255,255,0.5);
+      text-decoration: none;
+      font-size: 11px;
+      transition: color 0.2s;
+    }
+
+    .shop-footer-links a:hover { color: rgba(255,255,255,0.8); }
+
+    /* ======================================
+       RESPONSIVE
+    ====================================== */
+    @media (max-width: 768px) {
+      .shop-header-inner { height: 56px; }
+      .shop-logo-text { font-size: 18px; }
+      .shop-nav a.nav-text { display: none; }
+
+      .item-container {
+        grid-template-columns: 1fr;
+        gap: 20px;
+        padding: 12px 16px 40px;
+      }
+
+      .item-gallery {
+        position: static;
+      }
+
+      .item-name { font-size: 17px; }
+      .item-price-tag { font-size: 19px; padding: 6px 16px; }
+      .item-sold-overlay { font-size: 28px; padding: 4px 24px; }
+      .item-thumb { width: 52px; height: 52px; }
+
+      .item-lightbox-nav { width: 36px; height: 36px; font-size: 16px; }
+    }
+
+    @media (max-width: 480px) {
+      .item-details { gap: 8px 14px; }
+      .item-sold-overlay { font-size: 22px; padding: 3px 18px; letter-spacing: 4px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="shop-header">
+    <div class="shop-header-inner">
+      <a href="/shop/" class="shop-logo">
+        <div>
+          <div class="shop-logo-text">FURIRA</div>
+          <div class="shop-logo-sub">vintage & used</div>
+        </div>
+      </a>
+      <nav class="shop-nav">
+        <a href="/shop/" class="nav-text">Shop</a>
+        <a href="/shop/#about" class="nav-text">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- BREADCRUMB -->
+  <nav class="shop-breadcrumb">
+    <a href="/shop/">Shop</a>
+    <span>/</span>
+    <span id="breadcrumbName">Loading...</span>
+  </nav>
+
+  <!-- LOADING -->
+  <div class="item-loading" id="itemLoading">
+    <div class="item-loading-spinner"></div>
+    <div>Loading...</div>
+  </div>
+
+  <!-- PRODUCT DETAIL (hidden until loaded) -->
+  <div class="item-container" id="itemContainer" style="display: none;">
+
+    <!-- LEFT: Image Gallery -->
+    <div class="item-gallery">
+      <div class="item-main-image-wrap" id="mainImageWrap" onclick="itemOpenLightbox()">
+        <img id="mainImage" src="" alt="">
+        <div class="item-sold-overlay" id="soldOverlay" style="display: none;">Sold</div>
+        <button class="item-img-nav item-img-prev" onclick="event.stopPropagation(); itemNavImage(-1)">&#8249;</button>
+        <button class="item-img-nav item-img-next" onclick="event.stopPropagation(); itemNavImage(1)">&#8250;</button>
+        <div class="item-img-counter" id="imgCounter"></div>
+      </div>
+      <div class="item-thumbnails" id="thumbnails"></div>
+    </div>
+
+    <!-- RIGHT: Product Info -->
+    <div class="item-info">
+      <div class="item-brand" id="itemBrand"></div>
+      <h1 class="item-name" id="itemName"></h1>
+
+      <div id="itemPriceArea"></div>
+
+      <div class="item-divider"></div>
+
+      <div class="item-details" id="itemDetails"></div>
+
+      <div class="item-divider"></div>
+
+      <div id="itemDescriptionBlock" style="display: none;">
+        <div class="item-description-title">Description</div>
+        <div class="item-description" id="itemDescription"></div>
+      </div>
+
+      <button class="item-purchase-btn" id="purchaseBtn" onclick="itemPurchase()">
+        Add to Cart
+      </button>
+
+      <a href="/shop/" class="item-back-link">&#8592; Back to Shop</a>
+    </div>
+  </div>
+
+  <!-- LIGHTBOX -->
+  <div class="item-lightbox" id="lightbox" onclick="itemCloseLightbox()">
+    <button class="item-lightbox-close" onclick="itemCloseLightbox()">&times;</button>
+    <button class="item-lightbox-nav item-lightbox-prev" onclick="event.stopPropagation(); itemLightboxNav(-1)">&#8249;</button>
+    <img id="lightboxImage" src="" alt="" onclick="event.stopPropagation()">
+    <button class="item-lightbox-nav item-lightbox-next" onclick="event.stopPropagation(); itemLightboxNav(1)">&#8250;</button>
+    <div class="item-lightbox-counter" id="lightboxCounter"></div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="shop-footer">
+    <div class="shop-footer-logo">FURIRA</div>
+    <div class="shop-footer-links">
+      <a href="/shop/">Shop</a>
+      <a href="/shop/#about">About</a>
+      <a href="#contact">Contact</a>
+    </div>
+    <div>&copy; 2026 FURIRA. All rights reserved.</div>
+  </footer>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    // ============================================
+    // Firebase Init
+    // ============================================
+    firebase.initializeApp({
+      apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+      authDomain: "furira.jp",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "345706548795",
+      appId: "1:345706548795:web:058a553da6b4b74db5161e"
+    });
+    var db = firebase.firestore();
+
+    // ============================================
+    // State
+    // ============================================
+    var itemProduct = null;
+    var itemImages = [];
+    var itemCurrentIndex = 0;
+
+    // ============================================
+    // Condition mapping
+    // ============================================
+    var conditionMap = {
+      '新品、未使用': { rank: 'S', label: '新品同様', cssClass: 'condition-S' },
+      '未使用に近い': { rank: 'A', label: '非常に良い', cssClass: 'condition-A' },
+      '目立った傷や汚れなし': { rank: 'B', label: '良い', cssClass: 'condition-B' },
+      'やや傷や汚れあり': { rank: 'C', label: 'やや難あり', cssClass: 'condition-C' },
+      '傷や汚れあり': { rank: 'D', label: '難あり', cssClass: 'condition-D' },
+      '全体的に状態が悪い': { rank: 'E', label: '状態不良', cssClass: 'condition-E' }
+    };
+
+    // ============================================
+    // Fetch Product
+    // ============================================
+    async function itemFetchProduct() {
+      var params = new URLSearchParams(window.location.search);
+      var productId = params.get('id');
+
+      if (!productId) {
+        itemShowError('Product not found');
+        return;
+      }
+
+      try {
+        var doc = await db.collection('products').doc(productId).get();
+
+        if (!doc.exists) {
+          itemShowError('Product not found');
+          return;
+        }
+
+        var data = doc.data();
+        var images = [];
+        if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+          images = data.images;
+        } else if (data.images && data.images.imageUrls && data.images.imageUrls.length > 0) {
+          images = data.images.imageUrls;
+        } else {
+          images = [data.imageUrl1, data.imageUrl2, data.imageUrl3].filter(Boolean);
+        }
+
+        var brand = (typeof data.brand === 'object' && data.brand !== null)
+          ? (data.brand.name || data.brand.label || '') : (data.brand || '');
+        var size = (typeof data.size === 'object' && data.size !== null)
+          ? (data.size.display || data.size.actual || '') : (data.size || '');
+
+        var catParts = [data.superCategory, data.category, data.categoryMiddle, data.categoryMinor]
+          .filter(function(v) { return v && v.trim(); });
+
+        itemProduct = {
+          id: doc.id,
+          name: data.productName || '',
+          brand: brand,
+          price: data.listingAmount || 0,
+          saleAmount: data.saleAmount || 0,
+          images: images,
+          size: size,
+          condition: data.condition || '',
+          category: catParts.join(' > ') || '',
+          description: data.productDescription || '',
+          status: data.status || '',
+          managementNumber: data.managementNumber || ''
+        };
+
+        itemImages = images;
+        itemRender();
+      } catch (error) {
+        console.error('[Item] Error:', error);
+        itemShowError('Failed to load product');
+      }
+    }
+
+    // ============================================
+    // Render
+    // ============================================
+    function itemRender() {
+      var p = itemProduct;
+      var isSold = p.status === '販売済み' || p.status === '販売済';
+
+      // Update page title
+      document.title = (p.brand ? p.brand + ' ' : '') + p.name + ' | FURIRA';
+
+      // Breadcrumb
+      document.getElementById('breadcrumbName').textContent = p.name;
+
+      // Brand
+      var brandEl = document.getElementById('itemBrand');
+      if (p.brand) {
+        brandEl.textContent = p.brand;
+        brandEl.style.display = '';
+      } else {
+        brandEl.style.display = 'none';
+      }
+
+      // Name
+      document.getElementById('itemName').textContent = p.name;
+
+      // Price
+      var priceHtml = '';
+      var displayPrice = p.price || p.saleAmount || 0;
+      if (displayPrice > 0) {
+        priceHtml = '<span class="item-price-tag' + (isSold ? ' item-price-sold' : '') + '">&yen;' + Number(displayPrice).toLocaleString() + '</span>';
+      }
+      if (isSold) {
+        priceHtml += '<span class="item-sold-badge">SOLD</span>';
+      }
+      document.getElementById('itemPriceArea').innerHTML = priceHtml;
+
+      // Details
+      var detailsHtml = '';
+      if (p.category) {
+        detailsHtml += '<div class="item-detail-label">Category</div>';
+        detailsHtml += '<div class="item-detail-value">' + itemEscape(p.category) + '</div>';
+      }
+      if (p.size) {
+        detailsHtml += '<div class="item-detail-label">Size</div>';
+        detailsHtml += '<div class="item-detail-value">' + itemEscape(p.size) + '</div>';
+      }
+      if (p.condition) {
+        var cond = conditionMap[p.condition] || null;
+        detailsHtml += '<div class="item-detail-label">Condition</div>';
+        if (cond) {
+          detailsHtml += '<div class="item-detail-value"><span class="item-condition-badge ' + cond.cssClass + '">' + cond.rank + ' - ' + cond.label + '</span></div>';
+        } else {
+          detailsHtml += '<div class="item-detail-value">' + itemEscape(p.condition) + '</div>';
+        }
+      }
+      document.getElementById('itemDetails').innerHTML = detailsHtml;
+
+      // Description
+      if (p.description) {
+        document.getElementById('itemDescription').textContent = p.description;
+        document.getElementById('itemDescriptionBlock').style.display = '';
+      }
+
+      // Purchase button
+      var btn = document.getElementById('purchaseBtn');
+      if (isSold) {
+        btn.textContent = 'Sold Out';
+        btn.disabled = true;
+      }
+
+      // Images
+      if (itemImages.length > 0) {
+        document.getElementById('mainImage').src = itemImages[0];
+        document.getElementById('mainImage').alt = p.name;
+        itemUpdateCounter();
+
+        // Thumbnails
+        var thumbHtml = '';
+        itemImages.forEach(function(url, i) {
+          thumbHtml += '<div class="item-thumb' + (i === 0 ? ' active' : '') + '" onclick="itemSelectImage(' + i + ')">';
+          thumbHtml += '<img src="' + url + '" alt="Image ' + (i + 1) + '">';
+          thumbHtml += '</div>';
+        });
+        document.getElementById('thumbnails').innerHTML = thumbHtml;
+      }
+
+      // SOLD overlay
+      if (isSold) {
+        document.getElementById('soldOverlay').style.display = '';
+      }
+
+      // Show content, hide loading
+      document.getElementById('itemLoading').style.display = 'none';
+      document.getElementById('itemContainer').style.display = '';
+    }
+
+    // ============================================
+    // Image Navigation
+    // ============================================
+    function itemSelectImage(index) {
+      itemCurrentIndex = index;
+      document.getElementById('mainImage').src = itemImages[index];
+      itemUpdateCounter();
+      itemUpdateThumbnails();
+    }
+
+    function itemNavImage(dir) {
+      var newIndex = itemCurrentIndex + dir;
+      if (newIndex < 0) newIndex = itemImages.length - 1;
+      if (newIndex >= itemImages.length) newIndex = 0;
+      itemSelectImage(newIndex);
+    }
+
+    function itemUpdateCounter() {
+      if (itemImages.length > 1) {
+        document.getElementById('imgCounter').textContent = (itemCurrentIndex + 1) + ' / ' + itemImages.length;
+      }
+    }
+
+    function itemUpdateThumbnails() {
+      var thumbs = document.querySelectorAll('.item-thumb');
+      thumbs.forEach(function(t, i) {
+        t.classList.toggle('active', i === itemCurrentIndex);
+      });
+    }
+
+    // ============================================
+    // Lightbox
+    // ============================================
+    function itemOpenLightbox() {
+      if (itemImages.length === 0) return;
+      var lb = document.getElementById('lightbox');
+      document.getElementById('lightboxImage').src = itemImages[itemCurrentIndex];
+      document.getElementById('lightboxCounter').textContent = (itemCurrentIndex + 1) + ' / ' + itemImages.length;
+      lb.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function itemCloseLightbox() {
+      document.getElementById('lightbox').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function itemLightboxNav(dir) {
+      itemNavImage(dir);
+      document.getElementById('lightboxImage').src = itemImages[itemCurrentIndex];
+      document.getElementById('lightboxCounter').textContent = (itemCurrentIndex + 1) + ' / ' + itemImages.length;
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+      if (!document.getElementById('lightbox').classList.contains('active')) return;
+      if (e.key === 'Escape') itemCloseLightbox();
+      if (e.key === 'ArrowLeft') itemLightboxNav(-1);
+      if (e.key === 'ArrowRight') itemLightboxNav(1);
+    });
+
+    // ============================================
+    // Purchase (placeholder)
+    // ============================================
+    function itemPurchase() {
+      alert('Cart feature coming soon!');
+    }
+
+    // ============================================
+    // Helpers
+    // ============================================
+    function itemEscape(str) {
+      if (!str) return '';
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function itemShowError(msg) {
+      document.getElementById('itemLoading').innerHTML =
+        '<div style="font-size: 14px;">' + msg + '</div>' +
+        '<a href="/shop/" style="color: var(--blue-primary); margin-top: 16px; display: inline-block; font-size: 13px;">&#8592; Back to Shop</a>';
+    }
+
+    // ============================================
+    // Touch swipe for mobile
+    // ============================================
+    (function() {
+      var startX = 0;
+      var mainWrap = null;
+
+      document.addEventListener('DOMContentLoaded', function() {
+        mainWrap = document.getElementById('mainImageWrap');
+        if (!mainWrap) return;
+
+        mainWrap.addEventListener('touchstart', function(e) {
+          startX = e.touches[0].clientX;
+        }, { passive: true });
+
+        mainWrap.addEventListener('touchend', function(e) {
+          var diffX = e.changedTouches[0].clientX - startX;
+          if (Math.abs(diffX) > 50) {
+            itemNavImage(diffX > 0 ? -1 : 1);
+          }
+        }, { passive: true });
+      });
+    })();
+
+    // ============================================
+    // Init
+    // ============================================
+    itemFetchProduct();
+  </script>
+</body>
+</html>
