@@ -611,9 +611,17 @@
     async function shopFetchProducts() {
       try {
         var snapshot = await db.collection('products')
-          .where('status', '==', '出品中')
           .limit(100)
           .get();
+
+        // Debug: log statuses found
+        var statusCounts = {};
+        snapshot.forEach(function(doc) {
+          var s = doc.data().status || '(empty)';
+          statusCounts[s] = (statusCounts[s] || 0) + 1;
+        });
+        console.log('[Shop] Product statuses:', statusCounts);
+        console.log('[Shop] Total products:', snapshot.size);
 
         shopProducts = [];
         snapshot.forEach(function(doc) {
@@ -622,7 +630,7 @@
             ? data.images
             : [data.imageUrl1, data.imageUrl2, data.imageUrl3].filter(Boolean);
 
-          if (images.length === 0) return; // skip products without images
+          // Include all products for debugging
 
           var listingDate = data.listingDate;
           var listingDateMs = 0;
