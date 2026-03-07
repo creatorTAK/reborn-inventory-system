@@ -104,6 +104,35 @@
 
     .shop-nav a:hover { color: var(--blue-primary); }
 
+    .shop-cart-btn {
+      position: relative;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 20px;
+      padding: 4px;
+      transition: color 0.2s;
+    }
+
+    .shop-cart-btn:hover { color: var(--blue-primary); }
+
+    .cart-badge {
+      position: absolute;
+      top: -4px;
+      right: -6px;
+      background: var(--blue-primary);
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
     /* ======================================
        BREADCRUMB
     ====================================== */
@@ -630,6 +659,14 @@
       <nav class="shop-nav">
         <a href="/shop/" class="nav-text">Shop</a>
         <a href="/shop/#about" class="nav-text">About</a>
+        <button class="shop-cart-btn" onclick="location.href='/shop/cart.html'" aria-label="Cart">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 01-8 0"></path>
+          </svg>
+          <span class="cart-badge" id="cartBadge">0</span>
+        </button>
       </nav>
     </div>
   </header>
@@ -711,6 +748,7 @@
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="/shop/cart-utils.js"></script>
 
   <script>
     // ============================================
@@ -897,6 +935,9 @@
         document.getElementById('soldOverlay').style.display = '';
       }
 
+      // Update cart button state if already in cart
+      itemUpdateCartButton(false);
+
       // Show content, hide loading
       document.getElementById('itemLoading').style.display = 'none';
       document.getElementById('itemContainer').style.display = '';
@@ -964,10 +1005,34 @@
     });
 
     // ============================================
-    // Purchase (placeholder)
+    // Cart
     // ============================================
     function itemPurchase() {
-      alert('カート機能は近日公開予定です');
+      if (!itemProduct || !itemProduct.id) return;
+      var added = FuriraCart.add(itemProduct.id);
+      if (added) {
+        itemUpdateCartButton(true);
+      } else {
+        // Already in cart - go to cart
+        location.href = '/shop/cart.html';
+      }
+    }
+
+    function itemUpdateCartButton(justAdded) {
+      var btn = document.getElementById('purchaseBtn');
+      var isSold = itemProduct && (itemProduct.status === '販売済み' || itemProduct.status === '販売済');
+      if (isSold) return;
+
+      if (FuriraCart.has(itemProduct.id)) {
+        btn.textContent = justAdded ? 'カートに追加しました' : 'カートに入っています';
+        btn.style.background = 'var(--new-green)';
+        btn.onclick = function() { location.href = '/shop/cart.html'; };
+        if (justAdded) {
+          setTimeout(function() {
+            btn.textContent = 'カートを見る';
+          }, 1500);
+        }
+      }
     }
 
     // ============================================
@@ -1013,6 +1078,7 @@
     // ============================================
     // Init
     // ============================================
+    FuriraCart.updateBadge();
     itemFetchProduct();
   </script>
 </body>
