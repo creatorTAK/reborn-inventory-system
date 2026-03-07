@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FURIRA - お気に入り</title>
+  <meta name="description" content="FURIRA(フリラ) - お気に入りアイテム">
+  <link rel="icon" href="/images/furira-square-logo.png">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Noto+Sans+JP:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-warm: #F5F2ED;
+      --bg-card: #FFFFFF;
+      --blue-primary: #4A7FB5;
+      --blue-dark: #3A6A9B;
+      --craft-brown: #C4956A;
+      --craft-light: #E8D5C0;
+      --text-primary: #2C2C2C;
+      --text-secondary: #6B6560;
+      --text-light: #9B9590;
+      --sold-red: #B54A4A;
+      --new-green: #5B8A5A;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.10);
+      --radius: 4px;
+    }
+
+    html, body { overflow-x: hidden; max-width: 100%; }
+
+    body {
+      font-family: 'Noto Sans JP', 'Inter', sans-serif;
+      background: var(--bg-warm);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* HEADER */
+    .shop-header {
+      background: var(--bg-card);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .shop-header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+
+    .shop-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .shop-logo-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: var(--blue-primary);
+    }
+
+    .shop-logo-sub {
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--text-light);
+      text-transform: uppercase;
+      margin-top: -2px;
+    }
+
+    .shop-nav { display: flex; align-items: center; gap: 24px; }
+
+    .shop-nav a {
+      text-decoration: none;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      transition: color 0.2s;
+    }
+
+    .shop-nav a:hover { color: var(--blue-primary); }
+
+    .shop-nav-icon {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-secondary);
+      padding: 4px;
+      transition: color 0.2s;
+      position: relative;
+    }
+
+    .shop-nav-icon:hover { color: var(--blue-primary); }
+    .shop-nav-icon.active-page { color: #e74c6f; }
+
+    .cart-badge {
+      position: absolute;
+      top: -4px;
+      right: -6px;
+      background: var(--blue-primary);
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* PAGE CONTENT */
+    .fav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+    }
+
+    .fav-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .fav-subtitle {
+      font-size: 13px;
+      color: var(--text-light);
+      margin-bottom: 24px;
+    }
+
+    /* GRID - same masonry as shop top */
+    .fav-grid {
+      columns: 4 240px;
+      column-gap: 16px;
+    }
+
+    .shop-card {
+      break-inside: avoid;
+      margin-bottom: 16px;
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+    }
+
+    .shop-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+
+    .shop-card-img-wrap { position: relative; overflow: hidden; background: #f0ece6; }
+    .shop-card-img-wrap img { width: 100%; display: block; transition: transform 0.4s ease; }
+    .shop-card:hover .shop-card-img-wrap img { transform: scale(1.03); }
+
+    .shop-badge-sold {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%) rotate(-12deg);
+      border: 3px solid var(--sold-red); color: var(--sold-red);
+      font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700;
+      padding: 4px 20px; letter-spacing: 4px; text-transform: uppercase;
+      border-radius: 4px; opacity: 0.85; background: rgba(255,255,255,0.7); pointer-events: none;
+    }
+
+    .shop-card-fav {
+      position: absolute; top: 8px; right: 8px;
+      width: 32px; height: 32px;
+      background: rgba(255,255,255,0.85); border: none; border-radius: 50%;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1); transition: all 0.2s; z-index: 2;
+    }
+
+    .shop-card-fav:hover { background: white; transform: scale(1.1); }
+    .shop-card-fav svg { width: 16px; height: 16px; stroke: var(--text-light); fill: none; stroke-width: 2; transition: all 0.2s; }
+    .shop-card-fav.active svg { stroke: #e74c6f; fill: #e74c6f; }
+
+    .shop-card-info { padding: 12px 14px 14px; }
+
+    .shop-card-brand {
+      font-size: 10px; font-weight: 600; color: var(--text-light);
+      letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 4px;
+    }
+
+    .shop-card-name {
+      font-size: 13px; font-weight: 400; color: var(--text-primary);
+      line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 8px;
+    }
+
+    .shop-card-price-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--craft-light); color: var(--craft-brown);
+      padding: 4px 12px; border-radius: 2px; font-size: 14px; font-weight: 600;
+      position: relative;
+    }
+
+    .shop-card-price-tag::before {
+      content: ''; position: absolute; left: -4px; top: 50%;
+      transform: translateY(-50%); width: 8px; height: 8px;
+      background: var(--bg-warm); border-radius: 50%;
+    }
+
+    .shop-card-size {
+      display: inline-block; margin-left: 8px; font-size: 11px;
+      color: var(--text-light); border: 1px solid #e0dbd5; padding: 1px 8px; border-radius: 2px;
+    }
+
+    /* EMPTY STATE */
+    .fav-empty {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .fav-empty-icon { font-size: 48px; color: #e0dbd5; margin-bottom: 16px; }
+
+    .fav-empty-text { font-size: 16px; color: var(--text-secondary); margin-bottom: 8px; }
+    .fav-empty-sub { font-size: 13px; color: var(--text-light); margin-bottom: 24px; }
+
+    .fav-empty-btn {
+      display: inline-block; padding: 12px 32px;
+      background: var(--blue-primary); color: white; text-decoration: none;
+      border-radius: var(--radius); font-size: 14px; font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .fav-empty-btn:hover { background: var(--blue-dark); }
+
+    /* LOADING */
+    .fav-loading { text-align: center; padding: 60px 20px; color: var(--text-light); }
+
+    .fav-loading-spinner {
+      width: 32px; height: 32px; border: 2px solid #e0dbd5;
+      border-top-color: var(--blue-primary); border-radius: 50%;
+      animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* FOOTER */
+    .shop-footer {
+      background: var(--text-primary); color: rgba(255,255,255,0.5);
+      text-align: center; padding: 32px 20px; font-size: 11px; letter-spacing: 1px;
+    }
+
+    .shop-footer-logo {
+      font-family: 'Playfair Display', serif; font-size: 18px;
+      color: rgba(255,255,255,0.7); letter-spacing: 3px; margin-bottom: 8px;
+    }
+
+    .shop-footer-links { display: flex; justify-content: center; gap: 24px; margin-bottom: 16px; }
+    .shop-footer-links a { color: rgba(255,255,255,0.5); text-decoration: none; font-size: 11px; transition: color 0.2s; }
+    .shop-footer-links a:hover { color: rgba(255,255,255,0.8); }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      .shop-header-inner { height: 56px; }
+      .shop-logo-text { font-size: 18px; }
+      .shop-nav a.nav-text { display: none; }
+      .fav-container { padding: 20px 12px 40px; }
+      .fav-title { font-size: 18px; }
+      .fav-grid { columns: 2; column-gap: 10px; }
+      .shop-card { margin-bottom: 10px; }
+      .shop-card-info { padding: 8px 10px 12px; }
+      .shop-card-name { font-size: 12px; }
+      .shop-card-price-tag { font-size: 13px; padding: 3px 10px; }
+    }
+
+    @media (max-width: 480px) {
+      .shop-badge-sold { font-size: 16px; padding: 3px 14px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="shop-header">
+    <div class="shop-header-inner">
+      <a href="/shop/" class="shop-logo">
+        <div>
+          <div class="shop-logo-text">FURIRA</div>
+          <div class="shop-logo-sub">vintage & used</div>
+        </div>
+      </a>
+      <nav class="shop-nav">
+        <a href="/shop/" class="nav-text">Shop</a>
+        <a href="/shop/#about" class="nav-text">About</a>
+        <button class="shop-nav-icon active-page" onclick="location.reload()" aria-label="お気に入り">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="#e74c6f" stroke="#e74c6f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+          </svg>
+        </button>
+        <button class="shop-nav-icon" onclick="location.href='/shop/cart.html'" aria-label="Cart">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 01-8 0"></path>
+          </svg>
+          <span class="cart-badge" id="cartBadge">0</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <div class="fav-container">
+    <h1 class="fav-title">お気に入り</h1>
+    <div class="fav-subtitle" id="favSubtitle"></div>
+
+    <div class="fav-loading" id="favLoading">
+      <div class="fav-loading-spinner"></div>
+      <div>読み込み中...</div>
+    </div>
+
+    <div class="fav-empty" id="favEmpty" style="display: none;">
+      <div class="fav-empty-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+        </svg>
+      </div>
+      <div class="fav-empty-text">お気に入りはまだありません</div>
+      <div class="fav-empty-sub">気になるアイテムのハートをタップして保存しましょう</div>
+      <a href="/shop/" class="fav-empty-btn">商品を探す</a>
+    </div>
+
+    <div class="fav-grid" id="favGrid" style="display: none;"></div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="shop-footer">
+    <div class="shop-footer-logo">FURIRA</div>
+    <div class="shop-footer-links">
+      <a href="/shop/">Shop</a>
+      <a href="/shop/#about">About</a>
+      <a href="#contact">Contact</a>
+    </div>
+    <div>&copy; 2026 FURIRA. All rights reserved.</div>
+  </footer>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="/shop/cart-utils.js"></script>
+  <script src="/shop/favorites-utils.js"></script>
+
+  <script>
+    firebase.initializeApp({
+      apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
+      authDomain: "furira.jp",
+      projectId: "reborn-chat",
+      storageBucket: "reborn-chat.firebasestorage.app",
+      messagingSenderId: "345706548795",
+      appId: "1:345706548795:web:058a553da6b4b74db5161e"
+    });
+    var favDb = firebase.firestore();
+
+    async function favInit() {
+      FuriraCart.updateBadge();
+
+      var favIds = FuriraFavorites.get();
+      if (favIds.length === 0) {
+        document.getElementById('favLoading').style.display = 'none';
+        document.getElementById('favEmpty').style.display = '';
+        return;
+      }
+
+      document.getElementById('favSubtitle').textContent = favIds.length + ' 点のアイテム';
+
+      try {
+        var promises = favIds.map(function(id) { return favDb.collection('products').doc(id).get(); });
+        var docs = await Promise.all(promises);
+
+        var html = '';
+        var validCount = 0;
+
+        docs.forEach(function(doc) {
+          if (!doc.exists) return;
+          var data = doc.data();
+
+          var images = [];
+          if (data.images && Array.isArray(data.images) && data.images.length > 0) images = data.images;
+          else if (data.images && data.images.imageUrls && data.images.imageUrls.length > 0) images = data.images.imageUrls;
+          else images = [data.imageUrl1, data.imageUrl2, data.imageUrl3].filter(Boolean);
+          if (images.length === 0) return;
+
+          var brand = (typeof data.brand === 'object') ? (data.brand.name || data.brand.label || '') : (data.brand || '');
+          var size = (typeof data.size === 'object' && data.size !== null) ? (data.size.display || data.size.actual || '') : (data.size || '');
+          var isSold = data.status === '販売済み' || data.status === '販売済';
+          var price = data.listingAmount || data.saleAmount || 0;
+
+          validCount++;
+          html += '<div class="shop-card" onclick="location.href=\'/shop/item.html?id=' + doc.id + '\'">';
+          html += '<div class="shop-card-img-wrap">';
+          html += '<img src="' + images[0] + '" alt="' + favEscape(data.productName || '') + '" loading="lazy">';
+          if (isSold) html += '<div class="shop-badge-sold">Sold</div>';
+          html += '<button class="shop-card-fav active" onclick="event.stopPropagation(); favRemove(this, \'' + doc.id + '\')" aria-label="お気に入り解除"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg></button>';
+          html += '</div>';
+          html += '<div class="shop-card-info">';
+          if (brand) html += '<div class="shop-card-brand">' + favEscape(brand) + '</div>';
+          html += '<div class="shop-card-name">' + favEscape(data.productName || '') + '</div>';
+          html += '<div>';
+          if (price > 0) html += '<span class="shop-card-price-tag">&yen;' + Number(price).toLocaleString() + '</span>';
+          if (size) html += '<span class="shop-card-size">' + favEscape(size) + '</span>';
+          html += '</div></div></div>';
+        });
+
+        if (validCount === 0) {
+          document.getElementById('favLoading').style.display = 'none';
+          document.getElementById('favEmpty').style.display = '';
+          return;
+        }
+
+        document.getElementById('favSubtitle').textContent = validCount + ' 点のアイテム';
+        document.getElementById('favGrid').innerHTML = html;
+        document.getElementById('favLoading').style.display = 'none';
+        document.getElementById('favGrid').style.display = '';
+      } catch (error) {
+        console.error('[Favorites] Error:', error);
+        document.getElementById('favLoading').innerHTML = '<div style="color: var(--sold-red);">読み込みに失敗しました</div>';
+      }
+    }
+
+    function favRemove(btn, productId) {
+      FuriraFavorites.toggle(productId);
+      var card = btn.closest('.shop-card');
+      card.style.opacity = '0';
+      card.style.transform = 'scale(0.9)';
+      card.style.transition = 'all 0.3s';
+      setTimeout(function() {
+        card.remove();
+        var remaining = document.querySelectorAll('#favGrid .shop-card').length;
+        document.getElementById('favSubtitle').textContent = remaining + ' 点のアイテム';
+        if (remaining === 0) {
+          document.getElementById('favGrid').style.display = 'none';
+          document.getElementById('favEmpty').style.display = '';
+          document.getElementById('favSubtitle').textContent = '';
+        }
+      }, 300);
+    }
+
+    function favEscape(str) {
+      if (!str) return '';
+      var div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    favInit();
+  </script>
+</body>
+</html>
