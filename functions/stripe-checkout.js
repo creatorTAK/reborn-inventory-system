@@ -45,6 +45,13 @@ exports.createCheckoutSession = onRequest(
       const db = getFirestore();
       const stripe = require('stripe')(stripeSecretKey.value());
 
+      // マークアップ設定を取得
+      let markupPercent = 0;
+      try {
+        const settingsDoc = await db.collection('settings').doc('ecAutoPriceRules').get();
+        if (settingsDoc.exists) markupPercent = settingsDoc.data().markupPercent || 0;
+      } catch (e) { /* ignore */ }
+
       // Fetch product data from Firestore (price from DB, not client)
       const lineItems = [];
       const unavailable = [];
@@ -63,7 +70,15 @@ exports.createCheckoutSession = onRequest(
           continue;
         }
 
-        const price = data.listingAmount || 0;
+        // EC価格優先: ecPrice > markup適用 > listingAmount
+        let price = 0;
+        if (data.ecPrice && data.ecPrice > 0) {
+          price = data.ecPrice;
+        } else if (markupPercent > 0) {
+          price = Math.round((data.listingAmount || 0) * (1 + markupPercent / 100));
+        } else {
+          price = data.listingAmount || 0;
+        }
         if (price <= 0) {
           unavailable.push(productId);
           continue;

@@ -3177,9 +3177,17 @@ exports.ecAutoPriceReduction = onSchedule({
       .where('status', '==', '出品中')
       .get();
 
-    console.log(`[ecAutoPriceReduction] モード:${mode}, 出品中商品数: ${productsSnap.size}`);
+    const markupPercent = settings.markupPercent || 0;
+    console.log(`[ecAutoPriceReduction] モード:${mode}, マークアップ:${markupPercent}%, 出品中商品数: ${productsSnap.size}`);
     const now = Date.now();
     let updatedCount = 0;
+
+    // EC実効価格を計算（ecPrice > markup > listingAmount）
+    function getEcEffectivePrice(product) {
+      if (product.ecPrice && product.ecPrice > 0) return product.ecPrice;
+      if (markupPercent > 0) return Math.round((product.listingAmount || 0) * (1 + markupPercent / 100));
+      return product.listingAmount || 0;
+    }
 
     // 下限価格計算ヘルパー
     function calcFloorPrice(purchaseCost) {
@@ -3209,7 +3217,7 @@ exports.ecAutoPriceReduction = onSchedule({
 
         const listingMs = listingDate.toDate ? listingDate.toDate().getTime() : new Date(listingDate).getTime();
         const daysSinceListing = Math.floor((now - listingMs) / (1000 * 60 * 60 * 24));
-        const originalPrice = product.ecOriginalPrice || product.listingAmount || 0;
+        const originalPrice = product.ecOriginalPrice || getEcEffectivePrice(product);
         if (originalPrice <= 0) continue;
 
         let matchedRule = null;
@@ -3222,17 +3230,17 @@ exports.ecAutoPriceReduction = onSchedule({
         const floorPrice = calcFloorPrice(product.purchaseAmount || product.purchasePrice || 0);
         if (floorPrice > 0 && newPrice < floorPrice) newPrice = floorPrice;
 
-        const currentPrice = product.listingAmount || 0;
-        if (newPrice >= currentPrice) continue;
+        const currentEcPrice = getEcEffectivePrice(product);
+        if (newPrice >= currentEcPrice) continue;
 
         await db.collection('products').doc(pDoc.id).update({
-          listingAmount: newPrice,
+          ecPrice: newPrice,
           ecOriginalPrice: originalPrice,
           ecLastAutoReduction: FieldValue.serverTimestamp(),
           ecAutoReductionRule: { mode: 'step', daysAfter: matchedRule.daysAfter, discountPercent: matchedRule.discountPercent, originalPrice, reducedPrice: newPrice }
         });
         updatedCount++;
-        console.log(`[ecAutoPriceReduction] ${product.managementNumber || pDoc.id}: ¥${currentPrice} → ¥${newPrice} (${matchedRule.discountPercent}%OFF, ${daysSinceListing}日経過)`);
+        console.log(`[ecAutoPriceReduction] ${product.managementNumber || pDoc.id}: ¥${currentEcPrice} → ¥${newPrice} (${matchedRule.discountPercent}%OFF, ${daysSinceListing}日経過)`);
       }
     } else if (mode === 'daily') {
       // 毎日固定額値下げモード
@@ -3248,7 +3256,7 @@ exports.ecAutoPriceReduction = onSchedule({
         const daysSinceListing = Math.floor((now - listingMs) / (1000 * 60 * 60 * 24));
         if (daysSinceListing < dailyStartDay) continue;
 
-        const originalPrice = product.ecOriginalPrice || product.listingAmount || 0;
+        const originalPrice = product.ecOriginalPrice || getEcEffectivePrice(product);
         if (originalPrice <= 0) continue;
 
         // 開始日からの経過日数 × 固定額
@@ -3258,11 +3266,11 @@ exports.ecAutoPriceReduction = onSchedule({
         if (floorPrice > 0 && newPrice < floorPrice) newPrice = floorPrice;
         if (newPrice < 1) newPrice = 1;
 
-        const currentPrice = product.listingAmount || 0;
-        if (newPrice >= currentPrice) continue;
+        const currentEcPrice = getEcEffectivePrice(product);
+        if (newPrice >= currentEcPrice) continue;
 
         await db.collection('products').doc(pDoc.id).update({
-          listingAmount: newPrice,
+          ecPrice: newPrice,
           ecOriginalPrice: originalPrice,
           ecLastAutoReduction: FieldValue.serverTimestamp(),
           ecAutoReductionRule: { mode: 'daily', dailyAmount, reductionDays, originalPrice, reducedPrice: newPrice }

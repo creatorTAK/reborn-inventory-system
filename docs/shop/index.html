@@ -847,7 +847,8 @@
     <div class="shop-footer-links">
       <a href="/shop/">Shop</a>
       <a href="#about">About</a>
-      <a href="#contact">Contact</a>
+      <a href="/shop/legal.html">特定商取引法</a>
+      <a href="/shop/privacy.html">プライバシーポリシー</a>
     </div>
     <div>&copy; 2026 FURIRA. All rights reserved.</div>
   </footer>
@@ -884,6 +885,7 @@
     var shopCurrentFilter = 'all';
     var shopSearchQuery = '';
     var shopCurrentSort = 'default';
+    var shopMarkupPercent = 0;
 
     // ============================================
     // Category Mapping
@@ -900,6 +902,12 @@
     // ============================================
     async function shopFetchProducts() {
       try {
+        // マークアップ設定を取得
+        try {
+          var settingsDoc = await db.collection('settings').doc('ecAutoPriceRules').get();
+          if (settingsDoc.exists) shopMarkupPercent = settingsDoc.data().markupPercent || 0;
+        } catch(e) { /* ignore */ }
+
         var snapshot = await db.collection('products')
           .limit(200)
           .get();
@@ -931,7 +939,7 @@
             id: doc.id,
             name: data.productName || '',
             brand: (typeof data.brand === 'object') ? (data.brand.name || data.brand.label || '') : (data.brand || ''),
-            price: data.listingAmount || 0,
+            price: data.ecPrice || (shopMarkupPercent > 0 ? Math.round((data.listingAmount || 0) * (1 + shopMarkupPercent / 100)) : (data.listingAmount || 0)),
             images: images,
             size: (typeof data.size === 'object' && data.size !== null) ? (data.size.display || data.size.actual || data.size.name || data.size.label || '') : (data.size || ''),
             condition: data.condition || '',
