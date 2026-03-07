@@ -1575,6 +1575,23 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
       const mgmtNumbers = relatedData.managementNumbers || [];
       const itemNames = productNames.length > 0 ? productNames.join(', ') : productIds.join(', ');
 
+      // 注文データから配送先情報を取得
+      let shippingInfo = {};
+      if (relatedData.orderId) {
+        try {
+          const orderDoc = await db.collection('orders').doc(relatedData.orderId).get();
+          if (orderDoc.exists) {
+            const od = orderDoc.data();
+            shippingInfo = {
+              shippingName: od.shippingName || '',
+              shippingAddress: od.shippingAddress || {},
+              customerEmail: od.customerEmail || '',
+              customerPhone: od.customerPhone || '',
+            };
+          }
+        } catch (e) { console.warn('注文データ取得失敗:', e); }
+      }
+
       // 担当スタッフを決定: 各商品のassignedToを取得、なければ全admin
       const staffEmails = new Set();
       for (const pid of productIds) {
@@ -1619,6 +1636,9 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
             staffName: staffName,
             salePlatform: '自社EC',
             source: 'ec_takedown',
+            shippingName: shippingInfo.shippingName || '',
+            shippingAddress: shippingInfo.shippingAddress || {},
+            customerPhone: shippingInfo.customerPhone || '',
           },
         });
         console.log('✅ [onTaskCompleted] EC梱包発送タスク作成:', staffEmail);

@@ -614,13 +614,56 @@
       var relData = taskData.relatedData || {};
       var mgmtNums = relData.managementNumbers || [relData.managementNumber || '-'];
       _tdl_pendingEcShipTask = { taskId: taskId, taskData: taskData };
-      document.getElementById('tdl-ecShipOrderInfo').innerHTML =
-        '<strong>EC注文</strong><br>管理番号: ' + mgmtNums.join(', ');
+
+      // 配送先情報を組み立て
+      var addr = relData.shippingAddress || {};
+      var addrParts = [
+        addr.postal_code ? '\u3012' + addr.postal_code : '',
+        addr.state || '', addr.city || '', addr.line1 || '', addr.line2 || ''
+      ].filter(Boolean).join(' ');
+      var shipName = relData.shippingName || '';
+      var phone = relData.customerPhone || '';
+
+      var infoHtml = '<strong>EC注文</strong><br>管理番号: ' + mgmtNums.join(', ');
+      if (shipName) infoHtml += '<br><br><strong>配送先:</strong><br>' + shipName;
+      if (addrParts) infoHtml += '<br>' + addrParts;
+      if (phone) infoHtml += '<br>TEL: ' + phone;
+      if (!shipName && !addrParts) {
+        // relatedDataに配送先がない場合、ordersから取得
+        tdlFetchShippingInfo(relData.orderId);
+      }
+      document.getElementById('tdl-ecShipOrderInfo').innerHTML = infoHtml;
       document.getElementById('tdl-ecShipCarrier').value = 'yamato';
       document.getElementById('tdl-ecShipTracking').value = '';
       document.getElementById('tdl-ecShipFee').value = '0';
       document.getElementById('tdl-ecShipSubmitBtn').disabled = false;
       document.getElementById('tdl-ecShipModal').classList.add('active');
+    }
+
+    // relatedDataに配送先がない場合のフォールバック（既存タスク用）
+    async function tdlFetchShippingInfo(orderId) {
+      if (!orderId) return;
+      try {
+        var orderDoc = await _tdl_db.collection('orders').doc(orderId).get();
+        if (!orderDoc.exists) return;
+        var od = orderDoc.data();
+        var addr = od.shippingAddress || {};
+        var addrParts = [
+          addr.postal_code ? '\u3012' + addr.postal_code : '',
+          addr.state || '', addr.city || '', addr.line1 || '', addr.line2 || ''
+        ].filter(Boolean).join(' ');
+        var shipName = od.shippingName || '';
+        var phone = od.customerPhone || '';
+        if (shipName || addrParts) {
+          var el = document.getElementById('tdl-ecShipOrderInfo');
+          var current = el.innerHTML;
+          var extra = '<br><br><strong>配送先:</strong>';
+          if (shipName) extra += '<br>' + shipName;
+          if (addrParts) extra += '<br>' + addrParts;
+          if (phone) extra += '<br>TEL: ' + phone;
+          el.innerHTML = current + extra;
+        }
+      } catch (e) { console.warn('[tdl] 配送先取得失敗:', e); }
     }
 
     function tdlCloseEcShipModal() {
