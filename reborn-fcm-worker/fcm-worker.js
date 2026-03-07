@@ -554,10 +554,10 @@ async function getFirebaseAccessToken(serviceAccount) {
  * Body: { to: string, subject: string, body: string }
  */
 async function handleSendEmail(request, env) {
-  const { to, subject, body } = await request.json();
+  const { to, subject, body, text, html } = await request.json();
 
-  if (!to || !subject || !body) {
-    return jsonResponse({ error: 'to, subject, and body are required' }, 400);
+  if (!to || !subject || (!body && !html)) {
+    return jsonResponse({ error: 'to, subject, and body (or html) are required' }, 400);
   }
 
   const RESEND_API_KEY = env.RESEND_API_KEY;
@@ -565,19 +565,9 @@ async function handleSendEmail(request, env) {
     return jsonResponse({ error: 'RESEND_API_KEY not configured' }, 500);
   }
 
-  try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'フリラ <noreply@furira.jp>',
-        to: [to],
-        subject: subject,
-        text: body,
-        html: `
+  // If custom html is provided, use it directly; otherwise use default template
+  const emailText = text || body || '';
+  const emailHtml = html || `
 <!DOCTYPE html>
 <html>
 <head>
@@ -598,7 +588,7 @@ async function handleSendEmail(request, env) {
       <p style="margin:5px 0 0 0; font-size: 14px;">物販管理システム</p>
     </div>
     <div class="content">
-      ${body.split('\n').map(line => `<p style="margin: 10px 0;">${escapeHtml(line)}</p>`).join('')}
+      ${(body || '').split('\n').map(line => `<p style="margin: 10px 0;">${escapeHtml(line)}</p>`).join('')}
     </div>
     <div class="footer">
       <p>このメールは <a href="https://furira.jp">フリラ物販管理システム</a> から自動送信されています。</p>
@@ -606,7 +596,21 @@ async function handleSendEmail(request, env) {
   </div>
 </body>
 </html>
-        `.trim()
+  `.trim();
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'フリラ <noreply@furira.jp>',
+        to: [to],
+        subject: subject,
+        text: emailText,
+        html: emailHtml,
       }),
     });
 

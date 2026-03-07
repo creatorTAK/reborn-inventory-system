@@ -209,6 +209,7 @@ async function handleCheckoutCompleted(session, stripe) {
   }
 
   // 5. Send order confirmation email to customer
+  console.log('[Webhook] Step 5: Email check - customerEmail:', customerEmail || '(empty)');
   if (customerEmail) {
     try {
       const totalYenEmail = Math.round((session.amount_total || 0));
@@ -276,10 +277,11 @@ async function handleCheckoutCompleted(session, stripe) {
   </div>
 </body></html>`;
 
-      await sendOrderEmail(customerEmail, subject, textBody, htmlBody);
-      console.log('[Webhook] Order confirmation email sent to:', customerEmail);
+      console.log('[Webhook] Step 5: Calling sendOrderEmail to:', customerEmail);
+      const emailResult = await sendOrderEmail(customerEmail, subject, textBody, htmlBody);
+      console.log('[Webhook] Step 5: Email result:', JSON.stringify(emailResult));
     } catch (err) {
-      console.error('[Webhook] Order email failed:', err);
+      console.error('[Webhook] Step 5: Order email FAILED:', err.message, err.stack);
     }
   }
 }
@@ -291,6 +293,7 @@ function escapeHtmlStr(str) {
 
 async function sendOrderEmail(to, subject, textBody, htmlBody) {
   const CLOUDFLARE_WORKER_URL = 'https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send-email';
+  console.log('[sendOrderEmail] Sending to:', to, 'via:', CLOUDFLARE_WORKER_URL);
 
   const response = await fetch(CLOUDFLARE_WORKER_URL, {
     method: 'POST',
@@ -303,7 +306,14 @@ async function sendOrderEmail(to, subject, textBody, htmlBody) {
     }),
   });
 
-  const result = await response.json();
+  const responseText = await response.text();
+  console.log('[sendOrderEmail] Response status:', response.status, 'body:', responseText.substring(0, 500));
+  let result;
+  try {
+    result = JSON.parse(responseText);
+  } catch (e) {
+    throw new Error('Email response not JSON: ' + responseText.substring(0, 200));
+  }
   if (!response.ok || !result.success) {
     throw new Error('Email send failed: ' + JSON.stringify(result));
   }
