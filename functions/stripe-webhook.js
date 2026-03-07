@@ -111,23 +111,42 @@ async function handleCheckoutCompleted(session, stripe) {
   const orderRef = await db.collection('orders').add(orderData);
   console.log('[Webhook] Order saved:', orderRef.id);
 
-  // 2. Update product status to 販売済み
+  // 2. Update product status to 販売済み + 利益計算
   var productNames = [];
+  var productMgmtNumbers = [];
   for (const productId of productIds) {
     try {
       const productDoc = await db.collection('products').doc(productId).get();
       if (productDoc.exists) {
         const productData = productDoc.data();
         productNames.push(productData.productName || productId);
+        productMgmtNumbers.push(productData.managementNumber || '');
+
+        const perItemAmount = Math.round((session.amount_total || 0) / productIds.length);
+        const stripeFee = Math.round(perItemAmount * 0.036); // Stripe 3.6%
+        const purchaseCost = productData.purchaseAmount || productData.purchasePrice || 0;
+        const provisionalProfit = perItemAmount - purchaseCost - stripeFee;
 
         await db.collection('products').doc(productId).update({
           status: '販売済み',
           saleDate: FieldValue.serverTimestamp(),
-          saleAmount: Math.round((session.amount_total || 0) / productIds.length),
+          saleAmount: perItemAmount,
+          salePlatform: '自社EC',
           saleChannel: 'EC',
           orderId: orderRef.id,
+          platformFee: stripeFee,
+          paymentFee: 0,
+          finalProfit: Math.round(provisionalProfit),
+          profitRate: perItemAmount > 0 ? (provisionalProfit / perItemAmount) * 100 : 0,
+          provisionalProfit: Math.round(provisionalProfit),
+          shippingConfirmed: false,
+          shippingMethod1: '',
+          shippingMethod2: '',
+          shippingFee: 0,
+          packagingMaterials: [],
+          packagingCostTotal: 0,
         });
-        console.log('[Webhook] Product updated to 販売済み:', productId);
+        console.log('[Webhook] Product updated to 販売済み:', productId, 'profit:', provisionalProfit);
       }
     } catch (err) {
       console.error('[Webhook] Failed to update product:', productId, err);
@@ -145,16 +164,18 @@ async function handleCheckoutCompleted(session, stripe) {
 
     for (const email of adminEmails) {
       await db.collection('userTasks').doc(email).collection('tasks').add({
-        title: 'EC注文: ' + itemNames,
-        description: '¥' + totalYenTask.toLocaleString() + ' の注文が入りました。メルカリ出品の取り下げと発送準備をしてください。',
-        type: 'ec_order',
+        title: 'EC注文: メルカリ出品取り下げ',
+        description: '¥' + totalYenTask.toLocaleString() + ' の注文（' + itemNames + '）が入りました。\nメルカリに出品中の場合は取り下げてください。\n完了後、担当スタッフに梱包・発送タスクが自動作成されます。',
+        type: 'ec_takedown',
         completed: false,
         createdAt: FieldValue.serverTimestamp(),
         dueDate: null,
-        link: '',
+        link: 'ec-orders',
         relatedData: {
           orderId: orderRef.id,
           productIds: productIds,
+          productNames: productNames,
+          managementNumbers: productMgmtNumbers,
           amountTotal: totalYenTask,
           customerEmail: customerEmail,
           shippingName: shipping.name || '',

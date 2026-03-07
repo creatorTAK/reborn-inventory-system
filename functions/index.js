@@ -1562,9 +1562,74 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
     title: afterData.title
   });
 
-  // 報酬対象のタスクタイプをチェック
   // type または taskType フィールドを確認
   const taskType = afterData.type || afterData.taskType;
+
+  // ec_takedown完了時: 担当スタッフにshipping_task（梱包・発送タスク）を自動作成
+  if (taskType === 'ec_takedown') {
+    console.log('📦 [onTaskCompleted] EC取り下げ完了 → 梱包発送タスク作成:', taskId);
+    try {
+      const relatedData = afterData.relatedData || {};
+      const productIds = relatedData.productIds || [];
+      const productNames = relatedData.productNames || [];
+      const mgmtNumbers = relatedData.managementNumbers || [];
+      const itemNames = productNames.length > 0 ? productNames.join(', ') : productIds.join(', ');
+
+      // 担当スタッフを決定: 各商品のassignedToを取得、なければ全admin
+      const staffEmails = new Set();
+      for (const pid of productIds) {
+        try {
+          const pDoc = await db.collection('products').doc(pid).get();
+          if (pDoc.exists) {
+            const pData = pDoc.data();
+            if (pData.assignedTo) staffEmails.add(pData.assignedTo);
+          }
+        } catch (e) { /* skip */ }
+      }
+
+      // assignedToがなければactiveDevices（全admin）にフォールバック
+      if (staffEmails.size === 0) {
+        const devSnap = await db.collection('activeDevices').get();
+        devSnap.forEach(doc => staffEmails.add(doc.id));
+      }
+
+      for (const staffEmail of staffEmails) {
+        // スタッフ名を取得
+        let staffName = staffEmail.split('@')[0];
+        try {
+          const uDoc = await db.collection('users').doc(staffEmail).get();
+          if (uDoc.exists) staffName = uDoc.data().userName || uDoc.data().displayName || staffName;
+        } catch (e) { /* skip */ }
+
+        await db.collection('userTasks').doc(staffEmail).collection('tasks').add({
+          title: 'EC注文: 梱包・発送',
+          description: itemNames + ' の梱包・発送をしてください。\n管理番号: ' + mgmtNumbers.join(', '),
+          type: 'shipping_task',
+          completed: false,
+          createdAt: FieldValue.serverTimestamp(),
+          dueDate: null,
+          link: 'ec-orders',
+          relatedData: {
+            orderId: relatedData.orderId,
+            productId: productIds[0] || null,
+            productIds: productIds,
+            managementNumber: mgmtNumbers[0] || '',
+            managementNumbers: mgmtNumbers,
+            staffEmail: staffEmail,
+            staffName: staffName,
+            salePlatform: '自社EC',
+            source: 'ec_takedown',
+          },
+        });
+        console.log('✅ [onTaskCompleted] EC梱包発送タスク作成:', staffEmail);
+      }
+    } catch (err) {
+      console.error('❌ [onTaskCompleted] EC梱包発送タスク作成エラー:', err);
+    }
+    return { success: true, action: 'ec_takedown_to_shipping' };
+  }
+
+  // 報酬対象のタスクタイプをチェック
   const compensationTaskTypes = ['listing_approval', 'shipping_task', 'inventory_action', 'inspection_task'];
   if (!compensationTaskTypes.includes(taskType)) {
     console.log('⏭️ [onTaskCompleted] 報酬対象外のタスクタイプ:', taskType);

@@ -816,26 +816,44 @@
       });
     };
 
-    // Auto-complete EC order tasks when shipped
+    // Auto-complete EC shipping tasks when shipped from EC管理画面
     function ecoAutoCompleteShipTask(orderId) {
       var db = firebase.firestore();
       var user = firebase.auth().currentUser;
       if (!user || !user.email) return;
 
+      // shipping_task（梱包発送タスク）を自動完了
       db.collection('userTasks').doc(user.email).collection('tasks')
-        .where('type', '==', 'ec_order')
+        .where('type', '==', 'shipping_task')
         .where('completed', '==', false)
         .get()
         .then(function(snap) {
           snap.forEach(function(doc) {
             var data = doc.data();
             if (data.relatedData && data.relatedData.orderId === orderId) {
-              doc.ref.update({ completed: true });
+              doc.ref.update({ completed: true, completedAt: new Date().toISOString() });
             }
           });
         })
         .catch(function(err) {
-          console.error('[EC Orders] Auto-complete task error:', err);
+          console.error('[EC Orders] Auto-complete shipping task error:', err);
+        });
+
+      // ec_takedown（取り下げタスク）も残っていれば自動完了
+      db.collection('userTasks').doc(user.email).collection('tasks')
+        .where('type', '==', 'ec_takedown')
+        .where('completed', '==', false)
+        .get()
+        .then(function(snap) {
+          snap.forEach(function(doc) {
+            var data = doc.data();
+            if (data.relatedData && data.relatedData.orderId === orderId) {
+              doc.ref.update({ completed: true, completedAt: new Date().toISOString() });
+            }
+          });
+        })
+        .catch(function(err) {
+          console.error('[EC Orders] Auto-complete takedown task error:', err);
         });
     }
 
