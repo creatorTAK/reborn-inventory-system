@@ -573,12 +573,12 @@ async function handleSendEmail(request, env) {
 <head>
   <meta charset="utf-8">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2C2C2C; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: linear-gradient(135deg, #40B4E5, #1E8FBF); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-    .content { background: #fff; padding: 30px; border: 1px solid #ddd; border-top: none; }
-    .footer { background: #f5f5f5; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 8px 8px; }
-    a { color: #1E8FBF; }
+    .header { background: linear-gradient(135deg, #4A7FB5, #3A6A9B); color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+    .content { background: #fff; padding: 30px; border: 1px solid #E8E4DF; border-top: none; }
+    .footer { background: #FAF8F5; padding: 15px; text-align: center; font-size: 12px; color: #9B9590; border-radius: 0 0 8px 8px; }
+    a { color: #4A7FB5; }
   </style>
 </head>
 <body>

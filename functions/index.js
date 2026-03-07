@@ -1890,12 +1890,12 @@ function generateReminderEmailHtml(userName, notifications) {
   const normalTasks = notifications.filter(n => n.type === 'reminder');
 
   const taskListHtml = notifications.map(n => {
-    const bgColor = n.type === 'urgent_reminder' ? '#fef2f2' : '#f9fafb';
-    const borderColor = n.type === 'urgent_reminder' ? '#ef4444' : '#e5e7eb';
+    const bgColor = n.type === 'urgent_reminder' ? '#fef2f2' : '#FAF8F5';
+    const borderColor = n.type === 'urgent_reminder' ? '#ef4444' : '#E8E4DF';
     return `
       <div style="background: ${bgColor}; border-left: 3px solid ${borderColor}; padding: 12px 16px; margin-bottom: 8px; border-radius: 4px;">
-        <div style="font-weight: 600; color: #374151;">${escapeHtml(n.title)}</div>
-        <div style="color: #6b7280; font-size: 14px; margin-top: 4px;">${escapeHtml(n.content)}</div>
+        <div style="font-weight: 600; color: #2C2C2C;">${escapeHtml(n.title)}</div>
+        <div style="color: #6B6560; font-size: 14px; margin-top: 4px;">${escapeHtml(n.content)}</div>
       </div>
     `;
   }).join('');
@@ -1907,17 +1907,17 @@ function generateReminderEmailHtml(userName, notifications) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2C2C2C; margin: 0; padding: 0;">
   <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #40B4E5, #1E8FBF); color: white; padding: 24px; text-align: center; border-radius: 8px 8px 0 0;">
-      <h1 style="margin: 0; font-size: 24px; font-weight: bold;">📋 タスクリマインダー</h1>
-      <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">フリラ物販管理システム</p>
+    <div style="background: linear-gradient(135deg, #4A7FB5, #3A6A9B); color: white; padding: 24px; text-align: center; border-radius: 8px 8px 0 0;">
+      <h1 style="margin: 0; font-size: 28px; font-family: 'Georgia', serif; font-weight: bold; letter-spacing: 2px;">FURIRA</h1>
+      <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">タスクリマインダー</p>
     </div>
-    <div style="background: #fff; padding: 24px; border: 1px solid #e5e7eb; border-top: none;">
+    <div style="background: #fff; padding: 24px; border: 1px solid #E8E4DF; border-top: none;">
       <p style="margin: 0 0 16px 0; font-size: 16px;">
         ${escapeHtml(userName)}さん、おはようございます。
       </p>
-      <p style="margin: 0 0 20px 0; color: #6b7280;">
+      <p style="margin: 0 0 20px 0; color: #6B6560;">
         ${urgentTasks.length > 0 ? `<span style="color: #ef4444; font-weight: 600;">⚠️ 緊急対応が必要なタスクが${urgentTasks.length}件あります。</span><br>` : ''}
         未完了のタスクが${notifications.length}件あります。ご確認ください。
       </p>
@@ -1927,13 +1927,13 @@ function generateReminderEmailHtml(userName, notifications) {
       </div>
 
       <div style="text-align: center; margin-top: 24px;">
-        <a href="https://furira.jp" style="display: inline-block; background: #40B4E5; color: white; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+        <a href="https://furira.jp" style="display: inline-block; background: #4A7FB5; color: white; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: 600;">
           フリラを開く
         </a>
       </div>
     </div>
-    <div style="background: #f9fafb; padding: 16px; text-align: center; font-size: 12px; color: #9ca3af; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none;">
-      <p style="margin: 0;">このメールは <a href="https://furira.jp" style="color: #40B4E5;">フリラ物販管理システム</a> から自動送信されています。</p>
+    <div style="background: #FAF8F5; padding: 16px; text-align: center; font-size: 12px; color: #9B9590; border-radius: 0 0 8px 8px; border: 1px solid #E8E4DF; border-top: none;">
+      <p style="margin: 0;">このメールは <a href="https://furira.jp" style="color: #4A7FB5;">フリラ物販管理システム</a> から自動送信されています。</p>
     </div>
   </div>
 </body>

@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v379';  // v379: 全フラグメント+index.htmlのグレー/ボーダーをウォームパレットに統一
+const CACHE_VERSION = 'v380';  // v380: reborn-theme.css/product-styles.css/master-manager.jsの旧カラー全置換
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）

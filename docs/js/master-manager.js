@@ -770,10 +770,10 @@ function showPlatformTabs() {
               padding: 10px 14px;
               font-size: 12px;
               font-weight: ${isActive ? '600' : '500'};
-              color: ${isActive ? '#40B4E5' : '#6b7280'};
+              color: ${isActive ? '#4A7FB5' : '#6b7280'};
               background: ${isActive ? 'rgba(64, 180, 229, 0.08)' : 'transparent'};
               border: none;
-              border-bottom: 3px solid ${isActive ? '#40B4E5' : 'transparent'};
+              border-bottom: 3px solid ${isActive ? '#4A7FB5' : 'transparent'};
               cursor: pointer;
               transition: all 0.2s ease;
               white-space: nowrap;
@@ -4310,10 +4310,10 @@ window.selectPlatformTab = async function selectPlatformTab(platformId) {
       const isActive = tab.dataset.platform === platformId;
       
       tab.classList.toggle('active', isActive);
-      tab.style.color = isActive ? '#40B4E5' : '#6b7280';
+      tab.style.color = isActive ? '#4A7FB5' : '#6b7280';
       tab.style.background = isActive ? 'rgba(64, 180, 229, 0.08)' : 'transparent';
       tab.style.fontWeight = isActive ? '600' : '500';
-      tab.style.borderBottom = isActive ? '3px solid #40B4E5' : '3px solid transparent';
+      tab.style.borderBottom = isActive ? '3px solid #4A7FB5' : '3px solid transparent';
     });
   }
 
@@ -6535,7 +6535,7 @@ async function showCascadeAddModal() {
   batchModeCheckbox.type = 'checkbox';
   batchModeCheckbox.id = 'cascade-batch-mode';
   batchModeCheckbox.checked = batchAddMode;
-  batchModeCheckbox.style.cssText = 'width: 18px; height: 18px; accent-color: #40B4E5; cursor: pointer;';
+  batchModeCheckbox.style.cssText = 'width: 18px; height: 18px; accent-color: #4A7FB5; cursor: pointer;';
 
   batchModeCheckbox.addEventListener('change', () => {
     batchAddMode = batchModeCheckbox.checked;
