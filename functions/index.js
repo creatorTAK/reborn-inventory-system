@@ -3138,4 +3138,126 @@ exports.applyRakumaFeeRate = onSchedule({
   }
 });
 
+// ==========================================
+// EC自動値下げ（毎日実行）
+// ==========================================
+exports.ecAutoPriceReduction = onSchedule({
+  schedule: '0 * * * *', // 毎時0分（設定のexecHourで実行判定）
+  timeZone: 'Asia/Tokyo',
+  region: 'asia-northeast1'
+}, async (event) => {
+  console.log('[ecAutoPriceReduction] チェック開始');
+
+  try {
+    // 設定を取得
+    const settingsDoc = await db.collection('settings').doc('ecAutoPriceRules').get();
+    if (!settingsDoc.exists) {
+      console.log('[ecAutoPriceReduction] 設定なし → スキップ');
+      return;
+    }
+    const settings = settingsDoc.data();
+    if (!settings.enabled) {
+      console.log('[ecAutoPriceReduction] 無効 → スキップ');
+      return;
+    }
+
+    // 実行時刻チェック（JSTで判定）
+    const nowJST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+    const currentHour = nowJST.getHours();
+    const execHour = settings.execHour || 9;
+    if (currentHour !== execHour) {
+      console.log(`[ecAutoPriceReduction] 実行時刻外 (現在:${currentHour}時, 設定:${execHour}時) → スキップ`);
+      return;
+    }
+
+    const rules = settings.rules || [];
+    if (rules.length === 0) {
+      console.log('[ecAutoPriceReduction] ルールなし → スキップ');
+      return;
+    }
+
+    // ルールを日数降順でソート（大きいルールから適用判定）
+    const sortedRules = [...rules].sort((a, b) => b.daysAfter - a.daysAfter);
+
+    // EC出品中の商品を取得
+    const productsSnap = await db.collection('products')
+      .where('status', '==', '出品中')
+      .get();
+
+    console.log(`[ecAutoPriceReduction] 出品中商品数: ${productsSnap.size}`);
+    const now = Date.now();
+    let updatedCount = 0;
+
+    for (const pDoc of productsSnap.docs) {
+      const product = pDoc.data();
+      const listingDate = product.listingDate;
+      if (!listingDate) continue;
+
+      const listingMs = listingDate.toDate ? listingDate.toDate().getTime() : new Date(listingDate).getTime();
+      const daysSinceListing = Math.floor((now - listingMs) / (1000 * 60 * 60 * 24));
+
+      // 元の出品価格（初回のlistingAmountを保持）
+      const originalPrice = product.ecOriginalPrice || product.listingAmount || 0;
+      if (originalPrice <= 0) continue;
+
+      // 該当するルールを探す（日数降順で最初にマッチ）
+      let matchedRule = null;
+      for (const rule of sortedRules) {
+        if (daysSinceListing >= rule.daysAfter) {
+          matchedRule = rule;
+          break;
+        }
+      }
+      if (!matchedRule) continue;
+
+      // 新価格を計算
+      let newPrice = Math.round(originalPrice * (1 - matchedRule.discountPercent / 100));
+
+      // 下限価格チェック
+      const purchaseCost = product.purchaseAmount || product.purchasePrice || 0;
+      const floorType = settings.floorType || 'purchase_plus_fees';
+
+      let floorPrice = 0;
+      if (floorType === 'purchase_only') {
+        floorPrice = purchaseCost;
+      } else if (floorType === 'purchase_plus_fees') {
+        // 仕入値 + Stripe手数料(3.6%) + 送料見込み(500円)
+        floorPrice = Math.round(purchaseCost + (purchaseCost * 0.036) + 500);
+      } else if (floorType === 'fixed_margin') {
+        const marginPct = settings.floorMarginPercent || 10;
+        floorPrice = Math.round(purchaseCost / (1 - marginPct / 100));
+      }
+      // floorType === 'none' → floorPrice = 0
+
+      if (floorPrice > 0 && newPrice < floorPrice) {
+        newPrice = floorPrice;
+      }
+
+      // 現在価格と同じか高ければスキップ（無意味な更新を避ける）
+      const currentPrice = product.listingAmount || 0;
+      if (newPrice >= currentPrice) continue;
+
+      // 更新
+      const updateData = {
+        listingAmount: newPrice,
+        ecOriginalPrice: originalPrice, // 元値を保持
+        ecLastAutoReduction: FieldValue.serverTimestamp(),
+        ecAutoReductionRule: {
+          daysAfter: matchedRule.daysAfter,
+          discountPercent: matchedRule.discountPercent,
+          originalPrice: originalPrice,
+          reducedPrice: newPrice
+        }
+      };
+      await db.collection('products').doc(pDoc.id).update(updateData);
+      updatedCount++;
+      console.log(`[ecAutoPriceReduction] ${product.managementNumber || pDoc.id}: ¥${currentPrice} → ¥${newPrice} (${matchedRule.discountPercent}%OFF, ${daysSinceListing}日経過)`);
+    }
+
+    console.log(`[ecAutoPriceReduction] 完了: ${updatedCount}件値下げ`);
+  } catch (error) {
+    console.error('[ecAutoPriceReduction] エラー:', error);
+  }
+});
+
 
