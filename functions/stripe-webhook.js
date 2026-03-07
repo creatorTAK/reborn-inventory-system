@@ -213,7 +213,7 @@ async function handleCheckoutCompleted(session, stripe) {
   if (customerEmail) {
     try {
       const totalYenEmail = Math.round((session.amount_total || 0));
-      const orderNumber = orderRef.id.slice(0, 8).toUpperCase();
+      const orderNumber = session.id.substring(0, 24).toUpperCase();
       const itemListHtml = productNames.map(function(name) {
         return '<li style="padding: 4px 0;">' + escapeHtmlStr(name) + '</li>';
       }).join('');
