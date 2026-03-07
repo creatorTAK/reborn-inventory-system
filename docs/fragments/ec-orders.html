@@ -745,6 +745,8 @@
         body += '</select>';
         body += '<label>追跡番号</label>';
         body += '<input type="text" id="eco-tracking" placeholder="追跡番号を入力" inputmode="numeric">';
+        body += '<label>送料（円）</label>';
+        body += '<input type="number" id="eco-shipping-fee" placeholder="0" inputmode="numeric" value="0">';
         body += '<button class="eco-btn-ship" id="eco-btn-ship" onclick="ecoProcessShip(\'' + order.id + '\')">発送処理を実行</button>';
         body += '</div>';
       } else if (order.status === 'shipped') {
@@ -780,6 +782,7 @@
     window.ecoProcessShip = function(orderId) {
       var carrier = document.getElementById('eco-carrier').value;
       var tracking = (document.getElementById('eco-tracking').value || '').trim();
+      var shippingFee = parseFloat(document.getElementById('eco-shipping-fee').value) || 0;
 
       var btn = document.getElementById('eco-btn-ship');
       btn.disabled = true;
@@ -790,7 +793,37 @@
         status: 'shipped',
         carrier: carrier,
         trackingNumber: tracking,
+        shippingFee: shippingFee,
         shippedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(function() {
+        // 各商品の利益を確定（送料按分）
+        return db.collection('orders').doc(orderId).get();
+      }).then(function(orderDoc) {
+        if (!orderDoc.exists) return;
+        var orderData = orderDoc.data();
+        var productIds = orderData.productIds || [];
+        var perShipFee = productIds.length > 0 ? Math.round(shippingFee / productIds.length) : 0;
+
+        var promises = productIds.map(function(pid) {
+          return db.collection('products').doc(pid).get().then(function(pDoc) {
+            if (!pDoc.exists) return;
+            var p = pDoc.data();
+            var provProfit = p.provisionalProfit || p.finalProfit || 0;
+            var pkgCost = p.packagingCostTotal || 0;
+            var finalProfit = provProfit - perShipFee - pkgCost;
+            var salesAmount = p.saleAmount || 0;
+            var profitRate = salesAmount > 0 ? (finalProfit / salesAmount) * 100 : 0;
+
+            return db.collection('products').doc(pid).update({
+              shippingConfirmed: true,
+              shippingMethod1: carrier,
+              shippingFee: perShipFee,
+              finalProfit: Math.round(finalProfit),
+              profitRate: profitRate
+            });
+          });
+        });
+        return Promise.all(promises);
       }).then(function() {
         ecoCloseModal();
         ecoAutoCompleteShipTask(orderId);
