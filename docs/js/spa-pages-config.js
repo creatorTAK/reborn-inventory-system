@@ -200,6 +200,13 @@ const FURIRA_PAGES = {
     destroy: 'destroyAdminAnnouncePage',
     bottomNav: null
   },
+  'ec-orders': {
+    type: 'fragment',
+    fragmentUrl: '/fragments/ec-orders.html',
+    init: 'initEcOrdersPage',
+    destroy: 'destroyEcOrdersPage',
+    bottomNav: null
+  },
   'personal-info': {
     type: 'fragment',
     fragmentUrl: '/fragments/personal-info.html',
