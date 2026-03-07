@@ -555,11 +555,35 @@
         </select>
       </div>
 
-      <div class="eco-price-section-label">値下げルール</div>
-      <div id="eco-price-rules-container"></div>
-      <button class="eco-price-add-btn" onclick="ecoAddPriceRule()">
-        <i class="bi bi-plus-circle"></i> ルールを追加
-      </button>
+      <div class="eco-price-section-label">値下げモード</div>
+      <div style="margin-bottom:16px">
+        <select id="eco-price-mode" class="eco-price-time-select" style="width:100%" onchange="ecoToggleRuleMode()">
+          <option value="step">段階値下げ（○日後に○%OFF）</option>
+          <option value="daily">毎日値下げ（毎日○円ずつ）</option>
+        </select>
+      </div>
+
+      <div id="eco-step-rules-section">
+        <div class="eco-price-section-label">段階値下げルール</div>
+        <div id="eco-price-rules-container"></div>
+        <button class="eco-price-add-btn" onclick="ecoAddPriceRule()">
+          <i class="bi bi-plus-circle"></i> ルールを追加
+        </button>
+      </div>
+
+      <div id="eco-daily-rules-section" style="display:none">
+        <div class="eco-price-section-label">毎日値下げルール</div>
+        <div class="eco-price-rule-row">
+          <span class="eco-rule-label">毎日</span>
+          <input type="number" id="eco-daily-amount" value="100" min="1" style="width:90px">
+          <span class="eco-rule-label">円ずつ値下げ</span>
+        </div>
+        <div class="eco-price-rule-row" style="margin-top:8px">
+          <span class="eco-rule-label">開始</span>
+          <input type="number" id="eco-daily-start-day" value="1" min="0" style="width:60px">
+          <span class="eco-rule-label">日目から</span>
+        </div>
+      </div>
 
       <div class="eco-price-section-label">下限価格ルール</div>
       <div class="eco-price-floor">
@@ -581,9 +605,10 @@
       <button class="eco-price-save-btn" onclick="ecoSavePriceSettings()">設定を保存</button>
 
       <div class="eco-price-info">
-        ※ 値下げは出品日（listingDate）からの経過日数で判定します。<br>
-        ※ ルールは上から順にチェックされ、最初に一致した条件が適用されます。<br>
-        ※ 既に値下げ済みの商品は、より大きな割引率のルールにのみ更新されます。
+        ※ 値下げは出品日からの経過日数で判定します。<br>
+        ※ 段階モード: ルールは日数が大きい順にチェックされ、最初に一致した条件を適用。<br>
+        ※ 毎日モード: 開始日から毎日指定額を値下げ（下限価格で停止）。<br>
+        ※ 下限価格を下回る値下げは自動的にブロックされます。
       </div>
     </div>
   </div>
@@ -1055,7 +1080,6 @@
       var dd = document.getElementById('eco-dropdown');
       if (dd) dd.classList.remove('show');
 
-      // Load settings from Firestore
       var db = (typeof getCompatDb === 'function') ? getCompatDb() : window.db;
       if (!db) { alert('DB未接続'); return; }
 
@@ -1067,12 +1091,22 @@
         document.getElementById('eco-price-floor-margin').value = data.floorMarginPercent || 10;
         ecoToggleFloorMargin();
 
+        // モード
+        var mode = data.mode || 'step';
+        document.getElementById('eco-price-mode').value = mode;
+        ecoToggleRuleMode();
+
+        // 段階ルール
         ecoPriceRules = (data.rules && data.rules.length > 0) ? data.rules : [
           { daysAfter: 7, discountPercent: 5 },
           { daysAfter: 14, discountPercent: 10 },
           { daysAfter: 30, discountPercent: 15 }
         ];
         ecoRenderPriceRules();
+
+        // 毎日ルール
+        document.getElementById('eco-daily-amount').value = data.dailyAmount || 100;
+        document.getElementById('eco-daily-start-day').value = (data.dailyStartDay !== undefined) ? data.dailyStartDay : 1;
       }).catch(function() {
         ecoPriceRules = [
           { daysAfter: 7, discountPercent: 5 },
@@ -1087,6 +1121,12 @@
 
     window.ecoClosePriceSettings = function() {
       document.getElementById('eco-price-modal').classList.remove('show');
+    };
+
+    window.ecoToggleRuleMode = function() {
+      var mode = document.getElementById('eco-price-mode').value;
+      document.getElementById('eco-step-rules-section').style.display = (mode === 'step') ? 'block' : 'none';
+      document.getElementById('eco-daily-rules-section').style.display = (mode === 'daily') ? 'block' : 'none';
     };
 
     function ecoRenderPriceRules() {
@@ -1132,13 +1172,15 @@
       var db = (typeof getCompatDb === 'function') ? getCompatDb() : window.db;
       if (!db) { alert('DB未接続'); return; }
 
-      // Sort rules by daysAfter ascending
       ecoPriceRules.sort(function(a, b) { return a.daysAfter - b.daysAfter; });
 
       var settings = {
         enabled: document.getElementById('eco-price-enabled').checked,
         execHour: parseInt(document.getElementById('eco-price-exec-hour').value) || 9,
+        mode: document.getElementById('eco-price-mode').value,
         rules: ecoPriceRules,
+        dailyAmount: parseInt(document.getElementById('eco-daily-amount').value) || 100,
+        dailyStartDay: parseInt(document.getElementById('eco-daily-start-day').value) || 1,
         floorType: document.getElementById('eco-price-floor-type').value,
         floorMarginPercent: parseInt(document.getElementById('eco-price-floor-margin').value) || 10,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
