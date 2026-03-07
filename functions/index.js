@@ -23,9 +23,11 @@ function getSharp() {
 }
 const path = require('path');
 
-// Stripe Checkout
+// Stripe Checkout & Webhook
 const stripeCheckout = require('./stripe-checkout');
+const stripeWebhookHandler = require('./stripe-webhook');
 exports.createCheckoutSession = stripeCheckout.createCheckoutSession;
+exports.stripeWebhook = stripeWebhookHandler.stripeWebhook;
 
 // Firebase Admin初期化
 initializeApp();
