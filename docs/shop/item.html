@@ -870,6 +870,12 @@
     </div>
   </div>
 
+  <!-- RELATED PRODUCTS -->
+  <div class="rv-section" id="relatedSection" style="display: none;">
+    <div class="rv-title">関連商品</div>
+    <div class="rv-scroll" id="relatedScroll"></div>
+  </div>
+
   <!-- RECENTLY VIEWED -->
   <div class="rv-section" id="rvSection" style="display: none;">
     <div class="rv-title">最近見た商品</div>
@@ -1098,8 +1104,9 @@
       document.getElementById('itemLoading').style.display = 'none';
       document.getElementById('itemContainer').style.display = '';
 
-      // Record view and render recently viewed
+      // Record view and render sections
       itemRecordView(p.id);
+      itemRenderRelated(p);
       itemRenderRecentlyViewed(p.id);
     }
 
@@ -1249,6 +1256,77 @@
         }, { passive: true });
       });
     })();
+
+    // ============================================
+    // Related Products
+    // ============================================
+    async function itemRenderRelated(currentProduct) {
+      var cats = [currentProduct.category].filter(Boolean);
+      if (!cats.length) return;
+
+      // Search by superCategory or category
+      var catParts = currentProduct.category.split(' > ');
+      var superCat = catParts[0] || '';
+      if (!superCat) return;
+
+      try {
+        var snapshot = await db.collection('products')
+          .where('superCategory', '==', superCat)
+          .limit(30)
+          .get();
+
+        var related = [];
+        snapshot.forEach(function(doc) {
+          if (doc.id === currentProduct.id) return;
+          var d = doc.data();
+          var status = d.status || '';
+          if (status !== '出品中' && status !== '販売済み' && status !== '販売済') return;
+
+          var imgs = [];
+          if (d.images && Array.isArray(d.images)) imgs = d.images;
+          else if (d.images && d.images.imageUrls) imgs = d.images.imageUrls;
+          else imgs = [d.imageUrl1, d.imageUrl2, d.imageUrl3].filter(Boolean);
+          if (imgs.length === 0) return;
+
+          var brand = (typeof d.brand === 'object' && d.brand !== null)
+            ? (d.brand.name || d.brand.label || '') : (d.brand || '');
+
+          related.push({
+            id: doc.id,
+            name: d.productName || '',
+            brand: brand,
+            price: d.listingAmount || d.saleAmount || 0,
+            image: imgs[0],
+            status: status
+          });
+        });
+
+        if (related.length === 0) return;
+
+        // Shuffle and take up to 10
+        related.sort(function() { return Math.random() - 0.5; });
+        related = related.slice(0, 10);
+
+        var html = '';
+        related.forEach(function(p) {
+          var isSold = p.status === '販売済み' || p.status === '販売済';
+          html += '<a class="rv-card" href="/shop/item.html?id=' + encodeURIComponent(p.id) + '">';
+          html += '<div class="rv-card-img">';
+          html += '<img src="' + p.image + '" alt="' + itemEscape(p.name) + '" loading="lazy">';
+          if (isSold) html += '<div class="rv-card-sold">Sold</div>';
+          html += '</div>';
+          if (p.brand) html += '<div class="rv-card-brand">' + itemEscape(p.brand) + '</div>';
+          html += '<div class="rv-card-name">' + itemEscape(p.name) + '</div>';
+          if (p.price > 0) html += '<div class="rv-card-price">&yen;' + Number(p.price).toLocaleString() + '</div>';
+          html += '</a>';
+        });
+
+        document.getElementById('relatedScroll').innerHTML = html;
+        document.getElementById('relatedSection').style.display = '';
+      } catch (e) {
+        console.error('[Related]', e);
+      }
+    }
 
     // ============================================
     // Recently Viewed
