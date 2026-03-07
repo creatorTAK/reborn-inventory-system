@@ -167,18 +167,41 @@
     #spa-page-ec-orders .eco-card {
       background: #fff;
       border-radius: 10px;
-      padding: 16px;
+      padding: 14px;
       margin-bottom: 12px;
       box-shadow: 0 1px 4px rgba(0,0,0,0.06);
       cursor: pointer;
       transition: box-shadow 0.2s;
+      display: flex;
+      gap: 12px;
     }
     #spa-page-ec-orders .eco-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+    #spa-page-ec-orders .eco-card-img {
+      width: 64px;
+      height: 64px;
+      min-width: 64px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #f3f4f6;
+    }
+    #spa-page-ec-orders .eco-card-img-placeholder {
+      width: 64px;
+      height: 64px;
+      min-width: 64px;
+      border-radius: 8px;
+      background: #f3f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #d1d5db;
+      font-size: 24px;
+    }
+    #spa-page-ec-orders .eco-card-body { flex: 1; min-width: 0; }
     #spa-page-ec-orders .eco-card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     #spa-page-ec-orders .eco-order-id {
       font-size: 12px;
@@ -450,6 +473,7 @@
     var _ecoOrders = [];
     var _ecoCurrentFilter = 'all';
     var _ecoUnsubscribe = null;
+    var _ecoProductCache = {}; // productId -> { image, name }
 
     window.initEcOrdersPage = function() {
       ecoLoadOrders();
@@ -524,18 +548,44 @@
         .orderBy('createdAt', 'desc')
         .onSnapshot(function(snap) {
           _ecoOrders = [];
+          var needFetch = [];
           snap.forEach(function(doc) {
             var d = doc.data();
             d.id = doc.id;
             _ecoOrders.push(d);
+            (d.productIds || []).forEach(function(pid) {
+              if (!_ecoProductCache[pid]) needFetch.push(pid);
+            });
           });
           ecoUpdateSummary();
           ecoRenderList();
+          if (needFetch.length > 0) ecoFetchProductImages(needFetch);
         }, function(err) {
           console.error('[EC Orders] Load error:', err);
           document.getElementById('eco-list').innerHTML =
             '<div class="eco-empty"><i class="bi bi-exclamation-circle"></i>注文データの読み込みに失敗しました</div>';
         });
+    }
+
+    function ecoFetchProductImages(pids) {
+      var db = firebase.firestore();
+      var unique = pids.filter(function(v, i, a) { return a.indexOf(v) === i; });
+      unique.forEach(function(pid) {
+        db.collection('products').doc(pid).get().then(function(doc) {
+          if (!doc.exists) return;
+          var data = doc.data();
+          var img = '';
+          if (data.images && Array.isArray(data.images) && data.images.length > 0) {
+            img = data.images[0];
+          } else if (data.images && data.images.imageUrls && data.images.imageUrls.length > 0) {
+            img = data.images.imageUrls[0];
+          } else {
+            img = data.imageUrl1 || '';
+          }
+          _ecoProductCache[pid] = { image: img, name: data.productName || '' };
+          ecoRenderList();
+        }).catch(function() {});
+      });
     }
 
     function ecoUpdateSummary() {
@@ -584,7 +634,18 @@
         var statusText = ecoStatusLabel(order.status);
         var orderId = order.sessionId ? order.sessionId.substring(0, 24).toUpperCase() : order.id.substring(0, 8);
 
+        var imgHtml = '';
+        var firstPid = (order.productIds || [])[0];
+        var cached = firstPid ? _ecoProductCache[firstPid] : null;
+        if (cached && cached.image) {
+          imgHtml = '<img class="eco-card-img" src="' + cached.image + '" alt="" onerror="this.style.display=\'none\'">';
+        } else {
+          imgHtml = '<div class="eco-card-img-placeholder"><i class="bi bi-bag"></i></div>';
+        }
+
         html += '<div class="eco-card" onclick="ecoShowDetail(\'' + order.id + '\')">';
+        html += imgHtml;
+        html += '<div class="eco-card-body">';
         html += '<div class="eco-card-header">';
         html += '<span class="eco-order-id">#' + orderId + '</span>';
         html += '<span class="eco-status ' + statusClass + '">' + statusText + '</span>';
@@ -593,6 +654,7 @@
         html += '<div class="eco-card-meta">';
         html += '<span>' + dateStr + '</span>';
         html += '<span class="eco-card-amount">&yen;' + amount.toLocaleString() + '</span>';
+        html += '</div>';
         html += '</div>';
         html += '</div>';
       });
@@ -615,9 +677,16 @@
       document.getElementById('eco-modal-title').textContent = '注文 #' + displayId;
 
       var itemsHtml = '<ul class="eco-detail-items" style="list-style:none;padding:0;margin:0">';
-      (order.items || []).forEach(function(item) {
-        itemsHtml += '<li>' + ecoEscapeHtml(item.name || '') + ' &times;' + (item.quantity || 1) +
-          ' <span style="float:right;font-weight:600">&yen;' + (item.amount || 0).toLocaleString() + '</span></li>';
+      (order.items || []).forEach(function(item, idx) {
+        var pid = (order.productIds || [])[idx];
+        var pc = pid ? _ecoProductCache[pid] : null;
+        var thumbHtml = '';
+        if (pc && pc.image) {
+          thumbHtml = '<img src="' + pc.image + '" style="width:40px;height:40px;border-radius:6px;object-fit:cover;margin-right:10px;vertical-align:middle;" onerror="this.style.display=\'none\'">';
+        }
+        itemsHtml += '<li style="display:flex;align-items:center">' + thumbHtml +
+          '<span style="flex:1">' + ecoEscapeHtml(item.name || '') + ' &times;' + (item.quantity || 1) + '</span>' +
+          '<span style="font-weight:600;white-space:nowrap">&yen;' + (item.amount || 0).toLocaleString() + '</span></li>';
       });
       itemsHtml += '</ul>';
 
