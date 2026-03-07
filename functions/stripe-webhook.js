@@ -134,7 +134,39 @@ async function handleCheckoutCompleted(session, stripe) {
     }
   }
 
-  // 3. Send FCM notification to admins
+  // 3. Create task for admins (やることリスト)
+  try {
+    const adminEmails = [];
+    const activeDevicesSnap2 = await db.collection('activeDevices').get();
+    activeDevicesSnap2.forEach(function(doc) { adminEmails.push(doc.id); });
+
+    const itemNames = productNames.length > 0 ? productNames.join(', ') : productIds.join(', ');
+    const totalYenTask = Math.round((session.amount_total || 0));
+
+    for (const email of adminEmails) {
+      await db.collection('userTasks').doc(email).collection('tasks').add({
+        title: 'EC注文: ' + itemNames,
+        description: '¥' + totalYenTask.toLocaleString() + ' の注文が入りました。メルカリ出品の取り下げと発送準備をしてください。',
+        type: 'ec_order',
+        completed: false,
+        createdAt: FieldValue.serverTimestamp(),
+        dueDate: null,
+        link: '',
+        relatedData: {
+          orderId: orderRef.id,
+          productIds: productIds,
+          amountTotal: totalYenTask,
+          customerEmail: customerEmail,
+          shippingName: shipping.name || '',
+        },
+      });
+    }
+    console.log('[Webhook] Tasks created for', adminEmails.length, 'admins');
+  } catch (err) {
+    console.error('[Webhook] Task creation failed:', err);
+  }
+
+  // 4. Send FCM notification to admins
   try {
     const totalYen = Math.round((session.amount_total || 0));
     const itemText = productNames.length > 0
@@ -146,8 +178,13 @@ async function handleCheckoutCompleted(session, stripe) {
     const tokens = [];
     activeDevicesSnap.forEach(function(doc) {
       const data = doc.data();
-      if (data.token) tokens.push(data.token);
+      if (data.fcmTokens && Array.isArray(data.fcmTokens)) {
+        data.fcmTokens.forEach(function(t) { if (t) tokens.push(t); });
+      } else if (data.token) {
+        tokens.push(data.token);
+      }
     });
+    console.log('[Webhook] FCM tokens found:', tokens.length);
 
     if (tokens.length > 0) {
       const message = {
