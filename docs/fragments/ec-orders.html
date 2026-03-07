@@ -138,6 +138,48 @@
       vertical-align: middle;
     }
 
+    /* Period Filter */
+    #spa-page-ec-orders .eco-period-bar {
+      display: none;
+      padding: 8px 16px;
+      background: #FAF8F5;
+      border-bottom: 1px solid #E8E4DF;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    #spa-page-ec-orders .eco-period-bar.show { display: flex; }
+    #spa-page-ec-orders .eco-period-btn {
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #6B6560;
+      background: #fff;
+      border: 1px solid #E8E4DF;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #spa-page-ec-orders .eco-period-btn:hover { border-color: #4A7FB5; color: #4A7FB5; }
+    #spa-page-ec-orders .eco-period-btn.active { background: #4A7FB5; color: #fff; border-color: #4A7FB5; }
+
+    /* Load More */
+    #spa-page-ec-orders .eco-load-more {
+      text-align: center;
+      padding: 16px;
+    }
+    #spa-page-ec-orders .eco-load-more button {
+      padding: 10px 32px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #4A7FB5;
+      background: #fff;
+      border: 1.5px solid #4A7FB5;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #spa-page-ec-orders .eco-load-more button:hover { background: #4A7FB5; color: #fff; }
+
     /* Summary */
     #spa-page-ec-orders .eco-summary {
       display: grid;
@@ -503,6 +545,14 @@
     </button>
   </div>
 
+  <!-- Period Filter Bar -->
+  <div class="eco-period-bar" id="eco-period-bar">
+    <button class="eco-period-btn active" data-period="month" onclick="ecoSetPeriod('month')">今月</button>
+    <button class="eco-period-btn" data-period="7days" onclick="ecoSetPeriod('7days')">過去7日</button>
+    <button class="eco-period-btn" data-period="30days" onclick="ecoSetPeriod('30days')">過去30日</button>
+    <button class="eco-period-btn" data-period="all" onclick="ecoSetPeriod('all')">全期間</button>
+  </div>
+
   <div class="eco-content">
     <!-- Summary -->
     <div class="eco-summary">
@@ -638,6 +688,9 @@
 
     var _ecoOrders = [];
     var _ecoCurrentFilter = 'all';
+    var _ecoCurrentPeriod = 'month';
+    var _ecoDisplayCount = 20;
+    var _ECO_PAGE_SIZE = 20;
     var _ecoUnsubscribe = null;
     var _ecoProductCache = {}; // productId -> { image, name }
 
@@ -773,10 +826,42 @@
       }
     }
 
+    function ecoGetPeriodStart(period) {
+      var now = new Date();
+      if (period === 'month') {
+        return new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (period === '7days') {
+        var d = new Date(now); d.setDate(d.getDate() - 7); return d;
+      } else if (period === '30days') {
+        var d = new Date(now); d.setDate(d.getDate() - 30); return d;
+      }
+      return null; // 'all'
+    }
+
     function ecoRenderList() {
       var filtered = _ecoOrders;
       if (_ecoCurrentFilter !== 'all') {
         filtered = _ecoOrders.filter(function(o) { return o.status === _ecoCurrentFilter; });
+      }
+
+      // Apply period filter for shipped/delivered tabs
+      var needsPeriod = (_ecoCurrentFilter === 'shipped' || _ecoCurrentFilter === 'delivered');
+      if (needsPeriod) {
+        var periodStart = ecoGetPeriodStart(_ecoCurrentPeriod);
+        if (periodStart) {
+          filtered = filtered.filter(function(o) {
+            if (!o.createdAt || !o.createdAt.toDate) return false;
+            return o.createdAt.toDate() >= periodStart;
+          });
+        }
+      }
+
+      // Show/hide period bar
+      var periodBar = document.getElementById('eco-period-bar');
+      if (needsPeriod) {
+        periodBar.classList.add('show');
+      } else {
+        periodBar.classList.remove('show');
       }
 
       var listEl = document.getElementById('eco-list');
@@ -784,6 +869,14 @@
         var msg = _ecoCurrentFilter === 'all' ? '注文はまだありません' : 'この状態の注文はありません';
         listEl.innerHTML = '<div class="eco-empty"><i class="bi bi-inbox"></i>' + msg + '</div>';
         return;
+      }
+
+      // Apply pagination for shipped/delivered
+      var totalCount = filtered.length;
+      var needsLoadMore = false;
+      if (needsPeriod && filtered.length > _ecoDisplayCount) {
+        filtered = filtered.slice(0, _ecoDisplayCount);
+        needsLoadMore = true;
       }
 
       var html = '';
@@ -824,11 +917,31 @@
         html += '</div>';
         html += '</div>';
       });
+      // Add load more button
+      if (needsLoadMore) {
+        html += '<div class="eco-load-more"><button onclick="ecoLoadMore()">もっと見る（残り' + (totalCount - _ecoDisplayCount) + '件）</button></div>';
+      }
+
       listEl.innerHTML = html;
     }
 
+    window.ecoSetPeriod = function(period) {
+      _ecoCurrentPeriod = period;
+      _ecoDisplayCount = _ECO_PAGE_SIZE;
+      document.querySelectorAll('#spa-page-ec-orders .eco-period-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-period') === period);
+      });
+      ecoRenderList();
+    };
+
+    window.ecoLoadMore = function() {
+      _ecoDisplayCount += _ECO_PAGE_SIZE;
+      ecoRenderList();
+    };
+
     window.ecoSwitchTab = function(filter) {
       _ecoCurrentFilter = filter;
+      _ecoDisplayCount = _ECO_PAGE_SIZE;
       document.querySelectorAll('#spa-page-ec-orders .eco-tab').forEach(function(tab) {
         tab.classList.toggle('active', tab.getAttribute('data-filter') === filter);
       });
