@@ -23,6 +23,10 @@ function getSharp() {
 }
 const path = require('path');
 
+// Stripe Checkout
+const stripeCheckout = require('./stripe-checkout');
+exports.createCheckoutSession = stripeCheckout.createCheckoutSession;
+
 // Firebase Admin初期化
 initializeApp();
 const db = getFirestore();
