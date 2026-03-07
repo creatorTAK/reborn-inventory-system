@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v380';  // v380: reborn-theme.css/product-styles.css/master-manager.jsの旧カラー全置換
+const CACHE_VERSION = 'v381';  // v381: EC未発送バッジをアプリバッジ合算に追加
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -128,7 +128,8 @@ async function updateCombinedAppBadge() {
     const chatCount = await readBadgeCount('RebornBadgeDB');
     const todoCount = await readBadgeCount('SystemNotificationDB');
     const packagingCount = await readBadgeCount('PackagingBadgeDB');
-    const totalCount = chatCount + todoCount + packagingCount;
+    const ecCount = await readBadgeCount('EcBadgeDB');
+    const totalCount = chatCount + todoCount + packagingCount + ecCount;
     if (navigator.setAppBadge) {
       if (totalCount > 0) {
         await navigator.setAppBadge(totalCount);
@@ -412,14 +413,14 @@ self.addEventListener('message', (event) => {
   // アプリが開かれたときに、IndexedDBのカウントをFirestoreベースの正しい値に同期
   if (data.type === 'SYNC_BADGE_COUNT') {
     console.log('[SW v160] Received SYNC_BADGE_COUNT:', data);
-    syncBadgeCounts(data.chatCount || 0, data.todoCount || 0, data.packagingCount || 0);
+    syncBadgeCounts(data.chatCount || 0, data.todoCount || 0, data.packagingCount || 0, data.ecCount || 0);
   }
 });
 
 // ================================================================================
 // バッジカウント同期処理（クライアントの正しい値に合わせる）
 // ================================================================================
-async function syncBadgeCounts(chatCount, todoCount, packagingCount) {
+async function syncBadgeCounts(chatCount, todoCount, packagingCount, ecCount) {
   try {
     // RebornBadgeDB（チャット用）をchatCountに設定
     await setBadgeInDB('RebornBadgeDB', chatCount);
@@ -430,8 +431,11 @@ async function syncBadgeCounts(chatCount, todoCount, packagingCount) {
     // PackagingBadgeDB（資材不足用）をpackagingCountに設定
     await setBadgeInDB('PackagingBadgeDB', packagingCount || 0);
 
+    // EcBadgeDB（EC未発送用）をecCountに設定
+    await setBadgeInDB('EcBadgeDB', ecCount || 0);
+
     // ★ アプリバッジも正しい値に更新（重要！）
-    const totalCount = chatCount + todoCount + (packagingCount || 0);
+    const totalCount = chatCount + todoCount + (packagingCount || 0) + (ecCount || 0);
     if (navigator.setAppBadge) {
       if (totalCount > 0) {
         await navigator.setAppBadge(totalCount);
