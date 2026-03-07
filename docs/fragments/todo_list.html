@@ -290,6 +290,42 @@
     </div>
   </div>
 
+  <!-- EC発送モーダル -->
+  <div id="tdl-ecShipModal" class="deadline-modal">
+    <div class="deadline-modal-content">
+      <div class="deadline-modal-header">
+        <h3><i class="bi bi-truck" style="color: #4A7FB5; margin-right: 8px;"></i>EC発送処理</h3>
+        <button class="deadline-modal-close" onclick="tdlCloseEcShipModal()">&times;</button>
+      </div>
+      <div class="deadline-modal-body">
+        <div style="background: #eff6ff; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <div style="font-size: 13px; color: #1e40af;" id="tdl-ecShipOrderInfo">-</div>
+        </div>
+        <div class="deadline-input-group">
+          <label><i class="bi bi-building" style="margin-right: 6px;"></i>配送業者</label>
+          <select id="tdl-ecShipCarrier" style="width: 100%; padding: 10px; border: 1px solid #D1CCC6; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+            <option value="yamato">ヤマト運輸</option>
+            <option value="sagawa">佐川急便</option>
+            <option value="jppost">日本郵便</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="deadline-input-group">
+          <label><i class="bi bi-upc-scan" style="margin-right: 6px;"></i>追跡番号</label>
+          <input type="text" id="tdl-ecShipTracking" placeholder="追跡番号を入力" inputmode="numeric" style="width: 100%; padding: 10px; border: 1px solid #D1CCC6; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+        </div>
+        <div class="deadline-input-group">
+          <label><i class="bi bi-cash" style="margin-right: 6px;"></i>送料（円）</label>
+          <input type="number" id="tdl-ecShipFee" placeholder="0" inputmode="numeric" value="0" style="width: 100%; padding: 10px; border: 1px solid #D1CCC6; border-radius: 8px; font-size: 14px; box-sizing: border-box;">
+        </div>
+      </div>
+      <div class="deadline-modal-footer">
+        <button class="deadline-modal-btn cancel" onclick="tdlCloseEcShipModal()">キャンセル</button>
+        <button class="deadline-modal-btn primary" id="tdl-ecShipSubmitBtn" onclick="tdlSubmitEcShip()"><i class="bi bi-truck"></i> 発送完了</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 管理タブ（管理者専用） -->
   <div id="tdl-tab-admin" class="tdl-tab-content">
     <div class="tasks-container" style="padding: 16px;">
@@ -542,6 +578,12 @@
         var taskData = taskDoc.data();
         var relData = taskData.relatedData || {};
 
+        // EC注文の発送タスク → モーダルで発送処理
+        if (relData.salePlatform === '自社EC' && relData.orderId) {
+          tdlOpenEcShipModal(taskId, taskData);
+          return;
+        }
+
         if (!relData.managementNumber) {
           alert('管理番号が見つかりません。タスクのみ完了にしてください。');
           return;
@@ -562,6 +604,99 @@
         alert('エラーが発生しました: ' + (error.message || error));
       }
     }
+
+    // ========================================
+    // EC発送モーダル
+    // ========================================
+    var _tdl_pendingEcShipTask = null;
+
+    function tdlOpenEcShipModal(taskId, taskData) {
+      var relData = taskData.relatedData || {};
+      var mgmtNums = relData.managementNumbers || [relData.managementNumber || '-'];
+      _tdl_pendingEcShipTask = { taskId: taskId, taskData: taskData };
+      document.getElementById('tdl-ecShipOrderInfo').innerHTML =
+        '<strong>EC注文</strong><br>管理番号: ' + mgmtNums.join(', ');
+      document.getElementById('tdl-ecShipCarrier').value = 'yamato';
+      document.getElementById('tdl-ecShipTracking').value = '';
+      document.getElementById('tdl-ecShipFee').value = '0';
+      document.getElementById('tdl-ecShipSubmitBtn').disabled = false;
+      document.getElementById('tdl-ecShipModal').classList.add('active');
+    }
+
+    function tdlCloseEcShipModal() {
+      _tdl_pendingEcShipTask = null;
+      document.getElementById('tdl-ecShipModal').classList.remove('active');
+    }
+    window.tdlCloseEcShipModal = tdlCloseEcShipModal;
+
+    async function tdlSubmitEcShip() {
+      if (!_tdl_pendingEcShipTask) return;
+      var taskId = _tdl_pendingEcShipTask.taskId;
+      var taskData = _tdl_pendingEcShipTask.taskData;
+      var relData = taskData.relatedData || {};
+      var orderId = relData.orderId;
+
+      var carrier = document.getElementById('tdl-ecShipCarrier').value;
+      var tracking = (document.getElementById('tdl-ecShipTracking').value || '').trim();
+      var shippingFee = parseFloat(document.getElementById('tdl-ecShipFee').value) || 0;
+
+      var btn = document.getElementById('tdl-ecShipSubmitBtn');
+      btn.disabled = true;
+      btn.textContent = '処理中...';
+
+      try {
+        // 1. 注文ステータスを更新
+        await _tdl_db.collection('orders').doc(orderId).update({
+          status: 'shipped',
+          carrier: carrier,
+          trackingNumber: tracking,
+          shippingFee: shippingFee,
+          shippedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 2. 各商品の利益確定（送料按分）
+        var orderDoc = await _tdl_db.collection('orders').doc(orderId).get();
+        if (orderDoc.exists) {
+          var orderData = orderDoc.data();
+          var productIds = orderData.productIds || [];
+          var perShipFee = productIds.length > 0 ? Math.round(shippingFee / productIds.length) : 0;
+
+          for (var i = 0; i < productIds.length; i++) {
+            var pDoc = await _tdl_db.collection('products').doc(productIds[i]).get();
+            if (!pDoc.exists) continue;
+            var p = pDoc.data();
+            var provProfit = p.provisionalProfit || p.finalProfit || 0;
+            var pkgCost = p.packagingCostTotal || 0;
+            var finalProfit = provProfit - perShipFee - pkgCost;
+            var salesAmount = p.saleAmount || 0;
+            var profitRate = salesAmount > 0 ? (finalProfit / salesAmount) * 100 : 0;
+
+            await _tdl_db.collection('products').doc(productIds[i]).update({
+              shippingConfirmed: true,
+              shippingMethod1: carrier,
+              shippingFee: perShipFee,
+              finalProfit: Math.round(finalProfit),
+              profitRate: profitRate
+            });
+          }
+        }
+
+        // 3. タスクを完了
+        await _tdl_db.collection('userTasks').doc(_tdl_userEmail).collection('tasks').doc(taskId).update({
+          completed: true,
+          completedAt: new Date().toISOString()
+        });
+
+        tdlCloseEcShipModal();
+        tdlLoadTasks();
+      } catch (error) {
+        console.error('[tdl] EC発送処理エラー:', error);
+        alert('発送処理に失敗しました: ' + (error.message || error));
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-truck"></i> 発送完了';
+      }
+    }
+    window.tdlSubmitEcShip = tdlSubmitEcShip;
 
     // タスクを完了にする
     async function tdlCompleteTask(taskId, taskType) {
