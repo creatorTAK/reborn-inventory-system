@@ -207,4 +207,105 @@ async function handleCheckoutCompleted(session, stripe) {
     console.error('[Webhook] FCM notification failed:', err);
     // Don't throw - order is already saved
   }
+
+  // 5. Send order confirmation email to customer
+  if (customerEmail) {
+    try {
+      const totalYenEmail = Math.round((session.amount_total || 0));
+      const orderNumber = orderRef.id.slice(0, 8).toUpperCase();
+      const itemListHtml = productNames.map(function(name) {
+        return '<li style="padding: 4px 0;">' + escapeHtmlStr(name) + '</li>';
+      }).join('');
+      const shippingAddr = shipping.address || {};
+      const addrText = [
+        shippingAddr.postal_code ? '〒' + shippingAddr.postal_code : '',
+        shippingAddr.state || '',
+        shippingAddr.city || '',
+        shippingAddr.line1 || '',
+        shippingAddr.line2 || '',
+      ].filter(Boolean).join(' ');
+
+      const subject = '【FURIRA】ご注文ありがとうございます（注文番号: ' + orderNumber + '）';
+      const textBody = 'FURIRA ご注文確認\n\n'
+        + '注文番号: ' + orderNumber + '\n'
+        + '商品: ' + productNames.join(', ') + '\n'
+        + '合計: ¥' + totalYenEmail.toLocaleString() + '\n'
+        + 'お届け先: ' + (shipping.name || '') + ' ' + addrText + '\n\n'
+        + '発送準備が整い次第、改めてご連絡いたします。\n'
+        + 'ご不明な点がございましたら、お気軽にお問い合わせください。\n\n'
+        + 'FURIRA - Vintage & Used Clothing';
+
+      const htmlBody = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans JP', sans-serif; line-height: 1.6; color: #2C2C2C; margin: 0; padding: 0; background: #F5F2ED;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: #2C2C2C; color: white; padding: 24px; text-align: center; border-radius: 8px 8px 0 0;">
+      <h1 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 0.1em;">FURIRA</h1>
+      <p style="margin: 8px 0 0 0; font-size: 12px; opacity: 0.7; letter-spacing: 0.05em;">vintage &amp; used clothing</p>
+    </div>
+    <div style="background: #fff; padding: 32px 24px; border: 1px solid #e5e7eb; border-top: none;">
+      <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #2C2C2C;">ご注文ありがとうございます</h2>
+      <p style="margin: 0 0 24px 0; font-size: 14px; color: #6B6560;">ご注文を承りました。発送準備が整い次第、改めてご連絡いたします。</p>
+
+      <div style="background: #F5F2ED; padding: 16px; border-radius: 6px; margin-bottom: 24px;">
+        <div style="font-size: 12px; color: #9B9590; margin-bottom: 4px;">注文番号</div>
+        <div style="font-size: 18px; font-weight: 700; color: #2C2C2C; letter-spacing: 0.05em;">${orderNumber}</div>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <div style="font-size: 13px; font-weight: 600; color: #2C2C2C; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 8px;">ご注文商品</div>
+        <ul style="list-style: none; padding: 0; margin: 0; font-size: 14px; color: #2C2C2C;">${itemListHtml}</ul>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 2px solid #2C2C2C; padding-top: 12px; margin-bottom: 24px;">
+        <span style="font-size: 14px; font-weight: 600;">合計（税込）</span>
+        <span style="font-size: 20px; font-weight: 700;">&yen;${totalYenEmail.toLocaleString()}</span>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <div style="font-size: 13px; font-weight: 600; color: #2C2C2C; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 8px;">お届け先</div>
+        <div style="font-size: 14px; color: #2C2C2C;">${escapeHtmlStr(shipping.name || '')}</div>
+        <div style="font-size: 13px; color: #6B6560;">${escapeHtmlStr(addrText)}</div>
+      </div>
+
+      <p style="font-size: 13px; color: #9B9590; margin: 24px 0 0 0;">ご不明な点がございましたら、お気軽にお問い合わせください。</p>
+    </div>
+    <div style="text-align: center; padding: 16px; font-size: 11px; color: #9B9590;">
+      &copy; 2026 FURIRA. All rights reserved.
+    </div>
+  </div>
+</body></html>`;
+
+      await sendOrderEmail(customerEmail, subject, textBody, htmlBody);
+      console.log('[Webhook] Order confirmation email sent to:', customerEmail);
+    } catch (err) {
+      console.error('[Webhook] Order email failed:', err);
+    }
+  }
+}
+
+function escapeHtmlStr(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function sendOrderEmail(to, subject, textBody, htmlBody) {
+  const CLOUDFLARE_WORKER_URL = 'https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send-email';
+
+  const response = await fetch(CLOUDFLARE_WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      to: to,
+      subject: subject,
+      text: textBody,
+      html: htmlBody,
+    }),
+  });
+
+  const result = await response.json();
+  if (!response.ok || !result.success) {
+    throw new Error('Email send failed: ' + JSON.stringify(result));
+  }
+  return result;
 }
