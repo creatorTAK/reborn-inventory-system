@@ -43,6 +43,55 @@
       font-weight: 600;
       color: #111827;
     }
+    #spa-page-ec-orders .eco-sub-header-icons {
+      position: absolute;
+      right: 8px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    #spa-page-ec-orders .eco-sub-header-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: transparent;
+      border: none;
+      color: #374151;
+      font-size: 20px;
+      cursor: pointer;
+    }
+    #spa-page-ec-orders .eco-sub-header-icon:hover { background: #f3f4f6; }
+    #spa-page-ec-orders .eco-dropdown {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      min-width: 200px;
+      padding: 8px 0;
+      display: none;
+      z-index: 2000;
+    }
+    #spa-page-ec-orders .eco-dropdown.show { display: block; }
+    #spa-page-ec-orders .eco-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 16px;
+      background: none;
+      border: none;
+      font-size: 14px;
+      color: #374151;
+      cursor: pointer;
+      text-align: left;
+    }
+    #spa-page-ec-orders .eco-dropdown-item:hover { background: #f3f4f6; }
+    #spa-page-ec-orders .eco-dropdown-item i { font-size: 16px; color: #6b7280; width: 20px; text-align: center; }
 
     #spa-page-ec-orders .eco-content {
       padding: 16px;
@@ -320,6 +369,30 @@
       <i class="bi bi-chevron-left"></i>
     </button>
     <span class="eco-sub-header-title">EC注文管理</span>
+    <div class="eco-sub-header-icons">
+      <button class="eco-sub-header-icon" onclick="if(window.spaNavigate)spaNavigate('chat_rooms_list')" title="お知らせ">
+        <i class="bi bi-bell"></i>
+      </button>
+      <div style="position: relative;">
+        <button class="eco-sub-header-icon" onclick="ecoToggleMenu(event)" title="メニュー">
+          <i class="bi bi-list"></i>
+        </button>
+        <div class="eco-dropdown" id="eco-dropdown">
+          <button class="eco-dropdown-item" onclick="window.open('/shop/', '_blank')">
+            <i class="bi bi-shop"></i>
+            <span>ECサイトを開く</span>
+          </button>
+          <button class="eco-dropdown-item" onclick="ecoExportCSV()">
+            <i class="bi bi-download"></i>
+            <span>CSVエクスポート</span>
+          </button>
+          <button class="eco-dropdown-item" onclick="if(window.spaNavigate)spaNavigate('sales')">
+            <i class="bi bi-graph-up"></i>
+            <span>売上管理へ</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Status Tabs -->
@@ -388,6 +461,61 @@
         _ecoUnsubscribe = null;
       }
       _ecoOrders = [];
+      document.removeEventListener('click', _ecoCloseMenuOnClick);
+    };
+
+    // Dropdown menu
+    function _ecoCloseMenuOnClick(e) {
+      var dd = document.getElementById('eco-dropdown');
+      if (dd && !dd.contains(e.target) && !e.target.closest('.eco-sub-header-icon')) {
+        dd.classList.remove('show');
+      }
+    }
+    document.addEventListener('click', _ecoCloseMenuOnClick);
+
+    window.ecoToggleMenu = function(e) {
+      e.stopPropagation();
+      var dd = document.getElementById('eco-dropdown');
+      dd.classList.toggle('show');
+    };
+
+    window.ecoExportCSV = function() {
+      document.getElementById('eco-dropdown').classList.remove('show');
+      if (_ecoOrders.length === 0) { alert('エクスポートする注文がありません'); return; }
+
+      var rows = [['注文番号', 'ステータス', '商品名', '金額', '顧客メール', '配送先名', '注文日', '配送業者', '追跡番号']];
+      _ecoOrders.forEach(function(o) {
+        var displayId = o.sessionId ? o.sessionId.substring(0, 24).toUpperCase() : o.id.substring(0, 8);
+        var items = (o.items || []).map(function(it) { return it.name; }).join(' / ');
+        var dateStr = '';
+        if (o.createdAt && o.createdAt.toDate) {
+          var d = o.createdAt.toDate();
+          dateStr = d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+        }
+        rows.push([
+          displayId,
+          ecoStatusLabel(o.status),
+          items,
+          o.amountTotal || 0,
+          o.customerEmail || '',
+          o.shippingName || '',
+          dateStr,
+          ecoCarrierLabel(o.carrier) || '',
+          o.trackingNumber || ''
+        ]);
+      });
+
+      var csv = rows.map(function(r) {
+        return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');
+      }).join('\n');
+      var bom = '\uFEFF';
+      var blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'ec-orders-' + new Date().toISOString().slice(0, 10) + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
     };
 
     function ecoLoadOrders() {
