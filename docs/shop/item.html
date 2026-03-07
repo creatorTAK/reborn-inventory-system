@@ -612,6 +612,97 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ======================================
+       RECENTLY VIEWED
+    ====================================== */
+    .rv-section {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 32px 20px 8px;
+    }
+
+    .rv-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      letter-spacing: 0.02em;
+    }
+
+    .rv-scroll {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 12px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .rv-scroll::-webkit-scrollbar { display: none; }
+
+    .rv-card {
+      flex: 0 0 140px;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      transition: opacity 0.2s;
+    }
+
+    .rv-card:hover { opacity: 0.8; }
+
+    .rv-card-img {
+      width: 140px;
+      height: 140px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #eee;
+      position: relative;
+    }
+
+    .rv-card-img img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .rv-card-sold {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+
+    .rv-card-brand {
+      font-size: 10px;
+      color: var(--text-light);
+      margin-top: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .rv-card-name {
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .rv-card-price {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 2px;
+    }
+
+    /* ======================================
        FOOTER
     ====================================== */
     .shop-footer {
@@ -779,6 +870,12 @@
     </div>
   </div>
 
+  <!-- RECENTLY VIEWED -->
+  <div class="rv-section" id="rvSection" style="display: none;">
+    <div class="rv-title">最近見た商品</div>
+    <div class="rv-scroll" id="rvScroll"></div>
+  </div>
+
   <!-- LIGHTBOX -->
   <div class="item-lightbox" id="lightbox" onclick="itemCloseLightbox()">
     <button class="item-lightbox-close" onclick="itemCloseLightbox()">&times;</button>
@@ -804,6 +901,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="/shop/cart-utils.js"></script>
   <script src="/shop/favorites-utils.js"></script>
+  <script src="/shop/recently-viewed-utils.js"></script>
 
   <script>
     // ============================================
@@ -999,6 +1097,10 @@
       // Show content, hide loading
       document.getElementById('itemLoading').style.display = 'none';
       document.getElementById('itemContainer').style.display = '';
+
+      // Record view and render recently viewed
+      itemRecordView(p.id);
+      itemRenderRecentlyViewed(p.id);
     }
 
     // ============================================
@@ -1147,6 +1249,57 @@
         }, { passive: true });
       });
     })();
+
+    // ============================================
+    // Recently Viewed
+    // ============================================
+    function itemRecordView(productId) {
+      FuriraRecentlyViewed.add(productId);
+    }
+
+    async function itemRenderRecentlyViewed(currentId) {
+      var ids = FuriraRecentlyViewed.getExcluding(currentId, 10);
+      if (ids.length === 0) return;
+
+      var html = '';
+      var loaded = 0;
+      for (var i = 0; i < ids.length; i++) {
+        try {
+          var doc = await db.collection('products').doc(ids[i]).get();
+          if (!doc.exists) continue;
+          var d = doc.data();
+          var status = d.status || '';
+          if (status !== '出品中' && status !== '販売済み' && status !== '販売済') continue;
+
+          var imgs = [];
+          if (d.images && Array.isArray(d.images)) imgs = d.images;
+          else if (d.images && d.images.imageUrls) imgs = d.images.imageUrls;
+          else imgs = [d.imageUrl1, d.imageUrl2, d.imageUrl3].filter(Boolean);
+          if (imgs.length === 0) continue;
+
+          var brand = (typeof d.brand === 'object' && d.brand !== null)
+            ? (d.brand.name || d.brand.label || '') : (d.brand || '');
+          var price = d.listingAmount || d.saleAmount || 0;
+          var isSold = status === '販売済み' || status === '販売済';
+
+          html += '<a class="rv-card" href="/shop/item.html?id=' + encodeURIComponent(ids[i]) + '">';
+          html += '<div class="rv-card-img">';
+          html += '<img src="' + imgs[0] + '" alt="' + itemEscape(d.productName || '') + '" loading="lazy">';
+          if (isSold) html += '<div class="rv-card-sold">Sold</div>';
+          html += '</div>';
+          if (brand) html += '<div class="rv-card-brand">' + itemEscape(brand) + '</div>';
+          html += '<div class="rv-card-name">' + itemEscape(d.productName || '') + '</div>';
+          if (price > 0) html += '<div class="rv-card-price">&yen;' + Number(price).toLocaleString() + '</div>';
+          html += '</a>';
+          loaded++;
+        } catch (e) { /* skip */ }
+      }
+
+      if (loaded > 0) {
+        document.getElementById('rvScroll').innerHTML = html;
+        document.getElementById('rvSection').style.display = '';
+      }
+    }
 
     // ============================================
     // Init
