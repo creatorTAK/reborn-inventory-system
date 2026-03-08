@@ -6342,7 +6342,14 @@
       var actionButtons = '';
 
       if (status === 'pending') {
-        actionButtons = '<div style="display: flex; gap: 12px;">' +
+        var permOptions = Object.keys(_cfg_PERMISSION_DEFINITIONS).map(function(key) {
+          var def = _cfg_PERMISSION_DEFINITIONS[key];
+          return '<option value="' + key + '"' + (key === permId ? ' selected' : '') + '>' + def.label + '</option>';
+        }).join('');
+        actionButtons = '<div style="margin-bottom: 12px;">' +
+          '<label style="font-size: 12px; color: #6B6560; display: block; margin-bottom: 4px;">権限を選択</label>' +
+          '<select class="form-control" id="cfg-pendingPermSelect" style="font-size: 14px;">' + permOptions + '</select></div>' +
+          '<div style="display: flex; gap: 12px;">' +
           '<button onclick="cfgRejectUser(\'' + user.id + '\')" style="flex: 1; padding: 12px; background: #fee2e2; color: #dc2626; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;">拒否</button>' +
           '<button onclick="cfgApproveUser(\'' + user.id + '\')" style="flex: 1; padding: 12px; background: #10b981; color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer;">承認</button>' +
           '</div>';
@@ -6384,16 +6391,21 @@
     window.cfgCloseUserDetailModal = cfgCloseUserDetailModal;
 
     async function cfgApproveUser(userId) {
-      if (!confirm('このユーザーを承認しますか？')) return;
+      // 選択された権限を取得
+      var permSelect = document.getElementById('cfg-pendingPermSelect');
+      var selectedPermId = permSelect ? permSelect.value : 'staff';
+      var selectedPermDef = _cfg_PERMISSION_DEFINITIONS[selectedPermId] || { label: 'スタッフ' };
+
+      if (!confirm('このユーザーを「' + selectedPermDef.label + '」として承認しますか？')) return;
       try {
         // ユーザー情報を取得
         var userDoc = await window.db.collection('users').doc(userId).get();
         var userData = userDoc.exists ? userDoc.data() : {};
         var userName = userData.userName || userId.split('@')[0];
 
-        // ステータスを有効に更新
+        // ステータスを有効に更新（選択された権限を適用）
         await window.db.collection('users').doc(userId).update({
-          status: 'active', permissionId: 'staff', permissionDisplay: 'スタッフ',
+          status: 'active', permissionId: selectedPermId, permissionDisplay: selectedPermDef.label,
           approvedAt: firebase.firestore.FieldValue.serverTimestamp(), approvedBy: localStorage.getItem('reborn_user_email')
         });
 
