@@ -861,6 +861,10 @@
         await updateDoc(userRef, { personalInfo: newData });
 
         _pinfoData = newData;
+
+        // タスク自動完了
+        _pinfoAutoCompleteTasks(userEmail, newData);
+
         alert('個人情報を保存しました');
       } catch (error) {
         console.error('[PersonalInfo] 保存エラー:', error);
@@ -868,6 +872,50 @@
       } finally {
         saveBtn.disabled = false;
         saveBtn.textContent = '保存する';
+      }
+    }
+
+    // ========================================
+    // タスク自動完了
+    // ========================================
+
+    async function _pinfoAutoCompleteTasks(email, data) {
+      try {
+        var _col = window.firestoreCollection;
+        var _qry = window.firestoreQuery;
+        var _whr = window.firestoreWhere;
+        var _gds = window.firestoreGetDocs;
+        var _upd = window.firestoreUpdateDoc;
+        if (!_col || !_qry || !_whr || !_gds || !_upd) return;
+
+        var tasksRef = _col(db, 'userTasks', email, 'tasks');
+
+        // 発送先情報が入力されている場合 → shipping_info_registration完了
+        var sh = data.shipping;
+        if (sh.lastName && sh.postalCode && sh.prefecture && sh.city && sh.street && sh.phone) {
+          var sq = _qry(tasksRef, _whr('type', '==', 'shipping_info_registration'), _whr('completed', '==', false));
+          var sSnap = await _gds(sq);
+          sSnap.forEach(function(d) {
+            _upd(doc(db, 'userTasks', email, 'tasks', d.id), { completed: true });
+          });
+        }
+
+        // 口座情報が入力されている場合 → bank_account_registration完了
+        var bk = data.bank;
+        if (bk.bankCode && bk.bankName && bk.branchCode && bk.branchName && bk.accountNumber && bk.accountHolder) {
+          var bq = _qry(tasksRef, _whr('type', '==', 'bank_account_registration'), _whr('completed', '==', false));
+          var bSnap = await _gds(bq);
+          bSnap.forEach(function(d) {
+            _upd(doc(db, 'userTasks', email, 'tasks', d.id), { completed: true });
+          });
+        }
+
+        // バッジ更新
+        if (typeof window.updateTaskBadge === 'function') {
+          window.updateTaskBadge();
+        }
+      } catch (e) {
+        console.error('[PersonalInfo] タスク自動完了エラー:', e);
       }
     }
 
