@@ -342,7 +342,10 @@
       </div>
       <div class="pinfo-input-group">
         <label class="pinfo-input-label">氏名<span style="color: #ef4444; margin-left: 2px;">*</span></label>
-        <input type="text" class="pinfo-input" id="pinfo-name" placeholder="山田 太郎">
+        <div style="display: flex; gap: 10px;">
+          <input type="text" class="pinfo-input" id="pinfo-lastName" placeholder="山田" style="flex:1;">
+          <input type="text" class="pinfo-input" id="pinfo-firstName" placeholder="太郎" style="flex:1;">
+        </div>
       </div>
       <div class="pinfo-input-group">
         <label class="pinfo-input-label">電話番号<span style="color: #ef4444; margin-left: 2px;">*</span></label>
@@ -416,7 +419,7 @@
     var updateDoc = window.firestoreUpdateDoc;
 
     var _pinfoData = {
-      shipping: { name: '', postalCode: '', prefecture: '', city: '', street: '', building: '', phone: '' },
+      shipping: { lastName: '', firstName: '', postalCode: '', prefecture: '', city: '', street: '', building: '', phone: '' },
       bank: { bankCode: '', bankName: '', branchCode: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '' }
     };
     var _pinfoBankCache = null;
@@ -440,7 +443,7 @@
 
     function destroyPersonalInfoPage() {
       _pinfoData = {
-        shipping: { name: '', postalCode: '', prefecture: '', city: '', street: '', building: '', phone: '' },
+        shipping: { lastName: '', firstName: '', postalCode: '', prefecture: '', city: '', street: '', building: '', phone: '' },
         bank: { bankCode: '', bankName: '', branchCode: '', branchName: '', accountType: '', accountNumber: '', accountHolder: '' }
       };
       _pinfoSelectedBank = null;
@@ -462,6 +465,8 @@
             var sh = data.personalInfo.shipping || {};
             _pinfoData = {
               shipping: {
+                lastName: sh.lastName || '',
+                firstName: sh.firstName || '',
                 name: sh.name || '',
                 postalCode: sh.postalCode || '',
                 prefecture: sh.prefecture || '',
@@ -481,8 +486,17 @@
     }
 
     function _pinfoPopulateForm() {
-      // 発送先
-      document.getElementById('pinfo-name').value = _pinfoData.shipping.name || '';
+      // 発送先 - 姓名
+      var ln = _pinfoData.shipping.lastName || '';
+      var fn = _pinfoData.shipping.firstName || '';
+      // 旧データ互換: nameしかない場合はスペースで分割
+      if (!ln && !fn && _pinfoData.shipping.name) {
+        var parts = _pinfoData.shipping.name.trim().split(/\s+/);
+        ln = parts[0] || '';
+        fn = parts.slice(1).join(' ') || '';
+      }
+      document.getElementById('pinfo-lastName').value = ln;
+      document.getElementById('pinfo-firstName').value = fn;
       document.getElementById('pinfo-postalCode').value = _pinfoData.shipping.postalCode || '';
       document.getElementById('pinfo-prefecture').value = _pinfoData.shipping.prefecture || '';
       document.getElementById('pinfo-city').value = _pinfoData.shipping.city || '';
@@ -822,7 +836,8 @@
 
         var newData = {
           shipping: {
-            name: document.getElementById('pinfo-name').value.trim(),
+            lastName: document.getElementById('pinfo-lastName').value.trim(),
+            firstName: document.getElementById('pinfo-firstName').value.trim(),
             postalCode: document.getElementById('pinfo-postalCode').value.trim(),
             prefecture: document.getElementById('pinfo-prefecture').value,
             city: document.getElementById('pinfo-city').value.trim(),
