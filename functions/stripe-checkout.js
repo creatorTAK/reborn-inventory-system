@@ -129,6 +129,7 @@ exports.createCheckoutSession = onRequest(
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         line_items: lineItems,
+        allow_promotion_codes: true,
         shipping_address_collection: {
           allowed_countries: ['JP'],
         },
