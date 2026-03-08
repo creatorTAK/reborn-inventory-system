@@ -113,7 +113,7 @@ self.addEventListener('push', (event) => {
   console.log('★★★ [SW ' + SW_VERSION + '] Push received ★★★');
 
   let notificationData = {
-    title: 'フリラ',
+    title: 'FURIRA',
     body: 'テスト通知です',
     icon: '/icon-180.png',
     badge: '/icon-180.png',

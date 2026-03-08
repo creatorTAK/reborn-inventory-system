@@ -267,7 +267,7 @@ self.addEventListener('push', (event) => {
   const data = payload.data || {};
   const notification = payload.notification || {};
 
-  const title = notification.title || data.title || 'REBORN';
+  const title = notification.title || data.title || 'FURIRA';
   const body = notification.body || data.body || '新しい通知があります';
   const icon = data.icon || '/icon-180.png';
   const badge = data.badge || '/icon-180.png';

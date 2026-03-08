@@ -204,7 +204,7 @@ self.addEventListener('push', (event) => {
   const data = payload.data || {};
   const notification = payload.notification || {};
 
-  const title = notification.title || data.title || 'フリラ';
+  const title = notification.title || data.title || 'FURIRA';
   const body = notification.body || data.body || '新しい通知があります';
   const icon = data.icon || '/icon-180.png';
   const badge = data.badge || '/icon-180.png';
@@ -278,7 +278,7 @@ self.addEventListener('push', (event) => {
       console.error('[SW v32] Error in push handler:', error);
       // エラーでも通知は試みる
       try {
-        await self.registration.showNotification('フリラ', {
+        await self.registration.showNotification('FURIRA', {
           body: '通知の処理中にエラーが発生しました',
           icon: '/icon-180.png'
         });
