@@ -33,6 +33,10 @@ exports.stripeWebhook = stripeWebhookHandler.stripeWebhook;
 const photoroomProxy = require('./photoroom-proxy');
 exports.photoroomEditImage = photoroomProxy.photoroomEditImage;
 
+// Order History
+const orderHistory = require('./order-history');
+exports.getOrderHistory = orderHistory.getOrderHistory;
+
 // Firebase Admin初期化
 initializeApp();
 const db = getFirestore();

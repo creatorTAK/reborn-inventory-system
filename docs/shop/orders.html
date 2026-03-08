@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FURIRA - 注文履歴</title>
+  <meta name="description" content="FURIRA(フリラ) - 注文履歴の確認">
+  <link rel="icon" href="/images/furira-square-logo.png">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Noto+Sans+JP:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-warm: #F5F2ED;
+      --bg-card: #FFFFFF;
+      --blue-primary: #4A7FB5;
+      --blue-dark: #3A6A9B;
+      --blue-light: #E8F0F8;
+      --craft-brown: #C4956A;
+      --craft-light: #E8D5C0;
+      --text-primary: #2C2C2C;
+      --text-secondary: #6B6560;
+      --text-light: #9B9590;
+      --sold-red: #B54A4A;
+      --new-green: #5B8A5A;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --radius: 4px;
+    }
+
+    html, body {
+      overflow-x: hidden;
+      max-width: 100%;
+    }
+
+    body {
+      font-family: 'Noto Sans JP', 'Inter', sans-serif;
+      background: var(--bg-warm);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* HEADER */
+    .shop-header {
+      background: var(--bg-card);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .shop-header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+
+    .shop-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .shop-logo-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      color: var(--blue-primary);
+    }
+
+    .shop-logo-sub {
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--text-light);
+      text-transform: uppercase;
+      margin-top: -2px;
+    }
+
+    .shop-nav {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .shop-nav a {
+      text-decoration: none;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      transition: color 0.2s;
+    }
+
+    .shop-nav a:hover { color: var(--blue-primary); }
+
+    .shop-nav-icon {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 20px;
+      padding: 4px;
+      transition: color 0.2s;
+      position: relative;
+    }
+
+    .shop-nav-icon:hover { color: var(--blue-primary); }
+
+    .cart-badge {
+      position: absolute;
+      top: -4px;
+      right: -6px;
+      background: var(--blue-primary);
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* MAIN */
+    .oh-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+    }
+
+    .oh-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    /* EMAIL FORM */
+    .oh-form {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+    }
+
+    .oh-form-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .oh-form-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .oh-form-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #D1CCC6;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .oh-form-input:focus {
+      border-color: var(--blue-primary);
+    }
+
+    .oh-form-btn {
+      padding: 12px 24px;
+      background: var(--blue-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+
+    .oh-form-btn:hover { background: var(--blue-dark); }
+
+    .oh-form-btn:disabled {
+      background: #C5C0BA;
+      cursor: not-allowed;
+    }
+
+    .oh-form-note {
+      font-size: 11px;
+      color: var(--text-light);
+      margin-top: 8px;
+    }
+
+    /* LOADING */
+    .oh-loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-light);
+      font-size: 13px;
+      display: none;
+    }
+
+    .oh-spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid #E8E4DE;
+      border-top: 2px solid var(--blue-primary);
+      border-radius: 50%;
+      animation: ohSpin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes ohSpin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* EMPTY */
+    .oh-empty {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-light);
+      font-size: 13px;
+      display: none;
+    }
+
+    /* ORDER LIST */
+    .oh-orders {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .oh-order {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .oh-order-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .oh-order-number {
+      font-size: 12px;
+      color: var(--text-light);
+      font-family: 'Inter', monospace;
+    }
+
+    .oh-order-status {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .oh-status-paid { background: #FFF8E1; color: #F57F17; }
+    .oh-status-shipped { background: #E3F2FD; color: #1565C0; }
+    .oh-status-delivered { background: #E8F5E9; color: #2E7D32; }
+
+    .oh-order-items {
+      margin-bottom: 12px;
+    }
+
+    .oh-order-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      font-size: 13px;
+      border-bottom: 1px solid #F0ECE6;
+    }
+
+    .oh-order-item:last-child {
+      border-bottom: none;
+    }
+
+    .oh-order-item-name {
+      color: var(--text-primary);
+      flex: 1;
+      margin-right: 12px;
+    }
+
+    .oh-order-item-price {
+      color: var(--text-secondary);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .oh-order-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid #E8E4DE;
+    }
+
+    .oh-order-date {
+      font-size: 12px;
+      color: var(--text-light);
+    }
+
+    .oh-order-total {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .oh-order-tracking {
+      font-size: 12px;
+      color: var(--blue-primary);
+      margin-top: 8px;
+    }
+
+    .oh-back-link {
+      display: block;
+      text-align: center;
+      margin-top: 24px;
+      color: var(--blue-primary);
+      text-decoration: none;
+      font-size: 13px;
+    }
+
+    .oh-back-link:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      .shop-logo-text { font-size: 18px; }
+      .oh-form-row { flex-direction: column; }
+      .oh-form-btn { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="shop-header">
+    <div class="shop-header-inner">
+      <a href="/shop/" class="shop-logo">
+        <div>
+          <div class="shop-logo-text">FURIRA</div>
+          <div class="shop-logo-sub">vintage & used</div>
+        </div>
+      </a>
+      <nav class="shop-nav">
+        <a href="/shop/">Shop</a>
+        <a href="/shop/#about">About</a>
+        <button class="shop-nav-icon" onclick="location.href='/shop/favorites.html'" aria-label="お気に入り">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+          </svg>
+        </button>
+        <button class="shop-nav-icon" onclick="location.href='/shop/cart.html'" aria-label="Cart">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 01-8 0"></path>
+          </svg>
+          <span class="cart-badge" id="cartBadge">0</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <div class="oh-container">
+    <h1 class="oh-title">注文履歴</h1>
+
+    <div class="oh-form">
+      <div class="oh-form-label">ご注文時のメールアドレスを入力してください</div>
+      <div class="oh-form-row">
+        <input type="email" class="oh-form-input" id="ohEmail" placeholder="example@email.com" autocomplete="email">
+        <button class="oh-form-btn" id="ohSearchBtn" onclick="ohSearch()">確認する</button>
+      </div>
+      <div class="oh-form-note">※ 購入時にStripeで入力したメールアドレスです</div>
+    </div>
+
+    <div class="oh-loading" id="ohLoading">
+      <div class="oh-spinner"></div>
+      <div>注文情報を取得中...</div>
+    </div>
+
+    <div class="oh-empty" id="ohEmpty">
+      <div style="font-size: 36px; margin-bottom: 12px; opacity: 0.3;">&#128230;</div>
+      <div>注文が見つかりませんでした</div>
+      <div style="margin-top: 4px;">メールアドレスをご確認ください</div>
+    </div>
+
+    <div class="oh-orders" id="ohOrders"></div>
+
+    <a href="/shop/" class="oh-back-link">&#8592; 商品一覧に戻る</a>
+  </div>
+
+  <script>
+    var OH_FUNCTION_URL = 'https://asia-northeast1-reborn-chat.cloudfunctions.net/getOrderHistory';
+
+    // Enter key support
+    document.getElementById('ohEmail').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') ohSearch();
+    });
+
+    // Cart badge
+    (function() {
+      try {
+        var cart = JSON.parse(localStorage.getItem('furira_cart') || '[]');
+        if (cart.length > 0) {
+          var badge = document.getElementById('cartBadge');
+          badge.textContent = cart.length;
+          badge.style.display = 'flex';
+        }
+      } catch(e) {}
+    })();
+
+    function ohEscape(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    async function ohSearch() {
+      var email = document.getElementById('ohEmail').value.trim();
+      if (!email || !email.includes('@')) {
+        alert('メールアドレスを入力してください');
+        return;
+      }
+
+      var btn = document.getElementById('ohSearchBtn');
+      var loading = document.getElementById('ohLoading');
+      var empty = document.getElementById('ohEmpty');
+      var ordersEl = document.getElementById('ohOrders');
+
+      btn.disabled = true;
+      btn.textContent = '検索中...';
+      loading.style.display = 'block';
+      empty.style.display = 'none';
+      ordersEl.innerHTML = '';
+
+      try {
+        var response = await fetch(OH_FUNCTION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email }),
+        });
+
+        if (!response.ok) throw new Error('取得に失敗しました');
+
+        var data = await response.json();
+        loading.style.display = 'none';
+
+        if (!data.orders || data.orders.length === 0) {
+          empty.style.display = 'block';
+          return;
+        }
+
+        ohRender(data.orders);
+      } catch (error) {
+        loading.style.display = 'none';
+        alert('注文履歴の取得に失敗しました');
+        console.error('[OrderHistory]', error);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '確認する';
+      }
+    }
+
+    function ohRender(orders) {
+      var ordersEl = document.getElementById('ohOrders');
+      var html = '';
+
+      var statusMap = {
+        'paid': { label: '未発送', css: 'oh-status-paid' },
+        'shipped': { label: '発送済み', css: 'oh-status-shipped' },
+        'delivered': { label: '配達完了', css: 'oh-status-delivered' },
+      };
+
+      for (var i = 0; i < orders.length; i++) {
+        var o = orders[i];
+        var st = statusMap[o.status] || statusMap['paid'];
+
+        var itemsHtml = '';
+        for (var j = 0; j < o.items.length; j++) {
+          var item = o.items[j];
+          itemsHtml += '<div class="oh-order-item">' +
+            '<span class="oh-order-item-name">' + ohEscape(item.name) + '</span>' +
+            '<span class="oh-order-item-price">&yen;' + Number(item.amount).toLocaleString() + '</span>' +
+            '</div>';
+        }
+
+        var dateStr = '';
+        if (o.createdAt) {
+          var d = new Date(o.createdAt);
+          dateStr = d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+        }
+
+        var trackingHtml = '';
+        if (o.carrier && o.trackingNumber) {
+          trackingHtml = '<div class="oh-order-tracking">' +
+            ohEscape(o.carrier) + ': ' + ohEscape(o.trackingNumber) +
+            '</div>';
+        }
+
+        html += '<div class="oh-order">' +
+          '<div class="oh-order-header">' +
+            '<span class="oh-order-number">注文 #' + ohEscape(o.orderNumber) + '</span>' +
+            '<span class="oh-order-status ' + st.css + '">' + st.label + '</span>' +
+          '</div>' +
+          '<div class="oh-order-items">' + itemsHtml + '</div>' +
+          trackingHtml +
+          '<div class="oh-order-footer">' +
+            '<span class="oh-order-date">' + dateStr + '</span>' +
+            '<span class="oh-order-total">&yen;' + Number(o.amountTotal).toLocaleString() + '</span>' +
+          '</div>' +
+        '</div>';
+      }
+
+      ordersEl.innerHTML = html;
+    }
+  </script>
+</body>
+</html>
