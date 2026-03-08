@@ -29,6 +29,10 @@ const stripeWebhookHandler = require('./stripe-webhook');
 exports.createCheckoutSession = stripeCheckout.createCheckoutSession;
 exports.stripeWebhook = stripeWebhookHandler.stripeWebhook;
 
+// Photoroom API Proxy
+const photoroomProxy = require('./photoroom-proxy');
+exports.photoroomEditImage = photoroomProxy.photoroomEditImage;
+
 // Firebase Admin初期化
 initializeApp();
 const db = getFirestore();

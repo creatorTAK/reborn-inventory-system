@@ -5799,6 +5799,23 @@ window.continueProductRegistration = function() {
       const previewItem = document.createElement('div');
       previewItem.style.cssText = 'position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 2px solid #e5e7eb;';
 
+      // 1枚目のみAI加工ボタンを表示
+      let aiButtonHtml = '';
+      if (index === 0) {
+        const hasOriginal = !!image._originalData;
+        if (hasOriginal) {
+          // AI加工済み → 元に戻すボタン
+          aiButtonHtml = `
+            <button type="button" onclick="undoAiEdit()" style="position: absolute; bottom: 4px; left: 4px; right: 4px; background: rgba(107,101,96,0.9); color: white; border: none; border-radius: 4px; padding: 4px 0; font-size: 10px; cursor: pointer; font-weight: 500;">元に戻す</button>
+          `;
+        } else {
+          // 未加工 → AI加工ボタン
+          aiButtonHtml = `
+            <button type="button" id="aiEditBtn" onclick="applyAiEdit()" style="position: absolute; bottom: 4px; left: 4px; right: 4px; background: rgba(74,127,181,0.9); color: white; border: none; border-radius: 4px; padding: 4px 0; font-size: 10px; cursor: pointer; font-weight: 500;">AI加工</button>
+          `;
+        }
+      }
+
       previewItem.innerHTML = `
         <img src="${image.data}" alt="${image.name}" style="width: 100%; height: 100%; object-fit: cover;">
         <button
@@ -5807,6 +5824,7 @@ window.continueProductRegistration = function() {
           style="position: absolute; top: 4px; right: 4px; background: rgba(239, 68, 68, 0.9); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;"
           title="削除"
         >×</button>
+        ${aiButtonHtml}
       `;
 
       list.appendChild(previewItem);
@@ -5842,6 +5860,69 @@ window.continueProductRegistration = function() {
       }
 
       debug.log('すべての商品画像を削除しました');
+    }
+  }
+
+  /**
+   * 1枚目の画像にPhotoroom AI加工（背景除去+影+リライト）を適用
+   */
+  async function applyAiEdit() {
+    if (productImages.length === 0) return;
+
+    const btn = document.getElementById('aiEditBtn');
+    if (btn) {
+      btn.textContent = '処理中...';
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+    }
+
+    try {
+      const image = productImages[0];
+      const functionUrl = window._prdPhotoroomUrl ||
+        'https://asia-northeast1-reborn-chat.cloudfunctions.net/photoroomEditImage';
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: image.data }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'AI加工に失敗しました');
+      }
+
+      const result = await response.json();
+      if (result.success && result.imageBase64) {
+        // 元画像を保持してから置き換え
+        image._originalData = image.data;
+        image.data = result.imageBase64;
+        image.mimeType = 'image/jpeg';
+        displayProductImagesPreview();
+        debug.log('AI加工を適用しました（1枚目）');
+      }
+    } catch (error) {
+      console.error('[AI Edit] Error:', error);
+      alert('AI加工に失敗しました: ' + error.message);
+      if (btn) {
+        btn.textContent = 'AI加工';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }
+    }
+  }
+
+  /**
+   * 1枚目のAI加工を元に戻す
+   */
+  function undoAiEdit() {
+    if (productImages.length === 0) return;
+    const image = productImages[0];
+    if (image._originalData) {
+      image.data = image._originalData;
+      delete image._originalData;
+      displayProductImagesPreview();
+      debug.log('AI加工を元に戻しました（1枚目）');
     }
   }
 
@@ -10575,6 +10656,8 @@ window.handleProductImageUpload = handleProductImageUpload;
 window.displayProductImagesPreview = displayProductImagesPreview;
 window.removeProductImage = removeProductImage;
 window.clearAllProductImages = clearAllProductImages;
+window.applyAiEdit = applyAiEdit;
+window.undoAiEdit = undoAiEdit;
 
 // ============================================
 // 販売タイプ制御（メルカリ選択時のみ表示）
