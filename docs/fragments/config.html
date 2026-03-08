@@ -2291,15 +2291,31 @@
         </div>
         <div style="margin-bottom: 16px;">
           <label style="display: block; font-size: 13px; font-weight: 500; color: #3A3530; margin-bottom: 6px;">都道府県<span style="color: #ef4444;">*</span></label>
-          <input type="text" id="cfg-shippingPrefecture" class="form-control" placeholder="東京都" maxlength="10">
+          <select id="cfg-shippingPrefecture" class="form-control" style="appearance: auto; -webkit-appearance: menulist;">
+            <option value="">選択してください</option>
+            <option value="北海道">北海道</option><option value="青森県">青森県</option><option value="岩手県">岩手県</option><option value="宮城県">宮城県</option><option value="秋田県">秋田県</option>
+            <option value="山形県">山形県</option><option value="福島県">福島県</option><option value="茨城県">茨城県</option><option value="栃木県">栃木県</option><option value="群馬県">群馬県</option>
+            <option value="埼玉県">埼玉県</option><option value="千葉県">千葉県</option><option value="東京都">東京都</option><option value="神奈川県">神奈川県</option><option value="新潟県">新潟県</option>
+            <option value="富山県">富山県</option><option value="石川県">石川県</option><option value="福井県">福井県</option><option value="山梨県">山梨県</option><option value="長野県">長野県</option>
+            <option value="岐阜県">岐阜県</option><option value="静岡県">静岡県</option><option value="愛知県">愛知県</option><option value="三重県">三重県</option><option value="滋賀県">滋賀県</option>
+            <option value="京都府">京都府</option><option value="大阪府">大阪府</option><option value="兵庫県">兵庫県</option><option value="奈良県">奈良県</option><option value="和歌山県">和歌山県</option>
+            <option value="鳥取県">鳥取県</option><option value="島根県">島根県</option><option value="岡山県">岡山県</option><option value="広島県">広島県</option><option value="山口県">山口県</option>
+            <option value="徳島県">徳島県</option><option value="香川県">香川県</option><option value="愛媛県">愛媛県</option><option value="高知県">高知県</option><option value="福岡県">福岡県</option>
+            <option value="佐賀県">佐賀県</option><option value="長崎県">長崎県</option><option value="熊本県">熊本県</option><option value="大分県">大分県</option><option value="宮崎県">宮崎県</option>
+            <option value="鹿児島県">鹿児島県</option><option value="沖縄県">沖縄県</option>
+          </select>
         </div>
         <div style="margin-bottom: 16px;">
-          <label style="display: block; font-size: 13px; font-weight: 500; color: #3A3530; margin-bottom: 6px;">市区町村・番地<span style="color: #ef4444;">*</span></label>
-          <input type="text" id="cfg-shippingCity" class="form-control" placeholder="渋谷区渋谷1-2-3" maxlength="100">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #3A3530; margin-bottom: 6px;">市区町村<span style="color: #ef4444;">*</span></label>
+          <input type="text" id="cfg-shippingCity" class="form-control" placeholder="岡山市東区" maxlength="50">
         </div>
         <div style="margin-bottom: 16px;">
-          <label style="display: block; font-size: 13px; font-weight: 500; color: #3A3530; margin-bottom: 6px;">建物名・部屋番号</label>
-          <input type="text" id="cfg-shippingBuilding" class="form-control" placeholder="フリラビル101号室（任意）" maxlength="100">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #3A3530; margin-bottom: 6px;">番地<span style="color: #ef4444;">*</span></label>
+          <input type="text" id="cfg-shippingStreet" class="form-control" placeholder="益野町1-2-3" maxlength="50">
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 13px; font-weight: 500; color: #3A3530; margin-bottom: 6px;">建物名・部屋番号<span style="font-size: 11px; color: #6B6560; font-weight: 400; margin-left: 4px;">（マンション等の場合は必須）</span></label>
+          <input type="text" id="cfg-shippingBuilding" class="form-control" placeholder="FURIRAマンション 101号室" maxlength="100">
         </div>
         <div style="display: flex; gap: 8px;">
           <button type="button" onclick="cfgCloseShippingInfoModal()" class="cfg-btn-secondary" style="flex: 1;">キャンセル</button>
@@ -5987,7 +6003,7 @@
     function cfgUpdateShippingInfoStatus(info) {
       var el = document.getElementById('cfg-shippingInfoStatus');
       if (!el) return;
-      if (info && info.name) {
+      if (info && (info.lastName || info.name)) {
         el.innerHTML = '<span style="color: #059669;"><i class="bi bi-check-circle-fill"></i> 登録済み</span>';
       } else {
         el.innerHTML = '<span style="color: #ef4444;"><i class="bi bi-exclamation-circle-fill"></i> 未登録</span>';
@@ -6895,7 +6911,8 @@
         if (data.results && data.results.length > 0) {
           var result = data.results[0];
           document.getElementById('cfg-shippingPrefecture').value = result.address1;
-          document.getElementById('cfg-shippingCity').value = result.address2 + result.address3;
+          document.getElementById('cfg-shippingCity').value = result.address2;
+          document.getElementById('cfg-shippingStreet').value = result.address3;
         } else { alert('該当する住所が見つかりませんでした'); }
       } catch (e) { alert('住所検索に失敗しました'); }
     }
@@ -6914,7 +6931,7 @@
         var userDoc = await window.db.collection('users').doc(userEmail).get();
         if (userDoc.exists) {
           var shipping = userDoc.data().shippingInfo || {};
-          var fields = { 'cfg-shippingLastName': 'lastName', 'cfg-shippingFirstName': 'firstName', 'cfg-shippingPostalCode': 'postalCode', 'cfg-shippingPrefecture': 'prefecture', 'cfg-shippingCity': 'city', 'cfg-shippingBuilding': 'building' };
+          var fields = { 'cfg-shippingLastName': 'lastName', 'cfg-shippingFirstName': 'firstName', 'cfg-shippingPostalCode': 'postalCode', 'cfg-shippingPrefecture': 'prefecture', 'cfg-shippingCity': 'city', 'cfg-shippingStreet': 'street', 'cfg-shippingBuilding': 'building' };
           Object.keys(fields).forEach(function(id) {
             var el = document.getElementById(id);
             if (el) el.value = shipping[fields[id]] || '';
@@ -6937,9 +6954,10 @@
         postalCode: document.getElementById('cfg-shippingPostalCode').value.trim(),
         prefecture: document.getElementById('cfg-shippingPrefecture').value.trim(),
         city: document.getElementById('cfg-shippingCity').value.trim(),
+        street: document.getElementById('cfg-shippingStreet').value.trim(),
         building: document.getElementById('cfg-shippingBuilding').value.trim()
       };
-      if (!info.lastName || !info.firstName || !info.postalCode || !info.prefecture || !info.city) {
+      if (!info.lastName || !info.firstName || !info.postalCode || !info.prefecture || !info.city || !info.street) {
         alert('必須項目を入力してください'); return;
       }
       try {
