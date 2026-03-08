@@ -6,6 +6,20 @@
   <title>FURIRA - 商品詳細</title>
   <meta name="description" content="FURIRA(フリラ) - 厳選された古着・ヴィンテージアイテム">
   <link rel="icon" href="/images/furira-square-logo.png">
+  <link rel="canonical" href="https://furira.jp/shop/item.html">
+  <!-- OGP (defaults, updated dynamically by JS) -->
+  <meta property="og:title" content="FURIRA - 商品詳細">
+  <meta property="og:description" content="厳選された古着・ヴィンテージアイテム">
+  <meta property="og:type" content="product">
+  <meta property="og:url" content="https://furira.jp/shop/item.html">
+  <meta property="og:image" content="https://furira.jp/images/furira-square-logo.png">
+  <meta property="og:site_name" content="FURIRA">
+  <meta property="og:locale" content="ja_JP">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="FURIRA - 商品詳細">
+  <meta name="twitter:description" content="厳選された古着・ヴィンテージアイテム">
+  <meta name="twitter:image" content="https://furira.jp/images/furira-square-logo.png">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Noto+Sans+JP:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1073,8 +1087,34 @@
       var p = itemProduct;
       var isSold = p.status === '販売済み' || p.status === '販売済';
 
-      // Update page title
+      // Update page title & SEO meta
       document.title = (p.brand ? p.brand + ' ' : '') + p.name + ' | FURIRA';
+      var seoTitle = document.title;
+      var seoDesc = (p.brand ? p.brand + ' ' : '') + p.name + (p.size ? ' (' + p.size + ')' : '') + ' - FURIRA古着ショップ';
+      var seoImg = (p.images && p.images.length > 0) ? p.images[0] : 'https://furira.jp/images/furira-square-logo.png';
+      var seoUrl = 'https://furira.jp/shop/item.html?id=' + encodeURIComponent(p.id);
+      document.querySelector('meta[property="og:title"]').setAttribute('content', seoTitle);
+      document.querySelector('meta[property="og:description"]').setAttribute('content', seoDesc);
+      document.querySelector('meta[property="og:image"]').setAttribute('content', seoImg);
+      document.querySelector('meta[property="og:url"]').setAttribute('content', seoUrl);
+      document.querySelector('meta[name="twitter:title"]').setAttribute('content', seoTitle);
+      document.querySelector('meta[name="twitter:description"]').setAttribute('content', seoDesc);
+      document.querySelector('meta[name="twitter:image"]').setAttribute('content', seoImg);
+      document.querySelector('meta[name="description"]').setAttribute('content', seoDesc);
+      document.querySelector('link[rel="canonical"]').setAttribute('href', seoUrl);
+      // JSON-LD Product
+      var ldJson = document.createElement('script');
+      ldJson.type = 'application/ld+json';
+      var ldPrice = p.price || p.saleAmount || 0;
+      ldJson.textContent = JSON.stringify({
+        '@context': 'https://schema.org', '@type': 'Product',
+        name: (p.brand ? p.brand + ' ' : '') + p.name,
+        image: seoImg, description: seoDesc, url: seoUrl,
+        brand: p.brand ? { '@type': 'Brand', name: p.brand } : undefined,
+        offers: { '@type': 'Offer', price: ldPrice, priceCurrency: 'JPY',
+          availability: (p.status === '販売済み' || p.status === '販売済') ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock' }
+      });
+      document.head.appendChild(ldJson);
 
       // Breadcrumb
       document.getElementById('breadcrumbName').textContent = p.name;
