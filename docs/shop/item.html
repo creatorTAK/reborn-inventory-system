@@ -630,6 +630,60 @@
 
     .item-share-copied.show { opacity: 1; }
 
+    /* Restock notification */
+    .item-restock-row {
+      display: none;
+      margin-top: 12px;
+      background: var(--blue-light);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+
+    .item-restock-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .item-restock-form {
+      display: flex;
+      gap: 8px;
+    }
+
+    .item-restock-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #D1CCC6;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+    }
+
+    .item-restock-input:focus { border-color: var(--blue-primary); }
+
+    .item-restock-btn {
+      padding: 10px 16px;
+      background: var(--blue-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .item-restock-btn:hover { background: var(--blue-dark); }
+    .item-restock-btn:disabled { background: #C5C0BA; cursor: not-allowed; }
+
+    .item-restock-done {
+      display: none;
+      font-size: 13px;
+      color: var(--new-green);
+      font-weight: 500;
+    }
+
     /* Back link */
     .item-back-link {
       display: inline-flex;
@@ -1016,6 +1070,16 @@
         <span class="item-share-copied" id="shareCopied">コピーしました</span>
       </div>
 
+      <!-- Restock notification (shown for SOLD items) -->
+      <div class="item-restock-row" id="itemRestockRow">
+        <div class="item-restock-label">この商品が再入荷したらメールでお知らせします</div>
+        <div class="item-restock-form" id="itemRestockForm">
+          <input type="email" class="item-restock-input" id="restockEmail" placeholder="メールアドレス" autocomplete="email">
+          <button class="item-restock-btn" id="restockBtn" onclick="itemRegisterRestock()">通知を受け取る</button>
+        </div>
+        <div class="item-restock-done" id="restockDone">登録しました。再入荷時にメールでお知らせします。</div>
+      </div>
+
       <a href="/shop/" class="item-back-link">&#8592; 商品一覧に戻る</a>
     </div>
   </div>
@@ -1271,6 +1335,7 @@
       if (isSold) {
         btn.textContent = 'SOLD OUT';
         btn.disabled = true;
+        document.getElementById('itemRestockRow').style.display = 'block';
       }
 
       // Images
@@ -1583,6 +1648,36 @@
     }
 
     // ============================================
+    // ============================================
+    // Restock Notification
+    // ============================================
+    async function itemRegisterRestock() {
+      var email = document.getElementById('restockEmail').value.trim();
+      if (!email || !email.includes('@')) {
+        alert('メールアドレスを入力してください');
+        return;
+      }
+      var btn = document.getElementById('restockBtn');
+      btn.disabled = true;
+      btn.textContent = '登録中...';
+
+      try {
+        await itemDb.collection('restock_notifications').add({
+          productId: itemProduct.id,
+          email: email.toLowerCase(),
+          notified: false,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        document.getElementById('itemRestockForm').style.display = 'none';
+        document.getElementById('restockDone').style.display = 'block';
+      } catch (err) {
+        console.error('[Restock] Error:', err);
+        alert('登録に失敗しました。もう一度お試しください。');
+        btn.disabled = false;
+        btn.textContent = '通知を受け取る';
+      }
+    }
+
     // ============================================
     // Share Functions
     // ============================================

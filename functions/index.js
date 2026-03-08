@@ -3315,3 +3315,205 @@ exports.ecAutoPriceReduction = onSchedule({
 });
 
 
+// ==========================================
+// EC発送通知メール（orders status変更トリガー）
+// ==========================================
+exports.onOrderShipped = onDocumentUpdated('orders/{orderId}', async (event) => {
+  const beforeData = event.data.before.data();
+  const afterData = event.data.after.data();
+
+  // shipped に変わった時だけ発火
+  if (beforeData.status === 'shipped' || afterData.status !== 'shipped') return null;
+
+  const orderId = event.params.orderId;
+  const customerEmail = afterData.customerEmail;
+  if (!customerEmail) {
+    console.log('[onOrderShipped] customerEmail なし → スキップ');
+    return null;
+  }
+
+  console.log('[onOrderShipped] 発送通知メール送信:', orderId, '→', customerEmail);
+
+  try {
+    const orderNumber = orderId.substring(0, 24).toUpperCase();
+    const carrier = afterData.carrier || '';
+    const trackingNumber = afterData.trackingNumber || '';
+    const productNames = (afterData.items || []).map(i => i.name || '商品');
+
+    const itemListText = productNames.join(', ');
+    const itemListHtml = productNames.map(n => '<li style="padding: 4px 0;">' + escapeHtml(n) + '</li>').join('');
+
+    // 追跡情報
+    const trackingText = carrier && trackingNumber
+      ? '配送業者: ' + carrier + '\n追跡番号: ' + trackingNumber
+      : '';
+    const trackingHtml = carrier && trackingNumber
+      ? `<div style="background: #E3F2FD; padding: 16px; border-radius: 6px; margin-bottom: 24px;">
+          <div style="font-size: 13px; font-weight: 600; color: #1565C0; margin-bottom: 8px;">配送情報</div>
+          <div style="font-size: 14px; color: #2C2C2C;">配送業者: ${escapeHtml(carrier)}</div>
+          <div style="font-size: 14px; color: #2C2C2C;">追跡番号: ${escapeHtml(trackingNumber)}</div>
+        </div>`
+      : '';
+
+    const subject = '【FURIRA】ご注文商品を発送しました（注文番号: ' + orderNumber + '）';
+
+    const textBody = 'FURIRA 発送のお知らせ\n\n'
+      + '注文番号: ' + orderNumber + '\n'
+      + '商品: ' + itemListText + '\n'
+      + (trackingText ? '\n' + trackingText + '\n' : '')
+      + '\nお届けまで今しばらくお待ちください。\n'
+      + 'ご不明な点がございましたら、お気軽にお問い合わせください。\n\n'
+      + 'FURIRA - Vintage & Used Clothing';
+
+    const htmlBody = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans JP', sans-serif; line-height: 1.6; color: #2C2C2C; margin: 0; padding: 0; background: #F5F2ED;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: #2C2C2C; color: white; padding: 24px; text-align: center; border-radius: 8px 8px 0 0;">
+      <h1 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 0.1em;">FURIRA</h1>
+      <p style="margin: 8px 0 0 0; font-size: 12px; opacity: 0.7; letter-spacing: 0.05em;">vintage &amp; used clothing</p>
+    </div>
+    <div style="background: #fff; padding: 32px 24px; border: 1px solid #e5e7eb; border-top: none;">
+      <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #2C2C2C;">商品を発送しました</h2>
+      <p style="margin: 0 0 24px 0; font-size: 14px; color: #6B6560;">ご注文の商品を発送いたしました。お届けまで今しばらくお待ちください。</p>
+
+      <div style="background: #F5F2ED; padding: 16px; border-radius: 6px; margin-bottom: 24px;">
+        <div style="font-size: 12px; color: #9B9590; margin-bottom: 4px;">注文番号</div>
+        <div style="font-size: 18px; font-weight: 700; color: #2C2C2C; letter-spacing: 0.05em;">${orderNumber}</div>
+      </div>
+
+      ${trackingHtml}
+
+      <div style="margin-bottom: 24px;">
+        <div style="font-size: 13px; font-weight: 600; color: #2C2C2C; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 8px;">発送商品</div>
+        <ul style="list-style: none; padding: 0; margin: 0; font-size: 14px; color: #2C2C2C;">${itemListHtml}</ul>
+      </div>
+
+      <p style="font-size: 13px; color: #9B9590; margin: 24px 0 0 0;">ご不明な点がございましたら、お気軽にお問い合わせください。</p>
+    </div>
+    <div style="text-align: center; padding: 16px; font-size: 11px; color: #9B9590;">
+      &copy; 2026 FURIRA. All rights reserved.
+    </div>
+  </div>
+</body></html>`;
+
+    await sendEmailViaWorker(customerEmail, subject, textBody, htmlBody);
+    console.log('[onOrderShipped] 発送通知メール送信成功');
+  } catch (err) {
+    console.error('[onOrderShipped] メール送信失敗:', err.message);
+  }
+  return null;
+});
+
+// 共通メール送信（Cloudflare Worker経由）
+async function sendEmailViaWorker(to, subject, textBody, htmlBody) {
+  const WORKER_URL = 'https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send-email';
+  const response = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to, subject, text: textBody, html: htmlBody }),
+  });
+  const responseText = await response.text();
+  let result;
+  try { result = JSON.parse(responseText); } catch (e) {
+    throw new Error('Email response not JSON: ' + responseText.substring(0, 200));
+  }
+  if (!response.ok || !result.success) {
+    throw new Error('Email send failed: ' + JSON.stringify(result));
+  }
+  return result;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ==========================================
+// 再入荷通知（商品ステータス変更トリガー）
+// ==========================================
+exports.onProductRestocked = onDocumentUpdated('products/{productId}', async (event) => {
+  const beforeData = event.data.before.data();
+  const afterData = event.data.after.data();
+
+  // 販売済み → 出品中 に変わった時だけ発火
+  const wasSold = beforeData.status === '販売済み' || beforeData.status === '販売済';
+  const isListed = afterData.status === '出品中';
+  if (!wasSold || !isListed) return null;
+
+  const productId = event.params.productId;
+  console.log('[onProductRestocked] 再入荷検知:', productId);
+
+  try {
+    // 再入荷通知登録を取得
+    const notifSnap = await db.collection('restock_notifications')
+      .where('productId', '==', productId)
+      .where('notified', '==', false)
+      .get();
+
+    if (notifSnap.empty) {
+      console.log('[onProductRestocked] 通知登録なし → スキップ');
+      return null;
+    }
+
+    const productName = afterData.productName || '商品';
+    const brand = (typeof afterData.brand === 'object') ? (afterData.brand.name || '') : (afterData.brand || '');
+    const displayName = (brand ? brand + ' ' : '') + productName;
+    const productUrl = 'https://furira.jp/shop/item.html?id=' + productId;
+
+    const subject = '【FURIRA】再入荷のお知らせ: ' + displayName;
+
+    const textBody = 'FURIRA 再入荷のお知らせ\n\n'
+      + 'ご登録いただいた商品が再入荷しました。\n\n'
+      + '商品: ' + displayName + '\n'
+      + '商品ページ: ' + productUrl + '\n\n'
+      + '※ 一点ものの為、売り切れの際はご了承ください。\n\n'
+      + 'FURIRA - Vintage & Used Clothing';
+
+    const htmlBody = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans JP', sans-serif; line-height: 1.6; color: #2C2C2C; margin: 0; padding: 0; background: #F5F2ED;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: #2C2C2C; color: white; padding: 24px; text-align: center; border-radius: 8px 8px 0 0;">
+      <h1 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 0.1em;">FURIRA</h1>
+      <p style="margin: 8px 0 0 0; font-size: 12px; opacity: 0.7; letter-spacing: 0.05em;">vintage &amp; used clothing</p>
+    </div>
+    <div style="background: #fff; padding: 32px 24px; border: 1px solid #e5e7eb; border-top: none;">
+      <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #2C2C2C;">再入荷のお知らせ</h2>
+      <p style="margin: 0 0 24px 0; font-size: 14px; color: #6B6560;">ご登録いただいた商品が再入荷しました。</p>
+
+      <div style="background: #E8F5E9; padding: 16px; border-radius: 6px; margin-bottom: 24px;">
+        <div style="font-size: 15px; font-weight: 600; color: #2E7D32;">${escapeHtml(displayName)}</div>
+      </div>
+
+      <a href="${productUrl}" style="display: block; text-align: center; padding: 14px; background: #4A7FB5; color: white; text-decoration: none; border-radius: 6px; font-size: 15px; font-weight: 600;">商品ページを見る</a>
+
+      <p style="font-size: 12px; color: #9B9590; margin: 16px 0 0 0; text-align: center;">※ 一点ものの為、売り切れの際はご了承ください。</p>
+    </div>
+    <div style="text-align: center; padding: 16px; font-size: 11px; color: #9B9590;">
+      &copy; 2026 FURIRA. All rights reserved.
+    </div>
+  </div>
+</body></html>`;
+
+    // 全登録者にメール送信
+    const batch = db.batch();
+    let sentCount = 0;
+    for (const doc of notifSnap.docs) {
+      const email = doc.data().email;
+      try {
+        await sendEmailViaWorker(email, subject, textBody, htmlBody);
+        sentCount++;
+      } catch (e) {
+        console.error('[onProductRestocked] メール送信失敗:', email, e.message);
+      }
+      batch.update(doc.ref, { notified: true, notifiedAt: FieldValue.serverTimestamp() });
+    }
+    await batch.commit();
+    console.log('[onProductRestocked] 通知完了:', sentCount, '/' , notifSnap.size);
+  } catch (err) {
+    console.error('[onProductRestocked] エラー:', err.message);
+  }
+  return null;
+});
+
