@@ -801,8 +801,8 @@
 </div>
 
 <div class="actions">
-  <button onclick="prdOnSave()">保存</button>
-  <button id="resetButton" onclick="prdOnReset()">リセット</button>
+  <button onclick="prdOnSave()">出品する</button>
+  <button id="resetButton" onclick="prdOnReset()">クリア</button>
 </div>
 <div class="msg" id="msg"></div>
 
@@ -931,6 +931,9 @@
   var _prd_mgmtNumberInputHandler = null;
   var _prd_mgmtNumberChangeHandler = null;
   var _prd_qrScanner = null;
+  var _prd_DRAFT_KEY = 'prd_product_draft';
+  var _prd_draftSaveTimer = null;
+  var _prd_draftInputHandler = null;
 
   // ============================================
   // Dynamic script/CSS loading helpers
@@ -2312,6 +2315,113 @@
   }
 
   // ============================================
+  // Draft Save / Restore
+  // ============================================
+
+  var _prd_DRAFT_FIELDS = [
+    '管理番号','担当者',
+    'セールスワード(カテゴリ)','セールスワード',
+    'ブランド(英語)','ブランド(カナ)',
+    '商品名(タイトル)',
+    '特大分類','大分類(カテゴリ)','中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2',
+    'サイズ','商品の状態','アイテム名',
+    '商品の説明','商品状態詳細',
+    'サイズ(表記)','サイズ(表記)_トップス','サイズ(表記)_ボトムス','サイズ(表記)_靴',
+    'その他のサイズ表記_靴','普段のサイズ_靴','フィット感_靴',
+    '肩幅','身幅','袖丈','着丈','ウエスト','ヒップ','股上','股下',
+    '仕入日','仕入先','仕入金額',
+    '出品日','出品先','出品金額',
+    '配送料の負担','配送の方法','発送元の地域','発送までの日数',
+    'invId'
+  ];
+
+  function prdSaveDraft(immediate) {
+    if (_prd_draftSaveTimer) clearTimeout(_prd_draftSaveTimer);
+    var doSave = function() {
+      var data = {};
+      var hasData = false;
+      _prd_DRAFT_FIELDS.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el && el.value && el.value.trim() !== '') {
+          data[id] = el.value.trim();
+          // 担当者やデフォルト値以外に入力があるかチェック
+          if (id !== '担当者' && id !== '配送料の負担' && id !== '配送の方法' && id !== '発送元の地域' && id !== '発送までの日数' && id !== '出品先') {
+            hasData = true;
+          }
+        }
+      });
+      if (!hasData) { prdClearDraft(); return; }
+      var draft = { savedAt: new Date().toISOString(), fields: data };
+      try {
+        localStorage.setItem(_prd_DRAFT_KEY, JSON.stringify(draft));
+        console.log('[Prd] 下書き保存完了');
+      } catch (e) { console.error('[Prd] 下書き保存エラー:', e); }
+    };
+    if (immediate) doSave(); else _prd_draftSaveTimer = setTimeout(doSave, 1000);
+  }
+
+  function prdClearDraft() {
+    localStorage.removeItem(_prd_DRAFT_KEY);
+    if (_prd_draftSaveTimer) { clearTimeout(_prd_draftSaveTimer); _prd_draftSaveTimer = null; }
+  }
+
+  function prdLoadDraft() {
+    try {
+      var raw = localStorage.getItem(_prd_DRAFT_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) { return null; }
+  }
+
+  function prdRestoreDraft(draft) {
+    if (!draft || !draft.fields) return;
+    console.log('[Prd] 下書きから復元開始');
+    Object.keys(draft.fields).forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = draft.fields[id];
+    });
+    // カテゴリのカスケードを発火
+    var catFields = ['特大分類','大分類(カテゴリ)','中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2'];
+    catFields.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el && el.value) {
+        var evt = new Event('change', { bubbles: true });
+        el.dispatchEvent(evt);
+      }
+    });
+    // プレビュー更新
+    if (typeof updateNamePreview === 'function') updateNamePreview();
+    if (typeof updateDesc === 'function') updateDesc();
+    console.log('[Prd] 下書きから復元完了');
+  }
+
+  function prdCheckDraftOnInit() {
+    var draft = prdLoadDraft();
+    if (!draft || !draft.fields) return;
+    var savedAt = new Date(draft.savedAt);
+    var timeStr = savedAt.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    var fieldCount = Object.keys(draft.fields).length;
+    if (confirm('前回の下書き（' + timeStr + '保存）があります。\n\n復元しますか？\n\n※「キャンセル」を押すと新規入力になります')) {
+      prdRestoreDraft(draft);
+    } else {
+      prdClearDraft();
+    }
+  }
+
+  function prdSetupDraftAutoSave() {
+    var form = document.getElementById('mainFormContent');
+    if (!form) return;
+    _prd_draftInputHandler = function(e) {
+      var tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+        prdSaveDraft();
+      }
+    };
+    form.addEventListener('input', _prd_draftInputHandler);
+    form.addEventListener('change', _prd_draftInputHandler);
+  }
+
+  // ============================================
   // SPA Lifecycle: init / destroy
   // ============================================
 
@@ -2391,7 +2501,14 @@
         sessionStorage.removeItem('pendingInvSlotId');
         console.log('[Prd] scan.html統合: pendingInvSlotId検出:', pendingInvSlotId);
         prdOnQRScanSuccess(pendingInvSlotId);
+        prdSetupDraftAutoSave();
         return; // 以降の初期化は不要（QRスキャン自動起動を抑止）
+      }
+
+      // 下書き復元チェック（スロットデータがない場合のみ）
+      var _prd_hasDraft = !!prdLoadDraft();
+      if (_prd_hasDraft) {
+        prdCheckDraftOnInit();
       }
 
       // scanHub経由の自動起動チェック
@@ -2399,10 +2516,13 @@
       if (scanHubTarget === 'product') {
         sessionStorage.removeItem('scanHub_autoOpen');
         setTimeout(function() { prdOpenQRScanner(); }, 500);
-      } else {
-        // Auto-open QR scanner if setting enabled (即座に実行、ユーザー体感を優先)
+      } else if (!_prd_hasDraft) {
+        // Auto-open QR scanner if setting enabled (下書き復元時はスキャナー不要)
         prdAutoOpenQrScannerIfEnabled();
       }
+
+      // 下書き自動保存を開始
+      prdSetupDraftAutoSave();
 
       // SPA再初期化: 再訪問時のみ実行（初回はauto-executingコードが処理する）
       // バックグラウンド実行でQRスキャンをブロックしない
@@ -2499,6 +2619,17 @@
 
   function destroyProductPage() {
     console.log('[Prd SPA] destroyProductPage called');
+
+    // 下書き保存（ページ離脱時）
+    prdSaveDraft(true);
+
+    // 下書き自動保存のイベントリスナー除去
+    var form = document.getElementById('mainFormContent');
+    if (form && _prd_draftInputHandler) {
+      form.removeEventListener('input', _prd_draftInputHandler);
+      form.removeEventListener('change', _prd_draftInputHandler);
+      _prd_draftInputHandler = null;
+    }
 
     // Stop QR scanner if running
     if (_prd_qrScanner) {

@@ -933,8 +933,8 @@ window.initSuccessModal = function() {
     <div id="saveSuccessModal" class="success-modal-overlay">
       <div class="success-modal-content">
         <div class="success-modal-icon">✅</div>
-        <div class="success-modal-title">保存が完了しました</div>
-        <div class="success-modal-message">商品が正常に登録されました</div>
+        <div class="success-modal-title">出品が完了しました</div>
+        <div class="success-modal-message">商品が正常に出品されました</div>
         <div class="success-modal-buttons">
           <button type="button" class="success-modal-btn primary" onclick="continueProductRegistration()">
             続けて登録
@@ -7514,7 +7514,7 @@ window.continueProductRegistration = function() {
     }
 
     // ローディング画面を表示（保存完了まで表示し続ける）
-    showLoadingOverlay('登録中', 'データを保存中...');
+    showLoadingOverlay('出品中', 'データを保存中...');
     updateLoadingProgress(10, '準備中...');
 
     // バックグラウンドで実際の保存処理
@@ -7571,7 +7571,10 @@ window.continueProductRegistration = function() {
         console.log('[onSave] Firestore保存結果:', result);
 
         if (result.success) {
-          updateLoadingProgress(100, '保存完了！');
+          updateLoadingProgress(100, '出品完了！');
+
+          // 下書きを削除（出品成功）
+          if (typeof prdClearDraft === 'function') prdClearDraft();
 
           // 少し待ってからオーバーレイを閉じてモーダル表示
           await new Promise(resolve => setTimeout(resolve, 300));
@@ -7582,7 +7585,7 @@ window.continueProductRegistration = function() {
           // 保存成功モーダルを表示
           showSuccessModal();
 
-          // リセットボタンを「続けて登録」に変更
+          // クリアボタンを「続けて登録」に変更
           const resetBtn = document.getElementById('resetButton');
           if (resetBtn) {
             resetBtn.textContent = '続けて登録';
@@ -8248,7 +8251,9 @@ window.continueProductRegistration = function() {
    */
   function onReset() {
     try {
-      console.log('=== リセット開始（新実装） ===');
+      console.log('=== クリア開始 ===');
+      // 下書きも削除
+      if (typeof prdClearDraft === 'function') prdClearDraft();
 
       // Phase 1: データクリア
       resetManagementNumber();
@@ -8292,7 +8297,7 @@ window.continueProductRegistration = function() {
         discountToggle.textContent = '▼';
       }
 
-      console.log('=== リセット完了（新実装） ===');
+      console.log('=== クリア完了 ===');
     } catch (error) {
       console.error('リセット処理エラー:', error);
       alert('リセット処理中にエラーが発生しました。ページを再読み込みしてください。');
