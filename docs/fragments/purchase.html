@@ -2396,7 +2396,7 @@
                 <tr>
                   <th>依頼日</th>
                   <th>仕入先</th>
-                  <th>予定点数</th>
+                  <th>登録/予定</th>
                   <th>担当者</th>
                   <th>期限</th>
                   <th>進捗</th>
@@ -3103,8 +3103,8 @@
                   snap.forEach(function(taskDoc) {
                     var rd = taskDoc.data().relatedData || {};
                     if (rd.inspectionRequestId === requestDoc.id || rd.supplier === supplier) {
-                      taskDoc.ref.update({ completed: true, completedAt: new Date().toISOString() });
-                      console.log('[Inspection] タスク自動完了:', taskDoc.id);
+                      taskDoc.ref.update({ completed: true, completedAt: new Date().toISOString(), registeredCount: newCount });
+                      console.log('[Inspection] タスク自動完了:', taskDoc.id, '登録点数:', newCount);
                     }
                   });
                   if (typeof window.updateTaskBadge === 'function') window.updateTaskBadge();
@@ -5551,7 +5551,15 @@
           defaultSortKey: '_createdAtStr', defaultSortDir: 'desc',
           renderRow: function(d) {
             var progress = d.expectedCount > 0 ? Math.round((d.registeredCount||0) / d.expectedCount * 100) : 0;
-            return '<tr><td>' + d._createdAtStr + '</td><td>' + (d.supplier||'-') + '</td><td>' + (d.expectedCount||0) + '</td><td>' + (d.assigneeName||'-') + '</td><td>' + (d.dueDate||'-') + '</td><td>' + progress + '%</td><td>' + (d.status||'-') + '</td><td>' + (d.status !== 'completed' ? '<button class="btn btn-sm btn-outline-danger" onclick="purCancelInspectionRequest(\'' + d.id + '\')">キャンセル</button>' : '-') + '</td></tr>';
+            var actions = '-';
+            if (d.status !== 'completed' && d.status !== 'cancelled') {
+              actions = '<div class="d-flex gap-1 flex-wrap">' +
+                '<button class="btn btn-sm btn-outline-primary" onclick="purEditInspectionExpectedCount(\'' + d.id + '\',' + (d.expectedCount||0) + ')"><i class="bi bi-pencil"></i> 点数</button>' +
+                '<button class="btn btn-sm btn-outline-success" onclick="purManualCompleteInspection(\'' + d.id + '\')"><i class="bi bi-check-lg"></i> 完了</button>' +
+                '<button class="btn btn-sm btn-outline-danger" onclick="purCancelInspectionRequest(\'' + d.id + '\')">キャンセル</button>' +
+                '</div>';
+            }
+            return '<tr><td>' + d._createdAtStr + '</td><td>' + (d.supplier||'-') + '</td><td>' + (d.registeredCount||0) + '/' + (d.expectedCount||0) + '</td><td>' + (d.assigneeName||'-') + '</td><td>' + (d.dueDate||'-') + '</td><td>' + progress + '%</td><td>' + (d.status||'-') + '</td><td>' + actions + '</td></tr>';
           }
         });
       }
@@ -5612,6 +5620,65 @@
       window.db.collection('inspectionRequests').doc(requestId).update({
         status: 'cancelled', updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }).then(function() { alert('キャンセルしました'); purLoadInspectionRequests(); });
+    }
+
+    function purEditInspectionExpectedCount(requestId, currentCount) {
+      var newCount = prompt('予定点数を修正してください（現在: ' + currentCount + '点）', currentCount);
+      if (newCount === null) return;
+      newCount = parseInt(newCount);
+      if (isNaN(newCount) || newCount <= 0) { alert('有効な数値を入力してください'); return; }
+      window.db.collection('inspectionRequests').doc(requestId).get().then(function(doc) {
+        if (!doc.exists) { alert('データが見つかりません'); return; }
+        var data = doc.data();
+        var registered = data.registeredCount || 0;
+        var isCompleted = registered >= newCount;
+        var updates = { expectedCount: newCount, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+        if (isCompleted) { updates.status = 'completed'; updates.completedAt = new Date().toISOString(); }
+        return window.db.collection('inspectionRequests').doc(requestId).update(updates).then(function() {
+          if (isCompleted) {
+            // 点数修正で完了条件を満たした場合、タスクも自動完了
+            purAutoCompleteInspectionTask(data.assigneeEmail, requestId, data.supplier, registered);
+          }
+          alert('予定点数を' + newCount + '点に修正しました' + (isCompleted ? '（完了条件を満たしたため完了）' : ''));
+          purLoadInspectionRequests();
+        });
+      }).catch(function(err) { alert('修正に失敗しました: ' + err.message); });
+    }
+
+    function purManualCompleteInspection(requestId) {
+      window.db.collection('inspectionRequests').doc(requestId).get().then(function(doc) {
+        if (!doc.exists) { alert('データが見つかりません'); return; }
+        var data = doc.data();
+        var registered = data.registeredCount || 0;
+        var expected = data.expectedCount || 0;
+        var msg = '手動で完了にしますか？\n\n予定点数: ' + expected + '点\n登録済み: ' + registered + '点';
+        if (registered !== expected) msg += '\n\n※ 予定点数と登録済み点数が異なります。報酬は登録済みの' + registered + '点で計算されます。';
+        if (!confirm(msg)) return;
+        window.db.collection('inspectionRequests').doc(requestId).update({
+          status: 'completed', completedAt: new Date().toISOString(), updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(function() {
+          purAutoCompleteInspectionTask(data.assigneeEmail, requestId, data.supplier, registered);
+          alert('完了にしました');
+          purLoadInspectionRequests();
+        });
+      }).catch(function(err) { alert('完了処理に失敗しました: ' + err.message); });
+    }
+
+    function purAutoCompleteInspectionTask(assigneeEmail, requestId, supplier, registeredCount) {
+      if (!assigneeEmail) return;
+      window.db.collection('userTasks').doc(assigneeEmail).collection('tasks')
+        .where('type', '==', 'inspection_task')
+        .where('completed', '==', false)
+        .get().then(function(snap) {
+          snap.forEach(function(taskDoc) {
+            var rd = taskDoc.data().relatedData || {};
+            if (rd.inspectionRequestId === requestId || rd.supplier === supplier) {
+              taskDoc.ref.update({ completed: true, completedAt: new Date().toISOString(), registeredCount: registeredCount });
+              console.log('[Inspection] タスク手動完了:', taskDoc.id, '登録点数:', registeredCount);
+            }
+          });
+          if (typeof window.updateTaskBadge === 'function') window.updateTaskBadge();
+        });
     }
 
     // ============================================
