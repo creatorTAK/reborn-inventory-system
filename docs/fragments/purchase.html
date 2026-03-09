@@ -3095,18 +3095,19 @@
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           }).then(function() {
             if (isCompleted) {
-              // inspection_taskタスクを自動完了
+              // inspection_taskタスクを自動完了（inspectionRequestIdで精密マッチ、fallbackでsupplier）
               window.db.collection('userTasks').doc(currentUserEmail).collection('tasks')
                 .where('type', '==', 'inspection_task')
                 .where('completed', '==', false)
                 .get().then(function(snap) {
                   snap.forEach(function(taskDoc) {
                     var rd = taskDoc.data().relatedData || {};
-                    if (rd.supplier === supplier) {
+                    if (rd.inspectionRequestId === requestDoc.id || rd.supplier === supplier) {
                       taskDoc.ref.update({ completed: true, completedAt: new Date().toISOString() });
                       console.log('[Inspection] タスク自動完了:', taskDoc.id);
                     }
                   });
+                  if (typeof window.updateTaskBadge === 'function') window.updateTaskBadge();
                 });
             }
           });
@@ -5580,7 +5581,26 @@
         dueDate: dueDate || null, note: note, status: 'pending',
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         createdBy: localStorage.getItem('reborn_user_email') || 'unknown'
-      }).then(function() {
+      }).then(function(requestRef) {
+        // 担当者にinspection_taskを作成
+        var taskData = {
+          type: 'inspection_task',
+          title: '検品作業: ' + supplier + ' (' + expectedCount + '点)',
+          description: '仕入先「' + supplier + '」から' + expectedCount + '点の商品を検品してください。' + (note ? '\n備考: ' + note : ''),
+          completed: false,
+          link: 'purchase',
+          relatedData: {
+            inspectionRequestId: requestRef.id,
+            supplier: supplier,
+            expectedCount: expectedCount
+          },
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdBy: localStorage.getItem('reborn_user_email') || 'unknown'
+        };
+        if (dueDate) taskData.dueDate = dueDate;
+        window.db.collection('userTasks').doc(assigneeEmail).collection('tasks').add(taskData).then(function() {
+          console.log('[Inspection] タスク作成完了: ' + assigneeEmail);
+        }).catch(function(e) { console.error('[Inspection] タスク作成失敗:', e); });
         purCloseModal('pur-createInspectionRequestModal');
         alert('商品登録進捗を作成しました');
         purLoadInspectionRequests();
