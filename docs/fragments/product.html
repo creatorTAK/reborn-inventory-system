@@ -2378,23 +2378,36 @@
   function prdRestoreDraft(draft) {
     if (!draft || !draft.fields) return;
     console.log('[Prd] 下書きから復元開始');
-    Object.keys(draft.fields).forEach(function(id) {
+    var f = draft.fields;
+    // カテゴリ以外のフィールドを先に復元
+    var catIds = {'特大分類':1,'大分類(カテゴリ)':1,'中分類(カテゴリ)':1,'小分類(カテゴリ)':1,'細分類(カテゴリ)':1,'細分類2':1};
+    Object.keys(f).forEach(function(id) {
+      if (catIds[id]) return;
       var el = document.getElementById(id);
-      if (el) el.value = draft.fields[id];
+      if (el) el.value = f[id];
     });
-    // カテゴリのカスケードを発火
-    var catFields = ['特大分類','大分類(カテゴリ)','中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2'];
-    catFields.forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el && el.value) {
-        var evt = new Event('change', { bubbles: true });
-        el.dispatchEvent(evt);
+    // カテゴリを遅延カスケード復元（各レベルが前のレベルの選択肢生成を待つ）
+    var catOrder = ['特大分類','大分類(カテゴリ)','中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2'];
+    function restoreCatLevel(idx) {
+      if (idx >= catOrder.length) {
+        // 全カテゴリ復元完了後にプレビュー更新
+        if (typeof updateNamePreview === 'function') updateNamePreview();
+        if (typeof updateDesc === 'function') updateDesc();
+        console.log('[Prd] 下書きから復元完了');
+        return;
       }
-    });
-    // プレビュー更新
-    if (typeof updateNamePreview === 'function') updateNamePreview();
-    if (typeof updateDesc === 'function') updateDesc();
-    console.log('[Prd] 下書きから復元完了');
+      var id = catOrder[idx];
+      var val = f[id];
+      if (!val) { restoreCatLevel(idx + 1); return; }
+      var el = document.getElementById(id);
+      if (!el) { restoreCatLevel(idx + 1); return; }
+      // changeイベントで次レベルの選択肢が生成されるのを待つ
+      el.value = val;
+      var evt = new Event('change', { bubbles: true });
+      el.dispatchEvent(evt);
+      setTimeout(function() { restoreCatLevel(idx + 1); }, 150);
+    }
+    restoreCatLevel(0);
   }
 
   function prdCheckDraftOnInit() {
