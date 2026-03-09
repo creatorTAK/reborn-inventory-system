@@ -1706,6 +1706,9 @@
     // 反映完了通知
     prdShowInspectionDataAppliedNotification(qrData);
     console.log('[Prd] 検品情報の自動反映完了');
+
+    // QRデータ反映後に下書き保存（programmatic setはイベント発火しないため明示的に呼ぶ）
+    prdSaveDraft(true);
   }
 
   // ============================================
@@ -2400,14 +2403,23 @@
 
   function prdCheckDraftOnInit() {
     var draft = prdLoadDraft();
-    if (!draft || !draft.fields) return;
+    if (!draft || !draft.fields) return false;
+    // デフォルト値のみの下書きは無視
+    var _prd_defaultFields = {
+      '担当者':1, '配送料の負担':1, '配送の方法':1, '発送元の地域':1, '発送までの日数':1,
+      '出品先':1, '出品日':1, '管理番号':1,
+      'セールスワード(カテゴリ)':1, 'セールスワード':1
+    };
+    var hasRealData = Object.keys(draft.fields).some(function(k) { return !_prd_defaultFields[k]; });
+    if (!hasRealData) { prdClearDraft(); return false; }
     var savedAt = new Date(draft.savedAt);
     var timeStr = savedAt.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    var fieldCount = Object.keys(draft.fields).length;
     if (confirm('前回の下書き（' + timeStr + '保存）があります。\n\n復元しますか？\n\n※「キャンセル」を押すと新規入力になります')) {
       prdRestoreDraft(draft);
+      return true;
     } else {
       prdClearDraft();
+      return false;
     }
   }
 
@@ -2509,17 +2521,14 @@
       }
 
       // 下書き復元チェック（スロットデータがない場合のみ）
-      var _prd_hasDraft = !!prdLoadDraft();
-      if (_prd_hasDraft) {
-        prdCheckDraftOnInit();
-      }
+      var _prd_draftRestored = prdCheckDraftOnInit();
 
       // scanHub経由の自動起動チェック
       var scanHubTarget = sessionStorage.getItem('scanHub_autoOpen');
       if (scanHubTarget === 'product') {
         sessionStorage.removeItem('scanHub_autoOpen');
         setTimeout(function() { prdOpenQRScanner(); }, 500);
-      } else if (!_prd_hasDraft) {
+      } else if (!_prd_draftRestored) {
         // Auto-open QR scanner if setting enabled (下書き復元時はスキャナー不要)
         prdAutoOpenQrScannerIfEnabled();
       }

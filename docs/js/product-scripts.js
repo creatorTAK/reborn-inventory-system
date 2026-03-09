@@ -282,6 +282,9 @@ window.CONDITION_TO_RANK_MAP = CONDITION_TO_RANK_MAP;
 
     console.log('📦 [v315] スロットデータ反映完了');
 
+    // スロットデータ反映後に下書き保存
+    if (typeof prdSaveDraft === 'function') prdSaveDraft(true);
+
     // 反映完了通知（ユーザーへのフィードバック）
     showSlotDataAppliedNotification(slotData);
   }
