@@ -7517,6 +7517,11 @@ window.continueProductRegistration = function() {
       return show(ng);
     }
 
+    // 画像チェック
+    if (!productImages || productImages.length === 0) {
+      return show('商品画像を1枚以上アップロードしてください');
+    }
+
     // ローディング画面を表示（保存完了まで表示し続ける）
     showLoadingOverlay('出品中', 'データを保存中...');
     updateLoadingProgress(10, '準備中...');
