@@ -934,6 +934,7 @@
   var _prd_DRAFT_KEY = 'prd_product_draft';
   var _prd_draftSaveTimer = null;
   var _prd_draftInputHandler = null;
+  var _prd_userHasEdited = false;
 
   // ============================================
   // Dynamic script/CSS loading helpers
@@ -1708,6 +1709,7 @@
     console.log('[Prd] 検品情報の自動反映完了');
 
     // QRデータ反映後に下書き保存（programmatic setはイベント発火しないため明示的に呼ぶ）
+    _prd_userHasEdited = true;
     prdSaveDraft(true);
   }
 
@@ -2339,24 +2341,17 @@
   ];
 
   function prdSaveDraft(immediate) {
+    if (!_prd_userHasEdited) return;
     if (_prd_draftSaveTimer) clearTimeout(_prd_draftSaveTimer);
     var doSave = function() {
       var data = {};
-      var hasData = false;
-      // デフォルトで自動セットされるフィールド（これだけでは下書き保存しない）
-      var _prd_defaultFields = {
-        '担当者':1, '配送料の負担':1, '配送の方法':1, '発送元の地域':1, '発送までの日数':1,
-        '出品先':1, '出品日':1, '管理番号':1,
-        'セールスワード(カテゴリ)':1, 'セールスワード':1
-      };
       _prd_DRAFT_FIELDS.forEach(function(id) {
         var el = document.getElementById(id);
         if (el && el.value && el.value.trim() !== '') {
           data[id] = el.value.trim();
-          if (!_prd_defaultFields[id]) hasData = true;
         }
       });
-      if (!hasData) { prdClearDraft(); return; }
+      if (Object.keys(data).length === 0) { prdClearDraft(); return; }
       var draft = { savedAt: new Date().toISOString(), fields: data };
       try {
         localStorage.setItem(_prd_DRAFT_KEY, JSON.stringify(draft));
@@ -2368,6 +2363,7 @@
 
   function prdClearDraft() {
     localStorage.removeItem(_prd_DRAFT_KEY);
+    _prd_userHasEdited = false;
     if (_prd_draftSaveTimer) { clearTimeout(_prd_draftSaveTimer); _prd_draftSaveTimer = null; }
   }
 
@@ -2404,18 +2400,11 @@
   function prdCheckDraftOnInit() {
     var draft = prdLoadDraft();
     if (!draft || !draft.fields) return false;
-    // デフォルト値のみの下書きは無視
-    var _prd_defaultFields = {
-      '担当者':1, '配送料の負担':1, '配送の方法':1, '発送元の地域':1, '発送までの日数':1,
-      '出品先':1, '出品日':1, '管理番号':1,
-      'セールスワード(カテゴリ)':1, 'セールスワード':1
-    };
-    var hasRealData = Object.keys(draft.fields).some(function(k) { return !_prd_defaultFields[k]; });
-    if (!hasRealData) { prdClearDraft(); return false; }
     var savedAt = new Date(draft.savedAt);
     var timeStr = savedAt.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     if (confirm('前回の下書き（' + timeStr + '保存）があります。\n\n復元しますか？\n\n※「キャンセル」を押すと新規入力になります')) {
       prdRestoreDraft(draft);
+      _prd_userHasEdited = true;
       return true;
     } else {
       prdClearDraft();
@@ -2429,6 +2418,7 @@
     _prd_draftInputHandler = function(e) {
       var tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+        _prd_userHasEdited = true;
         prdSaveDraft();
       }
     };
@@ -2605,6 +2595,9 @@
   }
   function prdClearAllProductImages() {
     if (typeof clearAllProductImages === 'function') return clearAllProductImages();
+  }
+  function prdMarkEdited() {
+    _prd_userHasEdited = true;
   }
   function prdOnSave() {
     if (typeof onSave === 'function') return onSave();
