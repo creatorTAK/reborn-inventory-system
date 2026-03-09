@@ -5613,12 +5613,20 @@ window.continueProductRegistration = function() {
   }
 
   /**
-   * アップロードされた画像を取得
+   * アップロードされた画像を取得（後方互換用）
    * @returns {Array} Base64画像データの配列
    */
   function getUploadedImages() {
-    return uploadedImages.map(img => ({
-      data: img.data.split(',')[1], // Base64部分のみ（data:image/png;base64,を除く）
+    return getProductImagesForAI();
+  }
+
+  /**
+   * 商品画像の先頭5枚をAI生成用に取得
+   * @returns {Array} Base64画像データの配列
+   */
+  function getProductImagesForAI() {
+    return productImages.slice(0, 5).map(img => ({
+      data: img.data.split(',')[1],
       mimeType: img.mimeType
     }));
   }
@@ -6216,11 +6224,11 @@ window.continueProductRegistration = function() {
       // 商品情報を収集
       const productInfo = collectProductInfo();
 
-      // 画像データを取得
-      const images = getUploadedImages();
+      // 商品画像の先頭5枚をAI用に取得
+      const images = getProductImagesForAI();
 
       debug.log('収集した商品情報:', productInfo);
-      debug.log('アップロードされた画像数:', images.length);
+      debug.log('AI生成用画像数:', images.length);
 
       // バリデーション
       if (!productInfo.brandName || !productInfo.itemName) {
@@ -6231,7 +6239,7 @@ window.continueProductRegistration = function() {
 
       // 画像がない場合は確認メッセージを表示
       if (images.length === 0) {
-        const proceed = confirm('⚠️ AI生成用の画像がアップロードされていません。\n\n画像なしでも生成できますが、画像があるとより正確な説明文が生成されます。\n\nこのまま画像なしで生成しますか？');
+        const proceed = confirm('⚠️ 商品画像がアップロードされていません。\n\n画像なしでも生成できますが、画像があるとより正確な説明文が生成されます。\n\nこのまま画像なしで生成しますか？');
         if (!proceed) {
           resetAiButton(aiGenBtn, originalText);
           return;
@@ -7578,7 +7586,7 @@ window.continueProductRegistration = function() {
         updateLoadingProgress(75, 'EC用コンテンツを生成中...');
         try {
           const ecProductInfo = collectProductInfo();
-          const ecImages = getUploadedImages();
+          const ecImages = getProductImagesForAI();
           const EC_WORKER_URL = 'https://reborn-help-chatbot.mercari-yasuhirotakuji.workers.dev/generate-ec-content';
           const ecResponse = await fetch(EC_WORKER_URL, {
             method: 'POST',
