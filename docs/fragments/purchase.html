@@ -3065,6 +3065,10 @@
           console.log('[Pur] バッチ保存完了:', batchId, 'スロット:', slots.length);
           // 商品登録進捗更新
           purUpdateInspectionRequestProgress(batchData.supplier, batchData.itemCount).catch(function() {});
+          // restock_alertタスク自動完了（発送先スタッフ名で照合）
+          if (batchData.assignee) {
+            purAutoCompleteRestockAlert(batchData.assignee);
+          }
           return { batchId: batchId, slots: slots };
         });
       });
@@ -3615,6 +3619,24 @@
             }
           });
         }).catch(function(err) { console.error('[purchase] タスク自動完了エラー:', err); });
+    }
+
+    function purAutoCompleteRestockAlert(assigneeName) {
+      var userEmail = localStorage.getItem('reborn_user_email');
+      if (!userEmail || !assigneeName) return;
+      window.db.collection('userTasks').doc(userEmail).collection('tasks')
+        .where('type', '==', 'restock_alert')
+        .where('completed', '==', false)
+        .get().then(function(snap) {
+          snap.forEach(function(taskDoc) {
+            var rd = taskDoc.data().relatedData || {};
+            if (rd.assigneeName === assigneeName) {
+              taskDoc.ref.update({ completed: true, completedAt: new Date().toISOString() });
+              console.log('[purchase] restock_alertタスク自動完了:', taskDoc.id, assigneeName);
+            }
+          });
+          if (typeof window.updateTaskBadge === 'function') window.updateTaskBadge();
+        }).catch(function(err) { console.error('[purchase] restock_alert自動完了エラー:', err); });
     }
 
     function purSendBudgetAlert(month, pct, actual, budget) {
