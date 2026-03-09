@@ -3005,11 +3005,6 @@
         hideLoading();
         alert('商品情報を更新しました');
 
-        // 出品中への変更時に管理者へ確認タスクを追加
-        if (statusChanged && newStatus === '出品中' && oldStatus !== '出品中') {
-          addListingApprovalTask(currentProduct);
-        }
-
         // モーダルを閉じる
         const modalElement = document.getElementById('productDetailModal');
         const modal = bootstrap.Modal.getInstance(modalElement);
@@ -3017,86 +3012,6 @@
 
         // 一覧を再読み込み
         loadDashboardAndSearch();
-      }
-    }
-
-    /**
-     * 出品確認タスクを管理者に追加
-     * @param {Object} product - 商品データ
-     */
-    async function addListingApprovalTask(product) {
-      try {
-        console.log('📝 [ListingTask] 出品確認タスク追加開始:', product.managementNumber);
-
-        // 担当者情報
-        const staffName = product.createdBy || localStorage.getItem('reborn_user_name') || '不明';
-        const staffEmail = product.createdByEmail || localStorage.getItem('reborn_user_email') || '';
-
-        // タスクデータ
-        const productId = product.id || product.productId;
-        const taskData = {
-          type: 'listing_approval',
-          title: '出品確認',
-          description: `${staffName}さんが商品を出品しました。\n管理番号: ${product.managementNumber}\n確認してOKなら完了にしてください。`,
-          link: `/product.html?edit=${productId}`,
-          relatedData: {
-            productId: productId,
-            managementNumber: product.managementNumber,
-            staffName: staffName,
-            staffEmail: staffEmail,
-            listingAmount: product.listingAmount || product.listing?.amount || 0
-          }
-        };
-
-        // 親ウィンドウにタスク追加を依頼（postMessage経由）
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage({
-            type: 'addTaskToOwners',
-            taskData: taskData
-          }, '*');
-          console.log('📝 [ListingTask] タスク追加依頼を親ウィンドウに送信');
-        } else {
-          // 直接アクセスの場合はFirestoreに直接追加
-          await addTaskToOwnersDirectly(taskData);
-        }
-      } catch (error) {
-        console.error('❌ [ListingTask] タスク追加エラー:', error);
-      }
-    }
-
-    /**
-     * 管理者にタスクを直接追加（iframe外からアクセス時）
-     */
-    async function addTaskToOwnersDirectly(taskData) {
-      try {
-        const { collection, query, where, getDocs, addDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-
-        // 管理者を取得
-        const usersRef = collection(db, 'users');
-        const ownersQuery = query(usersRef, where('permissionId', '==', 'owner'));
-        const ownersSnapshot = await getDocs(ownersQuery);
-
-        if (ownersSnapshot.empty) {
-          console.warn('[Todo] 管理者が見つかりません');
-          return;
-        }
-
-        // 各管理者にタスクを追加
-        for (const ownerDoc of ownersSnapshot.docs) {
-          const ownerEmail = ownerDoc.data().userEmail;
-          const tasksRef = collection(db, 'userTasks', ownerEmail, 'tasks');
-
-          await addDoc(tasksRef, {
-            ...taskData,
-            createdAt: serverTimestamp(),
-            completed: false,
-            read: false
-          });
-
-          console.log('[Todo] タスク追加完了:', ownerEmail, taskData.type);
-        }
-      } catch (error) {
-        console.error('[Todo] タスク追加エラー:', error);
       }
     }
 
