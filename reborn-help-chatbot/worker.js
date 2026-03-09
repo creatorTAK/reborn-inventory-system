@@ -939,6 +939,111 @@ async function callGeminiForDescription(apiKey, prompt, aiConfig, productInfo, i
 }
 
 /**
+ * EC用商品タイトル+説明文のプロンプトを構築
+ */
+function buildEcContentPrompt(productInfo, imageCount) {
+  let prompt = '';
+
+  if (imageCount > 0) {
+    prompt = `あなたはECサイトの商品ページを作成するプロのコピーライターです。
+
+**添付された${imageCount}枚の商品画像を詳しく観察し**、画像から読み取れる情報とテキスト情報を組み合わせて、SEOに最適化された商品タイトルと商品説明文を作成してください。
+
+【商品情報】`;
+  } else {
+    prompt = `あなたはECサイトの商品ページを作成するプロのコピーライターです。以下の商品情報から、SEOに最適化された商品タイトルと商品説明文を作成してください。
+
+【商品情報】`;
+  }
+
+  if (productInfo.brandName) {
+    prompt += `\nブランド: ${productInfo.brandName}`;
+    if (productInfo.brandKana) prompt += `（${productInfo.brandKana}）`;
+  }
+  if (productInfo.category) prompt += `\nカテゴリ: ${productInfo.category}`;
+  if (productInfo.itemName) prompt += `\nアイテム: ${productInfo.itemName}`;
+  if (productInfo.size) prompt += `\nサイズ: ${productInfo.size}`;
+  if (productInfo.condition) prompt += `\n状態: ${productInfo.condition}`;
+  if (productInfo.material) prompt += `\n素材: ${productInfo.material}`;
+  if (productInfo.color) prompt += `\nカラー: ${productInfo.color}`;
+  if (productInfo.attributes) prompt += `\n商品属性: ${productInfo.attributes}`;
+  if (productInfo.accessories) prompt += `\n付属品: ${productInfo.accessories}`;
+  if (productInfo.modelNumber) {
+    prompt += `\n品番・型番: ${productInfo.modelNumber}
+※この品番でGoogle検索を行い、正式名称・発売情報・特徴を含めてください。`;
+  }
+
+  prompt += `
+
+【出力形式】
+以下のJSON形式で出力してください。他の文字は一切含めないでください。
+
+{"ecTitle":"商品タイトル","ecDescription":"商品説明文"}
+
+【商品タイトルの作成条件】
+- 50〜80文字程度
+- ブランド名（英語＋カナ読み）を含める
+- アイテムの種類を省略せずに記載（例: パーカー→プルオーバーパーカー）
+- サイズ、カラーを含める
+- SEOキーワードとなる特徴やディテールを含める（素材感、ロゴ、デザイン特徴など）
+- 楽天やZOZOTOWNのような情報量の多いタイトルを参考に
+- セールスワード（【送料無料】等）は含めない
+- 例: 「NIKE（ナイキ）プルオーバーパーカー メンズ Lサイズ グレー スウッシュ刺繍ロゴ 裏起毛 フーディー」
+
+【商品説明文の作成条件】
+- 300〜600文字程度
+- 丁寧で読みやすい文体
+- 以下の構成で作成：
+  1. 商品の概要（1〜2文）
+  2. デザイン・素材の特徴
+  3. サイズ感や着用イメージ
+  4. コンディション（中古品の場合）
+  5. おすすめポイント
+- HTMLタグは使用しない（プレーンテキスト）
+- 見出しには■を使用
+- メルカリ特有の表現（即購入OK、プロフ必読等）は含めない
+- ハッシュタグは含めない`;
+
+  return prompt;
+}
+
+/**
+ * /generate-ec-content エンドポイントのハンドラ
+ */
+async function handleGenerateEcContent(request, env) {
+  if (!env.GEMINI_API_KEY) {
+    return jsonResponse({ error: 'Server configuration error' }, 500);
+  }
+
+  const body = await request.json();
+  const { productInfo, images } = body;
+
+  if (!productInfo) {
+    return jsonResponse({ error: 'productInfo is required' }, 400);
+  }
+
+  const imageArray = images || [];
+  const prompt = buildEcContentPrompt(productInfo, imageArray.length);
+  const generatedText = await callGeminiForDescription(
+    env.GEMINI_API_KEY, prompt, {}, productInfo, imageArray
+  );
+
+  // JSONパース試行
+  try {
+    const jsonMatch = generatedText.match(/\{[\s\S]*"ecTitle"[\s\S]*"ecDescription"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return jsonResponse({ success: true, ecTitle: parsed.ecTitle, ecDescription: parsed.ecDescription });
+    }
+  } catch (e) {
+    console.log('[EC Content] JSON parse failed, returning raw text');
+  }
+
+  // JSONパース失敗時はそのまま返す
+  return jsonResponse({ success: true, ecTitle: '', ecDescription: generatedText });
+}
+
+/**
  * /generate-description エンドポイントのハンドラ
  */
 async function handleGenerateDescription(request, env) {
@@ -1007,6 +1112,19 @@ export default {
         return jsonResponse({
           error: 'Failed to process message',
           details: error.message
+        }, 500);
+      }
+    }
+
+    // EC content generation endpoint
+    if (url.pathname === '/generate-ec-content' && request.method === 'POST') {
+      try {
+        return await handleGenerateEcContent(request, env);
+      } catch (error) {
+        console.error('EC content generation error:', error);
+        return jsonResponse({
+          success: false,
+          error: error.message || 'EC用コンテンツの生成に失敗しました。'
         }, 500);
       }
     }

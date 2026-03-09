@@ -7574,8 +7574,31 @@ window.continueProductRegistration = function() {
           updateLoadingProgress(30, '商品データを準備中...');
         }
 
+        // EC用コンテンツをAI生成
+        updateLoadingProgress(75, 'EC用コンテンツを生成中...');
+        try {
+          const ecProductInfo = collectProductInfo();
+          const ecImages = getUploadedImages();
+          const EC_WORKER_URL = 'https://reborn-help-chatbot.mercari-yasuhirotakuji.workers.dev/generate-ec-content';
+          const ecResponse = await fetch(EC_WORKER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productInfo: ecProductInfo, images: ecImages })
+          });
+          const ecResult = await ecResponse.json();
+          if (ecResult.success && ecResult.ecTitle) {
+            d['ecTitle'] = ecResult.ecTitle;
+            d['ecDescription'] = ecResult.ecDescription || '';
+            console.log('[onSave] EC用コンテンツ生成成功:', ecResult.ecTitle);
+          } else {
+            console.warn('[onSave] EC用コンテンツ生成: タイトル取得できず、スキップ');
+          }
+        } catch (ecError) {
+          console.warn('[onSave] EC用コンテンツ生成エラー（出品は続行）:', ecError.message);
+        }
+
         // Firestore保存
-        updateLoadingProgress(80, 'データを保存中...');
+        updateLoadingProgress(85, 'データを保存中...');
         const result = await saveProductToFirestore(d);
         console.log('[onSave] Firestore保存結果:', result);
 
@@ -10427,6 +10450,10 @@ function convertFormToFirestoreDoc(formData, productId, userEmail, userName) {
     skuId: formData['skuId'] || null, // SKU ID（SKU管理時のみ）
     variations: formData['variations'] || {}, // バリエーション情報 { size, color, etc }
     stockQuantity: formData['stockQuantity'] || 1, // 在庫数量（1点物は常に1）
+
+    // EC用コンテンツ（AI自動生成）
+    ecTitle: formData['ecTitle'] || '',
+    ecDescription: formData['ecDescription'] || '',
 
     // ステータス管理（現状メルカリのみ・API不可のため登録=出品中。API連携時はトリガー差し替え）
     status: formData['ステータス'] || '出品中',
