@@ -1567,11 +1567,11 @@
     </div>
 
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0311v</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0311w</div>
     <script>
     // PWAバージョンチェック（タスクキル復帰 + バックグラウンド復帰）
     (function(){
-      var LOCAL_VER = 'v0311v';
+      var LOCAL_VER = 'v0311w';
       var lastCheck = 0;
 
       function _versionCheck() {
@@ -1949,12 +1949,21 @@
         window.db = firebase.firestore();
       }
 
-      // オフライン永続化を無効化（IndexedDB肥大化によるパフォーマンス劣化防止）
-      // PWAは常時オンライン前提のため、オフラインキャッシュ不要
+      // オフライン永続化を有効化（モバイル回線・不安定なネットワーク対応）
+      // キャッシュサイズを制限して肥大化を防止（デフォルト40MB → 10MB）
       window.db.settings({
-        cacheSizeBytes: 1048576 // 1MB最小限（完全無効化はできないためサイズ制限）
+        cacheSizeBytes: 10485760 // 10MB（古いデータは自動的にGCされる）
       });
-      console.log('[Firestore] オフラインキャッシュ制限: 1MB');
+      window.db.enablePersistence({ synchronizeTabs: true }).catch(function(err) {
+        if (err.code === 'failed-precondition') {
+          console.warn('⚠️ Firestore永続化: 複数タブが開いています');
+        } else if (err.code === 'unimplemented') {
+          console.warn('⚠️ Firestore永続化: ブラウザ非対応');
+        } else {
+          console.warn('⚠️ Firestore永続化エラー:', err);
+        }
+      });
+      console.log('[Firestore] オフラインキャッシュ: 10MB制限 + 永続化有効');
 
       // グローバル変数として公開
       window.firebaseMessaging = messaging;
