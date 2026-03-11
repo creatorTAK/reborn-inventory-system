@@ -6351,7 +6351,10 @@
         '<div style="font-size: 13px; color: #6B6560;">' + cfgEscapeHtml(userEmail) + '</div></div>' +
         '<div style="background: #FAF8F5; border-radius: 12px; padding: 16px;">' +
           '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;"><span style="color: #6B6560; font-size: 13px;">権限</span><span style="font-size: 13px; font-weight: 500;">' + permDef.label + '</span></div>' +
-          '<div style="display: flex; justify-content: space-between; align-items: center;"><span style="color: #6B6560; font-size: 13px;">ステータス</span><span style="font-size: 13px; font-weight: 500; color: ' + statusColor + ';">' + statusLabel + '</span></div></div>';
+          '<div style="display: flex; justify-content: space-between; align-items: center;"><span style="color: #6B6560; font-size: 13px;">ステータス</span><span style="font-size: 13px; font-weight: 500; color: ' + statusColor + ';">' + statusLabel + '</span></div>' +
+          (status === 'active' ? '<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;"><span style="color: #6B6560; font-size: 13px;">週あたり稼働時間</span><div style="display: flex; align-items: center; gap: 4px;"><input type="number" id="cfg-userWeeklyHours" value="' + (user.weeklyAvailableHours || 40) + '" min="1" max="80" style="width: 60px; padding: 4px 8px; border: 1px solid #D1CCC6; border-radius: 6px; font-size: 14px; text-align: right;"><span style="font-size: 12px; color: #6B6560;">時間</span></div></div>' +
+          '<button onclick="cfgSaveWeeklyHours(\'' + user.id + '\')" style="width: 100%; margin-top: 8px; padding: 8px; background: #EDF3F8; color: #4A7FB5; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer;">稼働時間を保存</button>' : '') +
+          '</div>';
 
       var currentEmail = localStorage.getItem('reborn_user_email');
       var isSelf = userEmail === currentEmail;
@@ -6393,6 +6396,18 @@
       modal.style.display = 'flex';
     }
     window.cfgOpenUserDetailModal = cfgOpenUserDetailModal;
+
+    async function cfgSaveWeeklyHours(userId) {
+      var input = document.getElementById('cfg-userWeeklyHours');
+      if (!input) return;
+      var hours = parseInt(input.value);
+      if (isNaN(hours) || hours < 1 || hours > 80) { alert('1〜80の範囲で入力してください'); return; }
+      try {
+        await window.db.collection('users').doc(userId).update({ weeklyAvailableHours: hours });
+        alert('稼働時間を保存しました（' + hours + '時間/週）');
+      } catch (e) { alert('保存に失敗しました: ' + e.message); }
+    }
+    window.cfgSaveWeeklyHours = cfgSaveWeeklyHours;
 
     function cfgCloseUserDetailModal() {
       var modal = document.getElementById('cfg-userDetailModal');

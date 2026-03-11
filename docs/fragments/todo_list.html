@@ -907,7 +907,7 @@
       _tdl_pendingReceivingTask = { taskId: taskId, taskData: taskData };
       var itemCount = (taskData.relatedData && taskData.relatedData.itemCount) || 0;
       document.getElementById('tdl-receivingItemCount').textContent = itemCount;
-      tdlLoadDefaultDueDays().then(function(days) {
+      tdlCalcSmartDueDays(itemCount).then(function(days) {
         document.getElementById('tdl-receivingDueDays').value = days;
         tdlUpdateReceivingDueDatePreview();
       });
@@ -919,15 +919,31 @@
       document.getElementById('tdl-receivingCompleteModal').classList.remove('active');
     }
 
-    async function tdlLoadDefaultDueDays() {
+    async function tdlCalcSmartDueDays(itemCount) {
+      var minutesPerItem = 15;
+      var minimumDays = 3;
+      var weeklyHours = 40;
       try {
+        // 設定読み込み
         var settingsDoc = await _tdl_db.collection('settings').doc('taskSettings').get();
         if (settingsDoc.exists) {
-          var data = settingsDoc.data();
-          return (data.productRegistration && data.productRegistration.defaultDueDays) || 7;
+          var s = settingsDoc.data();
+          if (s.productRegistration) {
+            minutesPerItem = s.productRegistration.minutesPerItem || minutesPerItem;
+            minimumDays = s.productRegistration.minimumDays || minimumDays;
+          }
         }
-      } catch (e) { console.warn('タスク設定取得失敗'); }
-      return 7;
+        // スタッフの稼働時間を取得
+        var userDoc = await _tdl_db.collection('users').doc(_tdl_userEmail).get();
+        if (userDoc.exists && userDoc.data().weeklyAvailableHours) {
+          weeklyHours = userDoc.data().weeklyAvailableHours;
+        }
+      } catch (e) { console.warn('期限算出設定取得失敗:', e); }
+      // 算出: (点数 × 1点あたり分数) ÷ (週あたり稼働分数) × 7日
+      var totalMinutes = itemCount * minutesPerItem;
+      var weeklyMinutes = weeklyHours * 60;
+      var days = Math.ceil(totalMinutes / weeklyMinutes * 7);
+      return Math.max(minimumDays, days);
     }
 
     function tdlUpdateReceivingDueDatePreview() {
