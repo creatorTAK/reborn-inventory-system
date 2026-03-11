@@ -1664,6 +1664,22 @@ exports.onTaskCompleted = onDocumentUpdated('userTasks/{userEmail}/tasks/{taskId
           },
         });
         console.log('✅ [onTaskCompleted] EC梱包発送タスク作成:', staffEmail);
+
+        // プッシュ通知送信
+        try {
+          const activeDeviceDoc = await db.collection('activeDevices').doc(staffEmail).get();
+          if (activeDeviceDoc.exists) {
+            const tokens = Array.isArray(activeDeviceDoc.data().fcmTokens)
+              ? activeDeviceDoc.data().fcmTokens.filter(Boolean) : [];
+            if (tokens.length > 0) {
+              await messaging.sendEachForMulticast({
+                tokens: tokens,
+                notification: { title: '📦 EC発送依頼', body: itemNames + ' の梱包・発送をお願いします（管理番号: ' + mgmtNumbers.join(', ') + '）' },
+                data: { type: 'shipping_task', orderId: relatedData.orderId || '' }
+              });
+            }
+          }
+        } catch (pushErr) { console.error('[onTaskCompleted] EC発送プッシュ通知エラー:', pushErr); }
       }
     } catch (err) {
       console.error('❌ [onTaskCompleted] EC梱包発送タスク作成エラー:', err);

@@ -5635,6 +5635,17 @@
         if (dueDate) taskData.dueDate = dueDate;
         window.db.collection('userTasks').doc(assigneeEmail).collection('tasks').add(taskData).then(function() {
           console.log('[Inspection] タスク作成完了: ' + assigneeEmail);
+          // プッシュ通知送信
+          window.db.collection('users').doc(assigneeEmail).collection('devices').where('active', '==', true).get().then(function(devSnap) {
+            var tokens = [];
+            devSnap.forEach(function(d) { if (d.data().fcmToken) tokens.push(d.data().fcmToken); });
+            if (tokens.length > 0) {
+              fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tokens: tokens, title: '📋 商品登録の依頼', body: supplier + 'から' + expectedCount + '点の商品登録をお願いします。', data: { type: 'inspection_task' } })
+              });
+            }
+          }).catch(function(e) { console.error('[Inspection] プッシュ通知エラー:', e); });
         }).catch(function(e) { console.error('[Inspection] タスク作成失敗:', e); });
         purCloseModal('pur-createInspectionRequestModal');
         alert('商品登録進捗を作成しました');
@@ -6010,7 +6021,20 @@
         };
         await db.collection('userTasks').doc(assigneeUserId).collection('tasks').doc(taskId).set(taskData);
 
-        // 2. purchaseBatchesのstatusをshippedに更新
+        // 2. プッシュ通知送信
+        try {
+          var devSnap = await db.collection('users').doc(assigneeUserId).collection('devices').where('active', '==', true).get();
+          var tokens = [];
+          devSnap.forEach(function(d) { if (d.data().fcmToken) tokens.push(d.data().fcmToken); });
+          if (tokens.length > 0) {
+            fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tokens: tokens, title: '📦 商品が発送されました', body: supplier + 'から' + itemCount + '点の商品が発送されました。受取をお願いします。', data: { type: 'receiving_task', batchId: batchId } })
+            });
+          }
+        } catch (pushErr) { console.error('[purchase] プッシュ通知エラー:', pushErr); }
+
+        // 3. purchaseBatchesのstatusをshippedに更新
         await db.collection('purchaseBatches').doc(batchId).update({
           status: 'shipped',
           shippedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -6019,7 +6043,7 @@
 
         console.log('[purchase] 発送通知タスク作成完了:', taskId);
 
-        // 3. 発送リマインダータスクを自動完了
+        // 4. 発送リマインダータスクを自動完了
         var currentUserEmail = localStorage.getItem('reborn_user_email');
         if (currentUserEmail) {
           db.collection('userTasks').doc(currentUserEmail).collection('tasks')
@@ -6105,6 +6129,20 @@
         if (dueDate) taskData.dueDate = dueDate;
 
         await db.collection('userTasks').doc(assigneeUserId).collection('tasks').doc(taskId).set(taskData);
+
+        // プッシュ通知送信
+        try {
+          var devSnap = await db.collection('users').doc(assigneeUserId).collection('devices').where('active', '==', true).get();
+          var tokens = [];
+          devSnap.forEach(function(d) { if (d.data().fcmToken) tokens.push(d.data().fcmToken); });
+          if (tokens.length > 0) {
+            fetch('https://reborn-fcm-worker.mercari-yasuhirotakuji.workers.dev/send', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tokens: tokens, title: '📦 商品が発送されました', body: (batch.supplier || '') + 'から' + (batch.itemCount || 0) + '点の商品が発送されました。受取をお願いします。', data: { type: 'receiving_task', batchId: batchId } })
+            });
+          }
+        } catch (pushErr) { console.error('[purchase] プッシュ通知エラー:', pushErr); }
+
         var batchUpdate = {
           status: 'shipped',
           shippedAt: firebase.firestore.FieldValue.serverTimestamp(),
