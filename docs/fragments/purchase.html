@@ -1327,7 +1327,7 @@
     /* ケバブメニュー */
     #spa-page-purchase .pur-kebab-wrap { position: relative; display: inline-block; }
     #spa-page-purchase .pur-kebab-menu {
-      display: none; position: absolute; right: 0; top: 100%; z-index: 100;
+      display: none; position: fixed; z-index: 100;
       background: white; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
       min-width: 150px; overflow: hidden;
     }
@@ -2786,7 +2786,13 @@
       var menu = btn.nextElementSibling;
       var wasActive = menu.classList.contains('active');
       purCloseKebab();
-      if (!wasActive) menu.classList.add('active');
+      if (!wasActive) {
+        var rect = btn.getBoundingClientRect();
+        menu.style.top = (rect.bottom + 4) + 'px';
+        menu.style.right = (window.innerWidth - rect.right) + 'px';
+        menu.style.left = 'auto';
+        menu.classList.add('active');
+      }
     }
     function purCloseKebab() {
       document.querySelectorAll('#spa-page-purchase .pur-kebab-menu.active').forEach(function(m) { m.classList.remove('active'); });
@@ -5982,7 +5988,21 @@
 
         console.log('[purchase] 発送通知タスク作成完了:', taskId);
 
-        // 3. UI更新
+        // 3. 発送リマインダータスクを自動完了
+        var currentUserEmail = localStorage.getItem('reborn_user_email');
+        if (currentUserEmail) {
+          db.collection('userTasks').doc(currentUserEmail).collection('tasks')
+            .where('type', '==', 'dispatch_reminder')
+            .where('relatedData.batchId', '==', batchId)
+            .where('completed', '==', false)
+            .get().then(function(snap) {
+              snap.forEach(function(doc) {
+                doc.ref.update({ completed: true, completedAt: new Date().toISOString() });
+              });
+            }).catch(function() {});
+        }
+
+        // 4. UI更新
         var sentEl = document.getElementById('pur-dispatchNotificationSent');
         if (sentEl) sentEl.style.display = 'block';
         if (btn) btn.innerHTML = '<i class="bi bi-check"></i> 送信完了';
