@@ -654,6 +654,7 @@
         </div>
         <div class="modal-footer" style="display: flex; gap: 8px; padding: 12px 16px; flex-wrap: wrap;">
           <button type="button" class="btn btn-outline-info" onclick="invCopyForPurchase()" style="flex: 0 0 100%; font-size: 13px;"><i class="bi bi-clipboard-plus me-1"></i>複製して仕入登録</button>
+          <button type="button" class="btn btn-outline-danger" id="invBtnDeleteProduct" onclick="invDeleteProduct()" style="flex: 0 0 auto; font-size: 13px; display: none;"><i class="bi bi-trash me-1"></i>削除</button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="flex: 1;">閉じる</button>
           <button type="button" class="btn btn-primary" id="invBtnSaveProductStatus" style="flex: 1;">保存</button>
         </div>
@@ -2157,6 +2158,10 @@
 
       // Lightbox setup (タップは各サムネイルのinline onclickで処理)
       invSetupLightbox();
+
+      // 削除ボタン表示（管理者のみ）
+      var deleteBtn = document.getElementById('invBtnDeleteProduct');
+      if (deleteBtn) deleteBtn.style.display = invIsAdminUser() ? 'inline-block' : 'none';
     }
 
     // ===== Lightbox =====
@@ -2445,6 +2450,67 @@
       invLoadDashboardAndSearch();
     }
 
+    // ===== 商品削除 =====
+    async function invDeleteProduct() {
+      if (!invCurrentProduct) { invShowError('商品データが見つかりません'); return; }
+      var mgmt = invCurrentProduct.managementNumber || '';
+      var name = invCurrentProduct.productName || '';
+      if (!confirm('商品「' + mgmt + ' ' + name + '」を完全に削除しますか？\n\n※ 画像・報酬記録・関連タスクもすべて削除されます。この操作は取り消せません。')) return;
+      if (!confirm('本当に削除してよろしいですか？')) return;
+
+      invShowLoading();
+      try {
+        var db = window.db;
+        var productId = invCurrentProduct.id;
+        var batch = window.firestoreWriteBatch(db);
+
+        // 1. 関連 userTasks を削除
+        var tasksSnap = await db.collection('userTasks')
+          .where('relatedData.productId', '==', productId).get();
+        tasksSnap.forEach(function(d) { batch.delete(d.ref); });
+
+        // 2. 関連 compensationRecords を削除
+        var compSnap = await db.collection('compensationRecords')
+          .where('productId', '==', productId).get();
+        compSnap.forEach(function(d) { batch.delete(d.ref); });
+
+        // 3. 関連 orders を削除（EC注文）
+        var ordersSnap = await db.collection('orders')
+          .where('productId', '==', productId).get();
+        ordersSnap.forEach(function(d) { batch.delete(d.ref); });
+
+        // 4. products ドキュメント削除
+        batch.delete(db.collection('products').doc(productId));
+
+        await batch.commit();
+
+        // 5. Storage画像を削除
+        if (mgmt && window.storageListAll && window.storageRef && window.firebaseStorage) {
+          try {
+            var folderRef = window.storageRef(window.firebaseStorage, 'products/' + mgmt);
+            var listResult = await window.storageListAll(folderRef);
+            await Promise.all(listResult.items.map(function(itemRef) {
+              return window.storageDeleteObject(itemRef);
+            }));
+          } catch (storageErr) {
+            console.warn('[Inv] Storage画像削除エラー（無視）:', storageErr);
+          }
+        }
+
+        invHideLoading();
+        alert('商品を削除しました');
+        var modalElement = document.getElementById('invProductDetailModal');
+        var modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) modal.hide();
+        sessionStorage.removeItem(INV_CACHE_KEY_PRODUCTS);
+        sessionStorage.removeItem(INV_CACHE_KEY_STATS);
+        invLoadDashboardAndSearch();
+      } catch (error) {
+        invHideLoading();
+        invShowError('削除エラー: ' + (error.message || error));
+      }
+    }
+    window.invDeleteProduct = invDeleteProduct;
 
     function invAutoCompleteTask(taskType, productId, targetEmail) {
       if (!window.db || !productId) return;
