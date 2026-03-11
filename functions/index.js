@@ -149,7 +149,70 @@ exports.onProductCreated = onDocumentCreated('products/{productId}', async (even
       }
     }
 
-    // 📸 商品撮影報酬は listing_approval タスク承認時にカウント（onTaskCompleted）
+    // 💰 商品登録時に報酬を即時記録（出品報酬＋撮影報酬）
+    try {
+      const staffEmail = productData.createdByEmail || productData.userEmail || null;
+      const staffName = productData.createdBy || productData.userName || '不明';
+
+      if (staffEmail) {
+        // 報酬カウント対象外チェック（管理者は除外）
+        const staffUserDoc = await db.collection('users').doc(staffEmail).get();
+        const staffData = staffUserDoc.exists ? staffUserDoc.data() : {};
+        const isExcluded = staffData.excludeFromCompensation === true ||
+          staffData.permissionId === 'owner' || staffData.permissionId === 'admin';
+
+        if (!isExcluded) {
+          const settingsDoc = await db.collection('settings').doc('compensation').get();
+          const settings = settingsDoc.exists ? settingsDoc.data() : getDefaultCompensationSettings();
+          const now = new Date();
+          const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+          // 出品報酬
+          const listingPrice = settings.taskRates?.listing || 100;
+          await db.collection('compensationRecords').add({
+            taskType: 'listing',
+            taskTypeKey: 'listing',
+            staffEmail: staffEmail,
+            staffName: staffName,
+            unitPrice: listingPrice,
+            totalAmount: listingPrice,
+            description: '出品作業報酬',
+            productId: productId,
+            managementNumber: productData.managementNumber || null,
+            completedAt: now.toISOString(),
+            recordedAt: now.toISOString(),
+            yearMonth: yearMonth
+          });
+          console.log('✅ [onProductCreated] 出品報酬記録:', { staffName, listingPrice });
+
+          // 撮影報酬（画像がある場合）
+          const imageUrls = productData.images?.imageUrls || [];
+          if (imageUrls.length > 0) {
+            const photoPrice = settings.taskRates?.photography || 50;
+            await db.collection('compensationRecords').add({
+              taskType: 'photography',
+              taskTypeKey: 'photography',
+              staffEmail: staffEmail,
+              staffName: staffName,
+              unitPrice: photoPrice,
+              totalAmount: photoPrice,
+              description: '商品撮影報酬',
+              productId: productId,
+              managementNumber: productData.managementNumber || null,
+              imageCount: imageUrls.length,
+              completedAt: now.toISOString(),
+              recordedAt: now.toISOString(),
+              yearMonth: yearMonth
+            });
+            console.log('✅ [onProductCreated] 撮影報酬記録:', { staffName, photoPrice, imageCount: imageUrls.length });
+          }
+        } else {
+          console.log('⏭️ [onProductCreated] 報酬対象外ユーザー:', staffEmail);
+        }
+      }
+    } catch (compError) {
+      console.error('⚠️ [onProductCreated] 報酬記録エラー（継続）:', compError);
+    }
 
   } catch (error) {
     console.error('❌ [onProductCreated] エラー:', error);
