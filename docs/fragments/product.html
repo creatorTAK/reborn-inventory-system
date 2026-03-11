@@ -2381,7 +2381,9 @@
       if (idx >= catOrder.length) {
         // 全カテゴリ復元完了後にプレビュー更新
         if (typeof updateNamePreview === 'function') updateNamePreview();
+        if (typeof updateDescriptionFromDetail === 'function') updateDescriptionFromDetail();
         if (typeof updateDesc === 'function') updateDesc();
+        prdUpdateQRCodeSectionVisibility();
         console.log('[Prd] 下書きから復元完了');
         return;
       }
@@ -2502,6 +2504,16 @@
         window.checkAndApplySlotData();
       }
 
+      // SPA再初期化: 再訪問時は下書き復元より先にUI・リスナーを復元する
+      if (_prd_isRevisit && typeof window.reinitProductScripts === 'function') {
+        console.log('[Prd SPA] Re-visit detected, running reinit before draft restore');
+        try {
+          await window.reinitProductScripts();
+        } catch (e) {
+          console.error('[Prd SPA] reinit error:', e);
+        }
+      }
+
       // scan.html統合: pendingInvSlotIdがあればスロットデータを自動取得
       var pendingInvSlotId = sessionStorage.getItem('pendingInvSlotId');
       if (pendingInvSlotId) {
@@ -2512,7 +2524,7 @@
         return; // 以降の初期化は不要（QRスキャン自動起動を抑止）
       }
 
-      // 下書き復元チェック（スロットデータがない場合のみ）
+      // 下書き復元チェック（reinit完了後に実行するため、カテゴリ等の選択肢が準備済み）
       var _prd_draftRestored = prdCheckDraftOnInit();
 
       // scanHub経由の自動起動チェック
@@ -2533,15 +2545,6 @@
 
       // 下書き自動保存を開始
       prdSetupDraftAutoSave();
-
-      // SPA再初期化: 再訪問時のみ実行（初回はauto-executingコードが処理する）
-      // バックグラウンド実行でQRスキャンをブロックしない
-      if (_prd_isRevisit && typeof window.reinitProductScripts === 'function') {
-        console.log('[Prd SPA] Re-visit detected, running reinit in background');
-        window.reinitProductScripts().catch(function(e) {
-          console.error('[Prd SPA] reinit error:', e);
-        });
-      }
 
       // Preload master data in background
       prdPreloadMasterData();

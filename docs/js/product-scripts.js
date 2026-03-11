@@ -4616,9 +4616,12 @@ window.continueProductRegistration = function() {
     el.value=val||'';
     el.placeholder=ph||'';
 
-    // 管理番号が変更されたら商品名プレビューも更新
+    // 管理番号が変更されたら商品名プレビュー・説明文も更新
     if (typeof updateNamePreview === 'function') {
       updateNamePreview();
+    }
+    if (typeof updateDescriptionFromDetail === 'function') {
+      updateDescriptionFromDetail();
     }
   }
 
