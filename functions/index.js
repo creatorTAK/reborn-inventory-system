@@ -37,6 +37,20 @@ exports.photoroomEditImage = photoroomProxy.photoroomEditImage;
 const orderHistory = require('./order-history');
 exports.getOrderHistory = orderHistory.getOrderHistory;
 
+// Pinterest Auto Pin
+const pinterest = require('./pinterest');
+exports.onProductCreatedPinterest = pinterest.onProductCreatedPinterest;
+exports.pinterestOAuthCallback = pinterest.pinterestOAuthCallback;
+exports.pinterestSetBoard = pinterest.pinterestSetBoard;
+exports.checkPinterestTokenExpiry = pinterest.checkPinterestTokenExpiry;
+
+// Instagram + Facebook Auto Post
+const metaSocial = require('./instagram-facebook');
+exports.onProductCreatedMeta = metaSocial.onProductCreatedMeta;
+exports.metaOAuthCallback = metaSocial.metaOAuthCallback;
+exports.metaSetPage = metaSocial.metaSetPage;
+exports.checkMetaTokenExpiry = metaSocial.checkMetaTokenExpiry;
+
 // Firebase Admin初期化
 initializeApp();
 const db = getFirestore();
@@ -2111,14 +2125,15 @@ exports.dailyTaskReminder = onSchedule({
         let notificationType = 'reminder';
 
         if (task.dueDate) {
-          // 発送タスク等（dueDateあり）
+          // 期限付きタスク（receiving_task / shipping_task等）
           const dueDate = task.dueDate.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
+          const deadlineLabel = task.type === 'receiving_task' ? '受取期限' : '発送期限';
 
           if (dueDate < now) {
             // 期限切れ
             const overdueDays = Math.ceil((now - dueDate) / (1000 * 60 * 60 * 24));
             shouldNotify = true;
-            notificationTitle = '🚨 発送期限を過ぎています';
+            notificationTitle = `🚨 ${deadlineLabel}を過ぎています`;
             notificationContent = `「${task.title}」の期限を${overdueDays}日超過しています。至急対応してください。`;
             notificationType = 'urgent_reminder';
           } else if (dueDate <= tomorrow) {
@@ -2126,12 +2141,12 @@ exports.dailyTaskReminder = onSchedule({
             const hoursLeft = Math.ceil((dueDate - now) / (1000 * 60 * 60));
             if (hoursLeft <= 24) {
               shouldNotify = true;
-              notificationTitle = '⏰ 本日が発送期限です';
+              notificationTitle = `⏰ 本日が${deadlineLabel}です`;
               notificationContent = `「${task.title}」の期限が本日です。お早めに対応してください。`;
               notificationType = 'urgent_reminder';
             } else {
               shouldNotify = true;
-              notificationTitle = '📅 明日が発送期限です';
+              notificationTitle = `📅 明日が${deadlineLabel}です`;
               notificationContent = `「${task.title}」の期限が明日です。準備をお願いします。`;
               notificationType = 'reminder';
             }
