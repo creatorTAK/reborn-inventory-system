@@ -1332,8 +1332,20 @@
       min-width: 150px; overflow: hidden;
     }
     #spa-page-purchase .pur-kebab-menu.active { display: block; }
-    body > .pur-kebab-menu { display: none; background: white; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); min-width: 150px; overflow: hidden; }
-    body > .pur-kebab-menu.active { display: block; }
+    body > .pur-kebab-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 9999; }
+    body > .pur-kebab-overlay.active { display: block; }
+    body > .pur-kebab-overlay .pur-kebab-sheet {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: white; border-radius: 16px 16px 0 0; padding: 8px 0; padding-bottom: env(safe-area-inset-bottom, 16px);
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+    }
+    body > .pur-kebab-overlay .pur-kebab-sheet .pur-kebab-item {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      padding: 14px 20px; border: none; background: none;
+      font-size: 1rem; text-align: left; cursor: pointer;
+    }
+    body > .pur-kebab-overlay .pur-kebab-sheet .pur-kebab-item:hover,
+    body > .pur-kebab-overlay .pur-kebab-sheet .pur-kebab-item:active { background: #f3f4f6; }
     #spa-page-purchase .pur-kebab-item {
       display: flex; align-items: center; gap: 8px; width: 100%;
       padding: 10px 14px; border: none; background: none;
@@ -2784,38 +2796,29 @@
       if (el) el.classList.remove('active');
     }
 
-    var _purActiveKebabClone = null;
+    var _purActiveKebabOverlay = null;
     function purToggleKebab(btn) {
-      var wasOpen = !!_purActiveKebabClone;
-      purCloseKebab();
-      if (wasOpen) return;
+      if (_purActiveKebabOverlay) { purCloseKebab(); return; }
       var menu = btn.nextElementSibling;
-      var clone = menu.cloneNode(true);
-      clone.classList.add('active');
-      clone.style.position = 'fixed';
-      clone.style.zIndex = '10000';
-      var rect = btn.getBoundingClientRect();
-      clone.style.right = (window.innerWidth - rect.right) + 'px';
-      clone.style.left = 'auto';
-      document.body.appendChild(clone);
-      var menuHeight = clone.offsetHeight;
-      if (rect.bottom + menuHeight + 4 > window.innerHeight) {
-        clone.style.top = (rect.top - menuHeight - 4) + 'px';
-      } else {
-        clone.style.top = (rect.bottom + 4) + 'px';
-      }
-      _purActiveKebabClone = clone;
+      // ボトムシートとして表示
+      var overlay = document.createElement('div');
+      overlay.className = 'pur-kebab-overlay active';
+      var sheet = document.createElement('div');
+      sheet.className = 'pur-kebab-sheet';
+      sheet.innerHTML = menu.innerHTML;
+      overlay.appendChild(sheet);
+      document.body.appendChild(overlay);
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) purCloseKebab();
+      });
+      _purActiveKebabOverlay = overlay;
     }
     function purCloseKebab() {
-      if (_purActiveKebabClone) {
-        _purActiveKebabClone.remove();
-        _purActiveKebabClone = null;
+      if (_purActiveKebabOverlay) {
+        _purActiveKebabOverlay.remove();
+        _purActiveKebabOverlay = null;
       }
-      document.querySelectorAll('#spa-page-purchase .pur-kebab-menu.active').forEach(function(m) { m.classList.remove('active'); });
     }
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('.pur-kebab-wrap') && !e.target.closest('.pur-kebab-menu')) purCloseKebab();
-    });
 
     // ============================================
     // Tab switching (custom, no Bootstrap)
