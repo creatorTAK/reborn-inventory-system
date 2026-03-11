@@ -4879,6 +4879,7 @@
         memo: document.getElementById('pur-entryMemo').value || '',
         items: batchItems
       }).then(function(result) {
+        purClearEntryDraft();
         _pur_entryGeneratedQRData = result.slots.map(function(s) { return { slotId: s.slotId, amount: s.amount }; });
         purShowQRPreview();
         purShowEntryAfterActions(result.batchId, assignee, assigneeData);
@@ -4974,6 +4975,7 @@
       });
 
       batchPromise.then(function(lastResult) {
+        purClearEntryDraft();
         _pur_entryGeneratedQRData = allSlots;
         purShowQRPreview();
         if (lastResult) purShowEntryAfterActions(lastResult.batchId, validItems[0].assignee, _pur_entryAssigneesData.find(function(a) { return a.name === validItems[0].assignee; }));
@@ -5951,6 +5953,16 @@
     }
 
     function purShowDraftRestoreDialog(draft) {
+      // 24時間以上前の下書きは自動削除
+      if (draft.savedAt) {
+        var elapsed = Date.now() - new Date(draft.savedAt).getTime();
+        if (elapsed > 24 * 60 * 60 * 1000) {
+          console.log('[purchase] 24時間以上前の下書きを自動削除');
+          purClearEntryDraft();
+          purAddEntryItem(true);
+          return;
+        }
+      }
       var savedAt = new Date(draft.savedAt);
       var timeStr = savedAt.toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
       var itemCount = draft.items.length;
