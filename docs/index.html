@@ -1567,11 +1567,11 @@
     </div>
 
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0311z</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0312a</div>
     <script>
     // PWAバージョンチェック（タスクキル復帰 + バックグラウンド復帰）
     (function(){
-      var LOCAL_VER = 'v0311z';
+      var LOCAL_VER = 'v0312a';
       var lastCheck = 0;
 
       function _versionCheck() {
@@ -7483,26 +7483,22 @@
         const currentUser = auth.currentUser;
 
         // 現在のFCMトークンを取得（認証済みの場合のみ）
-        // 常に新しいトークンを強制取得（古いトークン問題を防止）
+        // ※ deleteTokenは呼ばない（有効なトークンを破壊してしまうため）
         let currentToken = null;
         if (currentUser) {
           try {
             const messaging = getMessaging(app);
-            const vapidKey = 'BIiPYM_7rWJYqJl3sCQI9RGQsblY8eQTsZGz9rKRgAx2gKLk8jz1cT4tR8U5WvMqkHHHGrVnLv1QdqJ7rNvHtfY';
-            
-            // 古いトークンを削除して新しいトークンを強制取得
-            const { deleteToken } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js');
-            try {
-              await deleteToken(messaging);
-              console.log('[Device] 古いFCMトークンを削除');
-            } catch (delErr) {
-              // 削除失敗は無視（トークンがない場合など）
-              console.log('[Device] トークン削除スキップ:', delErr.message);
-            }
-            
-            // 新しいトークンを取得
-            currentToken = await getToken(messaging, { vapidKey });
-            console.log('[Device] ✅ 新しいFCMトークン取得:', currentToken ? currentToken.substring(0, 20) + '...' : 'なし');
+
+            // Service Worker登録を取得（トークンとプッシュサブスクリプションの紐づけに必須）
+            const swReg = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js')
+              || await navigator.serviceWorker.ready;
+
+            // 既存トークンを取得（変更がなければ同じトークンが返る）
+            currentToken = await getToken(messaging, {
+              vapidKey: VAPID_PUBLIC_KEY,
+              serviceWorkerRegistration: swReg
+            });
+            console.log('[Device] ✅ FCMトークン取得:', currentToken ? currentToken.substring(0, 20) + '...' : 'なし');
 
             if (currentToken) {
               localStorage.setItem('reborn_fcm_token', currentToken);
