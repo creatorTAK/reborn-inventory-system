@@ -2517,7 +2517,7 @@ exports.onProductUpdatedForAgingTask = onDocumentUpdated('products/{productId}',
 
   // 変更検知
   const statusChanged = beforeData.status !== afterData.status;
-  const priceChanged = beforeData.listingAmount !== afterData.listingAmount;
+  const priceChanged = (beforeData.listing?.amount || beforeData.listingAmount) !== (afterData.listing?.amount || afterData.listingAmount);
   const descriptionChanged = beforeData.description !== afterData.description;
   const wasListed = beforeData.status === '出品中';
 
@@ -2579,7 +2579,7 @@ exports.onProductUpdatedForAgingTask = onDocumentUpdated('products/{productId}',
       if (statusChanged) {
         completedReason = `ステータス変更: ${beforeData.status} → ${afterData.status}`;
       } else if (priceChanged) {
-        completedReason = `価格変更: ¥${beforeData.listingAmount} → ¥${afterData.listingAmount}`;
+        completedReason = `価格変更: ¥${beforeData.listing?.amount || beforeData.listingAmount} → ¥${afterData.listing?.amount || afterData.listingAmount}`;
       } else if (descriptionChanged) {
         completedReason = '商品説明を更新';
       }
@@ -3304,11 +3304,12 @@ exports.ecAutoPriceReduction = onSchedule({
     const now = Date.now();
     let updatedCount = 0;
 
-    // EC実効価格を計算（ecPrice > markup > listingAmount）
+    // EC実効価格を計算（ecPrice > markup > listing.amount）
     function getEcEffectivePrice(product) {
       if (product.ecPrice && product.ecPrice > 0) return product.ecPrice;
-      if (markupPercent > 0) return Math.round((product.listingAmount || 0) * (1 + markupPercent / 100));
-      return product.listingAmount || 0;
+      const baseAmount = (product.listing && product.listing.amount) || product.listingAmount || 0;
+      if (markupPercent > 0) return Math.round(baseAmount * (1 + markupPercent / 100));
+      return baseAmount;
     }
 
     // 下限価格計算ヘルパー
