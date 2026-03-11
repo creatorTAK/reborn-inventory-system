@@ -490,55 +490,66 @@
         }
       }
 
-      // 商品登録タスクのプログレスバー
+      // 商品登録タスクのプログレスバー・延長申請
       var progressHtml = '';
       var extensionBtnHtml = '';
-      if (task.type === 'product_registration_task' && task.relatedData) {
+      var isProductRegTask = task.type === 'product_registration_task' && task.relatedData;
+      var regComplete = false;
+      if (isProductRegTask) {
         var totalCount = task.relatedData.totalCount || 0;
         var registeredCount = task.relatedData.registeredCount || 0;
         var remainingCount = task.relatedData.remainingCount || totalCount;
         var progressPercent = totalCount > 0 ? Math.round((registeredCount / totalCount) * 100) : 0;
+        regComplete = remainingCount === 0;
 
-        progressHtml = '<div style="margin-top: 8px; padding: 8px; background: #f3f4f6; border-radius: 8px;">' +
-          '<div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px;">' +
-          '<span style="color: #3A3530; font-weight: 600;">📦 登録進捗</span>' +
-          '<span style="color: #6B6560;">' + registeredCount + ' / ' + totalCount + ' 点 (' + progressPercent + '%)</span></div>' +
+        progressHtml = '<div style="margin-top: 8px; padding: 10px; background: #f3f4f6; border-radius: 8px;">' +
+          '<div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px;">' +
+          '<span style="color: #6B6560;">' + registeredCount + ' / ' + totalCount + ' 点</span>' +
+          '<span style="color: #6B6560;">' + progressPercent + '%</span></div>' +
           '<div style="background: #E8E4DF; border-radius: 4px; height: 8px; overflow: hidden;">' +
-          '<div style="background: linear-gradient(90deg, #10b981 0%, #34d399 100%); height: 100%; width: ' + progressPercent + '%; transition: width 0.5s ease;"></div></div>' +
-          '<div style="text-align: center; margin-top: 6px; font-size: 14px; color: ' + (remainingCount === 0 ? '#10b981' : '#f59e0b') + '; font-weight: 600;">' +
-          (remainingCount === 0 ? '✅ 完了!' : '残り ' + remainingCount + ' 点') + '</div></div>';
+          '<div style="background: linear-gradient(90deg, #10b981 0%, #34d399 100%); height: 100%; width: ' + progressPercent + '%; transition: width 0.5s ease;"></div></div></div>';
 
         if (task.pendingExtension) {
-          extensionBtnHtml = '<div class="pending-extension-badge"><i class="bi bi-hourglass-split"></i> 延長申請中</div>';
-        } else if (task.dueDate) {
-          extensionBtnHtml = '<button class="request-extension-btn" onclick="event.stopPropagation(); tdlOpenExtensionRequestModalForTask(\'' + task.id + '\')"><i class="bi bi-clock-history"></i> 期限延長を申請</button>';
+          extensionBtnHtml = '<div style="margin-top: 6px; text-align: center;"><span style="font-size: 12px; color: #f59e0b;"><i class="bi bi-hourglass-split"></i> 延長申請中</span></div>';
+        } else if (task.dueDate && !regComplete) {
+          extensionBtnHtml = '<div style="margin-top: 6px; text-align: center;"><button class="request-extension-btn" onclick="event.stopPropagation(); tdlOpenExtensionRequestModalForTask(\'' + task.id + '\')" style="font-size: 12px; background: none; border: none; color: #9B9590; cursor: pointer; padding: 4px 8px;"><i class="bi bi-clock-history"></i> 期限延長を申請</button></div>';
         }
       }
 
       // アクションボタン
       var actionButtons = '';
-      if (task.link && task.type !== 'shipping_task' && task.type !== 'receiving_task') {
+      if (isProductRegTask) {
+        // 商品登録タスク: 全完了なら「完了」、それ以外は「商品登録を始める」
         var productIdParam = (task.relatedData && task.relatedData.productId) ? task.relatedData.productId : '';
-        actionButtons += '<div class="task-action" onclick="tdlHandleTaskClick(\'' + task.id + '\', \'' + task.link + '\', \'' + (task.linkTab || '') + '\', \'' + productIdParam + '\')"><i class="bi bi-arrow-right-circle"></i> 対応する</div>';
-      }
-      if (showCompleteButton) {
-        if (task.type === 'shipping_task') {
-          actionButtons += '<div class="task-action complete-btn" onclick="tdlShippingCompleteAction(\'' + task.id + '\')" style="background: linear-gradient(135deg, #6B9AC8 0%, #4A7FB5 100%); margin-left: 8px;"><i class="bi bi-truck"></i> 発送完了</div>';
-        } else if (task.type === 'receiving_task') {
-          actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-box-seam"></i> 受取完了</div>';
+        if (regComplete) {
+          actionButtons = '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); text-align: center;"><i class="bi bi-check-circle"></i> 完了にする</div>';
         } else {
-          actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); margin-left: 8px;"><i class="bi bi-check-circle"></i> 完了</div>';
+          actionButtons = '<div class="task-action" onclick="tdlHandleTaskClick(\'' + task.id + '\', \'' + task.link + '\', \'' + (task.linkTab || '') + '\', \'' + productIdParam + '\')" style="flex: 1; text-align: center;"><i class="bi bi-pencil-square"></i> 商品登録を始める</div>';
         }
+      } else if (task.type === 'shipping_task') {
+        actionButtons = '<div class="task-action complete-btn" onclick="tdlShippingCompleteAction(\'' + task.id + '\')" style="flex: 1; background: linear-gradient(135deg, #6B9AC8 0%, #4A7FB5 100%); text-align: center;"><i class="bi bi-truck"></i> 発送完了</div>';
+      } else if (task.type === 'receiving_task') {
+        actionButtons = '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); text-align: center;"><i class="bi bi-box-seam"></i> 受取完了</div>';
+      } else {
+        // 汎用タスク
+        if (task.link) {
+          var productIdParam2 = (task.relatedData && task.relatedData.productId) ? task.relatedData.productId : '';
+          actionButtons += '<div class="task-action" onclick="tdlHandleTaskClick(\'' + task.id + '\', \'' + task.link + '\', \'' + (task.linkTab || '') + '\', \'' + productIdParam2 + '\')" style="flex: 1; text-align: center;"><i class="bi bi-arrow-right-circle"></i> 対応する</div>';
+        }
+        actionButtons += '<div class="task-action complete-btn" onclick="tdlCompleteTask(\'' + task.id + '\', \'' + task.type + '\')" style="flex: 1; background: linear-gradient(135deg, #10b981 0%, #059669 100%); text-align: center;"><i class="bi bi-check-circle"></i> 完了</div>';
       }
+
+      // 商品登録タスクはdescription非表示（タイトル+バッジ+進捗で十分）
+      var descriptionHtml = isProductRegTask ? '' : '<div class="task-description">' + tdlEscapeHtml(task.description) + '</div>';
 
       return '<div class="task-item" data-task-id="' + task.id + '">' +
         '<div class="task-header"><div class="task-icon">' + iconHtml + '</div>' +
         '<div class="task-content"><div class="task-title">' + tdlEscapeHtml(task.title) + '</div>' +
-        '<div class="task-description">' + tdlEscapeHtml(task.description) + '</div>' +
+        descriptionHtml +
         '<div class="task-meta">' + (typeLabel !== task.title ? '<span class="type-badge ' + typeBadgeClass + '">' + typeLabel + '</span>' : '') +
         '<span>' + createdAt + '</span>' + dueDateHtml + '</div>' +
         progressHtml + extensionBtnHtml +
-        '<div style="display: flex; gap: 8px; flex-wrap: wrap;">' + actionButtons + '</div>' +
+        '<div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">' + actionButtons + '</div>' +
         '</div></div></div>';
     }
 
