@@ -33,6 +33,9 @@ docs/配下をコミットする際、同じコミット内で:
 - `firebase.messaging()` を Service Worker 内で初期化しない（二重通知の原因）
 - `getToken()` を呼ぶ際は必ず `vapidKey: VAPID_PUBLIC_KEY` と `serviceWorkerRegistration` を渡す
 
+### アーキテクチャ詳細
+`claudedocs/PWA_NOTIFICATION_BADGE_ARCHITECTURE.md` に全体構成・iOS固有の制約・過去のバグ事例・テスト手順をまとめてある。変更前に必ず読むこと。
+
 ### 変更時の必須チェックリスト
 以下のファイルを変更する場合、**変更前に**このチェックリストを確認:
 - `docs/firebase-messaging-sw.js`
