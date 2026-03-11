@@ -1690,16 +1690,15 @@
     prdShowInspectionDataAppliedNotification(qrData);
     console.log('[Prd] 検品情報の自動反映完了');
 
-    // QRデータ反映後に商品説明を更新（programmatic setはイベント発火しないため明示的に呼ぶ）
+    // QRデータ反映後に商品説明を更新 + 全フィールド確定後に再保存
     // カテゴリのカスケード選択が完了する時間を待ってから説明文を生成
+    _prd_userHasEdited = true;
+    prdSaveDraft(true); // まず現時点のデータを即時保存
     var descUpdateDelay = qrData.cat ? 2000 : 500;
     setTimeout(function() {
       if (typeof updateDescriptionFromDetail === 'function') updateDescriptionFromDetail();
+      prdSaveDraft(true); // カスケード完了後にも再保存
     }, descUpdateDelay);
-
-    // QRデータ反映後に下書き保存
-    _prd_userHasEdited = true;
-    prdSaveDraft(true);
   }
 
   // ============================================
@@ -2456,6 +2455,9 @@
     }
   }
 
+  var _prd_periodicSaveTimer = null;
+  var _prd_visibilityHandler = null;
+
   function prdSetupDraftAutoSave() {
     var form = document.getElementById('mainFormContent');
     if (!form) return;
@@ -2468,6 +2470,20 @@
     };
     form.addEventListener('input', _prd_draftInputHandler);
     form.addEventListener('change', _prd_draftInputHandler);
+
+    // 定期保存（5秒間隔）— タスクキル対策
+    if (_prd_periodicSaveTimer) clearInterval(_prd_periodicSaveTimer);
+    _prd_periodicSaveTimer = setInterval(function() {
+      if (_prd_userHasEdited) prdSaveDraft(true);
+    }, 5000);
+
+    // バックグラウンド移行時に即時保存 — タスクキル直前の最後のチャンス
+    _prd_visibilityHandler = function() {
+      if (document.visibilityState === 'hidden' && _prd_userHasEdited) {
+        prdSaveDraft(true);
+      }
+    };
+    document.addEventListener('visibilitychange', _prd_visibilityHandler);
   }
 
   // ============================================
@@ -2679,13 +2695,15 @@
     // 下書き保存（ページ離脱時）
     prdSaveDraft(true);
 
-    // 下書き自動保存のイベントリスナー除去
+    // 下書き自動保存のイベントリスナー・タイマー除去
     var form = document.getElementById('mainFormContent');
     if (form && _prd_draftInputHandler) {
       form.removeEventListener('input', _prd_draftInputHandler);
       form.removeEventListener('change', _prd_draftInputHandler);
       _prd_draftInputHandler = null;
     }
+    if (_prd_periodicSaveTimer) { clearInterval(_prd_periodicSaveTimer); _prd_periodicSaveTimer = null; }
+    if (_prd_visibilityHandler) { document.removeEventListener('visibilitychange', _prd_visibilityHandler); _prd_visibilityHandler = null; }
 
     // Stop QR scanner if running
     if (_prd_qrScanner) {
