@@ -10607,6 +10607,49 @@ async function saveProductToFirestore(formData) {
         });
         console.log(`[saveProductToFirestore] purchaseSlots更新完了: ${purchaseSlotId} → ${productId}`);
 
+        // バッチ進捗 & 商品登録タスク進捗を更新
+        try {
+          const slotDoc = await window.db.collection('purchaseSlots').doc(purchaseSlotId).get();
+          const batchId = slotDoc.exists ? slotDoc.data().batchId : null;
+          if (batchId) {
+            // purchaseBatchesのregisteredCount+1, remainingCount-1
+            await window.db.collection('purchaseBatches').doc(batchId).update({
+              registeredCount: firebase.firestore.FieldValue.increment(1),
+              remainingCount: firebase.firestore.FieldValue.increment(-1)
+            });
+            console.log(`[saveProductToFirestore] バッチ進捗更新: ${batchId}`);
+
+            // product_registration_taskの進捗を更新
+            const currentEmail = localStorage.getItem('reborn_user_email');
+            if (currentEmail) {
+              const taskSnap = await window.db.collection('userTasks').doc(currentEmail).collection('tasks')
+                .where('type', '==', 'product_registration_task')
+                .where('relatedData.batchId', '==', batchId)
+                .where('completed', '==', false)
+                .limit(1).get();
+              if (!taskSnap.empty) {
+                const taskDoc = taskSnap.docs[0];
+                const taskData = taskDoc.data();
+                const newRegistered = (taskData.relatedData.registeredCount || 0) + 1;
+                const newRemaining = Math.max(0, (taskData.relatedData.remainingCount || taskData.relatedData.totalCount || 0) - 1);
+                const updateData = {
+                  'relatedData.registeredCount': newRegistered,
+                  'relatedData.remainingCount': newRemaining
+                };
+                if (newRemaining === 0) {
+                  updateData.completed = true;
+                  updateData.completedAt = new Date().toISOString();
+                }
+                await taskDoc.ref.update(updateData);
+                console.log(`[saveProductToFirestore] タスク進捗更新: ${newRegistered}/${taskData.relatedData.totalCount}`);
+                if (typeof window.updateTaskBadge === 'function') window.updateTaskBadge();
+              }
+            }
+          }
+        } catch (batchErr) {
+          console.warn('[saveProductToFirestore] バッチ/タスク進捗更新スキップ:', batchErr.message);
+        }
+
         // INV-010: sku-based商品の場合はSKUコレクションも更新
         if (window.currentSkuInfo && window.currentSkuInfo.itemType === 'sku-based' && window.currentSkuInfo.skuId) {
           try {
