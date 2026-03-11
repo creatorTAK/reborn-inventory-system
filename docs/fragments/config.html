@@ -5857,9 +5857,11 @@
               localStorage.setItem('reborn_user_permission_id', permissionId);
               if (userData.userName) userName = userData.userName;
 
-              // 発送先・口座情報ステータス
-              cfgUpdateShippingInfoStatus(userData.shippingInfo || {});
-              cfgUpdateBankAccountStatus(userData.bankAccount || {});
+              // 発送先・口座情報ステータス（config.html形式 + personal-info.html形式の両方をチェック）
+              var shippingData = userData.shippingInfo || (userData.personalInfo && userData.personalInfo.shipping) || {};
+              var bankData = userData.bankAccount || (userData.personalInfo && userData.personalInfo.bank) || {};
+              cfgUpdateShippingInfoStatus(shippingData);
+              cfgUpdateBankAccountStatus(bankData);
 
               // 管理者は発送先・口座セクション非表示
               if (permissionId === 'owner') {
@@ -6945,7 +6947,8 @@
       try {
         var userDoc = await window.db.collection('users').doc(userEmail).get();
         if (userDoc.exists) {
-          var shipping = userDoc.data().shippingInfo || {};
+          var data = userDoc.data();
+          var shipping = data.shippingInfo || (data.personalInfo && data.personalInfo.shipping) || {};
           var fields = { 'cfg-shippingLastName': 'lastName', 'cfg-shippingFirstName': 'firstName', 'cfg-shippingPostalCode': 'postalCode', 'cfg-shippingPrefecture': 'prefecture', 'cfg-shippingCity': 'city', 'cfg-shippingStreet': 'street', 'cfg-shippingBuilding': 'building' };
           Object.keys(fields).forEach(function(id) {
             var el = document.getElementById(id);
@@ -7000,7 +7003,8 @@
       try {
         var userDoc = await window.db.collection('users').doc(userEmail).get();
         if (userDoc.exists) {
-          var bank = userDoc.data().bankAccount || {};
+          var data = userDoc.data();
+          var bank = data.bankAccount || (data.personalInfo && data.personalInfo.bank) || {};
           var fields = { 'cfg-bankName': 'bankName', 'cfg-bankBranch': 'branchName', 'cfg-bankAccountType': 'accountType', 'cfg-bankAccountNumber': 'accountNumber', 'cfg-bankAccountHolder': 'accountHolder' };
           Object.keys(fields).forEach(function(id) {
             var el = document.getElementById(id);
