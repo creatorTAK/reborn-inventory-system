@@ -1567,11 +1567,11 @@
     </div>
 
     <!-- デバッグ: コード配信確認用（問題解決後に削除） -->
-    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0311r</div>
+    <div id="debug-version" style="position:fixed;top:4px;right:4px;font-size:11px;color:red;z-index:99999;background:rgba(255,255,255,0.9);padding:2px 6px;border-radius:4px;border:1px solid red;">v0311s</div>
     <script>
     // PWAバージョンチェック（タスクキル復帰 + バックグラウンド復帰）
     (function(){
-      var LOCAL_VER = 'v0311r';
+      var LOCAL_VER = 'v0311s';
       var lastCheck = 0;
 
       function _versionCheck() {
@@ -2288,7 +2288,27 @@
     window.brandsPreloading = false;
     window.brandsCacheTimestamp = null;
 
-    // [REMOVED] preloadManagementConfigForPWA - 管理番号設定はproduct-scripts.jsがFirestore(settings/common)から直接取得するため不要
+    // 管理番号設定プリロード（全端末でlocalStorageにキャッシュ）
+    async function preloadManagementConfigForPWA() {
+      try {
+        if (!window.db) return;
+        var cached = localStorage.getItem('rebornConfig_managementNumber');
+        if (cached) return; // キャッシュあれば不要
+        var docSnap = await window.db.collection('settings').doc('common').get();
+        if (docSnap.exists && docSnap.data().managementNumber) {
+          localStorage.setItem('rebornConfig_managementNumber', JSON.stringify(docSnap.data().managementNumber));
+          var ts = docSnap.data().updatedAt && docSnap.data().updatedAt.toMillis ? docSnap.data().updatedAt.toMillis() : Date.now();
+          localStorage.setItem('managementConfigTimestamp', ts.toString());
+          console.log('[Preload] 管理番号設定をキャッシュしました');
+        }
+      } catch (e) { console.warn('[Preload] 管理番号設定取得失敗:', e); }
+    }
+    // アプリ画面表示後にバックグラウンドでプリロード
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        if (localStorage.getItem('fcm-setup-completed') === '1') preloadManagementConfigForPWA();
+      }, 2000);
+    });
 
     // Unhandled Promise Rejection をキャッチ（Safari等のFCMエラー対応）
     window.addEventListener('unhandledrejection', (event) => {
