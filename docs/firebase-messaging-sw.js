@@ -3,7 +3,7 @@
 // @fix: ホーム画面アイコンバッジ対応 - navigator.setAppBadge()追加
 
 // バージョン管理（更新時にインクリメント）
-const CACHE_VERSION = 'v382';  // v382: Firebase Messaging SDKインポート復活（FCMトークン登録に必須）
+const CACHE_VERSION = 'v383';  // v383: Firebase SDK削除（二重通知防止、トークン登録はメインページ側で実行）
 const CACHE_NAME = 'reborn-pwa-' + CACHE_VERSION;
 
 // 通知の重複を防ぐためのキャッシュ（軽量化）
@@ -24,23 +24,9 @@ const PRECACHE_RESOURCES = [
   '/icon-512.png'
 ];
 
-// Firebase Messaging SDKをインポート（FCMトークン登録に必須）
-// ※ onBackgroundMessage は使用しない（pushイベントを手動ハンドリングして2重通知を防ぐ）
-importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
-
-firebase.initializeApp({
-  apiKey: "AIzaSyCe-mj6xoV1HbHkIOVqeHCjKjwwtCorUZQ",
-  authDomain: "furira.jp",
-  projectId: "reborn-chat",
-  storageBucket: "reborn-chat.firebasestorage.app",
-  messagingSenderId: "345706548795",
-  appId: "1:345706548795:web:058a553da6b4b74db5161e"
-});
-
-// Firebase Messaging インスタンスを作成（トークン登録のため）
-// ※ onBackgroundMessage は設定しない（pushイベントハンドラで処理するため2重通知を防止）
-const messaging = firebase.messaging();
+// ※ Firebase Messaging SDKはService Workerには不要
+// トークン登録はメインページ側のgetToken()で実行される
+// SDKをここに入れると、notification付きFCMメッセージで自動表示 + pushハンドラで二重通知になる
 
 // 閲覧中のルームID管理（クライアントからpostMessageで受け取る）
 const viewingRoomByClient = new Map(); // clientId -> roomId
