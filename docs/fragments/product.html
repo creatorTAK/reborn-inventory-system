@@ -2340,6 +2340,30 @@
           data[id] = el.value.trim();
         }
       });
+      // 動的フィールド: カラー（カラー1〜カラー5）
+      for (var ci = 1; ci <= 5; ci++) {
+        var colorEl = document.getElementById('カラー' + ci);
+        if (colorEl && colorEl.value && colorEl.value.trim() !== '') {
+          data['カラー' + ci] = colorEl.value.trim();
+        }
+      }
+      // 動的フィールド: 素材（素材1〜素材3、各種類・割合は3行まで）
+      for (var mi = 1; mi <= 3; mi++) {
+        var locEl = document.getElementById('素材' + mi + '_箇所');
+        if (locEl && locEl.value && locEl.value.trim() !== '') {
+          data['素材' + mi + '_箇所'] = locEl.value.trim();
+        }
+        for (var ri = 1; ri <= 3; ri++) {
+          var typeEl = document.getElementById('素材' + mi + '_種類' + ri);
+          var pctEl = document.getElementById('素材' + mi + '_％' + ri);
+          if (typeEl && typeEl.value && typeEl.value.trim() !== '') {
+            data['素材' + mi + '_種類' + ri] = typeEl.value.trim();
+          }
+          if (pctEl && pctEl.value && pctEl.value.trim() !== '' && pctEl.value !== '--%') {
+            data['素材' + mi + '_％' + ri] = pctEl.value.trim();
+          }
+        }
+      }
       if (Object.keys(data).length === 0) { prdClearDraft(); return; }
       var draft = { savedAt: new Date().toISOString(), fields: data };
       try {
@@ -2368,10 +2392,10 @@
     if (!draft || !draft.fields) return;
     console.log('[Prd] 下書きから復元開始');
     var f = draft.fields;
-    // カテゴリ以外のフィールドを先に復元
-    var catIds = {'特大分類':1,'大分類(カテゴリ)':1,'中分類(カテゴリ)':1,'小分類(カテゴリ)':1,'細分類(カテゴリ)':1,'細分類2':1};
+    // カテゴリ・アイテム名以外のフィールドを先に復元
+    var deferIds = {'特大分類':1,'大分類(カテゴリ)':1,'中分類(カテゴリ)':1,'小分類(カテゴリ)':1,'細分類(カテゴリ)':1,'細分類2':1,'アイテム名':1};
     Object.keys(f).forEach(function(id) {
-      if (catIds[id]) return;
+      if (deferIds[id]) return;
       var el = document.getElementById(id);
       if (el) el.value = f[id];
     });
@@ -2379,12 +2403,28 @@
     var catOrder = ['特大分類','大分類(カテゴリ)','中分類(カテゴリ)','小分類(カテゴリ)','細分類(カテゴリ)','細分類2'];
     function restoreCatLevel(idx) {
       if (idx >= catOrder.length) {
-        // 全カテゴリ復元完了後にプレビュー更新
-        if (typeof updateNamePreview === 'function') updateNamePreview();
-        if (typeof updateDescriptionFromDetail === 'function') updateDescriptionFromDetail();
-        if (typeof updateDesc === 'function') updateDesc();
-        prdUpdateQRCodeSectionVisibility();
-        console.log('[Prd] 下書きから復元完了');
+        // アイテム名はカテゴリカスケード完了後に復元（選択肢がカテゴリ依存のため）
+        if (f['アイテム名']) {
+          setTimeout(function() {
+            var itemEl = document.getElementById('アイテム名');
+            if (itemEl) {
+              itemEl.value = f['アイテム名'];
+              itemEl.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            // 全復元完了後にプレビュー更新
+            if (typeof updateNamePreview === 'function') updateNamePreview();
+            if (typeof updateDescriptionFromDetail === 'function') updateDescriptionFromDetail();
+            if (typeof updateDesc === 'function') updateDesc();
+            prdUpdateQRCodeSectionVisibility();
+            console.log('[Prd] 下書きから復元完了');
+          }, 200);
+        } else {
+          if (typeof updateNamePreview === 'function') updateNamePreview();
+          if (typeof updateDescriptionFromDetail === 'function') updateDescriptionFromDetail();
+          if (typeof updateDesc === 'function') updateDesc();
+          prdUpdateQRCodeSectionVisibility();
+          console.log('[Prd] 下書きから復元完了');
+        }
         return;
       }
       var id = catOrder[idx];
