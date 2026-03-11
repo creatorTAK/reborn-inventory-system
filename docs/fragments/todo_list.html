@@ -219,7 +219,7 @@
     </div>
   </div>
 
-  <!-- 受取完了モーダル（期限設定） -->
+  <!-- 受取完了モーダル -->
   <div id="tdl-receivingCompleteModal" class="deadline-modal">
     <div class="deadline-modal-content">
       <div class="deadline-modal-header">
@@ -227,28 +227,15 @@
         <button class="deadline-modal-close" onclick="tdlCloseReceivingCompleteModal()">&times;</button>
       </div>
       <div class="deadline-modal-body">
-        <div style="background: #f0fdf4; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-          <div style="font-size: 13px; color: #166534;">
-            <strong id="tdl-receivingItemCount">0</strong>点の商品を受け取りました
+        <div style="background: #f0fdf4; border-radius: 8px; padding: 12px;">
+          <div style="font-size: 14px; color: #166534;">
+            <strong id="tdl-receivingItemCount">0</strong>点の商品を受け取りますか？
           </div>
-        </div>
-        <div class="deadline-input-group">
-          <label><i class="bi bi-calendar-event" style="margin-right: 6px;"></i>商品登録期限</label>
-          <div class="deadline-input-row">
-            <input type="number" id="tdl-receivingDueDays" min="1" max="30" value="7" onchange="tdlUpdateReceivingDueDatePreview()">
-            <span>日後</span>
-          </div>
-          <div class="deadline-preview" id="tdl-receivingDueDatePreview"></div>
-        </div>
-        <div class="deadline-note">
-          <i class="bi bi-info-circle" style="margin-right: 4px;"></i>
-          この期限は受取点数や担当者の状況に応じて調整できます。<br>
-          設定後の延長には管理者の承認が必要です。
         </div>
       </div>
       <div class="deadline-modal-footer">
         <button class="deadline-modal-btn cancel" onclick="tdlCloseReceivingCompleteModal()">キャンセル</button>
-        <button class="deadline-modal-btn primary" onclick="tdlSubmitReceivingComplete()">完了</button>
+        <button class="deadline-modal-btn primary" onclick="tdlSubmitReceivingComplete()">受取完了</button>
       </div>
     </div>
   </div>
@@ -907,10 +894,6 @@
       _tdl_pendingReceivingTask = { taskId: taskId, taskData: taskData };
       var itemCount = (taskData.relatedData && taskData.relatedData.itemCount) || 0;
       document.getElementById('tdl-receivingItemCount').textContent = itemCount;
-      tdlCalcSmartDueDays(itemCount).then(function(days) {
-        document.getElementById('tdl-receivingDueDays').value = days;
-        tdlUpdateReceivingDueDatePreview();
-      });
       document.getElementById('tdl-receivingCompleteModal').classList.add('active');
     }
 
@@ -946,19 +929,12 @@
       return Math.max(minimumDays, days);
     }
 
-    function tdlUpdateReceivingDueDatePreview() {
-      var days = parseInt(document.getElementById('tdl-receivingDueDays').value) || 7;
-      var dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + days);
-      var preview = (dueDate.getMonth() + 1) + '/' + dueDate.getDate() + '（' + ['日','月','火','水','木','金','土'][dueDate.getDay()] + '）まで';
-      document.getElementById('tdl-receivingDueDatePreview').textContent = '→ ' + preview;
-    }
-
     async function tdlSubmitReceivingComplete() {
       if (!_tdl_pendingReceivingTask) return;
       var taskId = _tdl_pendingReceivingTask.taskId;
       var taskData = _tdl_pendingReceivingTask.taskData;
-      var dueDays = parseInt(document.getElementById('tdl-receivingDueDays').value) || 7;
+      var itemCount = (taskData.relatedData && taskData.relatedData.itemCount) || 0;
+      var dueDays = await tdlCalcSmartDueDays(itemCount);
 
       try {
         await tdlCreateProductRegistrationTaskWithDeadline(taskData.relatedData, dueDays);
