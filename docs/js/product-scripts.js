@@ -770,7 +770,23 @@ window.CONFIG_STORAGE_KEYS = {
       if (discount) window.CACHED_CONFIG['割引情報'] = JSON.parse(discount);
       if (shippingDefault) window.CACHED_CONFIG['配送デフォルト'] = JSON.parse(shippingDefault);
       if (procureListingDefault) window.CACHED_CONFIG['仕入出品デフォルト'] = JSON.parse(procureListingDefault);
-      if (managementNumber) window.CACHED_CONFIG['管理番号設定'] = JSON.parse(managementNumber);
+      if (managementNumber) {
+        window.CACHED_CONFIG['管理番号設定'] = JSON.parse(managementNumber);
+        // managementNumberPlacement が未設定なら rebornConfig_managementNumber から同期
+        if (!localStorage.getItem('managementNumberPlacement')) {
+          try {
+            const mn = JSON.parse(managementNumber);
+            localStorage.setItem('managementNumberPlacement', JSON.stringify({
+              inTitle: mn.showInTitle || false,
+              inDesc: mn.showInDescription || false,
+              format: mn.titleFormat || '【】',
+              position: mn.titlePosition || 'end',
+              descFormat: mn.descFormat || '【】',
+              descPosition: mn.descPosition || 'order'
+            }));
+          } catch (e) { /* ignore */ }
+        }
+      }
       if (salesword) window.CACHED_CONFIG['よく使うセールスワード'] = JSON.parse(salesword);
       if (aiSettings) window.CACHED_CONFIG['AI生成設定'] = JSON.parse(aiSettings);
 
@@ -813,6 +829,18 @@ window.CONFIG_STORAGE_KEYS = {
         if (firestoreData.managementNumber) {
           window.CACHED_CONFIG['管理番号設定'] = firestoreData.managementNumber;
           localStorage.setItem('rebornConfig_managementNumber', JSON.stringify(firestoreData.managementNumber));
+          // managementNumberPlacement にも同期（商品説明・商品名への管理番号配置設定）
+          try {
+            const mn = firestoreData.managementNumber;
+            localStorage.setItem('managementNumberPlacement', JSON.stringify({
+              inTitle: mn.showInTitle || false,
+              inDesc: mn.showInDescription || false,
+              format: mn.titleFormat || '【】',
+              position: mn.titlePosition || 'end',
+              descFormat: mn.descFormat || '【】',
+              descPosition: mn.descPosition || 'order'
+            }));
+          } catch (e) { /* ignore */ }
         }
         if (firestoreData.salesword) {
           window.CACHED_CONFIG['よく使うセールスワード'] = firestoreData.salesword;
