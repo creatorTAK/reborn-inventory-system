@@ -3375,79 +3375,83 @@ window.continueProductRegistration = function() {
    * @returns {Promise<Object|null>} 管理番号設定オブジェクト、または null
    */
   async function loadManagementConfigFromFirestore() {
-    if (!window.db) {
-      console.warn('⚠️ Firestoreが初期化されていません');
-      return null;
-    }
-
     const startTime = performance.now();
 
     try {
-      console.log('📥 Firestoreから管理番号設定を読み込み中...');
+      console.log('📥 管理番号設定を読み込み中...');
 
-      // タイムアウト処理（10秒）
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Firestore読み込みタイムアウト（10秒）')), 10000)
-      );
-
-      const fetchPromise = (async () => {
-        const docRef = firebase.firestore().collection('settings').doc('common');
-        const docSnap = await docRef.get();
-        return docSnap;
-      })();
-
-      // Firestore読み込みとタイムアウトを競争
-      const docSnap = await Promise.race([fetchPromise, timeoutPromise]);
-      const duration = (performance.now() - startTime).toFixed(2);
-
-      if (docSnap.exists) {
-        const data = docSnap.data();
-        console.log(`✅ Firestoreから設定を取得: ${duration}ms`, data);
-
-        // managementNumber フィールドを返す
-        if (data.managementNumber) {
-          // タイムスタンプ比較：localStorageの方が新しい場合は上書きしない
-          const localTimestamp = parseInt(localStorage.getItem('managementConfigTimestamp') || '0');
-          const firestoreTimestamp = data.updatedAt?.toMillis?.() || 0;
-
-          console.log('🕐 タイムスタンプ比較:', {
-            local: localTimestamp,
-            localDate: localTimestamp ? new Date(localTimestamp).toISOString() : 'なし',
-            firestore: firestoreTimestamp,
-            firestoreDate: firestoreTimestamp ? new Date(firestoreTimestamp).toISOString() : 'なし'
-          });
-
-          if (localTimestamp > firestoreTimestamp) {
-            console.log('⏭️ localStorageの方が新しいため、Firestoreデータでの上書きをスキップ');
-            // localStorageの既存データを返す
-            const existingConfig = localStorage.getItem('rebornConfig_managementNumber');
-            if (existingConfig) {
-              return JSON.parse(existingConfig);
-            }
-          }
-
-          // Firestoreの方が新しい、または同等の場合はキャッシュを更新
-          localStorage.setItem('rebornConfig_managementNumber', JSON.stringify(data.managementNumber));
-          localStorage.setItem('managementConfigTimestamp', firestoreTimestamp.toString());
-          console.log('💾 localStorageをFirestoreデータで更新しました');
-          return data.managementNumber;
-        } else {
-          console.log('⚠️ managementNumber フィールドが存在しません');
-          return null;
+      // 方法1: Firestore REST API経由（HTTP fetch = WebSocket不要で高速）
+      let config = null;
+      try {
+        const authUser = firebase.auth().currentUser;
+        let headers = {};
+        if (authUser) {
+          const token = await authUser.getIdToken();
+          headers['Authorization'] = 'Bearer ' + token;
         }
-      } else {
-        console.log('⚠️ Firestore settings/common ドキュメントが存在しません');
-        return null;
+        const restUrl = 'https://firestore.googleapis.com/v1/projects/reborn-chat/databases/(default)/documents/settings/common';
+        const resp = await Promise.race([
+          fetch(restUrl, { headers: headers }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('REST APIタイムアウト')), 8000))
+        ]);
+        if (resp.ok) {
+          const docData = await resp.json();
+          if (docData.fields && docData.fields.managementNumber) {
+            config = _parseFirestoreRestValue(docData.fields.managementNumber);
+            console.log('✅ REST APIから管理番号設定を取得:', (performance.now() - startTime).toFixed(0) + 'ms');
+          }
+        }
+      } catch (restErr) {
+        console.warn('⚠️ REST API失敗、SDK fallback:', restErr.message);
       }
-    } catch (e) {
-      const duration = (performance.now() - startTime).toFixed(2);
-      if (e.message.includes('タイムアウト')) {
-        console.warn(`⏱️ ${e.message} (${duration}ms経過) → キャッシュを使用`);
-      } else {
-        console.error('❌ Firestore読み込みエラー:', e);
+
+      // 方法2: SDK fallback（REST APIが失敗した場合）
+      if (!config && window.db) {
+        try {
+          const docSnap = await Promise.race([
+            window.db.collection('settings').doc('common').get(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('SDK タイムアウト')), 15000))
+          ]);
+          if (docSnap.exists && docSnap.data().managementNumber) {
+            config = docSnap.data().managementNumber;
+            console.log('✅ SDKから管理番号設定を取得:', (performance.now() - startTime).toFixed(0) + 'ms');
+          }
+        } catch (sdkErr) {
+          console.warn('⚠️ SDK fallbackも失敗:', sdkErr.message);
+        }
+      }
+
+      if (config) {
+        localStorage.setItem('rebornConfig_managementNumber', JSON.stringify(config));
+        localStorage.setItem('managementConfigTimestamp', Date.now().toString());
+        console.log('💾 localStorageにキャッシュしました');
+        return config;
       }
       return null;
+    } catch (e) {
+      console.error('❌ 管理番号設定読み込みエラー:', e);
+      return null;
     }
+  }
+
+  // Firestore REST APIのValue形式をJSオブジェクトに変換
+  function _parseFirestoreRestValue(val) {
+    if (!val) return null;
+    if (val.stringValue !== undefined) return val.stringValue;
+    if (val.integerValue !== undefined) return parseInt(val.integerValue);
+    if (val.doubleValue !== undefined) return val.doubleValue;
+    if (val.booleanValue !== undefined) return val.booleanValue;
+    if (val.nullValue !== undefined) return null;
+    if (val.arrayValue) {
+      return (val.arrayValue.values || []).map(v => _parseFirestoreRestValue(v));
+    }
+    if (val.mapValue) {
+      const obj = {};
+      const fields = val.mapValue.fields || {};
+      Object.keys(fields).forEach(k => { obj[k] = _parseFirestoreRestValue(fields[k]); });
+      return obj;
+    }
+    return val;
   }
 
   // グローバル変数：管理番号設定をキャッシュ
@@ -3538,14 +3542,19 @@ window.continueProductRegistration = function() {
       console.warn('⚠️ Firestore読み込み失敗（キャッシュを使用）:', e);
     }
 
-    // 3. キャッシュもFirestoreもなければリトライ
+    // 3. キャッシュもFirestoreもなければローディング表示してリトライ
     if (!segments || segments.length === 0) {
-      console.log('⚠️ セグメント配列が空です - リトライスケジュール');
       if (!window._mgmtRetryCount) window._mgmtRetryCount = 0;
-      if (window._mgmtRetryCount < 3) {
-        window._mgmtRetryCount++;
-        var delay = window._mgmtRetryCount * 5000; // 5秒, 10秒, 15秒
-        console.log('🔄 管理番号設定リトライ ' + window._mgmtRetryCount + '/3 (' + (delay/1000) + '秒後)');
+      window._mgmtRetryCount++;
+      if (window._mgmtRetryCount <= 5) {
+        // ローディング表示
+        const container = document.getElementById('managementNumberFields');
+        if (container && container.style.display === 'none') {
+          container.style.display = 'block';
+          container.innerHTML = '<div style="padding: 12px; text-align: center; color: #6B6560; font-size: 13px;"><i class="bi bi-arrow-repeat" style="animation: spin 1s linear infinite; display: inline-block;"></i> 管理番号設定を読み込み中...</div>';
+        }
+        var delay = 3000; // 3秒間隔でリトライ
+        console.log('🔄 管理番号設定リトライ ' + window._mgmtRetryCount + '/5 (' + (delay/1000) + '秒後)');
         setTimeout(function() { initManagementNumberUI(); }, delay);
       } else {
         showManagementNumberNotConfigured();
