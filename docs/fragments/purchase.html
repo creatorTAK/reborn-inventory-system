@@ -1327,11 +1327,13 @@
     /* ケバブメニュー */
     #spa-page-purchase .pur-kebab-wrap { position: relative; display: inline-block; }
     #spa-page-purchase .pur-kebab-menu {
-      display: none; position: fixed; z-index: 100;
+      display: none; position: absolute; right: 0; top: 100%; z-index: 100;
       background: white; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
       min-width: 150px; overflow: hidden;
     }
     #spa-page-purchase .pur-kebab-menu.active { display: block; }
+    body > .pur-kebab-menu { display: none; background: white; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); min-width: 150px; overflow: hidden; }
+    body > .pur-kebab-menu.active { display: block; }
     #spa-page-purchase .pur-kebab-item {
       display: flex; align-items: center; gap: 8px; width: 100%;
       padding: 10px 14px; border: none; background: none;
@@ -2782,29 +2784,37 @@
       if (el) el.classList.remove('active');
     }
 
+    var _purActiveKebabClone = null;
     function purToggleKebab(btn) {
-      var menu = btn.nextElementSibling;
-      var wasActive = menu.classList.contains('active');
+      var wasOpen = !!_purActiveKebabClone;
       purCloseKebab();
-      if (!wasActive) {
-        menu.classList.add('active');
-        var rect = btn.getBoundingClientRect();
-        var menuHeight = menu.offsetHeight;
-        // 画面下にはみ出す場合は上に表示
-        if (rect.bottom + menuHeight + 4 > window.innerHeight) {
-          menu.style.top = (rect.top - menuHeight - 4) + 'px';
-        } else {
-          menu.style.top = (rect.bottom + 4) + 'px';
-        }
-        menu.style.right = (window.innerWidth - rect.right) + 'px';
-        menu.style.left = 'auto';
+      if (wasOpen) return;
+      var menu = btn.nextElementSibling;
+      var clone = menu.cloneNode(true);
+      clone.classList.add('active');
+      clone.style.position = 'fixed';
+      clone.style.zIndex = '10000';
+      var rect = btn.getBoundingClientRect();
+      clone.style.right = (window.innerWidth - rect.right) + 'px';
+      clone.style.left = 'auto';
+      document.body.appendChild(clone);
+      var menuHeight = clone.offsetHeight;
+      if (rect.bottom + menuHeight + 4 > window.innerHeight) {
+        clone.style.top = (rect.top - menuHeight - 4) + 'px';
+      } else {
+        clone.style.top = (rect.bottom + 4) + 'px';
       }
+      _purActiveKebabClone = clone;
     }
     function purCloseKebab() {
+      if (_purActiveKebabClone) {
+        _purActiveKebabClone.remove();
+        _purActiveKebabClone = null;
+      }
       document.querySelectorAll('#spa-page-purchase .pur-kebab-menu.active').forEach(function(m) { m.classList.remove('active'); });
     }
     document.addEventListener('click', function(e) {
-      if (!e.target.closest('.pur-kebab-wrap')) purCloseKebab();
+      if (!e.target.closest('.pur-kebab-wrap') && !e.target.closest('.pur-kebab-menu')) purCloseKebab();
     });
 
     // ============================================
