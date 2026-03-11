@@ -920,27 +920,27 @@
     }
 
     async function tdlCalcSmartDueDays(itemCount) {
-      var minutesPerItem = 15;
+      var minutesPerItem = 30;
+      var minimumItems = 30;
       var minimumDays = 3;
       var weeklyHours = 40;
       try {
-        // 設定読み込み
         var settingsDoc = await _tdl_db.collection('settings').doc('taskSettings').get();
         if (settingsDoc.exists) {
           var s = settingsDoc.data();
           if (s.productRegistration) {
             minutesPerItem = s.productRegistration.minutesPerItem || minutesPerItem;
+            minimumItems = s.productRegistration.minimumItems || minimumItems;
             minimumDays = s.productRegistration.minimumDays || minimumDays;
           }
         }
-        // スタッフの稼働時間を取得
         var userDoc = await _tdl_db.collection('users').doc(_tdl_userEmail).get();
         if (userDoc.exists && userDoc.data().weeklyAvailableHours) {
           weeklyHours = userDoc.data().weeklyAvailableHours;
         }
       } catch (e) { console.warn('期限算出設定取得失敗:', e); }
-      // 算出: (点数 × 1点あたり分数) ÷ (週あたり稼働分数) × 7日
-      var totalMinutes = itemCount * minutesPerItem;
+      var effectiveCount = Math.max(minimumItems, itemCount);
+      var totalMinutes = effectiveCount * minutesPerItem;
       var weeklyMinutes = weeklyHours * 60;
       var days = Math.ceil(totalMinutes / weeklyMinutes * 7);
       return Math.max(minimumDays, days);
