@@ -3385,9 +3385,9 @@ window.continueProductRegistration = function() {
     try {
       console.log('📥 Firestoreから管理番号設定を読み込み中...');
 
-      // タイムアウト処理（3秒）
+      // タイムアウト処理（10秒）
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Firestore読み込みタイムアウト（3秒）')), 3000)
+        setTimeout(() => reject(new Error('Firestore読み込みタイムアウト（10秒）')), 10000)
       );
 
       const fetchPromise = (async () => {
@@ -3538,14 +3538,18 @@ window.continueProductRegistration = function() {
       console.warn('⚠️ Firestore読み込み失敗（キャッシュを使用）:', e);
     }
 
-    // 3. キャッシュもFirestoreもなければレガシーUIへ
+    // 3. キャッシュもFirestoreもなければリトライ
     if (!segments || segments.length === 0) {
-      console.log('⚠️ セグメント配列が空です');
-    }
-
-    // PWA版：管理番号設定はlocalStorageのみを使用
-    if (!segments || segments.length === 0) {
-      showManagementNumberNotConfigured();
+      console.log('⚠️ セグメント配列が空です - リトライスケジュール');
+      if (!window._mgmtRetryCount) window._mgmtRetryCount = 0;
+      if (window._mgmtRetryCount < 3) {
+        window._mgmtRetryCount++;
+        var delay = window._mgmtRetryCount * 5000; // 5秒, 10秒, 15秒
+        console.log('🔄 管理番号設定リトライ ' + window._mgmtRetryCount + '/3 (' + (delay/1000) + '秒後)');
+        setTimeout(function() { initManagementNumberUI(); }, delay);
+      } else {
+        showManagementNumberNotConfigured();
+      }
     }
   }
 
