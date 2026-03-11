@@ -6635,34 +6635,49 @@ window.continueProductRegistration = function() {
     console.log('setupDetailEventListener 関数が呼び出されました');
     const detailInput = document.getElementById('商品状態詳細');
     if (detailInput) {
-      // 既存のイベントリスナーを削除
       detailInput.removeEventListener('input', updateDescriptionFromDetail);
-      // 新しいイベントリスナーを追加
       detailInput.addEventListener('input', updateDescriptionFromDetail);
       console.log('商品状態(詳細)イベントリスナー設定完了');
-      // テスト用: 初回実行
       updateDescriptionFromDetail();
     } else {
       console.error('商品状態詳細の要素が見つかりません');
     }
 
-    // 靴のサイズ関連項目にもイベントリスナーを追加
-    const shoesFields = [
-      'サイズ(表記)_靴',
-      'その他のサイズ表記_靴',
-      '普段のサイズ_靴',
-      'フィット感_靴'
+    // 商品説明に反映される全フィールドにイベントリスナーを設定
+    const descriptionFields = [
+      // 商品の状態
+      '商品の状態',
+      // サイズ関連（服）
+      'サイズ(表記)_トップス', 'サイズ(表記)_ボトムス',
+      '肩幅', '身幅', '袖丈', '着丈', 'ウエスト', 'ヒップ', '股上', '股下',
+      // サイズ関連（靴）
+      'サイズ(表記)_靴', 'その他のサイズ表記_靴', '普段のサイズ_靴', 'フィット感_靴',
+      // ブランド（カナ）
+      'ブランド(カナ)'
     ];
 
-    shoesFields.forEach(fieldId => {
+    descriptionFields.forEach(fieldId => {
       const element = document.getElementById(fieldId);
       if (element) {
-        const eventType = element.tagName === 'SELECT' ? 'change' : 'input';
+        const eventType = (element.tagName === 'SELECT') ? 'change' : 'input';
         element.removeEventListener(eventType, updateDescriptionFromDetail);
         element.addEventListener(eventType, updateDescriptionFromDetail);
-        console.log(`${fieldId}のイベントリスナー設定完了`);
       }
     });
+
+    // カラー・素材は動的に追加されるため、変更イベントを委譲で監視
+    document.addEventListener('change', function(e) {
+      if (e.target && (e.target.id || '').match(/^(カラー\d+|素材\d+_(箇所|種類\d+|％\d+))$/)) {
+        updateDescriptionFromDetail();
+      }
+    });
+    document.addEventListener('input', function(e) {
+      if (e.target && (e.target.id || '').match(/^(カラー\d+|素材\d+_(箇所|種類\d+|％\d+))$/)) {
+        updateDescriptionFromDetail();
+      }
+    });
+
+    console.log('商品説明連動イベントリスナー設定完了');
   }
 
   // ================= 新セールスワードシステム =================
